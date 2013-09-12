@@ -434,6 +434,34 @@ class SEMStream(Stream):
             # if emitter has no dwell time -> no problem
             pass
 
+        # Region of interest as left, top, right, bottom (in ratio from the
+        # whole area of the emitter => between 0 and 1)
+        self.roi = model.TupleContinuous((0, 0, 1, 1),
+                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
+                                         cls=(int, long, float))
+        self.roi.subscribe(self._onROI)
+
+    def _onROI(self, roi):
+        """
+        Update the scanning area of the SEM according to the roi
+        """
+        # FIXME: this is fighting agains the resolution setting of the SEM
+        # We should remove res setting from the GUI when this ROI is used.
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        shape = self._emitter.shape
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+        # resolution is the maximum resolution at the scale in proportion of the width
+        scale = self._emitter.scale.value
+        res = (max(1, shape[0] * width[0] * scale[0]),
+               max(1, shape[1] * width[1] * scale[1]))
+
+        # always in this order
+        self._emitter.resolution.value = res
+        self._emitter.translation.value = trans
+
     def estimateAcquisitionTime(self):
 
         try:

@@ -33,7 +33,7 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.util import get_picture_folder, formats_to_wildcards
+from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion
 import collections
 import logging
 import math
@@ -745,6 +745,9 @@ class LensAlignTab(Tab):
         # FIXME: this is reset by the canvas on the first image.
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
+        # Update the SEM area in dichotomic mode
+        self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
+
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
                                      main_data.ccd,
@@ -797,12 +800,15 @@ class LensAlignTab(Tab):
         """
         Called when the tool (mode) is changed
         """
-        if tool == guimodel.TOOL_DICHO:
+        if tool != guimodel.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
+        
+        if tool == guimodel.TOOL_DICHO:
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
             # meaningful value
+            pass
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
 
@@ -813,6 +819,10 @@ class LensAlignTab(Tab):
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
             pass
+
+    def _onDichoSeq(self, seq):
+        roi = conversion.dichotomy_to_region(seq)
+        self._sem_stream.roi.value = roi
 
     def _onSEMpxs(self, pxs):
         """
