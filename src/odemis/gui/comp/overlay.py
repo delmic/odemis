@@ -1073,8 +1073,13 @@ class DichotomyOverlay(ViewOverlay):
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button)
         self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
 
+        self.sequence_va.subscribe(self.refresh)
+
         # Disabling the overlay willl allow the event handlers to ignore events
         self.enabled = False
+
+    def refresh(self, seq):
+        self.base.Refresh()
 
     def _reset(self):
         """ Reset all attributes to their default values and get the dimensions
