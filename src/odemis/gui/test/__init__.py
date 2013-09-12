@@ -118,7 +118,10 @@ class GuiTestCase(unittest.TestCase):
             cls.app.MainLoop()
 
     @classmethod
-    def add_control(cls, ctrl, flags=0):
+    def add_control(cls, ctrl, flags=0, clear=False):
+        if clear:
+            cls.sizer.Clear(True)
+
         cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=0, proportion=1)
         cls.sizer.Layout()
         return ctrl

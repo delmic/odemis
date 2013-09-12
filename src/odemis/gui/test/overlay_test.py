@@ -90,15 +90,15 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")
-        self.add_control(cnvs, wx.EXPAND)
+        self.add_control(cnvs, wx.EXPAND, clear=True)
 
         cnvs.add_world_overlay(overlay.ViewSelectOverlay(cnvs, "test selection"))
         cnvs.toggle_update_mode(True)
         cnvs.current_mode = 1
 
-    def test_dichotomy_overlay(self):
+    def xtest_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND)
+        self.add_control(cnvs, wx.EXPAND, clear=True)
 
         lva = omodel.ListVA()
 
@@ -109,6 +109,15 @@ class PlotCanvasTestCase(test.GuiTestCase):
         dol.enable()
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
+
+    def test_spot_marker_overlay(self):
+        cnvs = miccanvas.SecomCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, clear=True)
+
+        sol = overlay.SpotMarkerOverlay(cnvs)
+        cnvs.add_view_overlay(sol)
+        sol.enable()
+
 
 if __name__ == "__main__":
     unittest.main()

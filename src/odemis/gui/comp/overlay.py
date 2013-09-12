@@ -751,7 +751,9 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                                         self.w_end_pos,
                                         offset)
 
-            logging.warn("start and end buffer pos: %s %s", b_start_pos, b_end_pos)
+            logging.warn(
+                "start and end buffer pos: %s %s",
+                b_start_pos, b_end_pos)
 
             # Calculate the width and height in buffer pixels. Again, this may
             # be wider and higher than the actual buffer.
@@ -764,7 +766,10 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             clipped_start_pos = self._clip_buffer_pos(b_start_pos)
             clipped_end_pos = self._clip_buffer_pos(b_end_pos)
 
-            logging.warn("clipped start and end: %s %s", clipped_start_pos, clipped_end_pos)
+            logging.warn(
+                "clipped start and end: %s %s",
+                clipped_start_pos,
+                clipped_end_pos)
 
             # No need to render
             if 0 in self.repitition:
@@ -1276,3 +1281,65 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.set_source_rgba(*self.hover_forw)
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
+
+class SpotMarkerOverlay(ViewOverlay):
+    def __init__(self, base):
+        super(SpotMarkerOverlay, self).__init__(base)
+
+        self.view_pos = None
+        self.enabled = False
+        self.offset = tuple(v // 2 for v in self.base.GetClientSize())
+
+        self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
+        self.base.Bind(wx.EVT_SIZE, self.on_size)
+
+    def on_size(self, evt):
+        self.offset = tuple(v // 2 for v in self.base.GetClientSize())
+
+    def on_mouse_button_down(self, evt):
+        if not self.enabled:
+            evt.Skip()
+
+    def on_mouse_button_up(self, evt):
+        if self.enabled:
+            vpos = evt.GetPosition()
+            self.set_view_position(vpos)
+            self.base.Refresh()
+            print self.get_world_position()
+        else:
+            evt.Skip()
+
+    def get_world_position(self):
+        if self.view_pos:
+            return self.base.view_to_world_pos(
+                        self.view_pos,
+                        self.offset)
+        else:
+            return None
+
+    def clear(self):
+        self.view_pos = None
+
+    def set_view_position(self, vpos):
+        self.view_pos = vpos[0] - self.offset[0], vpos[1] - self.offset[1]
+
+    def enable(self, enable=True):
+        """ Enable of disable the overlay """
+        self.enabled = enable
+        # TODO: Cache the current cursor so it can be restored?
+        if enable:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        else:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+
+    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+        if self.view_pos and self.enabled:
+            marker_bmp = img.getspot_markerBitmap()
+
+            dc_buffer.DrawBitmapPoint(
+                marker_bmp,
+                wx.Point(*self.view_pos),
+                useMask=False)
+
+        super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)
