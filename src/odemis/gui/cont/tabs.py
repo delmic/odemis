@@ -739,7 +739,8 @@ class LensAlignTab(Tab):
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canZoom = False
-        # FIXME: this is reset by the canvas on the first image.
+        # prevent the first image to reset our computation
+        self._sem_view.getMPPFromNextImage = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
@@ -747,7 +748,6 @@ class LensAlignTab(Tab):
         dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas,
                                                  self.tab_data_model.dicho_seq)
         self._dicho_overlay = dicho_overlay
-        # TODO: only enable it in dichotomic mode (and remove when leaving it)
         main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # create CCD stream
@@ -765,7 +765,6 @@ class LensAlignTab(Tab):
         stream_bar.add_stream(ccd_spe, True)
         ccd_spe.flatten() # removes the expander header
 
-        # TODO: remove ON/OFF buttons
         # Streams are always on when the tab is shown. In the future, if it's
         # possible to really control the SEM, we might revise this. For optical
         # it shouldn't be a problem as the light is turned off anyway.
