@@ -1079,6 +1079,14 @@ class DichotomyOverlay(ViewOverlay):
         self.enabled = False
 
     def refresh(self, seq):
+
+        if not all([0 <= v <= 3 for v in seq]):
+            raise ValueError("Illegal quadrant values in sequence!")
+
+        for i, q in enumerate(seq):
+            rect = self.index_to_rect(i, q)
+            self.sequence_rect.append(rect)
+
         self.base.Refresh()
 
     def _reset(self):

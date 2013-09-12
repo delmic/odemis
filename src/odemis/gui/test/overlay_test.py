@@ -108,5 +108,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         dol.sequence_va.subscribe(do_stuff, init=True)
         dol.enable()
 
+        dol.sequence_va.value = [0, 1, 2, 3, 0]
+
 if __name__ == "__main__":
     unittest.main()
