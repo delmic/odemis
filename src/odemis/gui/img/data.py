@@ -1656,10 +1656,10 @@ getbtn_spectrumBitmap = btn_spectrum.GetBitmap
 
 #----------------------------------------------------------------------
 btn_spot_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAcUlEQVRIx2O4e/cuGxBPBOK3"
-    "QPyfSvgd1Ew2BiAxgYoGo+MOBiq7HB2/ZaCh4WBMkgXGxsZD3ILRIBqmQYRsKC42xT5AN4wU"
-    "nwyeSAYZDsNDL5nSNA5wGUbVVES3jDZoLaB5lUnLSr+TAanZ8o4WzRYAEEvkHICgXf4AAAAA"
-    "SUVORK5CYII=")
+    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAb0lEQVRIx2O4e/cuGxBPBOK3"
+    "QPyfSvgd1Ew2BiAxgYoGo+MOBiq7HB2/ZaCh4WA8uCwwNjYe4haMBtEwDSJkQ3GxKfYBumGk"
+    "+GTwRDLIcBgeesmUpnGAyzCqpqJBXx/QvMqkZaXfyYDUbHlHi2YLAGi35BzOPhBzAAAAAElF"
+    "TkSuQmCC")
 index.append('btn_spot_a')
 catalog['btn_spot_a'] = btn_spot_a
 getbtn_spot_aData = btn_spot_a.GetData
