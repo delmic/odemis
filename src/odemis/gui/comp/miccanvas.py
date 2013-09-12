@@ -8,13 +8,13 @@ Copyright © 2012-2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -29,7 +29,7 @@ from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
 from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
 from odemis.model._vattributes import VigilantAttributeBase
-import odemis.gui.comp.overlay as overlay
+import odemis.gui.comp.overlay as comp_overlay
 from wx.lib.pubsub import pub
 import logging
 import odemis.gui as gui
@@ -66,13 +66,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     the pictures accordingly.
 
     It also provides various typical overlays (ie, drawings) for microscope views.
-    
+
     Public attributes:
     .canZoom (Boolean): If True (default), allows the user to zoom. When False,
       the zoom can still be changed programatically with view.mpp.
     .canDrag (Boolean): If True (default), allows the user to drag
     .noDragNoFocus (Boolean): False by default. If True, prevent Drag and Focus
-      change to happen. Useful to avoid the user to move a paused view. 
+      change to happen. Useful to avoid the user to move a paused view.
     """
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
@@ -103,7 +103,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._previous_size = None
 
         # for the FPS
-        self.fps_overlay = overlay.TextViewOverlay(self)
+        self.fps_overlay = comp_overlay.TextViewOverlay(self)
         self.ViewOverlays.append(self.fps_overlay)
 
     def setView(self, microscope_view, tab_data):
@@ -136,7 +136,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.focus_overlay = None
 
         if self.microscope_view.get_focus_count():
-            self.focus_overlay = overlay.FocusOverlay(self)
+            self.focus_overlay = comp_overlay.FocusOverlay(self)
             self.ViewOverlays.append(self.focus_overlay)
 
         # any image changes
@@ -155,13 +155,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # static overlays
         ch = None
         for o in self.ViewOverlays:
-            if isinstance(o, overlay.CrossHairOverlay):
+            if isinstance(o, comp_overlay.CrossHairOverlay):
                 ch = o
                 break
 
         if activated:
             if not ch:
-                ch = overlay.CrossHairOverlay(self)
+                ch = comp_overlay.CrossHairOverlay(self)
                 self.ViewOverlays.append(ch)
                 self.Refresh(eraseBackground=False)
         else:
@@ -517,13 +517,13 @@ class SecomCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
 
-        self.zoom_overlay = overlay.ViewSelectOverlay(self, "Zoom")
+        self.zoom_overlay = comp_overlay.ViewSelectOverlay(self, "Zoom")
         # play/pause icon
-        self.icon_overlay = overlay.StreamIconOverlay(self)
+        self.icon_overlay = comp_overlay.StreamIconOverlay(self)
         self.ViewOverlays.extend([self.zoom_overlay,
                                   self.icon_overlay])
 
-        self.update_overlay = overlay.WorldSelectOverlay(self, "Update")
+        self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
         self.active_overlay = None
@@ -716,7 +716,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
-        self.roi_overlay = overlay.RepetitionSelectOverlay(self, "Region of acquisition")
+        self.roi_overlay = comp_overlay.RepetitionSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
@@ -992,7 +992,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         DblMicroscopeCanvas.setView(self, microscope_view, tab_data)
         # find the MPP of the sensor and use it on all images
         try:
-            self._ccd_mpp = self.tab_data.main.ccd.pixelSize.value
+            self._ccd_mpp = self.tab_data.main.ccd.pixelSize.value #pylint: disable=E1101
         except AttributeError:
             logging.info("Failed to find CCD for Sparc mirror alignment")
 
@@ -1098,7 +1098,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
         self.ticks = canvas.PLOT_TICKS_HORZ
 
-        self.set_focusline_ovelay(overlay.MarkingLineOverlay(self))
+        self.set_focusline_ovelay(comp_overlay.MarkingLineOverlay(self))
 
         ## Event binding
 
