@@ -37,6 +37,7 @@ from odemis.gui.util import get_picture_folder, formats_to_wildcards
 import collections
 import logging
 import math
+import odemis.gui.comp.overlay as overlay
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
@@ -386,13 +387,13 @@ class SparcAcquisitionTab(Tab):
         self.update_spec_rep()
 
     def update_spec_rep(self, show=False):
-        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
 
         if self.spec_rep.ctrl.HasFocus() or show:
-            overlay.set_repetition(self.spec_rep.va.value)
-            overlay.grid_fill()
+            ol.set_repetition(self.spec_rep.va.value)
+            ol.grid_fill()
         else:
-            overlay.clear_fill()
+            ol.clear_fill()
 
     def on_spec_rep_focus(self, evt):
         self.update_spec_rep()
@@ -414,13 +415,13 @@ class SparcAcquisitionTab(Tab):
         self.update_angu_rep()
 
     def update_angu_rep(self, show=False):
-        overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
 
         if self.angu_rep.ctrl.HasFocus() or show:
-            overlay.set_repetition(self.angu_rep.va.value)
-            overlay.point_fill()
+            ol.set_repetition(self.angu_rep.va.value)
+            ol.point_fill()
         else:
-            overlay.clear_fill()
+            ol.clear_fill()
 
     def on_angu_rep_focus(self, evt):
         self.update_angu_rep()
@@ -486,8 +487,8 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
-            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            overlay.set_repetition(self.spec_rep.va.value)
+            ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+            ol.set_repetition(self.spec_rep.va.value)
 
     def onARROI(self, roi):
         """
@@ -500,8 +501,8 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
-            overlay = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            overlay.set_repetition(self.angu_rep.va.value)
+            ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+            ol.set_repetition(self.angu_rep.va.value)
 
 class AnalysisTab(Tab):
 
@@ -703,6 +704,9 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
+        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas)
+        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
+
         # See axes convention: A/B are 135° from Y/X
         self._stage_ab = InclinedStage("converter-ab", "stage",
                                        children={"aligner": main_data.aligner},
@@ -809,7 +813,7 @@ class LensAlignTab(Tab):
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
             pass
-        
+
     def _onSEMpxs(self, pxs):
         """
         Called when the SEM pixel size changes, which means the FoV changes
@@ -834,7 +838,7 @@ class InclinedStage(model.Actuator):
         """
         children (dict str -> actuator): name to actuator with 2+ axes
         axes (list of string): names of the axes for x and y
-        angle (float in degrees): angle of inclination (counter-clockwise) from 
+        angle (float in degrees): angle of inclination (counter-clockwise) from
           virtual to physical
         """
         assert len(axes) == 2
@@ -863,14 +867,14 @@ class InclinedStage(model.Actuator):
         pos = [xc * math.cos(a) - yc * math.sin(a),
                xc * math.sin(a) + yc * math.cos(a)]
         return pos
-    
+
     def _convertPosToChild(self, pos):
         a = math.radians(-self._angle)
         x, y = pos
         posc = [x * math.cos(a) - y * math.sin(a),
                 x * math.sin(a) + y * math.cos(a)]
         return posc
-    
+
     def _updatePosition(self, pos_child):
         """
         update the position VA when the child's position is updated
@@ -885,7 +889,7 @@ class InclinedStage(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
-        
+
         # shift is a vector, conversion is identical to a point
         vshift = [shift.get("x", 0), shift.get("y", 0)]
         vshift_child = self._convertPosToChild(vshift)
@@ -896,11 +900,11 @@ class InclinedStage(model.Actuator):
         return f
 
     # For now we don't support moveAbs(), not needed
-    
+
     def stop(self, axes=None):
         # This is normally never used (child is directly stopped)
         self._child.stop()
-        
+
 
 class MirrorAlignTab(Tab):
     """
