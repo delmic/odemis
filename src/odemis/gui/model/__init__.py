@@ -58,12 +58,12 @@ TOOL_SPOT = 7 # Activate spot mode on the SEM
 class MainGUIData(object):
     """
     Contains all the data corresponding to the entire GUI.
-    
-    In the MVC terminology, it's a model. It contains attributes to directly 
+
+    In the MVC terminology, it's a model. It contains attributes to directly
     access the microscope components, and data to be used or represented in the
-    entire GUI. Normally, there is only one instance of this object per 
+    entire GUI. Normally, there is only one instance of this object per
     execution (only one microscope manipulated at a time by the interface).
-    
+
     It contains mainly:
     .microscope:
         The HwComponent root of all the other components (can be None
@@ -71,7 +71,7 @@ class MainGUIData(object):
         recorded acquisition).
     .role (string): copy of .microscope.role (string) should be used to find out
         the generic type of microscope connected.
-        
+
     There are also many .ccd, .stage, etc, which can be used to directly access
     the sub-components.
     """
@@ -270,7 +270,7 @@ class MicroscopyGUIData(object):
 
     In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
     one for each window without tab). In the MVC terminology, it's a model.
-    
+
     This is a meta-class. You actually want to use one
     of the sub-classes to represent a specific type of interface. Not all
     interfaces have the same attributes. However, there are always:
@@ -647,7 +647,7 @@ class MicroscopeView(object):
 
     def getStreams(self):
         """
-        :returns [Stream]: list of streams that are displayed in the view
+        :return [Stream]: list of streams that are displayed in the view
 
         Do not modify directly, use addStream(), and removeStream().
         Note: use .stream_tree for getting the raw StreamTree
