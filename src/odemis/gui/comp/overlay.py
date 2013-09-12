@@ -1339,7 +1339,7 @@ class SpotMarkerOverlay(ViewOverlay):
 
             dc_buffer.DrawBitmapPoint(
                 marker_bmp,
-                wx.Point(self.view_pos[0] - 8, self.view_pos[1] - 8),
+                wx.Point(self.view_pos[0] - 16, self.view_pos[1] - 16),
                 useMask=False)
 
         super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)

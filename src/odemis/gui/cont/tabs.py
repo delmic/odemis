@@ -592,6 +592,7 @@ class AnalysisTab(Tab):
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
         fi = self.tab_data_model.fileinfo.value
+        #pylint: disable=E1103
         if fi and fi.file_name:
             path, _ = os.path.split(fi.file_name)
         else:
@@ -750,6 +751,12 @@ class LensAlignTab(Tab):
         self._dicho_overlay = dicho_overlay
         main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
+        # Spot marking mode
+        spotmark_overlay = overlay.SpotMarkerOverlay(
+                                    main_frame.vp_align_sem.canvas)
+        self._spotmark_overlay = spotmark_overlay
+        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
+
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
                                      main_data.ccd,
@@ -805,7 +812,9 @@ class LensAlignTab(Tab):
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
             self._dicho_overlay.enable(False)
-        
+        elif tool != guimodel.TOOL_SPOT:
+            self._spotmark_overlay.enable(False)
+
         if tool == guimodel.TOOL_DICHO:
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
@@ -820,7 +829,7 @@ class LensAlignTab(Tab):
             # changes reactivate the SEM stream and subscribe to an image, when image
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
-            pass
+            self._spotmark_overlay.enable(True)
 
     def _onDichoSeq(self, seq):
         roi = conversion.dichotomy_to_region(seq)
