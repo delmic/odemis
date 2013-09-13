@@ -230,6 +230,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._convertStreamsToImages()
         if self.fitViewToNextImage:
             self.fitViewToContent()
+            self.fitViewToNextImage = False
         #logging.debug("Will update drawing for new image")
         wx.CallAfter(self.ShouldUpdateDrawing)
 
