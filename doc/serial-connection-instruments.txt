@@ -47,6 +47,8 @@ miniterm.py --lf -e -DD /dev/ttyUSB0 38400
 ERR?
 Ctrl+D  (0x04)
 
+Ctrl+] (To quit)
+
 Note: Everything needs to be written fast (< 1s per character)
 
 
