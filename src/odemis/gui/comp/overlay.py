@@ -1067,7 +1067,7 @@ class DichotomyOverlay(ViewOverlay):
         # canvas or when we are not interested in updating the sequence.
         self.hover_pos = (None, None)
 
-        #
+        # maximum number of sub-quadrants (5->2**5 smaller than the whole area)
         self.max_len = 5
 
         self._reset()
@@ -1080,7 +1080,7 @@ class DichotomyOverlay(ViewOverlay):
 
         self.sequence_va.subscribe(self.on_change)
 
-        # Disabling the overlay willl allow the event handlers to ignore events
+        # Disabling the overlay will allow the event handlers to ignore events
         self.enabled = False
 
     def on_change(self, seq):
@@ -1125,6 +1125,7 @@ class DichotomyOverlay(ViewOverlay):
     def enable(self, enable=True):
         """ Enable of disable the overlay """
         self.enabled = enable
+        self.base.Refresh()
 
     def on_mouse_motion(self, evt):
         """ Mouse motion event handler """

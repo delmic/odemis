@@ -771,6 +771,7 @@ class LensAlignTab(Tab):
         ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
         stream_bar.add_stream(ccd_spe, True)
         ccd_spe.flatten() # removes the expander header
+        #TODO: CCD image fit to screen
 
         # Streams are always on when the tab is shown. In the future, if it's
         # possible to really control the SEM, we might revise this. For optical
@@ -822,6 +823,7 @@ class LensAlignTab(Tab):
             self._dicho_overlay.enable(True)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
+            self._spotmark_overlay.enable(True)
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
@@ -829,7 +831,6 @@ class LensAlignTab(Tab):
             # changes reactivate the SEM stream and subscribe to an image, when image
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
-            self._spotmark_overlay.enable(True)
 
     def _onDichoSeq(self, seq):
         roi = conversion.dichotomy_to_region(seq)
