@@ -809,6 +809,12 @@ class LensAlignTab(Tab):
         self._ccd_stream.should_update.value = show
         self._ccd_stream.is_active.value = show
 
+    def terminate(self):
+        super(LensAlignTab, self).terminate()
+        # make sure the streams are stopped
+        self._sem_stream.is_active.value = False
+        self._ccd_stream.is_active.value = False
+
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
