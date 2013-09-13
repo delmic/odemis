@@ -83,6 +83,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.canZoom = True
         self.canDrag = True
         self.noDragNoFocus = False
+        self.fitViewToNextImage = False
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
@@ -227,6 +228,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO use the real streamtree functions
         # for now we call a conversion layer
         self._convertStreamsToImages()
+        if self.fitViewToNextImage:
+            self.fitViewToContent()
         #logging.debug("Will update drawing for new image")
         wx.CallAfter(self.ShouldUpdateDrawing)
 

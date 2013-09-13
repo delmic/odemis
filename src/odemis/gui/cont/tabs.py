@@ -740,7 +740,6 @@ class LensAlignTab(Tab):
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canvas.canZoom = False
-        main_frame.vp_align_sem.canvas.canDrag = False # DEBUG
         # prevent the first image to reset our computation
         self._sem_view.getMPPFromNextImage = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
@@ -772,7 +771,11 @@ class LensAlignTab(Tab):
         ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
         stream_bar.add_stream(ccd_spe, True)
         ccd_spe.flatten() # removes the expander header
-        #TODO: CCD image fit to screen
+        # Fit CCD image to screen
+        self._ccd_view = ccd_view
+        ccd_view.getMPPFromNextImage = False
+        # No need to check for resize events as it's handled by the canvas
+        main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
 
         # Streams are always on when the tab is shown. In the future, if it's
         # possible to really control the SEM, we might revise this. For optical
