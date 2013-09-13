@@ -739,7 +739,8 @@ class LensAlignTab(Tab):
         self._sem_view.addStream(sem_stream)
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
-        main_frame.vp_align_sem.canZoom = False
+        main_frame.vp_align_sem.canvas.canZoom = False
+        main_frame.vp_align_sem.canvas.canDrag = False # DEBUG
         # prevent the first image to reset our computation
         self._sem_view.getMPPFromNextImage = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
@@ -752,10 +753,10 @@ class LensAlignTab(Tab):
         main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
-        spotmark_overlay = overlay.SpotMarkerOverlay(
-                                    main_frame.vp_align_sem.canvas)
-        self._spotmark_overlay = spotmark_overlay
-        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
+#        spotmark_overlay = overlay.SpotMarkerOverlay(
+#                                    main_frame.vp_align_sem.canvas)
+#        self._spotmark_overlay = spotmark_overlay
+#        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
 
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
@@ -813,17 +814,19 @@ class LensAlignTab(Tab):
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
             self._dicho_overlay.enable(False)
-        elif tool != guimodel.TOOL_SPOT:
-            self._spotmark_overlay.enable(False)
+#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(False, self._dicho_overlay)
+#        elif tool != guimodel.TOOL_SPOT:
+#            self._spotmark_overlay.enable(False)
 
         if tool == guimodel.TOOL_DICHO:
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
             # meaningful value
             self._dicho_overlay.enable(True)
+#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
-            self._spotmark_overlay.enable(True)
+#            self._spotmark_overlay.enable(True)
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
@@ -831,6 +834,7 @@ class LensAlignTab(Tab):
             # changes reactivate the SEM stream and subscribe to an image, when image
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
+            pass
 
     def _onDichoSeq(self, seq):
         roi = conversion.dichotomy_to_region(seq)

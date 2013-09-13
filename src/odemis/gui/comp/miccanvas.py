@@ -41,8 +41,9 @@ import wx
 
 MODE_SECOM_ZOOM = 1
 MODE_SECOM_UPDATE = 2
+MODE_SECOM_DICHO = 5
 
-SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE)
+SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE, MODE_SECOM_DICHO)
 
 MODE_SPARC_SELECT = 3
 MODE_SPARC_PICK = 4
@@ -69,7 +70,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     Public attributes:
     .canZoom (Boolean): If True (default), allows the user to zoom. When False,
-      the zoom can still be changed programatically with view.mpp.
+      the zoom can still be changed programmatically with view.mpp.
     .canDrag (Boolean): If True (default), allows the user to drag
     .noDragNoFocus (Boolean): False by default. If True, prevent Drag and Focus
       change to happen. Useful to avoid the user to move a paused view.
@@ -463,18 +464,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.canDrag:
             if not self.noDragNoFocus:
                 super(DblMicroscopeCanvas, self).OnLeftDown(event)
-        else:
-            event.Skip()
+        # TODO: Skip() ?
 
     def ShiftView(self, shift):
         if self.canDrag:
-            canvas.DraggableCanvas.ShiftView(self, shift)
+            super(DblMicroscopeCanvas, self).ShiftView(shift)
 
     def OnDblClick(self, event):
         if self.canDrag:
             super(DblMicroscopeCanvas, self).OnDblClick(event)
-        else:
-            event.Skip()
 
     def world_to_real_pos(self, pos):
         phy_pos = tuple([v * self.mpwu for v in pos])
@@ -608,6 +606,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         logging.debug("Update mode %s", self)
         self._toggle_mode(enabled, self.update_overlay, MODE_SECOM_UPDATE)
 
+    def toggle_dicho_mode(self, enabled, overlay):
+        self._toggle_mode(enabled, overlay, MODE_SECOM_DICHO)
+
     def on_zoom_start(self, canvas):
         """ If a zoom selection starts, all previous selections should be
         cleared.
@@ -644,10 +645,8 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             self.ShouldUpdateDrawing()
 
-        elif not self.noDragNoFocus or not self.microscope_view.has_stage():
-            canvas.DraggableCanvas.OnLeftDown(self, event)
         else:
-            event.Skip()
+            super(SecomCanvas, self).OnLeftDown(event)
 
 
     def OnLeftUp(self, event):
@@ -665,7 +664,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             self.ShouldUpdateDrawing()
         else:
-            canvas.DraggableCanvas.OnLeftUp(self, event)
+            super(SecomCanvas, self).OnLeftUp(event)
 
     def OnMouseMotion(self, event):
         if self.current_mode in SECOM_MODES and self.active_overlay:
@@ -694,7 +693,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                 else:
                     self.SetCursor(self.cursor)
         else:
-            canvas.DraggableCanvas.OnMouseMotion(self, event)
+            super(SecomCanvas, self).OnMouseMotion(event)
 
     # Capture unwanted events when a tool is active.
 
@@ -802,7 +801,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
 
         else:
-            canvas.DraggableCanvas.OnLeftDown(self, event)
+            super(SparcAcquiCanvas, self).OnLeftDown(event)
 
     def OnLeftUp(self, event):
         if self.current_mode in SPARC_MODES:
@@ -822,7 +821,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     self._roa.value = UNDEFINED_ROI
 
         else:
-            canvas.DraggableCanvas.OnLeftUp(self, event)
+            super(SparcAcquiCanvas, self).OnLeftUp(event)
 
     def OnMouseMotion(self, event):
         if self.current_mode in SPARC_MODES and self.active_overlay:
@@ -852,7 +851,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                     self.SetCursor(self.cursor)
 
         else:
-            canvas.DraggableCanvas.OnMouseMotion(self, event)
+            super(SparcAcquiCanvas, self).OnMouseMotion(event)
 
     # Capture unwanted events when a tool is active.
 

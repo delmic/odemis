@@ -1078,7 +1078,7 @@ class DichotomyOverlay(ViewOverlay):
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button)
         self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
 
-        self.sequence_va.subscribe(self.on_change)
+        self.sequence_va.subscribe(self.on_change, init=True)
 
         # Disabling the overlay will allow the event handlers to ignore events
         self.enabled = False
@@ -1168,8 +1168,6 @@ class DichotomyOverlay(ViewOverlay):
 
             vpos = evt.GetPosition()
             self.hover_pos = self.quad_hover(vpos)
-
-
 
         evt.Skip()
 
