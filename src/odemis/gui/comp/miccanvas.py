@@ -38,15 +38,15 @@ import threading
 import wx
 
 # Various modes canvas elements can go into.
+# TODO: directly use the TOOL_* values
+MODE_SECOM_ZOOM = guimodel.TOOL_ZOOM
+MODE_SECOM_UPDATE = guimodel.TOOL_ROI
+MODE_SECOM_DICHO = guimodel.TOOL_DICHO
 
-MODE_SECOM_ZOOM = 1
-MODE_SECOM_UPDATE = 2
-MODE_SECOM_DICHO = 5
+SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE)
 
-SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE, MODE_SECOM_DICHO)
-
-MODE_SPARC_SELECT = 3
-MODE_SPARC_PICK = 4
+MODE_SPARC_SELECT = guimodel.TOOL_ROA
+MODE_SPARC_PICK = guimodel.TOOL_POINT
 
 SPARC_MODES = (MODE_SPARC_SELECT, MODE_SPARC_PICK)
 
@@ -99,6 +99,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
         # and use listen to .tool (cf SparcCanvas)
         self.current_mode = None
+        self.allowedModes = None # None (all allowed) or a set of guimodel.TOOL_* allowed (rest is treated like NONE)
         # meter per "world unit"
         self.mpwu = None
 
@@ -107,6 +108,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # for the FPS
         self.fps_overlay = comp_overlay.TextViewOverlay(self)
         self.ViewOverlays.append(self.fps_overlay)
+
+        self.active_overlay = None
+        self.cursor = wx.STANDARD_CURSOR
 
     def setView(self, microscope_view, tab_data):
         """
@@ -141,13 +145,67 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_overlay = comp_overlay.FocusOverlay(self)
             self.ViewOverlays.append(self.focus_overlay)
 
+        if guimodel.TOOL_DICHO in tab_data.tool.choices:
+            self.dicho_overlay = comp_overlay.DichotomyOverlay(self,
+                                                 tab_data.dicho_seq)
+            self.ViewOverlays.append(self.dicho_overlay)
+
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
         # handle crosshair
         self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
-        self._tab_data_model.main.debug.subscribe(self._onDebug, init=True)
+        tab_data.main.debug.subscribe(self._onDebug, init=True)
+        tab_data.tool.subscribe(self._onTool, init=True)
+
+    def _onTool(self, tool):
+        """
+        Called when the tool (mode) of the view changes
+        """
+        if self.dragging:
+            logging.error("Changing to mode (%s) while dragging not implemented", tool)
+            # TODO: queue it until dragging is finished?
+            # Really? Why? I can't think of a scenario.
+
+        # filter the tool mode if needed:
+        if self.allowedModes is not None:
+            if tool not in self.allowedModes:
+                tool = guimodel.TOOL_NONE
+
+        # TODO: send a .enable/.disable to overlay when becoming the active one
+        if self.current_mode == MODE_SECOM_DICHO:
+            self.dicho_overlay.enable(False)
+
+        # TODO: one mode <-> one overlay (type)
+        # TODO: create the overlay on the fly, the first time it's requested
+        if tool == guimodel.TOOL_ROA:
+            self.current_mode = MODE_SPARC_SELECT
+            self.active_overlay = self.roi_overlay
+            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        elif tool == guimodel.TOOL_ROI:
+            self.current_mode = MODE_SECOM_UPDATE
+            self.active_overlay = self.update_overlay
+            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        elif tool == guimodel.TOOL_ZOOM:
+            self.current_mode = MODE_SECOM_ZOOM
+            self.active_overlay = self.zoom_overlay
+            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        elif tool == guimodel.TOOL_DICHO:
+            self.current_mode = MODE_SECOM_DICHO
+            self.active_overlay = self.dicho_overlay
+            #FIXME: cursor handled by .enable()
+            self.cursor = wx.StockCursor(wx.CURSOR_HAND)
+            self.dicho_overlay.enable(True)
+        elif tool == guimodel.TOOL_NONE:
+            self.current_mode = None
+            self.active_overlay = None
+            self.cursor = wx.STANDARD_CURSOR
+            self.ShouldUpdateDrawing()
+        else:
+            logging.warning("Unhandled tool type %s", tool)
+
+        self.SetCursor(self.cursor)
 
     def _onCrossHair(self, activated):
         """ Activate or disable the display of a cross in the middle of the view
@@ -531,11 +589,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         self.active_overlay = None
 
         # TODO: use .tool as for SparcCanvas
-        pub.subscribe(self.toggle_zoom_mode, 'secom.tool.zoom.click')
-        pub.subscribe(self.toggle_update_mode, 'secom.tool.update.click')
         pub.subscribe(self.on_zoom_start, 'secom.canvas.zoom.start')
-
-        self.cursor = wx.STANDARD_CURSOR
 
         # TODO: once the StreamTrees can render fully, reactivate the background
         # pattern
@@ -588,31 +642,6 @@ class SecomCanvas(DblMicroscopeCanvas):
     def add_view_overlay(self, vol):
         self.ViewOverlays.append(vol)
 
-    def _toggle_mode(self, enabled, overlay, mode):
-        if self.current_mode == mode and not enabled:
-            self.current_mode = None
-            self.active_overlay = None
-            self.cursor = wx.STANDARD_CURSOR
-            self.zoom_overlay.clear_selection()
-            self.ShouldUpdateDrawing()
-        elif not self.dragging and enabled:
-            self.current_mode = mode
-            self.active_overlay = overlay
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-
-        self.SetCursor(self.cursor)
-
-    def toggle_zoom_mode(self, enabled):
-        logging.debug("Zoom mode %s", self)
-        self._toggle_mode(enabled, self.zoom_overlay, MODE_SECOM_ZOOM)
-
-    def toggle_update_mode(self, enabled):
-        logging.debug("Update mode %s", self)
-        self._toggle_mode(enabled, self.update_overlay, MODE_SECOM_UPDATE)
-
-    def toggle_dicho_mode(self, enabled, overlay):
-        self._toggle_mode(enabled, overlay, MODE_SECOM_DICHO)
-
     def on_zoom_start(self, canvas):
         """ If a zoom selection starts, all previous selections should be
         cleared.
@@ -622,6 +651,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             self.ShouldUpdateDrawing()
 
     def OnLeftDown(self, event):
+        # TODO: move this to the overlay
         # If one of the Secom tools is activated...
         if self.current_mode in SECOM_MODES:
             vpos = event.GetPosition()
@@ -721,8 +751,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
         self.roi_overlay = comp_overlay.RepetitionSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
-        self.active_overlay = None
-        self.cursor = wx.STANDARD_CURSOR
+
 
     def setView(self, microscope_view, tab_data):
         """
@@ -751,30 +780,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._onSEMMag)
 
-        tab_data.tool.subscribe(self.onTool, init=True)
-
-    def onTool(self, tool):
-        """
-        Called when the tool (mode) of the view changes
-        """
-        if self.dragging:
-            logging.error("Changing to mode (%s) while dragging not implemented", tool)
-            # TODO: queue it until dragging is finished?
-            # Really? Why? I can't think of a scenario.
-
-        if tool == guimodel.TOOL_ROA:
-            self.current_mode = MODE_SPARC_SELECT
-            self.active_overlay = self.roi_overlay
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool == guimodel.TOOL_NONE:
-            self.current_mode = None
-            self.active_overlay = None
-            self.cursor = wx.STANDARD_CURSOR
-            self.ShouldUpdateDrawing()
-        else:
-            logging.warning("Unhandled tool type %s", tool)
-
-        self.SetCursor(self.cursor)
 
     def OnLeftDown(self, event):
         # If one of the Sparc tools is activated...

@@ -746,10 +746,10 @@ class LensAlignTab(Tab):
 
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
-        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas,
-                                                 self.tab_data_model.dicho_seq)
-        self._dicho_overlay = dicho_overlay
-        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
+#        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas,
+#                                                 self.tab_data_model.dicho_seq)
+#        self._dicho_overlay = dicho_overlay
+#        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
 #        spotmark_overlay = overlay.SpotMarkerOverlay(
@@ -776,6 +776,8 @@ class LensAlignTab(Tab):
         ccd_view.getMPPFromNextImage = False
         # No need to check for resize events as it's handled by the canvas
         main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
+        # force this view to never follow the tool mode (just standard view)
+        main_frame.vp_align_ccd.canvas.allowedModes = set([guimodel.TOOL_NONE])
 
         # Streams are always on when the tab is shown. In the future, if it's
         # possible to really control the SEM, we might revise this. For optical
@@ -796,7 +798,6 @@ class LensAlignTab(Tab):
         tb = main_frame.lens_align_tb
         tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
-
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
     def Show(self, show=True):
@@ -822,7 +823,7 @@ class LensAlignTab(Tab):
         if tool != guimodel.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
-            self._dicho_overlay.enable(False)
+#            self._dicho_overlay.enable(False)
 #            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(False, self._dicho_overlay)
 #        elif tool != guimodel.TOOL_SPOT:
 #            self._spotmark_overlay.enable(False)
@@ -831,7 +832,8 @@ class LensAlignTab(Tab):
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
             # meaningful value
-            self._dicho_overlay.enable(True)
+#            self._dicho_overlay.enable(True)
+            pass
 #            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
