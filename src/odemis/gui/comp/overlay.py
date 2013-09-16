@@ -1288,6 +1288,8 @@ class SpotMarkerOverlay(ViewOverlay):
         self.view_pos = None
         self.enabled = False
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
+        self.marker_bmp = img.getspot_markerBitmap()
+        self.marker_offset = self.marker_bmp.Size.Width // 2
 
         self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
@@ -1335,11 +1337,11 @@ class SpotMarkerOverlay(ViewOverlay):
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         if self.view_pos and self.enabled:
-            marker_bmp = img.getspot_markerBitmap()
-
             dc_buffer.DrawBitmapPoint(
-                marker_bmp,
-                wx.Point(self.view_pos[0] - 16, self.view_pos[1] - 16),
+                self.marker_bmp,
+                wx.Point(
+                    self.view_pos[0] - self.marker_offset,
+                    self.view_pos[1] - self.marker_offset),
                 useMask=False)
 
         super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)
