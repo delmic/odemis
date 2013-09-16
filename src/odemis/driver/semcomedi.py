@@ -1135,7 +1135,7 @@ class SEMComedi(model.HwComponent):
         tr_rect = rectangle[:, margin:]
         if osr == 1:
             # only one sample per pixel => copy
-            oarray = tr_rect[:, :, 0]
+            oarray[...] = tr_rect[:, :, 0]
         else:
             # inspired by _mean() from numpy, but save the accumulated value in
             # a separate array of a big enough dtype.
