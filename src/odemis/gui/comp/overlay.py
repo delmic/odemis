@@ -1299,17 +1299,14 @@ class SpotMarkerOverlay(ViewOverlay):
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
 
     def on_mouse_button_down(self, evt):
-        if not self.enabled:
-            evt.Skip()
+        evt.Skip()
 
     def on_mouse_button_up(self, evt):
         if self.enabled:
             vpos = evt.GetPosition()
             self.set_view_position(vpos)
             self.base.Refresh()
-            print self.get_world_position()
-        else:
-            evt.Skip()
+        evt.Skip()
 
     def get_world_position(self):
         if self.view_pos:
