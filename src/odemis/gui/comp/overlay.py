@@ -1199,10 +1199,10 @@ class DichotomyOverlay(ViewOverlay):
                     quad = 0
 
                     # If the position is in the left half, add 1 to the quadrant
-                    if vpos.x > x + w // 2:
+                    if vpos.x > x + w / 2:
                         quad += 1
                     # If the position is in the bottom half, add 2
-                    if vpos.y > y + h // 2:
+                    if vpos.y > y + h / 2:
                         quad += 2
 
                     return i, quad
@@ -1219,8 +1219,8 @@ class DichotomyOverlay(ViewOverlay):
         x, y, w, h = self.sequence_rect[idx]
 
         # The new rectangle will have half the size of the base one
-        w = w // 2
-        h = h // 2
+        w = w / 2
+        h = h / 2
 
         # If the quadrant is in the right half, construct x by adding half the
         # width to x position of the base rectangle.
