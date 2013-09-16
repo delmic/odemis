@@ -38,6 +38,7 @@ import collections
 import logging
 import math
 import odemis.gui.comp.overlay as overlay
+import odemis.gui.comp.scalewindow as scalewindow
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
@@ -705,6 +706,7 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
+
         # See axes convention: A/B are 135° from Y/X
         self._stage_ab = InclinedStage("converter-ab", "stage",
                                        children={"aligner": main_data.aligner},
@@ -792,10 +794,19 @@ class LensAlignTab(Tab):
                                                        "lens_align_")
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
 
+
         # Toolbar
         tb = main_frame.lens_align_tb
         tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
+
+        # Move the scale window from the hidden viewport legend next to the
+        # toolbar.
+        tb_sizer = tb.GetSizer()
+        main_frame.vp_align_sem.legend_panel.scaleDisplay.Reparent(tb)
+        tb_sizer.Add(
+            main_frame.vp_align_sem.legend_panel.scaleDisplay,
+            flag=wx.EXPAND)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 

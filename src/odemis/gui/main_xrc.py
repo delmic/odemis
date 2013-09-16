@@ -853,11 +853,13 @@ def __init_resources():
                         </object>
                         <orient>wxHORIZONTAL</orient>
                       </object>
+                      <fg>#E5E5E5</fg>
                       <bg>#333333</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
+                    <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
