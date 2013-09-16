@@ -1546,6 +1546,12 @@ class SEMComedi(model.HwComponent):
                     # Convert to a nice 2D DataArray
                     parray = rbuf[i]
                     darray = model.DataArray(parray, metadata)
+                    # TODO: call the callback in a thread => just add data to a
+                    # synchronizing queue and let a thread just call callback.
+                    # (need to be clever on the size of the queue: max 2 if no
+                    # synchronization, otherwise, quite a lot ~ 20?)
+                    # This should avoid the scan to spend a lot of time at the
+                    # last point.
                     callback(darray)
 
                 # force the GC to non-used buffers, for some reason, without this
