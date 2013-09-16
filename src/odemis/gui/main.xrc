@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -41,6 +41,27 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_22view">
+          <label>2x2 view</label>
+          <accel>F5</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_cross">
+          <label>Cross hair</label>
+          <accel>Esc</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <label>View</label>
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_htmldoc">
@@ -426,6 +447,35 @@
                     <flag>wxTOP|wxALIGN_CENTRE</flag>
                     <border>20</border>
                   </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                          <label>Approximate center at A = %s mm, B = %s mm</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="lens_align_btn_to_center">
+                          <label>Move there</label>
+                          <bitmap>img/btn_128x24.png</bitmap>
+                          <hover>img/btn_128x24_h.png</hover>
+                          <selected>img/btn_128x24_a.png</selected>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxALIGN_CENTRE</flag>
+                        <border>16</border>
+                      </object>
+                      <orient>wxVERTICAL</orient>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
                 </object>
                 <size>300,-1</size>
                 <fg>#E5E5E5</fg>
@@ -623,11 +673,13 @@
                         </object>
                         <orient>wxHORIZONTAL</orient>
                       </object>
+                      <fg>#E5E5E5</fg>
                       <bg>#333333</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
+                    <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">

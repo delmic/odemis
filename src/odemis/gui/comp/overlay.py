@@ -1288,6 +1288,8 @@ class SpotMarkerOverlay(ViewOverlay):
         self.view_pos = None
         self.enabled = False
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
+        self.marker_bmp = img.getspot_markerBitmap()
+        self.marker_offset = self.marker_bmp.GetSize().GetWidth() // 2
 
         self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
@@ -1297,17 +1299,14 @@ class SpotMarkerOverlay(ViewOverlay):
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
 
     def on_mouse_button_down(self, evt):
-        if not self.enabled:
-            evt.Skip()
+        evt.Skip()
 
     def on_mouse_button_up(self, evt):
         if self.enabled:
             vpos = evt.GetPosition()
             self.set_view_position(vpos)
             self.base.Refresh()
-            print self.get_world_position()
-        else:
-            evt.Skip()
+        evt.Skip()
 
     def get_world_position(self):
         if self.view_pos:
@@ -1329,16 +1328,17 @@ class SpotMarkerOverlay(ViewOverlay):
         # TODO: Cache the current cursor so it can be restored?
         if enable:
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            logging.debug("SpotMarkerOverlay enabled")
         else:
             self.base.SetCursor(wx.STANDARD_CURSOR)
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         if self.view_pos and self.enabled:
-            marker_bmp = img.getspot_markerBitmap()
-
             dc_buffer.DrawBitmapPoint(
-                marker_bmp,
-                wx.Point(self.view_pos[0] - 16, self.view_pos[1] - 16),
+                self.marker_bmp,
+                wx.Point(
+                    self.view_pos[0] - self.marker_offset,
+                    self.view_pos[1] - self.marker_offset),
                 useMask=False)
 
         super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)

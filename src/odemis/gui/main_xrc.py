@@ -41,6 +41,8 @@ class xrcfr_main(wx.Frame):
         self.menu_item_load1 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load1"))
         self.menu_item_load2 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load2"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
+        self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
         self.menu_item_htmldoc = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_htmldoc"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
@@ -56,6 +58,8 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
         self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
         self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
+        self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
+        self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
@@ -198,7 +202,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -240,6 +244,27 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_22view">
+          <label>2x2 view</label>
+          <accel>F5</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_cross">
+          <label>Cross hair</label>
+          <accel>Esc</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <label>View</label>
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_htmldoc">
@@ -625,6 +650,35 @@ def __init_resources():
                     <flag>wxTOP|wxALIGN_CENTRE</flag>
                     <border>20</border>
                   </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                          <label>Approximate center at A = %s mm, B = %s mm</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="lens_align_btn_to_center">
+                          <label>Move there</label>
+                          <bitmap>img_btn_128x24_png</bitmap>
+                          <hover>img_btn_128x24_h_png</hover>
+                          <selected>img_btn_128x24_a_png</selected>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxALIGN_CENTRE</flag>
+                        <border>16</border>
+                      </object>
+                      <orient>wxVERTICAL</orient>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
                 </object>
                 <size>300,-1</size>
                 <fg>#E5E5E5</fg>
@@ -822,11 +876,13 @@ def __init_resources():
                         </object>
                         <orient>wxHORIZONTAL</orient>
                       </object>
+                      <fg>#E5E5E5</fg>
                       <bg>#333333</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
+                    <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
@@ -3204,6 +3260,59 @@ P!\x84]\x0b\x05V0\x83\xdd\xb3,3w\xdf=\xf8\xb3\xc0|c\x87#I\x92\x18[=\x98\
 \xf0\xcb:\xff\x91\xfd\xcf\x97e\xf9\\\xd7\xf5\x27\xbe\xcfD\xecg0G\xf6\x8f\
 +\x0d\xb1"$\xa9\x8a`\x0c\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_btn_128x24_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x80\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+2\x0b\xf5\xe5\x00\x00\x00\xd0IDATh\xde\xed\xda1
+\x83@\x10\x85\xe1e\x8b\xdc U\x8e\x97c$\x10\x02\xa9s\x83@\x0ebi\xe1AV\x10\
+m\x15E\xd1\xc9>\x88\x97p\xfe\xe2k\xb6\x9c\xf7\x9cU0\x16Eq*\xcb\xf2UUU\xca\
+\x0c.$e\xae\xec\xe3\xba\xae\xcfq\x1com\xdb^\xea\xba\x0e)%\x1c\x982V\xd6\
+\xca\\\xd9\xc7a\x18\xae}\xdf\x87i\x9aB>\x08\xdb\xb6\xe1\xc0\x94\xb1\xb2\
+V\xe6\xca>.\xcbr\x9e\xe7\x99\xe18\xa3\xcc\x95}\xdc\x0f\xcc\x0c\x8e\xec\xb9\
+G\x9e\x06\xdf(\x00\x05`\x08\x14\x00~\x0b\xa0\xcf\x02\xf8\xc5\x06\xe0
+`\x08\\\x01\xe0
+\x00\x1b\x00l\x00\xf0\x12\x08
+\x00
+\x00
+\x00
+\x00\x17\x05\xe8\x18\x84[]4\xb3\x0f\xc8\xb8\xf5\xd5\x06xd\xef\xac\xe1\
+\x89p\xa3\xf9g~\xff\x01Q\xb9\xc78\xa7\xbb\xd4y\x00\x00\x00\x00IEND\xaeB\
+`\x82'''
+
+    img_btn_128x24_h_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x80\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+2\x0b\xf5\xe5\x00\x00\x00\xd8IDATh\xde\xed\xd8\xd1i\xc3@\x10\x84\xe1\xff\
+\xd0r\x1d\x08\x02\xee\xccO\x017aHH\xb0\xfb0\xf8)\xcd\xa8\x8e\x80\xc1\x05\
+H\x9cno\xf3\x94&\xbc\xf3\x950\xcc\xcd
+\xd9\xb2,\xb5\xd6\xfa5M\xd3;p@2\xf8u\xf7{k\xedj\xee~\xd9\xb6\xed\xdcZ\xa3\
+\xf7ND(\x9e\x17VJ\xc1\xcc\x0e\xb5\xd6\x8f\x88\x98l]\xd7S)\x85\xde\xbb\xd2\
+I\xc2\xddqw"\xe2d\xbd\xf7\x19\xd0\xcbOf\xdfw\x80\xd9\xc6\x18J#\xa1\xff\x07\
+\xaf\x02$g\xee\xae\x142\x17@\x0b\xa0\x02(\x05\x9d\x00\xd1\x02H\xce\x02\xe8\
+\x07\x90\x16@)\xe8\x1b@T\x00\xd1\x09\x10-\x80h\x01D\x05\x10\x9d\x00\xd1\
+\x02H\x86\x02D\xc4\x13\x98\x15EJO\x1bc\xdc\x80\xb3\xb2H\xe9nc\x8co\xa0\x02\
+G\xe0M\x99\xa4\xf0\x00~\x80\xcf?Ge|\xe0\x9eQ\x02\x84\x00\x00\x00\x00IEN\
+D\xaeB`\x82'''
+
+    img_btn_128x24_a_png = '''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x80\x00\x00\x00\x18\x08\x06\x00\x00\x00\
+2\x0b\xf5\xe5\x00\x00\x01\x06IDATh\xde\xed\x96M\x8a\x83P\x10\x84\xdbV\xde\
+NP0\x08Fq\xe3\x01\\x\xa3\x1cc\x06B \xeb\xb9\xc1@\x0e\x97E 7\x10\xe6\xd5\
+\x90\\"U\x0d\xdf\xc2m\xfd\xac\xf2a\x18B\xe4\x1a\xb9GvA\xc1\xfd\xe5<x\x96\
+e\x97<\xcf\xbf\xea\xba>\xc6\xb1\xb6m\xc5\x07\x03\xc7p\x0d\xe7p\xefeY\x9e\
+\xe2%\xd88\x8e6M\x93 \x00\xae\xe1\x1c\xee\xbd\xeb\xba\x03>\xfa\xbe\xb7\xa6\
+i\x04\x01p\x0d\xe7p\xefUUYQ\x14\x96\xa6\xa9a\xf6}\x17\x1f\x0c\x06\xae\xe1\
+\x1c\xee=\x84`I\x92\xd8\xb6m\x82\x088\x87{_\x86\x96\xc2\xc5\xdb\xbbK>\xf7\
+\x11\xb8r\x91\x1b\xd7K\xe0F\x11\xc0\x1e\x01\xeb\xba\x9a\xe0E\x1d@\x1d`\xd3\
+K \xe5\xbf\x03(\x0bU\x02\xb5\x08\xe6\x12\xa8E\xe8\x0f\xa02\xc4\\\x02\x15\
+\x01\x8a\x00-\x839\x02\xb4\x04\xf2\x030\xb3\xa7iX\xe7\x89?\xc0\xaf^\x02\
+-7\x9f\xe7\xf9\xbc,\xcbO,\x04\x0f\xb5b\x1a\x1ep\x1e\xdd\xff\x01Z|\x840\
+v\xa3\x18\x8b\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     img_btn_sem_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4114,59 +4223,6 @@ agc\xcc\x07\xaf)\x98a\xe7\xed`\xef7\xffk\x13\x10k\xc4\x0f\x81\xb5\xe2\xb7\
 \xc5\x1b\xd0c\x03\x1e\x98\x84\xd2\x9e<\x0c\xc3e\x1c\xc7\xbbL\xa3St\xf3\x1d\
 \xccb?\xbf\x00\x06\x94x\xf4\xde\xb3\xdf\x9a\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_btn_128x24_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x80\x00\x00\x00\x18\x08\x06\x00\x00\x00\
-2\x0b\xf5\xe5\x00\x00\x00\xd0IDATh\xde\xed\xda1
-\x83@\x10\x85\xe1e\x8b\xdc U\x8e\x97c$\x10\x02\xa9s\x83@\x0ebi\xe1AV\x10\
-m\x15E\xd1\xc9>\x88\x97p\xfe\xe2k\xb6\x9c\xf7\x9cU0\x16Eq*\xcb\xf2UUU\xca\
-\x0c.$e\xae\xec\xe3\xba\xae\xcfq\x1com\xdb^\xea\xba\x0e)%\x1c\x982V\xd6\
-\xca\\\xd9\xc7a\x18\xae}\xdf\x87i\x9aB>\x08\xdb\xb6\xe1\xc0\x94\xb1\xb2\
-V\xe6\xca>.\xcbr\x9e\xe7\x99\xe18\xa3\xcc\x95}\xdc\x0f\xcc\x0c\x8e\xec\xb9\
-G\x9e\x06\xdf(\x00\x05`\x08\x14\x00~\x0b\xa0\xcf\x02\xf8\xc5\x06\xe0
-`\x08\\\x01\xe0
-\x00\x1b\x00l\x00\xf0\x12\x08
-\x00
-\x00
-\x00
-\x00\x17\x05\xe8\x18\x84[]4\xb3\x0f\xc8\xb8\xf5\xd5\x06xd\xef\xac\xe1\
-\x89p\xa3\xf9g~\xff\x01Q\xb9\xc78\xa7\xbb\xd4y\x00\x00\x00\x00IEND\xaeB\
-`\x82'''
-
-    img_btn_128x24_h_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x80\x00\x00\x00\x18\x08\x06\x00\x00\x00\
-2\x0b\xf5\xe5\x00\x00\x00\xd8IDATh\xde\xed\xd8\xd1i\xc3@\x10\x84\xe1\xff\
-\xd0r\x1d\x08\x02\xee\xccO\x017aHH\xb0\xfb0\xf8)\xcd\xa8\x8e\x80\xc1\x05\
-H\x9cno\xf3\x94&\xbc\xf3\x950\xcc\xcd
-\xd9\xb2,\xb5\xd6\xfa5M\xd3;p@2\xf8u\xf7{k\xedj\xee~\xd9\xb6\xed\xdcZ\xa3\
-\xf7ND(\x9e\x17VJ\xc1\xcc\x0e\xb5\xd6\x8f\x88\x98l]\xd7S)\x85\xde\xbb\xd2\
-I\xc2\xddqw"\xe2d\xbd\xf7\x19\xd0\xcbOf\xdfw\x80\xd9\xc6\x18J#\xa1\xff\x07\
-\xaf\x02$g\xee\xae\x142\x17@\x0b\xa0\x02(\x05\x9d\x00\xd1\x02H\xce\x02\xe8\
-\x07\x90\x16@)\xe8\x1b@T\x00\xd1\x09\x10-\x80h\x01D\x05\x10\x9d\x00\xd1\
-\x02H\x86\x02D\xc4\x13\x98\x15EJO\x1bc\xdc\x80\xb3\xb2H\xe9nc\x8co\xa0\x02\
-G\xe0M\x99\xa4\xf0\x00~\x80\xcf?Ge|\xe0\x9eQ\x02\x84\x00\x00\x00\x00IEN\
-D\xaeB`\x82'''
-
-    img_btn_128x24_a_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x80\x00\x00\x00\x18\x08\x06\x00\x00\x00\
-2\x0b\xf5\xe5\x00\x00\x01\x06IDATh\xde\xed\x96M\x8a\x83P\x10\x84\xdbV\xde\
-NP0\x08Fq\xe3\x01\\x\xa3\x1cc\x06B \xeb\xb9\xc1@\x0e\x97E 7\x10\xe6\xd5\
-\x90\\"U\x0d\xdf\xc2m\xfd\xac\xf2a\x18B\xe4\x1a\xb9GvA\xc1\xfd\xe5<x\x96\
-e\x97<\xcf\xbf\xea\xba>\xc6\xb1\xb6m\xc5\x07\x03\xc7p\x0d\xe7p\xefeY\x9e\
-\xe2%\xd88\x8e6M\x93 \x00\xae\xe1\x1c\xee\xbd\xeb\xba\x03>\xfa\xbe\xb7\xa6\
-i\x04\x01p\x0d\xe7p\xefUUYQ\x14\x96\xa6\xa9a\xf6}\x17\x1f\x0c\x06\xae\xe1\
-\x1c\xee=\x84`I\x92\xd8\xb6m\x82\x088\x87{_\x86\x96\xc2\xc5\xdb\xbbK>\xf7\
-\x11\xb8r\x91\x1b\xd7K\xe0F\x11\xc0\x1e\x01\xeb\xba\x9a\xe0E\x1d@\x1d`\xd3\
-K \xe5\xbf\x03(\x0bU\x02\xb5\x08\xe6\x12\xa8E\xe8\x0f\xa02\xc4\\\x02\x15\
-\x01\x8a\x00-\x839\x02\xb4\x04\xf2\x030\xb3\xa7iX\xe7\x89?\xc0\xaf^\x02\
--7\x9f\xe7\xf9\xbc,\xcbO,\x04\x0f\xb5b\x1a\x1ep\x1e\xdd\xff\x01Z|\x840\
-v\xa3\x18\x8b\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     img_btn_256x24_png = '''\
 \x89PNG\x0d
 \x1a
@@ -4997,6 +5053,9 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_png', img_btn_64x48_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_h_png', img_btn_64x48_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x48_a_png', img_btn_64x48_a_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_png', img_btn_128x24_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_h_png', img_btn_128x24_h_png)
+    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_a_png', img_btn_128x24_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_sem_png', img_btn_sem_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_sem_h_png', img_btn_sem_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_sem_on_a_png', img_btn_sem_on_a_png)
@@ -5025,9 +5084,6 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_png', img_btn_64x16_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_h_png', img_btn_64x16_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_64x16_a_png', img_btn_64x16_a_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_png', img_btn_128x24_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_h_png', img_btn_128x24_h_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_btn_128x24_a_png', img_btn_128x24_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_256x24_png', img_btn_256x24_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_256x24_h_png', img_btn_256x24_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_256x24_a_png', img_btn_256x24_a_png)

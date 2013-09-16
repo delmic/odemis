@@ -6,9 +6,16 @@ first=1
 
 rm data.py
 
-pngcrush -brute -rem alla -d tmp *
-mv tmp/* .
-rmdir tmp/
+# I hate bash scripting with a passion
+if [ $# -gt 0 ]
+    then
+    echo "Optimizing PNGs"
+    pngcrush -brute -rem alla -d tmp *
+    mv tmp/* .
+    rmdir tmp/
+fi
+
+echo "Building data.py"
 
 for file in `ls *.png`
 do

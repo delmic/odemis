@@ -38,6 +38,7 @@ import collections
 import logging
 import math
 import odemis.gui.comp.overlay as overlay
+import odemis.gui.comp.scalewindow as scalewindow
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
@@ -752,10 +753,10 @@ class LensAlignTab(Tab):
 #        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
-#        spotmark_overlay = overlay.SpotMarkerOverlay(
-#                                    main_frame.vp_align_sem.canvas)
-#        self._spotmark_overlay = spotmark_overlay
-#        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
+        spotmark_overlay = overlay.SpotMarkerOverlay(
+                                    main_frame.vp_align_sem.canvas)
+        self._spotmark_overlay = spotmark_overlay
+        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
 
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
@@ -794,10 +795,20 @@ class LensAlignTab(Tab):
                                                        "lens_align_")
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
 
+
         # Toolbar
         tb = main_frame.lens_align_tb
         tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
+
+        # Hack warning: Move the scale window from the hidden viewport legend
+        # next to the toolbar.
+        tb_sizer = tb.GetSizer()
+        main_frame.vp_align_sem.legend_panel.scaleDisplay.Reparent(tb)
+        tb_sizer.Add(
+            main_frame.vp_align_sem.legend_panel.scaleDisplay,
+            flag=wx.EXPAND)
+
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
     def Show(self, show=True):
@@ -837,7 +848,7 @@ class LensAlignTab(Tab):
 #            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
-#            self._spotmark_overlay.enable(True)
+            self._spotmark_overlay.enable(True)
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
