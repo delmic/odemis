@@ -1289,7 +1289,7 @@ class SpotMarkerOverlay(ViewOverlay):
         self.enabled = False
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
         self.marker_bmp = img.getspot_markerBitmap()
-        self.marker_offset = self.marker_bmp.Size.Width // 2
+        self.marker_offset = self.marker_bmp.GetSize().GetWidth() // 2
 
         self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
