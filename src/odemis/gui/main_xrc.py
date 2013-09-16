@@ -56,6 +56,8 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
         self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
         self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
+        self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
+        self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
@@ -628,22 +630,31 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
                           <label>Approximate center at A = %s mm, B = %s mm</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                       </object>
-                      <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <object class="ImageTextButton">
+                        <object class="ImageTextButton" name="lens_align_btn_to_center">
                           <label>Move there</label>
                           <bitmap>img_btn_128x24_png</bitmap>
                           <hover>img_btn_128x24_h_png</hover>
                           <selected>img_btn_128x24_a_png</selected>
                           <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
-                        <flag>wxALIGN_CENTRE</flag>
+                        <flag>wxTOP|wxALIGN_CENTRE</flag>
+                        <border>16</border>
                       </object>
+                      <orient>wxVERTICAL</orient>
                     </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
                   </object>
                 </object>
                 <size>300,-1</size>

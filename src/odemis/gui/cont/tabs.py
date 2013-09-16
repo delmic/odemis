@@ -823,16 +823,16 @@ class LensAlignTab(Tab):
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
             self._dicho_overlay.enable(False)
-#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(False, self._dicho_overlay)
-#        elif tool != guimodel.TOOL_SPOT:
-#            self._spotmark_overlay.enable(False)
+            # self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(False, self._dicho_overlay)
+        elif tool != guimodel.TOOL_SPOT:
+            self._spotmark_overlay.enable(False)
 
         if tool == guimodel.TOOL_DICHO:
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
             # meaningful value
             self._dicho_overlay.enable(True)
-#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
+            # self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
             self._spotmark_overlay.enable(True)

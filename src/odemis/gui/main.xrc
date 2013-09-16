@@ -429,22 +429,31 @@
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
                           <label>Approximate center at A = %s mm, B = %s mm</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                       </object>
-                      <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <object class="ImageTextButton">
+                        <object class="ImageTextButton" name="lens_align_btn_to_center">
                           <label>Move there</label>
                           <bitmap>img/btn_128x24.png</bitmap>
                           <hover>img/btn_128x24_h.png</hover>
                           <selected>img/btn_128x24_a.png</selected>
                           <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
-                        <flag>wxALIGN_CENTRE</flag>
+                        <flag>wxTOP|wxALIGN_CENTRE</flag>
+                        <border>16</border>
                       </object>
+                      <orient>wxVERTICAL</orient>
                     </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
                   </object>
                 </object>
                 <size>300,-1</size>
