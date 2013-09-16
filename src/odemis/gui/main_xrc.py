@@ -41,6 +41,8 @@ class xrcfr_main(wx.Frame):
         self.menu_item_load1 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load1"))
         self.menu_item_load2 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load2"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
+        self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
         self.menu_item_htmldoc = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_htmldoc"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
@@ -242,6 +244,27 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_22view">
+          <label>2x2 view</label>
+          <accel>F5</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_cross">
+          <label>Cross hair</label>
+          <accel>Esc</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <label>View</label>
       </object>
       <object class="wxMenu">
         <object class="wxMenuItem" name="menu_item_htmldoc">
