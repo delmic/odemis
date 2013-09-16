@@ -2449,17 +2449,13 @@ getsliderBitmap = slider.GetBitmap
 
 #----------------------------------------------------------------------
 spot_marker = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAACF0lEQVRYw82XsYrCQBCGt7iz"
-    "CYiNqYNwIAQsbDQI+goBO23tgi8QfIM8gEXgSGFvKT5DmutSXWdneY3RwpvAPzAsiRfvODbF"
-    "V2QyOzM7MzvZqE/PUzWxiCUREylxJm7gDFkMHauu3TpKLgwXjvZEQIyJLvECupAF0LlhjfvX"
-    "ACLii9gQNjEkZsSgJIAB3g2hu8Ha6DcBuEjpO4xNid4T5ephjQ0baVU2yhZPUNMinX3sjN+9"
-    "ESFxJE7EFZwgC6HD+gPYCGBz8lMALhQXhEe8Csc74l6TnQjkFbYWsO0+CiBFtJ6QrYhcGE+I"
-    "OeEQLeBAlgi9HGvZjgfbaVUAEerVFzsPNcdOjfo7WiChyEQfPiI9ABcda4uar4SRtXAwIrZE"
-    "RlxABtlI6K3F+pXoCRu+XBlAjGMzFTXPS5xva9R/WxJELnpiCl8xB2BhcNjiqO1E2tnY4Ykm"
-    "PIh1iWhMPqI2fFoKo3OPAcK7Z0POEzuvyoQjZJyFIXwuOf0BpphsvETUXDf+QfhEG/iQ6Xoj"
-    "LQvckDP4jPnojUXzHaE8r9h94ahT0v2dkiA4C3M8H0UzFj5TheHQBQpTTaY/04z6D46gr+lm"
-    "WhlOeGZ/Z4Vm4I+Kwmi9Y8AoHDNptP0ggLame4G8hecrntnfrREBGC+B8SY0fgyNDyLjo9j4"
-    "x6gRn2PjF5JGXMkacSk1fi1vxI9JI37NGvNz+u+/5981r8vnV409CgAAAABJRU5ErkJggg==")
+    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAABPUlEQVRIx72Wuw2DQAyGDxQo"
+    "UqCMcFKUGRBbIGWFtFngFqGlYAeULdJRpWMIqIgj2dEv64C8LsUnhPHjbN+dMbeiMAscCEdc"
+    "iB7kPcsc64g80T7mHO+JhpgU8l3LGwgUrwU4ESMY18SRsETKWJbVoDey7WIGTjm2KyU0rIOB"
+    "HGaiVy5KZ5DnREV0xMB0LMtB7wz2kkmKNR89zitPvTWVJ8goPZEPDZRFZO0LzoUW7GpovJGt"
+    "KIr2jZXPZWJBdsDG1lBzbXwlSiJjSpZpvVxl4QwfmIm3nW/1D0c7z+7ZeYJIFkd+v8ipxPJ0"
+    "yqhc2KKl0u1UmXpUTvk5KKNsIUCmdAfly/wlQPASBW9y8G0a/KAFvyoki2CXXRLwut4YNeZ+"
+    "OXCiByFHZuIbmTH05NOhH+Hg92Ww/eK3JeYAT393rhYCzNLlN/oAAAAASUVORK5CYII=")
 index.append('spot_marker')
 catalog['spot_marker'] = spot_marker
 getspot_markerData = spot_marker.GetData

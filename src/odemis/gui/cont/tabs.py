@@ -752,10 +752,10 @@ class LensAlignTab(Tab):
         main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
-#        spotmark_overlay = overlay.SpotMarkerOverlay(
-#                                    main_frame.vp_align_sem.canvas)
-#        self._spotmark_overlay = spotmark_overlay
-#        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
+        spotmark_overlay = overlay.SpotMarkerOverlay(
+                                    main_frame.vp_align_sem.canvas)
+        self._spotmark_overlay = spotmark_overlay
+        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
 
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
@@ -835,7 +835,7 @@ class LensAlignTab(Tab):
 #            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
-#            self._spotmark_overlay.enable(True)
+            self._spotmark_overlay.enable(True)
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.

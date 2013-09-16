@@ -1329,6 +1329,7 @@ class SpotMarkerOverlay(ViewOverlay):
         # TODO: Cache the current cursor so it can be restored?
         if enable:
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            logging.debug("SpotMarkerOverlay enabled")
         else:
             self.base.SetCursor(wx.STANDARD_CURSOR)
 
