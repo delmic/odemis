@@ -625,7 +625,7 @@ class Controller(object):
 
     def Reboot(self):
         self._sendOrderCommand("RBT\n")
-        end_time = time.time() + 1 # give it some time to reboot before it's accessible again
+        end_time = time.time() + 2 # give it some time to reboot before it's accessible again
 
         # empty the serial buffer
         while self.serial.read():
@@ -1763,6 +1763,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
+                    #FIXME: it doesn't correspond in the C867 -> directly pass the time
                     duration = abs(actual_dist) / controller.getSpeed(channel)
                     max_duration = max(max_duration, duration)
 
