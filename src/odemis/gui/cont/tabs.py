@@ -54,15 +54,47 @@ import wx
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, name, button, panel, label=None):
+    def __init__(self, name, button, panel, main_frame, label=None):
         self.name = name
         self.label = label
         self.button = button
         self.panel = panel
+        self.main_frame = main_frame
 
     def Show(self, show=True):
         self.button.SetToggle(show)
+        self._connect_view_event()
         self.panel.Show(show)
+
+    def _connect_view_event(self):
+        """ If the tab has a 2x2 view, this method will connect it to the 2x2
+        view menu item.
+        """
+
+        view_controller = self.get_viewcontroller()
+        # If the tab has a ViewController...
+        if view_controller:
+            # ...and 4 views
+            if view_controller.num_viewports() == 4:
+                dat_mod = self.get_tab_data_model()
+                # We assume it has a 2x2 view that can be accessed using the
+                # data model
+                if dat_mod:
+
+                    def on_to_22(evt):
+                        dat_mod.viewLayout.value = guimodel.VIEW_LAYOUT_22
+
+                    # Assigning an event handler to the menu item, overrides
+                    # any previously assigned ones.
+                    wx.EVT_MENU(
+                        self.main_frame,
+                        self.main_frame.menu_item_22view.GetId(),
+                        on_to_22)
+
+                    self.main_frame.menu_item_22view.Enable()
+                    return
+
+        self.main_frame.menu_item_22view.Enable(False)
 
     def Hide(self):
         self.Show(False)
@@ -82,14 +114,28 @@ class Tab(object):
     def get_label(self):
         return self.button.GetLabel()
 
+    def get_viewcontroller(self):
+        """ Returns the viewcontroller of the tab, or None if none exist.
+        ViewControllers should be assinged to a _view_controller attribute.
+        """
+        if hasattr(self, '_view_controller'):
+            return self._view_controller  #pylint: disable=E1101
+        return None
+
+    def get_tab_data_model(self):
+        """ Returns the tab data model or None if none exist.
+        Tab data models should be assinged to a tab_data_model attribute.
+        """
+        if hasattr(self, 'tab_data_model'):
+            return self.tab_data_model  #pylint: disable=E1101
+        return None
 
 class SecomStreamsTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(SecomStreamsTab, self).__init__(name, button, panel)
+        super(SecomStreamsTab, self).__init__(name, button, panel, main_frame)
 
         self.tab_data_model = guimodel.LiveViewGUIData(main_data)
-        self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
         self._view_controller = None
@@ -240,10 +286,9 @@ class SecomStreamsTab(Tab):
 class SparcAcquisitionTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(SparcAcquisitionTab, self).__init__(name, button, panel)
+        super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame)
 
         self.tab_data_model = guimodel.ScannedAcquisitionGUIData(main_data)
-        self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
 
@@ -511,11 +556,10 @@ class AnalysisTab(Tab):
         """
         microscope will be used only to select the type of views
         """
-        super(AnalysisTab, self).__init__(name, button, panel)
+        super(AnalysisTab, self).__init__(name, button, panel, main_frame)
 
         # TODO: automatically change the display type based on the acquisition displayed
         self.tab_data_model = guimodel.AnalysisGUIData(main_data)
-        self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
         self._settings_controller = None
@@ -694,10 +738,9 @@ class LensAlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(LensAlignTab, self).__init__(name, button, panel)
+        super(LensAlignTab, self).__init__(name, button, panel, main_frame)
 
         self.tab_data_model = guimodel.ActuatorGUIData(main_data)
-        self.main_frame = main_frame
 
         self._settings_controller = settings.LensAlignSettingsController(
                                         self.main_frame,
@@ -963,10 +1006,9 @@ class MirrorAlignTab(Tab):
     # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(MirrorAlignTab, self).__init__(name, button, panel)
+        super(MirrorAlignTab, self).__init__(name, button, panel, main_frame)
 
         self.tab_data_model = guimodel.ActuatorGUIData(main_data)
-        self.main_frame = main_frame
 
         # Very simple, so most controllers are not needed
         self._settings_controller = None
@@ -1103,6 +1145,8 @@ class TabBarController(object):
         role = main_data.role
         logging.debug("Creating tabs belonging to the '%s' interface",
                       role or "no backend")
+
+        self.main_frame = main_frame
 
         tabs = [] # Tabs
         for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:

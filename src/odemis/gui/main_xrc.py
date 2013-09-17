@@ -249,7 +249,6 @@ def __init_resources():
         <object class="wxMenuItem" name="menu_item_22view">
           <label>2x2 view</label>
           <accel>F5</accel>
-          <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>

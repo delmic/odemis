@@ -39,9 +39,9 @@ class ViewController(object):
         """
         tab_data (MicroscopyGUIData) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
-        viewports (list of MicroscopeViewport or 
+        viewports (list of MicroscopeViewport or
                    OrderedDict (MicroscopeViewport -> kwargs)): the viewports to
-          update. The first one is the one focused. If it's an OrderedDict, the 
+          update. The first one is the one focused. If it's an OrderedDict, the
           kwargs are passed to the MicroscopeView creation.
         """
         self._tab_data_model = tab_data
@@ -62,20 +62,24 @@ class ViewController(object):
         tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
         tab_data.focussedView.subscribe(self._onView, init=True)
 
+    def num_viewports(self):
+        """ Return the number of viewport controlled by this class """
+        return len(self._viewports)
+
     def _createViewsFixed(self, viewports):
         """
         Create the different views displayed, according to viewtypes
         viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
-        
+
         To be executed only once, at initialisation.
         """
-        
+
         for vp, vkwargs in viewports.items():
             # TODO: automatically set some clever values for missing arguments?
             view = model.MicroscopeView(**vkwargs)
             self._tab_data_model.views.append(view)
             vp.setView(view, self._tab_data_model)
-        
+
     def _createViewsAuto(self):
         """
         Create the different views displayed, according to the current
@@ -306,8 +310,7 @@ class ViewController(object):
             logging.error("Failed to find the current viewport")
 
 class ViewSelector(object):
-    """
-    This class controls the view selector buttons and labels associated with
+    """ This class controls the view selector buttons and labels associated with
     them.
     """
 
