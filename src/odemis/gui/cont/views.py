@@ -66,6 +66,10 @@ class ViewController(object):
         """ Return the number of viewport controlled by this class """
         return len(self._viewports)
 
+    @property
+    def viewports(self):
+        return self._viewports
+
     def _createViewsFixed(self, viewports):
         """
         Create the different views displayed, according to viewtypes

@@ -45,6 +45,7 @@ import odemis.gui.model as guimodel
 import odemis.gui.model.stream as streammod
 import os.path
 import pkg_resources
+import types
 import weakref
 import wx
 
@@ -54,19 +55,22 @@ import wx
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, name, button, panel, main_frame, label=None):
+    def __init__(self, name, button, panel, main_frame, tab_data, label=None):
         self.name = name
         self.label = label
         self.button = button
         self.panel = panel
         self.main_frame = main_frame
+        self.tab_data_model = tab_data
 
     def Show(self, show=True):
         self.button.SetToggle(show)
-        self._connect_view_event()
+        if show:
+            self._connect_22view_event()
+            self._connect_crosshair_event()
         self.panel.Show(show)
 
-    def _connect_view_event(self):
+    def _connect_22view_event(self):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item.
         """
@@ -95,6 +99,53 @@ class Tab(object):
                     return
 
         self.main_frame.menu_item_22view.Enable(False)
+
+    def _connect_crosshair_event(self):
+        """ If the tab conains views with a crosshair overlay, it will connect
+        an event to the view menu allowing for the toggling to the visibility
+        of those crosshairs.
+        """
+        # If the tab has a ViewController...
+        if self.get_viewcontroller():
+            # ... and there's a focussed view that we can track
+            if hasattr(self.tab_data_model, 'focussedView'):
+
+                # Enable the menu option
+                self.main_frame.menu_item_cross.Enable()
+
+                # This unbound function sets the check mark on the menu item
+                def set_cross_check(fv):
+                    is_shown = fv.show_crosshair.value
+                    self.main_frame.menu_item_cross.Check(is_shown)
+
+                # Bind the unbound function to the menu item, so it becomes
+                # an instance method. This will also preserve the reference, so
+                # the the VigillantAttribute will not unsubscribe it, until
+                # it's replaced.
+                method = types.MethodType(
+                                    set_cross_check,
+                                    self.main_frame.menu_item_cross)
+                self.main_frame.menu_item_cross.method = method
+
+                self.tab_data_model.focussedView.subscribe(
+                                                    set_cross_check,
+                                                    init=True)
+
+                # This function will be attached to the menu item, so that
+                # the crosshair of the focussed view will get toggled.
+                def on_crosshair_check(evt):
+                    show = self.main_frame.menu_item_cross.IsChecked()
+                    foccused_view = self.tab_data_model.focussedView.value
+                    foccused_view.show_crosshair.value = show
+
+                wx.EVT_MENU(
+                        self.main_frame,
+                        self.main_frame.menu_item_cross.GetId(),
+                        on_crosshair_check)
+                return
+
+        # If the right elements are not found, simply disable the menu item
+        self.main_frame.menu_item_cross.Enable(False)
 
     def Hide(self):
         self.Show(False)
@@ -133,9 +184,11 @@ class Tab(object):
 class SecomStreamsTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(SecomStreamsTab, self).__init__(name, button, panel, main_frame)
 
-        self.tab_data_model = guimodel.LiveViewGUIData(main_data)
+        tab_data = guimodel.LiveViewGUIData(main_data)
+        super(SecomStreamsTab, self).__init__(name, button, panel,
+                                              main_frame, tab_data)
+
 
         # Various controllers used for the live view and acquisition of images
         self._view_controller = None
@@ -286,9 +339,10 @@ class SecomStreamsTab(Tab):
 class SparcAcquisitionTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(SparcAcquisitionTab, self).__init__(name, button, panel, main_frame)
+        tab_data = guimodel.ScannedAcquisitionGUIData(main_data)
+        super(SparcAcquisitionTab, self).__init__(name, button, panel,
+                                                  main_frame, tab_data)
 
-        self.tab_data_model = guimodel.ScannedAcquisitionGUIData(main_data)
 
         # Various controllers used for the live view and acquisition of images
 
@@ -556,10 +610,11 @@ class AnalysisTab(Tab):
         """
         microscope will be used only to select the type of views
         """
-        super(AnalysisTab, self).__init__(name, button, panel, main_frame)
-
         # TODO: automatically change the display type based on the acquisition displayed
-        self.tab_data_model = guimodel.AnalysisGUIData(main_data)
+        tab_data = guimodel.AnalysisGUIData(main_data)
+        super(AnalysisTab, self).__init__(name, button, panel,
+                                          main_frame, tab_data)
+
 
         # Various controllers used for the live view and acquisition of images
         self._settings_controller = None
@@ -738,9 +793,10 @@ class LensAlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(LensAlignTab, self).__init__(name, button, panel, main_frame)
+        tab_data = guimodel.ActuatorGUIData(main_data)
+        super(LensAlignTab, self).__init__(name, button, panel,
+                                           main_frame, tab_data)
 
-        self.tab_data_model = guimodel.ActuatorGUIData(main_data)
 
         self._settings_controller = settings.LensAlignSettingsController(
                                         self.main_frame,
@@ -1006,9 +1062,10 @@ class MirrorAlignTab(Tab):
     # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(MirrorAlignTab, self).__init__(name, button, panel, main_frame)
+        tab_data = guimodel.ActuatorGUIData(main_data)
+        super(MirrorAlignTab, self).__init__(name, button, panel,
+                                             main_frame, tab_data)
 
-        self.tab_data_model = guimodel.ActuatorGUIData(main_data)
 
         # Very simple, so most controllers are not needed
         self._settings_controller = None
