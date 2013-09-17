@@ -110,11 +110,11 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
 
-    def test_spot_marker_overlay(self):
+    def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, clear=True)
 
-        sol = overlay.SpotMarkerOverlay(cnvs)
+        sol = overlay.SpotModeOverlay(cnvs)
         cnvs.add_view_overlay(sol)
         sol.enable()
 

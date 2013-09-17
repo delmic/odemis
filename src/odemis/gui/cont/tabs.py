@@ -38,7 +38,6 @@ import collections
 import logging
 import math
 import odemis.gui.comp.overlay as overlay
-import odemis.gui.comp.scalewindow as scalewindow
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
@@ -48,7 +47,6 @@ import pkg_resources
 import types
 import weakref
 import wx
-
 
 
 
@@ -852,7 +850,7 @@ class LensAlignTab(Tab):
 #        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
-        spotmark_overlay = overlay.SpotMarkerOverlay(
+        spotmark_overlay = overlay.SpotModeOverlay(
                                     main_frame.vp_align_sem.canvas)
         self._spotmark_overlay = spotmark_overlay
         main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
@@ -882,11 +880,11 @@ class LensAlignTab(Tab):
         # Streams are always on when the tab is shown. In the future, if it's
         # possible to really control the SEM, we might revise this. For optical
         # it shouldn't be a problem as the light is turned off anyway.
-#        self._state_controller = MicroscopeStateController(
-#                                            self.tab_data_model,
-#                                            self.main_frame,
-#                                            "lens_align_btn_"
-#                                      )
+        # self._state_controller = MicroscopeStateController(
+        #                                     self.tab_data_model,
+        #                                     self.main_frame,
+        #                                     "lens_align_btn_"
+        #                               )
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,

@@ -213,11 +213,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # We don't specifically know about the crosshair, so look for it in the
         # static overlays
-        ch = None
-        for o in self.ViewOverlays:
-            if isinstance(o, comp_overlay.CrossHairOverlay):
-                ch = o
-                break
+        ch = self.get_crosshair_overlay()
 
         if activated:
             if not ch:
@@ -228,6 +224,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if ch:
                 self.ViewOverlays.remove(ch)
                 self.Refresh(eraseBackground=False)
+
+    def get_crosshair_overlay(self):
+        """ Returns the crosshair overlay or None if none is found """
+        for o in self.ViewOverlays:
+            if isinstance(o, comp_overlay.CrossHairOverlay):
+                return o
+        return None
 
     def _orderStreamsToImages(self, streams):
         """
