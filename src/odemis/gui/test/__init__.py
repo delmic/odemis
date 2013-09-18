@@ -129,3 +129,10 @@ class GuiTestCase(unittest.TestCase):
         cls.sizer.Add(ctrl, flag=flags|wx.EXPAND|wx.ALL, border=0, proportion=0)
         cls.sizer.Layout()
         return ctrl
+
+    @classmethod
+    def remove_all(cls):
+        for child in cls.sizer.GetChildren():
+            cls.sizer.Remove(child.Window)
+            child.Window.Destroy()
+        cls.sizer.Layout()
