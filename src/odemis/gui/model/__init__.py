@@ -627,6 +627,9 @@ class MicroscopeView(object):
             "x": view_pos[0] - prev_pos["x"],
             "y": view_pos[1] - prev_pos["y"]
         }
+        if abs(move["x"]) < 1e-12 and abs(move["y"]) < 1e-12:
+            logging.debug("skipping move request of 0")
+            return
 
         # Check it makes sense (=> not too big)
         distance = math.sqrt(sum([v ** 2 for v in move.values()]))
