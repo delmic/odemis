@@ -168,13 +168,6 @@ class SecomStreamsTab(Tab):
                                               main_frame, tab_data)
 
 
-        # Various controllers used for the live view and acquisition of images
-        self._view_controller = None
-        self._settings_controller = None
-        self._view_selector = None
-        self._acquisition_controller = None
-        self._microscope_controller = None
-
         # Order matters!
         # First we create the views, then the streams
         self._view_controller = viewcont.ViewController(
@@ -321,12 +314,6 @@ class SparcAcquisitionTab(Tab):
         super(SparcAcquisitionTab, self).__init__(name, button, panel,
                                                   main_frame, tab_data)
 
-
-        # Various controllers used for the live view and acquisition of images
-
-        self._settings_controller = None
-        self._view_controller = None
-        self._acquisition_controller = None
 
         self._roi_streams = [] # stream which must have the same ROI as the SEM CL
         self._prev_rois = {} # stream -> roi (tuple of4 floats)
@@ -592,13 +579,6 @@ class AnalysisTab(Tab):
         tab_data = guimodel.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
-
-
-        # Various controllers used for the live view and acquisition of images
-        self._settings_controller = None
-        self._view_controller = None
-        self._acquisition_controller = None
-        self._stream_controller = None
 
         # TODO: make sure it works with role=None, microscope=None
         self._view_controller = viewcont.ViewController(
@@ -1045,10 +1025,6 @@ class MirrorAlignTab(Tab):
                                              main_frame, tab_data)
 
 
-        # Very simple, so most controllers are not needed
-        self._settings_controller = None
-        self._view_controller = None
-        self._acquisition_controller = None
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
                                         self.main_frame.pnl_sparc_align_streams,
@@ -1090,14 +1066,13 @@ class MirrorAlignTab(Tab):
             mic_view.show_crosshair.value = False    #pylint: disable=E1103
             mic_view.merge_ratio.value = 1           #pylint: disable=E1103
 
-            # TODO: Do not put goal stream in the stream panel, we don't need
-            # any settings.
-            # TODO: don't allow to be removed/hidden/paused/folded
+            # TODO: don't allow to be removed/hidden/paused/folded => .locked
             self._stream_controller.addStream(ccd_stream)
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
 
         else:
+            self._view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
 
         self._settings_controller = settings.SparcAlignSettingsController(
