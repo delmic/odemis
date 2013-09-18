@@ -526,9 +526,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         canvas.DraggableCanvas.OnRightUp(self, event)
 
     def OnLeftDown(self, event):
-        if self.canDrag:
-            if not self.noDragNoFocus:
+        if self.canDrag or not self.noDragNoFocus:
                 super(DblMicroscopeCanvas, self).OnLeftDown(event)
+        else:
+            event.Skip()
         # TODO: Skip() ?
 
     def ShiftView(self, shift):
@@ -539,8 +540,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.canDrag:
             super(DblMicroscopeCanvas, self).OnDblClick(event)
 
+    # Y is opposite of our Y in computer (going up)
     def world_to_real_pos(self, pos):
-        phy_pos = tuple([v * self.mpwu for v in pos])
+        phy_pos = (pos[0] * self.mpwu, -pos[1] * self.mpwu)
         return phy_pos
 
     def real_to_world_pos(self, phy_pos):
@@ -548,7 +550,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         phy_pos (tuple of float): "physical" coordinates in m
         return (tuple of float)
         """
-        world_pos = tuple([v / self.mpwu for v in phy_pos])
+        world_pos = (phy_pos[0] / self.mpwu, -phy_pos[1] / self.mpwu)
         return world_pos
 
     def selection_to_real_size(self, start_w_pos, end_w_pos):

@@ -803,10 +803,10 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
-        # See axes convention: A/B are 135° from X/Y
+        # See axes convention: A/B are 135° from Y/X
         self._stage_ab = InclinedStage("converter-ab", "stage",
                                        children={"aligner": main_data.aligner},
-                                       axes=["a", "b"],
+                                       axes=["b", "a"],
                                        angle=135)
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
@@ -945,7 +945,7 @@ class LensAlignTab(Tab):
 #            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
-            self._spotmark_overlay.enable(True)
+#            self._spotmark_overlay.enable(True)
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
@@ -994,7 +994,7 @@ class InclinedStage(model.Actuator):
 
         self._child = children.values()[0]
         self._axes_child = {"x": axes[0], "y": axes[1]}
-        self._angle = angle # 135°
+        self._angle = angle
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
@@ -1200,8 +1200,6 @@ class TabBarController(object):
         role = main_data.role
         logging.debug("Creating tabs belonging to the '%s' interface",
                       role or "no backend")
-
-        self.main_frame = main_frame
 
         tabs = [] # Tabs
         for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:

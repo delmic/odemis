@@ -76,8 +76,7 @@ class MetadataUpdater(model.Component):
 
     def observeStage(self, stage, comp):
         # we need to keep the information on the detector to update
-        # a new function for each value of comp, so no need to duplicate the variable
-        def updateStagePos(pos):
+        def updateStagePos(pos, comp=comp):
             # We need axes X and Y
             if not "x" in pos or not "y" in pos:
                 logging.warning("Stage position doesn't contain X/Y axes")

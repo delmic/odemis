@@ -674,7 +674,7 @@ class NumberTextCtrl(wx.TextCtrl):
             If this is need, use the validator.
         """
         self.number = val
-        logging.debug("Setting value to '%s' for %s", val, self.__class__.__name__)
+        #logging.debug("Setting value to '%s' for %s", val, self.__class__.__name__)
 
         if self.HasFocus():
             logging.info("Received the new value '%s' to set while in focus", val)
