@@ -41,6 +41,10 @@ def goto_manual():
     global MANUAL
     MANUAL = True
 
+def goto_inspect():
+    global INSPECT
+    INSPECT = True
+
 def gui_loop():
     """
     Execute the main loop for the GUI until all the current events are processed
@@ -122,6 +126,6 @@ class GuiTestCase(unittest.TestCase):
         if clear:
             cls.sizer.Clear(True)
 
-        cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=0, proportion=1)
+        cls.sizer.Add(ctrl, flag=flags|wx.EXPAND|wx.ALL, border=0, proportion=0)
         cls.sizer.Layout()
         return ctrl
