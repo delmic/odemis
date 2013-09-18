@@ -276,8 +276,8 @@
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pb">
-                          <label>+B</label>
+                        <object class="wxStaticText" name="lbl_mb">
+                          <label>-B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -290,22 +290,6 @@
                           </font>
                         </object>
                         <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_ma">
-                          <label>-A</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <cellpos>0,3</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_pa">
@@ -321,12 +305,28 @@
                             <encoding>UTF-8</encoding>
                           </font>
                         </object>
+                        <cellpos>0,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_ma">
+                          <label>-A</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
                         <flag>wxALIGN_RIGHT</flag>
                         <cellpos>3,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mb">
-                          <label>-B</label>
+                        <object class="wxStaticText" name="lbl_pb">
+                          <label>+B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -341,7 +341,7 @@
                         <cellpos>3,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pb">
+                        <object class="ImageTextButton" name="lens_align_btn_mb">
                           <label>↖</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -366,7 +366,7 @@
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_pa">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -391,7 +391,7 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pa">
+                        <object class="ImageTextButton" name="lens_align_btn_ma">
                           <label>↙</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -416,7 +416,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_mb">
+                        <object class="ImageTextButton" name="lens_align_btn_pb">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
