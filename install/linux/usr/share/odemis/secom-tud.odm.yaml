@@ -97,6 +97,7 @@ Clara: {
 
 # Axes should be synchronized with the camera
 # Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
 "OLStage": {
     class: CombinedActuator,
     role: stage,
@@ -107,7 +108,7 @@ Clara: {
         inverted: ["x"],
     },
     properties: {
-        speed: {'x': 0.001, 'y': 0.001} #m/s (low enough to ensure we always use the minimum voltage)
+        speed: {'x': 0.01, 'y': 0.01} #m/s (low enough to ensure we always use the minimum voltage, but about right, to not wait too long)
     }
 }
 
@@ -156,7 +157,7 @@ PIGCS: {
         # axis -> controller, channel, closed-loop?
         axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
                "x": [4, 1, False], "y": [5, 1, False]},
-        vpms: {"x": 250, "y": 300}, # V/(m/s) : increase to increase the actual distance moved (for a given value in m)
+        vpms: {"x": 150, "y": 200}, # V/(m/s) : increase to increase the actual distance moved (for a given value in m)
         #dist_to_steps: {"a": 100000, "b": 100000}, # step/m
     },
 }
