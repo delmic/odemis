@@ -335,12 +335,6 @@ class ViewSelector(object):
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
 
-        # subscribe to layout and view changes
-        # FIXME: viewLayout disabled, because it was sending wrong (integer)
-        # views to _onView
-        #self._tab_data_model.viewLayout.subscribe(self._onView, init=True)
-        #self._tab_data_model.focussedView.subscribe(self._onView, init=True)
-
         # subscribe to thumbnails
         self._subscriptions = [] # list of functions
 
@@ -367,10 +361,9 @@ class ViewSelector(object):
             vp.microscope_view.name.subscribe(onName, init=True)
             self._subscriptions.append(onName)
 
-        # Select the overview by default
-        # Fixme: should be related to the layout in MicroscopyGUIData and/or the
-        # focussed viewport. ('None' selects the overview button)
-        self.toggleButtonForView(None)
+        # subscribe to layout and view changes
+        self._tab_data_model.viewLayout.subscribe(self._onViewChange)
+        self._tab_data_model.focussedView.subscribe(self._onViewChange, init=True)
 
     def toggleButtonForView(self, microscope_view):
         """
@@ -381,13 +374,13 @@ class ViewSelector(object):
         """
         for b, (vp, lbl) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if (vp is None and microscope_view is None) or (vp and vp.microscope_view == microscope_view):
+            if ((vp is None and microscope_view is None) or
+                (vp and vp.microscope_view == microscope_view)):
                 b.SetToggle(True)
             else:
                 if vp:
-                    logging.debug(
-                                "untoggling button of view %s",
-                                vp.microscope_view.name.value)
+                    logging.debug("untoggling button of view %s",
+                                  vp.microscope_view.name.value)
                 else:
                     logging.debug("untoggling button of view All")
                 b.SetToggle(False)
@@ -448,32 +441,21 @@ class ViewSelector(object):
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)
 
-    def _onView(self, view):
+    def _onViewChange(self, unused):
         """
         Called when another view is focused, or viewlayout is changed
         """
-
-        logging.debug("View changed")
-
-        try:
-            if view is not None:
-                assert isinstance(view, model.MicroscopeView)
-        except AssertionError:
-            logging.exception("Wrong type of view parameter! %s", view)
-            raise
+        logging.debug("Updating view selector")
 
         # TODO when changing from 2x2 to a view non focused, it will be called
         # twice in row. => optimise to not do it twice
 
-        self.toggleButtonForView(view)
-
-        # if layout is 2x2 => do nothing (first button is selected by _onViewLayout)
-        # if self._tab_data_model.viewLayout.value == model.VIEW_LAYOUT_22:
-        #     # otherwise (layout is 2x2) => select the first button
-        #     self.toggleButtonForView(None)
-        # else:
-        #     # otherwise (layout is 1) => select the right button
-        #     self.toggleButtonForView(view)
+        if self._tab_data_model.viewLayout.value == model.VIEW_LAYOUT_22:
+            # (layout is 2x2) => select the first button
+            self.toggleButtonForView(None)
+        else:
+            # otherwise (layout is 1) => select the right button
+            self.toggleButtonForView(self._tab_data_model.focussedView.value)
 
 
     def OnClick(self, evt):
@@ -490,14 +472,10 @@ class ViewSelector(object):
         viewport = self.buttons[btn][0]
 
         if viewport is None:
-            logging.debug("Overview button click")
-            self.toggleButtonForView(None)
             # 2x2 button
             # When selecting the overview, the focussed viewport should not change
             self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_22
         else:
-            logging.debug("View button click")
-            self.toggleButtonForView(viewport.microscope_view)
             # It's preferable to change the view before the layout so that
             # if the layout was 2x2 with another view focused, it doesn't first
             # display one big view, and immediately after changes to another view.
