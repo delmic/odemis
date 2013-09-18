@@ -54,10 +54,10 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
         self.pnl_tab_secom_align = xrc.XRCCTRL(self, "pnl_tab_secom_align")
         self.lens_align_slider_aligner = xrc.XRCCTRL(self, "lens_align_slider_aligner")
-        self.lens_align_btn_pb = xrc.XRCCTRL(self, "lens_align_btn_pb")
-        self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
-        self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
         self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
+        self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
+        self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
+        self.lens_align_btn_pb = xrc.XRCCTRL(self, "lens_align_btn_pb")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
@@ -479,8 +479,8 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pb">
-                          <label>+B</label>
+                        <object class="wxStaticText" name="lbl_mb">
+                          <label>-B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -493,22 +493,6 @@ def __init_resources():
                           </font>
                         </object>
                         <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_ma">
-                          <label>-A</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <style>normal</style>
-                            <weight>bold</weight>
-                            <underlined>0</underlined>
-                            <family>default</family>
-                            <face>Ubuntu</face>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                        </object>
-                        <cellpos>0,3</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lbl_pa">
@@ -524,12 +508,28 @@ def __init_resources():
                             <encoding>UTF-8</encoding>
                           </font>
                         </object>
+                        <cellpos>0,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_ma">
+                          <label>-A</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <style>normal</style>
+                            <weight>bold</weight>
+                            <underlined>0</underlined>
+                            <family>default</family>
+                            <face>Ubuntu</face>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                        </object>
                         <flag>wxALIGN_RIGHT</flag>
                         <cellpos>3,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mb">
-                          <label>-B</label>
+                        <object class="wxStaticText" name="lbl_pb">
+                          <label>+B</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -544,7 +544,7 @@ def __init_resources():
                         <cellpos>3,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pb">
+                        <object class="ImageTextButton" name="lens_align_btn_mb">
                           <label>↖</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -569,7 +569,7 @@ def __init_resources():
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_pa">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -594,7 +594,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pa">
+                        <object class="ImageTextButton" name="lens_align_btn_ma">
                           <label>↙</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -619,7 +619,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_mb">
+                        <object class="ImageTextButton" name="lens_align_btn_pb">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
