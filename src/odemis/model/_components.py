@@ -738,9 +738,10 @@ class CombinedActuator(Actuator):
         update the position VA
         """
         # it's read-only, so we change it via _value
-        logging.debug("reporting position %s", self._position)
-        self.position._value = self._position
-        self.position.notify(self._position)
+        pos = self._applyInversionRel(self._position)
+        logging.debug("reporting position %s", pos)
+        self.position._value = pos
+        self.position.notify(pos)
 
     def _updateSpeed(self):
         """
