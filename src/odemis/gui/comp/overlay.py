@@ -1281,64 +1281,111 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
 
-class SpotMarkerOverlay(ViewOverlay):
+class SpotModeOverlay(ViewOverlay):
+    """ When enabled, this overlay displays a circle marker in the center of
+    the canvas, indicating that the spot mode has been activated.
+    """
     def __init__(self, base):
-        super(SpotMarkerOverlay, self).__init__(base)
+        super(SpotModeOverlay, self).__init__(base)
 
         self.view_pos = None
         self.enabled = False
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
         self.marker_bmp = img.getspot_markerBitmap()
-        self.marker_offset = self.marker_bmp.GetSize().GetWidth() // 2
+        self.marker_offset = (self.marker_bmp.GetSize().GetWidth() // 2) - 1
 
-        self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
         self.base.Bind(wx.EVT_SIZE, self.on_size)
 
     def on_size(self, evt):
         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
-
-    def on_mouse_button_down(self, evt):
-        evt.Skip()
-
-    def on_mouse_button_up(self, evt):
-        if self.enabled:
-            vpos = evt.GetPosition()
-            self.set_view_position(vpos)
-            self.base.Refresh()
         evt.Skip()
 
     def get_world_position(self):
+        """ TODO: check if this method return the correct world coordinates """
         if self.view_pos:
             return self.base.view_to_world_pos(
                         self.view_pos,
                         self.offset)
-        else:
-            return None
-
-    def clear(self):
-        self.view_pos = None
-
-    def set_view_position(self, vpos):
-        self.view_pos = vpos[0] - self.offset[0], vpos[1] - self.offset[1]
+        return None
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
         self.enabled = enable
-        # TODO: Cache the current cursor so it can be restored?
-        if enable:
-            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-            logging.debug("SpotMarkerOverlay enabled")
-        else:
-            self.base.SetCursor(wx.STANDARD_CURSOR)
+
+        if self.base.get_crosshair_overlay() and enable:
+            self.base.microscope_view.show_crosshair.value = False
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
-        if self.view_pos and self.enabled:
+        if self.enabled:
+            view_pos = (0, 0)
             dc_buffer.DrawBitmapPoint(
                 self.marker_bmp,
                 wx.Point(
-                    self.view_pos[0] - self.marker_offset,
-                    self.view_pos[1] - self.marker_offset),
+                    view_pos[0] - self.marker_offset,
+                    view_pos[1] - self.marker_offset),
                 useMask=False)
 
-        super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)
+        super(SpotModeOverlay, self).Draw(dc_buffer, shift, scale)
+
+# TODO: use the following code as base for the Spot picking overlay
+# class SpotMarkerOverlay(ViewOverlay):
+#     def __init__(self, base):
+#         super(SpotMarkerOverlay, self).__init__(base)
+
+#         self.view_pos = None
+#         self.enabled = False
+#         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
+#         self.marker_bmp = img.getspot_markerBitmap()
+#         self.marker_offset = self.marker_bmp.GetSize().GetWidth() // 2
+
+#         self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
+#         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
+#         self.base.Bind(wx.EVT_SIZE, self.on_size)
+
+#     def on_size(self, evt):
+#         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
+
+#     def on_mouse_button_down(self, evt):
+#         evt.Skip()
+
+#     def on_mouse_button_up(self, evt):
+#         if self.enabled:
+#             vpos = evt.GetPosition()
+#             self.set_view_position(vpos)
+#             self.base.Refresh()
+#         evt.Skip()
+
+#     def get_world_position(self):
+#         if self.view_pos:
+#             return self.base.view_to_world_pos(
+#                         self.view_pos,
+#                         self.offset)
+#         else:
+#             return None
+
+#     def clear(self):
+#         self.view_pos = None
+
+#     def set_view_position(self, vpos):
+#         self.view_pos = vpos[0] - self.offset[0], vpos[1] - self.offset[1]
+
+#     def enable(self, enable=True):
+#         """ Enable of disable the overlay """
+#         self.enabled = enable
+#         # TODO: Cache the current cursor so it can be restored?
+#         if enable:
+#             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+#             logging.debug("SpotMarkerOverlay enabled")
+#         else:
+#             self.base.SetCursor(wx.STANDARD_CURSOR)
+
+#     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+#         if self.view_pos and self.enabled:
+#             dc_buffer.DrawBitmapPoint(
+#                 self.marker_bmp,
+#                 wx.Point(
+#                     self.view_pos[0] - self.marker_offset,
+#                     self.view_pos[1] - self.marker_offset),
+#                 useMask=False)
+
+#         super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)

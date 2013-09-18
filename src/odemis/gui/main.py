@@ -143,11 +143,6 @@ class OdemisGUIApp(wx.App):
             # no need for init as we know debug is False at init.
             self.main_data.debug.subscribe(self.on_debug_va)
 
-            # TODO: View menu with:
-            # 2x2 view    F5 (Toggle, enabled only if tab has not 4 views)
-            # Crosshair      (Toggle, changes according to the current view of the current tab)
-
-
             gc = odemis.gui.conf.get_general_conf()
 
             if os.path.exists(gc.html_dev_doc):

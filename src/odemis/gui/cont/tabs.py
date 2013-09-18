@@ -38,31 +38,112 @@ import collections
 import logging
 import math
 import odemis.gui.comp.overlay as overlay
-import odemis.gui.comp.scalewindow as scalewindow
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
 import odemis.gui.model.stream as streammod
 import os.path
 import pkg_resources
+import types
 import weakref
 import wx
-
 
 
 
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
-    def __init__(self, name, button, panel, label=None):
+    def __init__(self, name, button, panel, main_frame, tab_data, label=None):
         self.name = name
         self.label = label
         self.button = button
         self.panel = panel
+        self.main_frame = main_frame
+        self.tab_data_model = tab_data
 
     def Show(self, show=True):
         self.button.SetToggle(show)
+        if show:
+            self._connect_22view_event()
+            self._connect_crosshair_event()
         self.panel.Show(show)
+
+    def _connect_22view_event(self):
+        """ If the tab has a 2x2 view, this method will connect it to the 2x2
+        view menu item.
+        """
+
+        view_controller = self.get_viewcontroller()
+        # If the tab has a ViewController...
+        if view_controller:
+            # ...and 4 views
+            if view_controller.num_viewports() == 4:
+                dat_mod = self.get_tab_data_model()
+                # We assume it has a 2x2 view that can be accessed using the
+                # data model
+                if dat_mod:
+
+                    def on_to_22(evt):
+                        dat_mod.viewLayout.value = guimodel.VIEW_LAYOUT_22
+
+                    # Assigning an event handler to the menu item, overrides
+                    # any previously assigned ones.
+                    wx.EVT_MENU(
+                        self.main_frame,
+                        self.main_frame.menu_item_22view.GetId(),
+                        on_to_22)
+
+                    self.main_frame.menu_item_22view.Enable()
+                    return
+
+        self.main_frame.menu_item_22view.Enable(False)
+
+    def _connect_crosshair_event(self):
+        """ If the tab conains views with a crosshair overlay, it will connect
+        an event to the view menu allowing for the toggling to the visibility
+        of those crosshairs.
+        """
+        # If the tab has a ViewController...
+        if self.get_viewcontroller():
+            # ... and there's a focussed view that we can track
+            if hasattr(self.tab_data_model, 'focussedView'):
+
+                # Enable the menu option
+                self.main_frame.menu_item_cross.Enable()
+
+                # This unbound function sets the check mark on the menu item
+                def set_cross_check(fv):
+                    is_shown = fv.show_crosshair.value
+                    self.main_frame.menu_item_cross.Check(is_shown)
+
+                # Bind the unbound function to the menu item, so it becomes
+                # an instance method. This will also preserve the reference, so
+                # the the VigillantAttribute will not unsubscribe it, until
+                # it's replaced.
+                method = types.MethodType(
+                                    set_cross_check,
+                                    self.main_frame.menu_item_cross)
+                self.main_frame.menu_item_cross.method = method
+
+                self.tab_data_model.focussedView.subscribe(
+                                                    set_cross_check,
+                                                    init=True)
+
+                # This function will be attached to the menu item, so that
+                # the crosshair of the focussed view will get toggled.
+                def on_crosshair_check(evt):
+                    show = self.main_frame.menu_item_cross.IsChecked()
+                    foccused_view = self.tab_data_model.focussedView.value
+                    foccused_view.show_crosshair.value = show
+
+                wx.EVT_MENU(
+                        self.main_frame,
+                        self.main_frame.menu_item_cross.GetId(),
+                        on_crosshair_check)
+                return
+
+        # If the right elements are not found, simply disable the menu item
+        self.main_frame.menu_item_cross.Enable(False)
 
     def Hide(self):
         self.Show(False)
@@ -82,14 +163,30 @@ class Tab(object):
     def get_label(self):
         return self.button.GetLabel()
 
+    def get_viewcontroller(self):
+        """ Returns the viewcontroller of the tab, or None if none exist.
+        ViewControllers should be assinged to a _view_controller attribute.
+        """
+        if hasattr(self, '_view_controller'):
+            return self._view_controller  #pylint: disable=E1101
+        return None
+
+    def get_tab_data_model(self):
+        """ Returns the tab data model or None if none exist.
+        Tab data models should be assinged to a tab_data_model attribute.
+        """
+        if hasattr(self, 'tab_data_model'):
+            return self.tab_data_model  #pylint: disable=E1101
+        return None
 
 class SecomStreamsTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(SecomStreamsTab, self).__init__(name, button, panel)
 
-        self.tab_data_model = guimodel.LiveViewGUIData(main_data)
-        self.main_frame = main_frame
+        tab_data = guimodel.LiveViewGUIData(main_data)
+        super(SecomStreamsTab, self).__init__(name, button, panel,
+                                              main_frame, tab_data)
+
 
         # Various controllers used for the live view and acquisition of images
         self._view_controller = None
@@ -240,10 +337,10 @@ class SecomStreamsTab(Tab):
 class SparcAcquisitionTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(SparcAcquisitionTab, self).__init__(name, button, panel)
+        tab_data = guimodel.ScannedAcquisitionGUIData(main_data)
+        super(SparcAcquisitionTab, self).__init__(name, button, panel,
+                                                  main_frame, tab_data)
 
-        self.tab_data_model = guimodel.ScannedAcquisitionGUIData(main_data)
-        self.main_frame = main_frame
 
         # Various controllers used for the live view and acquisition of images
 
@@ -511,11 +608,11 @@ class AnalysisTab(Tab):
         """
         microscope will be used only to select the type of views
         """
-        super(AnalysisTab, self).__init__(name, button, panel)
-
         # TODO: automatically change the display type based on the acquisition displayed
-        self.tab_data_model = guimodel.AnalysisGUIData(main_data)
-        self.main_frame = main_frame
+        tab_data = guimodel.AnalysisGUIData(main_data)
+        super(AnalysisTab, self).__init__(name, button, panel,
+                                          main_frame, tab_data)
+
 
         # Various controllers used for the live view and acquisition of images
         self._settings_controller = None
@@ -694,10 +791,10 @@ class LensAlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(LensAlignTab, self).__init__(name, button, panel)
+        tab_data = guimodel.ActuatorGUIData(main_data)
+        super(LensAlignTab, self).__init__(name, button, panel,
+                                           main_frame, tab_data)
 
-        self.tab_data_model = guimodel.ActuatorGUIData(main_data)
-        self.main_frame = main_frame
 
         self._settings_controller = settings.LensAlignSettingsController(
                                         self.main_frame,
@@ -753,7 +850,7 @@ class LensAlignTab(Tab):
 #        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
-        spotmark_overlay = overlay.SpotMarkerOverlay(
+        spotmark_overlay = overlay.SpotModeOverlay(
                                     main_frame.vp_align_sem.canvas)
         self._spotmark_overlay = spotmark_overlay
         main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
@@ -783,11 +880,11 @@ class LensAlignTab(Tab):
         # Streams are always on when the tab is shown. In the future, if it's
         # possible to really control the SEM, we might revise this. For optical
         # it shouldn't be a problem as the light is turned off anyway.
-#        self._state_controller = MicroscopeStateController(
-#                                            self.tab_data_model,
-#                                            self.main_frame,
-#                                            "lens_align_btn_"
-#                                      )
+        # self._state_controller = MicroscopeStateController(
+        #                                     self.tab_data_model,
+        #                                     self.main_frame,
+        #                                     "lens_align_btn_"
+        #                               )
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,
@@ -963,10 +1060,10 @@ class MirrorAlignTab(Tab):
     # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        super(MirrorAlignTab, self).__init__(name, button, panel)
+        tab_data = guimodel.ActuatorGUIData(main_data)
+        super(MirrorAlignTab, self).__init__(name, button, panel,
+                                             main_frame, tab_data)
 
-        self.tab_data_model = guimodel.ActuatorGUIData(main_data)
-        self.main_frame = main_frame
 
         # Very simple, so most controllers are not needed
         self._settings_controller = None
@@ -1103,6 +1200,8 @@ class TabBarController(object):
         role = main_data.role
         logging.debug("Creating tabs belonging to the '%s' interface",
                       role or "no backend")
+
+        self.main_frame = main_frame
 
         tabs = [] # Tabs
         for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:
