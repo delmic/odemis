@@ -148,6 +148,14 @@ class OdemisGUIApp(wx.App):
             if os.path.exists(gc.html_dev_doc):
                 self.main_frame.menu_item_htmldoc.Enable(True)
 
+            # TODO: re-organise the Help menu:
+            # * User guide    F1 (Show user guide PDF for now, eg: xdg-open /usr/share/odemis/user-guide.pdf)
+            # * Developer
+            #   * Debug information Ctrl + D
+            #   * Inspect
+            #   * Developer guide
+            # * About...
+            # * Report a bug... (Opens a mail client to send an email to us?)
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_htmldoc.GetId(),
                         self.on_htmldoc)
@@ -160,6 +168,7 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_about.GetId(),
                         self.on_about)
 
+            # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't seem to like it)
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
@@ -365,10 +374,6 @@ class OdemisGUIApp(wx.App):
             self.goto_debug_mode()
             logging.exception("Failed to load example")
 
-    def on_timer(self, event): #pylint: disable=W0613
-        """ Timer stuff """
-        pass
-
     def on_stop_axes(self, evt):
         if self.main_data:
             self.main_data.stopMotion()
@@ -481,9 +486,11 @@ see http://www.fluorophores.org/disclaimer/.
                 logging.error("".join(exc))
 
                 # When an exception occurs, automatically got to debug mode.
-                if (self.main_data and
-                    not isinstance(value, NotImplementedError)):
-                    self.main_data.debug.value = True
+                if not isinstance(value, NotImplementedError):
+                    try:
+                        self.main_data.debug.value = True
+                    except:
+                        pass
             finally:
                 # put us back
                 sys.excepthook = self.excepthook
