@@ -706,10 +706,10 @@ class LensAlignTab(Tab):
 
         main_frame.vp_align_sem.ShowLegend(False)
 
-        # See axes convention: A/B are 135° from X/Y
+        # See axes convention: A/B are 135° from Y/X
         self._stage_ab = InclinedStage("converter-ab", "stage",
                                        children={"aligner": main_data.aligner},
-                                       axes=["a", "b"],
+                                       axes=["b", "a"],
                                        angle=135)
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
