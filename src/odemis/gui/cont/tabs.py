@@ -580,7 +580,6 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
-        # TODO: make sure it works with role=None, microscope=None
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
@@ -804,10 +803,6 @@ class LensAlignTab(Tab):
 
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
-#        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas,
-#                                                 self.tab_data_model.dicho_seq)
-#        self._dicho_overlay = dicho_overlay
-#        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
 
         # Spot marking mode
         spotmark_overlay = overlay.SpotModeOverlay(
@@ -836,15 +831,6 @@ class LensAlignTab(Tab):
         main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowedModes = set([guimodel.TOOL_NONE])
-
-        # Streams are always on when the tab is shown. In the future, if it's
-        # possible to really control the SEM, we might revise this. For optical
-        # it shouldn't be a problem as the light is turned off anyway.
-        # self._state_controller = MicroscopeStateController(
-        #                                     self.tab_data_model,
-        #                                     self.main_frame,
-        #                                     "lens_align_btn_"
-        #                               )
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,
@@ -1056,11 +1042,19 @@ class MirrorAlignTab(Tab):
                             mpp,
                             (0, 0))
             goal_stream = streammod.StaticStream("Goal", goal_iim)
+
             # create a view on the microscope model
+            vpv = collections.OrderedDict([
+                (main_frame.vp_sparc_align,
+                 {"name": "Optical",
+                  # no stage, or would need a fake stage to control X/Y of the mirror
+                  # no focus, or could control yaw/pitch?
+                  }),
+                                       ])
             self._view_controller = viewcont.ViewController(
                                         self.tab_data_model,
                                         self.main_frame,
-                                        [self.main_frame.vp_sparc_align]
+                                        vpv
                                     )
             mic_view = self.tab_data_model.focussedView.value
             mic_view.show_crosshair.value = False    #pylint: disable=E1103
@@ -1150,7 +1144,7 @@ class TabBarController(object):
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
-        returns (list of Tabs):
+        returns (list of Tabs): all the compatible tabs 
         """
         role = main_data.role
         logging.debug("Creating tabs belonging to the '%s' interface",

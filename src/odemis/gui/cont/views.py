@@ -23,8 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 from odemis.gui import model
-from odemis.gui.model.stream import SEMStream, BrightfieldStream, FluoStream, \
-    OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
+from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS, \
+    SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
 import collections
 import logging
@@ -93,62 +93,53 @@ class ViewController(object):
         """
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        if (isinstance(self._tab_data_model, model.AnalysisGUIData) and
-            self._main_data_model.role == "sparc"):
+        assert not self._tab_data_model.views # should still be empty
+        if isinstance(self._tab_data_model, model.AnalysisGUIData):
+            assert len(self._viewports) == 4
             # TODO: should be dependent on the type of acquisition, and so
             # updated every time the .file changes
-            assert len(self._viewports) == 4
-            assert not self._tab_data_model.views # should still be empty
-            logging.info("Creating (static) SPARC viewport layout")
-
-            view = model.MicroscopeView(
-                        "SEM",
-                        self._main_data_model.stage,
-                        stream_classes=EM_STREAMS
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[0].setView(view, self._tab_data_model)
-
-            view = model.MicroscopeView(
-                        "Spectrum",
-                        self._main_data_model.stage,
-                        # TODO: change center wavelength?
-                        focus0=self._main_data_model.focus,
-                        # TODO: focus1 changes bandwidth?
-                        stream_classes=SPECTRUM_STREAMS
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[1].setView(view, self._tab_data_model)
-
-            # TODO: need a special View?
-            view = model.MicroscopeView(
-                        "Angle Resolved",
-                        stream_classes=AR_STREAMS
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[2].setView(view, self._tab_data_model)
-
-            view = model.MicroscopeView(
-                        "SEM CL",
-                        self._main_data_model.stage,
-                        stream_classes=(EM_STREAMS + SPECTRUM_STREAMS)
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[3].setView(view, self._tab_data_model)
-
-        # calibration tab => allow to display anything (the tab wants)
-        elif isinstance(self._tab_data_model, model.ActuatorGUIData):
-            logging.info("Creating calibration viewport layout")
-            i = 1
-            for viewport in self._viewports:
-                view = model.MicroscopeView(
-                            "View %d" % i,
-                            self._main_data_model.stage,
-                            focus0=self._main_data_model.focus
-                         )
-                self._tab_data_model.views.append(view)
-                viewport.setView(view, self._tab_data_model)
-                i += 1
+            if self._main_data_model.role == "sparc":
+                logging.info("Creating (static) SPARC viewport layout")
+                vpv = collections.OrderedDict([
+                (self._viewports[0],  # focused view
+                 {"name": "SEM",
+                  "stream_classes": EM_STREAMS,
+                  }),
+                (self._viewports[1],
+                 {"name": "Spectrum",
+                  "stream_classes": SPECTRUM_STREAMS,
+                  }),
+                (self._viewports[2],
+                 {"name": "Angle resolved",
+                  "stream_classes": AR_STREAMS,
+                  }),
+                (self._viewports[3],
+                 {"name": "SEM CL",
+                  "stream_classes": (EM_STREAMS + SPECTRUM_STREAMS),
+                  }),
+                                               ])
+                self._createViewsFixed(vpv)
+            else:
+                logging.info("Creating generic static viewport layout")
+                vpv = collections.OrderedDict([
+                (self._viewports[0],  # focused view
+                 {"name": "SEM",
+                  "stream_classes": EM_STREAMS,
+                  }),
+                (self._viewports[1],
+                 {"name": "Optical",
+                  "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                  }),
+                (self._viewports[2],
+                 {"name": "Combined 1",
+                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                  }),
+                (self._viewports[3],
+                 {"name": "Combined 2",
+                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                  }),
+                                               ])
+                self._createViewsFixed(vpv)
 
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
@@ -161,7 +152,7 @@ class ViewController(object):
                             "SEM %d" % i,
                             self._main_data_model.stage,
                             focus0=None, # TODO: SEM focus or focus1?
-                            stream_classes=(SEMStream,)
+                            stream_classes=EM_STREAMS
                          )
                 self._tab_data_model.views.append(view)
                 viewport.setView(view, self._tab_data_model)
@@ -177,58 +168,45 @@ class ViewController(object):
                             "Optical %d" % i,
                             self._main_data_model.stage,
                             focus0=self._main_data_model.focus,
-                            stream_classes=(BrightfieldStream, FluoStream)
+                            stream_classes=OPTICAL_STREAMS
                          )
                 self._tab_data_model.views.append(view)
                 viewport.setView(view, self._tab_data_model)
                 i += 1
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
-        elif ((self._main_data_model.ebeam and self._main_data_model.light) or
-              (isinstance(self._tab_data_model, model.AnalysisGUIData) and
-              self._main_data_model.role == "secom")):
-            assert len(self._viewports) == 4
-            assert not self._tab_data_model.views # should still be empty
+        elif (self._main_data_model.ebeam and self._main_data_model.light and
+             len(self._viewports) == 4):
             logging.info("Creating combined SEM/Optical viewport layout")
-
-            view = model.MicroscopeView(
-                        "SEM",
-                        self._main_data_model.stage,
-                        focus0=None, # TODO: SEM focus
-                        stream_classes=EM_STREAMS
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[0].setView(view, self._tab_data_model)
-
-            view = model.MicroscopeView(
-                        "Optical",
-                        self._main_data_model.stage,
-                        focus1=self._main_data_model.focus,
-                        stream_classes=OPTICAL_STREAMS
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[1].setView(view, self._tab_data_model)
-
-            view = model.MicroscopeView(
-                        "Combined 1",
-                        self._main_data_model.stage,
-                        focus0=None, # TODO: SEM focus
-                        focus1=self._main_data_model.focus,
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[2].setView(view, self._tab_data_model)
-
-            view = model.MicroscopeView(
-                        "Combined 2",
-                        self._main_data_model.stage,
-                        focus0=None, # TODO: SEM focus
-                        focus1=self._main_data_model.focus,
-                     )
-            self._tab_data_model.views.append(view)
-            self._viewports[3].setView(view, self._tab_data_model)
-
-            # Start off with the 2x2 view
-            # Focus defaults to the top right viewport
+            vpv = collections.OrderedDict([
+            (self._viewports[0],  # focused view
+             {"name": "SEM",
+              "stage": self._main_data_model.stage,
+              "focus0": None, # TODO: SEM focus
+              "stream_classes": EM_STREAMS,
+              }),
+            (self._viewports[1],
+             {"name": "Optical",
+              "stage": self._main_data_model.stage,
+              "focus1": self._main_data_model.focus,
+              "stream_classes": OPTICAL_STREAMS,
+              }),
+            (self._viewports[2],
+             {"name": "Combined 1",
+              "stage": self._main_data_model.stage,
+              "focus0": None, # TODO: SEM focus
+              "focus1": self._main_data_model.focus,
+            "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+              }),
+            (self._viewports[3],
+             {"name": "Combined 2",
+              "stage": self._main_data_model.stage,
+              "focus0": None, # TODO: SEM focus
+              "focus1": self._main_data_model.focus,
+            "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+              }),
+                                           ])
+            self._createViewsFixed(vpv)
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
@@ -244,7 +222,6 @@ class ViewController(object):
                 i += 1
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
-
 
     def _onView(self, view):
         """
