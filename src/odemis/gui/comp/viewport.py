@@ -336,11 +336,6 @@ class SparcAcquisitionViewport(MicroscopeViewport):
     def __init__(self, *args, **kwargs):
         super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
 
-class SparcAnalysisViewport(MicroscopeViewport):
-
-    def __init__(self, *args, **kwargs):
-        super(SparcAnalysisViewport, self).__init__(*args, **kwargs)
-
 class SparcAlignViewport(MicroscopeViewport):
     """
     Very simple viewport with no zoom or move allowed

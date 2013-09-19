@@ -683,15 +683,6 @@ class SparcAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
 HANDLER_CLASS_LIST.append(SparcAcquisitionViewportXmlHandler)
 
 
-class SparcAnalysisViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.SparcAnalysisViewport
-
-    # This method and the next one are required for XmlResourceHandlers
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "SparcAnalysisViewport")
-HANDLER_CLASS_LIST.append(SparcAnalysisViewportXmlHandler)
-
 class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.SparcAlignViewport
