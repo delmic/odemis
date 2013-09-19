@@ -118,6 +118,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
+        
+        # Some more overlays
+        self._crosshair_ol = None
+        self._spotmode_ol = None
 
     def setView(self, microscope_view, tab_data):
         """
@@ -181,6 +185,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: send a .enable/.disable to overlay when becoming the active one
         if self.current_mode == MODE_SECOM_DICHO:
             self.dicho_overlay.enable(False)
+        elif self.current_mode == guimodel.TOOL_SPOT:
+            self._showSpotMode(False)
 
         # TODO: one mode <-> one overlay (type)
         # TODO: create the overlay on the fly, the first time it's requested
@@ -202,6 +208,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             #FIXME: cursor handled by .enable()
             self.cursor = wx.StockCursor(wx.CURSOR_HAND)
             self.dicho_overlay.enable(True)
+        elif tool == guimodel.TOOL_SPOT:
+            self.current_mode = tool
+            # the only thing the view does is to indicate the mode
+            self._showSpotMode(True)
         elif tool == guimodel.TOOL_NONE:
             self.current_mode = None
             self.active_overlay = None
@@ -216,26 +226,35 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Activate or disable the display of a cross in the middle of the view
         activated = true if the cross should be displayed
         """
-        # We don't specifically know about the crosshair, so look for it in the
-        # static overlays
-        ch = self.get_crosshair_overlay()
-
         if activated:
-            if not ch:
-                ch = comp_overlay.CrossHairOverlay(self)
-                self.ViewOverlays.append(ch)
+            if self._crosshair_ol is None:
+                self._crosshair_ol = comp_overlay.CrossHairOverlay(self)
+#                self._crosshair_ol = comp_overlay.SpotModeOverlay(self)
+
+            if self._crosshair_ol not in self.ViewOverlays:     
+                self.ViewOverlays.append(self._crosshair_ol)
                 self.Refresh(eraseBackground=False)
         else:
-            if ch:
-                self.ViewOverlays.remove(ch)
+            try:
+                self.ViewOverlays.remove(self._crosshair_ol)
                 self.Refresh(eraseBackground=False)
+            except ValueError:
+                pass # it was already not displayed
 
-    def get_crosshair_overlay(self):
-        """ Returns the crosshair overlay or None if none is found """
-        for o in self.ViewOverlays:
-            if isinstance(o, comp_overlay.CrossHairOverlay):
-                return o
-        return None
+    def _showSpotMode(self, activated=True):
+        if activated:
+            if self._spotmode_ol is None:
+                self._spotmode_ol = comp_overlay.SpotModeOverlay(self)
+
+            if self._spotmode_ol not in self.ViewOverlays:
+                self.ViewOverlays.append(self._spotmode_ol)
+                self.Refresh(eraseBackground=False)
+        else:
+            try:
+                self.ViewOverlays.remove(self._spotmode_ol)
+                self.Refresh(eraseBackground=False)
+            except ValueError:
+                pass # it was already not displayed
 
     def _orderStreamsToImages(self, streams):
         """

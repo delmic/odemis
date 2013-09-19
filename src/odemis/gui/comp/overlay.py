@@ -114,7 +114,10 @@ class Overlay(object):
         pass
 
 class ViewOverlay(Overlay):
-    """ This class displays an overlay on the view port """
+    """ This class displays an overlay on the view port.
+    The Draw method has to be fast, because it's called after every
+    refresh of the canvas. The center of the window is at 0,0 (and
+    dragging doesn't affects that). """
     pass
 
 class WorldOverlay(Overlay):
@@ -142,30 +145,46 @@ class CrossHairOverlay(ViewOverlay):
         self.size = size
         self.center = center
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, dc):
         """
         Draws the crosshair
         dc (wx.DC)
-        shift (2-tuple float): shift for the coordinate conversion
-        scale (float): scale for the coordinate conversion
         """
-        tl = (self.center[0] - self.size,
-              self.center[1] - self.size)
-        br = (self.center[0] + self.size,
-              self.center[1] + self.size)
-        tl_s = canvas.world_to_buffer_pos(tl, shift, scale)
-        br_s = canvas.world_to_buffer_pos(br, shift, scale)
-        center = canvas.world_to_buffer_pos(self.center, shift, scale)
+        center = self.center
+        tl = (center[0] - self.size, center[1] - self.size)
+        br = (center[0] + self.size, center[1] + self.size)
 
         # Draw black contrast cross first
         pen = wx.Pen(wx.BLACK)
         dc.SetPen(pen)
-        dc.DrawLine(tl_s[0] + 1, center[1] + 1, br_s[0] + 1, center[1] + 1)
-        dc.DrawLine(center[0] + 1, tl_s[1] + 1, center[0] + 1, br_s[1] + 1)
+        dc.DrawLine(tl[0] + 1, center[1] + 1, br[0] + 1, center[1] + 1)
+        dc.DrawLine(center[0] + 1, tl[1] + 1, center[0] + 1, br[1] + 1)
 
         dc.SetPen(self.pen)
-        dc.DrawLine(tl_s[0], center[1], br_s[0], center[1])
-        dc.DrawLine(center[0], tl_s[1], center[0], br_s[1])
+        dc.DrawLine(tl[0], center[1], br[0], center[1])
+        dc.DrawLine(center[0], tl[1], center[0], br[1])
+
+class SpotModeOverlay(ViewOverlay):
+    """ This overlay displays a circle marker in the center of
+    the canvas, indicating that the spot mode has been activated.
+    """
+    def __init__(self, base):
+        super(SpotModeOverlay, self).__init__(base)
+
+        self.marker_bmp = img.getspot_markerBitmap()
+        marker_size = self.marker_bmp.GetSize()
+        self._marker_offset = (marker_size.GetWidth() // 2 - 1,
+                               marker_size.GetHeight() // 2 - 1)
+        self.center = (0, 0)
+
+    def Draw(self, dc_buffer):
+        dc_buffer.DrawBitmapPoint(
+            self.marker_bmp,
+            wx.Point(
+                self.center[0] - self._marker_offset[0],
+                self.center[1] - self._marker_offset[1]),
+            useMask=False)
+
 
 class FocusOverlay(ViewOverlay):
     """ This overlay can be used to display the change in focus """
@@ -176,7 +195,7 @@ class FocusOverlay(ViewOverlay):
         self.line_width = 16
         self.shifts = [0, 0]
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, dc):
         """
         Draws the crosshair
         dc (wx.DC)
@@ -1281,51 +1300,6 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
 
-class SpotModeOverlay(ViewOverlay):
-    """ When enabled, this overlay displays a circle marker in the center of
-    the canvas, indicating that the spot mode has been activated.
-    """
-    def __init__(self, base):
-        super(SpotModeOverlay, self).__init__(base)
-
-        self.view_pos = None
-        self.enabled = False
-        self.offset = tuple(v // 2 for v in self.base.GetClientSize())
-        self.marker_bmp = img.getspot_markerBitmap()
-        self.marker_offset = (self.marker_bmp.GetSize().GetWidth() // 2) - 1
-
-        self.base.Bind(wx.EVT_SIZE, self.on_size)
-
-    def on_size(self, evt):
-        self.offset = tuple(v // 2 for v in self.base.GetClientSize())
-        evt.Skip()
-
-    def get_world_position(self):
-        """ TODO: check if this method return the correct world coordinates """
-        if self.view_pos:
-            return self.base.view_to_world_pos(
-                        self.view_pos,
-                        self.offset)
-        return None
-
-    def enable(self, enable=True):
-        """ Enable of disable the overlay """
-        self.enabled = enable
-
-        if self.base.get_crosshair_overlay() and enable:
-            self.base.microscope_view.show_crosshair.value = False
-
-    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
-        if self.enabled:
-            view_pos = (0, 0)
-            dc_buffer.DrawBitmapPoint(
-                self.marker_bmp,
-                wx.Point(
-                    view_pos[0] - self.marker_offset,
-                    view_pos[1] - self.marker_offset),
-                useMask=False)
-
-        super(SpotModeOverlay, self).Draw(dc_buffer, shift, scale)
 
 # TODO: use the following code as base for the Spot picking overlay
 # class SpotMarkerOverlay(ViewOverlay):

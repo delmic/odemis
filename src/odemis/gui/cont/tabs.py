@@ -812,12 +812,6 @@ class LensAlignTab(Tab):
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
 
-        # Spot marking mode
-        spotmark_overlay = overlay.SpotModeOverlay(
-                                    main_frame.vp_align_sem.canvas)
-        self._spotmark_overlay = spotmark_overlay
-        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
-
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
                                      main_data.ccd,
@@ -885,21 +879,15 @@ class LensAlignTab(Tab):
         if tool != guimodel.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
-#            self._dicho_overlay.enable(False)
-#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(False, self._dicho_overlay)
 #        elif tool != guimodel.TOOL_SPOT:
-#            self._spotmark_overlay.enable(False)
 
         if tool == guimodel.TOOL_DICHO:
             # TODO: enable a special "move to SEM center" button?
             # => better on dicho_seq update to only activate when it contains a
             # meaningful value
-#            self._dicho_overlay.enable(True)
             pass
-#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
         elif tool == guimodel.TOOL_SPOT:
             # TODO: switch to spot mode
-#            self._spotmark_overlay.enable(True)
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
