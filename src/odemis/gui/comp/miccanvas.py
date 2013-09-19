@@ -416,19 +416,34 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._previous_size = new_size
 
     @microscope_view_check
-    def Zoom(self, inc):
+    def Zoom(self, inc, block_on_zero=False):
         """
         Zoom by the given factor
         inc (float): scale the current view by 2^inc
+        block_on_zero (boolean): if True, and the zoom goes from software 
+          downscaling to software upscaling, it will stop at no software scaling
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """
         if not self.canZoom:
             return
-        scale = 2.0 ** inc
-        # Clip within the range
-        mpp = self.microscope_view.mpp.value / scale
-        mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
 
+        scale = 2.0 ** inc
+        prev_mpp = self.microscope_view.mpp.value
+        # Clip within the range
+        mpp = prev_mpp / scale
+
+        if block_on_zero:
+            # Check for every image
+            for s in self.microscope_view.stream_tree.getStreams():
+                try:
+                    im_mpp = s.image.value.mpp
+                    # did we just passed the image mpp (=zoom zero)?
+                    if prev_mpp < im_mpp < mpp or prev_mpp > im_mpp > mpp:
+                        mpp = im_mpp
+                except AttributeError:
+                    pass
+
+        mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
         self.microscope_view.mpp.value = mpp # this will call _onMPP()
 
     # Zoom/merge management
@@ -443,7 +458,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             ratio = sorted(self.microscope_view.merge_ratio.range + (ratio,))[1]
             self.microscope_view.merge_ratio.value = ratio
         else:
-            self.Zoom(change)
+            self.Zoom(change, block_on_zero=event.ShiftDown())
 
     @microscope_view_check
     def onExtraAxisMove(self, axis, shift):
