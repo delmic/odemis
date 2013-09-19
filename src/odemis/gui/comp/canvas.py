@@ -501,7 +501,6 @@ class DraggableCanvas(wx.Panel):
 
         if self.requested_world_pos != world_pos:
             self.requested_world_pos = world_pos
-            # TODO: we need also to save the scale requested
             # FIXME: could maybe be more clever and only request redraw for the
             # outside region
             self.ShouldUpdateDrawing()
@@ -1090,20 +1089,6 @@ def world_to_view_pos(world_pos, world_buff_cent, margins, scale, offset=None):
             world_to_buffer_pos(world_pos, world_buff_cent, scale, offset),
             margins
     )
-
-
-def world_to_real_pos(world_pos, mpwu):
-    real_pos = tuple([v * mpwu for v in world_pos])
-    return real_pos
-
-
-def real_to_world_pos(real_pos, mpwu):
-    """
-    real_pos (tuple of float): "physical" coordinates in m
-    return (tuple of float)
-    """
-    world_pos = tuple([v / mpwu for v in real_pos])
-    return world_pos
 
 # PlotCanvas configuration flags
 PLOT_CLOSE_NOT = 0

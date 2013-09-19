@@ -704,6 +704,14 @@ class AnalysisTab(Tab):
 
         # remove all the previous streams
         self._stream_controller.clear()
+        
+        # Force the canvases to fit to the content
+        for vp in [self.main_frame.vp_inspection_tl,
+                   self.main_frame.vp_inspection_tr,
+                   self.main_frame.vp_inspection_bl,
+                   self.main_frame.vp_inspection_br]:
+            vp.microscope_view.getMPPFromNextImage = False
+            vp.canvas.fitViewToNextImage = True
 
         acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
         # Add each data as a stream of the correct type

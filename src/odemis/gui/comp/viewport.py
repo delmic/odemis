@@ -219,19 +219,6 @@ class MicroscopeViewport(wx.Panel):
         # int(0.58*100) = 57
         self.legend_panel.mergeSlider.SetValue(round(val * 100))
 
-
-    # TODO need to subscribe to view_center, or done by canvas and delete this?
-    # We link only one way the position:
-    #  * if the user moves the view => moves the stage to the same position
-    #  * if the stage moves by itself, keep the view at the same place
-    #    (and the acquired images will not be centred anymore)
-    def _onViewCenter(self, pos):
-        if self._microscope_view is None:
-            return
-
-        self._microscope_view.view_pos.value = pos
-        self._microscope_view.moveStageToView()
-
     @call_after
     def _onMPP(self, mpp):
         self.legend_panel.scaleDisplay.SetMPP(mpp)
