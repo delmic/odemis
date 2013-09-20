@@ -653,7 +653,7 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lens_align_lbl_approc_center">
-                          <label>Approximate center at A = %s mm, B = %s mm</label>
+                          <label></label>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>

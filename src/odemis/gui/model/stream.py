@@ -441,6 +441,15 @@ class SEMStream(Stream):
                                          cls=(int, long, float))
         self.roi.subscribe(self._onROI)
 
+        # Spot mode: when set (and stream is active), it will drive the e-beam
+        # do only the center of the scanning area. Image is not updated.
+        # TODO: is this the right interface? Shall we just have a different 
+        # stream type? 
+        self.spot = model.BooleanVA(False)
+        # used to reset the previous settings after spot mode
+        self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
+        self.spot.subscribe(self._onSpot)
+
     def _onROI(self, roi):
         """
         Update the scanning area of the SEM according to the roi
@@ -461,6 +470,61 @@ class SEMStream(Stream):
         # always in this order
         self._emitter.resolution.value = res
         self._emitter.translation.value = trans
+
+    def _onSpot(self, active):
+        if active:
+            self._startSpot()
+        else:
+            self._stopSpot()
+
+    def _startSpot(self):
+        """
+        Start the spot mode. Can handle being called if it's already active 
+        """
+        if self._no_spot_settings != (None, None, None):
+            logging.debug("Starting spot mode while it was already active")
+            return
+
+        # to be avoid potential weird scanning while changing values
+        self._dataflow.unsubscribe(self.onNewImage)
+
+        logging.debug("Activating spot mode")
+        self._no_spot_settings = (self._emitter.dwellTime.value,
+                                  self._emitter.resolution.value,
+                                  self._emitter.translation.value)
+
+        # resolution -> translation: order matters
+        self._emitter.resolution.value = (1, 1)
+        self._emitter.translation.value = (0, 0) # position of the spot (floats)
+
+        # put a not too short dwell time to avoid acquisition to keep repeating,
+        # and not too long to avoid using too much memory for acquiring one point.
+        self._emitter.dwellTime.value = 0.1 # s
+
+        if self.is_active.value:
+            self._dataflow.subscribe(self.onNewImage)
+
+    def _stopSpot(self):
+        """
+        Stop the spot mode. Can handle being called if it's already inactive 
+        """
+        if self._no_spot_settings == (None, None, None):
+            logging.debug("Stop spot mode while it was already inactive")
+            return
+
+        # to be avoid potential weird scanning while changing values
+        self._dataflow.unsubscribe(self.onNewImage)
+        
+        logging.debug("Disabling spot mode")
+
+        (self._emitter.dwellTime.value,
+         self._emitter.resolution.value,
+         self._emitter.translation.value) = self._no_spot_settings
+
+        self._no_spot_settings = (None, None, None)
+
+        if self.is_active.value:
+            self._dataflow.subscribe(self.onNewImage)
 
     def estimateAcquisitionTime(self):
 
@@ -490,7 +554,14 @@ class SEMStream(Stream):
         if active:
             # TODO: if can blank => unblank
             pass
-        Stream.onActive(self, active)
+
+        # handle spot mode
+        if self.spot.value:
+            if active:
+                self._startSpot()
+            else:
+                self._stopSpot()
+        super(SEMStream, self).onActive(active)
 
     def onDwellTime(self, value):
         # When the dwell time changes, the new value is only used on the next
@@ -522,6 +593,18 @@ class SEMStream(Stream):
         finally:
             self._prevDwellTime = value
 
+    def onNewImage(self, df, data):
+        """
+        
+        """
+        # In spot mode, don't update the image.
+        # (still receives data as the e-beam needs an active detector to scan)
+        if self.spot.value:
+            return
+        super(SEMStream, self).onNewImage(df, data)
+
+    
+    # TODO: should be common to all Stream classes
     def getStatic(self):
         """
         return (StaticSEMStream): similar stream, but static

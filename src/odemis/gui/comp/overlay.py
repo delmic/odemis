@@ -972,9 +972,9 @@ class StreamIconOverlay(ViewOverlay):
     def hide_pause(self, hide_pause):
         self.pause = not hide_pause
         if not self.pause:
-            self.play = 0.7
+            self.play = 1.0
 
-    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+    def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
         if self.pause:
@@ -982,8 +982,8 @@ class StreamIconOverlay(ViewOverlay):
         elif self.play:
             self._draw_play(ctx)
             if self.play > 0:
-                self.play -= 0.07
-                wx.CallAfter(self.base.UpdateDrawing)
+                self.play -= 0.1 # a tenth less
+                wx.CallLater(50, self.base.Refresh) # in 0.05 s
             else:
                 self.play = 0
 
@@ -1254,7 +1254,7 @@ class DichotomyOverlay(ViewOverlay):
         return x, y, w, h
 
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, dc):
 
         if self.enabled:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
