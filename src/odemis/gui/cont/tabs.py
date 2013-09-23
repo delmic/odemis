@@ -1155,21 +1155,28 @@ class MirrorAlignTab(Tab):
             mic_view.show_crosshair.value = False    #pylint: disable=E1103
             mic_view.merge_ratio.value = 1           #pylint: disable=E1103
 
-            # TODO: don't allow to be removed/hidden/paused/folded => .locked
-            self._stream_controller.addStream(ccd_stream)
+            ccd_spe = self._stream_controller.addStream(ccd_stream)
+            ccd_spe.flatten()
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
-
         else:
             self._view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
+
+        if main_data.ebeam:
+            # SEM, just for the spot mode
+            # Not via stream controller, so we can avoid the scheduler
+            sem_stream = streammod.SEMStream("SEM", main_data.sed,
+                                             main_data.sed.data, main_data.ebeam)
+            self._sem_stream = sem_stream
+            self._sem_stream.spot.value = True
+        else:
+            self._sem_stream = None
 
         self._settings_controller = settings.SparcAlignSettingsController(
                                         self.main_frame,
                                         self.tab_data_model,
                                     )
-
-        # TODO: need contrast/brightness for the AR stream
 
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
@@ -1181,19 +1188,17 @@ class MirrorAlignTab(Tab):
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
-        # TODO: put the SEM at in spot mode at 0,0
-
-        # Turn on the camera only when displaying this tab
-        if show:
-            if self._ccd_stream:
-                self._ccd_stream.is_active.value = True
-        else:
-            if self._ccd_stream:
-                self._ccd_stream.is_active.value = False
+        # Turn on the camera and SEM only when displaying this tab
+        if self._ccd_stream:
+            self._ccd_stream.is_active.value = show
+        if self._sem_stream:
+            self._sem_stream.is_active.value = show
 
     def terminate(self):
         if self._ccd_stream:
             self._ccd_stream.is_active.value = False
+        if self._sem_stream:
+            self._sem_stream.is_active.value = False
 
 class TabBarController(object):
 
