@@ -33,7 +33,8 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion
+from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion, \
+    units, call_after
 import collections
 import logging
 import math
@@ -167,13 +168,6 @@ class SecomStreamsTab(Tab):
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
 
-
-        # Various controllers used for the live view and acquisition of images
-        self._view_controller = None
-        self._settings_controller = None
-        self._view_selector = None
-        self._acquisition_controller = None
-        self._microscope_controller = None
 
         # Order matters!
         # First we create the views, then the streams
@@ -321,12 +315,6 @@ class SparcAcquisitionTab(Tab):
         super(SparcAcquisitionTab, self).__init__(name, button, panel,
                                                   main_frame, tab_data)
 
-
-        # Various controllers used for the live view and acquisition of images
-
-        self._settings_controller = None
-        self._view_controller = None
-        self._acquisition_controller = None
 
         self._roi_streams = [] # stream which must have the same ROI as the SEM CL
         self._prev_rois = {} # stream -> roi (tuple of4 floats)
@@ -593,14 +581,6 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
-
-        # Various controllers used for the live view and acquisition of images
-        self._settings_controller = None
-        self._view_controller = None
-        self._acquisition_controller = None
-        self._stream_controller = None
-
-        # TODO: make sure it works with role=None, microscope=None
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
@@ -725,6 +705,14 @@ class AnalysisTab(Tab):
 
         # remove all the previous streams
         self._stream_controller.clear()
+        
+        # Force the canvases to fit to the content
+        for vp in [self.main_frame.vp_inspection_tl,
+                   self.main_frame.vp_inspection_tr,
+                   self.main_frame.vp_inspection_bl,
+                   self.main_frame.vp_inspection_br]:
+            vp.microscope_view.getMPPFromNextImage = False
+            vp.canvas.fitViewToNextImage = True
 
         acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
         # Add each data as a stream of the correct type
@@ -776,6 +764,7 @@ class LensAlignTab(Tab):
                                            main_frame, tab_data)
 
 
+        # TODO: we should actually display the settings of the streams (...once they have it)
         self._settings_controller = settings.LensAlignSettingsController(
                                         self.main_frame,
                                         self.tab_data_model
@@ -824,16 +813,6 @@ class LensAlignTab(Tab):
 
         # Update the SEM area in dichotomic mode
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
-#        dicho_overlay = overlay.DichotomyOverlay(main_frame.vp_align_sem.canvas,
-#                                                 self.tab_data_model.dicho_seq)
-#        self._dicho_overlay = dicho_overlay
-#        main_frame.vp_align_sem.canvas.add_view_overlay(dicho_overlay)
-
-        # Spot marking mode
-        spotmark_overlay = overlay.SpotModeOverlay(
-                                    main_frame.vp_align_sem.canvas)
-        self._spotmark_overlay = spotmark_overlay
-        main_frame.vp_align_sem.canvas.add_view_overlay(spotmark_overlay)
 
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical",
@@ -857,26 +836,22 @@ class LensAlignTab(Tab):
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowedModes = set([guimodel.TOOL_NONE])
 
-        # Streams are always on when the tab is shown. In the future, if it's
-        # possible to really control the SEM, we might revise this. For optical
-        # it shouldn't be a problem as the light is turned off anyway.
-        # self._state_controller = MicroscopeStateController(
-        #                                     self.tab_data_model,
-        #                                     self.main_frame,
-        #                                     "lens_align_btn_"
-        #                               )
-
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
                                                        "lens_align_")
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_secom_align)
 
-
         # Toolbar
         tb = main_frame.lens_align_tb
         tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
+        
+        # Dicho mode: during this mode, the label & button "move to center" are
+        # shown. If the sequence is empty, or a move is going, it's disabled.
+        self._ab_move = None # the future of the move (to know if it's over)
+        main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
+                                                 self._on_btn_to_center)
 
         # Hack warning: Move the scale window from the hidden viewport legend
         # next to the toolbar.
@@ -904,28 +879,30 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = False
         self._ccd_stream.is_active.value = False
 
+    @call_after
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
         """
+        # Reset previous mode
         if tool != guimodel.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
-#            self._dicho_overlay.enable(False)
-#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(False, self._dicho_overlay)
-#        elif tool != guimodel.TOOL_SPOT:
-#            self._spotmark_overlay.enable(False)
+            self.main_frame.lens_align_btn_to_center.Show(False)
+            self.main_frame.lens_align_lbl_approc_center.Show(False)
 
+        if tool != guimodel.TOOL_SPOT:
+            self._sem_stream.spot.value = False
+
+
+        # Set new mode
         if tool == guimodel.TOOL_DICHO:
-            # TODO: enable a special "move to SEM center" button?
-            # => better on dicho_seq update to only activate when it contains a
-            # meaningful value
-#            self._dicho_overlay.enable(True)
-            pass
-#            self.main_frame.vp_align_sem.canvas.toggle_dicho_mode(True, self._dicho_overlay)
+            self.main_frame.lens_align_btn_to_center.Show(True)
+            self.main_frame.lens_align_lbl_approc_center.Show(True)
         elif tool == guimodel.TOOL_SPOT:
-            # TODO: switch to spot mode
-#            self._spotmark_overlay.enable(True)
+            self._sem_stream.spot.value = True
+            # TODO: until the settings are directly connected to the hardware,
+            # we need to disable/freeze the SEM settings in spot mode.
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.
@@ -933,12 +910,90 @@ class LensAlignTab(Tab):
             # changes reactivate the SEM stream and subscribe to an image, when image
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
-            pass
 
+    @call_after
     def _onDichoSeq(self, seq):
         roi = conversion.dichotomy_to_region(seq)
         self._sem_stream.roi.value = roi
 
+        # Enable a special "move to SEM center" button iif:
+        # * seq is not empty
+        # * (and) no move currently going on
+        if seq and (self._ab_move is None or self._ab_move.done()):
+            a, b = self._computeROICenterAB(roi)
+            a_txt = units.readable_str(a, unit="m", sig=2)
+            b_txt = units.readable_str(b, unit="m", sig=2)
+            lbl = "Approximate center away by A = %s, B = %s." % (a_txt, b_txt)
+            enabled = True
+
+            # TODO: Warn if move is bigger than previous move (or simply too big)
+        else:
+            lbl = "Pick a sub-area on the SEM view to approximate the center."
+            enabled = False
+
+        self.main_frame.lens_align_btn_to_center.Enable(enabled)
+        # TODO: check the text colour
+        self.main_frame.lens_align_lbl_approc_center.SetLabel(lbl)
+        self.main_frame.lens_align_lbl_approc_center.Wrap(200) # FIXME: get the size
+        # FIXME: button position
+        # TODO: button text
+        self.main_frame.lens_align_lbl_approc_center.Enable(enabled)
+
+    def _on_btn_to_center(self, event):
+        """
+        Called when a click on the "move to center" button happens
+        """
+        # computes the center position
+        seq = self.tab_data_model.dicho_seq.value
+        roi = conversion.dichotomy_to_region(seq)
+        a, b = self._computeROICenterAB(roi)
+
+        # disable the button to avoid another move
+        self.main_frame.lens_align_btn_to_center.Disable()
+        
+        # run the move
+        move = {"a": a, "b": b}
+        aligner = self.tab_data_model.main.aligner
+        logging.debug("Moving by %s", move)
+        self._ab_move = aligner.moveRel(move)
+        self._ab_move.add_done_callback(self._on_move_to_center_done)
+
+    def _on_move_to_center_done(self, future):
+        """
+        Called when the move to the center is done
+        """
+        # reset the sequence as it's going to be completely different
+        self.tab_data_model.dicho_seq.value = []
+        logging.debug("Move over")
+
+    def _computeROICenterAB(self, roi):
+        """
+        Computes the position of the center of ROI, in the A/B coordinates
+        roi (tuple of 4: 0<=float<=1): left, top, right, bottom (in ratio)
+        returns (tuple of 2: floats): relative coordinates of center in A/B
+        """
+        # compute center in X/Y coordinates
+        pxs = self.tab_data_model.main.ebeam.pixelSize.value
+        eshape = self.tab_data_model.main.ebeam.shape
+        fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1]) # m
+        l, t, r, b = roi
+        xc, yc = (fov_size[0] * ((l + r) / 2 - 0.5),
+                  fov_size[1] * ((t + b) / 2 - 0.5))
+        
+        # same formula as InclinedStage._convertPosToChild()
+        ang = math.radians(135)
+        bc, ac = [xc * math.cos(ang) - yc * math.sin(ang),
+                  xc * math.sin(ang) + yc * math.cos(ang)]
+
+        # Force values to 0 if very close to it (happens often as can be on just
+        # on the axis)
+        if abs(ac) < 1e-10:
+            ac = 0
+        if abs(bc) < 1e-10:
+            bc = 0
+
+        return ac, bc
+        
     def _onSEMpxs(self, pxs):
         """
         Called when the SEM pixel size changes, which means the FoV changes
@@ -1045,10 +1100,6 @@ class MirrorAlignTab(Tab):
                                              main_frame, tab_data)
 
 
-        # Very simple, so most controllers are not needed
-        self._settings_controller = None
-        self._view_controller = None
-        self._acquisition_controller = None
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
                                         self.main_frame.pnl_sparc_align_streams,
@@ -1080,24 +1131,31 @@ class MirrorAlignTab(Tab):
                             mpp,
                             (0, 0))
             goal_stream = streammod.StaticStream("Goal", goal_iim)
+
             # create a view on the microscope model
+            vpv = collections.OrderedDict([
+                (main_frame.vp_sparc_align,
+                 {"name": "Optical",
+                  # no stage, or would need a fake stage to control X/Y of the mirror
+                  # no focus, or could control yaw/pitch?
+                  }),
+                                       ])
             self._view_controller = viewcont.ViewController(
                                         self.tab_data_model,
                                         self.main_frame,
-                                        [self.main_frame.vp_sparc_align]
+                                        vpv
                                     )
             mic_view = self.tab_data_model.focussedView.value
             mic_view.show_crosshair.value = False    #pylint: disable=E1103
             mic_view.merge_ratio.value = 1           #pylint: disable=E1103
 
-            # TODO: Do not put goal stream in the stream panel, we don't need
-            # any settings.
-            # TODO: don't allow to be removed/hidden/paused/folded
+            # TODO: don't allow to be removed/hidden/paused/folded => .locked
             self._stream_controller.addStream(ccd_stream)
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
 
         else:
+            self._view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
 
         self._settings_controller = settings.SparcAlignSettingsController(
@@ -1175,7 +1233,7 @@ class TabBarController(object):
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
-        returns (list of Tabs):
+        returns (list of Tabs): all the compatible tabs 
         """
         role = main_data.role
         logging.debug("Creating tabs belonging to the '%s' interface",

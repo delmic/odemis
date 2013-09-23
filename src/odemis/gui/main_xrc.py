@@ -653,7 +653,7 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lens_align_lbl_approc_center">
-                          <label>Approximate center at A = %s mm, B = %s mm</label>
+                          <label></label>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -2559,7 +2559,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_tl">
+                      <object class="MicroscopeViewport" name="vp_inspection_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2572,7 +2572,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_tr">
+                      <object class="MicroscopeViewport" name="vp_inspection_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2593,7 +2593,7 @@ def __init_resources():
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_bl">
+                      <object class="MicroscopeViewport" name="vp_inspection_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2606,7 +2606,7 @@ def __init_resources():
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_br">
+                      <object class="MicroscopeViewport" name="vp_inspection_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>

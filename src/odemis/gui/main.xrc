@@ -46,6 +46,7 @@
         <object class="wxMenuItem" name="menu_item_22view">
           <label>2x2 view</label>
           <accel>F5</accel>
+          <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
@@ -53,7 +54,6 @@
         </object>
         <object class="wxMenuItem" name="menu_item_cross">
           <label>Cross hair</label>
-          <accel>Esc</accel>
           <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
@@ -2356,7 +2356,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_tl">
+                      <object class="MicroscopeViewport" name="vp_inspection_tl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2369,7 +2369,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_tr">
+                      <object class="MicroscopeViewport" name="vp_inspection_tr">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2390,7 +2390,7 @@
                 <object class="sizeritem">
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_bl">
+                      <object class="MicroscopeViewport" name="vp_inspection_bl">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
@@ -2403,7 +2403,7 @@
                       <ratio>1</ratio>
                     </object>
                     <object class="sizeritem">
-                      <object class="SparcAnalysisViewport" name="vp_inspection_br">
+                      <object class="MicroscopeViewport" name="vp_inspection_br">
                         <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>

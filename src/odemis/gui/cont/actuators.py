@@ -80,10 +80,9 @@ class ActuatorController(object):
         self._main_frame = main_frame
         # Check which widgets and VAs exist. Bind the matching ones.
 
-        # Bind sizesteps
+        # Bind size steps (= sliders)
         self._va_connectors = []
         for an, ss in tab_data.stepsizes.items():
-            # TODO: use also prefix here
             slider_name = tab_prefix + "slider_" + an
             try:
                 slider = getattr(main_frame, slider_name)

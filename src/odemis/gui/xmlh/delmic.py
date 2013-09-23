@@ -96,7 +96,6 @@ msvps  = [
     ('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
     ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
     ('SparcAcquisitionViewport', xh_delmic.SparcAcquisitionViewportXmlHandler),
-    ('SparcAnalysisViewport', xh_delmic.SparcAnalysisViewportXmlHandler),
     ('SparcAlignViewport', xh_delmic.SparcAlignViewportXmlHandler),
 ]
 
