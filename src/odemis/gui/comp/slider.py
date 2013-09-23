@@ -202,6 +202,16 @@ class Slider(BaseSlider):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+        # If the user is dragging the NumberSlider, and thus it has the mouse
+        # captured, a call to SetValue will not result in the value of the
+        # slider chaning. This is to prevent the slider from jumping back and
+        # forth, while the user is trying to drag.
+        # A side effect of that is, that when another part of the system (e.g.
+        # a VirtualAttribute) is trying to set the value, it will be ignored.
+        # Instead of ignoring the value, it is now stored in the last_set
+        # attribute, which is used to call _SetValue when the mouse button is
+        # released (i.e. end of draggin).
+
         self.last_set = None
 
     def __del__(self):
