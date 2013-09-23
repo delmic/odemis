@@ -1498,10 +1498,9 @@ class SEMComedi(model.HwComponent):
 
                 # add scanner translation to the center
                 center = metadata.get(model.MD_POS, (0, 0))
-                tran = self._scanner.translation.value # px, hopefully hasn't been changed since data generation
-                pxs = self._scanner.pixelSize.value # m/px
-                metadata[model.MD_POS] = (center[0] + tran[0] * pxs[0],
-                                          center[1] + tran[1] * pxs[1])
+                trans = self._scanner.pixelToPhy(self._scanner.translation.value)
+                metadata[model.MD_POS] = (center[0] + trans[0],
+                                          center[1] + trans[1])
 
                 # write and read the raw data
                 try:
@@ -2265,6 +2264,18 @@ class Scanner(model.Emitter):
     @roattribute
     def HFWNoMag(self):
         return self._hfw_nomag
+
+    def pixelToPhy(self, px_pos):
+        """
+        Converts a position in pixels to physical (at the current magnification)
+        Note: the convention is that in internal coordinates Y goes down, while
+        in physical coordinates, Y goes up.
+        px_pos (tuple of 2 floats): position in internal coordinates (pixels)
+        returns (tuple of 2 floats): physical position in meters 
+        """
+        pxs = self.pixelSize.value # m/px
+        phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1]) # - to invert Y
+        return phy_pos
 
     def _onMagnification(self, mag):
         self._updatePixelSize()
