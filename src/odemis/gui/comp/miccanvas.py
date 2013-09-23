@@ -117,7 +117,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # The overlay which will receive mouse and keyboard events
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
-        
+
         # Some more overlays
         self._crosshair_ol = None
         self._spotmode_ol = None
@@ -230,7 +230,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._crosshair_ol is None:
                 self._crosshair_ol = comp_overlay.CrossHairOverlay(self)
 
-            if self._crosshair_ol not in self.ViewOverlays:     
+            if self._crosshair_ol not in self.ViewOverlays:
                 self.ViewOverlays.append(self._crosshair_ol)
                 self.Refresh(eraseBackground=False)
         else:
@@ -395,14 +395,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # skip ourself, to avoid asking the stage to move to (almost) the same
         # position
         wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
-        
+
     def ReCenterBuffer(self, world_pos):
         """
         Update the position of the buffer on the world
         pos (2-tuple float): the coordinates of the center of the buffer in
                              fake units
         """
-        # in case we are not attached to a view yet (shouldn't happen) 
+        # in case we are not attached to a view yet (shouldn't happen)
         if not self.microscope_view:
             logging.debug("ReCenterBuffer called without microscope view")
             super(DblMicroscopeCanvas, self).ReCenterBuffer(world_pos)
@@ -410,7 +410,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             physical_pos = self.world_to_real_pos(world_pos)
             # This will call _onViewPos() -> ReCenterBuffer()
             self.microscope_view.view_pos.value = physical_pos
-    
+
             self.microscope_view.moveStageToView() # will do nothing if no stage
             # stage_pos will be updated once the move is completed
 
@@ -428,7 +428,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # this will indirectly call _onMPP(), but not have any additional effect
         if self.microscope_view:
-            self.microscope_view.mpp.value = self.mpwu / self.scale
+            new_mpp = self.mpwu / self.scale
+            rng_mpp = self.microscope_view.mpp.range
+            new_mpp = max(rng_mpp[0], min(new_mpp, rng_mpp[1]))
+            self.microscope_view.mpp.value = new_mpp
 
     def _onMPP(self, mpp):
         """ Called when the view.mpp is updated
@@ -438,13 +441,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def OnSize(self, event):
         new_size = event.Size
-        
+
         # Update the mpp, so that the same width is displayed
         if self._previous_size and self.microscope_view:
             logging.debug("from %s to %s", self._previous_size, new_size)
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             self.microscope_view.mpp.value = hfw / new_size[0]
-            
+
         super(DblMicroscopeCanvas, self).OnSize(event)
         self._previous_size = new_size
 
@@ -453,7 +456,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         Zoom by the given factor
         inc (float): scale the current view by 2^inc
-        block_on_zero (boolean): if True, and the zoom goes from software 
+        block_on_zero (boolean): if True, and the zoom goes from software
           downscaling to software upscaling, it will stop at no software scaling
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """

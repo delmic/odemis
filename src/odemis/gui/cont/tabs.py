@@ -703,7 +703,7 @@ class AnalysisTab(Tab):
 
         # remove all the previous streams
         self._stream_controller.clear()
-        
+
         # Force the canvases to fit to the content
         for vp in [self.main_frame.vp_inspection_tl,
                    self.main_frame.vp_inspection_tr,
@@ -844,7 +844,7 @@ class LensAlignTab(Tab):
         tb = main_frame.lens_align_tb
         tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
-        
+
         # Dicho mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
         self._ab_move = None # the future of the move (to know if it's over)
@@ -932,7 +932,7 @@ class LensAlignTab(Tab):
 
             # TODO: Warn if move is bigger than previous move (or simply too big)
         else:
-            lbl = "Pick a sub-area to approximate the SEM center."
+            lbl = "Pick a sub-area to approximate the SEM center.\n"
             enabled = False
 
         self.main_frame.lens_align_btn_to_center.Enable(enabled)
@@ -940,7 +940,6 @@ class LensAlignTab(Tab):
         lbl_ctrl.SetLabel(lbl)
         lbl_ctrl.Wrap(lbl_ctrl.Size[0])
         self.main_frame.Layout()
-        # FIXME: button position -> sizer (button right aligned?)
 
 
     def _on_btn_to_center(self, event):
@@ -954,7 +953,7 @@ class LensAlignTab(Tab):
 
         # disable the button to avoid another move
         self.main_frame.lens_align_btn_to_center.Disable()
-        
+
         # run the move
         move = {"a": a, "b": b}
         aligner = self.tab_data_model.main.aligner
@@ -983,7 +982,7 @@ class LensAlignTab(Tab):
         l, t, r, b = roi
         xc, yc = (fov_size[0] * ((l + r) / 2 - 0.5),
                   fov_size[1] * ((t + b) / 2 - 0.5))
-        
+
         # same formula as InclinedStage._convertPosToChild()
         ang = math.radians(135)
         bc, ac = [xc * math.cos(ang) - yc * math.sin(ang),
@@ -997,7 +996,7 @@ class LensAlignTab(Tab):
             bc = 0
 
         return ac, bc
-        
+
     def _onSEMpxs(self, pxs):
         """
         Called when the SEM pixel size changes, which means the FoV changes
@@ -1240,7 +1239,7 @@ class TabBarController(object):
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.
-        returns (list of Tabs): all the compatible tabs 
+        returns (list of Tabs): all the compatible tabs
         """
         role = main_data.role
         logging.debug("Creating tabs belonging to the '%s' interface",
