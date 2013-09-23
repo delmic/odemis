@@ -30,7 +30,6 @@ import cairo
 import wx
 
 import odemis.gui as gui
-import odemis.gui.comp.canvas as canvas
 import odemis.gui.img.data as img
 import odemis.gui.util.units as units
 
@@ -109,29 +108,34 @@ class Overlay(object):
 
         return x, y
 
-    @abstractmethod
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
-        pass
-
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port.
     The Draw method has to be fast, because it's called after every
     refresh of the canvas. The center of the window is at 0,0 (and
     dragging doesn't affects that). """
-    pass
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def Draw(self, dc):
+        pass
 
 class WorldOverlay(Overlay):
-    """ This class displays an overlay on the buffer """
-    pass
+    """ This class displays an overlay on the buffer. 
+    It's updated only every time the entire buffer is redrawn."""
+    __metaclass__ = ABCMeta
+
+    @abstractmethod
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+        pass
+
 
 class TextViewOverlay(ViewOverlay):
     """ This overlay draws the label text at the provided view position """
     def __init__(self, base, vpos=((10, 16))):
-        super(TextViewOverlay, self).__init__(base)
-        self.label = ""
+        super(TextViewOverlay, self).__init__(base, label="")
         self.vpos = vpos
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, dc):
         if self.label:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
             self.write_label(ctx, dc.GetSize(), self.vpos, self.label)
@@ -185,6 +189,108 @@ class SpotModeOverlay(ViewOverlay):
                 self.center[1] - self._marker_offset[1]),
             useMask=False)
 
+class StreamIconOverlay(ViewOverlay):
+    """ This class can display various icon on the view to indicate the state of
+    the Streams belonging to that view.
+    """
+
+    opacity = 0.8
+    def __init__(self, base):
+        super(StreamIconOverlay, self).__init__(base)
+        self.pause = False # if True: displayed
+        self.play = 0 # opacity of the play icon
+
+        self.colour = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.opacity)
+
+    def hide_pause(self, hidden=True):
+        """
+        Hides the pause icon (or not)
+        hidden (boolean): if True, hides the icon (and display shortly a play
+         icon). If False, shows the pause icon.
+        """
+        self.pause = not hidden
+        if not self.pause:
+            self.play = 1.0
+        wx.CallAfter(self.base.Refresh)
+
+    def Draw(self, dc_buffer):
+        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+
+        if self.pause:
+            self._draw_pause(ctx)
+        elif self.play:
+            self._draw_play(ctx)
+            if self.play > 0:
+                self.play -= 0.1 # a tenth less
+                # Force a refresh (without erase background), to cause a new draw
+                wx.CallLater(50, self.base.Refresh, False) # in 0.05 s
+            else:
+                self.play = 0
+
+    def _get_dimensions(self):
+
+        width = max(16, self.base.ClientSize.x / 10)
+        height = width
+        right = self.base.ClientSize.x
+        bottom = self.base.ClientSize.y
+        margin = self.base.ClientSize.x / 25
+
+        return width, height, right, bottom, margin
+
+    def _draw_play(self, ctx):
+
+        width, height, right, _, margin = self._get_dimensions()
+
+        half_height = height / 2
+
+        x = right - margin - width + 0.5
+        y = margin + 0.5
+
+        ctx.set_line_width(1)
+        ctx.set_source_rgba(
+            *hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
+
+        ctx.move_to(x, y)
+
+        x = right - margin - 0.5
+        y += half_height
+
+        ctx.line_to(x, y)
+
+        x = right - margin - width + 0.5
+        y += half_height
+
+        ctx.line_to(x, y)
+        ctx.close_path()
+
+        ctx.fill_preserve()
+
+        ctx.set_source_rgba(0, 0, 0, self.play)
+        ctx.stroke()
+
+    def _draw_pause(self, ctx):
+
+        width, height, right, _, margin = self._get_dimensions()
+
+        bar_width = max(width / 3, 1)
+        gap_width = max(width - (2 * bar_width), 1) - 0.5
+
+        x = right - margin - bar_width + 0.5
+        y = margin + 0.5
+
+        ctx.set_line_width(1)
+
+        ctx.set_source_rgba(*self.colour)
+        ctx.rectangle(x, y, bar_width, height)
+
+        x -= bar_width + gap_width
+        ctx.rectangle(x, y, bar_width, height)
+
+        ctx.set_source_rgba(*self.colour)
+        ctx.fill_preserve()
+
+        ctx.set_source_rgb(0, 0, 0)
+        ctx.stroke()
 
 class FocusOverlay(ViewOverlay):
     """ This overlay can be used to display the change in focus """
@@ -199,45 +305,41 @@ class FocusOverlay(ViewOverlay):
         """
         Draws the crosshair
         dc (wx.DC)
-        shift (2-tuple float): shift for the coordinate conversion
-        scale (float): scale for the coordinate conversion
         """
+        # TODO: handle displaying the focus 0 (horizontally)
+
         if self.shifts[1]:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
             ctx.set_line_width(10)
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
 
             x, y = self.base.ClientSize
-            x = x - self.margin - (self.line_width // 2)
-            middle = y // 2
+            x -= self.margin - (self.line_width // 2)
+            middle = y / 2
 
-            # print self.shifts
-
-            end_y = min(
-                        max(self.margin,
-                            middle - (middle * (self.shifts[1] / (y / 2)))
-                        ),
-                        y - self.margin
-                    )
+            shift = self.shifts[1] * 1e6 # typically within µm
+            end_y = middle - (middle * (shift / (y / 2)))
+            end_y = min(max(self.margin, end_y), y - self.margin)
 
             ctx.move_to(x, middle)
             ctx.line_to(x, end_y)
             ctx.stroke()
-
             self.write_label(
                 ctx,
                 dc.GetSize(),
                 (x - 10, end_y),
-                "focus %s" % units.readable_str(self.shifts[1] / 1e6, 'm', 2),
+                "focus %s" % units.readable_str(self.shifts[1], 'm', 2),
                 flip=False,
                 align=wx.ALIGN_RIGHT
             )
 
     def add_shift(self, shift, axis):
-        """ TODO: doc """
-        self.shifts[axis] += shift * 1e6
+        """ Adds a value on the given axis, and updates the overlay
+        shift (float): amount added to the current value (can be negative)
+        axis (int): axis for which this happens
+        """
+        self.shifts[axis] += shift
         self.base.Refresh()
 
     def clear_shift(self):
@@ -246,8 +348,8 @@ class FocusOverlay(ViewOverlay):
         self.base.Refresh()
 
 class SelectionMixin(object):
-    """ This Overlay class can be used to draw rectangular selection areas.
-    These areas are always expressed in view port coordinates.
+    """ This mix-in class can be used on an Overlay to draw rectangular 
+    selection areas. These areas are always expressed in view port coordinates.
     Conversions to buffer and world coordinates should be done using subclasses.
     """
 
@@ -953,105 +1055,6 @@ class MarkingLineOverlay(ViewOverlay):
                 vpos = (self.vposx + 5, self.vposy + 3)
                 self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
 
-class StreamIconOverlay(ViewOverlay):
-    """ This class can display various icon on the view to indicate the state of
-    the Streams belonging to that view.
-    """
-
-    def __init__(self, base):
-
-        super(StreamIconOverlay, self).__init__(base, None)
-
-        opacity = 0.8
-
-        self.pause = False
-        self.play = 0
-
-        self.colour = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, opacity)
-
-    def hide_pause(self, hide_pause):
-        self.pause = not hide_pause
-        if not self.pause:
-            self.play = 1.0
-
-    def Draw(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-
-        if self.pause:
-            self._draw_pause(ctx)
-        elif self.play:
-            self._draw_play(ctx)
-            if self.play > 0:
-                self.play -= 0.1 # a tenth less
-                wx.CallLater(50, self.base.Refresh) # in 0.05 s
-            else:
-                self.play = 0
-
-    def _get_dimensions(self):
-
-        width = max(16, self.base.ClientSize.x / 10)
-        height = width
-        right = self.base.ClientSize.x
-        bottom = self.base.ClientSize.y
-        margin = self.base.ClientSize.x / 25
-
-        return width, height, right, bottom, margin
-
-    def _draw_play(self, ctx):
-
-        width, height, right, _, margin = self._get_dimensions()
-
-        half_height = height / 2
-
-        x = right - margin - width + 0.5
-        y = margin + 0.5
-
-        ctx.set_line_width(1)
-        ctx.set_source_rgba(
-            *hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
-
-        ctx.move_to(x, y)
-
-        x = right - margin - 0.5
-        y += half_height
-
-        ctx.line_to(x, y)
-
-        x = right - margin - width + 0.5
-        y += half_height
-
-        ctx.line_to(x, y)
-        ctx.close_path()
-
-        ctx.fill_preserve()
-
-        ctx.set_source_rgba(0, 0, 0, self.play)
-        ctx.stroke()
-
-    def _draw_pause(self, ctx):
-
-        width, height, right, _, margin = self._get_dimensions()
-
-        bar_width = max(width / 3, 1)
-        gap_width = max(width - (2 * bar_width), 1) - 0.5
-
-        x = right - margin - bar_width + 0.5
-        y = margin + 0.5
-
-        ctx.set_line_width(1)
-
-        ctx.set_source_rgba(*self.colour)
-        ctx.rectangle(x, y, bar_width, height)
-
-        x -= bar_width + gap_width
-        ctx.rectangle(x, y, bar_width, height)
-
-        ctx.set_source_rgba(*self.colour)
-        ctx.fill_preserve()
-
-        ctx.set_source_rgb(0, 0, 0)
-        ctx.stroke()
-
 TOP_LEFT = 0
 TOP_RIGHT = 1
 BOTTOM_LEFT = 2
@@ -1301,66 +1304,3 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
 
-
-# TODO: use the following code as base for the Spot picking overlay
-# class SpotMarkerOverlay(ViewOverlay):
-#     def __init__(self, base):
-#         super(SpotMarkerOverlay, self).__init__(base)
-
-#         self.view_pos = None
-#         self.enabled = False
-#         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
-#         self.marker_bmp = img.getspot_markerBitmap()
-#         self.marker_offset = self.marker_bmp.GetSize().GetWidth() // 2
-
-#         self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_button_down)
-#         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button_up)
-#         self.base.Bind(wx.EVT_SIZE, self.on_size)
-
-#     def on_size(self, evt):
-#         self.offset = tuple(v // 2 for v in self.base.GetClientSize())
-
-#     def on_mouse_button_down(self, evt):
-#         evt.Skip()
-
-#     def on_mouse_button_up(self, evt):
-#         if self.enabled:
-#             vpos = evt.GetPosition()
-#             self.set_view_position(vpos)
-#             self.base.Refresh()
-#         evt.Skip()
-
-#     def get_world_position(self):
-#         if self.view_pos:
-#             return self.base.view_to_world_pos(
-#                         self.view_pos,
-#                         self.offset)
-#         else:
-#             return None
-
-#     def clear(self):
-#         self.view_pos = None
-
-#     def set_view_position(self, vpos):
-#         self.view_pos = vpos[0] - self.offset[0], vpos[1] - self.offset[1]
-
-#     def enable(self, enable=True):
-#         """ Enable of disable the overlay """
-#         self.enabled = enable
-#         # TODO: Cache the current cursor so it can be restored?
-#         if enable:
-#             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-#             logging.debug("SpotMarkerOverlay enabled")
-#         else:
-#             self.base.SetCursor(wx.STANDARD_CURSOR)
-
-#     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
-#         if self.view_pos and self.enabled:
-#             dc_buffer.DrawBitmapPoint(
-#                 self.marker_bmp,
-#                 wx.Point(
-#                     self.view_pos[0] - self.marker_offset,
-#                     self.view_pos[1] - self.marker_offset),
-#                 useMask=False)
-
-#         super(SpotMarkerOverlay, self).Draw(dc_buffer, shift, scale)

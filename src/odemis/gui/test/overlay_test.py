@@ -87,35 +87,37 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
         cnvs = miccanvas.SecomCanvas(self.panel)
+        # TODO: setView() with a MicroscopeView
 
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")
-        self.add_control(cnvs, wx.EXPAND, clear=True)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        cnvs.add_world_overlay(overlay.ViewSelectOverlay(cnvs, "test selection"))
-        cnvs.toggle_update_mode(True)
+        cnvs.WorldOverlays.append(overlay.ViewSelectOverlay(cnvs, "test selection"))
+        cnvs.toggle_update_mode(True) # TODO: use .tool from view
         cnvs.current_mode = 1
 
-    def xtest_dichotomy_overlay(self):
+    def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, clear=True)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         lva = omodel.ListVA()
 
         dol = overlay.DichotomyOverlay(cnvs, lva)
-        cnvs.add_view_overlay(dol)
+        cnvs.ViewOverlays.append(dol)
 
         dol.sequence_va.subscribe(do_stuff, init=True)
         dol.enable()
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
 
-    def test_spot_mode_overlay(self):
+    def xtest_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = overlay.SpotModeOverlay(cnvs)
-        cnvs.add_view_overlay(sol)
+        cnvs.ViewOverlays.append(sol)
+
 
 if __name__ == "__main__":
     unittest.main()
