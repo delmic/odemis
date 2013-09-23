@@ -1089,8 +1089,8 @@ class DichotomyOverlay(ViewOverlay):
         # canvas or when we are not interested in updating the sequence.
         self.hover_pos = (None, None)
 
-        # maximum number of sub-quadrants (5->2**5 smaller than the whole area)
-        self.max_len = 5
+        # maximum number of sub-quadrants (6->2**6 smaller than the whole area)
+        self.max_len = 6
 
         # Bind event handlers
         self.base.Bind(wx.EVT_SIZE, self.on_size)
@@ -1115,13 +1115,6 @@ class DichotomyOverlay(ViewOverlay):
             rect = self.index_to_rect(i, q)
             self.sequence_rect.append(rect)
 
-        # Check if we have exceeded the length
-        if len(self.sequence_va.value) >= self.max_len:
-            self.base.SetCursor(wx.STANDARD_CURSOR)
-            self.hover_pos = (None, None)
-        else:
-            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-
         self.base.Refresh()
 
     def _reset(self):
@@ -1136,8 +1129,8 @@ class DichotomyOverlay(ViewOverlay):
 
         # When the mouse cursor leaves the overlay, the current top quadrant
         # should be highlighted, so clear the hover_pos attribute.
+        self.hover_pos = (None, None)
         if self.enabled:
-            self.hover_pos = (None, None)
             self.base.Refresh()
 
         evt.Skip()
@@ -1151,22 +1144,7 @@ class DichotomyOverlay(ViewOverlay):
         """ Mouse motion event handler """
 
         if self.enabled:
-            vpos = evt.GetPosition()
-            idx, quad = self.quad_hover(vpos)
-
-            # Change the cursor into a hand if the quadrant being hovered over
-            # can be selected. Use the default cursor otherwise
-            n = len(self.sequence_va.value)
-            if n == idx and n >= self.max_len:
-                self.base.SetCursor(wx.STANDARD_CURSOR)
-                idx, quad = (None, None)
-            else:
-                self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-
-            # Redraw only if the quadrant changed
-            if self.hover_pos != (idx, quad):
-                self.hover_pos = (idx, quad)
-                self.base.Refresh()
+            self._updateHover(evt.GetPosition())
 #        else:
         evt.Skip()
 
@@ -1190,14 +1168,29 @@ class DichotomyOverlay(ViewOverlay):
                 new_seq = self.sequence_va.value[:idx] + [quad]
             self.sequence_va.value = new_seq
 
-            vpos = evt.GetPosition()
-            self.hover_pos = self.quad_hover(vpos)
+            self._updateHover(evt.GetPosition())
 
     def on_size(self, evt):
         """ Called when size of canvas changes
         """
         # Force the recomputation of rectangles
         self.on_change(self.sequence_va.value)
+
+    def _updateHover(self, pos):
+        idx, quad = self.quad_hover(pos)
+
+        # Change the cursor into a hand if the quadrant being hovered over
+        # can be selected. Use the default cursor otherwise
+        if idx >= self.max_len:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+            idx, quad = (None, None)
+        else:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+
+        # Redraw only if the quadrant changed
+        if self.hover_pos != (idx, quad):
+            self.hover_pos = (idx, quad)
+            self.base.Refresh()
 
     def quad_hover(self, vpos):
         """ Return the sequence index number of the rectangle at position vpos
@@ -1264,7 +1257,7 @@ class DichotomyOverlay(ViewOverlay):
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
             ctx.set_source_rgba(*self.color)
-            ctx.set_line_width(1.5)
+            ctx.set_line_width(2)
             ctx.set_dash([2,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
