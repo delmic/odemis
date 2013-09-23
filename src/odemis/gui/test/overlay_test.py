@@ -112,12 +112,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, clear=True)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = overlay.SpotModeOverlay(cnvs)
         cnvs.add_view_overlay(sol)
-        sol.enable()
-
 
 if __name__ == "__main__":
     unittest.main()

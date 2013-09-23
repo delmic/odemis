@@ -124,11 +124,11 @@ class GuiTestCase(unittest.TestCase):
             cls.app.MainLoop()
 
     @classmethod
-    def add_control(cls, ctrl, flags=0, border=10, clear=False):
+    def add_control(cls, ctrl, flags=0, border=10, proportion=0, clear=False):
         if clear:
             cls.remove_all()
 
-        cls.sizer.Add(ctrl, flag=flags|wx.EXPAND|wx.ALL, border=border, proportion=0)
+        cls.sizer.Add(ctrl, flag=flags, border=border, proportion=proportion)
         cls.sizer.Layout()
         return ctrl
 
