@@ -26,17 +26,18 @@
 # Test module for Odemis' gui.comp.overlay module
 #===============================================================================
 
+from odemis.gui import model
+from odemis.gui.test import MANUAL, INSPECT, SLEEP_TIME, gui_loop
+from odemis.gui.xmlh import odemis_get_test_resources
 import logging
-import unittest
-import wx
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
 import odemis.gui.test.test_gui
 import odemis.model as omodel
+import unittest
+import wx
 
-from odemis.gui.xmlh import odemis_get_test_resources
-from odemis.gui.test import MANUAL, INSPECT, SLEEP_TIME, gui_loop
 
 MANUAL = True
 logging.getLogger().setLevel(logging.DEBUG)
@@ -83,7 +84,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
                 inspection.InspectionTool().Show()
             cls.app.MainLoop()
 
-    def xtest_view_select_overlay(self):
+    def test_view_select_overlay(self):
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -93,9 +94,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.SetForegroundColour("#DDDDDD")
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        cnvs.WorldOverlays.append(overlay.ViewSelectOverlay(cnvs, "test selection"))
-        cnvs.toggle_update_mode(True) # TODO: use .tool from view
-        cnvs.current_mode = 1
+        vsol = overlay.ViewSelectOverlay(cnvs, "test selection")
+        cnvs.WorldOverlays.append(vsol)
+        cnvs.active_overlay = vsol
+        cnvs.current_mode = model.TOOL_ROI
 
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -111,7 +113,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
 
-    def xtest_spot_mode_overlay(self):
+    def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 

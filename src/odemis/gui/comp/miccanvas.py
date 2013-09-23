@@ -74,6 +74,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     .canDrag (Boolean): If True (default), allows the user to drag
     .noDragNoFocus (Boolean): False by default. If True, prevent Drag and Focus
       change to happen. Useful to avoid the user to move a paused view.
+    .fitViewToNextImage (Boolean): False by default. If True, next time an image
+      is received, it will ensure the whole content fits the view (and reset
+      this flag).
     """
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
@@ -99,7 +102,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
         # and use listen to .tool (cf SparcCanvas)
         self.current_mode = None
-        self.allowedModes = None # None (all allowed) or a set of guimodel.TOOL_* allowed (rest is treated like NONE)
+        # None (all allowed) or a set of guimodel.TOOL_* allowed (rest is treated like NONE)
+        self.allowedModes = None
 
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
@@ -112,8 +116,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self._previous_size = None
 
-        # for the FPS
-
         # The overlay which will receive mouse and keyboard events
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
@@ -122,6 +124,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._crosshair_ol = None
         self._spotmode_ol = None
         self._fps_ol = comp_overlay.TextViewOverlay(self)
+
+        # play/pause icon
+        self.icon_overlay = comp_overlay.StreamIconOverlay(self)
+        self.ViewOverlays.append(self.icon_overlay)
+
+        self.zoom_overlay = comp_overlay.ViewSelectOverlay(self, "Zoom")
+        self.ViewOverlays.append(self.zoom_overlay)
+
+        self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
+        self.WorldOverlays.append(self.update_overlay)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -206,7 +218,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.current_mode = MODE_SECOM_DICHO
             self.active_overlay = self.dicho_overlay
             #FIXME: cursor handled by .enable()
-            self.cursor = wx.StockCursor(wx.CURSOR_HAND)
+#            self.cursor = wx.StockCursor(wx.CURSOR_HAND)
             self.dicho_overlay.enable(True)
         elif tool == guimodel.TOOL_SPOT:
             self.current_mode = tool
@@ -637,16 +649,6 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SecomCanvas, self).__init__(*args, **kwargs)
-
-        self.zoom_overlay = comp_overlay.ViewSelectOverlay(self, "Zoom")
-        # play/pause icon
-        self.icon_overlay = comp_overlay.StreamIconOverlay(self)
-        self.ViewOverlays.extend([self.zoom_overlay,
-                                  self.icon_overlay])
-
-        self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
-        self.WorldOverlays.append(self.update_overlay)
-
 
         # TODO: once the StreamTrees can render fully, reactivate the background
         # pattern
@@ -1138,7 +1140,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         ## Overlays
 
-        self.focusline_overlay = None
         # List of all overlays used by this canvas
         self.overlays = []
 
@@ -1149,7 +1150,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
         self.ticks = canvas.PLOT_TICKS_HORZ
 
-        self.set_focusline_ovelay(comp_overlay.MarkingLineOverlay(self))
+        self.focusline_overlay = comp_overlay.MarkingLineOverlay(self)
+        self.add_overlay(self.focusline_overlay)
 
         ## Event binding
 
@@ -1221,14 +1223,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         for o in self.overlays:
             o.Draw(dc)
-
-    def set_focusline_ovelay(self, fol):
-        """ Assign a focusline overlay to the canvas """
-        # TODO: Add type check to make sure the ovelay is a ViewOverlay.
-        # (But importing Viewoverlay causes cyclic imports)
-        self.focusline_overlay = fol
-        self.add_overlay(fol)
-        self.Refresh()
 
     def add_overlay(self, ol):
         self.overlays.append(ol)

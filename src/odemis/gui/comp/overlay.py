@@ -981,7 +981,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 # The grid is easy to draw, no need for a cached bmp
                 self.bmp = None
 
-                # If there are more repititions in either direction than there
+                # If there are more repetitions in either direction than there
                 # are pixels, just fill a semi transparent rectangle
                 if 0 in (step_x, step_y):
                     ctx.rectangle(
@@ -1031,7 +1031,7 @@ class MarkingLineOverlay(ViewOverlay):
         self.vposx = max(1, min(pos[0], self.base.ClientSize.x - self.line_width))
         self.vposy = max(1, min(pos[1], self.base.ClientSize.y - 1))
 
-    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+    def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
         if self.vposy:
