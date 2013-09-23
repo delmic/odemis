@@ -589,7 +589,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             elif num_focus == 2:
                 logging.debug("Two focus actuators found")
                 self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
-            self.focus_overlay.clear_shift()
+            if self.focus_overlay:
+                self.focus_overlay.clear_shift()
 
             super(DblMicroscopeCanvas, self).OnRightDown(event)
 
