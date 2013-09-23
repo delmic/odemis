@@ -92,32 +92,6 @@ class xrcbutton_frame(wx.Frame):
 
 
 
-class xrcslider_frame(wx.Frame):
-#!XRCED:begin-block:xrcslider_frame.PreCreate
-    def PreCreate(self, pre):
-        """ This function is called during the class's initialization.
-        
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-        
-#!XRCED:end-block:xrcslider_frame.PreCreate
-
-    def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
-        self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "slider_frame")
-        self.PostCreate(pre)
-
-        # Define variables for the controls, bind event handlers
-        self.slider_panel = xrc.XRCCTRL(self, "slider_panel")
-        self.vrslider = xrc.XRCCTRL(self, "vrslider")
-        self.bwslider = xrc.XRCCTRL(self, "bwslider")
-
-
-
 class xrccanvas_frame(wx.Frame):
 #!XRCED:begin-block:xrccanvas_frame.PreCreate
     def PreCreate(self, pre):
@@ -363,44 +337,7 @@ def __init_resources():
     </object>
     <size>400,400</size>
   </object>
-  <object class="wxFrame" name="slider_frame">
-    <object class="wxPanel" name="slider_panel">
-      <object class="wxBoxSizer">
-        <orient>wxVERTICAL</orient>
-        <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
-            <size>-1, 60</size>
-            <fg>#1E90FF</fg>
-            <bg>#4D4D4D</bg>
-            <style>wxBORDER_NONE</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <flag>wxEXPAND</flag>
-        </object>
-        <object class="sizeritem">
-          <object class="BandwidthSlider" name="bwslider">
-            <size>-1, 60</size>
-            <fg>#BA6DEA</fg>
-            <bg>#4D4D4D</bg>
-            <style>wxBORDER_NONE</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <flag>wxEXPAND</flag>
-        </object>
-      </object>
-      <size>400,400</size>
-      <fg>#E6E6FA</fg>
-      <bg>#A52A2A</bg>
-      <XRCED>
-        <assign_var>1</assign_var>
-      </XRCED>
-    </object>
-    <size>400,400</size>
-  </object>
+  
   <object class="wxFrame" name="canvas_frame">
     <object class="wxPanel" name="canvas_panel">
       <object class="wxBoxSizer">

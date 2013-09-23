@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -50,6 +50,9 @@ class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
     making sure that the changes in one are automatically reflected in the
     other.
+
+    At the end of the constructor, the value of the VA is assigned to the
+    control!
     """
     def __init__(self, va, ctrl, va_2_ctrl=None, ctrl_2_va=None, events=None):
         """
@@ -85,7 +88,6 @@ class VigilantAttributeConnector(object):
         try:
             value = self.ctrl_2_va()
             logging.debug("Assign value %s to vigilant attribute", value)
-
             self.vigilattr.value = value
         except (ValueError, TypeError, IndexError), exc:
             logging.error("Illegal value: %s", exc)

@@ -22,11 +22,11 @@
 """
 
 from __future__ import division
-from ..util.conversion import wxcol_to_frgb, change_brightness, hex_to_frgba
-from .text import UnitFloatCtrl, UnitIntegerCtrl
+from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness, hex_to_frgba
+from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import ABCMeta, abstractmethod
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from odemis.gui.util import limit_invocation
+from odemis.gui.util import limit_invocation, call_after
 import collections
 import logging
 import math
@@ -46,7 +46,7 @@ class BaseSlider(wx.PyControl):
     # The abstract methods must be implemented by any class inheriting from
     # BaseSlider
 
-    def Disable(self):
+    def Disable(self): #pylint: disable=W0221
         return self.Enable(False)
 
     @abstractmethod
@@ -202,6 +202,8 @@ class Slider(BaseSlider):
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+        self.last_set = None
+
     def __del__(self):
         """ TODO: rediscover the reason why this method is here. """
         try:
@@ -342,6 +344,10 @@ class Slider(BaseSlider):
             self.ReleaseMouse()
             self._send_scroll_event()
 
+            if self.last_set:
+                self._SetValue(self.last_set)
+
+        self.last_set = None
         event.Skip()
 
     def Enable(self, enable=True):
@@ -397,8 +403,6 @@ class Slider(BaseSlider):
                                        self.max_value,
                                        prcnt)
 
-
-
     def SetValue(self, value):
         """ Set the value of the slider
 
@@ -407,9 +411,14 @@ class Slider(BaseSlider):
         It doesn't send an event that the value was modified. To send an
         event, you need to call _send_slider_update_event()
         """
+
         # If the user is *NOT* dragging...
         if not self.HasCapture():
             self._SetValue(value)
+        # If we are dragging, we still store the value, so we can set it when
+        # the mouse is released.
+        else:
+            self.last_set = value
 
     def _SetValue(self, value):
         """ Set the value of the slider
@@ -566,7 +575,10 @@ class NumberSlider(Slider):
     def _update_linked_field(self, value):
         """ Update any linked field to the same value as this slider
         """
-        logging.debug("Updating number field to %s", value)
+        logging.debug(
+            "Updating number field from %s to %s",
+            self.current_value,
+            value)
         self.linked_field.ChangeValue(value)
 
     def set_position_value(self, xPos):
@@ -576,12 +588,12 @@ class NumberSlider(Slider):
         Slider.set_position_value(self, xPos)
         self._update_linked_field(self.current_value)
 
-    def _SetValue(self, val):
+    def _SetValue(self, value):
         """ Overridden method, so the linked field update could be added
         """
-
-        Slider._SetValue(self, val)
-        self._update_linked_field(val)
+        Slider._SetValue(self, value)
+        # User the current value, since _SetValue might clip the val parameter
+        self._update_linked_field(self.current_value)
 
     def OnLeftUp(self, event):
         """ Overridden method, so the linked field update could be added
