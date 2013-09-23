@@ -45,7 +45,7 @@ def goto_inspect():
     global INSPECT
     INSPECT = True
 
-def gui_loop():
+def gui_loop(sleep=None):
     """
     Execute the main loop for the GUI until all the current events are processed
     """
@@ -58,6 +58,8 @@ def gui_loop():
         app.MainLoop()
         if not app.Pending():
             break
+
+    wx.MilliSleep(sleep or SLEEP_TIME)
 
 def sleep(ms=None):
     wx.MilliSleep(ms or SLEEP_TIME)
@@ -122,11 +124,11 @@ class GuiTestCase(unittest.TestCase):
             cls.app.MainLoop()
 
     @classmethod
-    def add_control(cls, ctrl, flags=0, clear=False):
+    def add_control(cls, ctrl, flags=0, border=10, clear=False):
         if clear:
-            cls.sizer.Clear(True)
+            cls.remove_all()
 
-        cls.sizer.Add(ctrl, flag=flags|wx.EXPAND|wx.ALL, border=0, proportion=0)
+        cls.sizer.Add(ctrl, flag=flags|wx.EXPAND|wx.ALL, border=border, proportion=0)
         cls.sizer.Layout()
         return ctrl
 

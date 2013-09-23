@@ -35,6 +35,7 @@ import wx
 import wx.lib.mixins.listctrl as listmix
 
 from odemis.gui.util import units
+from odemis.gui.util import call_after
 
 
 # Locale is needed for correct string sorting
@@ -670,18 +671,21 @@ class NumberTextCtrl(wx.TextCtrl):
 
     def ChangeValue(self, val):
         """ Set the value of the control
-            No checks are done on the value to be correct
-            If this is need, use the validator.
+        No checks are done on the value to be correct
+        If this is needed, use the validator.
         """
         self.number = val
-        #logging.debug("Setting value to '%s' for %s", val, self.__class__.__name__)
+        # logging.debug(
+        #         "Setting value to '%s' for %s",
+        #         val, self.__class__.__name__)
 
         if self.HasFocus():
-            logging.info("Received the new value '%s' to set while in focus", val)
+            logging.info(
+                    "Received the new value '%s' to set while in focus",
+                    val)
             self._display_raw()
         else:
             self._display_pretty()
-
 
     def GetValueStr(self):
         """ Return the value of the control as a string """
@@ -804,7 +808,6 @@ class UnitNumberCtrl(NumberTextCtrl):
             str_val = u""
         else:
             str_val = units.readable_str(self.number, self.unit, self.accuracy)
-
         wx.TextCtrl.ChangeValue(self, str_val)
 
 #########################################

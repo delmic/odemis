@@ -181,44 +181,7 @@
     </object>
     <size>400,400</size>
   </object>
-  <object class="wxFrame" name="slider_frame">
-    <object class="wxPanel" name="slider_panel">
-      <object class="wxBoxSizer">
-        <orient>wxVERTICAL</orient>
-        <object class="sizeritem">
-          <object class="VisualRangeSlider" name="vrslider">
-            <size>-1, 60</size>
-            <fg>#1E90FF</fg>
-            <bg>#4D4D4D</bg>
-            <style>wxBORDER_NONE</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <flag>wxEXPAND</flag>
-        </object>
-        <object class="sizeritem">
-          <object class="BandwidthSlider" name="bwslider">
-            <size>-1, 60</size>
-            <fg>#BA6DEA</fg>
-            <bg>#4D4D4D</bg>
-            <style>wxBORDER_NONE</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <flag>wxEXPAND</flag>
-        </object>
-      </object>
-      <size>400,400</size>
-      <fg>#E6E6FA</fg>
-      <bg>#A52A2A</bg>
-      <XRCED>
-        <assign_var>1</assign_var>
-      </XRCED>
-    </object>
-    <size>400,400</size>
-  </object>
+  
   <object class="wxFrame" name="canvas_frame">
     <object class="wxPanel" name="canvas_panel">
       <object class="wxBoxSizer">
