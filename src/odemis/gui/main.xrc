@@ -450,7 +450,7 @@
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lens_align_lbl_approc_center">
-                          <label></label>
+                          <label/>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>

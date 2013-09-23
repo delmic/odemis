@@ -249,6 +249,7 @@ def __init_resources():
         <object class="wxMenuItem" name="menu_item_22view">
           <label>2x2 view</label>
           <accel>F5</accel>
+          <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
@@ -256,7 +257,6 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_cross">
           <label>Cross hair</label>
-          <accel>Esc</accel>
           <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
@@ -653,7 +653,7 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lens_align_lbl_approc_center">
-                          <label></label>
+                          <label/>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -661,7 +661,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="lens_align_btn_to_center">
-                          <label>Move to center...</label>
+                          <label>Move there</label>
                           <bitmap>img_btn_128x24_png</bitmap>
                           <hover>img_btn_128x24_h_png</hover>
                           <selected>img_btn_128x24_a_png</selected>
