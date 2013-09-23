@@ -434,11 +434,7 @@ class SEMStream(Stream):
             # if emitter has no dwell time -> no problem
             pass
 
-        # Region of interest as left, top, right, bottom (in ratio from the
-        # whole area of the emitter => between 0 and 1)
-        self.roi = model.TupleContinuous((0, 0, 1, 1),
-                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
-                                         cls=(int, long, float))
+        # Actually use the ROI
         self.roi.subscribe(self._onROI)
 
         # Spot mode: when set (and stream is active), it will drive the e-beam
@@ -454,7 +450,8 @@ class SEMStream(Stream):
         """
         Update the scanning area of the SEM according to the roi
         """
-        # FIXME: this is fighting agains the resolution setting of the SEM
+        # FIXME: this is fighting against the resolution setting of the SEM
+        # => only apply if is_active (and not spot mode...)
         # We should remove res setting from the GUI when this ROI is used.
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         width = (roi[2] - roi[0], roi[3] - roi[1])

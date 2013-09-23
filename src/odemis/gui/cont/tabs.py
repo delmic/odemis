@@ -339,6 +339,8 @@ class SparcAcquisitionTab(Tab):
                 main_data.sed.data,
                 main_data.ebeam
         )
+        # FIXME: this stream has a .roi VA which modifies the SEM settings
+        # even if not active => bad
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
 
