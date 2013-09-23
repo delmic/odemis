@@ -113,15 +113,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._previous_size = None
 
         # for the FPS
-        self.fps_overlay = comp_overlay.TextViewOverlay(self)
-        self.ViewOverlays.append(self.fps_overlay)
 
+        # The overlay which will receive mouse and keyboard events
         self.active_overlay = None
         self.cursor = wx.STANDARD_CURSOR
         
         # Some more overlays
         self._crosshair_ol = None
         self._spotmode_ol = None
+        self._fps_ol = comp_overlay.TextViewOverlay(self)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -229,7 +229,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if activated:
             if self._crosshair_ol is None:
                 self._crosshair_ol = comp_overlay.CrossHairOverlay(self)
-#                self._crosshair_ol = comp_overlay.SpotModeOverlay(self)
 
             if self._crosshair_ol not in self.ViewOverlays:     
                 self.ViewOverlays.append(self._crosshair_ol)
@@ -252,6 +251,21 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             try:
                 self.ViewOverlays.remove(self._spotmode_ol)
+                self.Refresh(eraseBackground=False)
+            except ValueError:
+                pass # it was already not displayed
+
+    def _onDebug(self, activated):
+        """
+        Called when GUI debug mode changes => display FPS overlay
+        """
+        if activated:
+            if self._fps_ol not in self.ViewOverlays:
+                self.ViewOverlays.append(self._fps_ol)
+                self.Refresh(eraseBackground=False)
+        else:
+            try:
+                self.ViewOverlays.remove(self._fps_ol)
                 self.Refresh(eraseBackground=False)
             except ValueError:
                 pass # it was already not displayed
@@ -614,18 +628,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         fps = super(DblMicroscopeCanvas, self)._DrawMergedImages(dc_buffer,
                                                          images,
                                                          mergeratio)
-        if self._tab_data_model and self._tab_data_model.main.debug.value:
-            self.fps_overlay.set_label("%d fps" % fps)
-
-    def _onDebug(self, enabled):
-        """
-        Called when GUI debug mode changes
-        """
-        if enabled:
-            # real value will be updated with FPS on next image update
-            self.fps_overlay.set_label("0 fps")
-        else:
-            self.fps_overlay.set_label("")
+        self._fps_ol.set_label("%d fps" % fps)
 
 class SecomCanvas(DblMicroscopeCanvas):
 
@@ -641,10 +644,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
-        self.active_overlay = None
-
-        # TODO: use .tool as for SparcCanvas
-        pub.subscribe(self.on_zoom_start, 'secom.canvas.zoom.start')
 
         # TODO: once the StreamTrees can render fully, reactivate the background
         # pattern
@@ -690,20 +689,6 @@ class SecomCanvas(DblMicroscopeCanvas):
                 # logging.debug("inserting normal image")
 
         return images
-
-    def add_world_overlay(self, wol):
-        self.WorldOverlays.append(wol)
-
-    def add_view_overlay(self, vol):
-        self.ViewOverlays.append(vol)
-
-    def on_zoom_start(self, canvas):
-        """ If a zoom selection starts, all previous selections should be
-        cleared.
-        """
-        if canvas != self:
-            self.zoom_overlay.clear_selection()
-            self.ShouldUpdateDrawing()
 
     def OnLeftDown(self, event):
         # TODO: move this to the overlay
@@ -807,7 +792,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.roi_overlay = comp_overlay.RepetitionSelectOverlay(self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
 
-
     def setView(self, microscope_view, tab_data):
         """
         Set the microscope_view that this canvas is displaying/representing
@@ -826,6 +810,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         else:
             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
 
+        # TODO: move this to the RepetitionSelectOverlay?
         self._roa.subscribe(self._onROA, init=True)
 
         sem = tab_data.main.ebeam
