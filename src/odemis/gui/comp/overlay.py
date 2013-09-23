@@ -1089,8 +1089,6 @@ class DichotomyOverlay(ViewOverlay):
         # maximum number of sub-quadrants (5->2**5 smaller than the whole area)
         self.max_len = 5
 
-        self._reset()
-
         # Bind event handlers
         self.base.Bind(wx.EVT_SIZE, self.on_size)
         self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
@@ -1166,34 +1164,37 @@ class DichotomyOverlay(ViewOverlay):
             if self.hover_pos != (idx, quad):
                 self.hover_pos = (idx, quad)
                 self.base.Refresh()
-
+#        else:
         evt.Skip()
 
     def on_mouse_button(self, evt):
         """ Mouse button handler """
-
+        evt.Skip() # FIXME
+        if not self.enabled:
+            return
+            
         # If the mouse cursor is over a selectable quadrant
-        if None not in self.hover_pos and self.enabled:
+        if None not in self.hover_pos:
             idx, quad = self.hover_pos
 
             # If we are hovering over the 'top' quadrant, add it to the sequence
             if len(self.sequence_va.value) == idx:
-                self.sequence_va.value = list(self.sequence_va.value + [quad])
+                new_seq = self.sequence_va.value + [quad]
+                new_seq = new_seq[:self.max_len] # cut if too long
             # Jump to the desired quadrant otherwise, cutting the sequence
             else:
                 # logging.debug("Trim")
-                seq = self.sequence_va.value[:idx]
-                self.sequence_va.value = list(seq + [quad])
+                new_seq = self.sequence_va.value[:idx] + [quad]
+            self.sequence_va.value = new_seq
 
             vpos = evt.GetPosition()
             self.hover_pos = self.quad_hover(vpos)
 
-        evt.Skip()
-
     def on_size(self, evt):
-        """ Reset everything
+        """ Called when size of canvas changes
         """
-        self._reset()
+        # Force the recomputation of rectangles
+        self.on_change(self.sequence_va.value)
 
     def quad_hover(self, vpos):
         """ Return the sequence index number of the rectangle at position vpos
@@ -1244,12 +1245,12 @@ class DichotomyOverlay(ViewOverlay):
         # If the quadrant is in the right half, construct x by adding half the
         # width to x position of the base rectangle.
         if quad in (TOP_RIGHT, BOTTOM_RIGHT):
-            x = x + w
+            x += w
 
         # If the quadrant is in the bottom half, construct y by adding half the
         # height to the y position of the base rectangle.
         if quad in (BOTTOM_LEFT, BOTTOM_RIGHT):
-            y = y + h
+            y += h
 
         return x, y, w, h
 

@@ -661,7 +661,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="lens_align_btn_to_center">
-                          <label>Move there</label>
+                          <label>Move to center...</label>
                           <bitmap>img_btn_128x24_png</bitmap>
                           <hover>img_btn_128x24_h_png</hover>
                           <selected>img_btn_128x24_a_png</selected>
@@ -670,7 +670,7 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_CENTRE</flag>
+                        <flag>wxTOP|wxALIGN_RIGHT</flag>
                         <border>16</border>
                       </object>
                       <orient>wxVERTICAL</orient>

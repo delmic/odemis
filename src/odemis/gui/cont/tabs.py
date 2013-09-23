@@ -38,14 +38,12 @@ from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion
 import collections
 import logging
 import math
-import odemis.gui.comp.overlay as overlay
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
 import odemis.gui.model.stream as streammod
 import os.path
 import pkg_resources
-import types
 import weakref
 import wx
 
@@ -103,7 +101,7 @@ class Tab(object):
             self.main_frame.menu_item_22view.Enable(False)
 
     def _connect_crosshair_event(self):
-        """ If the tab conains views with a crosshair overlay, it will connect
+        """ If the tab contains views with a crosshair overlay, it will connect
         an event to the view menu allowing for the toggling to the visibility
         of those crosshairs.
         """
@@ -911,33 +909,39 @@ class LensAlignTab(Tab):
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
 
-    @call_after
     def _onDichoSeq(self, seq):
         roi = conversion.dichotomy_to_region(seq)
+        logging.debug("Seq = %s -> roi = %s", seq, roi)
         self._sem_stream.roi.value = roi
 
+        self._update_to_center()
+
+    @call_after
+    def _update_to_center(self):
         # Enable a special "move to SEM center" button iif:
         # * seq is not empty
         # * (and) no move currently going on
+        seq = self.tab_data_model.dicho_seq.value
         if seq and (self._ab_move is None or self._ab_move.done()):
+            roi = self._sem_stream.roi.value
             a, b = self._computeROICenterAB(roi)
             a_txt = units.readable_str(a, unit="m", sig=2)
             b_txt = units.readable_str(b, unit="m", sig=2)
-            lbl = "Approximate center away by A = %s, B = %s." % (a_txt, b_txt)
+            lbl = "Approximate center away by:\nA = %s, B = %s." % (a_txt, b_txt)
             enabled = True
 
             # TODO: Warn if move is bigger than previous move (or simply too big)
         else:
-            lbl = "Pick a sub-area on the SEM view to approximate the center."
+            lbl = "Pick a sub-area to approximate the SEM center."
             enabled = False
 
         self.main_frame.lens_align_btn_to_center.Enable(enabled)
-        # TODO: check the text colour
-        self.main_frame.lens_align_lbl_approc_center.SetLabel(lbl)
-        self.main_frame.lens_align_lbl_approc_center.Wrap(200) # FIXME: get the size
-        # FIXME: button position
-        # TODO: button text
-        self.main_frame.lens_align_lbl_approc_center.Enable(enabled)
+        lbl_ctrl = self.main_frame.lens_align_lbl_approc_center
+        lbl_ctrl.SetLabel(lbl)
+        lbl_ctrl.Wrap(lbl_ctrl.Size[0])
+        self.main_frame.Layout()
+        # FIXME: button position -> sizer (button right aligned?)
+
 
     def _on_btn_to_center(self, event):
         """
@@ -963,8 +967,8 @@ class LensAlignTab(Tab):
         Called when the move to the center is done
         """
         # reset the sequence as it's going to be completely different
-        self.tab_data_model.dicho_seq.value = []
         logging.debug("Move over")
+        self.tab_data_model.dicho_seq.value = []
 
     def _computeROICenterAB(self, roi):
         """
@@ -999,6 +1003,9 @@ class LensAlignTab(Tab):
         Called when the SEM pixel size changes, which means the FoV changes
         pxs (tuple of 2 floats): in meter
         """
+        # in dicho search, it means A, B are actually different values
+        self._update_to_center()
+
         eshape = self.tab_data_model.main.ebeam.shape
         fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1]) # m
         semv_size = self.main_frame.vp_align_sem.Size # px
