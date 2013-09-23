@@ -315,7 +315,6 @@ class SecomViewport(MicroscopeViewport):
         self.canvas.icon_overlay.hide_pause(is_playing)
         if self._microscope_view.has_stage():
             self.canvas.noDragNoFocus = not is_playing
-        self.canvas.Refresh()
 
     def _checkMergeSliderDisplay(self):
         # Overridden to avoid displaying merge slide if only SEM or only Optical
