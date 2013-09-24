@@ -9,13 +9,13 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -33,6 +33,8 @@ import unittest
 import wx
 
 # logging.getLogger().setLevel(logging.DEBUG)
+
+#pylint: disable=E1103
 
 class Object(object):
     pass
@@ -56,6 +58,8 @@ class FakeMicroscopeModel(object):
         self.ccd = None
         self.sed = None
         self.ebeam = None
+        self.tool = None
+        self.subscribe = None
 
 class TestDblMicroscopeCanvas(unittest.TestCase):
 
@@ -79,7 +83,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
     def test_CrosHair(self):
         # crosshair
-        show_crosshair = self.view.show_crosshair
+        show_crosshair = self.view.show_crosshair #pylint: disable=E1103
         show_crosshair.value = True
         self.assertGreaterEqual(len(self.canvas.ViewOverlays), 1)
         lvo = len(self.canvas.ViewOverlays)
@@ -102,17 +106,18 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         px1_cent = (5, 5)
         # Red pixel at center, (5,5)
         im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
+
         im2 = wx.EmptyImage(201, 201, clear=True)
         px2_cent = ((im2.Width - 1) // 2 , (im2.Height - 1) // 2)
         # Blue pixel at center (100,100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
         stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
         # 200, 200 => outside of the im1
-        # +(0.5, 0.5) to make it really in the center of the pixel
+        # (+0.5, -0.5) to make it really in the center of the pixel
         stream2 = StaticStream("s2", InstrumentalImage(
                                         im2,
                                         mpp,
-                                        (200.5 * mpp, 200.5 * mpp)))
+                                        (200.5 * mpp, 199.5 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
@@ -141,10 +146,14 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         #         if px != (0, 0, 0):
         #             print px, i, j
 
-        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0], resultIm.Height / 2 + shift[1])
+        px1 = GetRGB(resultIm,
+                     resultIm.Width // 2 + shift[0],
+                     resultIm.Height // 2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
-        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0],
-                               resultIm.Height / 2 + 200 + shift[1])
+
+        px2 = GetRGB(resultIm,
+                     resultIm.Width // 2 + 200 + shift[0],
+                     resultIm.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
         # remove first picture
@@ -154,7 +163,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         test.gui_loop()
 
         resultIm = GetImageFromBuffer(self.canvas)
-        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0], resultIm.Height / 2 + 200 + shift[1])
+        px2 = GetRGB(resultIm, resultIm.Width // 2 + 200 + shift[0],
+         resultIm.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
 #    @unittest.skip("simple")
@@ -166,12 +176,15 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
         px1_cent = (5, 5)
-        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
+        # Red pixel at center, (5,5)
+        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
         im2 = wx.EmptyImage(201, 201, clear=True)
         px2_cent = (100, 100)
-        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255) # Blue pixel at center (100,100)
+        # Blue pixel at center (100,100)
+        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
         stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
-        stream2 = StaticStream("s2", InstrumentalImage(im2, mpp, (200.5 * mpp, 200.5 * mpp)))
+        stream2 = StaticStream("s2", InstrumentalImage(
+                                        im2, mpp, (200.5 * mpp, 199.5 * mpp)))
         self.view.addStream(stream1)
         self.view.addStream(stream2)
         # view might set its mpp to the mpp of first image => reset it
@@ -194,9 +207,11 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # copy the buffer into a nice image here
         resultIm = GetImageFromBuffer(self.canvas)
 
-        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0], resultIm.Height / 2 + shift[1])
+        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0],
+                     resultIm.Height / 2 + shift[1])
         self.assertEqual(px1, (127, 0, 0))
-        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0], resultIm.Height / 2 + 200 + shift[1])
+        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0],
+                     resultIm.Height / 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
 #    @unittest.skip("simple")
@@ -208,7 +223,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # add images
         im1 = wx.EmptyImage(11, 11, clear=True)
         px1_cent = (5, 5)
-        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0) # Red pixel at center, (5,5)
+        # Red pixel at center, (5,5)
+        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
         stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
         self.view.addStream(stream1)
         # view might set its mpp to the mpp of first image => reset it
@@ -249,7 +265,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertGreaterEqual(mpp_no_recenter, mpp_recenter)
 
 def GetRGB(im, x, y):
-    # TODO use DC.GetPixel()
+    # TODO: use DC.GetPixel()
     return (im.GetRed(x, y), im.GetGreen(x, y), im.GetBlue(x, y))
 
 def GetImageFromBuffer(canvas):
@@ -259,7 +275,10 @@ def GetImageFromBuffer(canvas):
     resultBmp = wx.EmptyBitmap(*canvas._bmp_buffer_size)
     resultDC = wx.MemoryDC()
     resultDC.SelectObject(resultBmp)
-    resultDC.BlitPointSize((0, 0), canvas._bmp_buffer_size, canvas._dc_buffer, (0, 0))
+    resultDC.BlitPointSize((0, 0),
+                           canvas._bmp_buffer_size,
+                           canvas._dc_buffer,
+                           (0, 0))
     resultDC.SelectObject(wx.NullBitmap)
     return wx.ImageFromBitmap(resultBmp)
 
