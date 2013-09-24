@@ -450,6 +450,12 @@ class SEMStream(Stream):
         """
         Update the scanning area of the SEM according to the roi
         """
+        # only change hw settings if stream is active (and not spot mode)
+        # Note: we could also (un)subscribe whenever these changes, but it's
+        # simple like this.
+        if not self.is_active.value or self.spot.value:
+            return
+
         # FIXME: this is fighting against the resolution setting of the SEM
         # => only apply if is_active (and not spot mode...)
         # We should remove res setting from the GUI when this ROI is used.
@@ -550,7 +556,9 @@ class SEMStream(Stream):
     def onActive(self, active):
         if active:
             # TODO: if can blank => unblank
-            pass
+
+            # update hw settings to our own ROI
+            self._onROI(self.roi.value)
 
         # handle spot mode
         if self.spot.value:
