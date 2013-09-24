@@ -26,7 +26,7 @@ from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness, hex_to_
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import ABCMeta, abstractmethod
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from odemis.gui.util import limit_invocation, call_after
+from odemis.gui.util import limit_invocation
 import collections
 import logging
 import math

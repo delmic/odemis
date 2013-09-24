@@ -175,7 +175,7 @@ class DraggableCanvas(wx.Panel):
             # FIXME: to check, the documentation says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
-        self.SetBackgroundColour('black')
+        self.SetBackgroundColour(wx.BLACK)
         self.backgroundBrush = wx.CROSS_HATCH # wx.SOLID for a plain background
 
         # view = the area displayed
