@@ -127,11 +127,11 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.grid_fill()
         gui_loop(SLEEP_TIME)
 
-#        rsol.set_repetition((4, 5))
-#        rsol.point_fill()
-#        gui_loop(SLEEP_TIME)
+        rsol.set_repetition((4, 5))
+        rsol.point_fill()
+        gui_loop(SLEEP_TIME)
 
-    def xtest_dichotomy_overlay(self):
+    def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
@@ -145,7 +145,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
 
-    def xtest_spot_mode_overlay(self):
+    def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
