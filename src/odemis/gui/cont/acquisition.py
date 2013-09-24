@@ -518,41 +518,14 @@ class SparcAcquiController(AcquisitionController):
         data (list of DataFlow): all the raw data acquired
         acqfile (File): file object to which the data was saved
         """
-
         # get the analysis tab
         mtc = get_main_tab_controller()
+        analysis_tab = mtc['analysis']
 
-        analysis_interface = mtc['inspection'].tab_data_model
-        stream_controller = mtc['inspection'].stream_controller
-
-        # clear the analysis tab
-        stream_controller.clear()
-
-        # add streams
-        for s in self._tab_data_model.acquisitionView.getStreams():
-            # Get a static version of the stream
-            statics = s.getStatic()
-            # TODO: how to associate the data we got back to the streams?
-            # in most cases, the stream still contains the .raw as acquired,
-            # but not always (eg, live streams, multiple time acquired streams...)
-            stream_controller.addStream(statics, add_to_all_views=True)
-
-        # add the file info
-        finfo = guimodel.FileInfo(acqfile)
-        # find the precise acquisition time as the earliest of all
-        acq_time = finfo.metadata.get(model.MD_ACQ_DATE, time.time()) # ctime
-        for r in data:
-            try:
-                r_time = r.metadata[model.MD_ACQ_DATE]
-                acq_time = min(r_time, acq_time)
-            except KeyError:
-                continue # no date known
-        finfo.metadata[model.MD_ACQ_DATE] = acq_time
-
-        analysis_interface.fileinfo.value = finfo
+        analysis_tab.display_new_data(acqfile.name, data)
 
         # show the new tab
-        mtc.switch("inspection")
+        mtc.switch("analysis")
 
     def on_acquisition(self, evt):
         """

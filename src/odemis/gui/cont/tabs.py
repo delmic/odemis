@@ -691,10 +691,10 @@ class AnalysisTab(Tab):
         except Exception:
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
-        self._display_new_data(fn, data)
+        self.display_new_data(fn, data)
 
 
-    def _display_new_data(self, filename, data):
+    def display_new_data(self, filename, data):
         """
         Display a new data set (removing all references to the current one)
         filename (string): Name of the file containing the data.
