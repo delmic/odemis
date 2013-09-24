@@ -156,7 +156,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_overlay = comp_overlay.FocusOverlay(self)
             self.ViewOverlays.append(self.focus_overlay)
 
-        if guimodel.TOOL_DICHO in tab_data.tool.choices:
+        if tab_data.tool and guimodel.TOOL_DICHO in tab_data.tool.choices:
             self.dicho_overlay = comp_overlay.DichotomyOverlay(self,
                                                  tab_data.dicho_seq)
             self.ViewOverlays.append(self.dicho_overlay)
@@ -178,7 +178,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
         tab_data.main.debug.subscribe(self._onDebug, init=True)
-        tab_data.tool.subscribe(self._onTool, init=True)
+
+        if tab_data.tool:
+            tab_data.tool.subscribe(self._onTool, init=True)
 
     def _onTool(self, tool):
         """
