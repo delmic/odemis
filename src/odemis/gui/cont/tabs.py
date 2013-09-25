@@ -458,7 +458,7 @@ class SparcAcquisitionTab(Tab):
         if self.spec_rep.ctrl.HasFocus() or show:
             ol.set_repetition(self.spec_rep.va.value)
             ol.grid_fill()
-        else:
+        elif not self.angu_rep.ctrl.HasFocus():
             ol.clear_fill()
 
     def on_spec_rep_focus(self, evt):
@@ -486,7 +486,7 @@ class SparcAcquisitionTab(Tab):
         if self.angu_rep.ctrl.HasFocus() or show:
             ol.set_repetition(self.angu_rep.va.value)
             ol.point_fill()
-        else:
+        elif not self.spec_rep.ctrl.HasFocus():
             ol.clear_fill()
 
     def on_angu_rep_focus(self, evt):

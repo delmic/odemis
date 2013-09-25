@@ -9,13 +9,13 @@ Copyright © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -33,9 +33,6 @@ import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.gui.util.units as units
 import wx
-
-
-
 
 
 class Overlay(object):
@@ -111,6 +108,7 @@ class Overlay(object):
 
         return x, y
 
+
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port.
     The Draw method has to be fast, because it's called after every
@@ -121,6 +119,7 @@ class ViewOverlay(Overlay):
     @abstractmethod
     def Draw(self, dc):
         pass
+
 
 class WorldOverlay(Overlay):
     """ This class displays an overlay on the buffer.
@@ -142,6 +141,7 @@ class TextViewOverlay(ViewOverlay):
         if self.label:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
             self.write_label(ctx, dc.GetSize(), self.vpos, self.label)
+
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, base,
@@ -171,6 +171,7 @@ class CrossHairOverlay(ViewOverlay):
         dc.DrawLine(tl[0], center[1], br[0], center[1])
         dc.DrawLine(center[0], tl[1], center[0], br[1])
 
+
 class SpotModeOverlay(ViewOverlay):
     """ This overlay displays a circle marker in the center of
     the canvas, indicating that the spot mode has been activated.
@@ -191,6 +192,7 @@ class SpotModeOverlay(ViewOverlay):
                 self.center[0] - self._marker_offset[0],
                 self.center[1] - self._marker_offset[1]),
             useMask=False)
+
 
 class StreamIconOverlay(ViewOverlay):
     """ This class can display various icon on the view to indicate the state of
@@ -295,6 +297,7 @@ class StreamIconOverlay(ViewOverlay):
         ctx.set_source_rgb(0, 0, 0)
         ctx.stroke()
 
+
 class FocusOverlay(ViewOverlay):
     """ This overlay can be used to display the change in focus """
     def __init__(self, base):
@@ -349,6 +352,7 @@ class FocusOverlay(ViewOverlay):
         logging.debug("Clearing focus shift")
         self.shifts = [0, 0]
         self.base.Refresh()
+
 
 class SelectionMixin(object):
     """ This mix-in class can be used on an Overlay to draw rectangular
@@ -605,7 +609,7 @@ class SelectionMixin(object):
         return None not in (self.v_start_pos, self.v_end_pos)
 
 class ViewSelectOverlay(ViewOverlay, SelectionMixin):
-
+    #pylint: disable=W0221
     def __init__(self, base, label,
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
@@ -655,6 +659,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
                                             start_pos,
                                             end_pos)
                 self.write_label(ctx, dc.GetSize(), (10, 10), msg)
+
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
@@ -819,6 +824,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 pos = (b_pos[2] + 5, b_pos[3] - 5)
                 self.write_label(ctx, dc_buffer.GetSize(), pos, size_lbl)
 
+
 FILL_NONE = 0
 FILL_GRID = 1
 FILL_POINT = 2
@@ -838,9 +844,12 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self.fill = FILL_NONE
         self.repetition = (0, 0)
         self._bmp = None
-        self._bmp_bpos = (None, None, None, None) # ROI for which the bmp is valid
+        # ROI for which the bmp is valid
+        self._bmp_bpos = (None, None, None, None)
 
     def clear_fill(self):
+        import traceback
+        traceback.print_stack()
         self.fill = FILL_NONE
         self._bmp = None
 
@@ -957,7 +966,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     wx.Point(int(start_x), int(start_y)),
                     useMask=True)
 
-
     def _drawPoints(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
         # Calculate the offset of the center of the buffer relative to the
@@ -1034,6 +1042,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._drawPoints(dc_buffer)
             # if FILL_NONE => nothing to do
 
+
 class MarkingLineOverlay(ViewOverlay):
 
     def __init__(self, base,
@@ -1076,6 +1085,7 @@ class MarkingLineOverlay(ViewOverlay):
             if self.label:
                 vpos = (self.vposx + 5, self.vposy + 3)
                 self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
+
 
 TOP_LEFT = 0
 TOP_RIGHT = 1
@@ -1167,7 +1177,6 @@ class DichotomyOverlay(ViewOverlay):
 
         if self.enabled:
             self._updateHover(evt.GetPosition())
-#        else:
         evt.Skip()
 
     def on_mouse_button(self, evt):

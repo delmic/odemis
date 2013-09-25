@@ -797,7 +797,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
-        self.roi_overlay = comp_overlay.RepetitionSelectOverlay(self, "Region of acquisition")
+        self.roi_overlay = comp_overlay.RepetitionSelectOverlay(
+                                                self, "Region of acquisition")
         self.WorldOverlays.append(self.roi_overlay)
 
     def setView(self, microscope_view, tab_data):
