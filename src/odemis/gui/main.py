@@ -7,13 +7,13 @@ Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis import model
 from odemis.gui import main_xrc, log
-import odemis.gui.model as guimodel
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
@@ -30,14 +29,16 @@ from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
 from wx.lib.pubsub import pub
-import Pyro4.errors
 import logging
 import numpy
 import odemis.gui.conf
 import odemis.gui.cont.tabs as tabs
+import odemis.gui.model as guimodel
 import os.path
 import pkg_resources
+import Pyro4.errors
 import scipy.io
+import subprocess
 import sys
 import threading
 import traceback
@@ -79,8 +80,10 @@ class OdemisGUIApp(wx.App):
         # TODO: need to set WM_CLASS to a better value than "main.py". For now
         # almost all wxPython windows get agglomerated together and Odemis is
         # named "FirstStep" sometimes.
-        # Not clear whether wxPython supports it. http://trac.wxwidgets.org/ticket/12778
-        # Maybe just change the name of this module to something more unique? (eg, odemis.py)
+        # Not clear whether wxPython supports it. See:
+        # http://trac.wxwidgets.org/ticket/12778
+        # Maybe just change the name of this module to something more unique?
+        # (eg, odemis.py)
 
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
@@ -91,8 +94,8 @@ class OdemisGUIApp(wx.App):
             microscope = model.getMicroscope()
         except (IOError, Pyro4.errors.CommunicationError), e:
             logging.exception("Failed to connect to back-end")
-            msg = ("The Odemis GUI could not connect to the Odemis back-end:\n\n"
-                   "{0}\n\n"
+            msg = ("The Odemis GUI could not connect to the Odemis back-end:"
+                   "\n\n{0}\n\n"
                    "Launch user interface anyway?").format(e)
 
             answer = wx.MessageBox(msg,
@@ -148,14 +151,16 @@ class OdemisGUIApp(wx.App):
             if os.path.exists(gc.html_dev_doc):
                 self.main_frame.menu_item_htmldoc.Enable(True)
 
+            if os.path.exists(gc.manual_path):
+                self.main_frame.menu_item_manual.Enable(True)
+
             # TODO: re-organise the Help menu:
-            # * User guide    F1 (Show user guide PDF for now, eg: xdg-open /usr/share/odemis/user-guide.pdf)
-            # * Developer
-            #   * Debug information Ctrl + D
-            #   * Inspect
-            #   * Developer guide
-            # * About...
             # * Report a bug... (Opens a mail client to send an email to us?)
+
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_manual.GetId(),
+                        self.on_manual)
+
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_htmldoc.GetId(),
                         self.on_htmldoc)
@@ -168,7 +173,8 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_about.GetId(),
                         self.on_about)
 
-            # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't seem to like it)
+            # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
+            # seem to like it)
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
@@ -254,7 +260,10 @@ class OdemisGUIApp(wx.App):
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            tc = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
+            tc = tabs.TabBarController(
+                            tab_defs,
+                            self.main_frame,
+                            self.main_data)
             set_main_tab_controller(tc)
 
             # making it very late seems to make it smoother
@@ -371,7 +380,7 @@ class OdemisGUIApp(wx.App):
             tab_data_model.fileinfo.value = guimodel.FileInfo(spec_fn)
             mtc.switch("analysis")
         except KeyError:
-            self.goto_debug_mode()
+            self.main_data.debug.value = True
             logging.exception("Failed to load example")
 
     def on_stop_axes(self, evt):
@@ -383,8 +392,10 @@ class OdemisGUIApp(wx.App):
     def on_about(self, evt):
 
         info = wx.AboutDialogInfo()
-        info.SetIcon(wx.Icon(os.path.join(self._module_path(), "img/icon128.png"),
-                             wx.BITMAP_TYPE_PNG))
+        info.SetIcon(wx.Icon(
+                        os.path.join(self._module_path(),
+                        "img/icon128.png"),
+                     wx.BITMAP_TYPE_PNG))
         info.Name = odemis.__shortname__
         info.Version = odemis.__version__
         info.Description = odemis.__fullname__
@@ -407,12 +418,15 @@ see http://www.fluorophores.org/disclaimer/.
 """)
         wx.AboutBox(info)
 
+    def on_manual(self, evt):
+        gc = odemis.gui.conf.get_general_conf()
+        subprocess.Popen(['xdg-open', gc.manual_path])
+
     def on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
 
     def on_htmldoc(self, evt):
-        import subprocess
         self.http_proc = subprocess.Popen(
             ["python", "-m", "SimpleHTTPServer"],
             stderr=subprocess.STDOUT,
@@ -421,8 +435,6 @@ see http://www.fluorophores.org/disclaimer/.
 
         import webbrowser
         webbrowser.open('http://localhost:8000')
-
-        #subprocess.call(('xdg-open', HTML_DOC))
 
     def on_debug_menu(self, evt):
         """ Update the debug VA according to the menu

@@ -43,6 +43,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
+        self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
         self.menu_item_htmldoc = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_htmldoc"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
@@ -266,27 +267,40 @@ def __init_resources():
         <label>View</label>
       </object>
       <object class="wxMenu">
-        <object class="wxMenuItem" name="menu_item_htmldoc">
-          <label>Source Code Documentation</label>
+        <object class="wxMenuItem" name="menu_item_manual">
+          <label>User manual</label>
+          <accel>F1</accel>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <object class="wxMenuItem" name="menu_item_inspect">
-          <label>Inspect GUI</label>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
+        <object class="wxMenu">
+          <label>Development</label>
+          <object class="wxMenuItem" name="menu_item_htmldoc">
+            <label>Source Code Documentation</label>
+            <enabled>0</enabled>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="wxMenuItem" name="menu_item_inspect">
+            <label>Inspect GUI</label>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="wxMenuItem" name="menu_item_debug">
+            <label>Debug</label>
+            <accel>Ctrl+D</accel>
+            <checkable>1</checkable>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
         </object>
-        <object class="wxMenuItem" name="menu_item_debug">
-          <label>Debug</label>
-          <accel>Ctrl+D</accel>
-          <checkable>1</checkable>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
+        
+        
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_about">
           <label>About</label>
