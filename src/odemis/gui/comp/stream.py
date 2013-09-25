@@ -1056,13 +1056,21 @@ class StreamPanel(wx.PyPanel):
         return (list of string): names of all the dyes which are compatible
         """
         # we expect excitation and emission to have a range
-        x_range = self.stream.excitation.range
-        e_range = self.stream.emission.range
+        x_range = list(self.stream.excitation.range)
+        e_range = list(self.stream.emission.range)
 
+        # TODO: for now be very indulgent, as there is no user feedback about
+        # the hardware not being compatible, and we are only looking at
+        # the peak values. In the future, it might be better to display every
+        # dye, and add a big warning if it looks incompatible with the hardware.
+        x_range[0] -= 20e-9
+        x_range[1] += 20e-9
+        e_range[0] -= 20e-9
+        e_range[1] += 20e-9
         dyes = []
         for name, (xwl, ewl) in dye.DyeDatabase.items():
-            if (x_range[0] <= xwl and xwl <= x_range[1] and
-                e_range[0] <= ewl and ewl <= e_range[1]):
+            if (x_range[0] <= xwl <= x_range[1] and
+                e_range[0] <= ewl <= e_range[1]):
                 dyes.append(name)
 
         return dyes
