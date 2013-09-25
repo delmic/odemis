@@ -72,10 +72,14 @@ Spectra: {
     affects: [Clara]
 }
 
+# Semrock FF01-440/521/607/700
 "MultiBand Fixed Filter": {
     class: static.LightFilter,
     role: filter,
-    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    init: {band: [[420.e-9, 460.e-9],
+                  [510.e-9, 532.e-9], 
+                  [590.e-9, 624.e-9],
+                  [677.e-9, 723.e-9]]}, # m,m
     affects: [Clara]
 }
 
