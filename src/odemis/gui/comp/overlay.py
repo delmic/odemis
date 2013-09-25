@@ -49,7 +49,8 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, size, vpos, label, flip=True, align=wx.ALIGN_LEFT):
+    def write_label(self, ctx, size, vpos, label, flip=True,
+                    align=wx.ALIGN_LEFT):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -87,27 +88,13 @@ class Overlay(object):
         ctx.move_to(x, y)
         ctx.show_text(label)
 
-    def _clip_viewport_pos(self, pos):
-        """ Return the given pos, clipped by the base's viewport
-            TODO: Change into viewport method?
-            pos (wx.Point)
-        """
+    @property
+    def view_width(self):
+        return self.base.ClientSize.x
 
-        pos.x = max(1, min(pos.x, self.base.ClientSize.x - 1))
-        pos.y = max(1, min(pos.y, self.base.ClientSize.y - 1))
-
-        return pos
-
-    def _clip_buffer_pos(self, pos):
-        """ Return the given pos, clipped within the base's buffer
-            pos (iterable of 2 numbers)
-            TODO: Change into viewport method?
-        """
-        x = max(1, min(pos[0], self.base._bmp_buffer_size[0] - 1))
-        y = max(1, min(pos[1], self.base._bmp_buffer_size[1] - 1))
-
-        return x, y
-
+    @property
+    def view_height(self):
+        return self.base.ClientSize.y
 
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port.
@@ -145,7 +132,8 @@ class TextViewOverlay(ViewOverlay):
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, base,
-                 color=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, center=(0, 0)):
+                 color=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE,
+                 center=(0, 0)):
         super(CrossHairOverlay, self).__init__(base)
 
         self.pen = wx.Pen(color)
@@ -205,7 +193,9 @@ class StreamIconOverlay(ViewOverlay):
         self.pause = False # if True: displayed
         self.play = 0 # opacity of the play icon
 
-        self.colour = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.opacity)
+        self.colour = hex_to_frgba(
+                            gui.FOREGROUND_COLOUR_HIGHLIGHT,
+                            self.opacity)
 
     def hide_pause(self, hidden=True):
         """
@@ -227,18 +217,19 @@ class StreamIconOverlay(ViewOverlay):
             self._draw_play(ctx)
             if self.play > 0:
                 self.play -= 0.1 # a tenth less
-                # Force a refresh (without erase background), to cause a new draw
+                # Force a refresh (without erase background), to cause a new
+                # draw
                 wx.CallLater(50, self.base.Refresh, False) # in 0.05 s
             else:
                 self.play = 0
 
     def _get_dimensions(self):
 
-        width = max(16, self.base.ClientSize.x / 10)
+        width = max(16, self.view_width / 10)
         height = width
-        right = self.base.ClientSize.x
-        bottom = self.base.ClientSize.y
-        margin = self.base.ClientSize.x / 25
+        right = self.view_width
+        bottom = self.view_height
+        margin = self.view_width / 25
 
         return width, height, right, bottom, margin
 
@@ -409,7 +400,7 @@ class SelectionMixin(object):
 
         #logging.debug("Updating selection to %s", current_pos)
 
-        current_pos = self._clip_viewport_pos(current_pos)
+        current_pos = self.base.clip_to_viewport(current_pos)
         self.v_end_pos = current_pos
 
     def stop_selection(self):
@@ -468,7 +459,7 @@ class SelectionMixin(object):
         """ Adjust the selection according to the given position and the current
         edit action
         """
-        current_pos = self._clip_viewport_pos(current_pos)
+        current_pos = self.base.clip_to_viewport(current_pos)
 
         logging.debug("Moving selection to %s", current_pos)
 
@@ -503,7 +494,7 @@ class SelectionMixin(object):
         # It might be better to limit the movement in such a way that no part
         # of the selection can be dragged off canvas. The commented part was a
         # first attempt at that, but it didn't work.
-        current_pos = self._clip_viewport_pos(current_pos)
+        current_pos = self.base.clip_to_viewport(current_pos)
         diff = current_pos - self.edit_start_pos
         self.v_start_pos += diff
         self.v_end_pos += diff
@@ -512,9 +503,9 @@ class SelectionMixin(object):
         # diff = current_pos - self.edit_start_pos
         # new_start = self.v_start_pos + diff
 
-        # if new_start == self._clip_viewport_pos(new_start):
+        # if new_start == self.base.clip_to_viewport(new_start):
         #     new_end = self.v_start_pos + diff
-        #     if new_end == self._clip_viewport_pos(new_end):
+        #     if new_end == self.base.clip_to_viewport(new_end):
         #         self.v_start_pos = new_start
         #         self.v_end_pos = new_end
 
@@ -848,8 +839,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self._bmp_bpos = (None, None, None, None)
 
     def clear_fill(self):
-        import traceback
-        traceback.print_stack()
         self.fill = FILL_NONE
         self._bmp = None
 
@@ -888,8 +877,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         logging.debug("width and height: %s %s", width, height)
 
         # Clip the start and end positions using the actual buffer size
-        start_x, start_y = self._clip_buffer_pos(b_pos[:2])
-        end_x, end_y = self._clip_buffer_pos(b_pos[2:4])
+        start_x, start_y = self.base.clip_to_buffer(b_pos[:2])
+        end_x, end_y = self.base.clip_to_buffer(b_pos[2:4])
 
         logging.debug(
             "clipped start and end: %s", (start_x, start_y, end_x, end_y))
@@ -987,8 +976,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         logging.debug("width and height: %s %s", width, height)
 
         # Clip the start and end positions using the actual buffer size
-        start_x, start_y = self._clip_buffer_pos(b_pos[:2])
-        end_x, end_y = self._clip_buffer_pos(b_pos[2:4])
+        start_x, start_y = self.base.clip_to_buffer(b_pos[:2])
+        end_x, end_y = self.base.clip_to_buffer(b_pos[2:4])
 
         logging.debug(
             "clipped start and end: %s", (start_x, start_y, end_x, end_y))
@@ -1059,8 +1048,8 @@ class MarkingLineOverlay(ViewOverlay):
         self.line_width = 2
 
     def set_position(self, pos):
-        self.vposx = max(1, min(pos[0], self.base.ClientSize.x - self.line_width))
-        self.vposy = max(1, min(pos[1], self.base.ClientSize.y - 1))
+        self.vposx = max(1, min(pos[0], self.view_width - self.line_width))
+        self.vposy = max(1, min(pos[1], self.view_height - 1))
 
     def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
@@ -1140,7 +1129,7 @@ class DichotomyOverlay(ViewOverlay):
         if not all([0 <= v <= 3 for v in seq]):
             raise ValueError("Illegal quadrant values in sequence!")
 
-        rect = 0, 0, self.base.ClientSize.x, self.base.ClientSize.y
+        rect = 0, 0, self.view_width, self.view_height
         self.sequence_rect = [rect]
 
         for i, q in enumerate(seq):

@@ -1017,6 +1017,17 @@ class DraggableCanvas(wx.Panel):
     def buffer_to_view_pos(self, pos):
         return buffer_to_view_pos(pos, self.margins)
 
+    def clip_to_viewport(self, pos):
+        """ Clip the given wx.Point to the current view size """
+        pos.x = max(1, min(pos.x, self.ClientSize.x - 1))
+        pos.y = max(1, min(pos.y, self.ClientSize.y - 1))
+        return pos
+
+    def clip_to_buffer(self, pos):
+        """ Clip the given wx.Point to the current buffer size """
+        return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
+                max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
+
 # World <-> Buffer
 
 def world_to_buffer_pos(world_pos, world_buffer_center, scale, offset=None):
