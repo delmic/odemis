@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Common configuration and code for the GUI test cases
 
+import os.path
 import unittest
 import wx
 import odemis.gui.test.test_gui
@@ -33,7 +34,7 @@ from odemis.gui.xmlh import odemis_get_test_resources
 MANUAL = False
 INSPECT = False
 
-SLEEP_TIME = 100 # ms: time to sleep between actions (to slow down the tests)
+SLEEP_TIME = 50 # ms: time to sleep between actions (to slow down the tests)
 
 def goto_manual():
     """ Call this function as soon as possible, to go to manual mode, where
@@ -45,7 +46,7 @@ def goto_inspect():
     global INSPECT
     INSPECT = True
 
-def gui_loop(sleep=None):
+def gui_loop(slp=None):
     """
     Execute the main loop for the GUI until all the current events are processed
     """
@@ -59,13 +60,12 @@ def gui_loop(sleep=None):
         if not app.Pending():
             break
 
-    wx.MilliSleep(sleep or SLEEP_TIME)
+    wx.MilliSleep(slp or SLEEP_TIME)
 
 def sleep(ms=None):
     wx.MilliSleep(ms or SLEEP_TIME)
 
 # Default wxPython App that can be used as a basis for testing
-
 class GuiTestApp(wx.App):
 
     test_frame = None
@@ -73,6 +73,8 @@ class GuiTestApp(wx.App):
     def __init__(self, frame):
         odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
         self.test_frame = frame
+        self.module_name = ""
+
         # gen_test_data()
         wx.App.__init__(self, redirect=False)
 
@@ -81,31 +83,39 @@ class GuiTestApp(wx.App):
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()
+
+        import __main__
+        self.module_name = os.path.basename(__main__.__file__)
+        self.test_frame.SetTitle(self.module_name)
+
         self.test_frame.Show()
 
         return True
 
-    def panel_finder(self, win):
+    def panel_finder(self, win=None):
+        """ Find the first child panel of win """
+
+        win = win or self.test_frame
 
         for c in win.GetChildren():
             if isinstance(c, wx.Panel):
                 return c
             else:
                 return self.panel_finder(c)
-
         return None
 
 # TestCase base class, with GuiTestApp support
-
 class GuiTestCase(unittest.TestCase):
 
     frame_class = None
+    app_class = None
 
     @classmethod
     def setUpClass(cls):
         if not cls.frame_class:
             raise ValueError("No frame_class set!")
-        cls.app = GuiTestApp(cls.frame_class)
+        cls.app_class = cls.app_class or GuiTestApp
+        cls.app = cls.app_class(cls.frame_class)
         cls.panel = cls.app.panel_finder(cls.app.test_frame)
         cls.sizer = cls.panel.GetSizer()
 
@@ -116,12 +126,16 @@ class GuiTestCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
         if not MANUAL:
+            cls.app.test_frame.Destroy()
             wx.CallAfter(cls.app.Exit)
-        else:
-            if INSPECT:
-                from wx.lib import inspection
-                inspection.InspectionTool().Show()
-            cls.app.MainLoop()
+        elif INSPECT:
+            from wx.lib import inspection
+            inspection.InspectionTool().Show()
+        cls.app.MainLoop()
+
+    def setUp(self):
+        self.app.test_frame.SetTitle(
+            "%s > %s" % (self.app.module_name, self._testMethodName))
 
     @classmethod
     def add_control(cls, ctrl, flags=0, border=10, proportion=0, clear=False):

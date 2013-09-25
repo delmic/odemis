@@ -1,103 +1,65 @@
 #-*- coding: utf-8 -*-
-'''
+"""
 @author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+
+"""
 
 #===============================================================================
 # Test module for Odemis' custom FoldPanelBar in gui.comp
 #===============================================================================
 
 from odemis.gui import test, comp
-from odemis.gui.xmlh import odemis_get_test_resources
-from wx.lib.inspection import InspectionTool
 import logging
-import odemis.gui.test.test_gui
+import odemis.gui.test as test
 import unittest
 import wx
 
-logging.getLogger().setLevel(logging.DEBUG)
-
-# Open an inspection window after running the tests if MANUAL is set
-INSPECT = False
+# test.goto_manual() # Keep the test frame open after the tests are run
+# logging.getLogger().setLevel(logging.DEBUG)
 
 FPB_SPACING = 0
 
-class TestApp(wx.App):
-    def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
-        self.test_frame = None
-        wx.App.__init__(self, redirect=False)
+class FoldPanelBarTestCase(test.GuiTestCase):
 
-    def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrcfpb_frame(None)
-        self.test_frame.SetSize((400, 400))
-        self.test_frame.Center()
-        self.test_frame.Layout()
-        self.test_frame.Show()
-        return True
-
-class FoldPanelBarTestCase(unittest.TestCase):
+    frame_class = test.test_gui.xrcfpb_frame
 
     @classmethod
     def setUpClass(cls):
-        cls.app = TestApp()
-        test.gui_loop()
+        super(FoldPanelBarTestCase, cls).setUpClass()
         cls.foldpanelitems = [cls.app.test_frame.panel_1,
                               cls.app.test_frame.panel_2,
                               cls.app.test_frame.panel_3]
-
-        # FIXME: Sometimes the tests start running before the test frame
-        # is completely and correctly drawn. Find out a way to delay test
-        # execution until the frame is correctly displayed!
-
-        if INSPECT and test.MANUAL:
-            InspectionTool().Show()
-
-    @classmethod
-    def tearDownClass(cls):
-        if not test.MANUAL:
-            wx.CallAfter(cls.app.Exit)
-        cls.app.MainLoop()
-
-    @classmethod
-    def dump_win_tree(cls, window, indent=0):
-        if not indent:
-            print ""
-
-        for child in window.GetChildren():
-            print "."*indent, child.__class__.__name__
-            cls.dump_win_tree(child, indent + 2)
 
     @classmethod
     def build_caption_event(cls, foldpanelitem):
 
         cap_bar = foldpanelitem.GetCaptionBar()
-        event = comp.foldpanelbar.CaptionBarEvent(comp.foldpanelbar.wxEVT_CAPTIONBAR)
+        event = comp.foldpanelbar.CaptionBarEvent(
+                                    comp.foldpanelbar.wxEVT_CAPTIONBAR)
         event.SetEventObject(cap_bar)
         event.SetBar(cap_bar)
 
         return event
 
-    def xtest_structure(self):
+    def test_structure(self):
         """ Test whether the FoldPanelBar consists of the right components
             in the right place.
         """
-        self.app.test_frame.SetTitle("Testing FoldPanelBar structure")
         wx.MilliSleep(test.SLEEP_TIME)
 
         self.assertIsInstance(self.app.test_frame.scrwin, wx.ScrolledWindow)
@@ -106,8 +68,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
         fpb = self.app.test_frame.fpb
         self.assertIsInstance(fpb, comp.foldpanelbar.FoldPanelBar)
 
-        #self.dump_win_tree(self.app.test_frame)
-        self.assertTrue(len(fpb.GetChildren()) in [3, 4]) # 4 if other test have created panel 4
+        # 4 if other test have created panel 4
+        self.assertTrue(len(fpb.GetChildren()) in [3, 4])
 
         for item in fpb.GetChildren():
             self.assertIsInstance(item, comp.foldpanelbar.FoldPanelItem)
@@ -115,13 +77,12 @@ class FoldPanelBarTestCase(unittest.TestCase):
                                   comp.foldpanelbar.CaptionBar)
 
 
-    def xtest_scrollbar_on_collapse(self):
+    def test_scrollbar_on_collapse(self):
         """ A vertical scroll bar should appear when a panel is expanded and
             its content will not fit within the parent window. """
 
         fpb = self.app.test_frame.fpb
 
-        self.app.test_frame.SetTitle("Testing expand/collapse scroll bars")
         wx.MilliSleep(test.SLEEP_TIME)
 
         # Put back into more or less original state
@@ -166,9 +127,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(fpb.has_horz_scrollbar(), False)
 
 
-    def xtest_scrollbar_on_resize(self):
+    def test_scrollbar_on_resize(self):
         """ Test the scroll bar """
-        self.app.test_frame.SetTitle("Testing resizing scroll bars")
         wx.MilliSleep(test.SLEEP_TIME)
 
         # Put back into more or less original state
@@ -216,9 +176,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
         test.gui_loop()
 
 
-    def xtest_caption_position(self):
+    def test_caption_position(self):
         """ Test if the caption positions don't when expanding and collapsing"""
-        self.app.test_frame.SetTitle("Testing caption positions")
         wx.MilliSleep(test.SLEEP_TIME)
 
         ini_positions = [i.GetPosition() for i in self.foldpanelitems]
@@ -275,12 +234,11 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
         wx.MilliSleep(test.SLEEP_TIME)
 
-    def xtest_icon_position(self):
+    def test_icon_position(self):
         """ Test the position of the fold/collapse icon """
         pass
 
     def test_foldpanel_manipulation(self):
-        self.app.test_frame.SetTitle("Testing Fold panel manipulation")
 
         wx.MilliSleep(test.SLEEP_TIME)
 
@@ -350,7 +308,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
         test.gui_loop()
 
         # New panel removed, back to 3
-        self.assertEqual(len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 3)
+        self.assertEqual(
+            len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 3)
 
         # Scroll bars should be gone again
         self.assertEqual(fpb.has_vert_scrollbar(), False)
@@ -387,7 +346,8 @@ class FoldPanelBarTestCase(unittest.TestCase):
         self.assertEqual(fpb.has_vert_scrollbar(), True)
         self.assertEqual(fpb.has_horz_scrollbar(), False)
 
-        # Count children of the top fold panel: 1 caption bar, 2 labels and 4 added labels: 7 total
+        # Count children of the top fold panel: 1 caption bar, 2 labels and 4
+        # added labels: 7 total
         self.assertEqual(len(top_panel.GetChildren()), 8)
 
         new_labels.reverse()
@@ -438,9 +398,3 @@ class FoldPanelBarTestCase(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-    #app = TestApp()
-
-    #app.MainLoop()
-    #app.Destroy()
-

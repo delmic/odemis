@@ -330,14 +330,13 @@ def __init_resources():
         <orient>wxVERTICAL</orient>
       </object>
       <fg>#E6E6FA</fg>
-      <bg>#A52A2A</bg>
+      <bg>#4D4D4D</bg>
       <XRCED>
         <assign_var>1</assign_var>
       </XRCED>
     </object>
     <size>400,400</size>
   </object>
-  
   <object class="wxFrame" name="canvas_frame">
     <object class="wxPanel" name="canvas_panel">
       <object class="wxBoxSizer">

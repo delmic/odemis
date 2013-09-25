@@ -27,64 +27,26 @@
 #===============================================================================
 
 from odemis.gui import model
-from odemis.gui.test import MANUAL, INSPECT, SLEEP_TIME, gui_loop
-from odemis.gui.xmlh import odemis_get_test_resources
 import logging
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
-import odemis.gui.test.test_gui
 import odemis.model as omodel
 import unittest
 import wx
 
-
-MANUAL = True
+test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
-
-# test.goto_manual() # Keep the test frame open after the tests are run
-
-class TestApp(wx.App):
-    def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
-        self.test_frame = None
-        wx.App.__init__(self, redirect=False)
-
-    def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrccanvas_frame(None)
-        self.test_frame.SetSize((400, 400))
-        self.test_frame.Center()
-        self.test_frame.Layout()
-        self.test_frame.Show()
-
-        return True
 
 def do_stuff(sequence):
     print "New sequence", sequence
 
 class OverlayTestCase(test.GuiTestCase):
 
-    @classmethod
-    def setUpClass(cls):
-        cls.app = TestApp()
-        cls.panel = cls.app.test_frame.canvas_panel
-        cls.sizer = cls.panel.GetSizer()
+    frame_class = test.test_gui.xrccanvas_frame
 
-        # NOTE!: Call Layout on the panel here, because otherwise the
-        # controls layed out using XRC will not have the right sizes!
-        gui_loop()
 
-    @classmethod
-    def tearDownClass(cls):
-        if not MANUAL:
-            wx.CallAfter(cls.app.Exit)
-        else:
-            if INSPECT:
-                from wx.lib import inspection
-                inspection.InspectionTool().Show()
-            cls.app.MainLoop()
-
-    def xtest_view_select_overlay(self):
+    def test_view_select_overlay(self):
         # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
 
@@ -93,13 +55,9 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         vsol = overlay.ViewSelectOverlay(cnvs, "test selection")
-        cnvs.WorldOverlays.append(vsol)
+        cnvs.ViewOverlays.append(vsol)
         cnvs.active_overlay = vsol
         cnvs.current_mode = model.TOOL_ROI
-
-        # FIXME: this overlay seems to not work (black selection?)
-        # but as for now we don't use it, no need to fix it yet...
-
 
     def test_roa_select_overlay(self):
         # Create and add a miccanvas
@@ -145,12 +103,18 @@ class OverlayTestCase(test.GuiTestCase):
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
 
+        test.gui_loop(1000)
+
+
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = overlay.SpotModeOverlay(cnvs)
         cnvs.ViewOverlays.append(sol)
+
+        test.gui_loop(1000)
+
 
 
 if __name__ == "__main__":

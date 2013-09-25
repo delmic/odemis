@@ -123,7 +123,7 @@ class ViewOverlay(Overlay):
         pass
 
 class WorldOverlay(Overlay):
-    """ This class displays an overlay on the buffer. 
+    """ This class displays an overlay on the buffer.
     It's updated only every time the entire buffer is redrawn."""
     __metaclass__ = ABCMeta
 
@@ -351,7 +351,7 @@ class FocusOverlay(ViewOverlay):
         self.base.Refresh()
 
 class SelectionMixin(object):
-    """ This mix-in class can be used on an Overlay to draw rectangular 
+    """ This mix-in class can be used on an Overlay to draw rectangular
     selection areas. These areas are always expressed in view port coordinates.
     Conversions to buffer and world coordinates should be done using subclasses.
     """
@@ -731,7 +731,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """
         if self.v_start_pos and self.v_end_pos:
             offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
-            w_pos = (self.base.view_to_world_pos(self.v_start_pos, offset) + 
+            w_pos = (self.base.view_to_world_pos(self.v_start_pos, offset) +
                      self.base.view_to_world_pos(self.v_end_pos, offset))
             w_pos = normalize_rect(w_pos)
             self.w_start_pos = w_pos[:2]
@@ -866,7 +866,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) + 
+        b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
                  self.base.world_to_buffer_pos(self.w_end_pos, offset))
         b_pos = normalize_rect(b_pos)
         logging.debug("start and end buffer pos: %s", b_pos)
@@ -957,7 +957,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     wx.Point(int(start_x), int(start_y)),
                     useMask=True)
 
-        
+
     def _drawPoints(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
         # Calculate the offset of the center of the buffer relative to the
@@ -1023,7 +1023,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
             ctx.stroke()
 
-        
+
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
         super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
 
@@ -1175,7 +1175,7 @@ class DichotomyOverlay(ViewOverlay):
         evt.Skip() # FIXME
         if not self.enabled:
             return
-            
+
         # If the mouse cursor is over a selectable quadrant
         if None not in self.hover_pos:
             idx, quad = self.hover_pos

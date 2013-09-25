@@ -31,13 +31,14 @@ import math
 
 import wx
 
-import odemis.gui.comp.canvas as canvas
-import odemis.gui.test.test_gui
-from odemis.gui.xmlh import odemis_get_test_resources
-from odemis.gui.test import MANUAL, SLEEP_TIME, gui_loop
 from odemis.gui.comp.miccanvas import ZeroDimensionalPlotCanvas
+from odemis.gui.xmlh import odemis_get_test_resources
+import odemis.gui.comp.canvas as canvas
+import odemis.gui.test as test
 
-INSPECT = False
+test.goto_manual()
+# test.goto_inspect()
+
 
 PLOTS = [
     ([0, 1, 2, 3, 4, 5], [1, 3, 5, 2, 4, 0]),
@@ -101,52 +102,9 @@ def gen_test_data():
             print "\n(%s, %s)," % (x_axis, y_axis)
         print "\n"
 
-    import sys
-    sys.exit()
+class PlotCanvasTestCase(test.GuiTestCase):
 
-class TestApp(wx.App):
-    def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
-        self.test_frame = None
-        # gen_test_data()
-        wx.App.__init__(self, redirect=False)
-
-    def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrccanvas_frame(None)
-        self.test_frame.SetSize((400, 400))
-        self.test_frame.Center()
-        self.test_frame.Layout()
-        self.test_frame.Show()
-
-        return True
-
-class PlotCanvasTestCase(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.app = TestApp()
-        cls.panel = cls.app.test_frame.canvas_panel
-        cls.sizer = cls.panel.GetSizer()
-
-        # NOTE!: Call Layout on the panel here, because otherwise the
-        # controls layed out using XRC will not have the right sizes!
-        gui_loop()
-
-    @classmethod
-    def tearDownClass(cls):
-        if not MANUAL:
-            wx.CallAfter(cls.app.Exit)
-        else:
-            if INSPECT:
-                from wx.lib import inspection
-                inspection.InspectionTool().Show()
-            cls.app.MainLoop()
-
-    @classmethod
-    def add_control(cls, ctrl, flags):
-        cls.sizer.Add(ctrl, flag=flags|wx.ALL, border=0, proportion=1)
-        cls.sizer.Layout()
-        return ctrl
+    frame_class = test.test_gui.xrccanvas_frame
 
     def test_plot_canvas(self):
 
@@ -158,7 +116,7 @@ class PlotCanvasTestCase(unittest.TestCase):
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")
         cnvs.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
-        self.add_control(cnvs, wx.EXPAND)
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
 
         cnvs.set_x_unit('m')
 
@@ -175,8 +133,7 @@ class PlotCanvasTestCase(unittest.TestCase):
         # Enable this bind to enable render toggling by clicking
         #cnvs.Bind(wx.EVT_LEFT_UP, toggle)
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
 
         data = [
             (0.5, 0.5),
@@ -185,22 +142,19 @@ class PlotCanvasTestCase(unittest.TestCase):
             (4.5, 0.5),
         ]
 
-        gui_loop()
+        test.gui_loop()
         cnvs.set_data(data)
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
 
         cnvs.set_dimensions(0, 5, 0, 5)
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
 
         cnvs.set_closed(canvas.PLOT_CLOSE_BOTTOM)
         cnvs.reset_dimensions()
 
-        gui_loop()
-        wx.MilliSleep(SLEEP_TIME)
+        test.gui_loop()
 
 
         cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
@@ -208,10 +162,7 @@ class PlotCanvasTestCase(unittest.TestCase):
         for plot in PLOTS:
             cnvs.set_1d_data(plot[0], plot[1])
 
-            gui_loop()
-            wx.MilliSleep(SLEEP_TIME)
-
-        # wx.MilliSleep(SLEEP_TIME)
+            test.gui_loop()
 
         # data = [
         #     (0.1, 0.1),
@@ -222,11 +173,8 @@ class PlotCanvasTestCase(unittest.TestCase):
 
         # cnvs.set_2d_data(data)
 
-        # gui_loop()
+        # test.gui_loop()
         # cnvs.Update()
-
-        # wx.MilliSleep(SLEEP_TIME)
-
 
     def test_buffer_to_world(self):
 

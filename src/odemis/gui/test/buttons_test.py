@@ -7,13 +7,13 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -27,114 +27,79 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from collections import OrderedDict
 from odemis.gui import test
 from odemis.gui.img import data
-from odemis.gui.xmlh import odemis_get_test_resources
-from wx.lib.inspection import InspectionTool
 import odemis.gui.comp.buttons as buttons
-import odemis.gui.test.test_gui
+import odemis.gui.test as test
 import unittest
 import wx
 
-INSPECT = False
-MANUAL = False
+test.goto_manual()
 
-class TestApp(wx.App):
-    def __init__(self):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
-        self.test_frame = None
-        self.buttons = OrderedDict()
-        wx.App.__init__(self, redirect=False)
+class ButtonsTestCase(test.GuiTestCase):
 
-    def OnInit(self):
-        self.test_frame = odemis.gui.test.test_gui.xrcbutton_frame(None)
-        self.test_frame.SetSize((400, 400))
-        self.test_frame.Center()
+    frame_class = test.test_gui.xrcbutton_frame
 
-        panel = self.test_frame.button_panel
-        sizer = panel.GetSizer()
+    @classmethod
+    def setUpClass(cls):
+        super(ButtonsTestCase, cls).setUpClass()
 
-        # Add button controls to test frame
+        cls.buttons = OrderedDict()
+        panel = cls.app.panel_finder()
 
-        self.buttons['ImageButton'] = buttons.ImageButton(panel, -1,
+        cls.buttons['ImageButton'] = buttons.ImageButton(panel, -1,
                                                 data.getbtn_128x24Bitmap())
-        self.buttons['ImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
+        cls.buttons['ImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
 
 
-        self.buttons['ImageTextButton'] = buttons.ImageTextButton(panel, -1,
+        cls.buttons['ImageTextButton'] = buttons.ImageTextButton(panel, -1,
                                                 data.getbtn_128x24Bitmap(),
                                                 "ImageTextButton",
                                                 label_delta=1)
-        self.buttons['ImageTextButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
+        cls.buttons['ImageTextButton'].SetBitmaps(data.getbtn_128x24_hBitmap(),
                                                    data.getbtn_128x24_aBitmap())
 
 
-        self.buttons['ImageToggleButton'] = buttons.ImageToggleButton(panel, -1,
+        cls.buttons['ImageToggleButton'] = buttons.ImageToggleButton(panel, -1,
                                                 data.getbtn_128x24Bitmap(),
                                                 label_delta=10)
-        self.buttons['ImageToggleButton'].SetBitmaps(
+        cls.buttons['ImageToggleButton'].SetBitmaps(
                                                 data.getbtn_128x24_hBitmap(),
                                                 data.getbtn_128x24_aBitmap())
 
-        self.buttons['ImageTextToggleButton'] = buttons.ImageTextToggleButton(
+        cls.buttons['ImageTextToggleButton'] = buttons.ImageTextToggleButton(
                                                 panel, -1,
                                                 data.getbtn_256x24_hBitmap(),
                                                 "ImageTextToggleButton",
                                                 label_delta=1,
                                                 style=wx.ALIGN_CENTER)
-        self.buttons['ImageTextToggleButton'].SetBitmaps(
+        cls.buttons['ImageTextToggleButton'].SetBitmaps(
                                                 data.getbtn_256x24_hBitmap(),
                                                 data.getbtn_256x24_aBitmap())
 
 
-        self.buttons['ViewButton'] = buttons.ViewButton(panel, -1,
+        cls.buttons['ViewButton'] = buttons.ViewButton(panel, -1,
                                                 data.getpreview_blockBitmap(),
                                                 label_delta=1,
                                                 style=wx.ALIGN_CENTER)
-        self.buttons['ViewButton'].set_overlay(data.geticon128Image())
-        self.buttons['ViewButton'].SetBitmaps(data.getpreview_block_aBitmap())
+        cls.buttons['ViewButton'].set_overlay(data.geticon128Image())
+        cls.buttons['ViewButton'].SetBitmaps(data.getpreview_block_aBitmap())
 
 
-        self.buttons['ColourButton'] = buttons.ColourButton(panel, -1,
+        cls.buttons['ColourButton'] = buttons.ColourButton(panel, -1,
                                                 data.getbtn_128x24Bitmap())
 
 
-        self.buttons['PopupImageButton'] = buttons.PopupImageButton(panel, -1,
+        cls.buttons['PopupImageButton'] = buttons.PopupImageButton(panel, -1,
                                                 data.getbtn_128x24Bitmap(),
                                                 r"\/",
                                                 style=wx.ALIGN_CENTER)
-        self.buttons['PopupImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
+        cls.buttons['PopupImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
 
-
-
-        # Add button controls to sizer
-        for _, button in self.buttons.items():
-            sizer.Add(button, border=5, flag=wx.ALL | wx.ALIGN_CENTER)
-
-        self.test_frame.Layout()
-        self.test_frame.Show()
-
-        return True
-
-class ButtonsTestCase(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        cls.app = TestApp()
-        test.gui_loop()
-
-    @classmethod
-    def tearDownClass(cls):
-        if not MANUAL:
-            wx.CallAfter(cls.app.Exit)
-        else:
-            if INSPECT:
-                InspectionTool().Show()
-        cls.app.MainLoop()
+        for btn in cls.buttons.values():
+            cls.add_control(btn, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL)
 
     def test_buttons(self):
-        test.gui_loop() # if everything shows up, it's pretty good already
-
         # colour button
-        cb = self.app.buttons['ColourButton']
+        cb = self.buttons['ColourButton']
         red = (255, 0, 0)
         cb.set_colour(red)
         test.gui_loop()
@@ -142,7 +107,7 @@ class ButtonsTestCase(unittest.TestCase):
         test.gui_loop()
 
         # PopupImageButton
-        pib = self.app.buttons['PopupImageButton']
+        pib = self.buttons['PopupImageButton']
         nb_options = 5
         for i in range(nb_options):
             def tmp(option=i):

@@ -18,7 +18,6 @@ sys.path.extend(["/home/rinze/dev/lib/Pyro4/src/",
                  "/home/rinze/dev/odemis/src/gui",
                  "/home/rinze/dev/misc/"])
 
-
 import unittest
 import os
 import logging
