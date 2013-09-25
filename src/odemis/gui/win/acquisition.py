@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
 from odemis.gui import acqmng
-import odemis.gui.model as guimodel
 from odemis.gui.acqmng import presets, preset_as_is
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
@@ -34,6 +33,7 @@ from wx.lib.pubsub import pub
 import copy
 import logging
 import math
+import odemis.gui.model as guimodel
 import os.path
 import time
 import wx
@@ -248,15 +248,13 @@ class AcquisitionDialog(xrcfr_acq):
         # (eg: accumulation/interpolation) when we have them
 
         # apply the recorded values
-        for se, value in new_preset.items():
-            # TODO: it might be more tricky that this because some values might
-            # affect others like resolution/binning => change them in a specific
-            # order.
-            se.va.value = value
+        acqmng.apply_preset(new_preset)
 
         # The hardware might not exactly apply the setting as computed in the
         # preset. We need the _exact_ same value to find back which preset is
         # currently selected. So update the values the first time.
+        # TODO: this should not be necessary once the settings only change the
+        # stream settings, and not directly the hardware.
         if not preset_name in self._presets_confirmed:
             for se in new_preset.keys():
                 new_preset[se] = se.va.value

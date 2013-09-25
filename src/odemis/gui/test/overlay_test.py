@@ -62,7 +62,7 @@ class TestApp(wx.App):
 def do_stuff(sequence):
     print "New sequence", sequence
 
-class PlotCanvasTestCase(test.GuiTestCase):
+class OverlayTestCase(test.GuiTestCase):
 
     @classmethod
     def setUpClass(cls):
@@ -84,13 +84,11 @@ class PlotCanvasTestCase(test.GuiTestCase):
                 inspection.InspectionTool().Show()
             cls.app.MainLoop()
 
-    def test_view_select_overlay(self):
-        # Create and add a test plot canvas
-        # cnvs = canvas.PlotCanvas(self.panel)
+    def xtest_view_select_overlay(self):
+        # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
-        # TODO: setView() with a MicroscopeView
 
-        cnvs.SetBackgroundColour(wx.BLACK)
+        cnvs.SetBackgroundColour(wx.WHITE)
         cnvs.SetForegroundColour("#DDDDDD")
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
@@ -98,6 +96,40 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.WorldOverlays.append(vsol)
         cnvs.active_overlay = vsol
         cnvs.current_mode = model.TOOL_ROI
+
+        # FIXME: this overlay seems to not work (black selection?)
+        # but as for now we don't use it, no need to fix it yet...
+
+
+    def test_roa_select_overlay(self):
+        # Create and add a miccanvas
+        # TODO: Sparc canvas because it's now the only one which supports TOOL_ROA
+        # but it should be a simple miccanvas
+        cnvs = miccanvas.SparcAcquiCanvas(self.panel)
+
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        rsol = overlay.RepetitionSelectOverlay(cnvs, "Region of acquisition")
+        cnvs.WorldOverlays.append(rsol)
+        cnvs.active_overlay = rsol
+        cnvs.current_mode = model.TOOL_ROA
+
+        gui_loop(SLEEP_TIME)
+        wroi = [-0.1, 0.3, 0.2, 0.4] # in m
+        rsol.set_physical_sel(wroi)
+        gui_loop(SLEEP_TIME)
+        wroi_back = rsol.get_physical_sel()
+        for o, b in zip(wroi, wroi_back):
+            self.assertAlmostEqual(o, b,
+                       msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
+
+        rsol.set_repetition((3, 2))
+        rsol.grid_fill()
+        gui_loop(SLEEP_TIME)
+
+        rsol.set_repetition((4, 5))
+        rsol.point_fill()
+        gui_loop(SLEEP_TIME)
 
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)

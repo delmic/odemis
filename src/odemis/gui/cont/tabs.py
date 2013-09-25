@@ -691,10 +691,10 @@ class AnalysisTab(Tab):
         except Exception:
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
-        self._display_new_data(fn, data)
+        self.display_new_data(fn, data)
 
 
-    def _display_new_data(self, filename, data):
+    def display_new_data(self, filename, data):
         """
         Display a new data set (removing all references to the current one)
         filename (string): Name of the file containing the data.
@@ -986,8 +986,8 @@ class LensAlignTab(Tab):
                   fov_size[1] * ((t + b) / 2 - 0.5))
 
         # same formula as InclinedStage._convertPosToChild()
-        ang = math.radians(135)
-        bc, ac = [xc * math.cos(ang) - yc * math.sin(ang),
+        ang = math.radians(-135)
+        ac, bc = [xc * math.cos(ang) - yc * math.sin(ang),
                   xc * math.sin(ang) + yc * math.cos(ang)]
 
         # Force values to 0 if very close to it (happens often as can be on just

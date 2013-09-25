@@ -708,7 +708,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             # Clicked outside selection
             if not hover:
                 self.dragging = True
-                self.active_overlay.start_selection(vpos, self.scale)
+                self.active_overlay.start_selection(vpos)
                 pub.sendMessage('secom.canvas.zoom.start', canvas=self)
                 if not self.HasCapture():
                     self.CaptureMouse()
@@ -767,7 +767,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             else:
                 hover = self.active_overlay.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
-                    self.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW)) # A closed hand!
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
                 elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
@@ -840,7 +840,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             # Clicked outside selection
             if not hover:
                 self.dragging = True
-                self.active_overlay.start_selection(vpos, self.scale)
+                self.active_overlay.start_selection(vpos)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked on edge
@@ -872,7 +872,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self._updateROA()
                 # force it to redraw the selection, even if the ROA hasn't changed
                 # because the selection is clipped identically
-                self._onROA(self._roa.value)
+                if self._roa:
+                    self._onROA(self._roa.value)
             else:
                 if self._roa:
                     self._roa.value = UNDEFINED_ROI
@@ -898,8 +899,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             else:
                 hover = self.active_overlay.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
-                    # No special cusor needed
-                    self.SetCursor(self.cursor)
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW)) # A closed hand!
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
                 elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
@@ -939,7 +939,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         """
         Returns the (theoretical) scanning area of the SEM. Works even if the
         SEM has not send any image yet.
-        returns (tuple of 4 floats): position in m (t, l, b, r)
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
         raises AttributeError in case no SEM is found
         """
         sem = self._tab_data_model.main.ebeam
@@ -956,10 +956,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # that it's always correct (but maybe not here in the view)
         sem_width = (sem.shape[0] * sem.pixelSize.value[0],
                      sem.shape[1] * sem.pixelSize.value[1])
-        sem_rect = [sem_center[0] - sem_width[0] / 2, # top
-                    sem_center[1] - sem_width[1] / 2, # left
-                    sem_center[0] + sem_width[0] / 2, # bottom
-                    sem_center[1] + sem_width[1] / 2] # right
+        sem_rect = [sem_center[0] - sem_width[0] / 2, # left
+                    sem_center[1] - sem_width[1] / 2, # top
+                    sem_center[0] + sem_width[0] / 2, # right
+                    sem_center[1] + sem_width[1] / 2] # bottom
 
         return sem_rect
 
@@ -967,8 +967,11 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         """
         Update the value of the ROA in the GUI according to the roi_overlay
         """
-        sem = self._tab_data_model.main.ebeam
-        if not self._roa or not sem:
+        try:
+            sem = self._tab_data_model.main.ebeam
+            if not self._roa or not sem:
+                raise AttributeError()
+        except AttributeError:
             logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
             return
 
@@ -988,10 +991,11 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             return
 
         # Convert the ROI into relative value compared to the SEM scan
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
         rel_rect = [(phys_rect[0] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
-                    (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
+                    1 - (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1]),
                     (phys_rect[2] - sem_rect[0]) / (sem_rect[2] - sem_rect[0]),
-                    (phys_rect[3] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
+                    1 - (phys_rect[1] - sem_rect[1]) / (sem_rect[3] - sem_rect[1])]
 
         # and is at least one pixel big
         rel_pixel_size = (1 / sem.shape[0], 1 / sem.shape[1])
@@ -1023,10 +1027,11 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             except AttributeError:
                 return # no SEM => ROA is not meaningful
 
+            # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
             phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
-                         sem_rect[1] + roi[1] * (sem_rect[3] - sem_rect[1]),
+                         sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
                          sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
-                         sem_rect[1] + roi[3] * (sem_rect[3] - sem_rect[1]))
+                         sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
 
         logging.debug("Selection now set to %s", phys_rect)
         self.roi_overlay.set_physical_sel(phys_rect)

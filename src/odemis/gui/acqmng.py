@@ -27,9 +27,10 @@ from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, \
     CANCELLED_AND_NOTIFIED, CancelledError, PENDING
 from odemis import model
-from odemis.gui.model.stream import FluoStream, ARStream, SpectrumStream,\
+from odemis.gui.model.stream import FluoStream, ARStream, SpectrumStream, \
     SEMSpectrumMDStream, OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import img
+import collections
 import logging
 import numpy
 import sys
@@ -460,8 +461,61 @@ class ProgressiveFuture(futures.Future):
         
 
 # TODO: presets shouldn't work on SettingEntries (GUI-only objects), but on
-# Stream (and HwComponents). Warning: some hw require the VAs to be set in a
-# specific order, otherwise the other VAs will change (eg, binning<->resolution)  
+# Stream (and HwComponents).
+def apply_preset(preset):
+    """
+    Apply the presets. It tries to ensure that they are set in the right order
+     if the hardware needs it.
+    preset (dict SettingEntries -> value): new value for each SettingEntry that 
+            should be modified.
+    """
+    # TODO: Once presets only affect the streams, we don't have dependency order
+    # problem anymore?
+
+    preset = dict(preset) # shallow copy (so we don't change the input)
+
+    # There are mostly 2 (similar) dependencies:
+    # * binning > resolution
+    # * scale > resolution > translation
+    # => do it in order: binning | scale > resolution > translation
+
+    for se, value in preset.items():
+        if se.name == "binning":
+            se.va.value = value
+            del preset[se]
+
+    for se, value in preset.items():
+        if se.name == "scale":
+            se.va.value = value
+            del preset[se]
+
+    for se, value in preset.items():
+        if se.name == "resolution":
+            se.va.value = value
+            del preset[se]
+
+    for se, value in preset.items():
+        if se.name == "translation":
+            se.va.value = value
+            del preset[se]
+
+    for se, value in preset.items():
+        se.va.value = value
+
+def _get_entry(entries, comp, name):
+    """
+    find the entry for the given component with the name
+    entries (list of SettingEntries): all the entries
+    comp (model.Component)
+    name (String)
+    return (SettingEntry or None)
+    """
+    for e in entries:
+        if e.comp == comp and e.name == name:
+            return e
+    else:
+        return None
+    
 
 # Quality setting presets
 def preset_hq(entries):
@@ -471,6 +525,7 @@ def preset_hq(entries):
     returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
     """
     ret = {}
+    
     for entry in entries:
         if not entry.va or entry.va.readonly:
             # not a real setting, just info
@@ -485,16 +540,24 @@ def preset_hq(entries):
                 value = entry.va.range[1] # max
             except (AttributeError, model.NotApplicableError):
                 pass
-        elif entry.name in ("exposureTime", "dwellTime"):
-            # if exposureTime/dwellTime => x10
+
+        elif entry.name == "dwellTime":
+            # SNR improves logarithmically with the dwell time => x10
             value = entry.va.value * 10
 
             # make sure it still fits
-            if isinstance(entry.va.range, tuple):
-                value = sorted(entry.va.range + (value,))[1] # clip
+            if isinstance(entry.va.range, collections.Iterable):
+                value = sorted(list(entry.va.range) + [value])[1] # clip
+
+        elif entry.name == "scale": # for scanners only
+            # => smallest = 1,1
+            value = tuple(1 for v in entry.va.value)
+            
+            # TODO: ensure it still fits
 
         elif entry.name == "binning":
             # if binning => smallest
+            prev_val = entry.va.value
             try:
                 value = entry.va.range[0] # min
             except (AttributeError, model.NotApplicableError):
@@ -502,9 +565,16 @@ def preset_hq(entries):
                     value = min(entry.va.choices)
                 except (AttributeError, model.NotApplicableError):
                     pass
-            # TODO: multiply exposuretime by the original binning
+            # Compensate decrease in energy by longer exposure time
+            et_entry = _get_entry(entries, entry.comp, "exposureTime")
+            if et_entry:
+                et_value = ret.get(et_entry, et_entry.va.value)
+                for prevb, newb in zip(prev_val, value):
+                    et_value *= prevb / newb
+                ret[et_entry] = et_value
+
         elif entry.name == "readoutRate":
-            # if readoutrate => smallest
+            # the smallest, the less noise (and slower, but we don't care)
             try:
                 value = entry.va.range[0] # min
             except (AttributeError, model.NotApplicableError):
