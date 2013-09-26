@@ -124,6 +124,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._crosshair_ol = None
         self._spotmode_ol = None
         self._fps_ol = comp_overlay.TextViewOverlay(self)
+        self.focus_overlay = None
 
         # play/pause icon
         self.icon_overlay = comp_overlay.StreamIconOverlay(self)
@@ -584,13 +585,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # There probably is a Ubuntu/wxPython related bug that
             # SetCursor does not work one CaptureMouse is called (which)
             # happens in the super method.
-            num_focus = self.microscope_view.get_focus_count()
-            if num_focus == 1:
-                logging.debug("One focus actuator found")
-                self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
-            elif num_focus == 2:
-                logging.debug("Two focus actuators found")
-                self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+            if self.microscope_view:
+                num_focus = self.microscope_view.get_focus_count()
+                if num_focus == 1:
+                    logging.debug("One focus actuator found")
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+                elif num_focus == 2:
+                    logging.debug("Two focus actuators found")
+                    self.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
             if self.focus_overlay:
                 self.focus_overlay.clear_shift()
 
