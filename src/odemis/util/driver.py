@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from Pyro4.errors import CommunicationError
 from odemis import model
 import collections
 import logging
@@ -151,3 +152,26 @@ def speedUpPyroConnect(comp):
         for child in (comp.detectors | comp.emitters | comp.actuators):
             t = threading.Thread(target=bind_obj, args=(child,))
             t.start()
+
+
+BACKEND_RUNNING = "RUNNING"
+BACKEND_DEAD = "DEAD"
+BACKEND_STOPPED = "STOPPED"
+def get_backend_status():
+    try:
+        model._components._microscope = None # force reset of the microscope
+        microscope = model.getMicroscope()
+        if len(microscope.name) > 0:
+            return BACKEND_RUNNING
+    except (IOError, CommunicationError):
+        logging.info("Failed to find microscope")
+        if os.path.exists(model.BACKEND_FILE):
+            return BACKEND_DEAD
+        else:
+            logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)
+            return BACKEND_STOPPED
+    except:
+        logging.exception("Unresponsive back-end")
+        return BACKEND_DEAD
+
+    return BACKEND_DEAD

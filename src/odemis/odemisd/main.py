@@ -21,9 +21,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+from Pyro4.errors import CommunicationError
 from odemis import model
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
+from odemis.util.driver import BACKEND_RUNNING, BACKEND_DEAD, BACKEND_STOPPED, \
+    get_backend_status
 import argparse
 import grp
 import logging
@@ -262,21 +265,6 @@ class BackendRunner(object):
             return 127
 
         return 0
-
-BACKEND_RUNNING = "RUNNING"
-BACKEND_DEAD = "DEAD"
-BACKEND_STOPPED = "STOPPED"
-def get_backend_status():
-    try:
-        microscope = model.getMicroscope()
-        if len(microscope.name) > 0:
-            return BACKEND_RUNNING
-    except:
-        if os.path.exists(model.BACKEND_FILE):
-            return BACKEND_DEAD
-        else:
-            return BACKEND_STOPPED
-    return BACKEND_DEAD
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,

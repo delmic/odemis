@@ -22,40 +22,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
-from Pyro4.errors import CommunicationError
 from odemis import model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
-from odemis.util.driver import reproduceTypedValue
+from odemis.util.driver import reproduceTypedValue, BACKEND_RUNNING, \
+    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
 import argparse
 import collections
 import gc
 import inspect
 import logging
 import odemis.util.driver
-import os
 import sys
 import time
 
-BACKEND_RUNNING = "RUNNING"
-BACKEND_DEAD = "DEAD"
-BACKEND_STOPPED = "STOPPED"
-def get_backend_status():
-    try:
-        microscope = model.getMicroscope()
-        if len(microscope.name) > 0:
-            return BACKEND_RUNNING
-    except (IOError, CommunicationError):
-        logging.info("Failed to find microscope")
-        if os.path.exists(model.BACKEND_FILE):
-            return BACKEND_DEAD
-        else:
-            logging.info("Back-end %s file doesn't exists", model.BACKEND_FILE)
-            return BACKEND_STOPPED
-    except:
-        logging.exception("Unresponsive back-end")
-        return BACKEND_DEAD
-
-    return BACKEND_DEAD
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
