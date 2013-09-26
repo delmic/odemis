@@ -8,15 +8,15 @@ Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import functools
@@ -154,24 +154,24 @@ class memoize(object):
 #### Wrappers ########
 
 def call_after_wrapper(f, *args, **kwargs):
-    def wrapzor(*args, **kwargs):
+    def call_after_wrapzor(*args, **kwargs):
         app = wx.GetApp()
         if app:
             return wx.CallAfter(f, *args, **kwargs)
-    return wrapzor
+    return call_after_wrapzor
 
 def dead_object_wrapper(f, *args, **kwargs):
     """ This simple wrapper suppresses errors caused code trying to access
     wxPython widgets that have already been destroyed
     """
-    def wrapzor(*args, **kwargs):
+    def dear_object_wrapzor(*args, **kwargs):
         try:
             app = wx.GetApp()
             if app:
                 return f(*args, **kwargs)
         except wx.PyDeadObjectError:
             logging.warn("Dead object ignored in %s", f.__name__)
-    return wrapzor
+    return dear_object_wrapzor
 
 
 # Path functions

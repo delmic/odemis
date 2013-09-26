@@ -480,6 +480,10 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         self.Bind(wx.EVT_ENTER_WINDOW, self.OnEnter)
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
 
+    def SetToggle(self, toggle):
+        if isinstance(self, ImageToggleButton):
+            GenBitmapToggleButton.SetToggle(self, toggle)
+
     def SetBitmaps(self, bmp_h=None, bmp_sel=None, bmp_sel_h=None):
         """ This method sets additional bitmaps for hovering and selection """
         if bmp_h:
