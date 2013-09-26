@@ -83,6 +83,10 @@ def LoadDyeDatabase():
         if not names:
             logging.debug("Skipping environment %d which has substance without name", eid)
 
+        # solvent name
+        solname = e["solvent"] or ""
+        solname = solname.strip()
+
         # find the peaks
         xpeaks = e["excitation_max"]
         epeaks = e["emission_max"]
@@ -92,18 +96,20 @@ def LoadDyeDatabase():
         xwl = xpeaks[0] * 1e-9 # m
         ewl = epeaks[0] * 1e-9 # m
 
-        # Note: if two substances have the same name -> too bad, only the last
-        # one will be in our database. (it's not a big deal, as it's usually
-        # just duplicate entries)
-        # TODO: if the peaks are really different, and the solvent too, then
-        # append the name of the solvent in parenthesis.
+        # Note: if two substances have the same name (and it changes something)
+        # => add the solvent name.
         for n in names:
-            if n in DyeDatabase:
-                # Disabled logging statement because it was firing too many
-                # messages that weren't interesting
-                #logging.debug("Dye database already had an entry for dye %s", n)
-                pass
-            DyeDatabase[n] = (xwl, ewl)
+            if not n in DyeDatabase:
+                DyeDatabase[n] = (xwl, ewl)
+            else:
+                # TODO: check for all the names with solvent name, and put the
+                # solvent name in the first dye too.
+                if DyeDatabase[n] == (xwl, ewl):
+                    continue
+                if not solname:
+                    continue
+                fullname = n + u" (in %s)" % solname
+                DyeDatabase[fullname] = (xwl, ewl)
 
     # TODO: also de-duplicate names in a case insensitive way
     logging.info("Loaded %d dye names from the database.", len(DyeDatabase))

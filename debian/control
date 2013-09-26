@@ -30,6 +30,7 @@ Depends: python (>= 2.7.1),
          python-xdg,
          python-pyro4-delmic,
          cgroup-bin,
+         odemis-doc,
          ${misc:Depends},
          ${python:Depends}
 Suggests: imagej

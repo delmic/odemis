@@ -68,11 +68,17 @@ def open_json_or_remove(filename):
         logging.error("File %s seems to be an invalid JSON file, trying to fix its escape sequences...", filename)
     
     # fluorophores.org sometimes returns JSON files which have "\ ". It's
-    # officially invalid, but it's not hard to make sense of it
+    # officially invalid, but it's not hard to make sense of it.
     f.seek(0)
     text = f.read()
     fixed_text = text.replace("\\ ", " ")
     
+    # fluorophores.org sometimes returns JSON files which have multiple lines
+    # strings, separated with \r\n. It's invalid, but easy to understand.
+    # => change \r\n to " ".
+    fixed_text = fixed_text.replace("\r\n", " ")
+
+
     try:
         if fixed_text == text:
             # not much hope
@@ -141,19 +147,30 @@ def main(*args):
         sname = OUT_DIR + "substance/%d.json" % nsid
         download(surl, sname)
         
-        # gif/png file too, if it is there
         try:
             fulls = open_json_or_remove(sname)
         except ValueError:
             logging.exception("Skipping %s", surl)
             continue
         
+        # gif/png file too, if it is there
         strurl = fulls["structure"]
         if strurl:
             strsname = strurl.rsplit("/", 1)[1]
             logging.debug("Downloading structure %s", strsname)
             strname = OUT_DIR + "substance/" + strsname
-            download(strurl, strname) 
+
+            # It seems they have a bug which cause the structure URL to be like:
+            # "/static/structures/633.gif" instead of
+            # "http://www.fluorophores.tugraz.at/media/structures/633.gif"
+            if strurl.startswith("/static"):
+                logging.warning("Fixing image url")
+                strurl = URL_DB + "/media" + strurl[7:]
+
+            try:
+                download(strurl, strname)
+            except Exception:
+                 logging.exception("Failed to download structure image @ %s", strurl)
 
 if __name__ == '__main__':
     ret = main(sys.argv)
