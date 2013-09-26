@@ -65,40 +65,41 @@ class Tab(object):
         if show:
             self._connect_22view_event()
             self._connect_crosshair_event()
-        else:
-            # TODO: disconnect
-            # If the next tab is connecting, there is not much to do because wx
-            # event handlers are overridden by next one, and VA is unreferenced
-            # and so unsubscribed. But must make sure it doesn't stay if no
-            # connection is done.
-            pass
+
         self.panel.Show(show)
 
     def _connect_22view_event(self):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
-        view menu item.
+        view menu item (or ensure it's disabled).
         """
         if len(self.tab_data_model.views) == 4:
-            # We assume it has a 2x2 view that can be accessed using the
-            # data model
+            # We assume it has a 2x2 view layout
+            def set_22_menu_check(viewlayout):
+                """Called when the view layout changes"""
+                is_22 = viewlayout == guimodel.VIEW_LAYOUT_22
+                self.main_frame.menu_item_22view.Check(is_22)
+            
             def on_switch_22(evt):
+                """Called when menu changes"""
                 if self.tab_data_model.viewLayout.value == guimodel.VIEW_LAYOUT_22:
                     self.tab_data_model.viewLayout.value = guimodel.VIEW_LAYOUT_ONE
                 else:
                     self.tab_data_model.viewLayout.value = guimodel.VIEW_LAYOUT_22
 
+            # Bind the function to the menu item, so it keeps the reference.
+            # The VigillantAttribute will not unsubscribe it, until replaced.
+            self.main_frame.menu_item_22view.vamethod = set_22_menu_check
+            self.tab_data_model.viewLayout.subscribe(set_22_menu_check, init=True)
             # Assigning an event handler to the menu item, overrides
             # any previously assigned ones.
-            wx.EVT_MENU(
-                self.main_frame,
-                self.main_frame.menu_item_22view.GetId(),
-                on_switch_22)
-
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_22view.GetId(),
+                        on_switch_22)
             self.main_frame.menu_item_22view.Enable()
-            # TODO: make it a check menu
-            # TODO: VA subscribe to viewLayout to update check/uncheck menu
         else:
             self.main_frame.menu_item_22view.Enable(False)
+            self.main_frame.menu_item_22view.Check(False)
+            self.main_frame.menu_item_22view.vamethod = None # drop VA subscription
 
     def _connect_crosshair_event(self):
         """ If the tab contains views with a crosshair overlay, it will connect
@@ -107,37 +108,33 @@ class Tab(object):
         """
         # only if there's a focussed view that we can track
         if hasattr(self.tab_data_model, 'focussedView'):
-            # This unbound function sets the check mark on the menu item
             def set_cross_check(fv):
+                """Called when focused view changes"""
                 is_shown = fv.show_crosshair.value
                 self.main_frame.menu_item_cross.Check(is_shown)
                 # TODO: just (un)subscribe to the show_crosshair
                 # (for now it works because the menu is the only place to change it)
 
-            # Bind the function to the menu item, so it preserve the reference.
-            # The VigillantAttribute will not unsubscribe it, until
-            # it's replaced.
-            self.main_frame.menu_item_cross.vamethod = set_cross_check
-
-            self.tab_data_model.focussedView.subscribe(
-                                                set_cross_check,
-                                                init=True)
-
-            # This function will be attached to the menu item, so that
-            # the crosshair of the focussed view will get toggled.
-            def on_crosshair_check(evt):
+            def on_switch_crosshair(evt):
+                """Called when menu changes"""
                 show = self.main_frame.menu_item_cross.IsChecked()
                 foccused_view = self.tab_data_model.focussedView.value
                 foccused_view.show_crosshair.value = show
 
-            wx.EVT_MENU(
-                    self.main_frame,
-                    self.main_frame.menu_item_cross.GetId(),
-                    on_crosshair_check)
+            # Bind the function to the menu item, so it keeps the reference.
+            # The VigillantAttribute will not unsubscribe it, until replaced.
+            self.main_frame.menu_item_cross.vamethod = set_cross_check
+            self.tab_data_model.focussedView.subscribe(set_cross_check, init=True)
+            # Assigning an event handler to the menu item, overrides
+            # any previously assigned ones.
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_cross.GetId(),
+                        on_switch_crosshair)
             self.main_frame.menu_item_cross.Enable()
         else:
             # If the right elements are not found, simply disable the menu item
             self.main_frame.menu_item_cross.Enable(False)
+            self.main_frame.menu_item_cross.Check(False)
             self.main_frame.menu_item_cross.vamethod = None # drop VA subscription
 
     def Hide(self):
