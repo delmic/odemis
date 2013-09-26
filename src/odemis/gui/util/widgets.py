@@ -70,7 +70,10 @@ class VigilantAttributeConnector(object):
         """
         self.vigilattr = va
         self.ctrl = ctrl
-        self.va_2_ctrl = call_after_wrapper(va_2_ctrl or ctrl.SetValue)
+        # Dead_object_wrapper might need/benefit from recognizing bound methods.
+        # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
+        self.va_2_ctrl = dead_object_wrapper(
+                            call_after_wrapper(va_2_ctrl or ctrl.SetValue))
         self.ctrl_2_va = ctrl_2_va or ctrl.GetValue
         if events is None:
             self.change_events = ()

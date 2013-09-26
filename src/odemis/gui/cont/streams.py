@@ -253,10 +253,11 @@ class StreamController(object):
             elif self.static_mode:
                 spanel.to_static_mode()
 
-            logging.debug("Sending stream.ctrl.added message")
-            pub.sendMessage('stream.ctrl.added',
-                            streams_present=True,
-                            streams_visible=self._has_visible_streams())
+            # TODO: remove, seems to be deprecated
+            # logging.debug("Sending stream.ctrl.added message")
+            # pub.sendMessage('stream.ctrl.added',
+            #                 streams_present=True,
+            #                 streams_visible=self._has_visible_streams())
 
             return spanel
         else:

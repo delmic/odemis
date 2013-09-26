@@ -450,7 +450,7 @@ class StreamPanel(wx.PyPanel):
 
         expand_opt = (OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED |
                       OPT_BTN_TINT)
-        if (self._has_dye(self.stream) and not 
+        if (self._has_dye(self.stream) and not
             (self.stream.excitation.readonly or self.stream.emission.readonly)):
             expand_opt |= OPT_NAME_EDIT
 
@@ -573,8 +573,7 @@ class StreamPanel(wx.PyPanel):
 
 
     def setVisible(self, visible):
-        """
-        Set the "visible" toggle button.
+        """ Set the "visible" toggle button.
         Note: it does not add/remove it to the current view.
         """
         self._expander._btn_vis.SetToggle(visible)
