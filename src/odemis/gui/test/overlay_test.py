@@ -72,10 +72,10 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.active_overlay = rsol
         cnvs.current_mode = model.TOOL_ROA
 
-        gui_loop(SLEEP_TIME)
+        test.gui_loop()
         wroi = [-0.1, 0.3, 0.2, 0.4] # in m
         rsol.set_physical_sel(wroi)
-        gui_loop(SLEEP_TIME)
+        test.gui_loop()
         wroi_back = rsol.get_physical_sel()
         for o, b in zip(wroi, wroi_back):
             self.assertAlmostEqual(o, b,
@@ -83,11 +83,11 @@ class OverlayTestCase(test.GuiTestCase):
 
         rsol.set_repetition((3, 2))
         rsol.grid_fill()
-        gui_loop(SLEEP_TIME)
+        test.gui_loop()
 
         rsol.set_repetition((4, 5))
         rsol.point_fill()
-        gui_loop(SLEEP_TIME)
+        test.gui_loop()
 
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
