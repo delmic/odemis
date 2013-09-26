@@ -62,10 +62,6 @@ class ViewController(object):
         tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
         tab_data.focussedView.subscribe(self._onView, init=True)
 
-    def num_viewports(self):
-        """ Return the number of viewport controlled by this class """
-        return len(self._viewports)
-
     @property
     def viewports(self):
         return self._viewports
