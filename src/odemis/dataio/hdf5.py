@@ -388,26 +388,42 @@ def _parse_physical_data(pdgroup, da):
                 pass
 
         try:
-            xwl = float(pdgroup["ExcitationWavelength"][i]) # in m
+            ds = pdgroup["ExcitationWavelength"]
+            xwl = float(ds[i]) # in m
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
             md[model.MD_IN_WL] = (xwl, xwl)
         except (KeyError, IndexError, ValueError):
             pass
 
         try:
-            ewl = float(pdgroup["EmissionWavelength"][i]) # in m
+            ds = pdgroup["EmissionWavelength"]
+            ewl = float(ds[i]) # in m
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
             md[model.MD_OUT_WL] = (ewl, ewl)
         except (KeyError, IndexError, ValueError):
             pass
 
         try:
-            mag = float(pdgroup["Magnification"][i])
+            ds = pdgroup["Magnification"]
+            mag = float(ds[i])
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
             md[model.MD_LENS_MAG] = mag
         except (KeyError, IndexError, ValueError):
             pass
 
         # Our extended metadata
         try:
-            it = float(pdgroup["IntegrationTime"][i]) # s
+            ds = pdgroup["IntegrationTime"]
+            it = float(ds[i]) # s
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
             md[model.MD_EXP_TIME] = it
         except (KeyError, IndexError, ValueError):
             pass
@@ -422,6 +438,7 @@ ST_VERIFIED = 115
 _dtstate = h5py.special_dtype(enum=('i', {
      "Invalid":ST_INVALID, "Default":ST_DEFAULT, "Estimated":ST_ESTIMATED,
      "Reported":ST_REPORTED, "Verified":ST_VERIFIED}))
+
 def _h5svi_set_state(dataset, state):
     """
     Set the "State" of a dataset: the confidence that can be put in the value
@@ -439,6 +456,22 @@ def _h5svi_set_state(dataset, state):
         fullstate = numpy.array(state, dtype=_dtstate)
 
     dataset.attrs["State"] = fullstate
+
+def _h5svi_get_state(dataset, default=None):
+    """
+    Read the "State" of a dataset: the confidence that can be put in the value
+    dataset (Dataset): the dataset
+    default: to be returned if no state is present
+    return state (int or list of int): the state value (ST_*) which will be duplicated
+     as many times as the shape of the dataset. If it's a list, it will be directly
+     used, as is. If not state available, default is returned.
+    """
+    try:
+        state = dataset.attrs["State"]
+    except IndexError:
+        return default
+
+    return state.tolist()
 
 def _h5py_enum_commit(group, name, dtype):
     """
@@ -470,18 +503,21 @@ def _add_image_metadata(group, images):
     gp["ChannelDescription"] = numpy.array(cdesc, dtype=dtvlen_str)
     _h5svi_set_state(gp["ChannelDescription"], ST_ESTIMATED)
 
-    # TODO: if it takes the default value, the state should be ST_DEFAULT
-    xwls = [numpy.mean(i.metadata.get(model.MD_IN_WL, 1e-9)) for i in images]
-    gp["ExcitationWavelength"] = xwls # in m
-    _h5svi_set_state(gp["ExcitationWavelength"], ST_REPORTED)
+    # Wavelengths are not a band, but a single value, so we pick the center
+    xwls = [i.metadata.get(model.MD_IN_WL) for i in images]
+    gp["ExcitationWavelength"] = [1e-9 if v is None else numpy.mean(v) for v in xwls] # in m
+    state = [ST_INVALID if v is None else ST_REPORTED for v in xwls]
+    _h5svi_set_state(gp["ExcitationWavelength"], state)
 
-    ewls = [numpy.mean(i.metadata.get(model.MD_OUT_WL, 1e-9)) for i in images]
-    gp["EmissionWavelength"] = ewls # in m
-    _h5svi_set_state(gp["EmissionWavelength"], ST_REPORTED)
+    ewls = [i.metadata.get(model.MD_OUT_WL) for i in images]
+    gp["EmissionWavelength"] = [1e-9 if v is None else numpy.mean(v) for v in ewls] # in m
+    state = [ST_INVALID if v is None else ST_REPORTED for v in ewls]
+    _h5svi_set_state(gp["EmissionWavelength"], state)
 
-    mags = [i.metadata.get(model.MD_LENS_MAG, 1.0) for i in images]
-    gp["Magnification"] = mags
-    _h5svi_set_state(gp["Magnification"], ST_REPORTED)
+    mags = [i.metadata.get(model.MD_LENS_MAG) for i in images]
+    gp["Magnification"] = [1.0 if m is None else m for m in mags]
+    state = [ST_INVALID if v is None else ST_REPORTED for v in mags]
+    _h5svi_set_state(gp["Magnification"], state)
 
     # MicroscopeMode
     dtmm = h5py.special_dtype(enum=('i', {
@@ -628,10 +664,11 @@ def _add_acquistion_svi(group, images, **kwargs):
 
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
-    dtstate = h5py.special_dtype(enum=('i', {
-         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
-    _h5py_enum_commit(group, "StateEnumeration", dtstate)
+#    dtstate = h5py.special_dtype(enum=('i', {
+#         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
+    _h5py_enum_commit(group, "StateEnumeration", _dtstate)
 
+    # TODO: use scaleoffset to store the number of bits used
     ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
     _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
     _add_image_metadata(group, images)
