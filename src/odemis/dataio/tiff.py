@@ -223,10 +223,10 @@ def _indent(elem, level=0):
     From http://effbot.org/zone/element-lib.htm#prettyprint
     elem (ElementTree)
     """
-    i = "\n" + level * "    "
+    i = u"\n" + level * u"    "
     if len(elem):
         if not elem.text or not elem.text.strip():
-            elem.text = i + "    "
+            elem.text = i + u"    "
         if not elem.tail or not elem.tail.strip():
             elem.tail = i
         for elem in elem:

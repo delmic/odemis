@@ -159,7 +159,7 @@ class TestHDF5IO(unittest.TestCase):
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: "tÉst",
+                    model.MD_DESCRIPTION: u"tÉst",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
