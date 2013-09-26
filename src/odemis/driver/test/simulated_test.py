@@ -138,12 +138,19 @@ class ActuatorTest(object):
 #            self.fail("Speed not consistent: ratio of " + str(ratio) +
 #                         "instead of " + str(expected_ratio) + ".")
 
-@skip("simple")
+#@skip("simple")
 class StageTest(unittest.TestCase, ActuatorTest):
 
     actuator_type = simulated.Stage
     # name, role, children (must be None)
     _kwargs = dict(name="stage", role="test", axes={"x", "y"}, inverted=["y"])
+
+    # force to not use the default methods from TestCase
+    def setUp(self):
+        ActuatorTest.setUp(self)
+
+    def tearDown(self):
+        ActuatorTest.tearDown(self)
 
 class CombinedTest(unittest.TestCase, ActuatorTest):
 
@@ -155,6 +162,11 @@ class CombinedTest(unittest.TestCase, ActuatorTest):
         self.dev = self.actuator_type("stage", "stage",
                                      {"x": self.child1, "y": self.child2},
                                      {"x": "a", "y": "d"})
+
+    # force to not use the default method from TestCase
+    def tearDown(self):
+        ActuatorTest.tearDown(self)
+
 
 if __name__ == "__main__":
     unittest.main()
