@@ -43,7 +43,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Use processes or threads? Threads are easier to debug, but less real
 USE_THREADS = True
 
-@unittest.skip("simple")
+#@unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
         container = model.createNewContainer("testempty")
