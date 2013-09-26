@@ -51,7 +51,7 @@ def rect_intersect(ra, rb):
     """
     Computes the rectangle representing the intersection area of two rectangles
     (aligned along the axes).
-    ra (tuple of 4 floats): position of the first rectangle top, left, bottom, right
+    ra (tuple of 4 floats): position of the first rectangle left, top, right, bottom
     rb (tuple of 4 floats): position of the second rectangle
     return (None or tuple of 4 floats): None if there is no intersection, or
      the rectangle representing the intersection 
@@ -74,6 +74,23 @@ def rect_intersect(ra, rb):
              min(ra[2], rb[2]), min(ra[3], rb[3]))
 
     return inter
+
+def normalize_rect(rect):
+    """
+    Ensure that a rectangle has a the left less than right, and top less than
+    bottom.
+    rect (iterable of 4 floats): left, top, right, bottom
+    return (iterable of 4 floats): left, top, right, bottom
+    """
+    l, t, r, b = rect
+    if l > r:
+        l, r = r, l
+    if t > b:
+        t, b = b, t
+
+    nrect = type(rect)((l, t, r, b))
+    return nrect
+
 
 class TimeoutError(Exception):
     pass
