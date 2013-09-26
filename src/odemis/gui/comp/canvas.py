@@ -193,6 +193,9 @@ class DraggableCanvas(wx.Panel):
         # (flt, flt) last absolute value, for sending the change
         self._rdrag_prev_value = None
 
+        # This attribute is used to store the current mouse cursor type
+        self.previous_cursor = None
+
         # timer to give a delay before redrawing so we wait to see if there are
         # several events waiting
         self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
@@ -273,6 +276,7 @@ class DraggableCanvas(wx.Panel):
 
         logging.debug("Drag started at %s", self.drag_init_pos)
 
+        self.previous_cursor = self.GetCursor()
         self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW))
 
         if not self.HasCapture():
@@ -286,7 +290,7 @@ class DraggableCanvas(wx.Panel):
             return
 
         self.dragging = False
-        self.SetCursor(wx.STANDARD_CURSOR)
+        self.SetCursor(self.previous_cursor or wx.STANDARD_CURSOR)
         if self.HasCapture():
             self.ReleaseMouse()
 
