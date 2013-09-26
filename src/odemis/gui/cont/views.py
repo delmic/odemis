@@ -103,7 +103,7 @@ class ViewController(object):
                   }),
                 (self._viewports[1],
                  {"name": "Spectrum",
-                  "stream_classes": SPECTRUM_STREAMS,
+                  "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
                   }),
                 (self._viewports[2],
                  {"name": "Angle resolved",
@@ -111,7 +111,7 @@ class ViewController(object):
                   }),
                 (self._viewports[3],
                  {"name": "SEM CL",
-                  "stream_classes": (EM_STREAMS + SPECTRUM_STREAMS),
+                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
                   }),
                                                ])
                 self._createViewsFixed(vpv)
