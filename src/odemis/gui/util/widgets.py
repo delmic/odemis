@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis.gui.util import call_after_wrapper, call_after
+from odemis.gui.util import call_after_wrapper, call_after, dead_object_wrapper
 import collections
 import logging
 
@@ -111,7 +111,7 @@ class VigilantAttributeConnector(object):
     def disconnect(self):
         logging.debug("Disconnecting VigilantAttributeConnector")
         for event in self.change_events:
-            self.ctrl.Unbind(event, self._on_value_change)
+            self.ctrl.Unbind(event, handler=self._on_value_change)
         self.vigilattr.unsubscribe(self.va_2_ctrl)
 
 

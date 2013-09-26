@@ -77,6 +77,7 @@ class VigilantAttributeBase(object):
             except WeakRefLostError:
                 self.unsubscribe(l)
 
+
 class VigilantAttribute(VigilantAttributeBase):
     '''
     A VigilantAttribute represents a value (an object) with:

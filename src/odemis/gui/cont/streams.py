@@ -214,8 +214,8 @@ class StreamController(object):
         stream (stream.Stream): the new stream to add
         add_to_all_views (boolean): if True, add the stream to all the
             compatible views, otherwise add only to the current view.
-        visible (boolean): If True, create a stream entry, otherwise adds the 
-          stream but do not create any entry. 
+        visible (boolean): If True, create a stream entry, otherwise adds the
+          stream but do not create any entry.
         returns (StreamPanel or Stream): stream entry or stream (if visible
          is False) that was created
         """

@@ -1514,7 +1514,12 @@ class StreamBar(wx.Panel):
         Deletion of the actual stream must be done separately.
         """
         self.stream_panels.remove(spanel)
-        wx.CallAfter(spanel.Destroy)
+        # The Destory method used to be called using the CallAfter function:
+        # wx.CallAfter(spanel.Destroy)
+        # This was causing errors with StreamPanel methods being called through
+        # VigillantAttributes. Not sure why CallAfter was used in the first
+        # place.
+        spanel.Destroy()
         self._set_warning()
 
     def clear(self):
