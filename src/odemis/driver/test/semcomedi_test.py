@@ -259,7 +259,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.translation.value = (-1.26, 10) # px
         pxs = self.scanner.pixelSize.value
         exp_pos = (center[0] + (-1.26 * pxs[0]),
-                   center[1] + (10 * pxs[1]))
+                   center[1] - (10 * pxs[1])) # because translation Y is opposite from physical one
         
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
