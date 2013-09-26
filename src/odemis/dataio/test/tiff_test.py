@@ -56,6 +56,7 @@ class TestTiffIO(unittest.TestCase):
             pass
 
     # Be careful: numpy's notation means that the pixel coordinates are Y,X,C
+#    @skip("simple")
     def testExportOnePage(self):
         # create a simple greyscale image
         size = (256, 512)
@@ -76,7 +77,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel(white), 124)
         
-#    @skip("Doesn't work")
+#    @skip("simple")
     def testExportMultiPage(self):
         # create a simple greyscale image
         size = (512, 256)
@@ -106,6 +107,7 @@ class TestTiffIO(unittest.TestCase):
             
         os.remove(FILENAME)
 
+#    @skip("simple")
     def testExportThumbnail(self):
         # create a simple greyscale image
         size = (512, 256)
@@ -183,7 +185,7 @@ class TestTiffIO(unittest.TestCase):
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: u"", # check empty unicode strings
-                    model.MD_DESCRIPTION: "tÉst", # tiff doesn't support É
+                    model.MD_DESCRIPTION: u"tÉst", # tiff doesn't support É (but XML does)
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
                     model.MD_BINNING: (1, 2), # px, px
@@ -227,7 +229,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel((1,1)), 0)
             
-
+#    @skip("simple")
     def testMetadata(self):
         """
         checks that the metadata is saved with every picture
@@ -307,7 +309,8 @@ class TestTiffIO(unittest.TestCase):
         bin_str = ime.find("Pixels/Channel/DetectorSettings").get("Binning")
         exp_bin = "%dx%d" % metadata[model.MD_BINNING]
         self.assertEqual(bin_str, exp_bin)
-        
+
+#    @skip("simple")
     def testExportRead(self):
         """
         Checks that we can read back an image and a thumbnail
@@ -359,6 +362,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
         self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
 
+#    @skip("simple")
     def testReadMDSpec(self):
         """
         Checks that we can read back the metadata of a spectrum image
@@ -443,6 +447,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+#    @skip("simple")
     def testReadMDFluo(self):
         """
         Checks that we can read back the metadata of a fluoresence image

@@ -143,20 +143,3 @@ def dichotomy_to_region(seq):
         roi = [l, t, r, b]
 
     return roi
-
-
-def normalize_rect(rect):
-    """
-    Ensure that a rectangle has a the left less than right, and top less than
-    bottom.
-    rect (iterable of 4 floats): left, top, right, bottom
-    return (iterable of 4 floats): left, top, right, bottom
-    """
-    l, t, r, b = rect
-    if l > r:
-        l, r = r, l
-    if t > b:
-        t , b = b, t
-
-    nrect = type(rect)((l, t, r, b))
-    return nrect

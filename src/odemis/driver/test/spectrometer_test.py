@@ -23,7 +23,7 @@ from __future__ import division
 from numpy.polynomial import polynomial
 from odemis import model
 from odemis.driver import spectrometer, spectrapro, pvcam, andorcam2
-from unittest.case import skip, skipIf
+from unittest.case import skip
 import logging
 import math
 import os
@@ -49,7 +49,7 @@ KWARGS_CCD = {"name": "pixis", "role": "ccd", "device": 0}
 CLASS_CCD_SIM = andorcam2.FakeAndorCam2
 KWARGS_CCD_SIM = {"name": "simcam", "role": "ccd", "device": 0}
 
-#CLASS_CCD = CLASS_CCD_SIM # full test simulated
+CLASS_CCD = CLASS_CCD_SIM # full test simulated
 
 CLASS = spectrometer.CompositedSpectrometer
 

@@ -450,7 +450,8 @@ class StreamPanel(wx.PyPanel):
 
         expand_opt = (OPT_BTN_REMOVE | OPT_BTN_VISIBLE | OPT_BTN_UPDATED |
                       OPT_BTN_TINT)
-        if self._has_dye(self.stream):
+        if (self._has_dye(self.stream) and not 
+            (self.stream.excitation.readonly or self.stream.emission.readonly)):
             expand_opt |= OPT_NAME_EDIT
 
         self.set_expander_button(Expander(self, self.stream, options=expand_opt))
@@ -940,13 +941,14 @@ class StreamPanel(wx.PyPanel):
         """
 
         # handle the auto-completion of dye names
-        # TODO: shall we do something better than remove the incompatible
-        # dyes?
-        # * mark them a different colour in the list (don't know how to do
-        #   that)?
-        # * show a warning message when they are picked?
-        self._expander.set_label_choices(self._getCompatibleDyes())
-        self._expander.onLabelChange = self._onNewDyeName
+        # TODO: Do not remove the incompatible dyes (because we might be wrong,
+        # and it leads the user to wonder why the dye is not there if he's
+        # looking for it):
+        # * mark them a "disabled" colour in the list. (how to do that?)
+        # * show a warning message when they are picked.
+        if not self.stream.excitation.readonly:
+            self._expander.set_label_choices(self._getCompatibleDyes())
+            self._expander.onLabelChange = self._onNewDyeName
 
         # Excitation and emission are a text input + a color display
         # Warning: stream.excitation is in m, we present everything in nm

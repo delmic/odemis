@@ -21,6 +21,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from odemis import model
 from odemis.cli import main
 from unittest.case import skip
 import Image
@@ -91,19 +92,7 @@ class TestWithoutBackend(unittest.TestCase):
         # AndorCam3 SimCam should be there for sure
         self.assertTrue("andorcam3.AndorCam3" in output)
     
-    def test_getFittestExporter(self):
-        # filename, format
-        tc = [("a/b/d.tiff", "TIFF"),
-              ("a/b/d.ome.tiff", "TIFF"),
-              ("a/b/d.h5", "HDF5"),
-              ("a/b/d.b", "TIFF"), # fallback to tiff
-              ("d.hdf5", "HDF5"),
-              ]
-        for input, exp_out in tc:
-            exporter = main.getFittestExporter(input)
-            out = exporter.FORMAT
-            self.assertEqual(exp_out, out,
-                 "getFittestExporter(%s) returned %s exporter" % (input, out))
+
     
 #@skip("Simple")
 class TestWithBackend(unittest.TestCase):
@@ -124,7 +113,7 @@ class TestWithBackend(unittest.TestCase):
         # end the backend
         cmdline = ODEMISD_CMD + " --kill"
         subprocess.call(cmdline.split())
-        odemis.model._components._microscope = None # force reset of the microscope for next connection
+        model._components._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
     def test_list(self):

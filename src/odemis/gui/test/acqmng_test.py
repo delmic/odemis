@@ -99,16 +99,16 @@ class TestWithBackend(unittest.TestCase):
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        cls.imodel = guimodel.MicroscopyGUIData(cls.microscope)
+        cls.main_model = guimodel.MainGUIData(cls.microscope)
         s1 = stream.FluoStream("fluo1",
-                  cls.imodel.ccd, cls.imodel.ccd.data,
-                  cls.imodel.light, cls.imodel.light_filter)
+                  cls.main_model.ccd, cls.main_model.ccd.data,
+                  cls.main_model.light, cls.main_model.light_filter)
         s2 = stream.FluoStream("fluo2",
-                  cls.imodel.ccd, cls.imodel.ccd.data,
-                  cls.imodel.light, cls.imodel.light_filter)
+                  cls.main_model.ccd, cls.main_model.ccd.data,
+                  cls.main_model.light, cls.main_model.light_filter)
         s3 = stream.BrightfieldStream("bf",
-                  cls.imodel.ccd, cls.imodel.ccd.data,
-                  cls.imodel.light)
+                  cls.main_model.ccd, cls.main_model.ccd.data,
+                  cls.main_model.light)
         cls.streams = [s1, s2, s3]
 
     @classmethod

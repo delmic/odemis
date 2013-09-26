@@ -52,11 +52,17 @@ class TestDataIO(unittest.TestCase):
                    (("coucou.le monde.hdf5",), "HDF5"),
                    (("some/fancy/../path/file.tiff",), "TIFF"),
                    (("some/fancy/../.hdf5/h5.ome.tiff",), "TIFF"),
+                   (("a/b/d.tiff",), "TIFF"),
+                   (("a/b/d.ome.tiff",), "TIFF"),
+                   (("a/b/d.h5",), "HDF5"),
+                   (("a/b/d.b",), "TIFF"), # fallback to tiff
+                   (("d.hdf5",), "HDF5"),
                    ]
         for args, fmt_exp in test_io:
             fmt_mng = find_fittest_exporter(*args)
             self.assertEqual(fmt_mng.FORMAT, fmt_exp,
                    "For '%s', expected format %s but got %s" % (args[0], fmt_exp, fmt_mng.FORMAT))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,9 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 from abc import ABCMeta, abstractmethod
-from odemis.gui.util.conversion import hex_to_frgba, change_brightness, \
-    normalize_rect
+from odemis.gui.util.conversion import hex_to_frgba, change_brightness
 from odemis.gui.util.units import readable_str
+from odemis.util import normalize_rect
 import cairo
 import logging
 import math

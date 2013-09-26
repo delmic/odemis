@@ -32,12 +32,11 @@ Light: {
 }
 
 "Fake Stage Z": {
-    # we only use the first axis
-    class: simulated.Stage2D,
+    class: simulated.Stage,
     role: stagez,
-    init: {axes: ["x", "y"]},
+    init: {axes: ["z"]},
     properties: {
-        speed: {'x':1, 'y':1} #m/s
+        speed: {'z':0.1} #m/s
     }
 }
 

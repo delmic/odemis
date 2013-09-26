@@ -1838,20 +1838,18 @@ class StreamTree(object):
             passed as an InstrumentalImage.
         :param kwargs: any argument to be given to the operator function
         """
-
         self.operator = operator or img.Average
 
         streams = streams or []
         assert(isinstance(streams, list))
 
+        self.streams = []
+        self.should_update = model.BooleanVA(False)
+        self.kwargs = kwargs
+
         for s in streams:
             self.add_stream(s)
 
-        self.should_update = model.BooleanVA(False)
-
-        self.streams = streams
-
-        self.kwargs = kwargs
 
     def __len__(self):
         acc = 0

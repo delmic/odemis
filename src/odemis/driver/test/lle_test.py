@@ -34,7 +34,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyUSB0" #"/dev/ttyLLE"
 
-CLASS = lle.LLE # use FakeLLE if no hardware
+CLASS = lle.FakeLLE # use FakeLLE if no hardware
 KWARGS = {"name": "test", "role": "light", "port": PORT, "sources": lle.DEFAULT_SOURCES}
 
 class TestStatic(unittest.TestCase):
