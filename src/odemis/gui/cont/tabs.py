@@ -46,7 +46,6 @@ import os.path
 import pkg_resources
 import weakref
 import wx
-from odemis.model._dataflow import MD_USER_TINT
 
 
 
@@ -879,6 +878,12 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = show
         self._ccd_stream.should_update.value = show
         self._ccd_stream.is_active.value = show
+
+        # TODO: save and restore SEM state (for now, it does nothing anyway)
+#        # Turn on (or off) SEM
+#        main_data = self.tab_data_model.main
+#        state = guimodel.STATE_ON if show else guimodel.STATE_PAUSE
+#        main_data.emState.value = state
 
     def terminate(self):
         super(LensAlignTab, self).terminate()
