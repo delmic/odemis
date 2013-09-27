@@ -1402,6 +1402,7 @@ class StaticSpectrumStream(StaticStream):
 
         if MD_WL_POLYNOMIAL in da.metadata:
             pn = da.metadata[MD_WL_POLYNOMIAL]
+            pn = polynomial.polytrim(pn)
             if len(pn) >= 2:
                 npn = polynomial.Polynomial(pn,
                                             domain=[0, da.shape[0] - 1],
