@@ -387,8 +387,8 @@ def _updateMDFromOME(root, das):
             pass
 
         try:
-            a = int(pxe.attrib["WaveStart"]) * 1e-9
-            b = int(pxe.attrib["WaveIncrement"]) * 1e-9
+            a = float(pxe.attrib["WaveStart"]) * 1e-9
+            b = float(pxe.attrib["WaveIncrement"]) * 1e-9
             md[model.MD_WL_POLYNOMIAL] = [a, b]
         except (KeyError, ValueError):
             pass
@@ -840,19 +840,21 @@ def _addImageElement(root, das, ifd):
     # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
     # not so pretty.
     # Some very old versions of the standard had WaveStart/WaveIncrement on Image
+    # WaveIncrement needs to be a float, as it's easily < 1 if the spectrum is
+    # fine.
 
     if model.MD_WL_POLYNOMIAL in globalMD:
         # we store a subset of the metadata in a non-standard attribute :-(
         pn = globalMD[model.MD_WL_POLYNOMIAL]
         if len(pn) >= 1:
-            pixels.attrib["WaveStart"] = "%d" % round(pn[0] * 1e9) # in nm
+            pixels.attrib["WaveStart"] = "%f" % (pn[0] * 1e9) # in nm
         if len(pn) >= 2:
-            pixels.attrib["WaveIncrement"] = "%d" % round(pn[1] * 1e9) # in nm/px
+            pixels.attrib["WaveIncrement"] = "%f" % (pn[1] * 1e9) # in nm/px
     elif model.MD_WL_LIST in globalMD:
         lwl = globalMD[model.MD_WL_LIST]
         inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
-        pixels.attrib["WaveStart"] = "%d" % round(lwl[0] * 1e9) # in nm
-        pixels.attrib["WaveIncrement"] = "%d" % round(inc * 1e9) # in nm/px
+        pixels.attrib["WaveStart"] = "%f" % (lwl[0] * 1e9) # in nm
+        pixels.attrib["WaveIncrement"] = "%f" % (inc * 1e9) # in nm/px
 
     subid = 0
     for da in das:
