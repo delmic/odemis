@@ -1,3 +1,24 @@
+odemis (1.3-1ubuntu1) precise; urgency=low
+
+  * New version: 1.3
+  * Main new features:
+    - Lens alignment tab for manual calibration of the SECOM
+    - Can open back previsou acquisitions in OME TIFF format too
+    - Enhanced management of the contrast and brightness with small histrogram
+    - Fit to RGB display option for the acquired spectra in SPARC
+    - Graphical representation repetition in the SPARC acquisition
+    - Large indicator icon when streams are paused
+    - Display manual on the press of F1
+    - Allow to rotate/flip CCD input in software
+    - Allow calibration of PI actuator controllers
+  * Main bug fixed:
+    - fix SEM acquisition with minimum dwell time
+    - ensure the light source is off during SEM acquisition
+    - many improvement in the way HDF5 files are re-opened
+    - improved High Quality preset in SECOM acquisition
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 27 Sep 2013 22:21:17 +0200
+
 odemis (1.2-1ubuntu1) precise; urgency=low
 
   * New version: 1.2
