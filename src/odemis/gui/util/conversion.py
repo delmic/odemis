@@ -80,6 +80,15 @@ def hex_to_rgba(hex_str, af=255):
 def wxcol_to_rgb(wxcol):
     return (wxcol.Red(), wxcol.Green(), wxcol.Blue())
 
+def rgb_to_hex(rgb):
+    """ Convert a RGB(A) color to hexadecimal color representation
+    rgb (3 or 4-tuple of ints): actually works with any length
+    return (string): in the form "aef1e532"
+    """
+    hex_str = "".join("%.2x" % c for c in rgb)
+    return hex_str
+
+
 # To handle RGB as floats (for Cairo, etc.)
 def hex_to_frgb(hex_str):
     """

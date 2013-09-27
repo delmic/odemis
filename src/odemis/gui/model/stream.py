@@ -761,6 +761,10 @@ class FluoStream(CameraStream):
             self._set_emission_filter()
 
     def onTint(self, value):
+        if self.raw:
+            data = self.raw[0]
+            data.metadata[model.MD_USER_TINT] = value
+
         self._updateImage()
 
     def _set_emission_filter(self):
@@ -1231,6 +1235,11 @@ class StaticSEMStream(StaticStream):
     """
     pass
 
+class StaticBrightfieldStream(StaticStream):
+    """
+    Same as a StaticStream, but considered a Brightfield stream
+    """
+    pass
 
 class StaticFluoStream(StaticStream):
     """Static Stream containing images obtained via epifluorescence.
@@ -1270,9 +1279,9 @@ class StaticFluoStream(StaticStream):
             logging.warning("No emission wavelength for fluorescence stream")
             default_tint = (0, 255, 0) # green is most typical
 
-        # colouration of the image (even if
-        # TODO: have and use metadata
-        self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
+        # colouration of the image
+        tint = image.metadata.get(model.MD_USER_TINT, default_tint)
+        self.tint = model.ListVA(tint, unit="RGB") # 3-tuple R,G,B
         self.tint.subscribe(self.onTint)
 
         # Do it at the end, as it forces it the update of the image
@@ -1807,7 +1816,8 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 # All the stream types related to optical
 OPTICAL_STREAMS = (FluoStream,
                    BrightfieldStream,
-                   StaticStream)
+                   StaticFluoStream,
+                   StaticBrightfieldStream)
 
 # All the stream types related to electron microscope
 EM_STREAMS = (SEMStream,

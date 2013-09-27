@@ -46,6 +46,7 @@ import os.path
 import pkg_resources
 import weakref
 import wx
+from odemis.model._dataflow import MD_USER_TINT
 
 
 
@@ -725,26 +726,35 @@ class AnalysisTab(Tab):
                 model.MD_WL_POLYNOMIAL in d.metadata or
                 (len(d.shape) >= 5 and d.shape[-5] > 1)):
                 desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
-                self._stream_controller.addStatic(
-                                            desc, d,
-                                            cls=streammod.StaticSpectrumStream,
-                                            add_to_all_views=True)
-            elif (model.MD_IN_WL in d.metadata and
-                  model.MD_OUT_WL in d.metadata):
+                cls = streammod.StaticSpectrumStream
+            elif ((model.MD_IN_WL in d.metadata and
+                  model.MD_OUT_WL in d.metadata) or
+                  model.MD_USER_TINT in d.metadata):
                 # TODO: handle bright-field (which also has in/out wl)
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
-                self._stream_controller.addStatic(
-                                            desc, d,
-                                            cls=streammod.StaticFluoStream,
-                                            add_to_all_views=True)
+                # No explicit way to distinguish between Brightfield and Fluo,
+                # so guess it's Brightfield iif:
+                # * No tint
+                # * (and) Large band for excitation wl (> 100 nm)
+                in_wl = d.metadata[model.MD_IN_WL]
+                if (model.MD_USER_TINT in d.metadata or
+                    in_wl[1] - in_wl[0] < 100e-9):
+                    # Fluo
+                    desc = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+                    cls = streammod.StaticFluoStream
+                else:
+                    # Brigthfield
+                    desc = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                    cls = streammod.StaticBrightfieldStream
+            elif model.MD_IN_WL in d.metadata: # no MD_OUT_WL
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                cls = streammod.StaticBrightfieldStream
             else:
-                desc = d.metadata.get(
-                                    model.MD_DESCRIPTION,
-                                    "Secondary electrons")
-                self._stream_controller.addStatic(
-                                            desc, d,
-                                            cls=streammod.StaticSEMStream,
-                                            add_to_all_views=True)
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
+                cls = streammod.StaticSEMStream
+
+            self._stream_controller.addStatic(desc, d, cls=cls,
+                                              add_to_all_views=True)
+        # TODO: ARStreams
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
