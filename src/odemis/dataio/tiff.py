@@ -417,6 +417,14 @@ def _updateMDFromOME(root, das):
             except (KeyError, ValueError):
                 pass
 
+            try:
+                hex_str = che.attrib["Color"] # hex string
+                hex_str = hex_str[-8:] # almost copy of conversion.hex_to_rgb
+                tint = tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4, 6])
+                mdc[model.MD_USER_TINT] = tint[:3] # only RGB
+            except (KeyError, ValueError):
+                pass
+
             # TODO: parse detector
 
             d_settings = che.find("DetectorSettings")
@@ -872,7 +880,6 @@ def _addImageElement(root, das, ifd):
             if model.MD_DESCRIPTION in da.metadata:
                 chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
     
-            # TODO Color attrib for tint?
             # TODO Fluor attrib for the dye?
             # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
@@ -895,6 +902,15 @@ def _addImageElement(root, das, ifd):
                 ewl = numpy.mean(owl) * 1e9 # in nm
                 chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
     
+            if model.MD_USER_TINT in da.metadata:
+                # user tint is 3 tuple int
+                # color is hex RGBA (eg: #FFFFFFFF)
+                tint = da.metadata[model.MD_USER_TINT]
+                if len(tint) == 3:
+                    tint = tint + (255,) # need alpha channel
+                hex_str = "".join("%.2x" % c for c in tint) # copy of conversion.rgb_to_hex()
+                chan.attrib["Color"] = "#%s" % hex_str
+
             # Add info on detector
             attrib = {}
             if model.MD_BINNING in da.metadata:

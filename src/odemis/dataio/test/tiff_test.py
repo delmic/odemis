@@ -477,6 +477,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (500e-9, 520e-9), # m
                      model.MD_OUT_WL: (600e-9, 630e-9), # m
+                     model.MD_USER_TINT: (255, 0, 65) # purple
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -528,6 +529,8 @@ class TestTiffIO(unittest.TestCase):
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
             self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+            if model.MD_USER_TINT in md:
+                self.assertEqual(im.metadata[model.MD_USER_TINT], md[model.MD_USER_TINT])
 
             iwl = im.metadata[model.MD_IN_WL] # nm
             self.assertTrue((md[model.MD_IN_WL][0] <= iwl[0] and
