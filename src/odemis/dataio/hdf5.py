@@ -387,13 +387,25 @@ def _parse_physical_data(pdgroup, da):
             except (KeyError, IndexError):
                 pass
 
+        # MicroscopeMode helps us to find out the bandwidth of the wavelength
+        # and it's also a way to keep it stable, if saving the data again.
+        h_width = 1e-9 # 1 nm : default is to just almost keep the value
+        try:
+            mm = pdgroup["MicroscopeMode"][i]
+            if mm == MM_FLUORESCENCE:
+                h_width = 10e-9 # 10 nm => narrow band
+            if mm == MM_TRANSMISSION: # we set it for brightfield
+                h_width = 100e-9 # 100 nm => large band
+        except (KeyError, IndexError, ValueError):
+            pass
+
         try:
             ds = pdgroup["ExcitationWavelength"]
             xwl = float(ds[i]) # in m
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_IN_WL] = (xwl, xwl)
+            md[model.MD_IN_WL] = (xwl - h_width, xwl + h_width)
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -403,7 +415,7 @@ def _parse_physical_data(pdgroup, da):
             state = _h5svi_get_state(ds)
             if state and state[i] == ST_INVALID:
                 raise ValueError
-            md[model.MD_OUT_WL] = (ewl, ewl)
+            md[model.MD_OUT_WL] = (ewl - h_width, ewl + h_width)
         except (KeyError, IndexError, ValueError):
             pass
 
@@ -430,6 +442,8 @@ def _parse_physical_data(pdgroup, da):
 
     return das
 
+# Enums used in SVI HDF5
+# State: how "trustable" is the value
 ST_INVALID = 111
 ST_DEFAULT = 112
 ST_ESTIMATED = 113
@@ -438,6 +452,35 @@ ST_VERIFIED = 115
 _dtstate = h5py.special_dtype(enum=('i', {
      "Invalid":ST_INVALID, "Default":ST_DEFAULT, "Estimated":ST_ESTIMATED,
      "Reported":ST_REPORTED, "Verified":ST_VERIFIED}))
+
+# MicroscopeMode
+MM_NONE = 0
+MM_TRANSMISSION = 1
+MM_REFLECTION = 2
+MM_FLUORESCENCE = 3
+_dtmm = h5py.special_dtype(enum=('i', {
+     "None":MM_NONE, "Transmission":MM_TRANSMISSION ,
+     "Reflection":MM_REFLECTION, "Fluorescence":MM_FLUORESCENCE}))
+_dictmm = h5py.check_dtype(enum=_dtmm)
+# MicroscopeType
+MT_NONE = 111
+MT_WIDEFIELD = 112
+MT_CONFOCAL = 113
+MT_4PIEXCITATION = 114
+MT_NIPKOWDISKCONFOCAL = 115
+MT_GENERICSENSOR = 118
+_dtmt = h5py.special_dtype(enum=('i', {
+    "None":MT_NONE, "WideField":MT_WIDEFIELD, "Confocal":MT_CONFOCAL,
+    "4PiExcitation":MT_4PIEXCITATION, "NipkowDiskConfocal":MT_NIPKOWDISKCONFOCAL,
+    "GenericSensor":MT_GENERICSENSOR}))
+_dictmt = h5py.check_dtype(enum=_dtmt)
+# ImagingDirection
+ID_UPWARD = 0
+ID_DOWNWARD = 1
+ID_BOTH = 2
+_dtid = h5py.special_dtype(enum=('i', {
+    "Upward":ID_UPWARD, "Downward":ID_DOWNWARD, "Both":ID_BOTH}))
+_dictid = h5py.check_dtype(enum=_dtid)
 
 def _h5svi_set_state(dataset, state):
     """
@@ -520,19 +563,11 @@ def _add_image_metadata(group, images):
     _h5svi_set_state(gp["Magnification"], state)
 
     # MicroscopeMode
-    dtmm = h5py.special_dtype(enum=('i', {
-         "None":0, "Transmission":1 , "Reflection":2, "Fluorescence":3}))
-    _h5py_enum_commit(gp, "MicroscopeModeEnumeration", dtmm)
+    _h5py_enum_commit(gp, "MicroscopeModeEnumeration", _dtmm)
     # MicroscopeType
-    dtmt = h5py.special_dtype(enum=('i', {
-            "None":111, "WideField":112, "Confocal":113, "4PiExcitation":114,
-            "NipkowDiskConfocal":115, "GenericSensor":118}))
-    _h5py_enum_commit(gp, "MicroscopeTypeEnumeration", dtmt)
+    _h5py_enum_commit(gp, "MicroscopeTypeEnumeration", _dtmt)
     # ImagingDirection
-    dtid = h5py.special_dtype(enum=('i', {
-            "Upward":0, "Downward":1, "Both":2
-            }))
-    _h5py_enum_commit(gp, "ImagingDirectionEnumeration", dtid)
+    _h5py_enum_commit(gp, "ImagingDirectionEnumeration", _dtid)
     mm, mt, id = [], [], []
     # MicroscopeMode: if IN_WL => fluorescence/brightfield, otherwise SEM (=Reflection?)
     for i in images:
@@ -552,23 +587,20 @@ def _add_image_metadata(group, images):
             mt.append("GenericSensor") # ScanningElectron?
             id.append("Upward")
     # Microscope* is the old format, Microscope*Str is new format
-    dictmm = h5py.check_dtype(enum=dtmm)
     # FIXME: it seems h5py doesn't allow to directly set the dataset type to a
     # named type (it always creates a new transient type), unless you redo
     # all make_new_dset() by hand.
-    gp["MicroscopeMode"] = numpy.array([dictmm[m] for m in mm], dtype=dtmm)
+    gp["MicroscopeMode"] = numpy.array([_dictmm[m] for m in mm], dtype=_dtmm)
     _h5svi_set_state(gp["MicroscopeMode"], ST_REPORTED)
     # For the *Str, Huygens expects a space separated string (scalar), _but_
     # still wants an array for the state of each channel.
     gp["MicroscopeModeStr"] = " ".join([m.lower() for m in mm])
     _h5svi_set_state(gp["MicroscopeModeStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
-    dictmt = h5py.check_dtype(enum=dtmt)
-    gp["MicroscopeType"] = numpy.array([dictmt[t] for t in mt], dtype=dtmt)
+    gp["MicroscopeType"] = numpy.array([_dictmt[t] for t in mt], dtype=_dtmt)
     _h5svi_set_state(gp["MicroscopeType"], ST_REPORTED)
     gp["MicroscopeTypeStr"] = " ".join([t.lower() for t in mt])
     _h5svi_set_state(gp["MicroscopeTypeStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
-    dictid = h5py.check_dtype(enum=dtid)
-    gp["ImagingDirection"] = numpy.array([dictid[d] for d in id], dtype=dtid)
+    gp["ImagingDirection"] = numpy.array([_dictid[d] for d in id], dtype=_dtid)
     _h5svi_set_state(gp["ImagingDirection"], ST_REPORTED)
     gp["ImagingDirectionStr"] = " ".join([d.lower() for d in id])
     _h5svi_set_state(gp["ImagingDirectionStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
@@ -606,15 +638,20 @@ def _add_image_metadata(group, images):
 
     # Below are additional metadata from us (Delmic)
     # IntegrationTime: time spent by each pixel to receive energy (in s)
-    its = []
+    its, st_its = [], []
     for i in images:
         if model.MD_DWELL_TIME in i.metadata:
             its.append(i.metadata[model.MD_DWELL_TIME])
+            st_its.append(ST_REPORTED)
         elif model.MD_EXP_TIME in i.metadata:
             its.append(i.metadata[model.MD_EXP_TIME])
-    if its:
+            st_its.append(ST_REPORTED)
+        else:
+            its.append(0)
+            st_its.append(ST_INVALID)
+    if not all(st == ST_INVALID for st in st_its):
         gp["IntegrationTime"] = its
-        _h5svi_set_state(gp["IntegrationTime"], ST_REPORTED)
+        _h5svi_set_state(gp["IntegrationTime"], st_its)
 
     # TODO: model.MD_EBEAM_ENERGY, model.MD_EBEAM_SPOT_DIAM
 
@@ -664,11 +701,9 @@ def _add_acquistion_svi(group, images, **kwargs):
 
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
-#    dtstate = h5py.special_dtype(enum=('i', {
-#         "Invalid":111, "Default":112, "Estimated":113, "Reported":114, "Verified":115}))
     _h5py_enum_commit(group, "StateEnumeration", _dtstate)
 
-    # TODO: use scaleoffset to store the number of bits used
+    # TODO: use scaleoffset to store the number of bits used (MD_BPP)
     ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
     _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
     _add_image_metadata(group, images)
