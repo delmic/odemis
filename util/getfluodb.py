@@ -46,6 +46,8 @@ def download(url, filename):
     url (string): place from where to download
     filename (sting): place to where to save (if already exists, will be deleted)
     """
+    if url.startswith("/"): # absolute path
+        url = URL_DB + url
     ufile = urllib2.urlopen(url)
     lfile = open(filename, 'w') # will delete if exists
     shutil.copyfileobj(ufile, lfile)
@@ -159,13 +161,6 @@ def main(*args):
             strsname = strurl.rsplit("/", 1)[1]
             logging.debug("Downloading structure %s", strsname)
             strname = OUT_DIR + "substance/" + strsname
-
-            # It seems they have a bug which cause the structure URL to be like:
-            # "/static/structures/633.gif" instead of
-            # "http://www.fluorophores.tugraz.at/media/structures/633.gif"
-            if strurl.startswith("/static"):
-                logging.warning("Fixing image url")
-                strurl = URL_DB + "/media" + strurl[7:]
 
             try:
                 download(strurl, strname)
