@@ -752,8 +752,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         return (tuple of 4 floats): position in m
         """
         if self.w_start_pos and self.w_end_pos:
-            p_pos = (self.base.world_to_real_pos(self.w_start_pos) +
-                     self.base.world_to_real_pos(self.w_end_pos))
+            p_pos = (self.base.world_to_physical_pos(self.w_start_pos) +
+                     self.base.world_to_physical_pos(self.w_end_pos))
             return normalize_rect(p_pos)
         else:
             return None
@@ -765,8 +765,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if rect is None:
             self.clear_selection()
         else:
-            w_pos = (self.base.real_to_world_pos(rect[:2]) +
-                     self.base.real_to_world_pos(rect[2:4]))
+            w_pos = (self.base.physical_to_world_pos(rect[:2]) +
+                     self.base.physical_to_world_pos(rect[2:4]))
             w_pos = normalize_rect(w_pos)
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
@@ -1033,7 +1033,10 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
 
 class MarkingLineOverlay(ViewOverlay):
-
+    """ Draw a vertical line at the given view position.
+    This class can easily be extended to include a horizontal or horz/vert
+    display mode.
+    """
     def __init__(self, base,
                  label="",
                  sel_cur=None,
@@ -1317,3 +1320,35 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
 
+class PointSelectOverlay(WorldOverlay):
+    def __init__(self, base, vpos=((10, 16))):
+        super(PointSelectOverlay, self).__init__(base, "kaas")
+        self.vpos = vpos
+
+        self.base.Bind(wx.EVT_MOTION, self.on_motion)
+        self.base.Bind(wx.EVT_ENTER_WINDOW, self.on_mouse_enter)
+        self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
+        self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_down)
+
+    # FIXME: just for testing
+    def on_motion(self, evt):
+        self.base.UpdateDrawing()
+        evt.Skip()
+
+    def on_mouse_down(self, evt):
+        self.vpos = evt.GetPosition
+        evt.Skip()
+
+
+    def on_mouse_up(self, evt):
+        evt.Skip()
+
+    def on_mouse_enter(self, evt):
+        self.base.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+
+    def on_mouse_leave(self, evt):
+        self.base.SetCursor(wx.STANDARD_CURSOR)
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+        print shift, scale, self.base.buffer_center_world_pos

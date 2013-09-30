@@ -1053,7 +1053,7 @@ def world_to_buffer_pos(world_pos, world_buffer_center, scale, offset=None):
 
 def buffer_to_world_pos(buff_pos, world_buffer_center, scale, offset=None):
     """
-    Converts a position from world coordinates to buffer coordinates
+    Converts a position from buffer coordinates to world coordinates
 
     :param world_pos: (2-tuple float) the coordinates in the world
     :param world_buffer_center: the center of the buffer in world coordinates
