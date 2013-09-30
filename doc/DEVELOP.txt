@@ -17,13 +17,70 @@ later version of Odemis, then the contract will also cover the extension.
 
 = Recommended development environment =
 
-Ubuntu 12.04 (32 bits)
+Ubuntu 12.04 (x86 32 bits, preferably with kernel 3.5 aka linux-generic-lts-quantal)
 Eclipse + PyDev plug-in + Pylint
 XRCed (package python-wxtools) for GUI edition
 
-= Downloading the source code =
+Source code available at: git clone git@github.com:delmic/odemis.git
 
-git clone git@github.com:pieleric/odemis.git
+Note that Odemis can run in fully simulated mode, where no actual hardware is
+needed. In this case, it can run in a virtual machine.
+
+== Detailed instructions ==
+
+Download Ubuntu 12.04 at this address:
+http://www.ubuntu.com/download/desktop/thank-you?release=lts&bits=32&distro=desktop&status=zeroc
+
+Install it by which ever way you prefer, following these instructions:
+http://www.ubuntu.com/download/desktop/install-desktop-long-term-support
+
+Once logged into your newly installed Ubuntu system:
+ * Start a terminal (with Ctrl+Alt+T0 and type:
+sudo add-apt-repository ppa:delmic-soft/odemis
+sudo apt-get update
+sudo apt-get dist-upgrade
+sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools python-setuptools
+sudo adduser $(whoami) odemis
+mkdir development
+cd development
+git clone git@github.com:delmic/odemis.git
+
+ * Edit /etc/odemis.conf with:
+sudo gedit /etc/odemis.conf
+
+ Modify the first lines so they read like this:
+DEVPATH="$HOME/development"
+PYTHONPATH="$DEVPATH/odemis/src/:$PYTHONPATH"
+
+ And edit the MODEL line for the model you want (probably a simulated microscope
+ like sparc-sim or secom-sim). For example:
+MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
+
+ * Install Eclipse and the plugins:
+sudo easy_install pylint
+cd
+mkdir usr
+cd usr
+wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/kepler/SR1/eclipse-standard-kepler-SR1-linux-gtk.tar.gz
+tar xf eclipse-standard-kepler-SR1-linux-gtk.tar.gz
+~/usr/eclipse/eclipse
+ 
+ Go to Help/Marketplace...
+ Search for PyDev, and install it.
+ Optionally, you can also install "Eclipse Color Theme" and "hunspell4eclipse".
+ 
+
+ In the Eclipse preference window, go to PyDev/PyLint and as location of the 
+ pylint executable, indicate your lint.py, which is approximately at this place:
+/usr/local/lib/python2.7/dist-packages/pylint-1.0.0-py2.7.egg/pylint/lint.py
+
+ * Edit Odemis with Eclipse:
+ Click on File/New/PyDev Project
+ Enter "odemis" as project name
+ Select a directory for project contents: the place where Odemis was downloaded
+ (/home/.../development/odemis)
+ Select "Create 'src' folder and add it to the PYTHONPATH"
+ Click on Finish
 
 = Overview of Odemis architecture =
 
