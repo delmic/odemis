@@ -824,6 +824,9 @@ class VisualRangeSlider(BaseSlider):
         prcnt = self._val_to_percentage(self.min_value,
                                         self.max_value,
                                         val)
+        if math.isnan(prcnt):
+            prcnt = 0.5 # can happen if range is weird
+
         return int(round(width * prcnt))
 
     def _pixel_to_val(self, pixel):

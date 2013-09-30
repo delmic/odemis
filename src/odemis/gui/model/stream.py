@@ -642,6 +642,21 @@ class CameraStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
+    def _stop_light(self):
+        """
+        Ensures the light is turned off (temporarily)
+        """
+        # Just change the intensity of each wavelengths, so that the power is
+        # recorded.
+        emissions = [0] * len(self._emitter.emissions.value)
+        self._emitter.emissions.value = emissions
+
+        # TODO: might need to be more clever to avoid turning off and on the
+        # light source when just switching between FluoStreams. => have a
+        # global acquisition manager which takes care of switching on/off
+        # the emitters which are used/unused.
+
+
 class BrightfieldStream(CameraStream):
     """ Stream containing images obtained via optical brightfield illumination.
 
@@ -650,18 +665,20 @@ class BrightfieldStream(CameraStream):
 
     def onActive(self, active):
         if active:
-            self._setLightExcitation()
+            self._setup_excitation()
             # TODO: do we need to have a special command to disable filter??
             # or should it be disabled automatically by the other streams not
             #using it?
-            # self._set_emission_filter()
+            # self._setup_emission()
+        else:
+            self._stop_light()
         Stream.onActive(self, active)
 
-    # def _set_emission_filter(self):
+    # def _setup_emission(self):
     #     if not self._filter.band.readonly:
     #         raise NotImplementedError("Do not know how to change filter band")
 
-    def _setLightExcitation(self):
+    def _setup_excitation(self):
         # TODO: how to select white light??? We need a brightlight hardware?
         # Turn on all the sources? Does this always mean white?
         # At least we should set a warning if the final emission range is quite
@@ -685,6 +702,7 @@ class CameraNoLightStream(CameraStream):
         self._prev_light_power = self._emitter.power.value
 
     def onActive(self, active):
+        # TODO: use _stop_light()
         if active:
             # turn off the light
             self._prev_light_power = self._emitter.power.value
@@ -724,17 +742,19 @@ class FluoStream(CameraStream):
         self._em_filter = em_filter
 
         # This is what is displayed to the user
-        # TODO: what should be nice default value of the light and filter?
+        # Default to the center of the first excitation and emission bands
         exc_range = [min([s[0] for s in emitter.spectra.value]),
                      max([s[4] for s in emitter.spectra.value])]
-        self.excitation = model.FloatContinuous(488e-9,
-                                                range=exc_range,
-                                                unit="m")
+        self.excitation = model.FloatContinuous(emitter.spectra.value[0][2],
+                                                range=exc_range, unit="m")
         self.excitation.subscribe(self.onExcitation)
 
+        # The wavelength band on the out path (set when emission changes)
+        self._current_out_wl = sorted(em_filter.band.value)[0]
         em_range = [min([s[0] for s in em_filter.band.value]),
                     max([s[1] for s in em_filter.band.value])]
-        self.emission = model.FloatContinuous(507e-9, range=em_range, unit="m")
+        self.emission = model.FloatContinuous(numpy.mean(self._current_out_wl),
+                                              range=em_range, unit="m")
         self.emission.subscribe(self.onEmission)
 
         # colouration of the image
@@ -745,8 +765,10 @@ class FluoStream(CameraStream):
     def onActive(self, active):
         # TODO update Emission or Excitation only if the stream is active
         if active:
-            self._setLightExcitation()
-            self._set_emission_filter()
+            self._setup_excitation()
+            self._setup_emission()
+        else:
+            self._stop_light() # important if SEM image to be acquired
         Stream.onActive(self, active)
 
     def _updateImage(self): #pylint: disable=W0221
@@ -754,32 +776,41 @@ class FluoStream(CameraStream):
 
     def onExcitation(self, value):
         if self.is_active.value:
-            self._setLightExcitation()
+            self._setup_excitation()
 
     def onEmission(self, value):
         if self.is_active.value:
-            self._set_emission_filter()
+            self._setup_emission()
 
     def onTint(self, value):
+        if self.raw:
+            data = self.raw[0]
+            data.metadata[model.MD_USER_TINT] = value
+
         self._updateImage()
 
-    def _set_emission_filter(self):
-        """ Check if the emission value matches the emission filter band
-
-        TODO: Change name of method, since no filter is actually set?
+    def _setup_emission(self):
         """
-
+        Set-up the hardware for the right emission light (light path between
+        the sample and the CCD), and check whether the emission value matches
+        the emission filter bands.
+        """
         wave_length = self.emission.value
 
         # TODO: we need a way to know if the HwComponent can change
-        # automatically or only manually. For now we suppose it's manual
+        # automatically or only manually. For now we suppose it's manual.
 
         # Changed manually: we can only check that it's correct
-        fitting = False
+        fitting = False # True for good, 1 for non-optimal
         for l, h in self._em_filter.band.value:
             if l < wave_length < h:
                 fitting = True
+                self._current_out_wl = (l, h)
                 break
+            elif l - 20e-9 < wave_length < h + 20e-9:
+                # There is probably some light from the fluorophore passing
+                fitting = 1
+                self._current_out_wl = (l, h)
 
         self._removeWarnings(Stream.WARNING_EMISSION_IMPOSSIBLE,
                              Stream.WARNING_EMISSION_NOT_OPT)
@@ -787,22 +818,25 @@ class FluoStream(CameraStream):
             logging.warning("Emission wavelength %s doesn't fit the filter",
                             units.readable_str(wave_length, "m"))
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
-            # TODO: detect no optimal situation (within 10% band of border?)
+        elif fitting == 1:
+            self._addWarning(Stream.WARNING_EMISSION_NOT_OPT)
+            # TODO: add the actual band in the warning message?
         return
 
-    def _setLightExcitation(self):
-        """ TODO: rename method to better match what the code does """
-
+    def _setup_excitation(self):
+        """ Set-up the excitation light to the specified wavelength (light path 
+        between the light source and the sample), and check whether this 
+        actually can work.
+        """
         wave_length = self.excitation.value
 
         def quantify_fit(wl, spec):
-            """ Quantifies how well the given wave length matches the given
+            """ Quantifies how well the given wavelength matches the given
             spectrum: the better the match, the higher the return value will be.
-
-            wl (float): Wave length to quantify
-            spec (5-tuple float): The spectrum to check the wave length against
+            wl (float): Wavelength to quantify
+            spec (5-tuple float): The spectrum to check the wavelength against
+            return (0<float): the more, the merrier
             """
-
             if spec[0] < wl < spec[4]:
                 distance = abs(wl - spec[2]) # distance to 100%
                 if distance:
@@ -819,7 +853,7 @@ class FluoStream(CameraStream):
         i = spectra.index(best)
 
         # create an emissions with only one source active, which best matches
-        # the excitation wave length
+        # the excitation wavelength
         emissions = [0] * len(spectra)
         emissions[i] = 1
         self._emitter.emissions.value = emissions
@@ -839,13 +873,11 @@ class FluoStream(CameraStream):
             # outside of main 50% band
             self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
-
     def onNewImage(self, dataflow, data):
         # Add some metadata on the fluorescence
 
         # TODO: handle better if there is already MD_OUT_WL
-        data.metadata[model.MD_OUT_WL] = (self.emission.value,
-                                          self.emission.value)
+        data.metadata[model.MD_OUT_WL] = self._current_out_wl
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
@@ -1231,6 +1263,11 @@ class StaticSEMStream(StaticStream):
     """
     pass
 
+class StaticBrightfieldStream(StaticStream):
+    """
+    Same as a StaticStream, but considered a Brightfield stream
+    """
+    pass
 
 class StaticFluoStream(StaticStream):
     """Static Stream containing images obtained via epifluorescence.
@@ -1270,9 +1307,9 @@ class StaticFluoStream(StaticStream):
             logging.warning("No emission wavelength for fluorescence stream")
             default_tint = (0, 255, 0) # green is most typical
 
-        # colouration of the image (even if
-        # TODO: have and use metadata
-        self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
+        # colouration of the image
+        tint = image.metadata.get(model.MD_USER_TINT, default_tint)
+        self.tint = model.ListVA(tint, unit="RGB") # 3-tuple R,G,B
         self.tint.subscribe(self.onTint)
 
         # Do it at the end, as it forces it the update of the image
@@ -1402,6 +1439,7 @@ class StaticSpectrumStream(StaticStream):
 
         if MD_WL_POLYNOMIAL in da.metadata:
             pn = da.metadata[MD_WL_POLYNOMIAL]
+            pn = polynomial.polytrim(pn)
             if len(pn) >= 2:
                 npn = polynomial.Polynomial(pn,
                                             domain=[0, da.shape[0] - 1],
@@ -1806,7 +1844,8 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 # All the stream types related to optical
 OPTICAL_STREAMS = (FluoStream,
                    BrightfieldStream,
-                   StaticStream)
+                   StaticFluoStream,
+                   StaticBrightfieldStream)
 
 # All the stream types related to electron microscope
 EM_STREAMS = (SEMStream,

@@ -333,8 +333,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_IN_WL: (500e-9, 520e-9), # m
-                     model.MD_OUT_WL: (600e-9, 630e-9), # m
+                     model.MD_LENS_MAG: 1200, # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake spec",
@@ -379,6 +378,12 @@ class TestHDF5IO(unittest.TestCase):
             self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
             self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+            if model.MD_LENS_MAG in md:
+                self.assertEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+
+            # None of the images are using light => no MD_IN_WL
+            self.assertFalse(model.MD_IN_WL in im.metadata,
+                             "Reporting excitation wavelength while there is none")
 
             if model.MD_WL_POLYNOMIAL in md:
                 pn = md[model.MD_WL_POLYNOMIAL]

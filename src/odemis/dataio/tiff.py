@@ -387,8 +387,8 @@ def _updateMDFromOME(root, das):
             pass
 
         try:
-            a = int(pxe.attrib["WaveStart"]) * 1e-9
-            b = int(pxe.attrib["WaveIncrement"]) * 1e-9
+            a = float(pxe.attrib["WaveStart"]) * 1e-9
+            b = float(pxe.attrib["WaveIncrement"]) * 1e-9
             md[model.MD_WL_POLYNOMIAL] = [a, b]
         except (KeyError, ValueError):
             pass
@@ -414,6 +414,14 @@ def _updateMDFromOME(root, das):
             try:
                 owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
                 mdc[model.MD_OUT_WL] = (owl, owl)
+            except (KeyError, ValueError):
+                pass
+
+            try:
+                hex_str = che.attrib["Color"] # hex string
+                hex_str = hex_str[-8:] # almost copy of conversion.hex_to_rgb
+                tint = tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4, 6])
+                mdc[model.MD_USER_TINT] = tint[:3] # only RGB
             except (KeyError, ValueError):
                 pass
 
@@ -840,19 +848,21 @@ def _addImageElement(root, das, ifd):
     # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
     # not so pretty.
     # Some very old versions of the standard had WaveStart/WaveIncrement on Image
+    # WaveIncrement needs to be a float, as it's easily < 1 if the spectrum is
+    # fine.
 
     if model.MD_WL_POLYNOMIAL in globalMD:
         # we store a subset of the metadata in a non-standard attribute :-(
         pn = globalMD[model.MD_WL_POLYNOMIAL]
         if len(pn) >= 1:
-            pixels.attrib["WaveStart"] = "%d" % round(pn[0] * 1e9) # in nm
+            pixels.attrib["WaveStart"] = "%f" % (pn[0] * 1e9) # in nm
         if len(pn) >= 2:
-            pixels.attrib["WaveIncrement"] = "%d" % round(pn[1] * 1e9) # in nm/px
+            pixels.attrib["WaveIncrement"] = "%f" % (pn[1] * 1e9) # in nm/px
     elif model.MD_WL_LIST in globalMD:
         lwl = globalMD[model.MD_WL_LIST]
         inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
-        pixels.attrib["WaveStart"] = "%d" % round(lwl[0] * 1e9) # in nm
-        pixels.attrib["WaveIncrement"] = "%d" % round(inc * 1e9) # in nm/px
+        pixels.attrib["WaveStart"] = "%f" % (lwl[0] * 1e9) # in nm
+        pixels.attrib["WaveIncrement"] = "%f" % (inc * 1e9) # in nm/px
 
     subid = 0
     for da in das:
@@ -870,7 +880,6 @@ def _addImageElement(root, das, ifd):
             if model.MD_DESCRIPTION in da.metadata:
                 chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
     
-            # TODO Color attrib for tint?
             # TODO Fluor attrib for the dye?
             # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
@@ -893,6 +902,15 @@ def _addImageElement(root, das, ifd):
                 ewl = numpy.mean(owl) * 1e9 # in nm
                 chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
     
+            if model.MD_USER_TINT in da.metadata:
+                # user tint is 3 tuple int
+                # color is hex RGBA (eg: #FFFFFFFF)
+                tint = da.metadata[model.MD_USER_TINT]
+                if len(tint) == 3:
+                    tint = tint + (255,) # need alpha channel
+                hex_str = "".join("%.2x" % c for c in tint) # copy of conversion.rgb_to_hex()
+                chan.attrib["Color"] = "#%s" % hex_str
+
             # Add info on detector
             attrib = {}
             if model.MD_BINNING in da.metadata:
