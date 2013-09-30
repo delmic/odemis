@@ -35,7 +35,7 @@ Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-desktop-long-term-support
 
 Once logged into your newly installed Ubuntu system:
- * Start a terminal (with Ctrl+Alt+T0 and type:
+ * Start a terminal (with Ctrl+Alt+T) and type:
 sudo add-apt-repository ppa:delmic-soft/odemis
 sudo apt-get update
 sudo apt-get dist-upgrade
