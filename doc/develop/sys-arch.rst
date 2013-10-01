@@ -1,3 +1,4 @@
+*********************
 Architecture Overview
 *********************
 
@@ -15,12 +16,19 @@ The figure below represents a typical Odemis instance run.
 The following describes the various parts of Odemis in more details.
 
 Drivers
+-------
+f
 
 Back-end manager
+----------------
+f
 
 Command-line interface
+----------------------
+f
 
 Graphical user interface
+------------------------
 
 
 For stability purpose, the backend should run in a separate process than the user interface. If feasible, every driver (component instance) should also be run in a separate process.

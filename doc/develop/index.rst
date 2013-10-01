@@ -6,6 +6,7 @@
    This file is maintained by hand, while the bulk of the rst files is generated
    automatically.
 
+##############################################
 Programming with Odemis and programming Odemis
 ##############################################
 
