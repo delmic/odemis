@@ -38,6 +38,7 @@ from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion
 import collections
 import logging
 import math
+import odemis.gui.comp.overlay as overlay
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimodel
@@ -78,7 +79,7 @@ class Tab(object):
                 """Called when the view layout changes"""
                 is_22 = viewlayout == guimodel.VIEW_LAYOUT_22
                 self.main_frame.menu_item_22view.Check(is_22)
-            
+
             def on_switch_22(evt):
                 """Called when menu changes"""
                 if self.tab_data_model.viewLayout.value == guimodel.VIEW_LAYOUT_22:
@@ -573,7 +574,8 @@ class AnalysisTab(Tab):
         """
         microscope will be used only to select the type of views
         """
-        # TODO: automatically change the display type based on the acquisition displayed
+        # TODO: automatically change the display type based on the acquisition
+        # displayed
         tab_data = guimodel.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
@@ -586,6 +588,11 @@ class AnalysisTab(Tab):
                                      self.main_frame.vp_inspection_bl,
                                      self.main_frame.vp_inspection_br],
                                 )
+
+        # TODO: (re)move, this is for testing purposes
+        cnvs  =self.main_frame.vp_inspection_tl.canvas
+        psol = overlay.PointSelectOverlay(cnvs)
+        cnvs.WorldOverlays.append(psol)
 
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
@@ -725,35 +732,26 @@ class AnalysisTab(Tab):
                 model.MD_WL_POLYNOMIAL in d.metadata or
                 (len(d.shape) >= 5 and d.shape[-5] > 1)):
                 desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
-                cls = streammod.StaticSpectrumStream
-            elif ((model.MD_IN_WL in d.metadata and
-                  model.MD_OUT_WL in d.metadata) or
-                  model.MD_USER_TINT in d.metadata):
+                self._stream_controller.addStatic(
+                                            desc, d,
+                                            cls=streammod.StaticSpectrumStream,
+                                            add_to_all_views=True)
+            elif (model.MD_IN_WL in d.metadata and
+                  model.MD_OUT_WL in d.metadata):
                 # TODO: handle bright-field (which also has in/out wl)
-                # No explicit way to distinguish between Brightfield and Fluo,
-                # so guess it's Brightfield iif:
-                # * No tint
-                # * (and) Large band for excitation wl (> 100 nm)
-                in_wl = d.metadata[model.MD_IN_WL]
-                if (model.MD_USER_TINT in d.metadata or
-                    in_wl[1] - in_wl[0] < 100e-9):
-                    # Fluo
-                    desc = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
-                    cls = streammod.StaticFluoStream
-                else:
-                    # Brigthfield
-                    desc = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                    cls = streammod.StaticBrightfieldStream
-            elif model.MD_IN_WL in d.metadata: # no MD_OUT_WL
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                cls = streammod.StaticBrightfieldStream
+                desc = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+                self._stream_controller.addStatic(
+                                            desc, d,
+                                            cls=streammod.StaticFluoStream,
+                                            add_to_all_views=True)
             else:
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
-                cls = streammod.StaticSEMStream
-
-            self._stream_controller.addStatic(desc, d, cls=cls,
-                                              add_to_all_views=True)
-        # TODO: ARStreams
+                desc = d.metadata.get(
+                                    model.MD_DESCRIPTION,
+                                    "Secondary electrons")
+                self._stream_controller.addStatic(
+                                            desc, d,
+                                            cls=streammod.StaticSEMStream,
+                                            add_to_all_views=True)
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
@@ -878,12 +876,6 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = show
         self._ccd_stream.should_update.value = show
         self._ccd_stream.is_active.value = show
-
-        # TODO: save and restore SEM state (for now, it does nothing anyway)
-#        # Turn on (or off) SEM
-#        main_data = self.tab_data_model.main
-#        state = guimodel.STATE_ON if show else guimodel.STATE_PAUSE
-#        main_data.emState.value = state
 
     def terminate(self):
         super(LensAlignTab, self).terminate()

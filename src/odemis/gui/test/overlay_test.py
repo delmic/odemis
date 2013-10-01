@@ -46,7 +46,15 @@ class OverlayTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
 
-    def test_view_select_overlay(self):
+    def test_point_select_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        psol = overlay.PointSelectOverlay(cnvs)
+        cnvs.WorldOverlays.append(psol)
+        test.gui_loop()
+
+    def xtest_view_select_overlay(self):
         # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
 
@@ -59,7 +67,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.active_overlay = vsol
         cnvs.current_mode = model.TOOL_ROI
 
-    def test_roa_select_overlay(self):
+    def xtest_roa_select_overlay(self):
         # Create and add a miccanvas
         # TODO: Sparc canvas because it's now the only one which supports TOOL_ROA
         # but it should be a simple miccanvas
@@ -89,7 +97,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.point_fill()
         test.gui_loop()
 
-    def test_dichotomy_overlay(self):
+    def xtest_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
@@ -106,7 +114,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop(1000)
 
 
-    def test_spot_mode_overlay(self):
+    def xtest_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 

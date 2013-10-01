@@ -627,13 +627,34 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # Y is opposite of our Y in computer (going up)
     def world_to_physical_pos(self, pos):
+        """ Translate world coordinates into physical coordinates.
+
+        Note: The y value needs to be flipped between world and physical
+            coordinates.
+
+        Note: If 'meters per world unit' (mpwu) is one, world and physical
+            coordinates are the same.
+
+        :param phy_pos: (float, float) "world" coordinates
+        :return: (float, float)
+
+        """
+
         phy_pos = (pos[0] * self.mpwu, -pos[1] * self.mpwu)
         return phy_pos
 
     def physical_to_world_pos(self, phy_pos):
-        """
-        phy_pos (tuple of float): "physical" coordinates in m
-        return (tuple of float)
+        """ Translate physical coordinates into world coordinates.
+
+        Note: The y value needs to be flipped between physical and world
+            coordinates.
+
+        Note: If 'meters per world unit' (mpwu) is one, world and physical
+            coordinates are the same.
+
+        :param phy_pos: (float, float) "physical" coordinates in m
+        :return: (float, float)
+
         """
         world_pos = (phy_pos[0] / self.mpwu, -phy_pos[1] / self.mpwu)
         return world_pos

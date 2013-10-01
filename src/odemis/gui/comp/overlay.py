@@ -31,6 +31,7 @@ import logging
 import math
 import odemis.gui as gui
 import odemis.gui.img.data as img
+import odemis.gui.util as util
 import odemis.gui.util.units as units
 import wx
 
@@ -51,6 +52,7 @@ class Overlay(object):
 
     def write_label(self, ctx, size, vpos, label, flip=True,
                     align=wx.ALIGN_LEFT):
+
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -120,6 +122,7 @@ class WorldOverlay(Overlay):
 
 class TextViewOverlay(ViewOverlay):
     """ This overlay draws the label text at the provided view position """
+
     def __init__(self, base, vpos=((10, 16))):
         super(TextViewOverlay, self).__init__(base, label="")
         self.vpos = vpos
@@ -1322,7 +1325,7 @@ class DichotomyOverlay(ViewOverlay):
 
 class PointSelectOverlay(WorldOverlay):
     def __init__(self, base, vpos=((10, 16))):
-        super(PointSelectOverlay, self).__init__(base, "kaas")
+        super(PointSelectOverlay, self).__init__(base, "PointSelectOverlay")
         self.vpos = vpos
 
         self.base.Bind(wx.EVT_MOTION, self.on_motion)
@@ -1331,15 +1334,42 @@ class PointSelectOverlay(WorldOverlay):
         self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_down)
 
+        # self.mpp = 1.78e-07
+        # self.center = (0.0, 0.0) # in m
+        # self.size = (128, 122) # pixels
+
+        self.mpp = 33
+        self.center = (0.0, 00.0) # in m
+        self.size = (10, 10) #(20, 20) # pixels
+
+        self.psize = util.tuple_multiply(self.size, self.mpp)
+
+        # pxl
+        self.block_size = util.tuple_tdiv(self.psize, self.size)
+        # util.tuple_idiv(
+        #                     , self.mpp)
+
+        # top left in physical
+        self.top_left = util.tuple_subtract(
+                            self.center,
+                            util.tuple_fdiv(self.psize, 2)
+                        )
+
+        self.pixel = None
+
+        self.color = hex_to_frgba(gui.SELECTION_COLOR)
+
     # FIXME: just for testing
     def on_motion(self, evt):
-        self.base.UpdateDrawing()
+        if not self.base.dragging:
+            self.vpos = evt.GetPosition()
+            self.view_to_pixel()
+            self.base.UpdateDrawing()
         evt.Skip()
 
     def on_mouse_down(self, evt):
-        self.vpos = evt.GetPosition
+        self.vpos = evt.GetPosition()
         evt.Skip()
-
 
     def on_mouse_up(self, evt):
         evt.Skip()
@@ -1350,5 +1380,89 @@ class PointSelectOverlay(WorldOverlay):
     def on_mouse_leave(self, evt):
         self.base.SetCursor(wx.STANDARD_CURSOR)
 
+    def view_to_pixel(self):
+        """ Translate a view coordinate into a pixel coordinate defined by the
+        overlay
+
+        The pixel coordinates have their 0,0 origin at the top left.
+
+        """
+        if self.vpos:
+
+            # Determine pixel from center
+
+            # # The offset, in pixels, to the center of the world coordinates
+            # offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
+            # # Calculate the physical position
+            # ppos = self.base.world_to_physical_pos(
+            #             self.base.view_to_world_pos(self.vpos, offset))
+
+            # # Calculate the distance to the center in meters
+            # dist = util.tuple_subtract(ppos, self.center)
+
+            # # Calculate overlay pixels
+            # pxl = (int(dist[0] / self.mpp), -int(dist[1] / self.mpp))
+            # # Convert to top left 0,0
+            # pxl = util.tuple_add(pxl, util.tuple_idiv(self.size, 2))
+
+            # # clip
+            # self.pixel = (max(0, min(pxl[0], self.size[0])),
+            #               max(0, min(pxl[1], self.size[1])))
+
+            # self.label =  "Pixel %s" % str( self.pixel)
+
+
+
+            # Determine pixel from top left
+
+            # The offset, in pixels, to the center of the world coordinates
+            offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
+            # Calculate the physical position
+            ppos = self.base.world_to_physical_pos(
+                        self.base.view_to_world_pos(self.vpos, offset))
+
+            # Calculate the distance to the top left in meters
+            dist = util.tuple_subtract(ppos, (self.top_left[0], -self.top_left[1]))
+
+            # Calculate overlay pixels
+            pxl = (int(dist[0] / self.mpp), -int(dist[1] / self.mpp))
+
+            # clip
+            self.pixel = (max(0, min(pxl[0], self.size[0])),
+                          max(0, min(pxl[1], self.size[1])))
+
+            self.label =  "Pixel %s" % str( self.pixel)
+
+    def pixel_to_rect(self):
+        if self.pixel:
+            top_left = util.tuple_add(
+                                self.top_left,
+                                util.tuple_multiply(self.pixel, self.mpp)
+                       )
+
+            offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
+
+            btop_left = self.base.world_to_buffer_pos(
+                                self.base.physical_to_world_pos(
+                                    (top_left[0], -top_left[1])
+                                ),
+                                offset
+                        )
+
+            return btop_left + self.block_size
+
     def Draw(self, dc, shift=(0, 0), scale=1.0):
-        print shift, scale, self.base.buffer_center_world_pos
+
+        if self.label:
+            # TEST LABEL WRITING
+            ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+
+            rect = self.pixel_to_rect()
+            if rect:
+                ctx.set_source_rgba(*self.color)
+                ctx.rectangle(*rect)
+                ctx.fill()
+
+            pos = self.base.view_to_buffer_pos((10, 16))
+            self.write_label(ctx, dc.GetSize(), pos, self.label)

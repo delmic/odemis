@@ -1034,41 +1034,59 @@ class DraggableCanvas(wx.Panel):
 
 # World <-> Buffer
 
-def world_to_buffer_pos(world_pos, world_buffer_center, scale, offset=None):
-    """
-    Converts a position from world coordinates to buffer coordinates
-    This function assumes that the originis of both the world coordinate system
-    and the buffer coordinate system are aligned.
+def world_to_buffer_pos(world_pos, buffcenter_wpos, scale, offset=None):
+    """ Converts a position from world coordinates to buffer coordinates
 
     :param world_pos: (2-tuple float) the coordinates in the world
-    :param world_buffer_center: the center of the buffer in world coordinates
+    :param buffcenter_wpos: the center of the buffer in world coordinates
     :param scale: how much zoomed is the buffer compared to the world
+    :param offset (int, int): The offset can be used to move the buffer origin
+        back to its original position. See `buffer_to_world_pos` for more
+        details.
+    :return: (int, int)
+
     """
-    buff_pos = (int(round((world_pos[0] - world_buffer_center[0]) * scale)),
-                int(round((world_pos[1] - world_buffer_center[1]) * scale)))
+    buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
+                int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
     if offset:
         return (buff_pos[0] + offset[0], buff_pos[1] + offset[1])
     else:
         return buff_pos
 
-def buffer_to_world_pos(buff_pos, world_buffer_center, scale, offset=None):
-    """
-    Converts a position from buffer coordinates to world coordinates
+def buffer_to_world_pos(buff_pos, buffcenter_wpos, scale, offset=None):
+    """ Converts a position from buffer coordinates to world coordinates
 
-    :param world_pos: (2-tuple float) the coordinates in the world
-    :param world_buffer_center: the center of the buffer in world coordinates
+    :param buff_pos: (int, int) the buffer coordinates
+    :param buffcenter_wpos: the center of the buffer in world coordinates
     :param scale: how much zoomed is the buffer compared to the world
+    :param offset (int, int): The offset can be used to align the origin of the
+        buffer with that of the world. E.g. to align 0,0 (top left) of the
+        buffer with the origin of the world (which is at the center), one would
+        set the offset to half the width and height of the buffer itself.
+    :return: (float, float)
+
     """
+
     if offset:
         buff_pos = (buff_pos[0] - offset[0], buff_pos[1] - offset[1])
-    return ((buff_pos[0] / scale) + world_buffer_center[0],
-            (buff_pos[1] / scale) + world_buffer_center[1])
+
+    return (buffcenter_wpos[0] + (buff_pos[0] / scale),
+            buffcenter_wpos[1] + (buff_pos[1] / scale))
 
 # View <-> Buffer
 
 def view_to_buffer_pos(view_pos, margins):
-    """ Convert view port coordinates to buffer coordinates """
+    """ Convert view port coordinates to buffer coordinates
 
+    The top left of the view is considered to have coordinates (0, 0), with to
+    the right and bottom of that the positive x and y directions.
+
+    A view position is tranformed by adding the margin width and height.
+
+    :param view_pos: (int, int) the coordinates in the view
+    :param margins: (int, int) the horizontal and vertical buffer margins
+    :return: (wx.Point) or (int, int) the calculated buffer position
+    """
     buffer_pos = (view_pos[0] + margins[0], view_pos[1] + margins[1])
 
     if isinstance(view_pos, wx.Point):
@@ -1077,6 +1095,16 @@ def view_to_buffer_pos(view_pos, margins):
         return buffer_pos
 
 def buffer_to_view_pos(buffer_pos, margins):
+    """ Convert a buffer position into a view position
+
+    Note:
+        If the buffer position does not fall within the view, negative values
+        might be returned or values that otherwise fall outside of the view.
+
+    :param view_pos: (int, int) the coordinates in the buffer
+    :param margins: (int, int) the horizontal and vertical buffer margins
+    :return: (wx.Point) or (int, int) the calculated view position
+    """
 
     view_pos = (buffer_pos[0] - margins[0], buffer_pos[1] - margins[1])
 
@@ -1088,8 +1116,11 @@ def buffer_to_view_pos(buffer_pos, margins):
 # View <-> World
 
 def view_to_world_pos(view_pos, world_buff_cent, margins, scale, offset=None):
-    """ This function assumes that the origins of the various coordinate systems
-    are *not* aligned."""
+    """ Convert a position in view coordinates into world coordinates
+
+    See `view_to_buffer_pos` and `buffer_to_world_pos` for more details
+
+    """
 
     return buffer_to_world_pos(
                 view_to_buffer_pos(view_pos, margins),
@@ -1099,6 +1130,11 @@ def view_to_world_pos(view_pos, world_buff_cent, margins, scale, offset=None):
     )
 
 def world_to_view_pos(world_pos, world_buff_cent, margins, scale, offset=None):
+    """ Convert a position in world coordinates into view coordinates
+
+    See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
+
+    """
 
     return buffer_to_view_pos(
             world_to_buffer_pos(world_pos, world_buff_cent, scale, offset),
