@@ -7,7 +7,7 @@
    automatically.
 
 Programming with Odemis and programming Odemis
-==============================================
+##############################################
 
 This document covers the main aspects of developement with Odemis. 
 
@@ -19,6 +19,9 @@ This document covers the main aspects of developement with Odemis.
 ..    backend-api
 ..    dataio
 ..    drivers
+..    testing
+..    documentation
+..    packaging
 
 
 .. Indices and tables
@@ -26,5 +29,6 @@ This document covers the main aspects of developement with Odemis.
 
    * :ref:`genindex`
    * :ref:`modindex`
+
 * :ref:`search`
 

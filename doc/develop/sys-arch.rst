@@ -6,6 +6,13 @@ One driver = one component?
 Maintains a model representing the whole microscope hardware.
 Metamodel: generic enough to represent any kind of microscope we might develop. Model: defined by us for each version of a microscope. Saved into a modifiable file using a structured format (our metamodel on top of XML, YAML...?). At initialisation the model is read, drivers instantiated according to it, and self-tests allow to validate which part of the microscope is currently usable. However, no automatic structure modification (eg: discover every component connected to the computer) so that if a component is off/broken, it's easy to detect.
 
+.. figure:: sys-arch.*
+    :width: 100 %
+    :alt: Odemis architecture overview
+    
+    The architecture of Odemis is made of 2 main parts: the back-end, containing
+    the drivers, and the front-end, providing the user interface.
+    
 There are in total 3 interfaces to/from the microscope model:
 Driver (aka device adapters):
 Connect Odemis to the hardware devices. There is a specific interface to write a driver. There is relatively direct relation between a driver (instance) and a microscope component (in the internal representation). In most case 1 driver instance is 1 microscope component (eg: digital camera, axis controller). However 1 driver instance should be able to provide several microscope components if the underlying connection requires them to be handle together (eg: SEM e-beam and SE-detector managed together). It should not happen that several driver instances are required to represent 1 microscope component: microscope components should be the smallest unit it makes sense to create device in a microscope (but in case of exception, it's always possible to write a device driver which glues several other device drivers, but that should not be seen from the odemis back-end point of view). The API should be relatively stable but extensible. Typically each device driver implement a set of common interfaces and also a set of interfaces specific to the type of component.
