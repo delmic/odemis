@@ -332,7 +332,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if iim is None:
                 continue
             scale = iim.mpp / self.mpwu
-            pos = self.real_to_world_pos(iim.center)
+            pos = self.physical_to_world_pos(iim.center)
             self.SetImage(i, iim.image, pos, scale)
 
         # set merge_ratio
@@ -396,7 +396,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # this can be caused by any viewport which has requested to recenter
         # the buffer
-        pos = self.real_to_world_pos((value["x"], value["y"]))
+        pos = self.physical_to_world_pos((value["x"], value["y"]))
         # skip ourself, to avoid asking the stage to move to (almost) the same
         # position
         wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
@@ -406,7 +406,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         When the view position is updated: recenter the view
         phy_pos (tuple of 2 float): X/Y in physical coordinates (m)
         """
-        pos = self.real_to_world_pos(phy_pos)
+        pos = self.physical_to_world_pos(phy_pos)
         # skip ourself, to avoid asking the stage to move to (almost) the same
         # position
         wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
@@ -422,7 +422,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             logging.debug("ReCenterBuffer called without microscope view")
             super(DblMicroscopeCanvas, self).ReCenterBuffer(world_pos)
         else:
-            physical_pos = self.world_to_real_pos(world_pos)
+            physical_pos = self.world_to_physical_pos(world_pos)
             # This will call _onViewPos() -> ReCenterBuffer()
             self.microscope_view.view_pos.value = physical_pos
 
@@ -626,14 +626,35 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             event.Skip()
 
     # Y is opposite of our Y in computer (going up)
-    def world_to_real_pos(self, pos):
+    def world_to_physical_pos(self, pos):
+        """ Translate world coordinates into physical coordinates.
+
+        Note: The y value needs to be flipped between world and physical
+            coordinates.
+
+        Note: If 'meters per world unit' (mpwu) is one, world and physical
+            coordinates are the same.
+
+        :param phy_pos: (float, float) "world" coordinates
+        :return: (float, float)
+
+        """
+
         phy_pos = (pos[0] * self.mpwu, -pos[1] * self.mpwu)
         return phy_pos
 
-    def real_to_world_pos(self, phy_pos):
-        """
-        phy_pos (tuple of float): "physical" coordinates in m
-        return (tuple of float)
+    def physical_to_world_pos(self, phy_pos):
+        """ Translate physical coordinates into world coordinates.
+
+        Note: The y value needs to be flipped between physical and world
+            coordinates.
+
+        Note: If 'meters per world unit' (mpwu) is one, world and physical
+            coordinates are the same.
+
+        :param phy_pos: (float, float) "physical" coordinates in m
+        :return: (float, float)
+
         """
         world_pos = (phy_pos[0] / self.mpwu, -phy_pos[1] / self.mpwu)
         return world_pos

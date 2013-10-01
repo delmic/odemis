@@ -8,13 +8,13 @@ Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -28,6 +28,7 @@ import os.path
 import subprocess
 
 from threading import Timer
+from itertools import izip
 
 import wx
 from decorator import decorator
@@ -265,3 +266,30 @@ class DictObj(dict):
     def __init__(self, **kw):
         dict.__init__(self, kw)
         self.__dict__.update(kw)
+
+def tuple_add(t1, t2):
+    """ Add t1 to t2 """
+    return tuple(x + y for x, y in izip(t1, t2))
+
+def tuple_subtract(t1, t2):
+    """ subtract t1 from t2 """
+    return tuple(x - y for x, y in izip(t1, t2))
+
+def tuple_multiply(t, m):
+    """ Multiply the elements of t with the value m """
+    return tuple(v * m for v in t)
+
+def tuple_fdiv(t, d):
+    """ Divide tuple elements by d """
+    if d:
+        d = float(d)
+        return tuple(v / d for v in t)
+
+def tuple_idiv(t, d):
+    """ Divide tuple elements by d """
+    if d:
+        return tuple(v // d for v in t)
+
+def tuple_tdiv(t1, t2):
+    """ Divide t1 elements by the corresponding elements in t2 """
+    return tuple(x / y for x, y in izip(t1, t2))

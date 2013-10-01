@@ -481,6 +481,8 @@ class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
         self.Bind(wx.EVT_LEAVE_WINDOW, self.OnLeave)
 
     def SetToggle(self, toggle):
+        # Avoid wxPyDeadObject errors. Investigate further. Probably needs to
+        # be handled in VigilantAttributeConnector. See comments there.
         if isinstance(self, ImageToggleButton):
             GenBitmapToggleButton.SetToggle(self, toggle)
 
