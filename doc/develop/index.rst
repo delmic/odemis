@@ -31,5 +31,10 @@ This document covers the main aspects of developement with Odemis.
    * :ref:`genindex`
    * :ref:`modindex`
 
-* :ref:`search`
+.. Don't put it in PDFs, as it doesn't work there
+.. only:: html
+
+    Search
+    ==========
+    * :ref:`search`
 
