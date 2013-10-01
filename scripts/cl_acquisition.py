@@ -27,14 +27,15 @@ odemis-cli --set-attr ARCam binning "2, 2"
 '''
 
 from __future__ import division
-from odemis import model
-from odemis.cli import main as cli
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
+
 import logging
 import numpy
+from odemis import model, dataio
+from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 import sys
 import threading
 import time
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -179,5 +180,5 @@ if __name__ == '__main__':
     s = spect_data.shape
     spect_data.shape = (s[0], 1, 1, s[1], s[2])
     
-    exporter = cli.getFittestExporter(filename)
+    exporter = dataio.find_fittest_exporter(filename)
     exporter.export(filename, [sed_data, spect_data])
