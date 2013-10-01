@@ -19,6 +19,7 @@ This document covers the main aspects of developement with Odemis.
 ..    backend-api
 ..    dataio
 ..    drivers
+..    extending  (cf DEVELOP.txt)
 ..    testing
 ..    documentation
 ..    packaging

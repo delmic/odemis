@@ -14,7 +14,24 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 # the i18n builder cannot share the environment and doctrees with the others
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
+# SVG to PDF conversion
+SVG2PDF         = inkscape
+#SOURCEDIR       = source
+#IMAGEDIRS can be a list of directories that contain SVG files and are relative to the SOURCEDIR
+IMAGEDIR       = .
+
 .PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext
+
+# Pattern rule for converting SVG to PDF
+%.pdf : %.svg
+	$(SVG2PDF) -f $< -A $@
+
+# Build a list of SVG files to convert to PDFs
+PDFs := $(patsubst %.svg,%.pdf,$(wildcard $(IMAGEDIR)/*.svg))
+
+# Make a rule to build the PDFs
+images: $(PDFs)
+
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
@@ -40,6 +57,7 @@ help:
 
 clean:
 	-rm -rf $(BUILDDIR)/*
+	-rm $(PDFs)
 
 html:
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
@@ -95,14 +113,14 @@ epub:
 	@echo
 	@echo "Build finished. The epub file is in $(BUILDDIR)/epub."
 
-latex:
+latex: $(PDFs)
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo
 	@echo "Build finished; the LaTeX files are in $(BUILDDIR)/latex."
 	@echo "Run \`make' in that directory to run these through (pdf)latex" \
 	      "(use \`make latexpdf' here to do that automatically)."
 
-latexpdf:
+latexpdf: $(PDFs)
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(BUILDDIR)/latex
 	@echo "Running LaTeX files through pdflatex..."
 	$(MAKE) -C $(BUILDDIR)/latex all-pdf
