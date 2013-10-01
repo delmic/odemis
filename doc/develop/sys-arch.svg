@@ -95,7 +95,7 @@
    vert-origin-y="90"
    vert-adv-y="90">
    <font-face
-   font-family="Ubuntu embedded"
+   font-family="Sans"
    units-per-em="2048"
    font-weight="normal"
    font-style="normal"
@@ -337,7 +337,7 @@
    font-style="normal"
    font-weight="400"
    id="g3933"
-   style="font-size:635px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:635px;font-style:normal;font-weight:400;font-family:Sans">
       
       <rect
    x="22785"
@@ -382,7 +382,7 @@
    font-style="normal"
    font-weight="400"
    id="g3963"
-   style="font-size:635px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:635px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g3965"
    style="fill:#3c3c3c;stroke:none">
@@ -443,7 +443,7 @@
    font-style="normal"
    font-weight="400"
    id="g3991"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g3993"
    style="fill:#3c3c3c;stroke:none">
@@ -538,7 +538,7 @@
    font-style="normal"
    font-weight="400"
    id="g4025"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4027"
    style="fill:#3c3c3c;stroke:none">
@@ -621,7 +621,7 @@
    font-style="normal"
    font-weight="400"
    id="g4055"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4057"
    style="fill:#3c3c3c;stroke:none">
@@ -722,7 +722,7 @@
    font-style="normal"
    font-weight="400"
    id="g4091"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4093"
    style="fill:#3c3c3c;stroke:none">
@@ -790,7 +790,7 @@
    font-style="normal"
    font-weight="400"
    id="g4117"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4119"
    style="fill:#3c3c3c;stroke:none">
@@ -861,7 +861,7 @@
    font-style="normal"
    font-weight="400"
    id="g4143"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4145"
    style="fill:#3c3c3c;stroke:none">
@@ -932,7 +932,7 @@
    font-style="normal"
    font-weight="400"
    id="g4169"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4171"
    style="fill:#3c3c3c;stroke:none">
@@ -1069,7 +1069,7 @@
    font-style="normal"
    font-weight="400"
    id="g4217"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4219"
    style="fill:#3c3c3c;stroke:none">
@@ -1158,7 +1158,7 @@
    font-style="normal"
    font-weight="400"
    id="g4249"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4251"
    style="fill:#3c3c3c;stroke:none">
@@ -1277,7 +1277,7 @@
    font-style="normal"
    font-weight="400"
    id="g4291"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4293"
    style="fill:#3c3c3c;stroke:none">
@@ -1402,7 +1402,7 @@
    font-style="normal"
    font-weight="400"
    id="g4335"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4337"
    style="fill:#3c3c3c;stroke:none">
@@ -1494,7 +1494,7 @@
    font-style="normal"
    font-weight="400"
    id="g4369"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4371"
    style="fill:#3c3c3c;stroke:none">
@@ -1759,7 +1759,7 @@
    font-style="normal"
    font-weight="400"
    id="g4479"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4481"
    style="fill:#3c3c3c;stroke:none">
@@ -1812,7 +1812,7 @@
    font-style="normal"
    font-weight="400"
    id="g4499"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4501"
    style="fill:#3c3c3c;stroke:none">
@@ -1891,7 +1891,7 @@
    font-style="normal"
    font-weight="400"
    id="g4531"
-   style="font-size:494px;font-style:normal;font-weight:400;font-family:Ubuntu embedded">
+   style="font-size:494px;font-style:normal;font-weight:400;font-family:Sans">
       <g
    id="g4533"
    style="fill:#3c3c3c;stroke:none">
