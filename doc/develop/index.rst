@@ -17,9 +17,9 @@ This document covers the main aspects of developement with Odemis.
 	
     sys-arch
     extending
+    base-api
+    backend-api
     documentation
-..    basic-model
-..    backend-api
 ..    dataio
 ..    drivers (device adapter)
 ..    testing
@@ -33,10 +33,4 @@ This document covers the main aspects of developement with Odemis.
    * :ref:`genindex`
    * :ref:`modindex`
 
-.. Don't put it in PDFs, as it doesn't work there
-.. only:: html
-
-    Search
-    ==========
-    * :ref:`search`
 

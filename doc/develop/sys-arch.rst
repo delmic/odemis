@@ -47,6 +47,19 @@ TODO
 
 
 
+Code Structure
+src/odemis/: to import to know the version of odemis
+src/odemis/model/: the default classes for the microscope model (including properties) import odemis.model as model imports everything. (same behaviour as wx or numpy).
+src/odemis/driver/: contains the device drivers (or a wrapper to the actual driver). One python module per hardware type whenever possible.
+src/odemis/odemisd/odemisd.py : backend, in charge of instantiating the microscope model and running it.
+src/odemis/gui/main.py: main for the graphical user interface
+src/odemis/cli/main.py : main for a basic command line interface to the backend (retrieve status of microscope, acquire image)
+src/odemis/util/: some helper functions
+scripts/
+doc/
+
+
+
 
 Additionally, every directory contains a test/ directory which contains various
 Python test classes used to validate the behaviour of the program.
