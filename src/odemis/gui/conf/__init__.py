@@ -80,7 +80,7 @@ class Config(object):
         # Absolute path to the configuration file
         self.file_path = os.path.abspath(
                                     os.path.join(CONF_PATH, self.file_name))
-        print self.file_path
+        # print self.file_path
         # Attribute that contains the actual configuration
         self.config = ConfigParser.SafeConfigParser()
         # Default configuration used to check for completeness

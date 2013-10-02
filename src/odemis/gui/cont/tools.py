@@ -98,10 +98,11 @@ TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
 class ToolBar(wx.Panel):
     """ Tool Menu base class responsible for the general buttons states """
 
-#    def __init__(self, parent, id= -1, tools=None, **kwargs):
-#        """
-#        tools (list of TOOL_*): each button to be displayed, in order
-#        """
+    # def __init__(self, parent, id= -1, tools=None, **kwargs):
+    #     """
+    #     tools (list of TOOL_*): each button to be displayed, in order
+    #     """
+
     def __init__(self):
         # TODO: don't rely on XRC, and create ourself the bitmap and sub panel
         pre = wx.PrePanel()
@@ -127,7 +128,7 @@ class ToolBar(wx.Panel):
         for t in self._tools:
             self._add_tool(*t)
 
-    def AddTool(self, *args):
+    def AddTool(self, *args, **kwargs):
         """
         tool_id (TOOL_*): button to be displayed
         handler (VA or callable): if mode: VA, if action: callable
@@ -203,4 +204,9 @@ class ToolBar(wx.Panel):
         sizer.Add(btn, border=b, flag=f)
         self._panel.Layout()
         return btn
+
+    # def enable_button(self, tool_id, enable):
+    #     sizer = self._panel.GetSizer()
+    #     print sizer.GetChildren()
+
 
