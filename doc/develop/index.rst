@@ -17,12 +17,13 @@ This document covers the main aspects of developement with Odemis.
 	
     sys-arch
     extending
+    documentation
 ..    basic-model
 ..    backend-api
 ..    dataio
 ..    drivers
 ..    testing
-..    documentation
+..    (documentation should come here)
 ..    packaging
 
 

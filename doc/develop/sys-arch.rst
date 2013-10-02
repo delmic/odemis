@@ -17,18 +17,39 @@ The following describes the various parts of Odemis in more details.
 
 Drivers
 -------
-f
+many independent modules which are each an adapter between a
+hardware component and the rest of Odemis, following a programming
+interface (with specificities for each type of the hardware).
+The code is found in the ``src/odemis/drivers/`` directory.
 
 Back-end manager
 ----------------
-f
+It is the core of Odemis and is in charge of connecting the various drivers
+together according to a configuration file. It provides a uniform view of the
+microscope (independently of the actual hardware components) to the user 
+interface. The code is found in the ``src/odemis/odemisd/`` directory.
 
 Command-line interface
 ----------------------
-f
+The command-line interface (CLI) allows basic manipulation of the microscope via
+a terminal, or in a script. The code is found in the ``src/odmemis/cli/``
+directory.
 
 Graphical user interface
 ------------------------
+The Graphical User Interface (GUI) allows the user to manipulate the microscope
+and displays the acquired data. This usual user interface for the target user.
+The code can be found in the ``src/odemis/gui/`` directory.
+
+Data IO
+-------
+TODO
+
+
+
+
+Additionally, every directory contains a test/ directory which contains various
+Python test classes used to validate the behaviour of the program.
 
 
 For stability purpose, the backend should run in a separate process than the user interface. If feasible, every driver (component instance) should also be run in a separate process.
