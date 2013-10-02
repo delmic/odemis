@@ -16,11 +16,11 @@ This document covers the main aspects of developement with Odemis.
     :maxdepth: 2
 	
     sys-arch
+    extending
 ..    basic-model
 ..    backend-api
 ..    dataio
 ..    drivers
-..    extending  (cf DEVELOP.txt)
 ..    testing
 ..    documentation
 ..    packaging
