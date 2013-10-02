@@ -203,12 +203,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif self.current_mode == guimodel.TOOL_SPOT:
             self._showSpotMode(False)
 
+        # TODO: fix with the rest of the todos
+        if hasattr(self, 'pick_overlay'):
+            self.pick_overlay.enable(False)
+
         # TODO: one mode <-> one overlay (type)
         # TODO: create the overlay on the fly, the first time it's requested
         if tool == guimodel.TOOL_ROA:
             self.current_mode = MODE_SPARC_SELECT
             self.active_overlay = self.roi_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        elif tool == guimodel.TOOL_POINT and hasattr(self, 'pick_overlay'):
+            self.current_mode = MODE_SPARC_PICK
+            self.active_overlay = self.pick_overlay
+            self.pick_overlay.enable(True)
         elif tool == guimodel.TOOL_ROI:
             self.current_mode = MODE_SECOM_UPDATE
             self.active_overlay = self.update_overlay
@@ -221,7 +229,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.current_mode = MODE_SECOM_DICHO
             self.active_overlay = self.dicho_overlay
             #FIXME: cursor handled by .enable()
-#            self.cursor = wx.StockCursor(wx.CURSOR_HAND)
+            # self.cursor = wx.StockCursor(wx.CURSOR_HAND)
             self.dicho_overlay.enable(True)
         elif tool == guimodel.TOOL_SPOT:
             self.current_mode = tool

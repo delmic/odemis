@@ -279,16 +279,16 @@ def tuple_multiply(t, m):
     """ Multiply the elements of t with the value m """
     return tuple(v * m for v in t)
 
-def tuple_fdiv(t, d):
-    """ Divide tuple elements by d """
-    if d:
-        d = float(d)
-        return tuple(v / d for v in t)
+def tuple_fdiv(t, f):
+    """ Divide tuple elements by float value f """
+    if f:
+        f = float(f)
+        return tuple(v / f for v in t)
 
-def tuple_idiv(t, d):
-    """ Divide tuple elements by d """
-    if d:
-        return tuple(v // d for v in t)
+def tuple_idiv(t, i):
+    """ Divide tuple elements by integer value i """
+    if i:
+        return tuple(v // i for v in t)
 
 def tuple_tdiv(t1, t2):
     """ Divide t1 elements by the corresponding elements in t2 """

@@ -51,6 +51,9 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         psol = overlay.PointSelectOverlay(cnvs)
+        # psol.set_values(33, (0.0, 0.0), (30, 30))
+        psol.set_values(30, (0.0, 0.0), (17, 19))
+
         cnvs.WorldOverlays.append(psol)
         test.gui_loop()
 

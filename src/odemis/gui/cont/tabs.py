@@ -589,11 +589,6 @@ class AnalysisTab(Tab):
                                      self.main_frame.vp_inspection_br],
                                 )
 
-        # TODO: (re)move, this is for testing purposes
-        cnvs  =self.main_frame.vp_inspection_tl.canvas
-        psol = overlay.PointSelectOverlay(cnvs)
-        cnvs.WorldOverlays.append(psol)
-
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
                                         self.main_frame.pnl_inspection_streams,
@@ -633,11 +628,20 @@ class AnalysisTab(Tab):
                             self.on_file_open_button
         )
 
+        # TODO: (re)move, this is for testing purposes
+        # Should we create a separate canvas for this?
+
+        cnvs = self.main_frame.vp_inspection_tl.canvas
+        self.psol = overlay.PointSelectOverlay(cnvs)
+        setattr(cnvs, 'pick_overlay', self.psol)
+        cnvs.WorldOverlays.append(self.psol)
+
         # Toolbar
         tb = self.main_frame.ana_toolbar
         tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+        # tb.enable_button(tools.TOOL_POINT, False)
 
     @property
     def stream_controller(self):
@@ -696,6 +700,17 @@ class AnalysisTab(Tab):
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self.display_new_data(fn, data)
+        spec_class = (streammod.SpectrumStream, streammod.StaticSpectrumStream)
+        for strm in self.tab_data_model.streams:
+            if isinstance(strm, spec_class):
+                iimg = strm.image.value
+                self.psol.set_values(
+                                iimg.mpp,
+                                iimg.center,
+                                iimg.get_pixel_size()
+                )
+                break
+
 
 
     def display_new_data(self, filename, data):

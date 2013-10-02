@@ -1324,61 +1324,113 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.fill()
 
 class PointSelectOverlay(WorldOverlay):
-    def __init__(self, base, vpos=((10, 16))):
-        super(PointSelectOverlay, self).__init__(base, "PointSelectOverlay")
-        self.vpos = vpos
+    """ This overlay allows for the selection of a pixel in a dataset that is
+    not directly visible in the view, but of which we know the Meters per pixel,
+    the center and resolution.
+    """
 
+    def __init__(self, base):
+        super(PointSelectOverlay, self).__init__(base, "PointSelectOverlay")
+
+        # Event binding
         self.base.Bind(wx.EVT_MOTION, self.on_motion)
         self.base.Bind(wx.EVT_ENTER_WINDOW, self.on_mouse_enter)
         self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
-        self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_down)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
 
-        # self.mpp = 1.78e-07
-        # self.center = (0.0, 0.0) # in m
-        # self.size = (128, 122) # pixels
+        # The current position of the mouse cursor in view coordinates
+        self._current_vpos = None
 
-        self.mpp = 33
-        self.center = (0.0, 00.0) # in m
-        self.size = (10, 10) #(20, 20) # pixels
+        # External values
+        self._mpp = None # Meter per pixel
+        self._physical_center = None # in meter (float, float)
+        self._resolution = None # Pixels in linked data (int, int)
 
-        self.psize = util.tuple_multiply(self.size, self.mpp)
+        # Core values
+        self._pysical_top_left = None # in meters (float, float)
+        self._pixel_size = None # base size of the pixel block (float, float)
+        self._pixel_pos = None # position of the current pixel (int, int)
+        self._selected_pixel = None # The pixel selected by the user
 
-        # pxl
-        self.block_size = util.tuple_tdiv(self.psize, self.size)
-        # util.tuple_idiv(
-        #                     , self.mpp)
+        self.color = hex_to_frgba(gui.SELECTION_COLOR, 0.5)
+        self.enabled = False
 
-        # top left in physical
-        self.top_left = util.tuple_subtract(
-                            self.center,
-                            util.tuple_fdiv(self.psize, 2)
-                        )
+    # Event handlers
 
-        self.pixel = None
-
-        self.color = hex_to_frgba(gui.SELECTION_COLOR)
-
-    # FIXME: just for testing
     def on_motion(self, evt):
-        if not self.base.dragging:
-            self.vpos = evt.GetPosition()
+        """ Update the current cursor position when the mouse is moving and
+        there is no dragging.
+        """
+        if not self.base.dragging and self.values_are_set():
+            self._current_vpos = evt.GetPosition()
+            old_pixel_pos = self._pixel_pos
             self.view_to_pixel()
-            self.base.UpdateDrawing()
-        evt.Skip()
+            if self._pixel_pos != old_pixel_pos:
+                self.base.UpdateDrawing()
 
-    def on_mouse_down(self, evt):
-        self.vpos = evt.GetPosition()
         evt.Skip()
 
     def on_mouse_up(self, evt):
+        """ Set the selected pixel, if a pixel position is known """
+        if self._pixel_pos:
+            self._selected_pixel = self._pixel_pos
+            logging.debug("Pixel %s selected", str(self._selected_pixel))
         evt.Skip()
 
     def on_mouse_enter(self, evt):
-        self.base.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+        """ Change the mouse cursor to a cross """
+        if self.enabled:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+        evt.Skip()
 
     def on_mouse_leave(self, evt):
-        self.base.SetCursor(wx.STANDARD_CURSOR)
+        """ Restore the mouse cursor to its default and clear any hover """
+        if self.enabled:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+        self._current_vpos = None
+        self._pixel_pos = None
+        evt.Skip()
+
+    # END Event handlers
+
+    def set_values(self, mpp, physical_center, resolution):
+
+        if not (len(physical_center) == len(physical_center) == 2):
+            raise ValueError("Illegal values for PointSelectOverlay")
+
+        msg = "Setting mpp to %s, physical center to %s and resolution to %s"
+        logging.debug(msg, mpp, physical_center, resolution)
+        self._mpp = mpp
+        self._physical_center = physical_center
+        self._resolution = resolution
+
+        self._calc_core_values()
+
+    def values_are_set(self):
+        """ Returns True if all needed values are set """
+        return None not in (self._mpp, self._physical_center, self._resolution)
+
+    def _calc_core_values(self):
+        """ Calculate the core values that only change when the external values
+        change.
+
+        """
+
+        if self.values_are_set():
+
+            # Get the physical size of the external data
+            physical_size = util.tuple_multiply(self._resolution, self._mpp)
+
+            # Get the top left corner (i.e. 0,0) of the external data
+            self._pysical_top_left = util.tuple_subtract(
+                                            self._physical_center,
+                                            util.tuple_fdiv(physical_size, 2)
+                                        )
+
+            # Calculate the base size, in meters, of each pixel.
+            # This base size, together with the view's scale, will be used to
+            # calculate the actual (int, int) size, before rendering
+            self._pixel_size = util.tuple_tdiv(physical_size, self._resolution)
 
     def view_to_pixel(self):
         """ Translate a view coordinate into a pixel coordinate defined by the
@@ -1387,61 +1439,45 @@ class PointSelectOverlay(WorldOverlay):
         The pixel coordinates have their 0,0 origin at the top left.
 
         """
-        if self.vpos:
 
-            # Determine pixel from center
-
-            # # The offset, in pixels, to the center of the world coordinates
-            # offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
-            # # Calculate the physical position
-            # ppos = self.base.world_to_physical_pos(
-            #             self.base.view_to_world_pos(self.vpos, offset))
-
-            # # Calculate the distance to the center in meters
-            # dist = util.tuple_subtract(ppos, self.center)
-
-            # # Calculate overlay pixels
-            # pxl = (int(dist[0] / self.mpp), -int(dist[1] / self.mpp))
-            # # Convert to top left 0,0
-            # pxl = util.tuple_add(pxl, util.tuple_idiv(self.size, 2))
-
-            # # clip
-            # self.pixel = (max(0, min(pxl[0], self.size[0])),
-            #               max(0, min(pxl[1], self.size[1])))
-
-            # self.label =  "Pixel %s" % str( self.pixel)
-
-
-
-            # Determine pixel from top left
+        if self._current_vpos:
 
             # The offset, in pixels, to the center of the world coordinates
             offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
             # Calculate the physical position
             ppos = self.base.world_to_physical_pos(
-                        self.base.view_to_world_pos(self.vpos, offset))
+                        self.base.view_to_world_pos(self._current_vpos, offset))
 
             # Calculate the distance to the top left in meters
-            dist = util.tuple_subtract(ppos, (self.top_left[0], -self.top_left[1]))
+            dist = util.tuple_subtract(
+                                ppos,
+                                (self._pysical_top_left[0],
+                                 -self._pysical_top_left[1]))
 
-            # Calculate overlay pixels
-            pxl = (int(dist[0] / self.mpp), -int(dist[1] / self.mpp))
+            # Calculate overlay pixels, not the need flip of the Y component
+            pixel = (int(dist[0] / self._mpp), -int(dist[1] / self._mpp))
 
             # clip
-            self.pixel = (max(0, min(pxl[0], self.size[0])),
-                          max(0, min(pxl[1], self.size[1])))
+            self._pixel_pos = (max(0, min(pixel[0], self._resolution[0])),
+                               max(0, min(pixel[1], self._resolution[1])))
 
-            self.label =  "Pixel %s" % str( self.pixel)
+            self.label =  "Pixel %s" % str( self._pixel_pos)
 
-    def pixel_to_rect(self):
-        if self.pixel:
+    def pixel_to_rect(self, scale):
+        """ Return a rectangle, in buffer coordinates, describing the current
+        pixel.
+
+        :param scale: (float) The scale to draw the pixel at.
+        """
+
+        if self._pixel_pos:
+            # First we calculate the position of the top left in buffer pixels
             top_left = util.tuple_add(
-                                self.top_left,
-                                util.tuple_multiply(self.pixel, self.mpp)
+                                self._pysical_top_left,
+                                util.tuple_multiply(self._pixel_pos, self._mpp)
                        )
-
             offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
-
+            # Note the Y flip again
             btop_left = self.base.world_to_buffer_pos(
                                 self.base.physical_to_world_pos(
                                     (top_left[0], -top_left[1])
@@ -1449,20 +1485,25 @@ class PointSelectOverlay(WorldOverlay):
                                 offset
                         )
 
-            return btop_left + self.block_size
+            return btop_left + util.tuple_multiply(self._pixel_size, scale)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
-        if self.label:
-            # TEST LABEL WRITING
+        if self.enabled:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
+            rect = self.pixel_to_rect(scale)
 
-            rect = self.pixel_to_rect()
             if rect:
                 ctx.set_source_rgba(*self.color)
                 ctx.rectangle(*rect)
                 ctx.fill()
 
-            pos = self.base.view_to_buffer_pos((10, 16))
-            self.write_label(ctx, dc.GetSize(), pos, self.label)
+                # Label for debugging purposes
+                pos = self.base.view_to_buffer_pos((10, 16))
+                self.write_label(ctx, dc.GetSize(), pos, self.label + str(rect))
+
+    def enable(self, enable=True):
+        """ Enable of disable the overlay """
+        self.enabled = enable
+        self.base.Refresh()
