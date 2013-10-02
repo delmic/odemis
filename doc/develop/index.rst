@@ -21,7 +21,7 @@ This document covers the main aspects of developement with Odemis.
 ..    basic-model
 ..    backend-api
 ..    dataio
-..    drivers
+..    drivers (device adapter)
 ..    testing
 ..    (documentation should come here)
 ..    packaging

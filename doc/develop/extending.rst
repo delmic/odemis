@@ -57,7 +57,7 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo add-apt-repository ppa:delmic-soft/odemis
     sudo apt-get update
     sudo apt-get dist-upgrade
-    sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools python-setuptools python-sphinx inkscape dia-gnome texlive
+    sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush
     sudo adduser $(whoami) odemis
     mkdir development
     cd development
@@ -75,7 +75,7 @@ Modify the first lines so they read like this::
     PYTHONPATH="$DEVPATH/odemis/src/:$PYTHONPATH"
 
 And edit the MODEL line for the model you want (probably a simulated microscope
-like sparc-sim or secom-sim). For example::
+like ``sparc-sim`` or ``secom-sim``). For example::
 
     MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
 
@@ -114,10 +114,10 @@ Edit Odemis with Eclipse
 Using Git
 """""""""
 
-Source code version control is managed with git. If you are not familliar with 
+Source code version control is managed with git. If you are not familiar with 
 this tool, it is better to first learning its basics before going further. Refer
-to tutorials such as ``Pro Git <http://git-scm.com/book>``_ or
-``Easy Version Control with Git <http://net.tutsplus.com/tutorials/other/easy-version-control-with-git/>``_.
+to tutorials such as `Pro Git <http://git-scm.com/book>`_ or
+`Easy Version Control with Git <http://net.tutsplus.com/tutorials/other/easy-version-control-with-git/>`_.
 
 Fixing a bug
 ============
@@ -137,7 +137,7 @@ Have a look at the log files:
 * ``~/odemis-gui.log`` contains the logs of the GUI (odemis-gui)
 
 It is also possible to run each part of Odemis independently. To get the maximum
-information, add ``--log-level=2`` as a start-up parameter of any of the odemis 
+information, add ``--log-level=2`` as a start-up parameter of any of the Odemis 
 parts. By running a part from Eclipse, it's possible to use the visual debugger
 to observe the internal state of the python processes and place breakpoints.
 In order to avoid the container separation in the back-end, which prevents 
@@ -155,13 +155,77 @@ There are several ways to automate the data acquisition. There are mostly a
 trade-off between simplicity of development and complexity of the task to
 automate.
 
-For the easiest tasks, a shell script calling the cli program might be the
+For the easiest tasks, a shell script calling the CLI might be the
 most appropriate way. See the CLI help command for a list of all possible
-commands ("odemis-cli --help").
+commands (``odemis-cli --help``). For example, to list all the available hardware
+components::
 
-For more complex tasks, it might be easier to write a specialised python program.
-In this case, the program directly access the backend. A good way to start is to
-look at the source code of the CLI. It shows examples of the most common tasks.
+    $ odemis-cli --list
+
+    SimSPARC	role:sparc
+      ↳ ARSimCam	role:ccd
+      ↳ SED ExtXY	role:se-detector
+      ↳ FakeSpec10	role:spectrometer
+        ↳ FakeSP2300i	role:spectrograph
+        ↳ SpecSimCam	role:sp-ccd
+      ↳ EBeam ExtXY	role:e-beam
+      ↳ MirrorMover	role:mirror
+
+To list all the properties of a component::
+
+    $ odemis-cli --list-prop FakeSP2300i
+     
+    Component 'FakeSP2300i':
+        role: spectrograph
+        affects: 'SpecSimCam'
+        axes (RO Attribute)	 value: frozenset(['wavelength'])
+        swVersion (RO Attribute)	 value: v1.1-190-gb5c626b (serial driver: Unknown)
+        ranges (RO Attribute)	 value: {'wavelength': (0, 2.4e-06)}
+        hwVersion (RO Attribute)	 value: SP-FAKE (s/n: 12345)
+        position (RO Vigilant Attribute)	 value: {'wavelength': 0.0} (unit: m)
+        speed (RO Vigilant Attribute)	 value: 1e-07 (unit: m/s) (range: 1e-07 → 1e-07)
+        grating (Vigilant Attribute)	 value: 2 (choices: 1: '300 g/mm BLZ=  345NM', 2: '600 g/mm BLZ=   89NM', 3: '1200 g/mm BLZ= 700NM')
+
+.. note:
+    When the name of a component which contains spaces is given as a 
+    parameter, it should be put into quotes, such as ``"EBeam ExtXY"``.
+
+To acquire
+5 images sequentially from the secondary electron detector at 5 different 
+positions on the sample, you could write this in bash::
+
+    for i in $(seq 5); do odemis-cli --acquire "SED ExtXY" --output etd-pos$i.h5; odemis-cli --move OLStage y -100; done
+
+For more complex tasks, it might be easier to write a specialised python script.
+In this case, the program directly accesses the back-end. In addition to reading
+this documentation, a good way to start is to look at the source code of the CLI
+in ``src/odemis/cli/main.py`` and the python
+scripts in ``scripts`` (and ``/usr/share/doc/odemis/scripts``). The most common 
+tasks can be found there. For example the following script acquires 10 SEM images
+at 10 different dwell times, and save them in one HDF5 file.
+
+.. code-block:: python
+
+    from odemis import model, dataio
+    import sys
+
+    filename = sys.argv[1]
+    exporter = dataio.find_fittest_exporter(filename)
+
+    # find components by their role
+    for c in model.getComponents():
+        if c.role == "e-beam":
+            escan = c
+        elif c.role == "se-detector":
+            sed = c
+
+    data = []
+    for i in range(1, 11): # 10 acquisitions
+        escan.dwellTime.value = i * 1e-6 # i µs
+        img = sed.data.get()
+        data.append(img)
+        
+    exporter.export(filename, data)
 
 Alternatively you may want to add the automated task as one option to the GUI.
 See later section about extending the GUI.
@@ -169,39 +233,59 @@ See later section about extending the GUI.
 Supporting new hardware
 =======================
 
-Add a module to the drivers/ directory following the interface for the specific
-type of component (see the back-end specification).
+In order to support a new hardware, you need to create a new device adapter (also
+called *driver*). High chances is that your device directly falls into one of these
+categories:
+
+* Emitter: generates energy (to influence the sample)
+* Detector: observes energy (from the sample)
+* Actuator: moves physically something
+
+To create a new device adapter, add a python module to the ``src/odemis/drivers/``
+directory following the interface for the specific type of component (see the back-end API).
 
 Add a test class to the test directory which instantiates the component and at
 least detects whether the component is connected or not (scan() and selfTest()
 methods) and does basic tasks (e.g., acquiring an image or moving an actuator).
 
-Update the configuration file for instantiating the microscope with the
+Update the microscope configuration file for instantiating the microscope with the
 parameters for your new driver.
 
-Commit your code using "git add ..." and "git commit -a".
-
-Optionally, send your extension to Delmic as a git patch or fork.
+Do not forget to commit your code using ``git add ...`` and ``git commit -a``.
+Optionally, send your extension to Delmic as a git patch or a github merge request.
 
 Adding a feature to the Graphical User Interface
 ================================================
 
-To edit the interface, you should use XRCed, by typing this (with the right paths):
-PYTHONPATH=./src/:../Pyro4/src/:/usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx/tools python src/odemis/gui/launch_xrced.py
+Note that it's not recommended to modify the GUI before you are already quite
+familiar with Odemis' code. In particular, there is no API for extending the 
+interface, and therefore you'll most likely need to modify the code in many 
+different files.
 
-If you add/modify an image in src/odemis/gui/img, you need to regenerate the data.py file:
-sudo apt-get install pngcrush # on the first use
-cd src/odemis/gui/img
-./images2python
+To edit the interface, you should use XRCed, by typing this (with the right paths)::
+
+    PYTHONPATH=./src/ /usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx/tools python src/odemis/gui/launch_xrced.py
+
+If you add/modify an image (used as a GUI element, not a microscope acquisition), 
+it should be done in ``src/odemis/gui/img``. After the modifications, you need to 
+regenerate the ``data.py`` file::
+
+    cd src/odemis/gui/img
+    ./images2python
 
 
-Improving the speed
+Speed optimization
 ===================
-First, you need to profile the code to see where is the bottleneck.
-PYTHONPATH=./src/:../Pyro4/src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
-# run the typical usage you want to measure
+First, you need to profile the code to see where is the bottleneck. This allows
+to run the profiler on the GUI::
 
-python -m pstats odemis.profile
-> sort time
-> stats
+    PYTHONPATH=./src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
+
+Then use the features you want to measure/optimize, and eventually close the GUI.
+
+After the program is closed, you can read the profile with the following commands::
+
+    python -m pstats odemis.profile
+    > sort time
+    > stats
 

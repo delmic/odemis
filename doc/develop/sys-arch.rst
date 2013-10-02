@@ -17,7 +17,7 @@ The following describes the various parts of Odemis in more details.
 
 Drivers
 -------
-many independent modules which are each an adapter between a
+Many independent modules which are each an adapter between a
 hardware component and the rest of Odemis, following a programming
 interface (with specificities for each type of the hardware).
 The code is found in the ``src/odemis/drivers/`` directory.
