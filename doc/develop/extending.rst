@@ -1,13 +1,18 @@
-How to extend Odemis
+****************
+Extending Odemis
+****************
 
 Depending on how you want to extend Odemis, there are different ways to modify
-it. First have a look at the first three sections, and then read the additional
-sections depending on the goal you have.
+it. In this chapter we first see how to set up a computer in order to develop 
+easily Odemis, and then have a quick look at the various ways of extending 
+Odemis.
 
-Please note that almost all source code is released under the GPLv2 license.
+Please note that almost all source code is released under the `GPLv2 license 
+<http://gnu.org/licenses/old-licenses/gpl-2.0.html>`_.
 This means in very broad terms that any modification or extension you make to it
 will have to either be kept internal or also be made freely available to anyone.
-See LICENSE.txt for the complete and official text of the license.
+See the file LICENSE.txt in the source code for the complete and official text 
+of the license.
 
 Moreover, if you have a microscope from Delmic, the maintenance contract only
 supports the original version of the Odemis software. Modified versions of the
@@ -15,18 +20,26 @@ software are not covered by the maintenance contract (unless explicitly stated).
 If you share your extension with Delmic and we decide to integrate them into a
 later version of Odemis, then the contract will also cover the extension.
 
-= Recommended development environment =
+Setting up the development environment
+======================================
 
-Ubuntu 12.04 (x86 32 bits, preferably with kernel 3.5 aka linux-generic-lts-quantal)
-Eclipse + PyDev plug-in + Pylint
-XRCed (package python-wxtools) for GUI edition
+Odemis is written almost entirely in Python language. So in theory, a simple
+text editor could be enough to edit Odemis. However in order to execute, debug,
+test, and edit efficiently Odemis, we recommend the following environment:
 
-Source code available at: git clone git@github.com:delmic/odemis.git
+ * Ubuntu 12.04 (x86 32 bits, preferably with kernel 3.5 aka linux-generic-lts-quantal)
+ * Eclipse + PyDev plug-in + Pylint
+ * XRCed (package python-wxtools) for GUI edition
+
+The source code available via a public git repository: https://github.com/delmic/odemis .
+To *clone* it, type:
+   git clone git@github.com:delmic/odemis.git
 
 Note that Odemis can run in fully simulated mode, where no actual hardware is
 needed. In this case, it can run in a virtual machine.
 
-== Detailed instructions ==
+Detailed instructions
+---------------------
 
 Download Ubuntu 12.04 at this address:
 http://www.ubuntu.com/download/desktop/thank-you?release=lts&bits=32&distro=desktop&status=zeroc
