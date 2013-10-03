@@ -10,8 +10,9 @@ via the use of this API.
 
 Microscope specific component
 
-HwComponent:
-This is the generic type for representing a hardware component. The subtypes are typical of microscopes in this model.
+.. py:class: HwComponent(name[, parent=None][, children=None])
+    
+    This is the generic type for representing a hardware component. The subtypes are typical of microscopes in this model.
 
 
 .role (ro, str): Role (function) of the component in the microscope (the software should used this to locate the different parts of the microscope in case the type is not sufficient: each role is unique in a given model)
@@ -32,7 +33,9 @@ Exceptions: call to methods, modifying some values or properties, accessing data
 
 .updateMetadata(metadata) (metadata: dict of str->value): update the metadata dict corresponding to the current physical state of the components affecting the component (detector). The goal is to attach this information to DataArrays. The key is the name of the metadata, which must be one of the constants model.MD_* whenever this is possible, but usage of additional strings is permitted. The detector can overwrite or append the metadata dict with its own metadata. The internal metadata is accumulative, so previous metadata keys which are updated keep their previous (i.e., they are not deleted).
 
-.getMetadata() return (dict of str->value): returns the metadata of the component. Required only for emitters.
+.. py:method:: getMetadata()
+
+    return (dict of str->value): returns the metadata of the component. Required only for emitters.
 
 .selfTest() (optional): method to request the driver to test whether the component works properly. It should not (on purpose) lead the component to do dangerous actions (e.g.: rotate a motor as fast as possible). It most cases it should limit its check to validate that the hardware component is correctly connected and is ready to use.  Returns True if everything went fine (success), False otherwise (failure). It might also throw an exception, in which case the test is considered failed. Description of the problems that occur should be logged using logging.error() or at similar levels.
 
@@ -159,5 +162,17 @@ TODO: use it to provide .ranges (dict of 2-tuple of numbers): (min, max) value o
 Note that .moveRel() and .moveAbs() are asynchronous. If several are requested before one is finished, it is up to the driver to ensure that the final position is equal to calling the moves while being synchronised (within an error margin). However the path that is taken to reach the final position is device dependent. So calling .moveAbs({“x”: 1}) and immediately after .moveRel({“x”: -0.5})  will eventually be equivalent to just one call to .moveAbs({“x”: 0.5}), but whether the stage passed by position x:1 is unknown (to the client).
 
 
+Convention about measurement units
+==================================
+
+Most of the data in Odemis is represented either as standard Python types,
+as :py:class:`DataArray` or as :py:class:`VigilantAttribute`. 
+This means that often they do not bear unit information explicitly,
+even though they represent physical quantities. 
+The convention is to use the standard `SI <http://en.wikipedia.org/wiki/SI>`_
+measurement units whenever it can be applied. 
+For example, distance and wavelengths are expressed in meters (m), 
+angles in radians (rad), and times in seconds (s).
+Never express anything in multiples of a official unit (e.g., never put anything in nm).
 
 
