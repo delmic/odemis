@@ -27,6 +27,9 @@ This document covers the main aspects of developement with Odemis.
 ..    packaging
 
 
+.. only:: html
+    * :ref:`genindex`
+
 .. Indices and tables
    ==================
 
