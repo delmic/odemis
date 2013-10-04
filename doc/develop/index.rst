@@ -21,13 +21,13 @@ This document covers the main aspects of developement with Odemis.
     backend-api
     documentation
 ..    dataio
-..    drivers (device adapter)
 ..    testing
 ..    (documentation should come here)
 ..    packaging
 
 
 .. only:: html
+    
     * :ref:`genindex`
 
 .. Indices and tables

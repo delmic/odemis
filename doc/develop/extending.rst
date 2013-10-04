@@ -78,13 +78,24 @@ And edit the MODEL line for the model you want (probably a simulated microscope
 like ``sparc-sim`` or ``secom-sim``). For example::
 
     MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
+    
+If you want to use a simulated microscope, you need to set-up the simulated
+acquisition board of the SEM with the following commands::
+
+    sudo chmod a+rw /dev/comedi0
+    sudo modprobe comedi comedi_num_legacy_minors=4
+    sudo modprobe comedi_test
+    sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+
+To automatically set-up the simulated board at computer start-up, you can copy
+the 4 lines to ``/etc/rc.local``, without the ``sudo`` part.
 
 Install Eclipse and the plugins
 """""""""""""""""""""""""""""""
 Type the folowing commands::
 
     sudo easy_install pylint
-    cd
+    cd ~
     mkdir usr
     cd usr
     wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/kepler/SR1/eclipse-standard-kepler-SR1-linux-gtk.tar.gz
@@ -155,21 +166,41 @@ There are several ways to automate the data acquisition. There are mostly a
 trade-off between simplicity of development and complexity of the task to
 automate.
 
-For the easiest tasks, a shell script calling the CLI might be the
-most appropriate way. See the CLI help command for a list of all possible
-commands (``odemis-cli --help``). For example, to list all the available hardware
-components::
+.. only:: html
 
-    $ odemis-cli --list
+    For the easiest tasks, a shell script calling the CLI might be the
+    most appropriate way. See the CLI help command for a list of all possible
+    commands (``odemis-cli --help``). For example, to list all the available hardware
+    components::
 
-    SimSPARC	role:sparc
-      ↳ ARSimCam	role:ccd
-      ↳ SED ExtXY	role:se-detector
-      ↳ FakeSpec10	role:spectrometer
-        ↳ FakeSP2300i	role:spectrograph
-        ↳ SpecSimCam	role:sp-ccd
-      ↳ EBeam ExtXY	role:e-beam
-      ↳ MirrorMover	role:mirror
+        $ odemis-cli --list
+
+        SimSPARC	role:sparc
+          ↳ ARSimCam	role:ccd
+          ↳ SED ExtXY	role:se-detector
+          ↳ FakeSpec10	role:spectrometer
+            ↳ FakeSP2300i	role:spectrograph
+            ↳ SpecSimCam	role:sp-ccd
+          ↳ EBeam ExtXY	role:e-beam
+          ↳ MirrorMover	role:mirror
+     
+.. only:: pdf
+
+    For the easiest tasks, a shell script calling the CLI might be the
+    most appropriate way. See the CLI help command for a list of all possible
+    commands (``odemis-cli --help``). For example, to list all the available hardware
+    components::
+
+        $ odemis-cli --list
+
+        SimSPARC	role:sparc
+          > ARSimCam	role:ccd
+          > SED ExtXY	role:se-detector
+          > FakeSpec10	role:spectrometer
+            > FakeSP2300i	role:spectrograph
+            > SpecSimCam	role:sp-ccd
+          > EBeam ExtXY	role:e-beam
+          > MirrorMover	role:mirror
 
 To list all the properties of a component::
 
