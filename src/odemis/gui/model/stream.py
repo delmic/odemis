@@ -1857,7 +1857,7 @@ SPECTRUM_STREAMS = (SpectrumStream,
 AR_STREAMS = (ARStream,
               StaticARStream)
 
-
+# TODO: make it like a VA, so that it's possible to know when it changes
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to
     appear as one image. It's a tree which has one stream per leaf and one merge

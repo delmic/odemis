@@ -188,6 +188,8 @@ class MainGUIData(object):
         # Set to True to request debug info to be displayed
         self.debug = model.BooleanVA(False)
 
+        # TODO: current tab + available tabs VAs, to switch tabs, as with views
+
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
         """
