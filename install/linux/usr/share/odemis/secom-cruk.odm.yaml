@@ -37,15 +37,18 @@ Spectra: {
     # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {
+        # Use channels and limits to ensure the image has the same orientation
+        # as in the SEM software.
         channels: [0, 1],
-        limits: [[-4, 4], [-4, 4]],  # V
-        settle_time: 10.e-6, # s
-        hfw_nomag: 0.2, # m
+        limits: [[-3.5, 3.5], [-3.95, 3.95]],  # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.276, # m
+        # Some small rotation might be needed in the SEM software
     },
     properties: {
-        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        scale: [8, 8], # (ratio), start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 1000, # (ratio)
+        magnification: 100, # (ratio), start low for a big field of view
     },
     affects: ["SED ExtXY", Clara] # affects the CCD in case of cathodoluminescence
 }
@@ -56,7 +59,7 @@ Spectra: {
     role: se-detector,
     init: {
         channel: 0,
-        limits: [-3, 3] # V
+        limits: [-3, 3] # V (max values ever possible)
     },
 }
 
@@ -67,10 +70,12 @@ Spectra: {
     affects: [Clara]
 }
 
+# Semrock FF01-524/628-25
 "MultiBand Fixed Filter": {
     class: static.LightFilter,
     role: filter,
-    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    init: {band: [[509.e-9, 539.e-9],
+                  [611.e-9, 644.e-9]]}, # m,m
     affects: [Clara]
 }
 
@@ -79,7 +84,10 @@ Spectra: {
 Clara: {
     class: andorcam2.AndorCam2,
     role: ccd,
-    init: {device: 0}, # the only Andor camera connected so always 0
+    init: {
+        device: 0, # the only Andor camera connected so always 0
+        transpose: [2, -1], # rotation by 90°
+    }, 
     properties: {
         exposureTime: 0.3, # s
     }
@@ -88,6 +96,8 @@ Clara: {
 # Use 3 CombinedActuators to separate the axes of the PIGCS over different roles
 
 # Axes should be synchronized with the camera
+# Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
 "OLStage": {
     class: CombinedActuator,
     role: stage,
@@ -95,9 +105,10 @@ Clara: {
     children: {"x": PIGCS, "y": PIGCS},
     init: {
         axes_map: {"x": "x", "y": "y"},
+        inverted: ["x"],
     },
     properties: {
-        speed: {'x': 0.0001, 'y': 0.0001} #m/s (low enough to ensure we always use the minimum voltage)
+        speed: {'x': 0.01, 'y': 0.01} #m/s (low enough to ensure we always use the minimum voltage, but about right, to not wait too long)
     }
 }
 
@@ -108,7 +119,7 @@ Clara: {
     children: {"a": PIGCS, "b": PIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
-#        inverted: ["a"]
+#        inverted: ["a", "b"],
     },
     properties: {
         speed: {'a': 0.001, 'b': 0.001} #m/s
@@ -146,7 +157,8 @@ PIGCS: {
         # axis -> controller, channel, closed-loop?
         axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
                "x": [4, 1, False], "y": [5, 1, False]},
-        vpms: {"x": 200, "y": 200} # V/(m/s) : increase to increase the actual distance moved (for a given value in m)
+        vpms: {"x": 150, "y": 200}, # V/(m/s) : increase to increase the actual distance moved (for a given value in m)
+        #dist_to_steps: {"a": 100000, "b": 100000}, # step/m
     },
 }
 
