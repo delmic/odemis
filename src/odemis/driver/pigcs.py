@@ -317,6 +317,7 @@ class Controller(object):
         full_com = "%d %s" % (self.address, com)
         logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         self.serial.write(full_com)
+        # TODO: flush()? (or flushOutput()?!)
 
     def _sendQueryCommandRaw(self, com):
         """
@@ -396,6 +397,7 @@ class Controller(object):
         return (boolean): True if it recovered
         """
         # Flush buffer + give it some time to recover from whatever
+        # TODO: use self.serial.flushInput() too?
         while self.serial.read():
             pass
 
@@ -1420,6 +1422,7 @@ class Bus(model.Actuator):
         if port:
             ports = [port]
         else:
+            # TODO: use serial.tools.list_ports.comports() (but only availabe in pySerial 2.6)
             if os.name == "nt":
                 ports = ["COM" + str(n) for n in range (0, 8)]
             else:
@@ -1469,6 +1472,7 @@ class Bus(model.Actuator):
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
             timeout=0.5 #s
+            # TODO: interCharTimeout? only useful for readline()?
         )
 
         return ser
