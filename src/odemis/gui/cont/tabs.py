@@ -234,8 +234,9 @@ class SecomStreamsTab(Tab):
 
         # Toolbar
         tb = self.main_frame.secom_toolbar
-        tb.AddTool(tools.TOOL_ROI, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        # TODO: Add the buttons when the functionality is there
+        #tb.AddTool(tools.TOOL_ROI, self.tab_data_model.tool)
+        #tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
@@ -440,8 +441,9 @@ class SparcAcquisitionTab(Tab):
         # Toolbar
         tb = self.main_frame.sparc_acq_toolbar
         tb.AddTool(tools.TOOL_ROA, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        # TODO: Add the buttons when the functionality is there
+        #tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
+        #tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     # Special event handlers for repetition indication in the ROI selection
@@ -638,8 +640,9 @@ class AnalysisTab(Tab):
 
         # Toolbar
         tb = self.main_frame.ana_toolbar
-        tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
+        # TODO: Add the buttons when the functionality is there
+        #tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        #tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
         # tb.enable_button(tools.TOOL_POINT, False)
 
