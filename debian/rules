@@ -1,8 +1,24 @@
 #!/usr/bin/make -f
 
 %:
-	dh $@ --with python2
+	dh $@ --with python2 --with sphinxdoc
+
+
+override_dh_installdocs:
+	# build & install multiple doc in multiple formats
+	python setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder html
+	# HTML is build/doc/develop/html/ , but rename so that it looks like ../develop
+	mv build/doc/develop/html/ build/doc/develop/develop/
+	dh_installdocs build/doc/develop/develop
+	python setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder latex # need to build pdf
+	make -C build/doc/develop/latex all-pdf # PDF is build/doc/develop/latex/odemis-develop.pdf
+	dh_installdocs build/doc/develop/latex/odemis-develop.pdf
 	
+	# Install the "normal" documentation files (not needed? taken care by setup.py?)
+	#dh_installdocs
+
+
 override_dh_compress:
-	# make sure it doesn't compress example scripts
-	dh_compress -X.py -X.m
+	# make sure it doesn't compress example scripts and PDF files
+	dh_compress -X.py -X.m -X .pdf
+

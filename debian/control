@@ -5,6 +5,7 @@ Maintainer: Éric Piel <piel@delmic.com>
 Standards-Version: 3.9.2
 Build-Depends: debhelper (>= 9),
                python-setuptools,
+               python-sphinx (>= 1.1.3),
                python (>= 2.7.1),
                python-all
 X-Python-Version: >= 2.7
@@ -32,7 +33,8 @@ Depends: python (>= 2.7.1),
          cgroup-bin,
          odemis-doc,
          ${misc:Depends},
-         ${python:Depends}
+         ${python:Depends},
+         ${sphinxdoc:Depends}
 Suggests: imagej
 Description: Open Delmic Microscope Software
  Odemis is the acquisition software for the Delmic microscopes. In particular,
