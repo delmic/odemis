@@ -723,43 +723,69 @@ class AnalysisTab(Tab):
             except KeyError: # no MD_ACQ_DATE
                 pass # => don't update the acq_date
 
-            # TODO: be more clever to detect the type of stream
-            if (model.MD_WL_LIST in d.metadata or
-                model.MD_WL_POLYNOMIAL in d.metadata or
-                (len(d.shape) >= 5 and d.shape[-5] > 1)):
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Spectrum")
-                cls = streammod.StaticSpectrumStream
-            elif ((model.MD_IN_WL in d.metadata and
-                  model.MD_OUT_WL in d.metadata) or
-                  model.MD_USER_TINT in d.metadata):
-                # TODO: handle bright-field (which also has in/out wl)
-                # No explicit way to distinguish between Brightfield and Fluo,
-                # so guess it's Brightfield iif:
-                # * No tint
-                # * (and) Large band for excitation wl (> 100 nm)
-                in_wl = d.metadata[model.MD_IN_WL]
-                if (model.MD_USER_TINT in d.metadata or
-                    in_wl[1] - in_wl[0] < 100e-9):
-                    # Fluo
-                    desc = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
-                    cls = streammod.StaticFluoStream
-                else:
-                    # Brigthfield
-                    desc = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                    cls = streammod.StaticBrightfieldStream
-            elif model.MD_IN_WL in d.metadata: # no MD_OUT_WL
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Brightfield")
-                cls = streammod.StaticBrightfieldStream
-            else:
-                desc = d.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
-                cls = streammod.StaticSEMStream
+            # Streams only support 2D data (e.g., no multiple channels like RGB)
+            # excepted for spectrums which have a 3rd dimensions on dim 5.
+            # So if it's the case => separate into one stream per channel
+            cdata = self._split_channels(d)
 
-            self._stream_controller.addStatic(desc, d, cls=cls,
-                                              add_to_all_views=True)
-        # TODO: ARStreams
+            for cd in cdata:
+                # TODO: be more clever to detect the type of stream
+                if (model.MD_WL_LIST in cd.metadata or
+                    model.MD_WL_POLYNOMIAL in cd.metadata or
+                    (len(cd.shape) >= 5 and cd.shape[-5] > 1)):
+                    desc = cd.metadata.get(model.MD_DESCRIPTION, "Spectrum")
+                    cls = streammod.StaticSpectrumStream
+                elif ((model.MD_IN_WL in cd.metadata and
+                      model.MD_OUT_WL in cd.metadata) or
+                      model.MD_USER_TINT in cd.metadata):
+                    # No explicit way to distinguish between Brightfield and Fluo,
+                    # so guess it's Brightfield iif:
+                    # * No tint
+                    # * (and) Large band for excitation wl (> 100 nm)
+                    in_wl = d.metadata[model.MD_IN_WL]
+                    if (model.MD_USER_TINT in cd.metadata or
+                        in_wl[1] - in_wl[0] < 100e-9):
+                        # Fluo
+                        desc = cd.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
+                        cls = streammod.StaticFluoStream
+                    else:
+                        # Brigthfield
+                        desc = cd.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                        cls = streammod.StaticBrightfieldStream
+                elif model.MD_IN_WL in cd.metadata: # no MD_OUT_WL
+                    desc = cd.metadata.get(model.MD_DESCRIPTION, "Brightfield")
+                    cls = streammod.StaticBrightfieldStream
+                else:
+                    desc = cd.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
+                    cls = streammod.StaticSEMStream
+                # TODO: ARStreams
+
+                self._stream_controller.addStatic(desc, cd, cls=cls,
+                                                  add_to_all_views=True)
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
+
+    def _split_channels(self, data):
+        """
+        Separate a DataArray into multiple DataArrays along the 3rd dimension
+        (channel).
+        data (DataArray): can be any shape
+        Returns (list of DataArrays): a list of one DataArray (if no splitting
+        is needed) or more (if splitting happened). The metadata is the same
+        (object) for all the DataArrays.
+        """
+        # Anything to split?
+        if len(data.shape) >= 3 and data.shape[-3] > 1:
+            # multiple channels => split
+            das = []
+            for c in range(data.shape[-3]):
+                das.append(data[..., c, :, :]) # metadata ref is copied
+
+            return das
+        else:
+            # return just one DA
+            return [data]
 
 
 class LensAlignTab(Tab):
