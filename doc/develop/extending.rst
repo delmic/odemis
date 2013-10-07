@@ -98,7 +98,7 @@ Type the folowing commands::
     cd ~
     mkdir usr
     cd usr
-    wget http://www.eclipse.org/downloads/download.php?file=/technology/epp/downloads/release/kepler/SR1/eclipse-standard-kepler-SR1-linux-gtk.tar.gz
+    wget http://download.eclipse.org/technology/epp/downloads/release/kepler/SR1/eclipse-standard-kepler-SR1-linux-gtk.tar.gz
     tar xf eclipse-standard-kepler-SR1-linux-gtk.tar.gz
     ~/usr/eclipse/eclipse
  
