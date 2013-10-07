@@ -111,7 +111,7 @@ class OdemisGUIApp(wx.App):
 
         #self.main_frame.Bind(wx.EVT_CHAR, self.on_key)
 
-        log.create_gui_logger(self.main_frame.txt_log)
+        log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug)
         logging.info("***********************************************")
         logging.info("************  Starting Odemis GUI  ************")
         logging.info("***********************************************")
@@ -179,6 +179,8 @@ class OdemisGUIApp(wx.App):
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
 
+            # TODO: remove this, or move to developer menu (we now have an
+            # official way to open back images)
             if not self.main_data.role or self.main_data.role == "sparc":
                 # works with the analysis tab
                 wx.EVT_MENU(self.main_frame,

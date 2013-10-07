@@ -40,7 +40,11 @@ def init_logger():
     frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
     l.handlers[0].setFormatter(logging.Formatter(frm))
 
-def create_gui_logger(log_field):
+def create_gui_logger(log_field, error_va=None):
+    """
+    log_field (wx text field)
+    error_va (Boolean VigilantAttribute)
+    """
     # Create file handler
 
     # Path to the log file
@@ -64,6 +68,8 @@ def create_gui_logger(log_field):
     gui_format = logging.Formatter(frm, '%H:%M:%S')
     text_field_handler = TextFieldHandler()
     text_field_handler.setTextField(log_field)
+    if error_va is not None:
+        text_field_handler.setErrorVA(error_va)
     text_field_handler.setFormatter(gui_format)
     logging.debug("Switching to GUI logger")
 
@@ -97,21 +103,23 @@ class TextFieldHandler(logging.Handler):
         """ Call the parent constructor and initialize the handler """
         logging.Handler.__init__(self)
         self.textfield = None
+        self.error_va = None
 
     def setTextField(self, textfield):
         self.textfield = textfield
         self.textfield.Clear()
 
+    def setErrorVA(self, error_va):
+        self.error_va = error_va
+
     def emit(self, record):
         """ Write a record, in color, to a text field. """
         if self.textfield is not None:
-            color = "#777777"
-
-            if record.levelno > logging.WARNING:
+            if record.levelno >= logging.ERROR:
                 color = "#B00B2C"
-            elif record.levelno > logging.INFO:
+            elif record.levelno == logging.WARNING:
                 color = "#C87000"
-            elif record.levelno > logging.DEBUG:
+            elif record.levelno == logging.INFO:
                 color = "#555555"
             else:
                 color = "#777777"
@@ -119,6 +127,10 @@ class TextFieldHandler(logging.Handler):
             # Do the actual writing in a CallAfter, so logging won't interfere
             # with the GUI drawing process.
             wx.CallAfter(self.write_to_field, record, color)
+        
+        # Will typically ensure that the text field is displayed
+        if self.error_va is not None and record.levelno >= logging.ERROR:
+            self.error_va.value = True
 
     def write_to_field(self, record, color):
 
