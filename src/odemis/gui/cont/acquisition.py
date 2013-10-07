@@ -311,8 +311,10 @@ class SecomAcquiController(AcquisitionController):
 
         pub.subscribe(self.on_stream_changed, 'stream.ctrl')
 
-    def on_stream_changed(self, streams_present, streams_visible):
+    def on_stream_changed(self, streams_present, streams_visible, tab):
         """ Handler for pubsub 'stream.changed' messages """
+        if tab != self._tab_data_model:
+            return
         self._main_frame.btn_secom_acquire.Enable(streams_present and streams_visible)
 
     def on_acquire(self, evt):

@@ -253,11 +253,12 @@ class StreamController(object):
             elif self.static_mode:
                 spanel.to_static_mode()
 
-            # TODO: remove, seems to be deprecated
-            # logging.debug("Sending stream.ctrl.added message")
-            # pub.sendMessage('stream.ctrl.added',
-            #                 streams_present=True,
-            #                 streams_visible=self._has_visible_streams())
+            # TODO: make StreamTree a VA-like and remove this
+            logging.debug("Sending stream.ctrl.added message")
+            pub.sendMessage('stream.ctrl.added',
+                            streams_present=True,
+                            streams_visible=self._has_visible_streams(),
+                            tab=self._tab_data_model)
 
             return spanel
         else:
@@ -305,7 +306,8 @@ class StreamController(object):
         logging.debug("Sending stream.ctrl message")
         pub.sendMessage('stream.ctrl',
                         streams_present=True,
-                        streams_visible=self._has_visible_streams())
+                        streams_visible=self._has_visible_streams(),
+                        tab=self._tab_data_model)
 
 
     def _onStreamUpdate(self, stream, updated):
@@ -428,7 +430,8 @@ class StreamController(object):
         logging.debug("Sending stream.ctrl.removed message")
         pub.sendMessage('stream.ctrl.removed',
                         streams_present=self._has_streams(),
-                        streams_visible=self._has_visible_streams())
+                        streams_visible=self._has_visible_streams(),
+                        tab=self._tab_data_model)
 
     def clear(self):
         """
@@ -458,7 +461,8 @@ class StreamController(object):
         logging.debug("Sending stream.ctrl.removed message")
         pub.sendMessage('stream.ctrl.removed',
                         streams_present=False,
-                        streams_visible=False)
+                        streams_visible=False,
+                        tab=self._tab_data_model)
 
     def _has_streams(self):
         return len(self._stream_bar.stream_panels) > 0
