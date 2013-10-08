@@ -830,6 +830,12 @@ class LensAlignTab(Tab):
         main_frame.vp_align_sem.ShowLegend(False)
 
         # See axes convention: A/B are 135° from Y/X
+        # Note that this is an approximation of the actual movements.
+        # In the current SECOM design, B affects both axes (not completely in a
+        # linear fashion) and A affects mostly X (not completely in a linear
+        # fashion). By improving the model (=conversion A/B <-> X/Y), the GUI
+        # could behave in a more expected way to the user, but the current
+        # approximation is enough to do the calibration relatively quickly.
         self._stage_ab = InclinedStage("converter-ab", "stage",
                                        children={"aligner": main_data.aligner},
                                        axes=["b", "a"],
