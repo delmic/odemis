@@ -828,10 +828,8 @@ class CLController(Controller):
     """
     Controller managed via closed-loop commands (ex: C-867 with reference)
     """
-    def __init__(self, busacc, address=None, axes=None,
-                 dist_to_steps=None, min_dist=None, vpms=None):
-        super(CLController, self).__init__(busacc, address, axes,
-                                           dist_to_steps, min_dist, vpms)
+    def __init__(self, busacc, address=None, axes=None):
+        super(CLController, self).__init__(busacc, address, axes)
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
@@ -902,9 +900,10 @@ class OLController(Controller):
     Controller managed via open-loop commands (ex: E-861)
     """
     def __init__(self, busacc, address=None, axes=None,
-                 dist_to_steps=None, min_dist=None, vpms=None):
+                 dist_to_steps=None, min_dist=None):
         super(OLController, self).__init__(busacc, address, axes,
-                                           dist_to_steps, min_dist, vpms)
+                                           dist_to_steps=dist_to_steps,
+                                           min_dist=min_dist)
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
@@ -1023,10 +1022,8 @@ class SMOController(Controller):
     """
     Controller managed via the test open-loop command "SMO" (ex: C-867)
     """
-    def __init__(self, busacc, address=None, axes=None,
-                 dist_to_steps=None, min_dist=None, vpms=None):
-        super(SMOController, self).__init__(busacc, address, axes,
-                                           dist_to_steps, min_dist, vpms)
+    def __init__(self, busacc, address=None, axes=None, vpms=None):
+        super(SMOController, self).__init__(busacc, address, axes, vpms=vpms)
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
@@ -1251,19 +1248,22 @@ class Bus(model.Actuator):
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
-        controllers = {} # address -> args (dict (axis -> boolean), dist_to_steps, min_dist, vpms)
+        controllers = {} # address -> kwargs (dict (axis -> boolean), dist_to_steps, min_dist, vpms)
         for axis, (add, channel, isCL) in axes.items():
             if not add in controllers:
-                controllers[add] = [{}, None, None, None]
+                controllers[add] = {"axes":{}}
             elif channel in controllers[add]:
                 raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
             ac_to_axis[(add, channel)] = axis
-            args = controllers[add]
-            args[0].update({channel: isCL})
+            kwargs = controllers[add]
+            kwargs["axes"].update({channel: isCL})
             # FIXME: for now we rely on the fact 1 axis = 1 controller for the calibration values
-            args[1] = dist_to_steps.get(axis)
-            args[2] = min_dist.get(axis)
-            args[3] = vpms.get(axis)
+            if axis in dist_to_steps:
+                kwargs["dist_to_steps"] = dist_to_steps[axis]
+            if axis in min_dist:
+                kwargs["min_dist"] = min_dist[axis]
+            if axis in vpms:
+                kwargs["vpms"] = vpms[axis]
 
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
@@ -1272,16 +1272,16 @@ class Bus(model.Actuator):
         speed = {}
         max_speed = 0 # m/s
         min_speed = 1e6 # m/s
-        for address, args in controllers.items():
+        for address, kwargs in controllers.items():
             try:
-                controller = Controller(self.accesser, address, *args)
+                controller = Controller(self.accesser, address, **kwargs)
             except IOError:
                 logging.exception("Failed to find a controller with address %d on %s", address, port)
                 raise
             except LookupError:
                 logging.exception("Failed to initialise controller %d on %s", address, port)
                 raise
-            channels = args[0]
+            channels = kwargs["axes"]
             for c in channels:
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
@@ -2220,12 +2220,10 @@ class FakeBus(Bus):
     """
     Same as the normal Bus, but connects to simulated controllers
     """
-    def __init__(self, name, role, port, axes, baudrate=38400,
-        dist_to_steps=None, min_dist=None, vpms=None, **kwargs):
+    def __init__(self, name, role, port, axes, baudrate=38400, **kwargs):
         # compute the addresses from the axes declared
         addresses = [d[0] for d in axes.values()]
         Bus.__init__(self, name, role, port, axes, baudrate=baudrate,
-                     dist_to_steps=dist_to_steps, min_dist=min_dist, vpms=vpms,
                      _addresses=addresses, **kwargs)
 
     @classmethod
