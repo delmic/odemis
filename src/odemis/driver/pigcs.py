@@ -79,7 +79,19 @@ approximately the minimum to move, and 10V is the maximum. Voltage is more or
 less linear between -32766 and 32766 -> -10 and 10V. So the distance moved 
 depends on the time the SMO is set, which is obviously very unprecise.
 
-In closed-loop, it's all automagical.
+In closed-loop, it's almost all automagical.
+There are two modes in closed-loop: before and after referencing. Referencing
+consists in going to at least one "reference" point so that the actual position
+is known. 
+ * Non referenced: that's the only one possible just after boot. It's only 
+   possible to do relative moves.
+ * Referenced: both absolute and relative moves are possible. It's the default
+   mode.
+The problem with referencing is that for some cases, it might be dangerous to
+move the actuator, so a user feedback is needed. This means an explicit request
+via the API must be done before this is going on, and stopping must be possible.
+In addition, in many cases, relative move is sufficient.   
+
 
 The recommended maximum step frequency is 800 Hz.
 
@@ -106,10 +118,10 @@ MODEL_UNKNOWN = 0
 # are overriding the method dynamically depending on what the controller can do,
 # but that's too hard to read.
 class Controller(object):
-    def __init__(self, ser, address=None, axes=None,
+    def __init__(self, busacc, address=None, axes=None,
                  dist_to_steps=None, min_dist=None, vpms=None):
         """
-        ser: a serial port (opened)
+        busacc: a BusAccesser (with at least a serial port opened)
         address 1<int<16: address as configured on the controller
         If not address is given, it just allows to do some raw commands
         axes (dict int -> boolean): determine which axis will be used and whether
@@ -129,7 +141,7 @@ class Controller(object):
         """
         # TODO: calibration values should be per axis (but for now we only have controllers with 1 axis)
 
-        self.serial = ser
+        self.busacc = busacc
         self.address = address
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
@@ -313,45 +325,7 @@ class Controller(object):
         Send a command which does not expect any report back
         com (string): command to send (including the \n if necessary)
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
-        full_com = "%d %s" % (self.address, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-        self.serial.write(full_com)
-        # TODO: flush()? (or flushOutput()?!)
-
-    def _sendQueryCommandRaw(self, com):
-        """
-        Send a command and return its report (raw)
-        com (string): the command to send (without address prefix but with \n)
-        return (list of strings): the complete report with each line separated and without \n 
-        """
-        full_com = "%d %s" % (self.address, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-        self.serial.write(full_com)
-
-        char = self.serial.read() # empty if timeout
-        line = ""
-        lines = []
-        while char:
-            if char == "\n":
-                if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
-                    not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
-                    lines.append(line[:-1]) # don't include the space
-                    line = ""
-                else:
-                    # full end
-                    lines.append(line)
-                    break
-            else:
-                # normal char
-                line += char
-            char = self.serial.read()
-
-        if not char:
-            raise IOError("Controller %d timeout." % self.address)
-
-        return lines
-
+        self.busacc.sendOrderCommand(self.address, com)
 
     def _sendQueryCommand(self, com):
         """
@@ -360,10 +334,9 @@ class Controller(object):
         return (string or list of strings): the report without prefix 
            (e.g.,"0 1") nor newline. If answer is multiline: returns a list of each line 
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
         try:
-            lines = self._sendQueryCommandRaw(com)
-        except IOError as ex:
+            lines = self.busacc.sendQueryCommand(self.address, com)
+        except IOError:
             if not self._try_recover:
                 raise
 
@@ -372,62 +345,43 @@ class Controller(object):
                 logging.warning("Controller %d timeout after '%s', but recovered.",
                                 self.address, com.encode('string_escape'))
                 # try one more time
-                lines = self._sendQueryCommandRaw(com)
+                lines = self.busacc.sendQueryCommand(self.address, com)
             else:
                 raise IOError("Controller %d timeout after '%s', not recovered." %
                               (self.address, com.encode('string_escape')))
 
-        assert len(lines) > 0
+        return lines
 
-        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
-        prefix = "0 %d " % self.address
-        if not lines[0].startswith(prefix):
-            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
-        lines[0] = lines[0][len(prefix):]
-
-        if len(lines) == 1:
-            return lines[0]
-        else:
-            return lines
-
-    err_ans_re = ".* \\d+\n$" # ex: "0 1 54\n"
+    err_ans_re = "\\d+$" # ex: ("0 1 ")[54](\n)
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
         return (boolean): True if it recovered
         """
-        # Flush buffer + give it some time to recover from whatever
-        # TODO: use self.serial.flushInput() too?
-        while self.serial.read():
-            pass
+        self.busacc.flushInput()
 
-        # It appears to make the controller more comfortable...
-        self._sendOrderCommand("ERR?\n")
-        char = self.serial.read()
-        resp = ""
-        while char:
-            resp += char
+        # It makes the controller more comfortable...
+        try:
+            resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
             if re.match(self.err_ans_re, resp): # looks like an answer to err?
                 # TODO Check if error == 307 or 308?
                 return True
-            char = self.serial.read()
+        except IOError:
+            pass
 
         # We timed out again, try harder: reboot
         self.Reboot()
         self._sendOrderCommand("ERR?\n")
-        char = self.serial.read()
-        resp = ""
-        while char:
-            resp += char
+        try:
+            resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
             if re.match(self.err_ans_re, resp): # looks like an answer to err?
-                #TODO reset all the values (SetServo...)
-                self._prev_speed_accel = (dict(), dict())
+                # TODO Check if error == 307 or 308?
                 return True
-            char = self.serial.read()
+        except IOError:
+            pass
 
         # that's getting pretty hopeless
         return False
-
 
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
@@ -627,13 +581,16 @@ class Controller(object):
 
     def Reboot(self):
         self._sendOrderCommand("RBT\n")
-        end_time = time.time() + 2 # give it some time to reboot before it's accessible again
 
         # empty the serial buffer
-        while self.serial.read():
-            pass
+        self.busacc.flushInput()
 
-        time.sleep(max(0, end_time - time.time()))
+        # Sending commands before it's fully rebooted can seriously mess it up.
+        # It might end up in a state where only power cycle can reset it.
+        # Give it some time to reboot before it's accessible again.
+        time.sleep(2)
+
+        self.busacc.flushInput()
 
     # TODO: use it when terminating?
     def RelaxPiezos(self, axis):
@@ -1164,17 +1121,17 @@ class Controller(object):
         return True
 
     @staticmethod
-    def scan(ser, max_add=16):
+    def scan(busacc, max_add=16):
         """
         Scan the serial network for all the PI GCS compatible devices available.
         Note this is the low-level part, you probably want to use Controller.scan()
          for scanning devices on a computer.
-        ser: the (open) serial port
+        bus: the bus
         max_add (1<=int<=16): maximum address to scan
         return (dict int -> tuple): addresses of available controllers associated
             to number of axes, and presence of limit switches/sensor
         """
-        ctrl = Controller(ser)
+        ctrl = Controller(busacc)
 
         present = {}
         for i in range(1, max_add + 1):
@@ -1224,6 +1181,9 @@ class Bus(model.Actuator):
         model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
 
         ser = self.openSerialPort(port, baudrate, _addresses)
+        self.accesser = BusAccesser(ser)
+        # to acquire before sending anything on the serial port
+        self.ser_access = threading.Lock()
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
@@ -1254,7 +1214,7 @@ class Bus(model.Actuator):
         min_speed = 1e6 # m/s
         for address, args in controllers.items():
             try:
-                controller = Controller(ser, address, *args)
+                controller = Controller(self.accesser, address, *args)
             except IOError:
                 logging.exception("Failed to find a controller with address %d on %s", address, port)
                 raise
@@ -1296,9 +1256,6 @@ class Bus(model.Actuator):
                              )
         self._hwVersion = ", ".join(hwversions)
 
-        # to acquire before sending anything on the serial port
-        self.ser_access = threading.Lock()
-
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
 
@@ -1308,7 +1265,7 @@ class Bus(model.Actuator):
         """
         position = {}
         with self.ser_access:
-            # send stop to all controllers (including the ones not in action)
+            # request position from each controller
             for axis, (controller, channel) in self._axis_to_cc.items():
                 position[axis] = controller.getPosition(channel)
 
@@ -1415,6 +1372,7 @@ class Bus(model.Actuator):
     def scan(cls, port=None, _cls=None):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
+        _cls (class): only used for testing, override the class for opening the serial port
         returns (list of 2-tuple): name, args (port, axes(channel -> CL?)
         Note: it's obviously not advised to call this function if moves on the motors are ongoing
         """
@@ -1437,7 +1395,7 @@ class Bus(model.Actuator):
                 for br in [38400, 9600, 19200, 115200]:
                     logging.debug("Trying port %s at baud rate %d", p, br)
                     ser = _cls.openSerialPort(p, br)
-                    controllers = Controller.scan(ser)
+                    controllers = Controller.scan(BusAccesser(ser))
                     if controllers:
                         axis_num = 0
                         arg = {}
@@ -1472,10 +1430,103 @@ class Bus(model.Actuator):
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
             timeout=0.5 #s
-            # TODO: interCharTimeout? only useful for readline()?
         )
 
         return ser
+
+class BusAccesser(object):
+    """
+    Manages connections to the low-level bus
+    """
+    def __init__(self, serial):
+        self.serial = serial
+        # TODO: also handle the lock and move the acquistion of lock to inside
+        # each of these methods.
+
+    def sendOrderCommand(self, addr, com):
+        """
+        Send a command which does not expect any report back
+        addr (None or 1<=int<=16): address of the controller. If None, no address
+        is used (and it's typically controller 1 answering)
+        com (string): command to send (including the \n if necessary)
+        """
+        assert(len(com) <= 100) # commands can be quite long (with floats)
+        assert(1 <= addr <= 16)
+        if addr is None:
+            full_com = com
+        else:
+            full_com = "%d %s" % (addr, com)
+        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+        self.serial.write(full_com)
+        # We don't flush, as it will be done anyway if an answer is needed
+
+    def sendQueryCommand(self, addr, com):
+        """
+        Send a command and return its report (raw)
+        addr (None or 1<=int<=16): address of the controller
+        com (string): the command to send (without address prefix but with \n)
+        return (string or list of strings): the report without prefix 
+           (e.g.,"0 1") nor newline. 
+           If answer is multiline: returns a list of each line  
+        """
+        assert(len(com) <= 100) # commands can be quite long (with floats)
+        assert(1 <= addr <= 16)
+        if addr is None:
+            full_com = com
+        else:
+            full_com = "%d %s" % (addr, com)
+        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+        self.serial.write(full_com)
+
+        # ensure everything is received, before expecting an answer
+        self.serial.flush()
+
+        char = self.serial.read() # empty if timeout
+        line = ""
+        lines = []
+        while char:
+            if char == "\n":
+                if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
+                    not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
+                    lines.append(line[:-1]) # don't include the space
+                    line = ""
+                else:
+                    # full end
+                    lines.append(line)
+                    break
+            else:
+                # normal char
+                line += char
+            char = self.serial.read()
+
+        if not char:
+            raise IOError("Controller %d timeout." % addr)
+
+        assert len(lines) > 0
+
+        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
+        if addr is None:
+            prefix = ""
+        else:
+            prefix = "0 %d " % addr
+        if not lines[0].startswith(prefix):
+            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
+        lines[0] = lines[0][len(prefix):]
+
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return lines
+
+    def flushInput(self):
+        """
+        Ensure there is no more data queued to be read on the bus (=serial port)
+        """
+        # Flush buffer + give it some time to recover from whatever
+        self.serial.flush()
+        self.serial.flushInput()
+        while self.serial.read():
+            pass
 
 
 class ActionManager(threading.Thread):
@@ -1819,7 +1870,7 @@ class E861Simulator(object):
         # special trick to only answer if baudrate is correct
         if baudrate != 38400:
             logging.debug("Baudrate incompatible: %d", baudrate)
-            self.write = (lambda s=1: "")
+            self.write = (lambda s: "")
 
     def _init_mem(self):
         # internal values to simulate the device
@@ -1838,7 +1889,7 @@ class E861Simulator(object):
         self._ready = True # is ready?
         self._errno = 0 # last error set
 
-    _re_command = ".*?[\n\x04\x05\x07\x08\x18]"
+    _re_command = ".*?[\n\x04\x05\x07\x08\x18\x24]"
     def write(self, data):
         self._input_buf += data
         # process each commands separated by a "\n" or is short command
@@ -1884,9 +1935,9 @@ class E861Simulator(object):
         process the command, and put the result in the output buffer
         com (str): command
         """
-#        logging.debug("Fake controller %d processing command '%s'",
-#                       self._address, com.encode('string_escape'))
-        out = None # None means error decoding command
+        logging.debug("Fake controller %d processing command '%s'",
+                       self._address, com.encode('string_escape'))
+        out = None # None means error while decoding command
 
         # command can start with a prefix like "5 0 " or "5 "
         m = re.match(self._re_addr_com, com)
@@ -1908,9 +1959,11 @@ class E861Simulator(object):
         args = filter(bool, com.split(" "))
         logging.debug("Command decoded: %s", args)
 
-        # FIXME: if errno is not null, most commands don't work any more
         if self._errno:
-            logging.debug("received command %s while errno = %d", com, self._errno)
+            # if errno is not null, most commands don't work any more
+            if com not in ["*IDN?", "RBT", "ERR?", "CSV?"]:
+                logging.debug("received command %s while errno = %d", com, self._errno)
+                return
 
         # TODO: to support more commands, we should have a table, with name of
         # the command + type of arguments (+ number of optional args)
@@ -2054,6 +2107,12 @@ class DaisyChainSimulator(object):
             t = threading.Thread(target=self._thread_read_serial, args=(p,))
             t.daemon = True
             t.start()
+
+    def flush(self):
+        return
+
+    def flushInput(self):
+        return
 
     def write(self, data):
         # just duplicate

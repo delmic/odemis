@@ -52,13 +52,14 @@ class TestController(unittest.TestCase):
     """
     def setUp(self):
         self.ser = CLASS.openSerialPort(PORT)
+        self.accesser = pigcs.BusAccesser(self.ser)
 
     def test_scan(self):
-        addresses = pigcs.Controller.scan(self.ser)
+        addresses = pigcs.Controller.scan(self.accesser)
         self.assertGreater(len(addresses), 0, "No controller found")
 
     def test_move(self):
-        ctrl = pigcs.Controller(self.ser, *CONFIG_CTRL_BASIC)
+        ctrl = pigcs.Controller(self.accesser, *CONFIG_CTRL_BASIC)
         speed = ctrl.max_speed / 10
         self.assertGreater(ctrl.max_speed, 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
@@ -79,7 +80,7 @@ class TestController(unittest.TestCase):
         self.assertFalse(ctrl.isMoving(set([1])))
 
     def test_timeout(self):
-        ctrl = pigcs.Controller(self.ser, *CONFIG_CTRL_BASIC)
+        ctrl = pigcs.Controller(self.accesser, *CONFIG_CTRL_BASIC)
 
         self.assertIn("Physik Instrumente", ctrl.GetIdentification())
         self.assertTrue(ctrl.IsReady())
@@ -94,6 +95,7 @@ class TestFake(TestController):
     """
     def setUp(self):
         self.ser = pigcs.FakeBus.openSerialPort(PORT)
+        self.accesser = pigcs.BusAccesser(self.ser)
 
 #@unittest.skip("faster")
 class TestActuator(unittest.TestCase):
