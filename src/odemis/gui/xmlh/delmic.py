@@ -637,3 +637,17 @@ component.Manager.setMenu(
     'OwnerDrawnComboBox',
     21
 )
+
+### ToolBar
+
+c = component.Component('ToolBar', ['window', 'top_level', 'control'],
+              ['pos', 'size'],
+              image=images.TreeMenuBar.GetImage())
+c.addStyles(
+    'wxHORIZONTAL',
+    'wxVERTICAL'
+)
+
+component.Manager.register(c)
+component.Manager.addXmlHandler(xh_delmic.ToolBarHandler)
+component.Manager.setMenu(c, 'Delmic', 'Tool Bar', 'ToolBar', 32)

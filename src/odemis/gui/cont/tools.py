@@ -96,55 +96,58 @@ TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
 
 
 class ToolBar(wx.Panel):
-    """ Tool Menu base class responsible for the general buttons states """
 
-    # def __init__(self, parent, id= -1, tools=None, **kwargs):
-    #     """
-    #     tools (list of TOOL_*): each button to be displayed, in order
-    #     """
+    def __init__(self, *args, **kwargs):
+        wx.Panel.__init__(self, *args, **kwargs)
+        self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
-    def __init__(self):
-        # TODO: don't rely on XRC, and create ourself the bitmap and sub panel
-        pre = wx.PrePanel()
-        # the Create step is done later by XRC.
-        self.PostCreate(pre)
-        self.Bind(wx.EVT_WINDOW_CREATE, self.OnCreate)
+        # Create orientation dependand objects
+        if kwargs['style'] & wx.VERTICAL == wx.VERTICAL:
+            self.orientation = wx.VERTICAL
+            main_sizer = wx.BoxSizer(wx.VERTICAL)
+            first_bmp = wx.StaticBitmap(self, -1,
+                                        img.data.getside_menu_topBitmap())
+            second_bmp = wx.StaticBitmap(self, -1,
+                                         img.data.getside_menu_bottomBitmap())
+            self.btn_sizer = wx.BoxSizer(wx.VERTICAL)
+        else:
+            self.orientation = wx.HORIZONTAL
+            main_sizer = wx.BoxSizer(wx.HORIZONTAL)
+            first_bmp = wx.StaticBitmap(self, -1,
+                                        img.data.getside_menu_leftBitmap())
+            second_bmp = wx.StaticBitmap(self, -1,
+                                         img.data.getside_menu_rightBitmap())
+            self.btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
-        self._panel = None # the (sub) panel that contains the sizer and buttons
+        # Set the main sizer that will contain the elements that will form
+        # the toolbar bar.
+        self.SetSizer(main_sizer)
+
+        # Add the left or top image
+        main_sizer.Add(first_bmp)
+
+        # Create a panel that will hold the actual buttons
+        self.btn_panel = wx.Panel(self, -1)
+        self.btn_panel.SetBackgroundColour(wx.BLACK)
+        self.btn_panel.SetSizer(self.btn_sizer)
+
+        # Add the button panel to the toolbar
+        main_sizer.Add(self.btn_panel)
+
+        main_sizer.Add(second_bmp)
+
+        if self.orientation == wx.VERTICAL:
+            main_sizer.SetItemMinSize(self.btn_panel, 40, -1)
+        else:
+            main_sizer.SetItemMinSize(self.btn_panel, -1, 36)
+
         self._tools = []
-        self._mode_callbacks = [] # to keep a reference, so they don't get unsubscribed
+        self._mode_callbacks = []
 
-    def OnCreate(self, event):
-        self.Unbind(wx.EVT_WINDOW_CREATE)
 
-        for w in self.GetChildren():
-            if isinstance(w, wx.Panel):
-                self._panel = w
-                assert w.GetSizer() is not None
-                break
-        else:
-            raise KeyError("Failed to find the sub panel")
+    def add_tool(self, tool_id, handler):
+        """ Add a tool and it's event handler to the toolbar
 
-        for t in self._tools:
-            self._add_tool(*t)
-
-    def AddTool(self, *args, **kwargs):
-        """
-        tool_id (TOOL_*): button to be displayed
-        handler (VA or callable): if mode: VA, if action: callable
-        value (object): value for the VA
-        raises:
-            KeyError: if tool_id is incorrect
-        """
-        # Because it can be called before OnCreate, so we need to cache
-        # FIXME: as soon as OnCreate is gone, it can be simplified
-        if not self._panel:
-            self._tools.append(args)
-        else:
-            self._add_tool(*args)
-
-    def _add_tool(self, tool_id, handler):
-        """
         tool_id (TOOL_*): button to be displayed
         handler (VA or callable): if mode: VA, if action: callable
         value (object): value for the VA
@@ -162,7 +165,12 @@ class ToolBar(wx.Panel):
         btn.Bind(wx.EVT_BUTTON, callback)
 
     def _add_mode_tool(self, tooltype, va):
-        btn = self._add_button(ImageToggleButton, tooltype.icon, tooltype.tooltip)
+        btn = self._add_button(
+                        ImageToggleButton,
+                        tooltype.icon,
+                        tooltype.tooltip
+            )
+
         value_on = tooltype.value_on
         value_off = tooltype.value_off
 
@@ -176,7 +184,8 @@ class ToolBar(wx.Panel):
         def _on_va_change(new_value, value_on=value_on, btn=btn):
             btn.SetToggle(new_value == value_on)
 
-        btn.Bind(wx.EVT_BUTTON, _on_click) # FIXME: It doesn't generate evt_togglebutton
+        # FIXME: It doesn't generate evt_togglebutton
+        btn.Bind(wx.EVT_BUTTON, _on_click)
         va.subscribe(_on_va_change)
         self._mode_callbacks.append(_on_va_change)
 
@@ -185,28 +194,25 @@ class ToolBar(wx.Panel):
         bmpa = img.data.catalog[img_prefix + "_a"].GetBitmap()
         bmph = img.data.catalog[img_prefix + "_h"].GetBitmap()
 
-        btn = cls(self._panel, bitmap=bmp, size=(24, 24))
+        btn = cls(self.btn_panel, bitmap=bmp, size=(24, 24))
         btn.SetBitmapSelected(bmpa)
         btn.SetBitmapHover(bmph)
 
         if tooltip:
             btn.SetToolTipString(tooltip)
 
-        if self._panel.Parent.GetSizer().GetOrientation() == wx.HORIZONTAL:
+        if self.orientation == wx.HORIZONTAL:
             f = wx.LEFT | wx.RIGHT | wx.TOP
             b = 5
         else:
             f = wx.BOTTOM | wx.LEFT
             b = 10
 
-        sizer = self._panel.GetSizer()
-
-        sizer.Add(btn, border=b, flag=f)
-        self._panel.Layout()
+        self.btn_sizer.Add(btn, border=b, flag=f)
+        self.btn_panel.Layout()
         return btn
 
-    # def enable_button(self, tool_id, enable):
-    #     sizer = self._panel.GetSizer()
-    #     print sizer.GetChildren()
-
-
+    def enable_button(self, tool_id, enable):
+        #sizer = self._panel.GetSizer()
+        #print sizer.GetChildren()
+        pass

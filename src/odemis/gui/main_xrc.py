@@ -299,8 +299,6 @@ def __init_resources():
             </XRCED>
           </object>
         </object>
-        
-        
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_about">
           <label>About</label>
@@ -863,38 +861,12 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="lens_align_tb" subclass="odemis.gui.cont.tools.ToolBar">
-                      <object class="wxBoxSizer">
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_left_png</bitmap>
-                          </object>
-                          <flag>wxLEFT</flag>
-                          <border>60</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxHORIZONTAL</orient>
-                            </object>
-                            <bg>#000000</bg>
-                          </object>
-                          <minsize>-1,36</minsize>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_right_png</bitmap>
-                          </object>
-                        </object>
-                        <orient>wxHORIZONTAL</orient>
-                      </object>
-                      <fg>#E5E5E5</fg>
-                      <bg>#333333</bg>
+                    <object class="ToolBar" name="lens_align_tb">
+                      <style>wxHORIZONTAL</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
@@ -935,30 +907,8 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="secom_toolbar" subclass="odemis.gui.cont.tools.ToolBar">
-                      <object class="wxBoxSizer">
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_top_png</bitmap>
-                          </object>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxVERTICAL</orient>
-                            </object>
-                            <bg>#000000</bg>
-                          </object>
-                          <minsize>40,-1</minsize>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_bottom_png</bitmap>
-                          </object>
-                        </object>
-                        <orient>wxVERTICAL</orient>
-                      </object>
-                      <bg>#333333</bg>
+                    <object class="ToolBar" name="secom_toolbar">
+                      <style>wxVERTICAL</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -1962,30 +1912,8 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="sparc_acq_toolbar" subclass="odemis.gui.cont.tools.ToolBar">
-                      <object class="wxBoxSizer">
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_top_png</bitmap>
-                          </object>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxVERTICAL</orient>
-                            </object>
-                            <bg>#000000</bg>
-                          </object>
-                          <minsize>40,-1</minsize>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_bottom_png</bitmap>
-                          </object>
-                        </object>
-                        <orient>wxVERTICAL</orient>
-                      </object>
-                      <bg>#333333</bg>
+                    <object class="ToolBar" name="sparc_acq_toolbar">
+                      <style>wxVERTICAL</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -2407,30 +2335,8 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxPanel" name="ana_toolbar" subclass="odemis.gui.cont.tools.ToolBar">
-                      <object class="wxBoxSizer">
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_top_png</bitmap>
-                          </object>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxVERTICAL</orient>
-                            </object>
-                            <bg>#000000</bg>
-                          </object>
-                          <minsize>40,-1</minsize>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <bitmap>img_side_menu_bottom_png</bitmap>
-                          </object>
-                        </object>
-                        <orient>wxVERTICAL</orient>
-                      </object>
-                      <bg>#333333</bg>
+                    <object class="ToolBar" name="ana_toolbar">
+                      <style>wxVERTICAL</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
@@ -3568,60 +3474,6 @@ X\x8b\xcc\xe1\x9b5\xf3\x02l\xa7\xf0U\x81\x17T\xbe\xf0\x91\xb9\xf0\xdd\xd2\
 <B-\x11\xae\xad\x96\x87\xbb\xf8?\xf2p\x17O\x96\x87_;\x18\xdf-\xae\x09\xf8\
 \x9f\xceY\xbfOC\xd6\x89$I~\x95R\xfe\x81\xe7\x17\x0e\xc9\xb3\xb5\x0bb\x8c\
 \xac\xf9\x0f\x93\xdft\x9c\xbb%Z\xf2\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_side_menu_left_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x0e\x00\x00\x00$\x08\x06\x00\x00\x00\xb9\
-\x0b\x81\x00\x00\x00\xacIDATH\xc7\x9d\xd1\xad\x0eAq\x00\x86\xf1\xe7\xd8\
-L`\x14\x89l\x02\x9b\xa8\xba\x09SMv\x01\xa7\xb9\x09I\x96tw`nC#\xe8\x27\x99\
-\xa3\x98\xd9\xd9\xf9\xf8\x9f\xe7\xed\xbf\xbd\xe1\x81\xfa\xeb\x02q]4\x02\
-\x12 \xad\x83Z\xc0\xfd\x8bj\xc1\xcd\x1f
-\x86Q\xe6-\x18v2(\x18N,\\Yx\xb0\xf0a`#\x07\x05\xc1\xbe\x85s\x0b\xb7\x16\
-\x9e-L\x0cl\x17\xa0J8\xb6pi\xe1\xde\xc2\x9b\x81\xcd\x12T
-\x07\x16.,\x8c-\xbc\x18\x18\x01o\x03{\x15\xa8\x10\xce,\\[x\xb4\xf0i\xe0\
-4\x00\xe5\xc2\xab\x81\xbb\x80~?\xd8\x00\x86\xc0\x09x\x05\xa2\xf4\x03f\xc6\
-\xe2n\xbf\xb5\x83\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_side_menu_right_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x0e\x00\x00\x00$\x08\x06\x00\x00\x00\xb9\
-\x0b\x81\x00\x00\x00\x9dIDATH\x89\x9d\xd4!2\x04\x00\x18@\xe1\xcf\xce\x18\
-\x81\xa1Hd#\xd8\x19Qu\x09\xa3\x1a\xd9\x01\xb6\xb9\x84$K\xba\x1b\x18\xd7\
-\xd0V\xd07\x99\xfd\xdd`\xc3{\xfd\xab\x0fV8\x16\x1alpQ\xe0`\x8d\x83\x02\x07\
-\x8f\x15\xae\xb1W\xe0\xe0\xa8\xc2\xab
-\xef+|\xad\xf0\xa7\xc2\xc1\xa2\xc2\xd3
-o*|\xaa\xf0\xa3\xc2M\x85\x83\xc3
-/+\xbc\xab\xf0\xa5\xc2\xef
-\x07\xfb\x15\x9eUx[\xe1\xaa\xc2\xcf
-\xb7v\\o\x17\x1c\x9cTx]\xe1C\x85o\x15\xfeV8XV\xf8U\xe1\x16\xcf\x05\x0e\
-\xfe\xf0\x8es,\xfe\x01c\xca\xe2n&\xcaW\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    img_side_menu_top_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00(\x00\x00\x00\x14\x08\x06\x00\x00\x00\xff\
-F\xbb\x00\x00\x00\x92IDATH\xc7\xed\xce\xb1\x09\xc2P\x14@\xd1\x13\x15\xd2\
-\xa5\xb2\xcc\x02VV.\xe2\x02\x0e\xe1\x14N`\xe7\x0c\x19\xc0\x11\x04k{\x11\
-\x9c\xe2\xdb\x04\xb1\x12\x03\xf9\xfeW\xe4\xc2\xed\x0f\xb1\x9b\x05\xf7i#\
-\xe3*tQqs\x1c\x91\xa2\xc1jl\xf1\xecq\xc5\x80\x15\x1a\xacz\xd0\x01\xd7\x0f\
-T\xfa\x17p\x08$\xe5\x04\x8e\x01\x19\x05\x98\x132\x08\xb8\xc0\x12\x1b\xec\
-p\xc2=3\xe4\x27\xe0\x1a\xe7B\x90\xaf\xc0\x06\x97`\xb07\xb0\xc6#(.\xc1>0\
-.\xc1-:02n\x02N\xc0\xe2\xbf\x00\xbb\xae\xea\x93q\x12\x83\xbe\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
-    img_side_menu_bottom_png = '''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00(\x00\x00\x00\x14\x08\x06\x00\x00\x00\xff\
-F\xbb\x00\x00\x00\x83IDATH\xc7c```\xf8?\xc8\xf1\xa8\x03G\x1d8\xe0\x0e\xbc\
-9\xd8\x1dX<\xd8\x1d\xc8\x0e\xc4\xcf\x06\xb3\x03A\x80\x0f\x88\xcf\x0cf\x07\
-\xc2\x80>\x10\xef\x19\xcc\x0e\x84\x01\x16 \x16\x01bS \x8e\x07\xe2y@\xfc\
-d09\x10\x17`\x84&\x07M \x0e\x02\xe2N >?\x98\x1c8\x10\x0e\xa7)\xa0\x86\xc3\
-\x07\x04\x90\xe2\xf0A\x05\xd8\xa1\x0e~9X\x1d\x08\x03\xcc@<}0;\x10\x96\x0c\
-60\x0cr 3\xd8\x1d\xc8\x04\x00\xaa\xbe\xea\x93\xc7--v\x00\x00\x00\x00IEN\
-D\xaeB`\x82'''
 
     img_preview_block_png = '''\
 \x89PNG\x0d
@@ -5074,10 +4926,6 @@ Z\xb9A\x04\xc6\x89\x00\x00\x00\x00IEND\xaeB`\x82'''
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_opt_png', img_btn_opt_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_opt_h_png', img_btn_opt_h_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_opt_on_a_png', img_btn_opt_on_a_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_left_png', img_side_menu_left_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_right_png', img_side_menu_right_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_top_png', img_side_menu_top_png)
-    wx.MemoryFSHandler.AddFile('XRC/main/img_side_menu_bottom_png', img_side_menu_bottom_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_png', img_preview_block_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_preview_block_a_png', img_preview_block_a_png)
     wx.MemoryFSHandler.AddFile('XRC/main/img_btn_press_png', img_btn_press_png)
