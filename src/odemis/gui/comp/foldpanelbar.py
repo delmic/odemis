@@ -55,7 +55,6 @@ class FoldPanelBar(wx.Panel):
         self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
-
         global SCROLLBAR_WIDTH
         SCROLLBAR_WIDTH = wx.SystemSettings_GetMetric(wx.SYS_VSCROLL_X)
 

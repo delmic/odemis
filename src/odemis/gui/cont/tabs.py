@@ -235,9 +235,9 @@ class SecomStreamsTab(Tab):
         # Toolbar
         tb = self.main_frame.secom_toolbar
         # TODO: Add the buttons when the functionality is there
-        #tb.AddTool(tools.TOOL_ROI, self.tab_data_model.tool)
-        #tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+        #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
+        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
     def settings_controller(self):
@@ -440,11 +440,11 @@ class SparcAcquisitionTab(Tab):
 
         # Toolbar
         tb = self.main_frame.sparc_acq_toolbar
-        tb.AddTool(tools.TOOL_ROA, self.tab_data_model.tool)
+        tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
         # TODO: Add the buttons when the functionality is there
-        #tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
-        #tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+        #tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     # Special event handlers for repetition indication in the ROI selection
 
@@ -641,10 +641,10 @@ class AnalysisTab(Tab):
         # Toolbar
         tb = self.main_frame.ana_toolbar
         # TODO: Add the buttons when the functionality is there
-        #tb.AddTool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        #tb.AddTool(tools.TOOL_POINT, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
-        # tb.enable_button(tools.TOOL_POINT, False)
+        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        # tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        tb.enable_button(tools.TOOL_POINT, False)
+        tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
     def stream_controller(self):
@@ -907,8 +907,8 @@ class LensAlignTab(Tab):
 
         # Toolbar
         tb = main_frame.lens_align_tb
-        tb.AddTool(tools.TOOL_DICHO, self.tab_data_model.tool)
-        tb.AddTool(tools.TOOL_SPOT, self.tab_data_model.tool)
+        tb.add_tool(tools.TOOL_DICHO, self.tab_data_model.tool)
+        tb.add_tool(tools.TOOL_SPOT, self.tab_data_model.tool)
 
         # Dicho mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
@@ -937,10 +937,10 @@ class LensAlignTab(Tab):
         self._ccd_stream.is_active.value = show
 
         # TODO: save and restore SEM state (for now, it does nothing anyway)
-#        # Turn on (or off) SEM
-#        main_data = self.tab_data_model.main
-#        state = guimodel.STATE_ON if show else guimodel.STATE_PAUSE
-#        main_data.emState.value = state
+        # Turn on (or off) SEM
+        # main_data = self.tab_data_model.main
+        # state = guimodel.STATE_ON if show else guimodel.STATE_PAUSE
+        # main_data.emState.value = state
 
     def terminate(self):
         super(LensAlignTab, self).terminate()

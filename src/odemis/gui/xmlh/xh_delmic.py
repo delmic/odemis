@@ -7,13 +7,13 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -33,6 +33,7 @@ import odemis.gui.comp.viewport as vport
 import odemis.gui.comp.slider as slide
 import odemis.gui.comp.stream as strm
 import odemis.gui.comp.text as txt
+import odemis.gui.cont.tools as tools
 import odemis.gui.img.data as img
 import wx
 import wx.combo
@@ -67,16 +68,17 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
 
         parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = strm.StreamPanel(parent_window,
-                                         self.GetID(),
-                                         self.GetText('label'),
-                                         self.GetPosition(),
-                                         self.GetSize(),
-                                         self.GetStyle("style", wx.TAB_TRAVERSAL),
-                                         #self.GetStyle('exstyle'),
-                                         name=self.GetName(),
-                                         collapsed=self.GetBool('collapsed')
-                                         )
+        panel = strm.StreamPanel(
+                            parent_window,
+                            self.GetID(),
+                            self.GetText('label'),
+                            self.GetPosition(),
+                            self.GetSize(),
+                            self.GetStyle("style", wx.TAB_TRAVERSAL),
+                            #self.GetStyle('exstyle'),
+                            name=self.GetName(),
+                            collapsed=self.GetBool('collapsed')
+                )
 
         # These two things should be done in either case:
         # Set standard window attributes
@@ -883,3 +885,45 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         self.SetupWindow(new_ctrl)
         return new_ctrl
 HANDLER_CLASS_LIST.append(OwnerDrawnComboBoxHandler)
+
+####################################################################
+# ToolBar Handler
+#
+# Small bar for view related tools
+####################################################################
+
+class ToolBarHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+
+        self.AddStyle("wxHORIZONTAL", wx.HORIZONTAL)
+        self.AddStyle("wxVERTICAL", wx.VERTICAL)
+
+        # Standard styles
+        self.AddWindowStyles()
+        #self._isInside = False
+
+    def CanHandle(self, node):
+        # return not self._isInside and self.IsOfClass(node, 'wx.lib.foldpanelbar.FoldPanelBar') or \
+        #        self._isInside and self.IsOfClass(node, 'foldpanel')
+        return self.IsOfClass(node, 'ToolBar')
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        parent_window = self.GetParentAsWindow()
+        # Now create the object
+        toolbar = tools.ToolBar(
+                        parent_window,
+                        self.GetID(),
+                        self.GetPosition(),
+                        self.GetSize(),
+                        style=self.GetStyle(),
+                        name=self.GetName(),
+                )
+
+        # Set standard window attributes
+        self.SetupWindow(toolbar)
+        return toolbar
+HANDLER_CLASS_LIST.append(ToolBarHandler)

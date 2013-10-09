@@ -1353,6 +1353,7 @@ class PointSelectOverlay(WorldOverlay):
         self._selected_pixel = None # The pixel selected by the user
 
         self.color = hex_to_frgba(gui.SELECTION_COLOR, 0.5)
+        self.select_color = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
         self.enabled = False
 
     # Event handlers
@@ -1372,7 +1373,7 @@ class PointSelectOverlay(WorldOverlay):
 
     def on_mouse_up(self, evt):
         """ Set the selected pixel, if a pixel position is known """
-        if self._pixel_pos:
+        if self._pixel_pos and self.enabled:
             self._selected_pixel = self._pixel_pos
             logging.debug("Pixel %s selected", str(self._selected_pixel))
         evt.Skip()
@@ -1463,45 +1464,54 @@ class PointSelectOverlay(WorldOverlay):
 
             self.label =  "Pixel %s" % str( self._pixel_pos)
 
-    def pixel_to_rect(self, scale):
+    def pixel_to_rect(self, pixel, scale):
         """ Return a rectangle, in buffer coordinates, describing the current
         pixel.
 
         :param scale: (float) The scale to draw the pixel at.
         """
 
-        if self._pixel_pos:
-            # First we calculate the position of the top left in buffer pixels
-            top_left = util.tuple_add(
-                                self._pysical_top_left,
-                                util.tuple_multiply(self._pixel_pos, self._mpp)
-                       )
-            offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
-            # Note the Y flip again
-            btop_left = self.base.world_to_buffer_pos(
-                                self.base.physical_to_world_pos(
-                                    (top_left[0], -top_left[1])
-                                ),
-                                offset
-                        )
+        # First we calculate the position of the top left in buffer pixels
+        top_left = util.tuple_add(
+                            self._pysical_top_left,
+                            util.tuple_multiply(pixel, self._mpp)
+                   )
+        offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
+        # Note the Y flip again
+        btop_left = self.base.world_to_buffer_pos(
+                            self.base.physical_to_world_pos(
+                                (top_left[0], -top_left[1])
+                            ),
+                            offset
+                    )
 
-            return btop_left + util.tuple_multiply(self._pixel_size, scale)
+        return btop_left + util.tuple_multiply(self._pixel_size, scale)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
-        if self.enabled:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
+        ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-            rect = self.pixel_to_rect(scale)
+        if self.enabled:
+
+            if self._pixel_pos:
+                rect = self.pixel_to_rect(self._pixel_pos, scale)
+
+                if rect:
+                    ctx.set_source_rgba(*self.color)
+                    ctx.rectangle(*rect)
+                    ctx.fill()
+
+                    # Label for debugging purposes
+                    pos = self.base.view_to_buffer_pos((10, 16))
+                    self.write_label(ctx, dc.GetSize(), pos, self.label + str(rect))
+
+        if self._selected_pixel:
+            rect = self.pixel_to_rect(self._selected_pixel, scale)
 
             if rect:
-                ctx.set_source_rgba(*self.color)
+                ctx.set_source_rgba(*self.select_color)
                 ctx.rectangle(*rect)
                 ctx.fill()
-
-                # Label for debugging purposes
-                pos = self.base.view_to_buffer_pos((10, 16))
-                self.write_label(ctx, dc.GetSize(), pos, self.label + str(rect))
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
