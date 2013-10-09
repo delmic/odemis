@@ -41,7 +41,7 @@ Command Set). In particular it handle the PI E-861 controller. Information can
 be found the manual E-861_User_PZ205E121.pdf (p.107). See PIRedStone for the PI C-170.
 
 In a daisy-chain, connected via USB or via RS-232, there must be one
-controller with address 1 (=DIP 1111).
+controller with address 1 (=DIP 1111). There is also a broadcast address: 255.
 
 The controller support closed-loop mode (i.e., absolute positioning) but only
 if it is associated to a sensor (not software detectable). It can also work in 
@@ -77,7 +77,7 @@ use the command. The voltage defines the speed (and direction) of the move. The
 voltage should be set to 0 again when the position desired is reached. 3V is 
 approximately the minimum to move, and 10V is the maximum. Voltage is more or 
 less linear between -32766 and 32766 -> -10 and 10V. So the distance moved 
-depends on the time the SMO is set, which is obviously very unprecise.
+depends on the time the SMO is set, which is obviously very imprecise.
 
 In closed-loop, it's almost all automagical.
 There are two modes in closed-loop: before and after referencing. Referencing
@@ -90,8 +90,7 @@ is known.
 The problem with referencing is that for some cases, it might be dangerous to
 move the actuator, so a user feedback is needed. This means an explicit request
 via the API must be done before this is going on, and stopping must be possible.
-In addition, in many cases, relative move is sufficient.   
-
+In addition, in many cases, relative move is sufficient.
 
 The recommended maximum step frequency is 800 Hz.
 
@@ -131,18 +130,19 @@ class Controller(object):
         # Three types of controllers: Closed-loop (detected just from the axes
         # arguments), normal open-loop, and open-loop via SMO test command.
         # Difference between the 2 open-loop is hard-coded on the model as it's
-        # faster that checking for the list of commands available.
+        # faster than checking for the list of commands available.
         if address is None:
             subcls = Controller # just for tests/scan
         elif any(axes.values()):
             if not all(axes.values()):
                 raise ValueError("Controller %d, mix of closed-loop and "
                                  "open-loop axes is not supported", address)
+            # TODO: don't ask user for CL/OL and check if has limit and sensor?
             subcls = CLController
         else:
             # Check controller model by asking it, but cannot rely on the
             # normal commands as nothing is ready, so do all "manually"
-            err = busacc.sendQueryCommand(address, "ERR?\n") # to make it happier # TODO: needed for IDN?
+            # Note: IDN works even if error is set
             idn = busacc.sendQueryCommand(address, "*IDN?\n")
             if re.search(cls.idn_matches[MODEL_C867], idn):
                 subcls = SMOController
@@ -180,6 +180,7 @@ class Controller(object):
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
         if address is None:
+            self._channels = range(1, 17) # allow commands to work on any axis
             return
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
@@ -211,13 +212,13 @@ class Controller(object):
 
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
-        self._hasLimit = dict([(a, self.hasLimitSwitches(a)) for a in self._channels])
+        self._hasLimit = dict([(a, self.HasLimitSwitches(a)) for a in self._channels])
         # dict axis -> boolean
-        self._hasSensor = dict([(a, self.hasSensor(a)) for a in self._channels])
+        self._hasSensor = dict([(a, self.HasSensor(a)) for a in self._channels])
         self._position = {} # m (dict axis-> position)
 
 
-        # If the controller is misconfigured for the actuator, things can go quite
+        # If the controller is mis-configured for the actuator, things can go quite
         # wrong, so make it clear
         logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
         for c in self._channels:
@@ -300,6 +301,8 @@ class Controller(object):
         # that's getting pretty hopeless
         return False
 
+    
+
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
     def GetIdentification(self):
@@ -318,6 +321,8 @@ class Controller(object):
         return (str) the name of the stage for which the controller is configured.
         Note that the actual stage might be different.
         """
+        # TODO: this is actually per axis.
+        # CST? does this as well
         #parameter 0x3c
         return self.GetParameter(1, 0x3C)
 
@@ -381,6 +386,22 @@ class Controller(object):
             raise ValueError("Parameter %d %d unknown" % (axis, param))
         return value
 
+    def SetParameter(self, axis, param, val):
+        """
+        axis (1<int<16): axis number
+        param (0<int): parameter id (cf p.35)
+        val (str): value to set (if not a string, it will be converted)
+        Raises ValueError if hardware complains
+        """
+        # SPA (Set Volatile Memory Parameters)
+        assert((1 <= axis) and (axis <= 16))
+        assert(0 <= param)
+        self._sendOrderCommand("SPA %d %d %s\n" % (axis, param, val))
+        err = self.GetErrorNum()
+        if err:
+            raise ValueError("Error %d: setting param %x with val %s failed." %
+                             (err, param, val), err)
+
     def GetRecoderConfig(self):
         """
         you don't need this
@@ -388,35 +409,58 @@ class Controller(object):
         #DRC? (get Data Recorder Configuration)
         return self._sendQueryCommand("DRC?\n")
 
-    def hasLimitSwitches(self, axis):
+    def _readAxisValue(self, com, axis):
+        """
+        Returns the value for a command with axis.
+        Ex: POS? 1 -> 1=25.3
+        com (str): the 4 letter command (including the ?)
+        axis (1<int<16): axis number
+        returns (int or float or str): value returned depending on the type detected
+        """
+        assert(axis in self._channels)
+        assert(2 < len(com) < 8)
+        resp = self._sendQueryCommand("%s %d\n" % (com, axis))
+        try:
+            value_str = resp.split("=")[1]
+        except IndexError:
+            raise ValueError("Failed to parse answer from %s %d: '%s'" %
+                             (com, axis, resp))
+        try:
+            value = int(value_str)
+        except TypeError:
+            try:
+                value = float(value_str)
+            except TypeError:
+                value = value_str
+        
+        return value
+
+    def HasLimitSwitches(self, axis):
         """
         Report whether the given axis has limit switches (is able to detect 
          the ends of the axis).
         Note: It's just read from a configuration value in flash 
-        memory. Can be configured easily with PIMikroMove (paremeter 
+        memory. Can be configured easily with PIMikroMove 
         axis (1<int<16): axis number
+        returns (bool)
         """
         #LIM? (Indicate Limit Switches)
-        assert((1 <= axis) and (axis <= 16))
-
-        answer = self._sendQueryCommand("LIM? %d\n" % axis)
         # 1 => True, 0 => False
-        return answer == "1"
+        return self._readAxisValue("LIM?", axis) == 1
 
-    def hasSensor(self, axis):
+    def HasSensor(self, axis):
         """
-        Report whether the given axis has a sensor (is able to measure the 
-         distance travelled). 
+        Report whether the given axis has a reference switch (is able to detect
+         the "middle" of the axis).
         Note: apparently it's just read from a configuration value in flash 
         memory. Can be configured easily with PIMikroMove
         axis (1<int<16): axis number
+        returns (bool)
         """
+        # TODO: Rename to has RefSwitch?
         # TRS? (Indicate Reference Switch)
-        assert((1 <= axis) and (axis <= 16))
-
-        answer = self._sendQueryCommand("TRS? %d\n" % axis)
         # 1 => True, 0 => False
-        return answer == "1"
+        return self._readAxisValue("TRS?", axis) == 1
 
     def GetMotionStatus(self):
         """
@@ -463,6 +507,28 @@ class Controller(object):
             return False
 
         logging.warning("Controller %d replied unknown ready status '%s'", self.address, ans)
+
+    def IsReferenced(self, axis):
+        """
+        Report whether the given axis has been referenced
+        Note: setting position with RON disabled will also put it in this mode
+        axis (1<int<16): axis number
+        returns (bool)
+        """
+        #FRF? (Get Referencing Result)
+        # 1 => True, 0 => False
+        return self._readAxisValue("FRF?", axis) == 1
+
+    def IsOnTarget(self, axis):
+        """
+        Report whether the given axis is concidered on target (for closed-loop 
+          moves only)
+        axis (1<int<16): axis number
+        returns (bool)
+        """
+        #ONT? (Get On Target State)
+        # 1 => True, 0 => False
+        return self._readAxisValue("ONT?", axis) == 1
 
     def GetErrorNum(self):
         """
@@ -536,7 +602,7 @@ class Controller(object):
     def SetServo(self, axis, activated):
         """
         Activate or de-activate the servo. 
-        Note: only activate it if there is a sensor (cf .hasSensor and ._hasSensor)
+        Note: only activate it if there is a sensor (cf .HasSensor and ._hasSensor)
         axis (1<int<16): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
         """
@@ -548,7 +614,29 @@ class Controller(object):
             state = 1
         else:
             state = 0
+        # FIXME: on E861 it seems recommended to first relax piezo.
+        # On C867, it's RNP doesn't exists
         self._sendOrderCommand("SVO %d %d\n" % (axis, state))
+
+    def SetReferenceMode(self, axis, absolute):
+        """
+        Select the reference mode. 
+        Note: only useful for closed-loop moves 
+        axis (1<int<16): axis number
+        absolute (bool): If True, absolute moves can be used, but needs to have
+          been referenced.
+          If False only relative moves can be used, but only needs a sensor to
+          be used.
+        """
+        #RON (Set Reference Mode)
+        assert(axis in self._channels)
+
+        if absolute:
+            assert(self._hasLimit[axis] or self._hasSensor[axis])
+            state = 1
+        else:
+            state = 0
+        self._sendOrderCommand("RON %d %d\n" % (axis, state))
 
     # Functions for relative move in open-loop (no sensor)
     def OLMoveStep(self, axis, steps):
@@ -616,9 +704,9 @@ class Controller(object):
 
     def SetOLAcceleration(self, axis, value):
         """
-        Set open-loop acceleration of given axes.
+        Set open-loop acceleration of given axis.
         axis (1<int<16): axis number
-        value (0<float): acceleration in step-cycles/s. Default is 2000 
+        value (0<float): acceleration in step-cycles/s². Default is 2000 
         """
         #OAC (Set Open-Loop Acceleration)
         assert(axis in self._channels)
@@ -629,34 +717,116 @@ class Controller(object):
         """
         Set the open-loop deceleration.
         axis (1<int<16): axis number
-        value (0<float): deceleration in step-cycles/s. Default is 2000 
+        value (0<float): deceleration in step-cycles/s². Default is 2000 
         """
         #ODC (Set Open-Loop Deceleration)
         assert(axis in self._channels)
         assert(value > 0)
         self._sendOrderCommand("ODC %d %.5g\n" % (axis, value))
 
+    # Methods for closed-loop functionality. For all of them, servo must be on
+    def MoveAbs(self, axis, pos):
+        """
+        Start an absolute move of an axis to specific position.
+         Can only be done with servo on and referenced.
+        axis (1<int<16): axis number
+        pos (float): position in "user" unit (~m)
+        """
+        #MOV (Set Target Position)
+        assert(axis in self._channels)
+        self._sendOrderCommand("MVO %d %.5g\n" % (axis, pos))
+
+    def MoveRel(self, axis, shift):
+        """
+        Start an relative move of an axis to specific position.
+         Can only be done with servo on and referenced.
+        axis (1<int<16): axis number
+        shift (float): change of position in "user" unit (~m)
+        """
+        #MVR (Set Target Relative To Current Position)
+        assert(axis in self._channels)
+        self._sendOrderCommand("MVR %d %.5g\n" % (axis, shift))
+
+    # TODO: it seems it's possible to have axes with only either limit or ref
+    # switch. If there is no ref switch, we should be able to fallback to limit
+    # switch referencing
+    #FNL (Fast Reference Move To Negative Limit)
+    #FPL (Fast Reference Move To Positive Limit)
+    
+    def ReferenceToSwitch(self, axis):
+        """
+        Start to move the axis to the switch position (typically, the center)
+        Note: Servo and referencing must be on
+        See IsReferenced()
+        axis (1<int<16): axis number
+        """
+        #FRF (Fast Reference Move To Reference Switch)
+        assert(axis in self._channels)
+        self._sendOrderCommand("FRF %d\n" % axis)
+
+    def GetPosition(self, axis):
+        """
+        Get the position (in "user" units)
+        axis (1<int<16): axis number
+        return (float): pos can be negative
+        Note: after referencing, a constant is added by the controller
+        """
+        #POS? (GetRealPosition)
+        return self._readAxisValue("POS?", axis)
+
+    def GetMinPosition(self, axis):
+        """
+        Get the minimum reachable position (in "user" units)
+        axis (1<int<16): axis number
+        return (float): pos can be negative
+        """
+        #TMN? (Get Minimum Commandable Position)
+        return self._readAxisValue("TMN?", axis)
+
+    def GetMaxPosition(self, axis):
+        """
+        Get the maximum reachable position (in "user" units)
+        axis (1<int<16): axis number
+        return (float): pos can be negative
+        """
+        #TMX? (Get Maximum Commandable Position)
+        assert(axis in self._channels)
+        return self._readAxisValue("TMX?", axis)
+
+    def SetCLVelocity(self, axis, velocity):
+        """
+        Set velocity for closed-loop montion.
+        axis (1<int<16): axis number
+        velocity (0<float): velocity in units/s
+        """
+        #VEL (Set Closed-Loop Velocity)
+        assert(axis in self._channels)
+        assert(velocity > 0)
+        self._sendOrderCommand("VEL %d %.5g\n" % (axis, velocity))
+
+    def SetCLAcceleration(self, axis, value):
+        """
+        Set closed-loop acceleration of given axis.
+        axis (1<int<16): axis number
+        value (0<float): acceleration in units/s² 
+        """
+        #ACC (Set Closed-Loop Acceleration)
+        assert(axis in self._channels)
+        assert(value > 0)
+        self._sendOrderCommand("ACC %d %.5g\n" % (axis, value))
+
+    def SetCLDeceleration(self, axis, value):
+        """
+        Set the closed-loop deceleration.
+        axis (1<int<16): axis number
+        value (0<float): deceleration in units/s² 
+        """
+        #DEC (Set Closed-Loop Deceleration)
+        assert(axis in self._channels)
+        assert(value > 0)
+        self._sendOrderCommand("DEC %d %.5g\n" % (axis, value))
 
 
-#Abs (with sensor = closed-loop):
-#MOV (Set Target Position)
-#MVR (Set Target Relative To Current Position)
-#
-#FNL (Fast Reference Move To Negative Limit)
-#FPL (Fast Reference Move To Positive Limit)
-#FRF (Fast Reference Move To Reference Switch)
-#
-#POS? (GetRealPosition)
-#ONT? (Get On Target State)
-#
-#TMN? (Get Minimum Commandable Position)
-#TMX? (Get Maximum Commandable Position)
-#Min-Max position in physical units (μm)
-#
-#VEL (Set Closed-Loop Velocity)
-#ACC (Set Closed-Loop Acceleration)
-#DEC (Set Closed-Loop Deceleration)
-#
 # Different from OSM because they use the sensor and are defined in physical unit.
 # Servo must be off! => Probably useless... compared to MOV/MVR
 #OMR (Relative Open-Loop Motion)
@@ -811,7 +981,7 @@ class Controller(object):
                 ctrl.address = i
                 axes = {}
                 for a in ctrl.GetAxes():
-                    axes = {a: ctrl.hasSensor(a)}
+                    axes = {a: ctrl.HasSensor(a)}
                 if not axes:
                     logging.info("Found controller %d with no axis", i)
                 else:
@@ -827,38 +997,82 @@ class Controller(object):
 class CLController(Controller):
     """
     Controller managed via closed-loop commands (ex: C-867 with reference)
+    TODO: For now, only relative moves are supported.
+          For supporting absolute moves, we need to add querying and requesting
+          "homing" procedure. Then the position would reset to 0 (and that's it
+          from the user's point of view).
     """
     def __init__(self, busacc, address=None, axes=None):
         super(CLController, self).__init__(busacc, address, axes)
+
+        self._speed = {} # m/s dict axis -> speed
+        self._accel = {} # m/s² dict axis -> acceleration/deceleration
+
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
 
             if not cl: # want open-loop?
                 raise ValueError("Initialising CLController with request for open-loop")
-            # that should be the default, but for safety we force it
+            if not self._hasSensor[a]:
+                raise ValueError("Closed-loop control requested but controller "
+                                 "%d reports no sensor for axis %d" % (address, a))
+
+            # Start with servo, non-referenced mode, assume the position is
+            # correct, and set units to meters
             self.SetServo(a, True)
-            # for now we don't handle closed-loop anyway...
-            raise NotImplementedError("Closed-loop support not yet implemented")
-            self._position[a] = 0
+            self.SetReferenceMode(a, False)
+            # It seems the internal device unit is in 100 nm, but "user" unit
+            # is usually set to report in mm (but can be changed).
+            # => change to be always in meters
+            self.SetParameter(a, 0xE, 10000000) # numerator
+            self.SetParameter(a, 0xF, 1) # denumerator
 
-        # actually set just before a move
-        # The max using closed-loop info seem purely arbitrary
+            # Movement range before refenrencing is max range in both directions
+            pos = self.GetPosition(a)
+            width = self.GetMaxPosition(a) - self.GetMinPosition(a)
+            self.pos_rng = [pos - width, pos + width]
 
-#        # FIXME: how to use the closed-loop version?
-#        max_vel = float(self.GetParameter(1, 0xA)) # in unit/s
-#        num_unit = float(self.GetParameter(1, 0xE))
-#        den_unit = float(self.GetParameter(1, 0xF))
-#        max_accel = float(self.GetParameter(1, 0x4A)) # in unit/s²
-#        # seems like unit = num_unit/den_unit mm
-#        # and it should be initialised using PIStages.dat
-#        self.max_speed = max_vel * 1e3 * (num_unit/den_unit)
-#        self.max_accel = max_accel * 1e3 * (num_unit/den_unit)
+            # Read speed/accel ranges
+            self._speed[a] = self._readAxisValue("VEL?", a) # m/s
+            self._accel[a] = self._readAxisValue("ACC?", a) # m/s²
+
+            # TODO: also use per-axis info
+            try:
+                self.max_speed = float(self.GetParameter(1, 0xA)) # m/s
+                self.max_accel = float(self.GetParameter(1, 0x4A)) # m/s²
+            except (IOError, ValueError):
+                self.max_speed = self._speed[a]
+                self.max_accel = self._accel[a]
+
         self.min_speed = 10e-6 # m/s (default low value)
-        self.max_speed = 0.5 # m/s
-        self.max_accel = 0.01 # m/s²
-        self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
-        self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
+
+        # Procedure:
+        # servo on
+        # RON 1 0 -> non-referencing
+        # POS 1 0 -> reset position ... OR shall just read the current one which might be more correct if was not turned off?
+        # Now you can:
+        # MVR 1 1.84870 -> relative move
+        # POS? 1 -> request pos
+        # 1=-2.74960
+        # On termination -> SVO 1 0 
+        
+        # Note: setting position only works if ron is disabled. It's possible
+        # also indirectly set it after referencing, but then it will conflict
+        # with TMN/TMX and some correct moves will fail.
+        # So referencing could look like:
+        # ron 1 1
+        # frf -> go home and now know the position officially
+        # orig_pos = pos?
+        #
+
+        # Use FRF? to know about the referencing status
+        # TMN? TMX?  give range (careful, it's typically 0 -> BIG Number)
+        # Note: the actuator actively control the motor to stay at the last 
+        # position requested as long as the servo is on. So need to disable
+        # servo when stopping the program to allow the user to move the stage
+        # manually (or maybe even after any move?)
+
 
     def _updateSpeedAccel(self, axis):
         """
@@ -870,29 +1084,35 @@ class CLController(Controller):
         prev_speed = self._prev_speed_accel[0].get(axis, None)
         new_speed = self._speed[axis]
         if prev_speed != new_speed:
-            raise NotImplementedError("No closed-loop support")
+            # TODO: check it's within range
+            self.SetCLVelocity(axis, new_speed)
             self._prev_speed_accel[0][axis] = new_speed
 
         prev_accel = self._prev_speed_accel[1].get(axis, None)
         new_accel = self._accel[axis]
         if prev_accel != new_accel:
-            raise NotImplementedError("No closed-loop support")
+            # TODO: check it's within range
+            self.SetCLAcceleration(axis, new_accel)
+            self.SetCLDeceleration(axis, new_accel)
             self._prev_speed_accel[1][axis] = new_accel
-
 
     def moveRel(self, axis, distance):
         """
         See OL.moveRel
         """
         assert(axis in self._channels)
-
         self._updateSpeedAccel(axis)
-        # closed-loop
-        raise NotImplementedError("No closed-loop support")
-        # call MVR
+        # TODO: check it's in range
+        self.MoveRel(axis, distance)
 
-        self._position[axis] += distance
         return distance
+
+    def getPosition(self, axis):
+        """
+        Find current position as reported by the sensor
+        return (float): the current position of the given axis
+        """
+        return self.GetPosition(axis)
 
 
 class OLController(Controller):
@@ -1393,6 +1613,8 @@ class Bus(model.Actuator):
         # Stop every axes (even if there is no action going, or action on just
         # some axes
         with self.ser_access:
+            # TODO: use the broadcast address to request a stop to all 
+            # controllers on the bus at the same time?
             # send stop to all controllers (including the ones not in action)
             controllers = set()
             for axis, (controller, channel) in self._axis_to_cc.items():
@@ -2009,7 +2231,7 @@ class E861Simulator(object):
             addr = 1 # default is address == 1
             prefix = ""
 
-        if addr != self._address: # message is for us?
+        if addr != self._address and addr != 255: # message is for us?
             logging.debug("Controller %d skipping message for %d",
                           self._address, addr)
             return
@@ -2093,13 +2315,13 @@ class E861Simulator(object):
             elif args[0] == "LIM?" and len(args) == 2: # Has limit switch: axis
                 axis = int(args[1])
                 if axis == 1:
-                    out = "%d" % (1 - self._parameters[0x32]) # inverted parameter
+                    out = "%d=%d" % (axis, 1 - self._parameters[0x32]) # inverted parameter
                 else:
                     self._errno = 15
             elif args[0] == "TRS?" and len(args) == 2: # Indicate Reference Switch: axis
                 axis = int(args[1])
                 if axis == 1:
-                    out = "%d" % self._parameters[0x14]
+                    out = "%d=%d" % (axis, self._parameters[0x14])
                 else:
                     self._errno = 15
             elif args[0] == "SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
