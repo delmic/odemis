@@ -33,6 +33,7 @@ import logging
 import numpy
 import odemis.gui.conf
 import odemis.gui.cont.tabs as tabs
+import odemis.gui.img.data as imgdata
 import odemis.gui.model as guimodel
 import os.path
 import pkg_resources
@@ -129,9 +130,10 @@ class OdemisGUIApp(wx.App):
         try:
             # Add frame icon
             ib = wx.IconBundle()
-            ib.AddIconFromFile(os.path.join(self._module_path(),
-                                            "img/icon128.png"),
-                                            wx.BITMAP_TYPE_ANY)
+            # ib.AddIconFromFile(os.path.join(self._module_path(),
+            #                                 "img/icon128.png"),
+            #                                 wx.BITMAP_TYPE_ANY)
+            ib.AddIcon(imgdata.catalog['icon128'].GetIcon())
             self.main_frame.SetIcons(ib)
 
             # TODO: move to menu controller?
