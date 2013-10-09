@@ -339,6 +339,9 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
+    # Useful to debug cases of multiple conflicting installations
+    logging.debug("Starting Odemis back-end (from %s)", __file__)
+
     if options.validate and (options.kill or options.check or options.daemon):
         logging.error("Impossible to validate a model and manage the daemon simultaneously")
         return 127
