@@ -91,6 +91,13 @@ The problem with referencing is that for some cases, it might be dangerous to
 move the actuator, so a user feedback is needed. This means an explicit request
 via the API must be done before this is going on, and stopping must be possible.
 In addition, in many cases, relative move is sufficient.
+Note that for the closed-loop to work, in addition to the actuator there must
+be:
+  * a sensor (which indicates a distance)
+  * a reference switch (which indicates a point, usually in the middle)
+  * 2 limit switches (which indicate the borders)
+Most of the time, all of these are present, but the controller can do with just
+either the ref switch or the limit switches.
 
 The recommended maximum step frequency is 800 Hz.
 
@@ -127,6 +134,7 @@ class Controller(object):
         hardware.
         For the arguments, see __init__()
         """
+        busacc.flushInput()
         # Three types of controllers: Closed-loop (detected just from the axes
         # arguments), normal open-loop, and open-loop via SMO test command.
         # Difference between the 2 open-loop is hard-coded on the model as it's
@@ -180,7 +188,7 @@ class Controller(object):
         self._try_recover = False # for now, fully raw access
         # did the user asked for a raw access only?
         if address is None:
-            self._channels = range(1, 17) # allow commands to work on any axis
+            self._channels = set(range(1, 17)) # allow commands to work on any axis
             return
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
@@ -192,15 +200,15 @@ class Controller(object):
         if vpms and not (0 < vpms):
             raise ValueError("vpms (%s) must be > 0", vpms)
 
-        # reinitialise: make sure it's back to normal and ensure it's responding
-        # FIXME: there seems to be problems to recover sometimes from a
-        # disturbed controller. Not sure what is required to do. Seems to
-        # be just the right commands with the right timing....
-        # In this state, the error led directly turns on when the usb cable
-        # is connected in.
-        self.GetErrorNum()
-        self.Reboot()
-        self.GetErrorNum()
+        self.GetErrorNum() # make it happy again (in case it wasn't)
+        # We don't reboot by default because:
+        # * in almost any case we can assume it's in a good state (if not, it's
+        #   up to the controller to force it.
+        # * if it's in a really bad state, GetErrorNum will fail and cause a
+        #   reboot anyway
+        # * it sometimes actually cause more harm by putting the controller in
+        #   a zombie state
+        # * it's slow (especially if you have 5 controllers)
 
         version = self.GetSyntaxVersion()
         if version != "2.0":
@@ -212,9 +220,9 @@ class Controller(object):
 
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
-        self._hasLimit = dict([(a, self.HasLimitSwitches(a)) for a in self._channels])
+        self._hasLimitSwitches = dict([(a, self.HasLimitSwitches(a)) for a in self._channels])
         # dict axis -> boolean
-        self._hasSensor = dict([(a, self.HasSensor(a)) for a in self._channels])
+        self._hasRefSwitch = dict([(a, self.HasRefSwitch(a)) for a in self._channels])
         self._position = {} # m (dict axis-> position)
 
 
@@ -222,10 +230,10 @@ class Controller(object):
         # wrong, so make it clear
         logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
         for c in self._channels:
-            logging.info("Axis %s has %slimit switch and has %sreference switch",
+            logging.info("Axis %s has %slimit switches and has %sreference switch",
                          c,
-                         "" if self._hasLimit[c] else "no ",
-                         "" if self._hasSensor[c] else "no ")
+                         "" if self._hasLimitSwitches[c] else "no ",
+                         "a " if self._hasRefSwitch[c] else "no ")
         self._avail_params = self.GetAvailableParameters()
 
         self._try_recover = True # full feature only after init
@@ -237,6 +245,9 @@ class Controller(object):
         self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
         self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
         self._prev_speed_accel = (dict(), dict())
+
+    def terminate(self):
+        pass
 
     def _sendOrderCommand(self, com):
         """
@@ -334,7 +345,6 @@ class Controller(object):
         #SAI? ALL: list all axes (included disabled ones)
         answer = self._sendQueryCommand("SAI? ALL\n")
         # TODO check it works with multiple axes
-        # FIXME: on the C867 the name of the axis can be a string of up to 8 char (see TVI)
         axes = set([int(a) for a in answer.split(" ")])
         return axes
 
@@ -342,7 +352,7 @@ class Controller(object):
         #HLP? (Get List Of Available Commands)
         # first line starts with \x00
         lines = self._sendQueryCommand("HLP?\n")
-        lines[0].lstrip("\x00")
+        lines[0] = lines[0].lstrip("\x00")
         return lines
 
     def GetAvailableParameters(self):
@@ -353,8 +363,7 @@ class Controller(object):
         """
         #HPA? (Get List Of Available Parameters)
         lines = self._sendQueryCommand("HPA?\n")
-        # first line doesn't seem to starts with \x00
-#        lines[0].lstrip("\x00")
+        lines[0] = lines[0].lstrip("\x00")
         params = {}
         # first and last lines are typically just user-friendly text
         # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
@@ -377,6 +386,8 @@ class Controller(object):
         # SPA? (Get Volatile Memory Parameters)
         assert((1 <= axis) and (axis <= 16))
         assert(0 <= param)
+        if hasattr(self, "_avail_params") and  not param in self._avail_params:
+            raise ValueError("Parameter %d %d not available" % (axis, param))
 
         answer = self._sendQueryCommand("SPA? %d %d\n" % (axis, param))
         try:
@@ -427,10 +438,10 @@ class Controller(object):
                              (com, axis, resp))
         try:
             value = int(value_str)
-        except TypeError:
+        except ValueError:
             try:
                 value = float(value_str)
-            except TypeError:
+            except ValueError:
                 value = value_str
         
         return value
@@ -448,7 +459,7 @@ class Controller(object):
         # 1 => True, 0 => False
         return self._readAxisValue("LIM?", axis) == 1
 
-    def HasSensor(self, axis):
+    def HasRefSwitch(self, axis):
         """
         Report whether the given axis has a reference switch (is able to detect
          the "middle" of the axis).
@@ -521,13 +532,15 @@ class Controller(object):
 
     def IsOnTarget(self, axis):
         """
-        Report whether the given axis is concidered on target (for closed-loop 
+        Report whether the given axis is considered on target (for closed-loop 
           moves only)
         axis (1<int<16): axis number
         returns (bool)
         """
         #ONT? (Get On Target State)
         # 1 => True, 0 => False
+        # cf parameters 0x3F (settle time), and 0x4D (algo), 0x406 (window size)
+        # 0x407 (window off size)
         return self._readAxisValue("ONT?", axis) == 1
 
     def GetErrorNum(self):
@@ -602,7 +615,7 @@ class Controller(object):
     def SetServo(self, axis, activated):
         """
         Activate or de-activate the servo. 
-        Note: only activate it if there is a sensor (cf .HasSensor and ._hasSensor)
+        Note: only activate it if there is a sensor (cf .HasRefSwitch and ._hasRefSwitch)
         axis (1<int<16): axis number
         activated (boolean): True if the servo should be activated (closed-loop)
         """
@@ -610,7 +623,7 @@ class Controller(object):
         assert(axis in self._channels)
 
         if activated:
-            assert(self._hasSensor[axis])
+            assert(self._hasRefSwitch[axis])
             state = 1
         else:
             state = 0
@@ -632,7 +645,7 @@ class Controller(object):
         assert(axis in self._channels)
 
         if absolute:
-            assert(self._hasLimit[axis] or self._hasSensor[axis])
+            assert(self._hasLimitSwitches[axis] or self._hasRefSwitch[axis])
             state = 1
         else:
             state = 0
@@ -747,12 +760,23 @@ class Controller(object):
         assert(axis in self._channels)
         self._sendOrderCommand("MVR %d %.5g\n" % (axis, shift))
 
-    # TODO: it seems it's possible to have axes with only either limit or ref
-    # switch. If there is no ref switch, we should be able to fallback to limit
-    # switch referencing
-    #FNL (Fast Reference Move To Negative Limit)
-    #FPL (Fast Reference Move To Positive Limit)
-    
+    def ReferenceToLimit(self, axis, lim=1):
+        """
+        Start to move the axis to the switch position (typically, the center)
+        Note: Servo and referencing must be on
+        See IsReferenced()
+        axis (1<int<16): axis number
+        lim (-1 or 1): -1 for negative limit and 1 for positive limit
+        """
+        #FNL (Fast Reference Move To Negative Limit)
+        #FPL (Fast Reference Move To Positive Limit)
+        assert(axis in self._channels)
+        assert(lim in [-1, 1])
+        if lim == 1:
+            self._sendOrderCommand("FPL %d\n" % axis)
+        else:
+            self._sendOrderCommand("FNL %d\n" % axis)
+
     def ReferenceToSwitch(self, axis):
         """
         Start to move the axis to the switch position (typically, the center)
@@ -881,6 +905,16 @@ class Controller(object):
         assert(axis in self._channels)
         self._accel[axis] = accel
 
+    def moveRel(self, axis, distance):
+        """
+        Move on a given axis for a given distance.
+        It's asynchronous: the method might return before the move is complete.
+        axis (1<=int<=16): the axis
+        distance (float): the distance of move in m (can be negative)
+        returns (float): approximate distance actually moved
+        """
+        raise NotImplementedError("This method must be overridden by a subclass")
+
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving. 
@@ -981,7 +1015,7 @@ class Controller(object):
                 ctrl.address = i
                 axes = {}
                 for a in ctrl.GetAxes():
-                    axes = {a: ctrl.HasSensor(a)}
+                    axes = {a: ctrl.HasRefSwitch(a)}
                 if not axes:
                     logging.info("Found controller %d with no axis", i)
                 else:
@@ -1007,6 +1041,7 @@ class CLController(Controller):
 
         self._speed = {} # m/s dict axis -> speed
         self._accel = {} # m/s² dict axis -> acceleration/deceleration
+        self.pos_rng = {} # m, dict axis -> min,max position
 
         for a, cl in axes.items():
             if not a in self._channels:
@@ -1014,9 +1049,10 @@ class CLController(Controller):
 
             if not cl: # want open-loop?
                 raise ValueError("Initialising CLController with request for open-loop")
-            if not self._hasSensor[a]:
+            if not self._hasRefSwitch[a]:
                 raise ValueError("Closed-loop control requested but controller "
                                  "%d reports no sensor for axis %d" % (address, a))
+
 
             # Start with servo, non-referenced mode, assume the position is
             # correct, and set units to meters
@@ -1031,7 +1067,7 @@ class CLController(Controller):
             # Movement range before refenrencing is max range in both directions
             pos = self.GetPosition(a)
             width = self.GetMaxPosition(a) - self.GetMinPosition(a)
-            self.pos_rng = [pos - width, pos + width]
+            self.pos_rng[a] = (pos - width, pos + width)
 
             # Read speed/accel ranges
             self._speed[a] = self._readAxisValue("VEL?", a) # m/s
@@ -1047,16 +1083,6 @@ class CLController(Controller):
 
         self.min_speed = 10e-6 # m/s (default low value)
 
-        # Procedure:
-        # servo on
-        # RON 1 0 -> non-referencing
-        # POS 1 0 -> reset position ... OR shall just read the current one which might be more correct if was not turned off?
-        # Now you can:
-        # MVR 1 1.84870 -> relative move
-        # POS? 1 -> request pos
-        # 1=-2.74960
-        # On termination -> SVO 1 0 
-        
         # Note: setting position only works if ron is disabled. It's possible
         # also indirectly set it after referencing, but then it will conflict
         # with TMN/TMX and some correct moves will fail.
@@ -1073,6 +1099,11 @@ class CLController(Controller):
         # servo when stopping the program to allow the user to move the stage
         # manually (or maybe even after any move?)
 
+    def terminate(self):
+        super(CLController, self).terminate()
+        # Disable servo, to allow the user to move the axis manually
+        for a in self._channels:
+            self.SetServo(a, False)
 
     def _updateSpeedAccel(self, axis):
         """
@@ -1098,7 +1129,7 @@ class CLController(Controller):
 
     def moveRel(self, axis, distance):
         """
-        See OL.moveRel
+        See Controller.moveRel
         """
         assert(axis in self._channels)
         self._updateSpeedAccel(axis)
@@ -1113,6 +1144,35 @@ class CLController(Controller):
         return (float): the current position of the given axis
         """
         return self.GetPosition(axis)
+
+    # TODO: might need to see if isMoving should actually use IsOnTarget()
+    # as moving status report exactly that: whether it's still moving, but
+    # it might have already reached the target and being just do small
+    # adjustements. It seems in some cases (long moves with high accel?) on
+    # target can be very long (>10s).
+
+    def startReferencing(self, axis):
+        """
+        Start a referencing move. Use isMoving() or isReferenced to know if
+        the move is over. Position will change, as well as absolute positions.
+        axis (1<=int<=16)
+        """
+        if self._hasRefSwitch[axis]:
+            self.ReferenceToSwitch(axis)
+        else:
+            raise NotImplementedError("Don't know how to reference to limit yet")
+            self.ReferenceToLimit(axis)
+            # TODO: need to do that after it's done
+            self.waitEndMotion(set(axis))
+            # Go back to center
+            pmin, pmax = self.GetMinPosition(axis), self.GetMaxPosition(axis)
+            self.MoveAbs(axis, pmin + (pmax - pmin) / 2)
+
+    def isReferenced(self, axis):
+        """
+        returns (bool): True if the axis is referenced
+        """
+        return self.IsReferenced(axis)
 
 
 class OLController(Controller):
@@ -1145,18 +1205,15 @@ class OLController(Controller):
 
         self.min_speed = 10e-6 # m/s (default low value)
 
-        # FIXME 0x7000204 seems specific to E-861. need different initialisation per controller
-        # Even the old firmware don't seem to support it
+        # FIXME 0x7000204 seems specific to E-861. => use CL info if not available?
         self.max_speed = 0.5 # m/s
         self.max_accel = 0.01 # m/s²
         try:
-            if 0x7000204 in self._avail_params:
-                # (max m/s) = (max step/s) * (step/m)
-                self.max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
-                # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
-            if 0x7000205 in self._avail_params:
-                # (max m/s²) = (max step/s²) * (step/m)
-                self.max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
+            # (max m/s) = (max step/s) * (step/m)
+            self.max_speed = float(self.GetParameter(1, 0x7000204)) / self._dist_to_steps # m/s
+            # Note: the E-861 claims max 0.015 m/s but actually never goes above 0.004 m/s
+            # (max m/s²) = (max step/s²) * (step/m)
+            self.max_accel = float(self.GetParameter(1, 0x7000205)) / self._dist_to_steps # m/s²
         except (IOError, ValueError) as err:
             # TODO detect better that it's just a problem of sending unsupported command/value
             # Put default (large values)
@@ -1215,11 +1272,7 @@ class OLController(Controller):
 
     def moveRel(self, axis, distance):
         """
-        Move on a given axis for a given distance.
-        It's asynchronous: the method might return before the move is complete.
-        axis (1<=int<=16): the axis
-        distance (float): the distance of move in m (can be negative)
-        returns (float): approximate distance actually moved
+        See Controller.moveRel
         """
         # TODO: also report expected time for the move?
         assert(axis in self._channels)
@@ -1273,8 +1326,6 @@ class SMOController(Controller):
         # which also gives the best precision.
         self._vpms = vpms * (32767 / 10)
 
-        self.min_speed = self._min_motor_out / self._vpms # m/s
-
         # Set up a macro that will do the job
         # To be called like "MAC START OLSTEP 16000 500"
         # First param is voltage between -32766 and 32766
@@ -1295,8 +1346,7 @@ class SMOController(Controller):
               "%(n)d MAC END\n" % {"n": self.address}
         self._sendOrderCommand(mac)
 
-        # TODO: compute from vpms
-        self.min_speed = 0.0001 # m/s
+        self.min_speed = self._min_motor_out / self._vpms # m/s
         self.max_speed = 1.0 # m/s
         self.max_accel = 0.01 # m/s² (actually I've got no idea, and cannot be changed)
 
@@ -1393,7 +1443,7 @@ class SMOController(Controller):
 
     def moveRel(self, axis, distance):
         """
-        See OL.moveRel
+        See Controller.moveRel
         """
         assert(axis in self._channels)
         
@@ -1412,7 +1462,7 @@ class SMOController(Controller):
 
     def isMoving(self, axes=None):
         """
-        Replacement method for isMoving() when the OL moves are done using OLViaPID
+        See Controller.isMoving
         """
         if axes is None:
             axes = self._channels
@@ -1490,8 +1540,9 @@ class Bus(model.Actuator):
         # TODO also a rangesRel : min and max of a step
         position = {}
         speed = {}
+        referenced = {}
         max_speed = 0 # m/s
-        min_speed = 1e6 # m/s
+        min_speed = 1e16 # m/s
         for address, kwargs in controllers.items():
             try:
                 controller = Controller(self.accesser, address, **kwargs)
@@ -1508,21 +1559,32 @@ class Bus(model.Actuator):
 
                 position[axis] = controller.getPosition(c)
                 # TODO if closed-loop, the ranges should be updated after homing
-                # For now we put very large one
-                self._ranges[axis] = [-1, 1] # m
+                try:
+                    self._ranges[axis] = controller.pos_rng[c]
+                except (IndexError, AttributeError):
+                    # Unknown? Give room
+                    self._ranges[axis] = (-1, 1) # m
                 # Just to make sure it doesn't go too fast
                 speed[axis] = 0.001 # m/s
                 max_speed = max(max_speed, controller.max_speed)
                 min_speed = min(min_speed, controller.min_speed)
 
+                if hasattr(controller, "isReferenced"):
+                    referenced[axis] = controller.isReferenced(c)
 
+
+        # TODO: allow to override the unit (per axis)
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(self._applyInversionAbs(position),
                                                 unit="m", readonly=True)
 
+        # RO VA dict axis -> bool: True if the axis has been referenced
+        # Only axes which can be referenced are listed
+        self.referenced = model.VigilantAttribute(referenced, readonly=True)
+
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(speed, range=[min_speed, max_speed], unit="m/s",
-                                        setter=self._setSpeed)
+        self.speed = model.MultiSpeedVA(speed, range=[min_speed, max_speed],
+                                        unit="m/s", setter=self._setSpeed)
         self._setSpeed(speed)
 
         # set HW and SW version
@@ -1538,7 +1600,8 @@ class Bus(model.Actuator):
 
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
-
+    
+    # TODO: with CL, report position during move
     def _getPosition(self):
         """
         return (dict string -> float): axis name to (absolute) position
@@ -1601,6 +1664,10 @@ class Bus(model.Actuator):
 
     # TODO implement moveAbs
 
+    # TODO reference(self, axes)
+    # start a move to reference. axes: set of str
+    # returns a Future, done once the axis is referenced
+
     def stop(self):
         """
         stops the motion on all axes
@@ -1636,6 +1703,12 @@ class Bus(model.Actuator):
         if self._action_mgr:
             self._action_mgr.terminate()
             self._action_mgr = None
+
+        with self.ser_access:
+            controllers = set()
+            for axis, (controller, channel) in self._axis_to_cc.items():
+                if controller not in controllers:
+                    controller.terminate()
 
     def selfTest(self):
         """
@@ -2338,7 +2411,7 @@ class E861Simulator(object):
                 else:
                     self._errno = 15
             elif com == "HLP?":
-                out = ("The following commands are available: \n" +
+                out = ("\x00The following commands are available: \n" +
                        "#4 request status register \n" +
                        "HLP list the available commands \n" +
                        "ERR? get error number \n" +
@@ -2346,7 +2419,7 @@ class E861Simulator(object):
                        "end of help"
                        )
             elif com == "HPA?":
-                out = ("The following parameters are valid: \n" +
+                out = ("\x00The following parameters are valid:\n" +
                        "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
