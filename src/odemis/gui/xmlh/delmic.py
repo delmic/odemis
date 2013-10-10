@@ -97,6 +97,7 @@ msvps  = [
     ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
     ('SparcAcquisitionViewport', xh_delmic.SparcAcquisitionViewportXmlHandler),
     ('SparcAlignViewport', xh_delmic.SparcAlignViewportXmlHandler),
+    ('PlotViewport', xh_delmic.PlotViewportXmlHandler),
 ]
 
 for i, (name, handler) in enumerate(msvps):

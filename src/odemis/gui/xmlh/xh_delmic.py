@@ -694,6 +694,14 @@ class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):
         return self.IsOfClass(node, "SparcAlignViewport")
 HANDLER_CLASS_LIST.append(SparcAlignViewportXmlHandler)
 
+class PlotViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.PlotViewport
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "PlotViewport")
+HANDLER_CLASS_LIST.append(PlotViewportXmlHandler)
 
 ##################################
 # Sliders
