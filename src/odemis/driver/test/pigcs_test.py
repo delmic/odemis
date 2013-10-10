@@ -42,7 +42,7 @@ CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 CONFIG_CTRL_BASIC = (1, {1: False})
 CONFIG_BUS_CL = {"x":(1, 1, True)} # TODO: use it
 
-CLASS = pigcs.Bus # use FakeBus if no hardware present
+CLASS = pigcs.FakeBus # use FakeBus if no hardware present
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 

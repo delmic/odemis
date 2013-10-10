@@ -752,7 +752,7 @@ class Controller(object):
         """
         #MOV (Set Target Position)
         assert(axis in self._channels)
-        self._sendOrderCommand("MVO %d %.5g\n" % (axis, pos))
+        self._sendOrderCommand("MOV %d %.5g\n" % (axis, pos))
 
     def MoveRel(self, axis, shift):
         """
@@ -1541,7 +1541,7 @@ class Bus(model.Actuator):
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
-        controllers = {} # address -> kwargs (dict (axis -> boolean), dist_to_steps, min_dist, vpms)
+        controllers = {} # address -> kwargs (axes, dist_to_steps, min_dist, vpms...)
         for axis, (add, channel, isCL) in axes.items():
             if not add in controllers:
                 controllers[add] = {"axes":{}}
@@ -2221,6 +2221,12 @@ class ActionFuture(object):
 
 # All the classes below are for the simulation of the hardware
 
+class SimulatedError(Exception):
+    """
+    Special exception class to simulate error in the controller
+    """
+    pass
+
 class E861Simulator(object):
     """
     Simulates a GCS controller (+ serial port at 38400). Only used for testing.
@@ -2229,18 +2235,32 @@ class E861Simulator(object):
     """
     _idn = "(c)2013 Delmic Fake Physik Instrumente(PI) Karlsruhe, E-861 Version 7.2.0"
     _csv = "2.0"
-    def __init__(self, port, baudrate=9600, timeout=0, address=1, *args, **kwargs):
+    def __init__(self, port, baudrate=9600, timeout=0, address=1, 
+                 closedloop=False, *args, **kwargs):
         """
         parameters are the same as a serial port
-        address (1<=int<=16): the address of the controller  
+        address (1<=int<=16): the address of the controller
+        closedloop (bool): whether it simulates a closed-loop actuator or not
         """
         self._address = address
+        self._has_encoder = closedloop
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
 
         self._init_mem()
-
+        
         self._end_move = 0 # time the last requested move is over
+
+        # only used in closed-loop
+        # If move is over:
+        #   position == target
+        # else:
+        #   position = original position
+        #   target = requested position
+        #   current position = weigthed average (according to time)
+        self._position = 0.012 # m
+        self._target = self._position # m 
+        self._start_move = 0
 
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
@@ -2253,9 +2273,15 @@ class E861Simulator(object):
     def _init_mem(self):
         # internal values to simulate the device
         # Parameter table: address -> value
-        self._parameters = {0x14: 0, # 0 = no ref switch, 1 = ref switch
-                            0x32: 1, # 0 = limit switches, 1 = no limit switches
+        self._parameters = {0x14: 1 if self._has_encoder else 0, # 0 = no ref switch, 1 = ref switch
+                            0x32: 0 if self._has_encoder else 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
+                            # pos ref switch
+                            # unit num
+                            # unit denum
+#                            0x7000003: 10.0, # VEL
+#                            0x7000201: 3.2, # ACC
+#                            0x7000202: 0.9, # DEC
                             0x7000003: 10.0, # SSA
                             0x7000201: 3.2, # OVL
                             0x7000202: 0.9, # OAC
@@ -2265,6 +2291,8 @@ class E861Simulator(object):
                             }
         self._servo = 0 # servo state
         self._ready = True # is ready?
+        self._referenced = 0
+        self._ref_mode = 1
         self._errno = 0 # last error set
 
     _re_command = ".*?[\n\x04\x05\x07\x08\x18\x24]"
@@ -2301,8 +2329,32 @@ class E861Simulator(object):
         del self._output_buf
         del self._input_buf
 
+    def _get_cur_pos_cl(self):
+        """
+        Computes the current position, in closed loop mode
+        """
+        if self._servo != 1:
+            raise SimulatedError(2)
+        now = time.time()
+        if now > self._move_end:
+            self._target = self._position
+            return self._position
+        else:
+            completion = (now - self._start_move) / (self._end_move - self._start_move)
+            cur_pos = self._position + (self._target - self._position) * completion
+            return cur_pos
+    
+    # TODO: some commands are read-only
     # Command name -> parameter number
-    _com_to_param = {"OVL": 0x7000201,
+    _com_to_param = {"LIM": 0x32,
+                     "TRS": 0x14,
+                     "CTS": 0x3c,
+                     "TMN": 0x44, #XXX
+                     "TMX": 0x44, #XXX
+                     "VEL": 0x44, #XXX
+                     "ACC": 0x44, #XXX
+                     "DEC": 0x44, #XXX
+                     "OVL": 0x7000201,
                      "OAC": 0x7000202,
                      "ODC": 0x7000206,
                      "SSA": 0x7000003,
@@ -2382,17 +2434,38 @@ class E861Simulator(object):
                 self._end_move = 0
             elif args[0][:3] in self._com_to_param:
                 param = self._com_to_param[args[0][:3]]
-                if args[0][3:4] == "?": # query
-                    if len(args) == 2:
-                        out = "%s=%s" % (args[1], self._parameters[param])
+                logging.debug("Converting command %s to param %d", args[0], param)
+                axis = int(args[1])
+                if axis != 1:
+                    raise SimulatedError(15)
+                if args[0][3:4] == "?" and len(args) == 2: # query
+                    out = "%s=%s" % (args[1], self._parameters[param])
+                elif len(args[0]) == 3 and len(args) == 3: # set
+                    # convert according to the current type of the parameter
+                    typeval = type(self._parameters[param])
+                    self._parameters[param] = typeval(args[2])
                 else:
-                    if len(args) == 3:
-                        # TODO: convert according to the type of the parameter
-                        axis, val = int(args[1]), float(args[2])
-                        if axis == 1:
-                            self._parameters[param] = val
-                        else:
-                            self._errno = 15
+                    raise SimulatedError(15)
+            elif args[0] == "SPA?" and len(args) == 3: # GetParameter: axis, address
+                axis, addr = int(args[1]), int(args[2])
+                if axis != 1:
+                    raise SimulatedError(15)
+                try:
+                    out = "%d=%s" % (addr, self._parameters[addr])
+                except KeyError:
+                    logging.debug("Unknown parameter %d", addr)
+                    raise SimulatedError(56)
+            elif args[0] == "SPA" and len(args) == 4: # SetParameter: axis, address, value
+                axis, addr = int(args[1]), int(args[2])
+                if axis != 1:
+                    raise SimulatedError(15)
+                # TODO: special case for unit num/denum -> update all other values
+                try:
+                    typeval = type(self._parameters[addr])
+                    self._parameters[addr] = typeval(args[3])
+                except KeyError:
+                    logging.debug("Unknown parameter %d", addr)
+                    raise SimulatedError(56)
             elif args[0] == "SVO" and len(args) == 3: # Set Servo State
                 axis, state = int(args[1]), int(args[2])
                 if axis == 1:
@@ -2402,38 +2475,64 @@ class E861Simulator(object):
             elif args[0] == "OSM" and len(args) == 3: #Open-Loop Step Moving
                 axis, steps = int(args[1]), float(args[2])
                 speed = self._parameters[self._com_to_param["OVL"]]
-                if axis == 1:
-                    duration = abs(steps) / speed
-                    logging.debug("Simulating a move of %f s", duration)
-                    self._end_move = time.time() + duration # current move stopped
-                else:
-                    self._errno = 15
-            elif args[0] == "LIM?" and len(args) == 2: # Has limit switch: axis
+                if axis != 1:
+                    raise SimulatedError(15)
+                duration = abs(steps) / speed
+                logging.debug("Simulating a move of %f s", duration)
+                self._end_move = time.time() + duration # current move stopped
+            elif args[0] == "MOV" and len(args) == 3: # Closed-Loop absolute move
+                axis, pos = int(args[1]), float(args[2])
+                speed = self._parameters[self._com_to_param["VEL"]]
+                if axis != 1:
+                    raise SimulatedError(15)
+                cur_pos = self._get_cur_pos_cl()
+                distance = cur_pos - pos
+                duration = abs(distance) / speed
+                logging.debug("Simulating a move of %f s", duration)
+                self._start_move = time.time()
+                self._end_move = self._start_move + duration
+                self._position = cur_pos
+                self._target = pos
+            elif args[0] == "MVR" and len(args) == 3: # Closed-Loop relative move
+                axis, distance = int(args[1]), float(args[2])
+                speed = self._parameters[self._com_to_param["VEL"]]
+                if axis != 1:
+                    raise SimulatedError(15)
+                duration = abs(distance) / speed
+                logging.debug("Simulating a move of %f s", duration)
+                cur_pos = self._get_cur_pos_cl()
+                self._start_move = time.time()
+                self._end_move = self._start_move + duration
+                self._position = cur_pos
+                self._target = cur_pos + distance
+            elif args[0] == "POS?" and len(args) == 2: # Closed-Loop position query
                 axis = int(args[1])
-                if axis == 1:
-                    out = "%d=%d" % (axis, 1 - self._parameters[0x32]) # inverted parameter
-                else:
-                    self._errno = 15
-            elif args[0] == "TRS?" and len(args) == 2: # Indicate Reference Switch: axis
+                if axis != 1:
+                    raise SimulatedError(15)
+                out = "%s=%s" % (args[1], self._get_cur_pos_cl())
+            elif args[0] == "ONT?" and len(args) == 2: # on target
                 axis = int(args[1])
-                if axis == 1:
-                    out = "%d=%d" % (axis, self._parameters[0x14])
-                else:
-                    self._errno = 15
+                if axis != 1:
+                    raise SimulatedError(15)
+                ont = time.time() > self._end_move
+                out = "%s=%d" % (args[1], 1 if ont else 0)
+            elif args[0] == "FRF?" and len(args) == 2: # is referenced?
+                axis = int(args[1])
+                if axis != 1:
+                    raise SimulatedError(15)
+                out = "%s=%d" % (args[1], self._referenced)
+            elif args[0] == "FRF" and len(args) == 2: # reference to ref switch
+                axis = int(args[1])
+                if axis != 1:
+                    raise SimulatedError(15)
+                self._referenced = 1
+                self._end_move = 0
+                self._position = 0.012# TODO: specific param
             elif args[0] == "SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
                 # Can be followed by "ALL", but for us, it's the same
                 out = "1"
-            elif args[0] == "SPA?" and len(args) == 3: # GetParameter: axis, address
-                axis, addr = int(args[1]), int(args[2])
-                if axis == 1:
-                    try:
-                        out = "%d=%s" % (addr, self._parameters[addr])
-                    except KeyError:
-                        logging.debug("Unknown parameter %d", addr)
-                        self._errno = 56
-                else:
-                    self._errno = 15
             elif com == "HLP?":
+                # The important part is " \n" at the end of each line
                 out = ("\x00The following commands are available: \n" +
                        "#4 request status register \n" +
                        "HLP list the available commands \n" +
@@ -2442,7 +2541,7 @@ class E861Simulator(object):
                        "end of help"
                        )
             elif com == "HPA?":
-                out = ("\x00The following parameters are valid:\n" +
+                out = ("\x00The following parameters are valid: \n" +
                        "0x1=\t0\t1\tINT\tmotorcontroller\tP term 1 \n" +
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
@@ -2452,6 +2551,9 @@ class E861Simulator(object):
             else:
                 logging.debug("Unknown command '%s'", com)
                 self._errno = 1
+        except SimulatedError as ex:
+            logging.debug("Error detected while processing command '%s'", com)
+            self._errno = ex.args[0]
         except Exception:
             logging.debug("Failed to process command '%s'", com)
             self._errno = 1
@@ -2540,7 +2642,7 @@ class FakeBus(Bus):
     """
     def __init__(self, name, role, port, axes, baudrate=38400, **kwargs):
         # compute the addresses from the axes declared
-        addresses = [d[0] for d in axes.values()]
+        addresses = dict([(d[0], d[2]) for d in axes.values()])
         Bus.__init__(self, name, role, port, axes, baudrate=baudrate,
                      _addresses=addresses, **kwargs)
 
@@ -2554,13 +2656,14 @@ class FakeBus(Bus):
         """
         Opens a fake serial port
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
-        _addresses (list of int or None): list of each address that should have 
-         a simulated controller created. Default to [1, 2] (used for scan).
+        _addresses (dict of int -> bool, or None): list of each address that should have 
+         a simulated controller created and wheter it is closed-loop or not.
+         Default to {1: False, 2:False} (used for scan).
         return (serial): the opened serial port
         """
-        _addresses = _addresses or [1, 2]
+        _addresses = _addresses or {1: False, 2: False}
         simulators = []
-        for addr in _addresses:
+        for addr, cl in _addresses.items():
             sim = E861Simulator(
                     port=port,
                     baudrate=baudrate,
@@ -2569,6 +2672,7 @@ class FakeBus(Bus):
                     stopbits=serial.STOPBITS_ONE,
                     timeout=0.5, #s
                     address=addr,
+                    closedloop=cl,
                    )
             simulators.append(sim)
 
