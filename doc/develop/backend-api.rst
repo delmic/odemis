@@ -46,14 +46,14 @@ microscope hardware.
         Update the metadata dict corresponding to the current physical state of the components affecting the component (detector). The goal is to attach this information to DataArrays. The key is the name of the metadata, which must be one of the constants model.MD_* whenever this is possible, but usage of additional strings is permitted. The detector can overwrite or append the metadata dict with its own metadata. The internal metadata is accumulative, so previous metadata keys which are not updated keep their previous value (i.e., they are not deleted).
         
         :param metadata:
-        :type metada: dict of str -> value
+        :type metada: dict of str → value
 
     .. py:method:: getMetadata()
 
         Required only for emitters.
         
         :return: the metadata of the component. 
-        :rtype: dict of str->value
+        :rtype: dict of str → value
 
     .. py:method:: selfTest()
     
@@ -252,13 +252,15 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
 
     .. py:attribute:: ranges
     
-        *(RO, dict of 2-tuple of numbers)* (min, max) position for each axis.
+        *(RO, dict str → 2-tuple of numbers)* (min, max) position for each axis.
 
     .. TODO: .rangesRel: min, max value of moveRel: max is same as .ranges[1]-.ranges[0], min is the minimum distance which will actually move the motor (less, nothing happens).
 
     .. py:attribute:: speed
     
-        *(VA, dict str-> float)* speed of each axis in m/s. It has a .range = (min, max) which is common for all the axes.
+        *(VA, dict str → float)* speed of each axis in m/s. It has a .range = (min, max) which is common for all the axes.
+        
+        .. TODO: range should be a dict.
     
     .. py:attribute:: position
     
@@ -267,7 +269,7 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         to the implementation to define how often it is updated, but should be
         updated at least after completion of every moves.
 
-    .. TODO: use it to provide .ranges (dict of 2-tuple of numbers): (min, max) value of the axis for moving. It could also have .choices for the axes which have specific positions. A .unit should also be used to indicate the unit. Problem: it's annoying to have it represent all the axes. It might be better to have one VA per axis (but to support it over the current remote model, each VA must be a direct attribute of the component, so maybe position_axisname could be used).
+        .. TODO: use it to provide .ranges (dict of str -> 2-tuple of numbers): (min, max) value of the axis for moving. It could also have .choices for the axes which have specific positions. A .unit should also be used to indicate the unit. Problem: it's annoying to have it represent all the axes. It might be better to have one VA per axis (but to support it over the current remote model, each VA must be a direct attribute of the component, so maybe position_axisname could be used).
     
     .. py:attribute:: referenced
     
@@ -285,7 +287,7 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         
         :param shift: distance (or angle) that should be moved for each axis. 
             If an axis is not mentioned it should not be moved.
-        :type shift: dict str -> float
+        :type shift: dict str → float
         :rtype: Future 
 
     .. py:method:: moveAbs(pos)
@@ -293,7 +295,7 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         Requests a move to a specific position.
         
         :param pos: Position to reach for each axis. If an axis is not mentioned it should not be moved.
-        :type pos: dict str -> float
+        :type pos: dict str → float
         :rtype: Future
 
     .. py:method:: reference(axes)
