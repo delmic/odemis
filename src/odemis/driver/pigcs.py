@@ -43,6 +43,16 @@ be found the manual E-861_User_PZ205E121.pdf (p.107). See PIRedStone for the PI 
 In a daisy-chain, connected via USB or via RS-232, there must be one
 controller with address 1 (=DIP 1111). There is also a broadcast address: 255.
 
+The controller contains many parameters in flash memory. These parameters must
+have been previously written correctly to fit the stage it is driving. This
+driver uses and expects the parameters to be correct.
+The configuration database is available in a file called pistages2.dat. The
+PIMikroMove Windows program allows to load it, but by default doesn't copy it to
+the non-volatile memory, so you need to explicitly save them in persistent
+memory. (Can also be done with the WPA command and password "100".)
+In particular, for closed-loop stages, ensure that the settling windows and time
+are correctly set so that a move is considered on target quickly (< 1 s).
+
 The controller support closed-loop mode (i.e., absolute positioning) but only
 if it is associated to a sensor (not software detectable). It can also work in 
 open-loop mode but to avoid damaging the hardware (which is moved by this
@@ -56,11 +66,6 @@ The controller accepts several baud rates. We choose 38400 (DIP=01) as it's fast
 and it seems accepted by every version. Other settings are 8 data, 1 stop, 
 no parity.
 
-The controller can save in memory the configuration for a specific stage.
-The configuration database is available in a file called pistages2.dat. The
-PIMikroMove Windows program allows to load it, but by default doesn't copy it to
-the non-volatile memory, so you need to also force the record. (Can also be done
-with the WPA command and password "100".)
 
 In open-loop, the controller has 2 ways to move the actuators:
  * Nanostepping: high-speed, and long distance
@@ -1145,11 +1150,29 @@ class CLController(Controller):
         """
         return self.GetPosition(axis)
 
-    # TODO: might need to see if isMoving should actually use IsOnTarget()
-    # as moving status report exactly that: whether it's still moving, but
-    # it might have already reached the target and being just do small
-    # adjustements. It seems in some cases (long moves with high accel?) on
-    # target can be very long (>10s).
+    # Warning: if the settling window is too small or settling time too big,
+    # it might take several seconds to reach target (or even never reach it)
+    def isMoving(self, axes=None):
+        """
+        Indicate whether the motors are moving (ie, last requested move is over)
+        axes (None or set of int): axes to check whether for move, or all if None
+        return (boolean): True if at least one of the axes is moving, False otherwise
+        """
+        if axes is None:
+            axes = self._channels
+        else:
+            assert axes.issubset(self._channels)
+
+        if axes.isdisjoint(self.GetMotionStatus()):
+            return False
+
+        # With servo on, it might constantly be _slightly_ moving (around the
+        # target), so it's much better to use IsOnTarget info. The controller
+        # needs to be correctly configured with the right window size.
+        for c in self._channels:
+            if not self.IsOnTarget(c):
+                return True
+        return False
 
     def startReferencing(self, axis):
         """
