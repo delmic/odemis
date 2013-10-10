@@ -268,6 +268,14 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         updated at least after completion of every moves.
 
     .. TODO: use it to provide .ranges (dict of 2-tuple of numbers): (min, max) value of the axis for moving. It could also have .choices for the axes which have specific positions. A .unit should also be used to indicate the unit. Problem: it's annoying to have it represent all the axes. It might be better to have one VA per axis (but to support it over the current remote model, each VA must be a direct attribute of the component, so maybe position_axisname could be used).
+    
+    .. py:attribute:: referenced
+    
+        *(RO VA, dict str → bool)* Whether axes have been referenced or not.
+        For the actuators which requires referencing to give accurate position
+        information.
+        If an axis cannot be referenced at all (e.g., not sensor), it is not 
+        listed.
 
     .. py:method:: moveRel(shift)
     
@@ -288,6 +296,16 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         :type pos: dict str -> float
         :rtype: Future
 
+    .. py:method:: reference(axes)
+        
+        Requests a referencing move (sometimes called "homing"). After the move,
+        the axis might be anywhere although if possible, it should be back to 
+        the position before the call, or at "central" position. The position 
+        information might be reset.
+        
+        :param axes: The axes which must be referenced
+        :type axes: set str
+        :rtype: Future
 
     .. py:method:: stop([axes=None])
     
