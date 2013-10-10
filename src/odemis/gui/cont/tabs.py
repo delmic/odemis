@@ -642,7 +642,7 @@ class AnalysisTab(Tab):
         tb = self.main_frame.ana_toolbar
         # TODO: Add the buttons when the functionality is there
         #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        # tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         tb.enable_button(tools.TOOL_POINT, False)
         tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 

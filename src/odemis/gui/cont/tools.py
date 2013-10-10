@@ -141,7 +141,7 @@ class ToolBar(wx.Panel):
         else:
             main_sizer.SetItemMinSize(self.btn_panel, -1, 36)
 
-        self._tools = []
+        self._buttons = {}
         self._mode_callbacks = []
 
 
@@ -156,20 +156,22 @@ class ToolBar(wx.Panel):
         """
         tooltype = TOOLS[tool_id]
         if isinstance(tooltype, ActionTool):
-            self._add_action_tool(tooltype, handler)
+            self._add_action_tool(tooltype, tool_id, handler)
         elif isinstance(tooltype, ModeTool):
-            self._add_mode_tool(tooltype, handler)
+            self._add_mode_tool(tooltype, tool_id, handler)
 
-    def _add_action_tool(self, tooltype, callback):
+    def _add_action_tool(self, tooltype, tool_id, callback):
         btn = self._add_button(ImageButton, tooltype.icon, tooltype.tooltip)
         btn.Bind(wx.EVT_BUTTON, callback)
+        self._buttons[tool_id] = btn
 
-    def _add_mode_tool(self, tooltype, va):
+    def _add_mode_tool(self, tooltype, tool_id, va):
         btn = self._add_button(
                         ImageToggleButton,
                         tooltype.icon,
                         tooltype.tooltip
             )
+        self._buttons[tool_id] = btn
 
         value_on = tooltype.value_on
         value_off = tooltype.value_off
@@ -213,6 +215,4 @@ class ToolBar(wx.Panel):
         return btn
 
     def enable_button(self, tool_id, enable):
-        #sizer = self._panel.GetSizer()
-        #print sizer.GetChildren()
-        pass
+        self._buttons[tool_id].Enable(enable)
