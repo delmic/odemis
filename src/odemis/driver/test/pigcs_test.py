@@ -40,8 +40,9 @@ else:
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 CONFIG_CTRL_BASIC = (1, {1: False})
+CONFIG_BUS_CL = {"x":(1, 1, True)} # TODO: use it
 
-CLASS = pigcs.FakeBus # use FakeBus if no hardware present
+CLASS = pigcs.Bus # use FakeBus if no hardware present
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 
@@ -59,25 +60,44 @@ class TestController(unittest.TestCase):
         self.assertGreater(len(addresses), 0, "No controller found")
 
     def test_move(self):
+        """
+        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
+        so test failure might not indicate software bug.
+        """
         ctrl = pigcs.Controller(self.accesser, *CONFIG_CTRL_BASIC)
         speed = ctrl.max_speed / 10
         self.assertGreater(ctrl.max_speed, 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
-        distance = ctrl.moveRel(1, speed / 2) # should take 0.5s
+        distance = -ctrl.moveRel(1, -speed / 2) # should take 0.5s
         self.assertGreater(distance, 0)
         self.assertTrue(ctrl.isMoving(set([1])))
         self.assertEqual(ctrl.GetErrorNum(), 0)
         status = ctrl.GetStatus()
-        time.sleep(1) # a bit more than one second
-        self.assertFalse(ctrl.isMoving(set([1])))
+        ts = time.time()
+        while ctrl.isMoving(set([1])):
+            ctrl.getPosition(1)
+            ctrl.IsOnTarget(1)
+            time.sleep(0.01)
+        dur = time.time() - ts
+        logging.debug("Took %f s to stop", dur)
+        # Closed loop can take a long time to stop (actually, up to 10s in the worse cases)
+        self.assertLess(dur, 1.5)
 
         # now the same thing but with a stop
-        distance = ctrl.moveRel(1, speed) # should take one second
+        distance = -ctrl.moveRel(1, -speed) # should take one second
         time.sleep(0.01) # wait a bit that it's surely running
         self.assertGreater(distance, 0)
         ctrl.stopMotion()
-        time.sleep(0.1)
-        self.assertFalse(ctrl.isMoving(set([1])))
+
+        ts = time.time()
+        while ctrl.isMoving(set([1])):
+            ctrl.getPosition(1)
+            ctrl.IsOnTarget(1)
+            time.sleep(0.01)
+        dur = time.time() - ts
+        logging.debug("Took %f s to stop", dur)
+        # Closed loop can take a long time to stop (actually, up to 10s in the worse cases)
+        self.assertLess(dur, 0.2)
 
     def test_timeout(self):
         ctrl = pigcs.Controller(self.accesser, *CONFIG_CTRL_BASIC)
@@ -89,6 +109,7 @@ class TestController(unittest.TestCase):
         self.assertTrue(ctrl.IsReady())
         self.assertEqual(0, ctrl.GetErrorNum())
 
+@unittest.skip("faster")
 class TestFake(TestController):
     """
     very basic test of the simulator, to ensure we always test it.
@@ -152,6 +173,10 @@ class TestActuator(unittest.TestCase):
 
 
     def test_speed(self):
+        """
+        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
+        so test failure might not indicate software bug.
+        """
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time
         # than a 0.001m/s move
         stage = CLASS(**KWARGS)
@@ -211,9 +236,12 @@ class TestActuator(unittest.TestCase):
 
     def test_queue(self):
         """
-        Ask for several long moves in a row, and checks that nothing breaks
+        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
+        so test failure might not indicate software bug.
         """
         stage = CLASS(**KWARGS)
+        if isinstance(stage, pigcs.SMOController):
+            logging.warning("Speed is very imprecise on device, test failure might not indicate software bug")
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed} # => 1s per move
@@ -370,10 +398,14 @@ if __name__ == "__main__":
 #import logging
 #logging.getLogger().setLevel(logging.DEBUG)
 #CONFIG_CTRL_BASIC = (1, {1: False})
+#CONFIG_CTRL_CL = (1, {1: True})
 #PORT = "/dev/ttyPIGCS"
 #ser = pigcs.Bus.openSerialPort(PORT)
-#ctrl = pigcs.Controller(ser, *CONFIG_CTRL_BASIC)
+#busacc = pigcs.BusAccesser(ser)
+#ctrl = pigcs.Controller(busacc, *CONFIG_CTRL_CL)
 #ctrl.GetAvailableCommands()
 #ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
 #ctrl.moveRel(1, 10e-6); ctrl.isMoving()
+
+
 
