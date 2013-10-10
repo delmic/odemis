@@ -1374,8 +1374,10 @@ class PointSelectOverlay(WorldOverlay):
     def on_mouse_up(self, evt):
         """ Set the selected pixel, if a pixel position is known """
         if self._pixel_pos and self.enabled:
-            self._selected_pixel = self._pixel_pos
-            logging.debug("Pixel %s selected", str(self._selected_pixel))
+            if self._selected_pixel != self._pixel_pos:
+                self._selected_pixel = self._pixel_pos
+                self.base.UpdateDrawing()
+                logging.debug("Pixel %s selected", str(self._selected_pixel))
         evt.Skip()
 
     def on_mouse_enter(self, evt):
@@ -1493,7 +1495,7 @@ class PointSelectOverlay(WorldOverlay):
 
         if self.enabled:
 
-            if self._pixel_pos:
+            if self._pixel_pos and self._selected_pixel != self._pixel_pos:
                 rect = self.pixel_to_rect(self._pixel_pos, scale)
 
                 if rect:
@@ -1503,7 +1505,8 @@ class PointSelectOverlay(WorldOverlay):
 
                     # Label for debugging purposes
                     pos = self.base.view_to_buffer_pos((10, 16))
-                    self.write_label(ctx, dc.GetSize(), pos, self.label + str(rect))
+                    self.write_label(ctx, dc.GetSize(), pos,
+                                     self.label + str(rect))
 
         if self._selected_pixel:
             rect = self.pixel_to_rect(self._selected_pixel, scale)
