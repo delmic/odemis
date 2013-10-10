@@ -222,7 +222,7 @@ class SliderTestCase(test.GuiTestCase):
         vrs.SetForegroundColour('#A020F0')
         self.add_control(vrs, flags=wx.EXPAND)
 
-        print "%s %s" % (vrs.__class__.__name__, vrs.GetSize())
+        # print "%s %s" % (vrs.__class__.__name__, vrs.GetSize())
 
         test.gui_loop()
 
@@ -277,11 +277,12 @@ class SliderTestCase(test.GuiTestCase):
         bws.SetForegroundColour('#A020F0')
         self.add_control(bws, flags=wx.EXPAND)
 
-        print "%s %s" % (bws.__class__.__name__, bws.GetSize())
+        # print "%s %s" % (bws.__class__.__name__, bws.GetSize())
 
         test.gui_loop()
 
-        print bws.min_value, bws.max_value
+        # print bws.min_value, bws.max_value
+
         bws.SetRange(0, 100)
         bws.SetValue((25, 75))
 

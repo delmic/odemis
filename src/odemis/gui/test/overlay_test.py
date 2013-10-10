@@ -36,10 +36,10 @@ import unittest
 import wx
 
 test.goto_manual()
-logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 
 def do_stuff(sequence):
-    print "New sequence", sequence
+    logging.error("New sequence %s", sequence)
 
 class OverlayTestCase(test.GuiTestCase):
 
@@ -57,7 +57,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.WorldOverlays.append(psol)
         test.gui_loop()
 
-    def xtest_view_select_overlay(self):
+    def test_view_select_overlay(self):
         # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
 
@@ -70,9 +70,10 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.active_overlay = vsol
         cnvs.current_mode = model.TOOL_ROI
 
-    def xtest_roa_select_overlay(self):
+    def test_roa_select_overlay(self):
         # Create and add a miccanvas
-        # TODO: Sparc canvas because it's now the only one which supports TOOL_ROA
+        # TODO: Sparc canvas because it's now the only one which supports
+        # TOOL_ROA
         # but it should be a simple miccanvas
         cnvs = miccanvas.SparcAcquiCanvas(self.panel)
 
@@ -100,7 +101,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.point_fill()
         test.gui_loop()
 
-    def xtest_dichotomy_overlay(self):
+    def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
@@ -114,17 +115,17 @@ class OverlayTestCase(test.GuiTestCase):
 
         dol.sequence_va.value = [0, 1, 2, 3, 0]
 
-        test.gui_loop(1000)
+        test.gui_loop()
 
 
-    def xtest_spot_mode_overlay(self):
+    def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = overlay.SpotModeOverlay(cnvs)
         cnvs.ViewOverlays.append(sol)
 
-        test.gui_loop(1000)
+        test.gui_loop()
 
 
 

@@ -24,7 +24,7 @@ import logging
 
 import odemis.gui.test as test
 
-print "\nRunning all Odemis GUI TestCases...\n"
+print "\n** Gathering all Odemis GUI TestCases...\n"
 
 
 alltests = unittest.TestSuite()
@@ -35,9 +35,9 @@ for root, dirs, files in os.walk(path):
     modules_to_test = [x[:-3] for x in files if x.endswith('test.py')]
 
     for file_name in modules_to_test:
-        print "Adding module %s" % file_name
+        print " * Adding module %s" % file_name
         module = __import__(file_name)
-        logging.getLogger().setLevel(logging.INFO)
+        logging.getLogger().setLevel(logging.ERROR)
 
         module.INSPECT = False
         module.MANUAL = False
@@ -51,25 +51,26 @@ test.INSPECT = False
 test.MANUAL = False
 test.SLEEP_TIME = 10
 
+print "\n** Running..."
 alltests.run(result)
 
 print result
 
 num_errors = len(result.errors)
-print "\n%d Errors occured" % num_errors
+print "\n** %d Errors occured" % num_errors
 
 for error in result.errors:
-    print "* %s" % error[0]
+    print "  * %s" % error[0]
     for line in error[1].splitlines():
         print "  %s" % line
 
 num_failures = len(result.failures)
-print "\n%d Failures occured\n" % num_failures
+print "\n** %d Failures occured\n" % num_failures
 
 for failure in result.failures:
-    print "* %s" % failure[0]
+    print " * %s" % failure[0]
     for line in failure[1].splitlines():
         print "  %s" % line
 
 
-print "Done."
+print "** Done."
