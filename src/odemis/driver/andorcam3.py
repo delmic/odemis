@@ -172,12 +172,12 @@ class AndorCam3(model.DigitalCamera):
           ATError if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, **kwargs)
+        self.temp_timer = None
 
         if bitflow_install_dirs is not None:
             os.environ["BITFLOW_INSTALL_DIRS"] = bitflow_install_dirs
         self.atcore = ATDLL()
         
-        self.temp_timer = None
         self.Open(device)
         if device is None:
             # nothing else to initialise
@@ -1093,10 +1093,8 @@ class AndorCam3(model.DigitalCamera):
             self.Close()
             self.handle = None
 
-        del self.atcore
-    
-    def __del__(self):
-        self.terminate()
+        if self.atcore is not None:
+            self.atcore = None
     
     def selfTest(self):
         """
