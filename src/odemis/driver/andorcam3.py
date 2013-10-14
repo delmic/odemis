@@ -701,11 +701,11 @@ class AndorCam3(model.DigitalCamera):
         prev_binning, self._binning = self._binning, self._findBinning(value)
         
         # adapt resolution so that the AOI stays the same
-        change = (prev_binning[0] / value[0],
-                  prev_binning[1] / value[1])
+        change = (prev_binning[0] / self._binning[0],
+                  prev_binning[1] / self._binning[1])
         old_resolution = self._transposeSizeFromUser(self.resolution.value)
         new_res = (int(round(old_resolution[0] * change[0])),
-                          int(round(old_resolution[1] * change[1])))
+                   int(round(old_resolution[1] * change[1])))
         
         # fit
         max_res = self._transposeSizeFromUser(self.resolution.range[1])
