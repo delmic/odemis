@@ -97,7 +97,7 @@ def reproduceTypedValue(real_val, str_val):
 
         # Try to be open-minded if the sub-type is a number (so that things like
         # " 3 x 5 px" returns (3, 5)
-        if isinstance(sub_real_val, int):
+        if isinstance(sub_real_val, (int, long)):
             pattern = "[+-]?[\d]+" # ex: -15
         elif isinstance(sub_real_val, float):
             pattern = "[+-]?[\d.]+(?:[eE][+-]?[\d]+)?" # ex: -156.41e-9

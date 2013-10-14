@@ -343,7 +343,7 @@ class AndorCam3(model.DigitalCamera):
         assert(isinstance(prop, unicode))
         result = c_longlong()
         self.atcore.AT_GetInt(self.handle, prop, byref(result))
-        return result.value
+        return int(result.value) # int => use int instead of long if possible
     
     def GetEnumIndex(self, prop):
         assert(isinstance(prop, unicode))
