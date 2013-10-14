@@ -135,7 +135,7 @@ class AndorV2DLL(CDLL):
 
     def __init__(self):
         if os.name == "nt":
-            # FIXME: That's not gonna fly... on Windows, should be a WinDLL?
+            #FIXME: might not fly if parent is not a WinDLL => use __new__()
             WinDLL.__init__(self, "atmcd32d.dll") # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
