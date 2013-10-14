@@ -1,0 +1,82 @@
+# Fake optical microscope to be able to use just a Andor SDK3 camera such as
+# the Neo or Zyla. If the SDK is installed, but not camera is plugged in, it
+# will likely find the integrated simulator.
+Optical: {
+    class: Microscope,
+    role: optical,
+    emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
+    detectors: [Cam],
+    actuators: ["FakeStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+}
+
+Light: {
+    class: simulated.Light,
+    role: brightlight,
+    affects: [Cam],
+    properties: {
+        power: 100 # W
+    }
+}
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: [Cam]
+}
+
+"MultiBand Fixed Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[430.e-9, 480.e-9], [520.e-9, 600.e-9]]}, # m,m
+    affects: [Cam]
+}
+
+Cam: {
+    class: andorcam3.AndorCam3,
+    role: ccd,
+    init: {device: 0} # if a real camera is plugged in, it's usually 0
+}
+
+"FakeStage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: [Cam],
+    properties: {
+        speed: {'x':0.1, 'y':0.1} #m/s
+    }
+}
+
+# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
+"SEM-Optical Alignment": {
+    class: CombinedActuator,
+    role: align,
+    affects: [Cam],
+    children: {"a": FakePIGCS, "b": FakePIGCS},
+    init: {
+        axes_map: {"a": "a", "b": "b"},
+        inverted: ["b"]
+    },
+    properties: {
+        speed: {'a': 0.1, 'b': 0.1} #m/s
+    }
+}
+
+"OpticalZ actuator": {
+    class: CombinedActuator,
+    role: focus,
+    affects: [Cam],
+    children: {"z": FakePIGCS},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
+FakePIGCS: {
+    class: simulated.Stage,
+    role: align,
+    init: {axes: ["a", "b", "z"]},
+}
