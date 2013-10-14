@@ -27,6 +27,15 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+class LightTest(unittest.TestCase):
+
+    def test_simple(self):
+        light = simulated.Light("test", "light")
+        self.assertGreaterEqual(len(light.spectra.value), 1)
+        self.assertGreaterEqual(len(light.shape), 0)
+        light.power.value = 100
+        self.assertEqual(light.power.value, 100)
+
 class ActuatorTest(object):
     """
     This abstract class should be able to test any type of actuator

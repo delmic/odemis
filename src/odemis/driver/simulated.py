@@ -39,7 +39,7 @@ class Light(model.Emitter):
     def __init__(self, name, role, **kwargs):
         model.Emitter.__init__(self, name, role, **kwargs)
         
-        self.shape = (1)
+        self._shape = ()
         self.power = model.FloatEnumerated(100, set([0, 100]), unit="W")
         self.power.subscribe(self._updatePower)
         # just one band: white
