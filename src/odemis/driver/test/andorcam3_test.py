@@ -29,7 +29,8 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = andorcam3.AndorCam3
-KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1])
+KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
+              bitflow_install_dirs="/usr/local/share/bitflow/")
 
 class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS

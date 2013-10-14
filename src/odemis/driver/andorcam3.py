@@ -155,19 +155,26 @@ class AndorCam3(model.DigitalCamera):
     It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
+    Note: for the bitflow driver to initialise (and detect cameras), you need
+    to have the BITFLOW_INSTALL_DIRS environment variable set to a good location.
+    
     It also provide low-level methods corresponding to the SDK functions.
     """
     
-    def __init__(self, name, role, device=None, **kwargs):
+    def __init__(self, name, role, device=None, bitflow_install_dirs=None, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to some information
+        bitflow_install_dirs (None or str): path of bitflow install directory,
+          used to set BITFLOW_INSTALL_DIRS
         Raises:
           ATError if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, **kwargs)
-             
+
+        if bitflow_install_dirs is not None:
+            os.environ["BITFLOW_INSTALL_DIRS"] = bitflow_install_dirs
         self.atcore = ATDLL()
         
         self.temp_timer = None
@@ -1017,6 +1024,7 @@ class AndorCam3(model.DigitalCamera):
                         logging.warning("trying again to acquire image after error %s:", strerr)
                         need_reinit = True
                         continue
+                    # FIXME: seems to sometimes fail with  11: AT_ERR_NODATA
                     else:
                         raise
     
