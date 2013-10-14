@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-
+from __future__ import division
 from ctypes import *
 import gc
 import logging
@@ -559,7 +559,7 @@ class AndorCam3(model.DigitalCamera):
         values = self.GetEnumStringAvailable(u"FanSpeed")
         speed_index = int(round(speed * (len(values) - 1)))
         self.SetEnumString(u"FanSpeed", values[speed_index])
-        return float(speed_index) / len(values)
+        return speed_index / len(values)
         
     def setReadoutRate(self, frequency):
         """
@@ -676,8 +676,8 @@ class AndorCam3(model.DigitalCamera):
         # TODO: check the binning is correct
         
         # adapt resolution so that the AOI stays the same
-        change = (float(prev_binning[0]) / value[0],
-                  float(prev_binning[1]) / value[1])
+        change = (prev_binning[0] / value[0],
+                  prev_binning[1] / value[1])
         old_resolution = self._transposeSizeFromUser(self.resolution.value)
         new_res = (int(round(old_resolution[0] * change[0])),
                           int(round(old_resolution[1] * change[1])))
@@ -710,7 +710,7 @@ class AndorCam3(model.DigitalCamera):
                         int(resolution[1] // self._binning[1]))
             if size != max_size:
                 logging.warning("requested size %s different from the only"
-                       " size available %s.", size, max_size)
+                                " size available %s.", size, max_size)
             return
         
         # AOI
@@ -719,16 +719,16 @@ class AndorCam3(model.DigitalCamera):
         assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
                (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
         
-        # TODO the Neo docs says "Sub images are all mid-point centred." 
-        # So it might require specific computation for the left/top ?
-        # TODO check whether on Neo ranges[0][1] is 2592 or 2560, if 2592, it should be + 16
-        lt = ((ranges[0][1] - size[0]) / 2 + 1,
-              (ranges[1][1] - size[1]) / 2 + 1)
+        # TODO: need to check for FullAOIControl is implemented and True
+        # center the AOI
+        lt = ((ranges[0][1] - size[0]) // 2 + 1,
+              (ranges[1][1] - size[1]) // 2 + 1)
 
-        self.SetInt(u"AOIWidth", c_uint64(size[0]))
-        self.SetInt(u"AOILeft", c_uint64(lt[0]))
-        self.SetInt(u"AOIHeight", c_uint64(size[1]))
-        self.SetInt(u"AOITop", c_uint64(lt[1]))
+        # order matters
+        self.SetInt(u"AOIWidth", size[0])
+        self.SetInt(u"AOILeft", lt[0])
+        self.SetInt(u"AOIHeight", size[1])
+        self.SetInt(u"AOITop", lt[1])
     
     def _setResolution(self, value):
         value = self._transposeSizeFromUser(value)
@@ -761,7 +761,7 @@ class AndorCam3(model.DigitalCamera):
         
         # TODO the documentation of Neo mentions a few fixed possible resolutions
         # But in practice it seems everything is possible.
-        # Need to check for FullAOIControl? and if not, fallback to the
+        # Need to check for FullAOIControl? and if false, fall-back to the
         # resolutions of the table p. 42.
         
         return size
