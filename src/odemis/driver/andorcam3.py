@@ -629,15 +629,14 @@ class AndorCam3(model.DigitalCamera):
          are combined to create "super pixels"
         return (2-tuple int)
         """
-        
         # Nicely the API is different depending on cameras...
         if self.isImplemented(u"AOIBinning"):
-            # Typically for the Neo, only same binning on both side is supported
-            allowed_bin = [1, 2, 3, 4, 8]
-            binning = (util.find_closest(min(binning), allowed_bin),) * 2
-            # TODO: might need to check combination is available in GetEnumStringAvailable()
+            # we assume it's correct
             binning_str = u"%dx%d" % binning
             self.SetEnumString(u"AOIBinning", binning_str)
+
+            bin_idx = self.GetEnumIndex(u"AOIBinning")
+            logging.debug("Set binning to %s", self.GetEnumStringByIndex(u"AOIBinning", bin_idx))
         elif self.isImplemented(u"AOIHBin"):
             if self.isWritable(u"AOIHBin"):
                 self.SetInt(u"AOIHBin", binning[0])
@@ -645,12 +644,32 @@ class AndorCam3(model.DigitalCamera):
             # Typically for the simcam
             act_binning = (self.GetInt(u"AOIHBin"), self.GetInt(u"AOIVBin"))
             if act_binning != binning:
-                raise IOError("Requested binning %s but got %s " %  
+                raise IOError("Requested binning %s but got %s" %
                               (binning, act_binning))
             binning = act_binning
             
         return binning
     
+    def _findBinning(self, binning):
+        """
+        return (2-tuple int): best binning possible to get with the camera
+        """
+        if self.isImplemented(u"AOIBinning"):
+            binnings = self.GetEnumStringAvailable(u"AOIBinning")
+            # Typically for the Neo, only same binning on both side is supported
+            # TODO: might need to check combination is available in GetEnumStringAvailable()
+            allowed_bin = []
+            for b in binnings:
+                m = re.match("([0-9]+)x([0-9]+)", b)
+                allowed_bin.append(int(m.group(1)))
+
+            binning = (util.find_closest(min(binning), allowed_bin),) * 2
+        else:
+            max_bin = self._getMaxBinnings()
+            binning = (min(max_bin[0], binning[0]), min(max_bin[1], binning[1]))
+
+        return binning
+        
     def _getMaxBinnings(self):
         """
         returns (2-tuple int): maximum binning value (horizontal and vertical)
@@ -679,8 +698,7 @@ class AndorCam3(model.DigitalCamera):
         Called when "binning" VA is modified. It actually modifies the camera binning.
         """
         value = self._transposeSizeFromUser(value)
-        prev_binning, self._binning = self._binning, value
-        # TODO: check the binning is correct
+        prev_binning, self._binning = self._binning, self._findBinning(value)
         
         # adapt resolution so that the AOI stays the same
         change = (prev_binning[0] / value[0],
@@ -864,7 +882,9 @@ class AndorCam3(model.DigitalCamera):
         # Changing the binning modifies the resolution if conflicting
         if prev_binning != self._binning:
             prev_resolution = None # force the resolution update
+            # Note: on CMOS camera binning is pretty much equivalent to software binning
             logging.debug("Updating binning settings")
+            # TODO: doesn't seem to work with binning != 1 => black image
             self._binning = self._storeBinning(self._binning)
             self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
 
