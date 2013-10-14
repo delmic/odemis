@@ -196,8 +196,14 @@ class AndorCam3(model.DigitalCamera):
         self._shape = resolution + (2**self._metadata[model.MD_BPP],)
         
         # put the detector pixelSize
-        psize = (self.GetFloat(u"PixelWidth") * 1e-6,
-                 self.GetFloat(u"PixelHeight") * 1e-6)
+        try:
+            psize = (self.GetFloat(u"PixelWidth") * 1e-6,
+                     self.GetFloat(u"PixelHeight") * 1e-6)
+        except ATError:
+            # SDK 3.5 only support this info for the SimCam ?!
+            psize = (6.5e-6, 6.5e-6) # Neo and Zyla both have this size
+            logging.warning(u"Unknown pixel size, assuming %d µm", psize[0] * 1e6)
+
         self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser(psize),
                                                  unit="m", readonly=True)
         self._metadata[model.MD_SENSOR_PIXEL_SIZE] = self.pixelSize.value
