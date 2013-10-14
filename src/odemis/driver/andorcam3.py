@@ -714,8 +714,8 @@ class AndorCam3(model.DigitalCamera):
             return
         
         # AOI
-        ranges = (self.GetIntRanges("AOIWidth"),
-                  self.GetIntRanges("AOIHeight"))
+        ranges = (self.GetIntRanges(u"AOIWidth"),
+                  self.GetIntRanges(u"AOIHeight"))
         assert((ranges[0][0] <= size[0]) and (size[0] <= ranges[0][1]) and
                (ranges[1][0] <= size[1]) and (size[1] <= ranges[1][1]))
         
@@ -755,8 +755,8 @@ class AndorCam3(model.DigitalCamera):
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
         # TODO check that binning is taken into account here already
-        ranges = (self.GetIntRanges("AOIWidth"),
-                  self.GetIntRanges("AOIHeight"))
+        ranges = (self.GetIntRanges(u"AOIWidth"),
+                  self.GetIntRanges(u"AOIHeight"))
         size = (max(ranges[0][0], size[0]), max(ranges[1][0], size[1]))
         
         # TODO the documentation of Neo mentions a few fixed possible resolutions
