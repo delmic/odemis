@@ -21,16 +21,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from ctypes import *
-from odemis import model, util
 import gc
 import logging
 import numpy
+from odemis import model, util
 import odemis
 import os
 import re
 import threading
 import time
 import weakref
+
 
 # Neo encodings (selectable depending on gain selection):
 #0 Mono12
@@ -43,7 +44,6 @@ import weakref
 #7 Mono22PackedParallel
 #8 Mono8 -> error code 19
 #9 Mono32
-
 class ATError(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
@@ -401,6 +401,14 @@ class AndorCam3(model.DigitalCamera):
         self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
         return (writable.value != 0)
     
+    def isEnumIndexAvailable(self, prop, idx):
+        """
+        return bool
+        """
+        available = c_int()
+        self.atcore.AT_IsEnumIndexAvailable(self.handle, prop, idx, byref(available))
+        return (available.value != 0)
+
     def SetEnumString(self, prop, value):
         """
         Set a unicode string corresponding for the given property
@@ -424,12 +432,20 @@ class AndorCam3(model.DigitalCamera):
     def GetEnumStringAvailable(self, prop):
         """
         Return in a list the strings corresponding of each possible value of an enum
+        Non implemented values are replaced by None, but (temporarily) unavailable ones
+         are still returned. Use isEnumIndexAvailable() to check for the
+         availability of a value.
         """
         num_values = c_int()
         self.atcore.AT_GetEnumCount(self.handle, prop, byref(num_values))
+        implemented = c_int()
         result = []
         for i in range(num_values.value):
-            result.append(self.GetEnumStringByIndex(prop, i))
+            self.atcore.AT_IsEnumIndexImplemented(self.handle, prop, i, byref(implemented))
+            if implemented.value != 0:
+                result.append(self.GetEnumStringByIndex(prop, i))
+            else:
+                result.append(None)
             
         return result
     
@@ -450,7 +466,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             if self.isImplemented(u"TemperatureControl"):
                 tmps_str = self.GetEnumStringAvailable(u"TemperatureControl")
-                tmps = [float(t) for t in tmps_str]
+                tmps = [float(t) for t in tmps_str if tmps_str is not None]
                 return min(tmps), max(tmps)
             else:
                 return self.GetFloatRanges(u"TargetSensorTemperature")
@@ -469,7 +485,7 @@ class AndorCam3(model.DigitalCamera):
         assert((-300 <= temp) and (temp <= 100))
         if self.isImplemented(u"TemperatureControl"):
             tmps_str = self.GetEnumStringAvailable(u"TemperatureControl")
-            tmps = [float(t) for t in tmps_str]
+            tmps = [float(t) for t in tmps_str if tmps_str is not None]
             tmp_idx = util.index_closest(temp, tmps)
             self.SetEnumIndex(tmp_idx, u"TemperatureControl")
             temp = tmps[tmp_idx]
@@ -530,13 +546,15 @@ class AndorCam3(model.DigitalCamera):
         return (int): actual readout rate in Hz
         """
         assert(0 <= frequency)
-        # returns strings like u"550 MHz"
-        rates = self.GetEnumStringAvailable(u"PixelReadoutRate")
-        values = [int(r.rstrip(u" MHz")) for r in rates]
-        # TODO: use index_closest
-        closest = util.find_closest(frequency / 1e6, values)
-        self.SetEnumString(u"PixelReadoutRate", u"%d MHz" % closest)
-        return closest * 1e6
+        # returns strings like u"550 MHz" (and None if not implemented)
+        rates_str = self.GetEnumStringAvailable(u"PixelReadoutRate")
+        for i in range(len(rates_str)):
+            if not self.isEnumIndexAvailable(u"PixelReadoutRate", i):
+                rates_str[i] = None
+        rates = [int(r.rstrip(u" MHz")) if r else -1e100 for r in rates_str]
+        idx_rate = util.index_closest(frequency / 1e6, rates)
+        self.SetEnumIndex(u"PixelReadoutRate", idx_rate)
+        return rates[idx_rate] * 1e6
 
     def getModelName(self):
         model_name = "Andor " + self.GetString(u"CameraModel")
@@ -755,7 +773,7 @@ class AndorCam3(model.DigitalCamera):
         # rolling shutter (global avoids tearing, rolling reduces noise)
         # 16 bit - Gain 1+4 (maximum)
         # SpuriousNoiseFilter On (this is actually a software based method)
-        rate = self.setReadoutRate(100)
+        rate = self.setReadoutRate(1)
         self._metadata[model.MD_READOUT_TIME] = 1.0 / rate # s
         
 #        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
