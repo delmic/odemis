@@ -202,7 +202,7 @@ class AndorCam3(model.DigitalCamera):
         except ATError:
             # SDK 3.5 only support this info for the SimCam ?!
             psize = (6.5e-6, 6.5e-6) # Neo and Zyla both have this size
-            logging.warning(u"Unknown pixel size, assuming %d µm", psize[0] * 1e6)
+            logging.warning(u"Unknown pixel size, assuming %g µm", psize[0] * 1e6)
 
         self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser(psize),
                                                  unit="m", readonly=True)
@@ -232,13 +232,11 @@ class AndorCam3(model.DigitalCamera):
                               [self._transposeSizeToUser((1, 1)),
                                self._transposeSizeToUser(resolution)],
                                              setter=self._setResolution)
-        self._setResolution(self._transposeSizeToUser(resolution))
         
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
                               [self._transposeSizeToUser((1, 1)),
                                self._transposeSizeToUser(self._getMaxBinnings())],
                                           setter=self._setBinning)
-        self._setBinning(self._transposeSizeToUser(self._binning))
         
         range_exp = list(self.GetFloatRanges(u"ExposureTime"))
         range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0 
@@ -316,13 +314,14 @@ class AndorCam3(model.DigitalCamera):
                                   byref(buffersize), timeout_ms)
         return pbuffer, buffersize.value
         
-    def Flush(self):        
+    def Flush(self):
         self.atcore.AT_Flush(self.handle)
     
     def GetString(self, prop):
         """
         Return a unicode string corresponding to the given property
         """
+        assert(isinstance(prop, unicode))
         len_str = c_int()
         self.atcore.AT_GetStringMaxLength(self.handle, prop, byref(len_str))
         string = create_unicode_buffer(len_str.value)
@@ -330,14 +329,17 @@ class AndorCam3(model.DigitalCamera):
         return string.value
     
     def SetInt(self, prop, value):
+        assert(isinstance(prop, unicode))
         self.atcore.AT_SetInt(self.handle, prop, c_longlong(value))
         
     def GetInt(self, prop):
+        assert(isinstance(prop, unicode))
         result = c_longlong()
         self.atcore.AT_GetInt(self.handle, prop, byref(result))
         return result.value
     
     def GetEnumIndex(self, prop):
+        assert(isinstance(prop, unicode))
         result = c_longlong()
         self.atcore.AT_GetEnumIndex(self.handle, prop, byref(result))
         return result.value
@@ -347,6 +349,7 @@ class AndorCam3(model.DigitalCamera):
         Return the max of an integer property.
         Return (2-tuple int)
         """
+        assert(isinstance(prop, unicode))
         result = c_longlong()
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result))
         return result.value
@@ -356,15 +359,18 @@ class AndorCam3(model.DigitalCamera):
         Return the (min, max) of an integer property.
         Return (2-tuple int)
         """
+        assert(isinstance(prop, unicode))
         result = (c_longlong(), c_longlong())
         self.atcore.AT_GetIntMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetIntMax(self.handle, prop, byref(result[1]))
         return (result[0].value, result[1].value)
     
     def SetFloat(self, prop, value):
+        assert(isinstance(prop, unicode))
         self.atcore.AT_SetFloat(self.handle, prop, c_double(value))
     
     def GetFloat(self, prop):
+        assert(isinstance(prop, unicode))
         result = c_double()
         self.atcore.AT_GetFloat(self.handle, prop, byref(result))
         return result.value
@@ -374,12 +380,14 @@ class AndorCam3(model.DigitalCamera):
         Return the (min, max) of an float property.
         Return (2-tuple int)
         """
+        assert(isinstance(prop, unicode))
         result = (c_double(), c_double())
         self.atcore.AT_GetFloatMin(self.handle, prop, byref(result[0]))
         self.atcore.AT_GetFloatMax(self.handle, prop, byref(result[1]))
         return (result[0].value, result[1].value)
     
     def SetBool(self, prop, value):
+        assert(isinstance(prop, unicode))
         if value:
             int_val = c_int(1)
         else:
@@ -387,6 +395,7 @@ class AndorCam3(model.DigitalCamera):
         self.atcore.AT_SetBool(self.handle, prop, int_val)
     
     def GetBool(self, prop):
+        assert(isinstance(prop, unicode))
         result = c_int()
         self.atcore.AT_GetBool(self.handle, prop, byref(result))
         return (result.value != 0)
@@ -395,6 +404,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return bool
         """
+        assert(isinstance(prop, unicode))
         implemented = c_int()
         self.atcore.AT_IsImplemented(self.handle, prop, byref(implemented))
         return (implemented.value != 0)
@@ -403,6 +413,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return bool
         """
+        assert(isinstance(prop, unicode))
         writable = c_int()
         self.atcore.AT_IsWritable(self.handle, prop, byref(writable))
         return (writable.value != 0)
@@ -411,6 +422,7 @@ class AndorCam3(model.DigitalCamera):
         """
         return bool
         """
+        assert(isinstance(prop, unicode))
         available = c_int()
         self.atcore.AT_IsEnumIndexAvailable(self.handle, prop, idx, byref(available))
         return (available.value != 0)
@@ -419,18 +431,21 @@ class AndorCam3(model.DigitalCamera):
         """
         Set a unicode string corresponding for the given property
         """
+        assert(isinstance(prop, unicode))
         self.atcore.AT_SetEnumString(self.handle, prop, value)
 
     def SetEnumIndex(self, prop, idx):
         """
         Select the current index of an enumerated property
         """
+        assert(isinstance(prop, unicode))
         self.atcore.AT_SetEnumIndex(self.handle, prop, idx)
     
     def GetEnumStringByIndex(self, prop, index):
         """
         Return a unicode string corresponding to the given property and index
         """
+        assert(isinstance(prop, unicode))
         string = create_unicode_buffer(128) # no way to know the max size
         self.atcore.AT_GetEnumStringByIndex(self.handle, prop, index, string, len(string))
         return string.value
@@ -442,6 +457,7 @@ class AndorCam3(model.DigitalCamera):
          are still returned. Use isEnumIndexAvailable() to check for the
          availability of a value.
         """
+        assert(isinstance(prop, unicode))
         num_values = c_int()
         self.atcore.AT_GetEnumCount(self.handle, prop, byref(num_values))
         implemented = c_int()
@@ -491,9 +507,9 @@ class AndorCam3(model.DigitalCamera):
         assert((-300 <= temp) and (temp <= 100))
         if self.isImplemented(u"TemperatureControl"):
             tmps_str = self.GetEnumStringAvailable(u"TemperatureControl")
-            tmps = [float(t) for t in tmps_str if tmps_str is not None]
+            tmps = [float(t) if t is not None else 1e100 for t in tmps_str]
             tmp_idx = util.index_closest(temp, tmps)
-            self.SetEnumIndex(tmp_idx, u"TemperatureControl")
+            self.SetEnumIndex(u"TemperatureControl", tmp_idx)
             temp = tmps[tmp_idx]
         else:
             # In theory not necessary as the VA will ensure this anyway
@@ -849,6 +865,7 @@ class AndorCam3(model.DigitalCamera):
             logging.debug("Updating resolution settings")
             self._setSize(self._resolution)
 
+        # TODO read BaselineLevel and pass as metadata (or subtract)?
         self._prev_settings = [self._binning, self._resolution]
 
     def _allocate_buffer(self, size):
