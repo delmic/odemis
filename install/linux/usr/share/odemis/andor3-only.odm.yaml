@@ -1,6 +1,6 @@
 # Fake optical microscope to be able to use just a Andor SDK3 camera such as
 # the Neo or Zyla. If the SDK is installed, but not camera is plugged in, it
-# will likely find the integrated simulator.
+# will likely find the integrated simulator (SimCam).
 Optical: {
     class: Microscope,
     role: optical,
@@ -11,7 +11,7 @@ Optical: {
 
 Light: {
     class: simulated.Light,
-    role: brightlight,
+    role: light,
     affects: [Cam],
     properties: {
         power: 100 # W
@@ -34,7 +34,10 @@ Light: {
 Cam: {
     class: andorcam3.AndorCam3,
     role: ccd,
-    init: {device: 0} # if a real camera is plugged in, it's usually 0
+    init: {
+           device: 0,  # if a real camera is plugged in, it's usually 0
+           bitflow_install_dirs: "/usr/local/share/bitflow/", # Put the path where Bitflow data is installed
+           }
 }
 
 "FakeStage": {
