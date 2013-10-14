@@ -603,10 +603,9 @@ class AndorCam3(model.DigitalCamera):
         
         # Nicely the API is different depending on cameras...
         if self.isImplemented(u"AOIBinning"):
-            # Typically for the Neo
+            # Typically for the Neo, only same binning on both side is supported
             allowed_bin = [1, 2, 3, 4, 8]
-            binning = (util.find_closest(binning[0], allowed_bin),
-                       util.find_closest(binning[1], allowed_bin))
+            binning = (util.find_closest(min(binning), allowed_bin),) * 2
             # TODO: might need to check combination is available in GetEnumStringAvailable()
             binning_str = u"%dx%d" % binning
             self.SetEnumString(u"AOIBinning", binning_str)
@@ -786,7 +785,7 @@ class AndorCam3(model.DigitalCamera):
             # u"16-bit (low noise & high well capacity)"
 
             if self.isImplemented(u"PreAmpGainControl"):
-                av_gains = self.atcore.GetEnumStringAvailable(self.handle, u"PreAmpGainControl")
+                av_gains = self.GetEnumStringAvailable(u"PreAmpGainControl")
                 logging.debug("Available gains: %s", av_gains)
                 # If not, we are on a SimCam so it doesn't matter
                 self.SetEnumString(u"PreAmpGainControl", u"Gain 1 Gain 4 (16 bit)")
