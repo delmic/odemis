@@ -301,8 +301,10 @@ class SecomStreamsTab(Tab):
 
         # Force the check for the stream update
         main_data = self.tab_data_model.main
-        self.onOpticalState(main_data.opticalState.value)
-        self.onEMState(main_data.emState.value)
+        if hasattr(main_data, 'opticalState'):
+            self.onOpticalState(main_data.opticalState.value)
+        if hasattr(main_data, 'emState'):
+            self.onEMState(main_data.emState.value)
 
 
 class SparcAcquisitionTab(Tab):
