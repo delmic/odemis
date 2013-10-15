@@ -4,7 +4,7 @@ Created on 6 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -230,8 +230,8 @@ class AndorCam3(model.DigitalCamera):
                                                   setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        # TODO: also put exposure and gain?
-        self._prev_settings = [None, None] # binning, image
+        # TODO: also put readout rate and gain?
+        self._prev_settings = [None, None, None] # binning, image, exp time
         self._binning = (1, 1) # used by resolutionFitter()
         self._resolution = resolution
         # need to be before binning, as it is modified when changing binning         
@@ -246,10 +246,10 @@ class AndorCam3(model.DigitalCamera):
                                           setter=self._setBinning)
         
         range_exp = list(self.GetFloatRanges(u"ExposureTime"))
-        range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0 
-        self.exposureTime = model.FloatContinuous(1.0, range_exp, unit="s",
-                                                  setter=self.setExposureTime)
-        self.setExposureTime(1.0)
+        range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0
+        self._exp_time = 1.0
+        self.exposureTime = model.FloatContinuous(self._exp_time, range_exp,
+                                          unit="s", setter=self.setExposureTime)
         
         # TODO add readout rate (at least as RO, to allow for better time estimation)
         
@@ -779,7 +779,8 @@ class AndorCam3(model.DigitalCamera):
         
         # smaller than the whole sensor
         size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
-        # TODO check that binning is taken into account here already
+        # TODO check whether binning is taken into account here already
+        # => either use the future binning or the current binning + future binning
         ranges = (self.GetIntRanges(u"AOIWidth"),
                   self.GetIntRanges(u"AOIHeight"))
         size = (max(ranges[0][0], size[0]), max(ranges[1][0], size[1]))
@@ -804,10 +805,8 @@ class AndorCam3(model.DigitalCamera):
         return act_exp
     
     def setExposureTime(self, value):
-        # TODO make sure we are in a state it's possible to change exposure time
-        exp = self._storeExposureTime(value)
-        self._metadata[model.MD_EXP_TIME] = exp
-        return exp
+        self._exp_time = value
+        return value
     
     def _setupBestQuality(self):
         """
@@ -868,7 +867,7 @@ class AndorCam3(model.DigitalCamera):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
-        new_settings = [self._binning, self._resolution]
+        new_settings = [self._binning, self._resolution, self._exp_time]
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -877,14 +876,18 @@ class AndorCam3(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        prev_binning, prev_resolution = self._prev_settings
+        prev_binning, prev_resolution, prev_exp = self._prev_settings
+
+        if prev_exp != self._exp_time:
+            self._exp_time = self._storeExposureTime(self._exp_time)
+            self._metadata[model.MD_EXP_TIME] = self._exp_time
 
         # Changing the binning modifies the resolution if conflicting
         if prev_binning != self._binning:
             prev_resolution = None # force the resolution update
             # Note: on CMOS camera binning is pretty much equivalent to software binning
             logging.debug("Updating binning settings")
-            # TODO: doesn't seem to work with binning != 1 => black image
+            # FIXME: doesn't seem to work with binning != 1 => black image
             self._binning = self._storeBinning(self._binning)
             self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
 
@@ -893,7 +896,7 @@ class AndorCam3(model.DigitalCamera):
             self._setSize(self._resolution)
 
         # TODO read BaselineLevel and pass as metadata (or subtract)?
-        self._prev_settings = [self._binning, self._resolution]
+        self._prev_settings = [self._binning, self._resolution, self._exp_time]
 
     def _allocate_buffer(self, size):
         """
@@ -1004,7 +1007,7 @@ class AndorCam3(model.DigitalCamera):
 
                     self._update_settings()
                     size = self._resolution
-                    exposure_time = self.exposureTime.value
+                    exposure_time = self._exp_time
 
                     # Allocates a pipeline of two buffers in a pipe, so that when we are
                     # processing one buffer, the driver can already acquire the next image.
