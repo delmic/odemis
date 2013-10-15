@@ -230,8 +230,8 @@ class AndorCam3(model.DigitalCamera):
                                                   setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        # TODO: also put readout rate and gain?
-        self._prev_settings = [None, None, None] # binning, image, exp time
+        # TODO: also put gain?
+        self._prev_settings = [None, None, None, None] # binning, image, exp time, readout rate
         self._binning = (1, 1) # used by resolutionFitter()
         self._resolution = resolution
         # need to be before binning, as it is modified when changing binning         
@@ -251,7 +251,11 @@ class AndorCam3(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp,
                                           unit="s", setter=self.setExposureTime)
         
-        # TODO add readout rate (at least as RO, to allow for better time estimation)
+        ror_choices = set(self.getReadoutRates())
+        self._readout_rate = max(ror_choices) # default to fast acquisition
+        self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
+                                         unit="Hz", setter=self._setReadoutRate)
+
         
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
@@ -568,7 +572,15 @@ class AndorCam3(model.DigitalCamera):
         self.SetEnumString(u"FanSpeed", values[speed_index])
         return speed_index / len(values)
         
-    def setReadoutRate(self, frequency):
+    def getReadoutRates(self):
+        """
+        Returns (list of 0<floats): possible readout rates in Hz
+        """
+        rates_str = self.GetEnumStringAvailable(u"PixelReadoutRate")
+        rates = [int(r.rstrip(u" MHz")) * 1e6 for r in rates_str if r is not None]
+        return rates
+
+    def _storeReadoutRate(self, frequency):
         """
         Set the pixel readout rate
         frequency (0 <= float): the pixel readout rate in Hz
@@ -580,10 +592,18 @@ class AndorCam3(model.DigitalCamera):
         for i in range(len(rates_str)):
             if not self.isEnumIndexAvailable(u"PixelReadoutRate", i):
                 rates_str[i] = None
-        rates = [int(r.rstrip(u" MHz")) if r else -1e100 for r in rates_str]
+        rates = [int(r.rstrip(u" MHz")) if r else 1e100 for r in rates_str]
         idx_rate = util.index_closest(frequency / 1e6, rates)
         self.SetEnumIndex(u"PixelReadoutRate", idx_rate)
         return rates[idx_rate] * 1e6
+    
+    def _setReadoutRate(self, frequency):
+        """
+        Called when the readout rate is requested
+        """
+        self._readout_rate = frequency
+        # TODO: check also if it is currently available?
+        return self._readout_rate
 
     def getModelName(self):
         model_name = "Andor " + self.GetString(u"CameraModel")
@@ -814,15 +834,16 @@ class AndorCam3(model.DigitalCamera):
         """
         # we are not in a hurry, so we can set up to the slowest and less noise
         # parameters:
-        # slow read out
         # rolling shutter (global avoids tearing, rolling reduces noise)
         # 16 bit - Gain 1+4 (maximum)
         # SpuriousNoiseFilter On (this is actually a software based method)
-        rate = self.setReadoutRate(1)
-        self._metadata[model.MD_READOUT_TIME] = 1.0 / rate # s
         
 #        print self.atcore.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
-        self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
+        try:
+            self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
+        except ATError:
+            logging.exception("Failed to set shuttering mode")
+        # TODO: readout overlap?
         
         try:
             # TODO: use SimplePreAmpGainControl (if available) as the rest is
@@ -876,7 +897,11 @@ class AndorCam3(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        prev_binning, prev_resolution, prev_exp = self._prev_settings
+        prev_binning, prev_resolution, prev_exp, prev_rorate = self._prev_settings
+
+        if prev_rorate != self._readout_rate:
+            self._readout_rate = self._storeReadoutRate(self._readout_rate)
+            self._metadata[model.MD_READOUT_TIME] = 1.0 / self._readout_rate # s
 
         if prev_exp != self._exp_time:
             self._exp_time = self._storeExposureTime(self._exp_time)
@@ -896,7 +921,9 @@ class AndorCam3(model.DigitalCamera):
             self._setSize(self._resolution)
 
         # TODO read BaselineLevel and pass as metadata (or subtract)?
-        self._prev_settings = [self._binning, self._resolution, self._exp_time]
+
+        self._prev_settings = [self._binning, self._resolution,
+                               self._exp_time, self._readout_rate]
 
     def _allocate_buffer(self, size):
         """
@@ -932,7 +959,8 @@ class AndorCam3(model.DigitalCamera):
         dataarray = model.DataArray(ndbuffer, metadata)
         # crop the array in case of stride (should not cause copy)
         return dataarray[:,:size[0]]
-        
+
+    # unused
     def acquireOne(self):
         """
         Acquire one image at the best quality.
@@ -941,8 +969,14 @@ class AndorCam3(model.DigitalCamera):
         with self.acquisition_lock:
             assert not self.GetBool(u"CameraAcquiring")
             
+            self._update_settings()
+            size = self._resolution
+            exposure_time = self._exp_time
+            if self.isImplemented(u"ReadoutTime"):
+                readout_time = self.GetFloat(u"ReadoutTime")
+            else: # for SimCam
+                readout_time = 1 / self._readout_rate # s
             metadata = dict(self._metadata) # duplicate
-            size = self._transposeSizeFromUser(self.resolution.value)
             
             cbuffer = self._allocate_buffer(size)
             self.QueueBuffer(cbuffer)
@@ -950,8 +984,6 @@ class AndorCam3(model.DigitalCamera):
             # Acquire the image
             logging.info("acquiring one image of %d bytes", sizeof(cbuffer))
             self.Command(u"AcquisitionStart")
-            exposure_time = self.exposureTime.value
-            readout_time = size[0] * size[1] * metadata[model.MD_READOUT_TIME] # s
             metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
             pbuffer, buffersize = self.WaitBuffer(exposure_time + readout_time + 1)
             
@@ -1008,6 +1040,11 @@ class AndorCam3(model.DigitalCamera):
                     self._update_settings()
                     size = self._resolution
                     exposure_time = self._exp_time
+                    if self.isImplemented(u"ReadoutTime"):
+                        readout_time = self.GetFloat(u"ReadoutTime")
+                    else: # for SimCam
+                        # CMOS cams read each pixel simultaneously
+                        readout_time = 1 / self._readout_rate # s
 
                     # Allocates a pipeline of two buffers in a pipe, so that when we are
                     # processing one buffer, the driver can already acquire the next image.
@@ -1021,7 +1058,6 @@ class AndorCam3(model.DigitalCamera):
                     # Acquire the images
                     logging.info("acquiring a series of images of %d bytes", sizeof(cbuffer))
                     self.Command(u"AcquisitionStart")
-                    readout_time = size[0] * size[1] * self._metadata[model.MD_READOUT_TIME] # s
                     need_reinit = False
 
                 # Acquire an image
@@ -1145,7 +1181,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             self.resolution.value = self._transposeSizeToUser(resolution)
             self.exposureTime.value = 0.01
-            im = self.acquireOne()
+            im = self.data.get()
         except Exception as err:
             logging.warning("Failed to acquire an image: " + str(err))
             return False
