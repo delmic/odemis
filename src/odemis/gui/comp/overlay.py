@@ -1356,28 +1356,46 @@ class PointSelectOverlay(WorldOverlay):
         self.select_color = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
         self.enabled = False
 
+        # This attribute is used to check if the base was dragged while the
+        # mouse button was down. If so, we assume the user wanted to drag the
+        # picture and *not* select a new pixel.
+        self.was_dragged = False
+
     # Event handlers
 
     def on_motion(self, evt):
         """ Update the current cursor position when the mouse is moving and
         there is no dragging.
         """
-        if not self.base.dragging and self.values_are_set():
-            self._current_vpos = evt.GetPosition()
-            old_pixel_pos = self._pixel_pos
-            self.view_to_pixel()
-            if self._pixel_pos != old_pixel_pos:
-                self.base.UpdateDrawing()
+        # If the mouse button is not down...
+        if not self.base.HasCapture():
+            # ...and we have data for plotting pixels
+            if self.values_are_set():
+                self._current_vpos = evt.GetPosition()
+                old_pixel_pos = self._pixel_pos
+                self.view_to_pixel()
+                if self._pixel_pos != old_pixel_pos:
+                    self.base.UpdateDrawing()
+        else:
+            # The canvas was dragged
+            self.was_dragged = True
 
         evt.Skip()
 
     def on_mouse_up(self, evt):
-        """ Set the selected pixel, if a pixel position is known """
-        if self._pixel_pos and self.enabled:
+        """ Set the selected pixel, if a pixel position is known
+
+        If the base was dragged while the mouse button was down, we do *not*
+        select a new pixel.
+        """
+
+        if self._pixel_pos and self.enabled and not self.was_dragged:
             if self._selected_pixel != self._pixel_pos:
                 self._selected_pixel = self._pixel_pos
                 self.base.UpdateDrawing()
                 logging.debug("Pixel %s selected", str(self._selected_pixel))
+
+        self.was_dragged = False
         evt.Skip()
 
     def on_mouse_enter(self, evt):
@@ -1397,7 +1415,9 @@ class PointSelectOverlay(WorldOverlay):
     # END Event handlers
 
     def set_values(self, mpp, physical_center, resolution):
-
+        """ Set the values needed for mapping mouse positions to pixel
+        coordinates
+        """
         if not (len(physical_center) == len(physical_center) == 2):
             raise ValueError("Illegal values for PointSelectOverlay")
 
