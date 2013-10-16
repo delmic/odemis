@@ -447,7 +447,7 @@ class AndorCam2(model.DigitalCamera):
                                                  unit="Hz", setter=self.setReadoutRate)
 
         gain_choices = set(self.GetPreAmpGains())
-        self._gain = min(gain_choices) # default to high gain
+        self._gain = min(gain_choices) # default to low gain = less noise
         self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
                                           setter=self.setGain)
 
