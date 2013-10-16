@@ -56,3 +56,19 @@ if __name__ == '__main__':
     unittest.main()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
+#
+#from odemis.driver import andorcam3
+#import logging
+#logging.getLogger().setLevel(logging.DEBUG)
+#
+#a = andorcam3.AndorCam3("test", "cam", 0)
+#a.targetTemperature.value = -15
+#a.fanSpeed.value = 0
+#rr = a.readoutRate.value
+#a.data.get()
+#rt = a.GetFloat(u"ReadoutTime")
+#res = a.resolution.value
+#res[0] * res[1] / rr
+#a.data.get()
+#a.resolution.value = (128, 128)
+
