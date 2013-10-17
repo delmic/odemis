@@ -891,7 +891,7 @@ class AndorCam3(model.DigitalCamera):
         # The best bit depth depends on the gain
         self._setBestBitDepth()
 
-    def _setBestBitDepth(self):
+    def _setBestBitDepth(self, bpp=None):
         """
         Tries to pick the best available bit depth (for the current gain)
         """
@@ -907,6 +907,13 @@ class AndorCam3(model.DigitalCamera):
             except ATError:
                 self.SetEnumString(u"PixelEncoding", u"Mono12Coded")
                 self._metadata[model.MD_BPP] = 12
+
+        # If the camera can be more precise on BPP, use it (eg: 11 bits)
+        if self.isImplemented(u"BitDepth"):
+            i = self.GetEnumIndex(u"BitDepth")
+            bpp_str = self.GetEnumStringByIndex(u"BitDepth", i)
+            m = re.match("([0-9]+)", bpp_str) # looks like "16 bit"
+            self._metadata[model.MD_BPP] = int(m.group(1))
 
     def _setupBestQuality(self):
         """
