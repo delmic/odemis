@@ -1087,8 +1087,9 @@ class AndorCam3(model.DigitalCamera):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is True.
         """
-        need_reinit = True
         nbuffers = 2
+        num_errors = 0
+        need_reinit = True
         try:
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
@@ -1145,14 +1146,18 @@ class AndorCam3(model.DigitalCamera):
                 except ATError as (errno, strerr):
                     # sometimes there is timeout, don't completely give up
                     # Note: seems to happen when time between two waitbuffer() is too long
-                    # TODO maximum failures in a row?
-                    if errno == 13: # AT_ERR_TIMEDOUT
+                    if errno in [11, 13]: # AT_ERR_NODATA, AT_ERR_TIMEDOUT
+                        num_errors += 1
+                        if num_errors > 5:
+                            logging.error("%d errors in a row, canceling acquisition", num_errors)
+                            return
                         logging.warning("trying again to acquire image after error %s:", strerr)
                         need_reinit = True
                         continue
-                    # FIXME: seems to sometimes fail with  11: AT_ERR_NODATA
                     else:
                         raise
+                else:
+                    num_errors = 0
     
                 # Cannot directly use pbuffer because we'd lose the reference to the
                 # memory allocation... and it'd get free'd at the end of the method
@@ -1172,6 +1177,8 @@ class AndorCam3(model.DigitalCamera):
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
+        except Exception:
+            logging.exception("Acquisition failed with unexcepted error")
         finally:
             try:
                 self.Command(u"AcquisitionStop")
