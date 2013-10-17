@@ -34,15 +34,12 @@ from odemis.gui.comp import miccanvas
 import wx
 
 
+class ViewPort(wx.Panel):
 
-class MicroscopeViewport(wx.Panel):
-    """ A panel that shows a microscope view and its legend below it.
-
-    This is a generic class, that should be inherited by more specific classes.
-    """
-
-    # Default class
+    # Default classes for the canvas and the legend. These may be overridden
+    # in subclasses
     canvas_class = miccanvas.DblMicroscopeCanvas
+    legend_class = None
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -66,25 +63,24 @@ class MicroscopeViewport(wx.Panel):
         # main widget
         self.canvas = self.canvas_class(self)
 
-        ##### Legend
-        # It's made of multiple controls positioned via sizers
-        # TODO: allow the user to pick which information is displayed in the
-        # legend
-        self.legend_panel = InfoLegend(self) #wx.Panel(self)
-
-        # Focus the view when a child element is clicked
-        self.legend_panel.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-        # Bind on EVT_SLIDER to update even while the user is moving
-        self.legend_panel.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        self.legend_panel.Bind(wx.EVT_SLIDER, self.OnSlider)
-
         # Put all together (canvas + legend)
         mainSizer = wx.BoxSizer(wx.VERTICAL)
         mainSizer.Add(self.canvas, 1,
                 border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
-        mainSizer.Add(self.legend_panel, 0,
-                border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+
+        ##### Legend
+
+        if self.legend_class:
+            # It's made of multiple controls positioned via sizers
+            # TODO: allow the user to pick which information is displayed in the
+            # legend
+            self.legend_panel = self.legend_class(self)  #pylint: disable=E1102
+
+            # Focus the view when a child element is clicked
+            self.legend_panel.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+
+            mainSizer.Add(self.legend_panel, 0,
+                    border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
 
         self.SetSizerAndFit(mainSizer)
         self.SetAutoLayout(True)
@@ -95,6 +91,72 @@ class MicroscopeViewport(wx.Panel):
     @property
     def microscope_view(self):
         return self._microscope_view
+
+    def setView(self, microscope_view, tab_data):
+        raise NotImplementedError
+
+    ################################################
+    ## Panel control
+    ################################################
+
+    def ShowLegend(self, show):
+        """ Show or hide the merge slider """
+        self.legend_panel.Show(show)
+
+    def HasFocus(self, *args, **kwargs):
+        return self._has_focus == True
+
+    def SetFocus(self, focus):   #pylint: disable=W0221
+        """ Set the focus on the viewport according to the focus parameter.
+        focus:  A boolean value.
+        """
+        logging.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
+
+        self._has_focus = focus
+        if focus:
+            self.SetBackgroundColour(gui.BORDER_COLOUR_FOCUS)
+        else:
+            self.SetBackgroundColour(gui.BORDER_COLOUR_UNFOCUS)
+
+    ################################################
+    ## GUI Event handling
+    ################################################
+
+    def OnChildFocus(self, evt):
+        """ When one of it's child widgets is clicked, this viewport should be
+        considered as having the focus.
+        """
+        if self._microscope_view and self._tab_data_model:
+            # This will take care of doing everything necessary
+            # Remember, the notify method of the vigilant attribute will
+            # only fire if the values changes.
+            self._tab_data_model.focussedView.value = self._microscope_view
+
+        evt.Skip()
+
+    def OnSize(self, evt):
+        evt.Skip() # processed also by the parent
+
+
+class MicroscopeViewport(ViewPort):
+    """ A panel that shows a microscope view and its legend below it.
+
+    This is a generic class, that should be inherited by more specific classes.
+    """
+
+    legend_class = InfoLegend
+
+    def __init__(self, *args, **kwargs):
+        """Note: The MicroscopeViewport is not fully initialised until setView()
+        has been called.
+        """
+        # Call parent constructor at the end, because it needs the legen panel
+        ViewPort.__init__(self, *args, **kwargs)
+
+        # Bind on EVT_SLIDER to update even while the user is moving
+        self.legend_panel.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.legend_panel.Bind(wx.EVT_SLIDER, self.OnSlider)
+
 
     def setView(self, microscope_view, tab_data):
         """
@@ -133,30 +195,11 @@ class MicroscopeViewport(wx.Panel):
     ## Panel control
     ################################################
 
-    def ShowLegend(self, show):
-        """ Show or hide the merge slider """
-        self.legend_panel.Show(show)
-
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
         self.legend_panel.bmpSliderLeft.Show(show)
         self.legend_panel.mergeSlider.Show(show)
         self.legend_panel.bmpSliderRight.Show(show)
-
-    def HasFocus(self, *args, **kwargs):
-        return self._has_focus == True
-
-    def SetFocus(self, focus):   #pylint: disable=W0221
-        """ Set the focus on the viewport according to the focus parameter.
-        focus:  A boolean value.
-        """
-        logging.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
-
-        self._has_focus = focus
-        if focus:
-            self.SetBackgroundColour(gui.BORDER_COLOUR_FOCUS)
-        else:
-            self.SetBackgroundColour(gui.BORDER_COLOUR_UNFOCUS)
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
@@ -252,18 +295,6 @@ class MicroscopeViewport(wx.Panel):
     ## GUI Event handling
     ################################################
 
-    def OnChildFocus(self, evt):
-        """ When one of it's child widgets is clicked, this viewport should be
-        considered as having the focus.
-        """
-        if self._microscope_view and self._tab_data_model:
-            # This will take care of doing everything necessary
-            # Remember, the notify method of the vigilant attribute will
-            # only fire if the values changes.
-            self._tab_data_model.focussedView.value = self._microscope_view
-
-        evt.Skip()
-
     def OnSlider(self, evt):
         """
         Merge ratio slider
@@ -348,45 +379,43 @@ class SparcAlignViewport(MicroscopeViewport):
         self.legend_panel.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
 
 
-class PlotViewport(wx.Panel):
+class PlotViewport(ViewPort):
+    """ Class for displaying plotted data """
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
+    legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
-        wx.Panel.__init__(self, *args, **kwargs)
-
-        # Keep track of this panel's pseudo focus
-        self._has_focus = False
-
-        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
-                          wx.FONTSTYLE_NORMAL,
-                          wx.FONTWEIGHT_NORMAL)
-        self.SetFont(font)
-        self.SetBackgroundColour("#1A1A1A")
-        self.SetForegroundColour("#BBBBBB")
-
-        # main widget
-        self.canvas = self.canvas_class(self)
-
-        # legend
-        self.legend = AxisLegend(self)
-
-        # Put all together (canvas + legend)
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
-        mainSizer.Add(self.canvas, 1,
-                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
-        mainSizer.Add(self.legend, 0,
-                border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
-
-        self.SetSizerAndFit(mainSizer)
-        self.SetAutoLayout(True)
-
-        self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+        ViewPort.__init__(self, *args, **kwargs)
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
 
     def OnChildFocus(self, evt):
         evt.Skip()
+
+    @property
+    def microscope_view(self):
+        return self._microscope_view
+
+    def setView(self, microscope_view, tab_data):
+        """
+        Set the microscope view that this viewport is displaying/representing
+        *Important*: Should be called only once, at initialisation.
+
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
+
+        # This is a kind of a kludge, as it'd be best to have the viewport
+        # created after the microscope view, but they are created independently
+        # via XRC.
+        assert(self._microscope_view is None)
+
+        # import traceback
+        # traceback.print_stack()
+
+        self._microscope_view = microscope_view
+        self._tab_data_model = tab_data
+

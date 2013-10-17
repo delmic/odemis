@@ -8,13 +8,13 @@ Copyright © 2012-2013 Rinze de Laat and Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -30,8 +30,9 @@ import collections
 import logging
 import wx
 
-class ViewController(object):
+import odemis.gui.util.widgets as util
 
+class ViewController(object):
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
@@ -44,7 +45,7 @@ class ViewController(object):
           update. The first one is the one focused. If it's an OrderedDict, the
           kwargs are passed to the MicroscopeView creation.
         """
-        self._tab_data_model = tab_data
+        self._data_model = tab_data
         self._main_data_model = tab_data.main
 
         if isinstance(viewports, collections.OrderedDict):
@@ -67,8 +68,7 @@ class ViewController(object):
         return self._viewports
 
     def _createViewsFixed(self, viewports):
-        """
-        Create the different views displayed, according to viewtypes
+        """ Create the different views displayed, according to viewtypes
         viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
 
         To be executed only once, at initialisation.
@@ -77,43 +77,91 @@ class ViewController(object):
         for vp, vkwargs in viewports.items():
             # TODO: automatically set some clever values for missing arguments?
             view = model.MicroscopeView(**vkwargs)
-            self._tab_data_model.views.append(view)
-            vp.setView(view, self._tab_data_model)
+            self._data_model.views.append(view)
+            vp.setView(view, self._data_model)
+
+    def swap_viewsports(self, vpi1, vpi2):
+        """ Swap the positions of viewports denoted by indices vpi1 and vpi2
+
+        It is assumed that vpi1 points to one of the viewports visible in a 2x2
+        display, and that vpi2 is outside this 2x2 layout and invisible.
+        """
+
+        # Little shothand local variable
+        vp = self._viewports
+
+        # Get the sizer of the visible viewport
+        sizer1 = vp[vpi1].GetContainingSizer()
+        # And the one of the invisible one, which should be the containing sizer
+        # of sizer1
+        sizer2 = parent_sizer = vp[vpi2].GetContainingSizer()
+
+        # Get the sizer position of the first viewport, so we can use that
+        # to insert the other viewport
+        pos1 = util.get_sizer_postion(vp[vpi1])
+
+        # Get the sizer item for the visible viewport, so we can access its
+        # sizer properties like proportion and flags
+        item1 = parent_sizer.GetItem(vp[vpi1], recursive=True)
+
+        # Move viewport 2 to sizer 1
+        sizer2.Detach(vp[vpi2])
+        sizer1.Insert(
+            pos1,
+            vp[vpi2],
+            proportion=item1.GetProportion(),
+            flag=item1.GetFlag(),
+            border=item1.GetBorder())
+
+        # Move viewport 1 to the end of the conaining sizer
+        sizer1.Detach(vp[vpi1])
+        parent_sizer.Add(vp[vpi1])
+
+        # Flip the visibility
+        vp[vpi1].Hide()
+        vp[vpi2].Show()
+
+        # Swap the viewports in the viewport list
+        vp[vpi1], vp[vpi2] = vp[vpi2], vp[vpi1]
+
+        # Refresh the Layout
+        parent_sizer.Layout()
+
 
     def _createViewsAuto(self):
-        """
-        Create the different views displayed, according to the current
+        """ Create the different views displayed, according to the current
         microscope.
 
         To be executed only once, at initialisation.
         """
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        assert not self._tab_data_model.views # should still be empty
-        if isinstance(self._tab_data_model, model.AnalysisGUIData):
-            assert len(self._viewports) == 4
+        assert not self._data_model.views # should still be empty
+        if isinstance(self._data_model, model.AnalysisGUIData):
+            assert len(self._viewports) >= 4
             # TODO: should be dependent on the type of acquisition, and so
             # updated every time the .file changes
             if self._main_data_model.role == "sparc":
                 logging.info("Creating (static) SPARC viewport layout")
                 vpv = collections.OrderedDict([
-                (self._viewports[0],  # focused view
-                 {"name": "SEM",
-                  "stream_classes": EM_STREAMS,
-                  }),
-                (self._viewports[1],
-                 {"name": "Spectrum",
-                  "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
-                (self._viewports[2],
-                 {"name": "Angle resolved",
-                  "stream_classes": AR_STREAMS,
-                  }),
-                (self._viewports[3],
-                 {"name": "SEM CL",
-                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
-                                               ])
+                    (self._viewports[0],  # focused view
+                     {"name": "SEM",
+                      "stream_classes": EM_STREAMS,
+                      }),
+                    (self._viewports[1],
+                     {"name": "Spectrum",
+                      "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      }),
+                    (self._viewports[2],
+                     {"name": "Angle resolved",
+                      "stream_classes": AR_STREAMS,
+                      }),
+                    (self._viewports[3],
+                     {"name": "SEM CL",
+                      "stream_classes":
+                            EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      }),
+                ])
                 self._createViewsFixed(vpv)
             else:
                 logging.info("Creating generic static viewport layout")
@@ -128,11 +176,18 @@ class ViewController(object):
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",
-                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                  "stream_classes":
+                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
                   }),
                 (self._viewports[3],
                  {"name": "Combined 2",
-                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                  "stream_classes":
+                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                  }),
+                (self._viewports[4],
+                 {"name": "Spectrum",
+                  "stream_classes":
+                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
                   }),
                                                ])
                 self._createViewsFixed(vpv)
@@ -150,8 +205,8 @@ class ViewController(object):
                             focus0=None, # TODO: SEM focus or focus1?
                             stream_classes=EM_STREAMS
                          )
-                self._tab_data_model.views.append(view)
-                viewport.setView(view, self._tab_data_model)
+                self._data_model.views.append(view)
+                viewport.setView(view, self._data_model)
                 i += 1
 
         # If Optical only: all Optical
@@ -166,8 +221,8 @@ class ViewController(object):
                             focus0=self._main_data_model.focus,
                             stream_classes=OPTICAL_STREAMS
                          )
-                self._tab_data_model.views.append(view)
-                viewport.setView(view, self._tab_data_model)
+                self._data_model.views.append(view)
+                viewport.setView(view, self._data_model)
                 i += 1
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
@@ -213,18 +268,19 @@ class ViewController(object):
                             self._main_data_model.stage,
                             focus0=self._main_data_model.focus
                          )
-                self._tab_data_model.views.append(view)
-                viewport.setView(view, self._tab_data_model)
+                self._data_model.views.append(view)
+                viewport.setView(view, self._data_model)
                 i += 1
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
     def _onView(self, view):
-        """
-        Called when another view is focused
+        """ Called when another focussed view changes.
+
+        :param view: (MicroscopeView) The newly focussed view
         """
         logging.debug("Changing focus to view %s", view.name.value)
-        layout = self._tab_data_model.viewLayout.value
+        layout = self._data_model.viewLayout.value
 
         self._viewports[0].Parent.Freeze()
 
@@ -232,7 +288,8 @@ class ViewController(object):
             if viewport.microscope_view == view:
                 viewport.SetFocus(True)
                 if layout == model.VIEW_LAYOUT_ONE:
-                    # TODO: maybe in that case, it's not necessary to display the focus frame around?
+                    # TODO: maybe in that case, it's not necessary to display
+                    # the focus frame around?
                     viewport.Show()
             else:
                 viewport.SetFocus(False)
@@ -245,8 +302,7 @@ class ViewController(object):
         self._viewports[0].Parent.Thaw()
 
     def _onViewLayout(self, layout):
-        """
-        Called when the view layout of the GUI must be changed
+        """ Called when the view layout of the GUI must be changed
         """
         # only called when changed
         self._viewports[0].Parent.Freeze()
@@ -256,14 +312,15 @@ class ViewController(object):
             # TODO resize all the viewports now, so that there is no flickering
             # when just changing view
             for viewport in self._viewports:
-                if viewport.microscope_view == self._tab_data_model.focussedView.value:
+                if viewport.microscope_view == self._data_model.focussedView.value:
                     viewport.Show()
                 else:
                     viewport.Hide()
-
         elif layout == model.VIEW_LAYOUT_22:
             logging.debug("Showing all views")
-            for viewport in self._viewports:
+            # We limit the showing of viewports to the first 4, because more
+            # than 4 may be present
+            for viewport in self._viewports[:4]:
                 viewport.Show()
 
         elif layout == model.VIEW_LAYOUT_FULLSCREEN:
@@ -280,7 +337,7 @@ class ViewController(object):
         """
         # find the viewport corresponding to the current view
         for vp in self._viewports:
-            if vp.microscope_view == self._tab_data_model.focussedView.value:
+            if vp.microscope_view == self._data_model.focussedView.value:
                 vp.canvas.fitViewToContent()
                 break
         else:
@@ -301,7 +358,7 @@ class ViewSelector(object):
             associated.
             The first button has no viewport, for the 2x2 view.
         """
-        self._tab_data_model = tab_data
+        self._data_model = tab_data
 
         self.buttons = buttons
 
@@ -335,14 +392,14 @@ class ViewSelector(object):
             self._subscriptions.append(onName)
 
         # subscribe to layout and view changes
-        self._tab_data_model.viewLayout.subscribe(self._onViewChange)
-        self._tab_data_model.focussedView.subscribe(self._onViewChange, init=True)
+        self._data_model.viewLayout.subscribe(self._onViewChange)
+        self._data_model.focussedView.subscribe(self._onViewChange, init=True)
 
     def toggleButtonForView(self, microscope_view):
         """
         Toggle the button which represents the view and untoggle the other ones
-        microscope_view (MicroscopeView or None): the view, or None if the first button
-                                           (2x2) is to be toggled
+        microscope_view (MicroscopeView or None): the view, or None if the first
+                                    button (2x2) is to be toggled
         Note: it does _not_ change the view
         """
         for b, (vp, lbl) in self.buttons.items():
@@ -376,7 +433,8 @@ class ViewSelector(object):
                     max(1, (size[1] - border_width) // 2))
         # starts with an empty image with the border colour everywhere
         im_22 = wx.EmptyImage(*size, clear=False)
-        im_22.SetRGBRect(wx.Rect(0, 0, *size), *btn_all.GetBackgroundColour().Get())
+        im_22.SetRGBRect(wx.Rect(0, 0, *size),
+                         *btn_all.GetBackgroundColour().Get())
 
         i = 0
 
@@ -397,13 +455,16 @@ class ViewSelector(object):
                 sim = im.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
 
                 # crop to the right shape
-                lt = ((size_sub[0] - sim.Width) // 2, (size_sub[1] - sim.Height) // 2)
+                lt = ((size_sub[0] - sim.Width) // 2,
+                      (size_sub[1] - sim.Height) // 2)
                 sim.Resize(size_sub, lt)
 
                 # compute placement
                 y, x = divmod(i, 2)
                 # copy im in the right place
-                im_22.Paste(sim, x * (size_sub[0] + border_width), y * (size_sub[1] + border_width))
+                im_22.Paste(sim,
+                            x * (size_sub[0] + border_width),
+                            y * (size_sub[1] + border_width))
             else:
                 # black image
                 # Should never happen
@@ -423,12 +484,12 @@ class ViewSelector(object):
         # TODO when changing from 2x2 to a view non focused, it will be called
         # twice in row. => optimise to not do it twice
 
-        if self._tab_data_model.viewLayout.value == model.VIEW_LAYOUT_22:
+        if self._data_model.viewLayout.value == model.VIEW_LAYOUT_22:
             # (layout is 2x2) => select the first button
             self.toggleButtonForView(None)
         else:
             # otherwise (layout is 1) => select the right button
-            self.toggleButtonForView(self._tab_data_model.focussedView.value)
+            self.toggleButtonForView(self._data_model.focussedView.value)
 
 
     def OnClick(self, evt):
@@ -439,18 +500,21 @@ class ViewSelector(object):
         """
 
         # The event does not need to be 'skipped' because
-        # the button will be toggled when the event for value change is received.
+        # the button will be toggled when the event for value change is
+        # received.
 
         btn = evt.GetEventObject()
         viewport = self.buttons[btn][0]
 
         if viewport is None:
             # 2x2 button
-            # When selecting the overview, the focussed viewport should not change
-            self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_22
+            # When selecting the overview, the focussed viewport should not
+            # change
+            self._data_model.viewLayout.value = model.VIEW_LAYOUT_22
         else:
             # It's preferable to change the view before the layout so that
             # if the layout was 2x2 with another view focused, it doesn't first
-            # display one big view, and immediately after changes to another view.
-            self._tab_data_model.focussedView.value = viewport.microscope_view
-            self._tab_data_model.viewLayout.value = model.VIEW_LAYOUT_ONE
+            # display one big view, and immediately after changes to another
+            # view.
+            self._data_model.focussedView.value = viewport.microscope_view
+            self._data_model.viewLayout.value = model.VIEW_LAYOUT_ONE

@@ -518,12 +518,12 @@ MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
 class MicroscopeView(object):
     """ Represents a view from a microscope and ways to alter it.
 
-    Basically, its "input" is a StreamTree and can request stage and focus move.
-    It never computes the composited image from all the streams itself. It's up
-    to other objects (e.g., the canvas) to ask the StreamTree for its latest
-    image (the main goal of this scheme is to avoid computation when not needed).
-    Similarly, the thumbnail is never automatically recomputed, but other
-    objects can update it.
+    Basically, its "input" is a StreamTree and it can request stage and focus
+    move. It never computes the composited image from all the streams itself.
+    It's up to other objects (e.g., the canvas) to ask the StreamTree for its
+    latest image (the main goal of this scheme is to avoid computation when not
+    needed). Similarly, the thumbnail is never automatically recomputed, but
+    other objects can update it.
     """
 
     def __init__(self, name, stage=None,

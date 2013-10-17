@@ -25,6 +25,8 @@ from odemis.gui.util import call_after_wrapper, call_after, dead_object_wrapper
 import collections
 import logging
 
+import wx
+
 
 def get_all_children(widget, klass=None):
     """ Recursively get all the child widgets of the given widget
@@ -45,6 +47,22 @@ def get_all_children(widget, klass=None):
             result.append(w)
 
     return result
+
+def get_sizer_postion(window):
+    """ Return the int index value of a given window within its conaining sizer
+
+    The window must be contained within a BoxSizer
+    """
+    sizer = window.GetContainingSizer()
+
+    if not sizer or not isinstance(sizer, wx.BoxSizer):
+        return None
+
+    for i, sizer_item in enumerate(sizer.GetChildren()):
+        if sizer_item.IsWindow() and sizer_item.GetWindow() == window:
+            return i
+
+    raise ValueError("Widget not found")
 
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,

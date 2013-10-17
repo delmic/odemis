@@ -1188,6 +1188,7 @@ class PlotCanvas(wx.Panel):
         self.closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
         self.ticks = None
+        # The number of pixels to space ticks at
         self.tick_gap = 40
 
         ## Event binding
@@ -1369,11 +1370,19 @@ class PlotCanvas(wx.Panel):
         self.Update()
 
     def get_ticks(self):
-        ticks = []
-        for i in range(self.ClientSize.x / self.tick_gap):
-            xpos = (i + 1) * self.tick_gap
-            ticks.append((xpos, self._pos_x_to_val_x(xpos)))
-        return ticks
+        """ Get a list of (x position, x value) tuples where the position
+        is given as a pixel value.
+
+        If no data is present, an empty list will be returned.
+        """
+        if self._data:
+            ticks = []
+            for i in range(self.ClientSize.x / self.tick_gap):
+                xpos = (i + 1) * self.tick_gap
+                ticks.append((xpos, self._pos_x_to_val_x(xpos)))
+            return ticks
+        else:
+            return []
 
     def _plot_data(self, ctx, width, height):
         if self._data:
