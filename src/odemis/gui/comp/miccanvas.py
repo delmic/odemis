@@ -497,7 +497,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 try:
                     im_mpp = s.image.value.mpp
                     # did we just passed the image mpp (=zoom zero)?
-                    if prev_mpp < im_mpp < mpp or prev_mpp > im_mpp > mpp:
+                    if ((prev_mpp < im_mpp < mpp or prev_mpp > im_mpp > mpp) and
+                        abs(prev_mpp - im_mpp) > 1e-15): # for float error
                         mpp = im_mpp
                 except AttributeError:
                     pass

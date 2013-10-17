@@ -332,6 +332,11 @@ class VirtualTestCam(object):
         self.size = (self.camera.shape[0]/2, self.camera.shape[1]/2)
         exposure = 0.1
 
+        if (self.camera.resolution.range[0][0] > self.size[0] or
+            self.camera.resolution.range[0][1] > self.size[1]):
+            # cannot divide the size by 2? Then it probably doesn't support AOI
+            self.skipTest("Camera doesn't support area of interest")
+
         self.camera.resolution.value = self.size
         if self.camera.resolution.value == self.camera.shape[:2]:
             # cannot divide the size by 2? Then it probably doesn't support AOI

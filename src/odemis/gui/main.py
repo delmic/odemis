@@ -20,30 +20,32 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import Pyro4.errors
+import logging
+import numpy
 from odemis import model
 from odemis.gui import main_xrc, log
+import odemis.gui.conf
 from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
+from odemis.gui.util import call_after
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
-from wx.lib.pubsub import pub
-import logging
-import numpy
-import odemis.gui.conf
-import odemis.gui.cont.tabs as tabs
-import odemis.gui.img.data as imgdata
-import odemis.gui.model as guimodel
 import os.path
 import pkg_resources
-import Pyro4.errors
 import scipy.io
 import subprocess
 import sys
 import threading
 import traceback
 import wx
+from wx.lib.pubsub import pub
+
+import odemis.gui.cont.tabs as tabs
+import odemis.gui.img.data as imgdata
+import odemis.gui.model as guimodel
 
 
 class OdemisGUIApp(wx.App):
@@ -442,6 +444,7 @@ see http://www.fluorophores.org/disclaimer/.
         """
         self.main_data.debug.value = self.main_frame.menu_item_debug.IsChecked()
 
+    @call_after
     def on_debug_va(self, enabled):
         """ This method (un)sets the application into debug mode, setting the
         log level and opening the log panel. """

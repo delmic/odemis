@@ -174,7 +174,7 @@ def FindOptimalBC(data, depth):
     return brightness, contrast
 
 # TODO: try to do cumulative histogram value mapping (=histogram equalization)?
-# => might improve the greys
+# => might improve the greys, but might be "too" clever
 def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     """
     data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
@@ -203,10 +203,24 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         if data.dtype.kind in "iu":
             # no need to clip if irange is the whole possible range
             idt = numpy.iinfo(data.dtype)
+            # trick to ensure B&W if there is only one value allowed
+            if irange[0] >= irange[1]:
+                if irange[0] > idt.min:
+                    irange = [irange[1] - 1, irange[1]]
+                else:
+                    irange = [irange[0], irange[0] + 1]
             if irange[0] > idt.min or irange[1] < idt.max:
                 data = data.clip(*irange)
         else: # floats et al. => always clip
+            # TODO: might not work correctly if range is in middle of data values
+            # trick to ensure B&W image
+            if irange[0] >= irange[1] and irange[0] > float(data.min()):
+                force_white = True
+            else:
+                force_white = False
             data = data.clip(*irange)
+            if force_white:
+                irange = [irange[1] - 1, irange[1]]
         drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
 
 

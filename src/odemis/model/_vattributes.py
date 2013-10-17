@@ -690,6 +690,8 @@ class FloatEnumerated(FloatVA, Enumerated):
         Enumerated._check(self, value)
         FloatVA._check(self, value)
 
+    # TODO: _set_value should allow some room for floating point error
+
 class IntEnumerated(IntVA, Enumerated):
     """
     A simple class which is both int and enumerated
