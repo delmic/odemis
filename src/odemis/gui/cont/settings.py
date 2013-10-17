@@ -387,6 +387,18 @@ class SettingsPanel(object):
         except KeyError:
             control_type = self._determine_default_control(vigil_attr)
 
+        # Change radio type to fitting type depending on its content
+        if control_type == odemis.gui.CONTROL_RADIO:
+            if len(choices_fmt) <= 1: # only one choice => force label
+                control_type = odemis.gui.CONTROL_LABEL
+            elif len(choices_fmt) > 10: # too many choices => combo
+                control_type = odemis.gui.CONTROL_COMBO
+            else:
+                # choices names too long => combo
+                max_len = max([len(f) for _, f in choices_fmt])
+                if max_len > 6:
+                    control_type = odemis.gui.CONTROL_COMBO
+
         # Special case, early stop
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
@@ -402,7 +414,7 @@ class SettingsPanel(object):
         # Format label
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
+        lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
@@ -497,59 +509,56 @@ class SettingsPanel(object):
             # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
-            if len(choices_fmt) > 1:
-                new_ctrl = GraphicalRadioButtonControl(
-                                        self.panel,
-                                        -1,
-                                        size=(-1, 16),
-                                        choices=[c for c, _ in choices_fmt],
-                                        style=wx.NO_BORDER,
-                                        labels=[f for _, f in choices_fmt],
-                                        units=unit)
+            new_ctrl = GraphicalRadioButtonControl(
+                                    self.panel,
+                                    - 1,
+                                    size=(-1, 16),
+                                    choices=[c for c, _ in choices_fmt],
+                                    style=wx.NO_BORDER,
+                                    labels=[f for _, f in choices_fmt],
+                                    units=unit)
 
-                if conf.get('type', None) == "1d_binning":
-                    # need to convert back and forth between 1D and 2D
-                    # from 2D to 1D (just pick X)
-                    def radio_set(value, ctrl=new_ctrl):
-                        v = value[0]
-                        logging.debug("Setting Radio value to %d", v)
-                        # it's fine to set a value not in the choices, it will
-                        # just not set any of the buttons.
-                        return ctrl.SetValue(v)
+            if conf.get('type', None) == "1d_binning":
+                # need to convert back and forth between 1D and 2D
+                # from 2D to 1D (just pick X)
+                def radio_set(value, ctrl=new_ctrl):
+                    v = value[0]
+                    logging.debug("Setting Radio value to %d", v)
+                    # it's fine to set a value not in the choices, it will
+                    # just not set any of the buttons.
+                    return ctrl.SetValue(v)
 
-                    # from 1D to 2D (both identical)
-                    def radio_get(ctrl=new_ctrl):
-                        value = ctrl.GetValue()
-                        return (value, value)
-                elif conf.get('type', None) == "1std_binning":
-                    # need to convert back and forth between 1D and 2D
-                    # from 2D to 1D (just pick X)
-                    def radio_set(value, ctrl=new_ctrl):
-                        v = value[0]
-                        logging.debug("Setting Radio value to %d", v)
-                        # it's fine to set a value not in the choices, it will
-                        # just not set any of the buttons.
-                        return ctrl.SetValue(v)
+                # from 1D to 2D (both identical)
+                def radio_get(ctrl=new_ctrl):
+                    value = ctrl.GetValue()
+                    return (value, value)
+            elif conf.get('type', None) == "1std_binning":
+                # need to convert back and forth between 1D and 2D
+                # from 2D to 1D (just pick X)
+                def radio_set(value, ctrl=new_ctrl):
+                    v = value[0]
+                    logging.debug("Setting Radio value to %d", v)
+                    # it's fine to set a value not in the choices, it will
+                    # just not set any of the buttons.
+                    return ctrl.SetValue(v)
 
-                    # from 1D to 2D (don't change dimensions >1)
-                    def radio_get(ctrl=new_ctrl, va=vigil_attr):
-                        value = ctrl.GetValue()
-                        new_val = list(va.value)
-                        new_val[0] = value
-                        return new_val
-                else:
-                    radio_get = None
-                    radio_set = None
-
-                vac = VigilantAttributeConnector(vigil_attr,
-                                                 new_ctrl,
-                                                 va_2_ctrl=radio_set,
-                                                 ctrl_2_va=radio_get,
-                                                 events=wx.EVT_BUTTON)
-
-                new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
+                # from 1D to 2D (don't change dimensions >1)
+                def radio_get(ctrl=new_ctrl, va=vigil_attr):
+                    value = ctrl.GetValue()
+                    new_val = list(va.value)
+                    new_val[0] = value
+                    return new_val
             else:
-                new_ctrl, vac = self._create_label(self.panel, vigil_attr, unit)
+                radio_get = None
+                radio_set = None
+
+            vac = VigilantAttributeConnector(vigil_attr,
+                                             new_ctrl,
+                                             va_2_ctrl=radio_set,
+                                             ctrl_2_va=radio_get,
+                                             events=wx.EVT_BUTTON)
+
+            new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
@@ -686,7 +695,7 @@ class SettingsPanel(object):
         # Format label
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
-        lbl_ctrl = wx.StaticText(self.panel, -1, "%s" % label)
+        lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
@@ -743,7 +752,7 @@ class SettingsPanel(object):
         try:
             if key == model.MD_ACQ_DATE:
                 # convert to a date using the user's preferences
-                nice_str = time.strftime("%c", time.localtime(value))
+                nice_str = time.strftime(u"%c", time.localtime(value))
             else:
                 # Still try to beautify a bit if it's a number
                 if (isinstance(value, (int, float)) or
