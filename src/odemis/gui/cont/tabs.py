@@ -73,7 +73,7 @@ class Tab(object):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item (or ensure it's disabled).
         """
-        if len(self.tab_data_model.views) == 4:
+        if len(self.tab_data_model.views) >= 4:
             # We assume it has a 2x2 view layout
             def set_22_menu_check(viewlayout):
                 """Called when the view layout changes"""
@@ -590,7 +590,8 @@ class AnalysisTab(Tab):
                                     [self.main_frame.vp_inspection_tl,
                                      self.main_frame.vp_inspection_tr,
                                      self.main_frame.vp_inspection_bl,
-                                     self.main_frame.vp_inspection_br],
+                                     self.main_frame.vp_inspection_br,
+                                     self.main_frame.vp_inspection_plot],
                                 )
 
         self._stream_controller = streamcont.StreamController(
@@ -641,12 +642,12 @@ class AnalysisTab(Tab):
         cnvs.WorldOverlays.append(self.psol)
 
         # Toolbar
-        tb = self.main_frame.ana_toolbar
+        self.tb = self.main_frame.ana_toolbar
         # TODO: Add the buttons when the functionality is there
         #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        tb.enable_button(tools.TOOL_POINT, False)
-        tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        self.tb.enable_button(tools.TOOL_POINT, False)
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     @property
     def stream_controller(self):
@@ -657,8 +658,8 @@ class AnalysisTab(Tab):
 
     def on_file_open_button(self, evt):
         """ Open an image file using a file dialog box
-
         """
+
         # Find the available formats (and corresponding extensions)
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
@@ -714,8 +715,9 @@ class AnalysisTab(Tab):
                                 iimg.center,
                                 iimg.get_pixel_size()
                 )
-                break
-
+                self.tb.enable_button(tools.TOOL_POINT, True)
+                return
+        self.tb.enable_button(tools.TOOL_POINT, False)
 
 
     def display_new_data(self, filename, data):
@@ -789,6 +791,38 @@ class AnalysisTab(Tab):
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
+
+    # @call_after
+    # def _onTool(self, tool):
+    #     """
+    #     Called when the tool (mode) is changed
+    #     """
+    #     # Reset previous mode
+    #     if tool != guimodel.TOOL_DICHO:
+    #         # reset the sequence
+    #         self.tab_data_model.dicho_seq.value = []
+    #         self.main_frame.lens_align_btn_to_center.Show(False)
+    #         self.main_frame.lens_align_lbl_approc_center.Show(False)
+
+    #     if tool != guimodel.TOOL_SPOT:
+    #         self._sem_stream.spot.value = False
+
+
+    #     # Set new mode
+    #     if tool == guimodel.TOOL_DICHO:
+    #         self.main_frame.lens_align_btn_to_center.Show(True)
+    #         self.main_frame.lens_align_lbl_approc_center.Show(True)
+    #     elif tool == guimodel.TOOL_SPOT:
+    #         self._sem_stream.spot.value = True
+    #         # TODO: until the settings are directly connected to the hardware,
+    #         # we need to disable/freeze the SEM settings in spot mode.
+
+    #         # TODO: support spot mode and automatically update the survey image each
+    #         # time it's updated.
+    #         # => in spot-mode, listen to stage position and magnification, if it
+    #         # changes reactivate the SEM stream and subscribe to an image, when image
+    #         # is received, stop stream and move back to spot-mode. (need to be careful
+    #         # to handle when the user disables the spot mode during this moment)
 
     def _split_channels(self, data):
         """

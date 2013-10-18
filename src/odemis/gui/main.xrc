@@ -2340,6 +2340,14 @@
                   <ratio>1</ratio>
                 </object>
                 <orient>wxVERTICAL</orient>
+                <object class="sizeritem">
+                  <object class="PlotViewport" name="vp_inspection_plot">
+                    <hidden>1</hidden>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                </object>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

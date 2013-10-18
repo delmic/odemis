@@ -37,6 +37,8 @@ from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
 class InfoLegend(wx.Panel):
     """ This class describes a legend containing the default controls that
     provide information about live data streams.
+
+    TODO: give this class a more descriptive name
     """
 
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,

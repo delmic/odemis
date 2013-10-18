@@ -147,6 +147,7 @@ class xrcfr_main(wx.Frame):
         self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
         self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
         self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
+        self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_inspect_file_info = xrc.XRCCTRL(self, "fp_inspect_file_info")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
@@ -2544,6 +2545,14 @@ def __init_resources():
                   <ratio>1</ratio>
                 </object>
                 <orient>wxVERTICAL</orient>
+                <object class="sizeritem">
+                  <object class="PlotViewport" name="vp_inspection_plot">
+                    <hidden>1</hidden>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                </object>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

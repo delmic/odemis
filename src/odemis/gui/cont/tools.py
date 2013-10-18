@@ -142,6 +142,8 @@ class ToolBar(wx.Panel):
             main_sizer.SetItemMinSize(self.btn_panel, -1, 36)
 
         self._buttons = {}
+        # References of va callbacks are stored in this list, to prevent
+        # unsubscription
         self._mode_callbacks = []
 
 
