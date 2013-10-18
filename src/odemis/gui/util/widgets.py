@@ -48,8 +48,8 @@ def get_all_children(widget, klass=None):
 
     return result
 
-def get_sizer_postion(window):
-    """ Return the int index value of a given window within its conaining sizer
+def get_sizer_position(window):
+    """ Return the int index value of a given window within its containing sizer
 
     The window must be contained within a BoxSizer
     """
