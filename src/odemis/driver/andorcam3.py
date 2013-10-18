@@ -1094,17 +1094,18 @@ class AndorCam3(model.DigitalCamera):
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
                 if need_reinit or self._need_update_settings():
-                    assert (self.isImplemented(u"CycleMode") and
-                            self.isWritable(u"CycleMode"))
-                    self.SetEnumString(u"CycleMode", u"Continuous")
-                    # We don't use the framecount feature as it's not always present, and
-                    # easy to do in software.
                     if self.GetBool(u"CameraAcquiring"):
                         try:
                             self.Command(u"AcquisitionStop")
                         except ATError as (errno, strerr):
                             logging.error("AcquisitionStop failed with error %s:", strerr)
                             # try anyway
+
+                    # We don't use the framecount feature as it's not always present, and
+                    # easy to do in software.
+                    assert (self.isImplemented(u"CycleMode") and
+                            self.isWritable(u"CycleMode"))
+                    self.SetEnumString(u"CycleMode", u"Continuous")
 
                     self._update_settings()
                     size = self._resolution
