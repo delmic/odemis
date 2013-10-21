@@ -1528,13 +1528,13 @@ class PointSelectOverlay(WorldOverlay):
                     self.write_label(ctx, dc.GetSize(), pos,
                                      self.label + str(rect))
 
-        if self._selected_pixel:
-            rect = self.pixel_to_rect(self._selected_pixel, scale)
+            if self._selected_pixel:
+                rect = self.pixel_to_rect(self._selected_pixel, scale)
 
-            if rect:
-                ctx.set_source_rgba(*self.select_color)
-                ctx.rectangle(*rect)
-                ctx.fill()
+                if rect:
+                    ctx.set_source_rgba(*self.select_color)
+                    ctx.rectangle(*rect)
+                    ctx.fill()
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
