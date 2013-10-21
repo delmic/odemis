@@ -776,6 +776,8 @@ class AndorCam3(model.DigitalCamera):
         rrng_height = {}
         if self.isImplemented(u"AOIBinning"):
             binnings = self.GetEnumStringAvailable(u"AOIBinning")
+            # FIXME: SDK3.4 32 bits seems to have a problem with AOI < 4096 (kernel oops)
+            # => forbid small resolutions? > 48*48 px
             for bs in binnings:
                 m = re.match("([0-9]+)x([0-9]+)", bs)
                 b = int(m.group(1)), int(m.group(2))

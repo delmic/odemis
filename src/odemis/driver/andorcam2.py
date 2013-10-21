@@ -465,8 +465,9 @@ class AndorCam2(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
                                                   unit="s", setter=self.setExposureTime)
 
-        # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
-        self._output_amp = 0 # less noise
+        # Clara: 0 = conventional (less noise), 1 = Extended Near Infra-Red => 0
+        # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
+        self._output_amp = 0
 
         ror_choices = set(self.GetReadoutRates())
         self._readout_rate = max(ror_choices) # default to fast acquisition
@@ -1079,6 +1080,9 @@ class AndorCam2(model.DigitalCamera):
         return value
 
     def setGain(self, value):
+        # TODO: need to handle EM Gain for EMCCD cameras (eg, iXon Ultra) too.
+        # cf SetEMCCDGain(), SetEMGainMode(), GetEMGainRange()
+
         # Just save, and the setting will be actually updated by _update_settings()
         # not every gain is compatible with the readout rate (channel/hsspeed)
         gains = self.gain.choices
@@ -1133,6 +1137,8 @@ class AndorCam2(model.DigitalCamera):
             channel, hsspeed = self._getChannelHSSpeed(self._readout_rate)
             self.atcore.SetADChannel(channel)
             try:
+                # TODO: on iXon Ultra, when selecting EM CCD oa, the image is vertically reversed
+                # (for now, it's fixed, so doesn't matter)
                 self.atcore.SetOutputAmplifier(self._output_amp)
             except AndorV2Error:
                 pass # unsupported
