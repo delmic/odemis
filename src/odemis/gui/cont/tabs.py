@@ -634,14 +634,6 @@ class AnalysisTab(Tab):
                             self.on_file_open_button
         )
 
-        # TODO: (re)move, this is for testing purposes
-        # Should we create a separate canvas for this?
-
-        # cnvs = self.main_frame.vp_inspection_tl.canvas
-        # self.psol = overlay.PointSelectOverlay(cnvs)
-        # setattr(cnvs, 'pick_overlay', self.psol)
-        # cnvs.WorldOverlays.append(self.psol)
-
         # Toolbar
         self.tb = self.main_frame.ana_toolbar
         # TODO: Add the buttons when the functionality is there

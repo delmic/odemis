@@ -43,7 +43,9 @@ class ViewController(object):
         viewports (list of MicroscopeViewport or
                    OrderedDict (MicroscopeViewport -> kwargs)): the viewports to
           update. The first one is the one focused. If it's an OrderedDict, the
-          kwargs are passed to the MicroscopeView creation.
+          kwargs are passed to the MicroscopeView creation. If there are more
+          than 4 viewports, only the first 4 will be made visible and any others
+          will be hidden.
         """
         self._data_model = tab_data
         self._main_data_model = tab_data.main
