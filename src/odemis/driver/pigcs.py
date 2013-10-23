@@ -229,6 +229,9 @@ class Controller(object):
         # dict axis -> boolean
         self._hasRefSwitch = dict([(a, self.HasRefSwitch(a)) for a in self._channels])
         self._position = {} # m (dict axis-> position)
+        self._target = {} # m (dict axis-> future position when a move is over)
+        self._end_move = {} # m (dict axis -> time the move will finish)
+        self._start_move = {} # m (dict axis -> time the move started)
 
 
         # If the controller is mis-configured for the actuator, things can go quite
@@ -877,13 +880,66 @@ class Controller(object):
                 return c
         return MODEL_UNKNOWN
 
+    def _storeMove(self, axis, shift, duration):
+        """
+        Save move information for interpolating the position
+        To be called when a new move is started
+        axis (int): the channel
+        shift (float): relative change in position (im m)
+        duration (0<float): time it will take (in s)
+        """
+        now = time.time()
+        cur_pos = self._interpolatePosition(axis)
+        self._start_move[axis] = now
+        self._end_move[axis] = now + duration
+        self._target[axis] = cur_pos + shift
+
+    def _storeStop(self, axis):
+        """
+        Save the fact that a move was stop immediately (maybe not achieved)
+        """
+        self._position[axis] = self._interpolatePosition(axis)
+        self._end_move[axis] = 0
+
+    def _storeMoveComplete(self, axis):
+        """
+        Save the fact that the current move is complete (even if the end time
+        is not yet achieved)
+        """
+        now = time.time()
+        if now < self._end_move.get(axis, 0):
+            self._position[axis] = self._target[axis]
+            self._end_move[axis] = 0
+
+    def _interpolatePosition(self, axis):
+        """
+        return (float): interpolated position at the current time
+        """
+        now = time.time()
+        if now > self._end_move.get(axis, 0):
+            return self._position[axis]
+        else:
+            start = self._start_move[axis]
+            end = self._end_move[axis]
+            completion = (now - start) / (end - start)
+            pos = self._position[axis]
+            cur_pos = pos + (self._target[axis] - pos) * completion
+            return cur_pos
+
+
     def getPosition(self, axis):
         """
-        Note: in open-loop mode it's very approximate.
+        Note: in open-loop mode it's very approximate (and interpolated)
         return (float): the current position of the given axis
         """
+        # This is using interpolation, closed-loop must override this method
         assert(axis in self._channels)
-        return self._position[axis]
+
+        # make sure that if a move finished early, we report the final position
+        if not self.isMoving(set([axis])):
+            self._storeMoveComplete(axis)
+
+        return self._interpolatePosition(axis)
 
     def setSpeed(self, axis, speed):
         """
@@ -1307,10 +1363,14 @@ class OLController(Controller):
         self.OLMoveStep(axis, steps)
         # TODO use OLAnalogDriving for very small moves (< 5µm)?
 
-        self._position[axis] += distance
+        duration = distance / self._speed[axis]
+        self._storeMove(axis, distance, duration)
         return distance
 
-
+    def stopMotion(self):
+        Controller.stopMotion(self)
+        for c in self._channels:
+            self._storeStop(c)
 
 class SMOController(Controller):
     """
@@ -1475,10 +1535,12 @@ class SMOController(Controller):
             return 0
         elif t < 1: # special small move command
             self.OLMovePID0(axis, v)
+            duration = 0.5e-3 # = 1/2 ms
         else:
             self.OLMovePID(axis, v, t)
+            duration = t / 1000
 
-        self._position[axis] += ad
+        self._storeMove(axis, ad, duration)
         return ad
 
     def isMoving(self, axes=None):
@@ -1503,6 +1565,7 @@ class SMOController(Controller):
         self.Stop() # doesn't seem to be effective with SMO macro
         for c in self._channels:
             self.StopOLViaPID(c)
+            self._storeStop(c)
 
 class Bus(model.Actuator):
     """
