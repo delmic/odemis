@@ -130,7 +130,7 @@ class ViewController(object):
 
         # Get the sizer position of the first viewport, so we can use that
         # to insert the other viewport
-        pos1 = util.get_sizer_postion(vp[vpi1])
+        pos1 = util.get_sizer_position(vp[vpi1])
 
         # Get the sizer item for the visible viewport, so we can access its
         # sizer properties like proportion and flags

@@ -64,8 +64,34 @@ class AndorCapabilities(Structure):
                 ("FTReadModes", c_uint32)]
 
     # for the Features field
+    FEATURES_POLLING = 1
+    FEATURES_EVENTS = 2
+    FEATURES_SPOOLING = 4
+    FEATURES_SHUTTER = 8
+    FEATURES_SHUTTEREX = 16
+    FEATURES_EXTERNAL_I2C = 32
+    FEATURES_SATURATIONEVENT = 64
     FEATURES_FANCONTROL = 128
     FEATURES_MIDFANCONTROL = 256
+    FEATURES_TEMPERATUREDURINGACQUISITION = 512
+    FEATURES_KEEPCLEANCONTROL = 1024
+    FEATURES_DDGLITE = 0x0800
+    FEATURES_FTEXTERNALEXPOSURE = 0x1000
+    FEATURES_KINETICEXTERNALEXPOSURE = 0x2000
+    FEATURES_DACCONTROL = 0x4000
+    FEATURES_METADATA = 0x8000
+    FEATURES_IOCONTROL = 0x10000
+    FEATURES_PHOTONCOUNTING = 0x20000
+    FEATURES_COUNTCONVERT = 0x40000
+    FEATURES_DUALMODE = 0x80000
+    FEATURES_OPTACQUIRE = 0x100000
+    FEATURES_REALTIMESPURIOUSNOISEFILTER = 0x200000
+    FEATURES_POSTPROCESSSPURIOUSNOISEFILTER = 0x400000
+    FEATURES_DUALPREAMPGAIN = 0x800000
+    FEATURES_DEFECT_CORRECTION = 0x1000000
+    FEATURES_STARTOFEXPOSURE_EVENT = 0x2000000
+    FEATURES_ENDOFEXPOSURE_EVENT = 0x4000000
+    FEATURES_CAMERALINK = 0x8000000
 
     # for the GetFunctions field
     GETFUNCTION_TEMPERATURE = 0x01
@@ -124,6 +150,7 @@ class AndorCapabilities(Structure):
     CameraTypes = {
         CAMERATYPE_CLARA: "Clara",
         CAMERATYPE_IVAC: "iVac",
+        CAMERATYPE_IXONULTRA: "iXon Utlra", # FIXME: currently not working
         }
 
 class AndorV2DLL(CDLL):
@@ -438,8 +465,9 @@ class AndorCam2(model.DigitalCamera):
         self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
                                                   unit="s", setter=self.setExposureTime)
 
-        # For the Clara: 0 = conventional, 1 = Extended Near Infra-Red
-        self._output_amp = 0 # less noise
+        # Clara: 0 = conventional (less noise), 1 = Extended Near Infra-Red => 0
+        # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
+        self._output_amp = 0
 
         ror_choices = set(self.GetReadoutRates())
         self._readout_rate = max(ror_choices) # default to fast acquisition
@@ -482,11 +510,19 @@ class AndorCam2(model.DigitalCamera):
 #        metadata['Filter'] = "Cosmic Ray filter"
 
 
-        # TODO: handle shutter
-        # TODO: according to doc: if AC_FEATURES_SHUTTEREX you MUST use SetShutterEx()
-        # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
-        # Apparently, if there is no shutter, it should be 0, 0
-        self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
+        # Shutter -> auto in most cases is fine (= open during acquisition)
+        if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
+            # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
+            caps = self.GetCapabilities()
+            if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
+                self.atcore.SetShutterEx(1, 1, 0, 0, 0) # mode 1 = open, extmode 0 = auto
+            else:
+                self.atcore.SetShutterEx(1, 0, 0, 0, 0) # mode 0 = auto, extmode 0 = auto
+        elif self.hasFeature(AndorCapabilities.FEATURES_SHUTTER):
+            # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
+            # Apparently, if there is no shutter, it should be 0, 0
+            self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
+        
         self.atcore.SetTriggerMode(0) # 0 = internal
 
     def getMetadata(self):
@@ -536,6 +572,7 @@ class AndorCam2(model.DigitalCamera):
                               "directory, check the andor2 installation.")
                 install_path = possibilities[0] # try just in case
 
+            logging.debug("Initialising with path %s", install_path)
             self.atcore.Initialize(install_path)
         logging.info("Initialisation completed.")
 
@@ -1043,6 +1080,9 @@ class AndorCam2(model.DigitalCamera):
         return value
 
     def setGain(self, value):
+        # TODO: need to handle EM Gain for EMCCD cameras (eg, iXon Ultra) too.
+        # cf SetEMCCDGain(), SetEMGainMode(), GetEMGainRange()
+
         # Just save, and the setting will be actually updated by _update_settings()
         # not every gain is compatible with the readout rate (channel/hsspeed)
         gains = self.gain.choices
@@ -1097,6 +1137,8 @@ class AndorCam2(model.DigitalCamera):
             channel, hsspeed = self._getChannelHSSpeed(self._readout_rate)
             self.atcore.SetADChannel(channel)
             try:
+                # TODO: on iXon Ultra, when selecting EM CCD oa, the image is vertically reversed
+                # (for now, it's fixed, so doesn't matter)
                 self.atcore.SetOutputAmplifier(self._output_amp)
             except AndorV2Error:
                 pass # unsupported
@@ -1517,6 +1559,11 @@ class AndorCam2(model.DigitalCamera):
             # TODO for some hardware we need to wait the temperature is above -20°C
             try:
                 self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
+                # iXon Ultra: as we force it open, we need to force it close now
+                caps = self.GetCapabilities()
+                if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
+                    self.atcore.SetShutterEx(1, 2, 0, 0, 0) # mode 2 = close
+
                 # FIXME: not sure if it does anything (with Clara)
             except:
                 pass
@@ -1927,6 +1974,10 @@ class FakeAndorV2DLL(object):
         self.readmode = _val(mode)
 
     def SetShutter(self, typ, mode, closingtime, openingtime):
+        # mode 0 = auto
+        pass # whatever
+
+    def SetShutterEx(self, typ, mode, closingtime, openingtime, extmode):
         # mode 0 = auto
         pass # whatever
 

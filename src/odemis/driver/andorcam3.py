@@ -780,8 +780,16 @@ class AndorCam3(model.DigitalCamera):
                 m = re.match("([0-9]+)x([0-9]+)", bs)
                 b = int(m.group(1)), int(m.group(2))
                 self.SetEnumString(u"AOIBinning", bs)
-                rrng_width[b[0]] = self.GetIntRanges(u"AOIWidth")
-                rrng_height[b[1]] = self.GetIntRanges(u"AOIHeight")
+                # FIXME: SDK3.4 32 bits seems to have a problem with AOI < 4096 (kernel oops)
+                # => forbid small resolutions > 48*48 px
+                # Once using only versions >= 3.5: can use this simple code:
+#                rrng_width[b[0]] = self.GetIntRanges(u"AOIWidth")
+#                rrng_height[b[1]] = self.GetIntRanges(u"AOIHeight")
+
+                rng_width = self.GetIntRanges(u"AOIWidth")
+                rng_height = self.GetIntRanges(u"AOIHeight")
+                rrng_width[b[0]] = (max(48, rng_width[0]), rng_width[1])
+                rrng_height[b[1]] = (max(48, rng_height[0]), rng_height[1])
         else:
             # no binning -> 1x1
             rrng_width[1] = self.GetIntRanges(u"AOIWidth")
@@ -1094,17 +1102,18 @@ class AndorCam3(model.DigitalCamera):
             while not self.acquire_must_stop.is_set():
                 # need to stop acquisition to update settings
                 if need_reinit or self._need_update_settings():
-                    assert (self.isImplemented(u"CycleMode") and
-                            self.isWritable(u"CycleMode"))
-                    self.SetEnumString(u"CycleMode", u"Continuous")
-                    # We don't use the framecount feature as it's not always present, and
-                    # easy to do in software.
                     if self.GetBool(u"CameraAcquiring"):
                         try:
                             self.Command(u"AcquisitionStop")
                         except ATError as (errno, strerr):
                             logging.error("AcquisitionStop failed with error %s:", strerr)
                             # try anyway
+
+                    # We don't use the framecount feature as it's not always present, and
+                    # easy to do in software.
+                    assert (self.isImplemented(u"CycleMode") and
+                            self.isWritable(u"CycleMode"))
+                    self.SetEnumString(u"CycleMode", u"Continuous")
 
                     self._update_settings()
                     size = self._resolution

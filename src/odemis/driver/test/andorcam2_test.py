@@ -32,7 +32,7 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CLASS = andorcam2.FakeAndorCam2 # use FakeAndorCam2 if you don't have the hardware
+CLASS = andorcam2.AndorCam2 # use FakeAndorCam2 if you don't have the hardware
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1])
 
 # arguments used for the creation of the SEM simulator
