@@ -29,7 +29,6 @@ of microscope images.
 from concurrent.futures._base import CancelledError
 from odemis import model, dataio
 from odemis.gui import acqmng, conf
-import odemis.gui.model as guimodel
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model.stream import UNDEFINED_ROI
@@ -284,7 +283,9 @@ class AcquisitionController(object):
         logging.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
 
-
+# TODO: Once the Secom acquisition is merged back into the main stream tab,
+# the difference between controller should be small enough to merge a lots of
+# things together
 class SecomAcquiController(AcquisitionController):
     """ controller to handle snapshot and high-res image acquisition in a
     "global" context. In particular, it needs to be aware of which viewport
@@ -344,8 +345,7 @@ class SecomAcquiController(AcquisitionController):
         finally:
             main_stream_controller.resumeStreams(paused_streams)
 
-            for se, value in orig_settings.items():
-                se.va.value = value
+            acqmng.apply_preset(orig_settings)
             main_settings_controller.resume()
 
             # Make sure that the acquisition button is enabled again.
@@ -472,7 +472,7 @@ class SparcAcquiController(AcquisitionController):
             streams = self._tab_data_model.acquisitionView.getStreams()
             acq_time = acqmng.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
-            acq_time = math.ceil(acq_time) # round a bit pessimistically
+            acq_time = math.ceil(acq_time) # round a bit pessimistic
             txt = "Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
 
@@ -506,8 +506,7 @@ class SparcAcquiController(AcquisitionController):
             s.should_update.value = True
             s.is_active.value = True
 
-        for se, value in self._orig_settings.items():
-            se.va.value = value
+        acqmng.apply_preset(self._orig_settings)
         self._settings_controller.resume()
 
         # Make sure that the acquisition button is enabled again.
