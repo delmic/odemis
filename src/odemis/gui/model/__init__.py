@@ -1,23 +1,24 @@
 # -*- coding: utf-8 -*-
 """
-Created on 16 Feb 2012
-
-@author: Éric Piel
-
-Copyright © 2012-2013 Éric Piel, Rinze de Laat, Delmic
+:created: 16 Feb 2012
+:author: Éric Piel
+:copyright: © 2012-2013 Éric Piel, Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
+
 """
 
 from abc import ABCMeta
@@ -278,7 +279,7 @@ class MicroscopyGUIData(object):
     interfaces have the same attributes. However, there are always:
     .main:
         The MainGUIData object for the current GUI.
-    .view and .focussedView:
+    .views and .focussedView:
         Represent the available/currently selected views (graphical image/data
         display).
     .viewLayout:
@@ -297,7 +298,7 @@ class MicroscopyGUIData(object):
 
         self.streams = set() # Streams available (handled by StreamController)
 
-        # MicroscopeViews available, (handled by ViewController)
+        # Views available, (handled by ViewController)
         # The ViewController cares about position: they are top-left, top-right
         # bottom-left, bottom-right.
         self.views = []
@@ -514,8 +515,21 @@ class FileInfo(object):
         return os.path.basename(self.file_name)
 
 
+class View(object):
+
+    def __init__(self, name):
+        self.name = model.StringVA(name)
+
+        # a thumbnail version of what is displayed
+        self.thumbnail = VigilantAttribute(None) # contains a wx.Image
+
+        # Last time the image of the view was changed. It's actually mostly
+        # a trick to allow other parts of the GUI to know when the (theoretical)
+        # composited image has changed.
+        self.lastUpdate = model.FloatVA(time.time(), unit="s")
+
 MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
-class MicroscopeView(object):
+class MicroscopeView(View):
     """ Represents a view from a microscope and ways to alter it.
 
     Basically, its "input" is a StreamTree and it can request stage and focus
@@ -540,7 +554,8 @@ class MicroscopeView(object):
           the user)
         """
 
-        self.name = model.StringVA(name)
+        super(MicroscopeView, self).__init__(name)
+
         self.stream_classes = stream_classes or (Stream,)
         self._stage = stage
         self._focus = [focus0, focus1]
@@ -580,17 +595,10 @@ class MicroscopeView(object):
         # Streams are active? If so, is there another/better way?
         self._streams_lock = threading.Lock()
 
-        # Last time the image of the view was changed. It's actually mostly
-        # a trick to allow other parts of the GUI to know when the (theoretical)
-        # composited image has changed.
-        self.lastUpdate = model.FloatVA(time.time(), unit="s")
         # Last initialisation is done on the first image received
         self.getMPPFromNextImage = True
 
-        # a thumbnail version of what is displayed
-        self.thumbnail = VigilantAttribute(None) # contains a wx.Image
-
-        # TODO list of annotations to display
+        # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
 
     def get_focus(self, i):
