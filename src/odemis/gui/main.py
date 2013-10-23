@@ -430,6 +430,9 @@ see http://www.fluorophores.org/disclaimer/.
         InspectionTool().Show()
 
     def on_htmldoc(self, evt):
+        """ Launch Python's SimpleHTTPServer in a separate process and have it
+        serve the source code documentation as created by Sphinx
+        """
         self.http_proc = subprocess.Popen(
             ["python", "-m", "SimpleHTTPServer"],
             stderr=subprocess.STDOUT,
