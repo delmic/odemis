@@ -125,9 +125,15 @@ class VigilantAttributeTest(unittest.TestCase):
         prop.value.append(41) # +1
         self.assertEqual(prop.value, [1, 4, 44, 43, 42, 41])
 
+        # In place repetition
+        orig_len = len(prop.value)
+        prop.value *= 3 # +1
+        self.assertEqual(len(prop.value), orig_len * 3)
+
         # Item assignment
         prop.value = range(5) # +1
         prop.value[1] = 5 # +1
+        prop.value[1] = 5 # +0
         self.assertEqual(prop.value, [0, 5, 2, 3, 4])
         self.assertEqual(prop.value.pop(), 4) # +1
 
@@ -147,7 +153,7 @@ class VigilantAttributeTest(unittest.TestCase):
         prop.value = ["b"] # no more counting
 
         self.assertTrue(prop.value == ["b"])
-        self.assertTrue(self.called == 16, "Called has value %s" % self.called)
+        self.assertTrue(self.called == 17, "Called has value %s" % self.called)
 
     def test_continuous(self):
         prop = model.FloatContinuous(2.0, [-1, 3.4])
