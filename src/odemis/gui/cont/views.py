@@ -108,7 +108,12 @@ class ViewController(object):
 
         for vp, vkwargs in viewports.items():
             # TODO: automatically set some clever values for missing arguments?
-            view = model.MicroscopeView(**vkwargs)
+            # If stream classes are defined we assume a MicroscopeView is needed
+            if 'stream_classes' in vkwargs:
+                view = model.MicroscopeView(**vkwargs)
+            else:
+                view = model.View(**vkwargs)
+
             self._data_model.views.append(view)
             vp.setView(view, self._data_model)
 
@@ -218,9 +223,7 @@ class ViewController(object):
                   }),
                 (self._viewports[4],
                  {"name": "Spectrum",
-                  "stream_classes":
-                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
+                 }),
                                                ])
                 self._createViewsFixed(vpv)
 

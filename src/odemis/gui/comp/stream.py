@@ -1,11 +1,6 @@
 # -*- coding: utf-8 -*-
 
-""" This module contains classes needed to construct stream panels.
-
-Stream panels are custom, specialized controls that allow the user to view and
-manipulate various data streams coming from the microscope.
-
-
+"""
 @author: Rinze de Laat
 
 Copyright © 2012 Rinze de Laat, Delmic
@@ -23,14 +18,21 @@ PARTICULAR PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
+
+
+
+This module contains classes needed to construct stream panels.
+
+Stream panels are custom, specialized controls that allow the user to view and
+manipulate various data streams coming from the microscope.
+
 """
 
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
     BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE, FOREGROUND_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
-from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
-    IntegerTextCtrl, UnitFloatCtrl
+from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
 from odemis.gui.util import call_after, limit_invocation
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -39,7 +41,6 @@ import collections
 import logging
 import math
 import numpy
-import odemis.gui
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 import odemis.gui.model as model

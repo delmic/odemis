@@ -1,26 +1,25 @@
 # -*- coding: utf-8 -*-
 """
-Created on 22 Feb 2013
-
-@author: Rinze de Laat
-
-Copyright © 2013 Rinze de Laat, Delmic
+:created: 22 Feb 2013
+:author: Rinze de Laat
+:copyright: © 2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License version 2 as published
+    by the Free Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 
-### Purpose ###
 
 This module contains classes that describe Streams, which are basically
 Detector, Emitter and Dataflow associations.
@@ -439,8 +438,8 @@ class SEMStream(Stream):
 
         # Spot mode: when set (and stream is active), it will drive the e-beam
         # do only the center of the scanning area. Image is not updated.
-        # TODO: is this the right interface? Shall we just have a different 
-        # stream type? 
+        # TODO: is this the right interface? Shall we just have a different
+        # stream type?
         self.spot = model.BooleanVA(False)
         # used to reset the previous settings after spot mode
         self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
@@ -482,7 +481,7 @@ class SEMStream(Stream):
 
     def _startSpot(self):
         """
-        Start the spot mode. Can handle being called if it's already active 
+        Start the spot mode. Can handle being called if it's already active
         """
         if self._no_spot_settings != (None, None, None):
             logging.debug("Starting spot mode while it was already active")
@@ -509,7 +508,7 @@ class SEMStream(Stream):
 
     def _stopSpot(self):
         """
-        Stop the spot mode. Can handle being called if it's already inactive 
+        Stop the spot mode. Can handle being called if it's already inactive
         """
         if self._no_spot_settings == (None, None, None):
             logging.debug("Stop spot mode while it was already inactive")
@@ -517,7 +516,7 @@ class SEMStream(Stream):
 
         # to be avoid potential weird scanning while changing values
         self._dataflow.unsubscribe(self.onNewImage)
-        
+
         logging.debug("Disabling spot mode")
 
         (self._emitter.dwellTime.value,
@@ -600,7 +599,7 @@ class SEMStream(Stream):
 
     def onNewImage(self, df, data):
         """
-        
+
         """
         # In spot mode, don't update the image.
         # (still receives data as the e-beam needs an active detector to scan)
@@ -608,7 +607,7 @@ class SEMStream(Stream):
             return
         super(SEMStream, self).onNewImage(df, data)
 
-    
+
     # TODO: should be common to all Stream classes
     def getStatic(self):
         """
@@ -688,7 +687,7 @@ class BrightfieldStream(CameraStream):
 
 class CameraNoLightStream(CameraStream):
     """ Stream containing images obtained via optical CCD but without any light
-     source on. Used for the SECOM lens alignment tab. 
+     source on. Used for the SECOM lens alignment tab.
 
     It basically knows how to turn off light and remove position information.
     """
@@ -824,8 +823,8 @@ class FluoStream(CameraStream):
         return
 
     def _setup_excitation(self):
-        """ Set-up the excitation light to the specified wavelength (light path 
-        between the light source and the sample), and check whether this 
+        """ Set-up the excitation light to the specified wavelength (light path
+        between the light source and the sample), and check whether this
         actually can work.
         """
         wave_length = self.excitation.value
