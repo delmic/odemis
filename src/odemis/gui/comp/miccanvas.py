@@ -287,6 +287,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             except ValueError:
                 pass # it was already not displayed
 
+
+    #FIXME: seems like it might still be called while the Canvas has been destroyed
+    # => need to make sure that the object is garbage collected (= no more
+    # references) once it's not used. (Or explicitly unsubscribe??)
+    @ignore_dead
     def _onDebug(self, activated):
         """
         Called when GUI debug mode changes => display FPS overlay

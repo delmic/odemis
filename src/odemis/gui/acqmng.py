@@ -333,27 +333,20 @@ def apply_preset(preset):
     # * scale > resolution > translation
     # => do it in order: binning | scale > resolution > translation
 
-    for se, value in preset.items():
-        if se.name == "binning":
-            se.va.value = value
-            del preset[se]
+    def apply_presets_named(name):
+        for se, value in preset.items():
+            if se.name == name:
+                logging.debug("Updating preset %s -> %s", se.name, value)
+                se.va.value = value
+                del preset[se]
+
+    apply_presets_named("binning")
+    apply_presets_named("scale")
+    apply_presets_named("resolution")
+    apply_presets_named("translation")
 
     for se, value in preset.items():
-        if se.name == "scale":
-            se.va.value = value
-            del preset[se]
-
-    for se, value in preset.items():
-        if se.name == "resolution":
-            se.va.value = value
-            del preset[se]
-
-    for se, value in preset.items():
-        if se.name == "translation":
-            se.va.value = value
-            del preset[se]
-
-    for se, value in preset.items():
+        logging.debug("Updating preset %s -> %s", se.name, value)
         se.va.value = value
 
 def _get_entry(entries, comp, name):
