@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model
@@ -88,12 +88,55 @@ class VigilantAttributeTest(unittest.TestCase):
 
     def test_list(self):
         prop = model.ListVA([2.0, 5, 4])
+
         self.called = 0
         # now count
         prop.subscribe(self.callback_test_notify, init=True) # +1
+
+        # List assignment
         prop.value = [3.0, 5] # +1
         prop.value = list((0,)) # +1
         prop.value = [0] # nothing because same value
+
+        # Item removal
+        del prop.value[0] # +1
+        self.assertEqual(prop.value, [])
+
+        prop.value = [1, 2, 3, 4] # +1
+
+        del prop.value[1:-1] # +1
+        self.assertEqual(prop.value, [1, 4])
+
+        # Insert and remove item
+        prop.value.insert(1, 66) # +1
+        self.assertEqual(prop.value, [1, 66,  4])
+        prop.value.remove(66) # +1
+        self.assertEqual(prop.value, [1, 4])
+
+        # Item adding
+        prop.value += [44] # +1
+        self.assertEqual(prop.value, [1, 4, 44])
+        self.assertEqual(type(prop.value).__name__, "_VAList")
+
+        prop.value.extend([43, 42]) # +1
+        prop.value.extend([]) # The list value stays the same, so no increase!!
+        self.assertEqual(prop.value, [1, 4, 44, 43, 42])
+
+        prop.value.append(41) # +1
+        self.assertEqual(prop.value, [1, 4, 44, 43, 42, 41])
+
+        # Item assignment
+        prop.value = range(5) # +1
+        prop.value[1] = 5 # +1
+        self.assertEqual(prop.value, [0, 5, 2, 3, 4])
+        self.assertEqual(prop.value.pop(), 4) # +1
+
+        # Item sorting
+        prop.value.sort() # +1
+        self.assertEqual(prop.value, [0, 2, 3, 5])
+        prop.value.reverse() # +1
+        self.assertEqual(prop.value, [5, 3, 2, 0])
+
         try:
             prop.value = 45
             self.fail("Assigning int to a list should not be allowed.")
@@ -104,7 +147,7 @@ class VigilantAttributeTest(unittest.TestCase):
         prop.value = ["b"] # no more counting
 
         self.assertTrue(prop.value == ["b"])
-        self.assertTrue(self.called == 3)
+        self.assertTrue(self.called == 16, "Called has value %s" % self.called)
 
     def test_continuous(self):
         prop = model.FloatContinuous(2.0, [-1, 3.4])

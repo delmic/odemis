@@ -157,12 +157,13 @@ class VigilantAttribute(VigilantAttributeBase):
     value = property(_get_value, _set_value, _del_value, "The actual value")
 
     def _register(self, daemon):
-        """
-        Get the VigilantAttributeBase ready to be shared. It gets registered to the Pyro
-        daemon and over 0MQ. It should be called only once. Note that you have
-        to call this method to register a VA, a simple daemon.register(p)
-        is not enough.
-        daemon (Pyro4.Daemon): daemon used to share this object
+        """ Get the VigilantAttributeBase ready to be shared.
+
+        It gets registered to the Pyro daemon and over 0MQ. It should be called
+        only once. Note that you have to call this method to register a VA, a
+        simple daemon.register(p) is not enough.
+
+        :param daemon: (Pyro4.Daemon) daemon used to share this object
         """
         daemon.register(self)
 
@@ -513,19 +514,76 @@ class IntVA(VigilantAttribute):
         if not isinstance(value, int):
             raise TypeError("Value '%r' is not a int." % value)
 
-class ListVA(VigilantAttribute):
+class _VAList(list):
+    """ This is a subclass of Python's default `list` class for us in ListVA
+
+        The main difference compared to the standard `list` class is that a
+        notifier method is called when the value of the object changes.
+
+        This notifier must be a callable and it must be provided at creation
+        time.
     """
-    A VA which contains a list of values
+    def __init__(self, notifier, *args):
+        list.__init__(self, *args)
+        self.notifier = notifier
+
+    def _call_with_notifier(func):  #pylint: disable=E0213
+        """ This special function wraps any given method, making sure the
+        notifier method is called if the value actually changes.
+        """
+        def newfunc(self, *args, **kwargs):
+            # This might get expensive with long lists!
+            old_val = list(self)
+            res = func(self, *args, **kwargs)  #pylint: disable=E1102
+            if old_val != self:
+                self.notifier(self)
+            return res
+        return newfunc
+
+    # We must wrap any and all methods of `list` that can cause the value to
+    # change
+    __add__ = _call_with_notifier(list.__add__)
+    __iadd__ = _call_with_notifier(list.__iadd__)
+    __setitem__ = _call_with_notifier(list.__setitem__)
+    __setslice__ = _call_with_notifier(list.__setslice__)
+    __delitem__ = _call_with_notifier(list.__delitem__)
+    __delslice__ = _call_with_notifier(list.__delslice__)
+
+    append = _call_with_notifier(list.append)
+    extend = _call_with_notifier(list.extend)
+    insert = _call_with_notifier(list.insert)
+    pop = _call_with_notifier(list.pop)
+    remove = _call_with_notifier(list.remove)
+    reverse = _call_with_notifier(list.reverse)
+    sort = _call_with_notifier(list.sort)
+
+class ListVA(VigilantAttribute):
+    """ A VA which contains a list of values
     """
 
+    # FIXME: Is there a good reason the default argument is []?
     def __init__(self, value=[], *args, **kwargs):
+        value = _VAList(self.notify, value)
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
         if not isinstance(value, collections.Iterable):
             raise TypeError("Value '%r' is not a list." % value)
-        # TODO we need to also detect whenever this list is modified
-        # or at least force the value to be a tuple (= read-only)
+
+    # We must redefine the getters and setters, so we can reconstruct the value
+    # property
+    def _get_value(self):
+        """The value of this VA"""
+        return VigilantAttribute._get_value(self)
+
+    def _set_value(self, value):
+        value = _VAList(self.notify, value)
+        VigilantAttribute._set_value(self, value)
+
+    def _del_value(self):
+        return VigilantAttribute._del_value(self)
+
+    value = property(_get_value, _set_value, _del_value, "The actual value")
 
 
 class BooleanVA(VigilantAttribute):

@@ -45,7 +45,7 @@ FirstStep
 
 
 Graphical User Interface
------------------------
+------------------------
 .. toctree::
     :glob:
 

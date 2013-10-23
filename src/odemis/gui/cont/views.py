@@ -43,7 +43,9 @@ class ViewController(object):
         viewports (list of MicroscopeViewport or
                    OrderedDict (MicroscopeViewport -> kwargs)): the viewports to
           update. The first one is the one focused. If it's an OrderedDict, the
-          kwargs are passed to the MicroscopeView creation.
+          kwargs are passed to the MicroscopeView creation. If there are more
+          than 4 viewports, only the first 4 will be made visible and any others
+          will be hidden.
         """
         self._data_model = tab_data
         self._main_data_model = tab_data.main
@@ -59,6 +61,11 @@ class ViewController(object):
         # First viewport is focused
         tab_data.focussedView.value = self._viewports[0].microscope_view
 
+        # Store the initial values, so we can reset
+        self._def_viewports = self._viewports
+        self._def_layout = tab_data.viewLayout.value
+        self._def_focus = self._viewports[0].microscope_view
+
         # subscribe to layout and view changes
         tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
         tab_data.focussedView.subscribe(self._onView, init=True)
@@ -66,6 +73,31 @@ class ViewController(object):
     @property
     def viewports(self):
         return self._viewports
+
+    def reset(self):
+        """ Reset the view layout
+
+        This means that the viewport order, the viewport layout and the focus
+        will all be reset to as they were when the controller was created.
+        """
+
+        containing_window = self._viewports[0].Parent
+        containing_window.Freeze()
+
+        # Reset the order of the viewports
+        for i, dvp in enumerate(self._def_viewports):
+            # If a viewport has moved compared to the original order...
+            if self._viewports[i] != dvp:
+                # ...put it back in its original place
+                j = self._viewports.index(dvp)
+                self.swap_viewports(i, j)
+
+        # Reset the focus
+        self._data_model.focussedView.value = self._def_focus
+        # Reset the layout
+        self._data_model.viewLayout.value = self._def_layout
+
+        containing_window.Thaw()
 
     def _createViewsFixed(self, viewports):
         """ Create the different views displayed, according to viewtypes
@@ -76,18 +108,23 @@ class ViewController(object):
 
         for vp, vkwargs in viewports.items():
             # TODO: automatically set some clever values for missing arguments?
-            view = model.MicroscopeView(**vkwargs)
+            # If stream classes are defined we assume a MicroscopeView is needed
+            if 'stream_classes' in vkwargs:
+                view = model.MicroscopeView(**vkwargs)
+            else:
+                view = model.View(**vkwargs)
+
             self._data_model.views.append(view)
             vp.setView(view, self._data_model)
 
-    def swap_viewsports(self, vpi1, vpi2):
+    def swap_viewports(self, vpi1, vpi2):
         """ Swap the positions of viewports denoted by indices vpi1 and vpi2
 
         It is assumed that vpi1 points to one of the viewports visible in a 2x2
         display, and that vpi2 is outside this 2x2 layout and invisible.
         """
 
-        # Little shothand local variable
+        # Small shothand local variable
         vp = self._viewports
 
         # Get the sizer of the visible viewport
@@ -186,9 +223,7 @@ class ViewController(object):
                   }),
                 (self._viewports[4],
                  {"name": "Spectrum",
-                  "stream_classes":
-                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
+                 }),
                                                ])
                 self._createViewsFixed(vpv)
 
@@ -304,8 +339,9 @@ class ViewController(object):
     def _onViewLayout(self, layout):
         """ Called when the view layout of the GUI must be changed
         """
-        # only called when changed
-        self._viewports[0].Parent.Freeze()
+
+        containing_window = self._viewports[0].Parent
+        containing_window.Freeze()
 
         if layout == model.VIEW_LAYOUT_ONE:
             logging.debug("Showing only one view")
@@ -328,8 +364,8 @@ class ViewController(object):
         else:
             raise NotImplementedError()
 
-        self._viewports[0].Parent.Layout()  # resize the viewports
-        self._viewports[0].Parent.Thaw()
+        containing_window.Layout()  # resize the viewports
+        containing_window.Thaw()
 
     def fitCurrentViewToContent(self):
         """

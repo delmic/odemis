@@ -125,6 +125,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._spotmode_ol = None
         self._fps_ol = comp_overlay.TextViewOverlay(self)
         self.focus_overlay = None
+        self.roi_overlay = None
+        self.point_overlay = None
 
         # play/pause icon
         self.icon_overlay = comp_overlay.StreamIconOverlay(self)
@@ -157,10 +159,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_overlay = comp_overlay.FocusOverlay(self)
             self.ViewOverlays.append(self.focus_overlay)
 
-        if tab_data.tool and guimodel.TOOL_DICHO in tab_data.tool.choices:
-            self.dicho_overlay = comp_overlay.DichotomyOverlay(self,
-                                                 tab_data.dicho_seq)
-            self.ViewOverlays.append(self.dicho_overlay)
+        if tab_data.tool:
+            # If required, create a DichotomyOverlay
+            if guimodel.TOOL_DICHO in tab_data.tool.choices:
+                self.dicho_overlay = comp_overlay.DichotomyOverlay(self,
+                                                     tab_data.dicho_seq)
+                self.ViewOverlays.append(self.dicho_overlay)
+
+            # If required, create a PointSelectOverlay
+            if guimodel.TOOL_POINT in tab_data.tool.choices:
+                self.point_overlay = comp_overlay.PointSelectOverlay(self)
+                self.WorldOverlays.append(self.point_overlay)
 
         self.microscope_view.mpp.subscribe(self._onMPP)
 
@@ -204,8 +213,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._showSpotMode(False)
 
         # TODO: fix with the rest of the todos
-        if hasattr(self, 'pick_overlay'):
-            self.pick_overlay.enable(False)
+        if self.point_overlay:
+            self.point_overlay.enable(False)
 
         # TODO: one mode <-> one overlay (type)
         # TODO: create the overlay on the fly, the first time it's requested
@@ -213,10 +222,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.current_mode = MODE_SPARC_SELECT
             self.active_overlay = self.roi_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool == guimodel.TOOL_POINT and hasattr(self, 'pick_overlay'):
+        elif tool == guimodel.TOOL_POINT and hasattr(self, 'point_overlay'):
             self.current_mode = MODE_SPARC_PICK
-            self.active_overlay = self.pick_overlay
-            self.pick_overlay.enable(True)
+            self.active_overlay = self.point_overlay
+            self.point_overlay.enable(True)
         elif tool == guimodel.TOOL_ROI:
             self.current_mode = MODE_SECOM_UPDATE
             self.active_overlay = self.update_overlay
@@ -452,6 +461,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if recenter is None:
             # recenter only if there is no stage attached
             recenter = not hasattr(self.microscope_view, "stage_pos")
+
         super(DblMicroscopeCanvas, self).fitViewToContent(recenter=recenter)
 
         # this will indirectly call _onMPP(), but not have any additional effect

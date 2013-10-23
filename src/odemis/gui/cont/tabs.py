@@ -100,7 +100,7 @@ class Tab(object):
         else:
             self.main_frame.menu_item_22view.Enable(False)
             self.main_frame.menu_item_22view.Check(False)
-            self.main_frame.menu_item_22view.vamethod = None # drop VA subscription
+            self.main_frame.menu_item_22view.vamethod = None # drop VA subscr.
 
     def _connect_crosshair_event(self):
         """ If the tab contains views with a crosshair overlay, it will connect
@@ -221,7 +221,8 @@ class SecomStreamsTab(Tab):
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
-        # Note: weakref, so that if a stream is removed, we don't turn it back on
+        # Note: weakref, so that if a stream is removed, we don't turn it back
+        # on
         if hasattr(main_data, 'opticalState'):
             self._opt_streams_enabled = False
             self._opt_stream_to_restart = set() # weakref set of Streams
@@ -633,14 +634,6 @@ class AnalysisTab(Tab):
                             self.on_file_open_button
         )
 
-        # TODO: (re)move, this is for testing purposes
-        # Should we create a separate canvas for this?
-
-        cnvs = self.main_frame.vp_inspection_tl.canvas
-        self.psol = overlay.PointSelectOverlay(cnvs)
-        setattr(cnvs, 'pick_overlay', self.psol)
-        cnvs.WorldOverlays.append(self.psol)
-
         # Toolbar
         self.tb = self.main_frame.ana_toolbar
         # TODO: Add the buttons when the functionality is there
@@ -648,6 +641,16 @@ class AnalysisTab(Tab):
         self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         self.tb.enable_button(tools.TOOL_POINT, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+
+        # TODO:
+        #   - Where should the swap take place (including the data loading) when
+        #     a point is selected?
+        #   - How should we handle the case that when the zoom is too small and
+        #     a single pixel on the screen is larger than a pixel in the
+        #     spectrum data?
+        #   - How to handle swapping back and forth between 1x1 and 2x2 view
+
+        self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
     @property
     def stream_controller(self):
@@ -682,6 +685,12 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return
 
+        # Reset any mode tool when a new image is being opened
+        self.tab_data_model.tool.value = guimodel.TOOL_NONE
+
+        # Reset the view
+        self._view_controller.reset()
+
         # Detect the format to use
         fn = dialog.GetPath()
         logging.debug("Current file set to %s", fn)
@@ -702,22 +711,26 @@ class AnalysisTab(Tab):
         converter = dataio.get_exporter(fmt)
         try:
             data = converter.read_data(fn)
-        except Exception:
+        except Exception: #pylint: disable=W0703
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self.display_new_data(fn, data)
-        spec_class = (streammod.SpectrumStream, streammod.StaticSpectrumStream)
+        spec_cls = (streammod.SpectrumStream, streammod.StaticSpectrumStream)
+
         for strm in self.tab_data_model.streams:
-            if isinstance(strm, spec_class):
+            if isinstance(strm, spec_cls):
                 iimg = strm.image.value
-                self.psol.set_values(
+                ol = self.main_frame.vp_inspection_tl.canvas.point_overlay
+                ol.set_values(
                                 iimg.mpp,
                                 iimg.center,
                                 iimg.get_pixel_size()
                 )
                 self.tb.enable_button(tools.TOOL_POINT, True)
-                return
-        self.tb.enable_button(tools.TOOL_POINT, False)
+                break
+        else:
+            self.tb.enable_button(tools.TOOL_POINT, False)
+
 
 
     def display_new_data(self, filename, data):
@@ -792,37 +805,18 @@ class AnalysisTab(Tab):
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
 
-    # @call_after
-    # def _onTool(self, tool):
-    #     """
-    #     Called when the tool (mode) is changed
-    #     """
-    #     # Reset previous mode
-    #     if tool != guimodel.TOOL_DICHO:
-    #         # reset the sequence
-    #         self.tab_data_model.dicho_seq.value = []
-    #         self.main_frame.lens_align_btn_to_center.Show(False)
-    #         self.main_frame.lens_align_lbl_approc_center.Show(False)
+    @call_after
+    def _onTool(self, tool):
+        """
+        Called when the tool (mode) is changed
+        """
 
-    #     if tool != guimodel.TOOL_SPOT:
-    #         self._sem_stream.spot.value = False
-
-
-    #     # Set new mode
-    #     if tool == guimodel.TOOL_DICHO:
-    #         self.main_frame.lens_align_btn_to_center.Show(True)
-    #         self.main_frame.lens_align_lbl_approc_center.Show(True)
-    #     elif tool == guimodel.TOOL_SPOT:
-    #         self._sem_stream.spot.value = True
-    #         # TODO: until the settings are directly connected to the hardware,
-    #         # we need to disable/freeze the SEM settings in spot mode.
-
-    #         # TODO: support spot mode and automatically update the survey image each
-    #         # time it's updated.
-    #         # => in spot-mode, listen to stage position and magnification, if it
-    #         # changes reactivate the SEM stream and subscribe to an image, when image
-    #         # is received, stop stream and move back to spot-mode. (need to be careful
-    #         # to handle when the user disables the spot mode during this moment)
+        # Reset the viewports when the spot tool is not selected
+        # Doing it this way, causes some unnecessary calls to the reset method
+        # but it cannot be avoided. Subscribing to the tool VA will only
+        # tell us what the new tool is and not what the previous, if any, was.
+        if tool != guimodel.TOOL_SPOT:
+            self._view_controller.reset()
 
     def _split_channels(self, data):
         """
