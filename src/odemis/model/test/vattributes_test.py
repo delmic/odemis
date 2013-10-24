@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis import model
+import pickle
 import unittest
 import weakref
 
@@ -136,6 +137,8 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertEqual(prop.value, [0, 2, 3, 5])
         prop.value.reverse() # +1
         self.assertEqual(prop.value, [5, 3, 2, 0])
+
+        pickle.dumps(prop.value, pickle.HIGHEST_PROTOCOL)
 
         try:
             prop.value = 45
