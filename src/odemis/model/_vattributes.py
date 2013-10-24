@@ -561,9 +561,9 @@ class ListVA(VigilantAttribute):
     """ A VA which contains a list of values
     """
 
-    # FIXME: Is there a good reason the default argument is []?
-    def __init__(self, value=[], *args, **kwargs):
-        value = _VAList(self.notify, value)
+    def __init__(self, value=None, *args, **kwargs):
+        # value = _VAList(self.notify, [] if value is None else value)
+        value = [] if value is None else value
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
@@ -577,7 +577,7 @@ class ListVA(VigilantAttribute):
         return VigilantAttribute._get_value(self)
 
     def _set_value(self, value):
-        value = _VAList(self.notify, value)
+        # value = _VAList(self.notify, value)
         VigilantAttribute._set_value(self, value)
 
     def _del_value(self):
