@@ -20,10 +20,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from . import _core
-from ._core import WeakMethod, WeakRefLostError
-from Pyro4.core import oneway
 import Pyro4
+from Pyro4.core import oneway
 import collections
 import inspect
 import logging
@@ -31,7 +29,11 @@ import numbers
 import threading
 import zmq
 
-class NotSettableError(Exception):
+from . import _core
+from ._core import WeakMethod, WeakRefLostError
+
+
+class NotSettableError(AttributeError):
     pass
 
 class NotApplicableError(Exception):
@@ -190,8 +192,8 @@ class VigilantAttribute(VigilantAttributeBase):
         if daemon:
             daemon.unregister(self)
         if hasattr(self, "_ctx") and self._ctx: # no ._ctx if exception during init
-                self.pipe.close()
-                self._ctx.term()
+            self.pipe.close()
+            self._ctx.term()
 
     @oneway
     def subscribe(self, listener, init=False):
@@ -466,9 +468,13 @@ def load_vigilant_attributes(self, vas):
 def VASerializer(self):
     """reduce function that automatically replaces Pyro objects by a Proxy"""
     daemon = getattr(self, "_pyroDaemon", None)
+    # only return a proxy if the object is a registered pyro object
     if daemon:
-        # only return a proxy if the object is a registered pyro object
-        return (VigilantAttributeProxy, (daemon.uriFor(self),), self._getproxystate())
+        if isinstance(self, ListVA):
+            # more advanced proxy for ListVA
+            return (ListVAProxy, (daemon.uriFor(self),), self._getproxystate())
+        else:
+            return (VigilantAttributeProxy, (daemon.uriFor(self),), self._getproxystate())
     else:
         return self.__reduce__()
 
@@ -514,7 +520,32 @@ class IntVA(VigilantAttribute):
         if not isinstance(value, int):
             raise TypeError("Value '%r' is not a int." % value)
 
-class _VAList(list):
+# ListVA is difficult: not only change of the .value must be detected, but we
+# also want to detect change on the list itself. So we have a special
+# _NotifyingList which let us know whenever it is updated. It does _not_ work
+# recursively.
+# In order to support this also over Pyro, we need to provide a special proxy
+# which ensures that changes on the list go back to the original object, so
+# every modification is converted into a ".value =".
+
+# Helper for the _NotifyingList
+def _call_with_notifier(func):
+    """ This special function wraps any given method, making sure the
+    notifier method is called if the value actually changes.
+    """
+    def newfunc(self, *args, **kwargs):
+        # This might get expensive with long lists!
+        old_val = list(self)
+        res = func(self, *args, **kwargs)
+        if old_val != self:
+            try:
+                self._notifier(self)
+            except WeakRefLostError:
+                pass
+        return res
+    return newfunc
+
+class _NotifyingList(list):
     """ This is a subclass of Python's default `list` class for us in ListVA
 
         The main difference compared to the standard `list` class is that a
@@ -525,23 +556,13 @@ class _VAList(list):
     """
     def __init__(self, notifier, *args):
         list.__init__(self, *args)
-        self.notifier = notifier
+        self._notifier = WeakMethod(notifier)
 
-    def _call_with_notifier(func):  #pylint: disable=E0213
-        """ This special function wraps any given method, making sure the
-        notifier method is called if the value actually changes.
-        """
-        def newfunc(self, *args, **kwargs):
-            # This might get expensive with long lists!
-            old_val = list(self)
-            res = func(self, *args, **kwargs)  #pylint: disable=E1102
-            if old_val != self:
-                self.notifier(self)
-            return res
-        return newfunc
+    # transform back to a normal list when pickled
+    def __reduce__(self):
+        return list, (list(self),)
 
-    # We must wrap any and all methods of `list` that can cause the value to
-    # change
+    # We must wrap any method of `list` that can change the value
     __iadd__ = _call_with_notifier(list.__iadd__)
     __imul__ = _call_with_notifier(list.__imul__)
     __setitem__ = _call_with_notifier(list.__setitem__)
@@ -559,32 +580,41 @@ class _VAList(list):
 
 class ListVA(VigilantAttribute):
     """ A VA which contains a list of values
+        Modifying the list will cause a notification
     """
 
     def __init__(self, value=None, *args, **kwargs):
-        # value = _VAList(self.notify, [] if value is None else value)
-        value = [] if value is None else value
+        value = _NotifyingList(self.notify, [] if value is None else value)
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
         if not isinstance(value, collections.Iterable):
             raise TypeError("Value '%r' is not a list." % value)
 
-    # We must redefine the getters and setters, so we can reconstruct the value
-    # property
-    def _get_value(self):
-        """The value of this VA"""
-        return VigilantAttribute._get_value(self)
-
+    # Redefine the setter, so we can force to listen to internal modifications
     def _set_value(self, value):
-        # value = _VAList(self.notify, value)
+        value = _NotifyingList(self.notify, value)
         VigilantAttribute._set_value(self, value)
 
-    def _del_value(self):
-        return VigilantAttribute._del_value(self)
+    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
 
-    value = property(_get_value, _set_value, _del_value, "The actual value")
+class ListVAProxy(VigilantAttributeProxy):
+    # VAProxy + listen to modifications inside the list
 
+    # Only the getter needs to be special
+    @property
+    def value(self):
+        # Transform a normal list into a notifying one
+        raw_list = Pyro4.Proxy.__getattr__(self, "_get_value")()
+        # When value change, directly call the remote setter
+        val = _NotifyingList(Pyro4.Proxy.__getattr__(self, "_set_value"), raw_list)
+        return val
+
+    @value.setter
+    def value(self, v):
+        if self.readonly:
+            raise NotSettableError("Value is read-only")
+        return Pyro4.Proxy.__getattr__(self, "_set_value")(v)
 
 class BooleanVA(VigilantAttribute):
     """

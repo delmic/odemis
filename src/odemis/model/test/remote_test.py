@@ -683,6 +683,22 @@ class RemoteTest(unittest.TestCase):
         except IndexError:
             pass # as it should be
         
+        # List
+        l = self.comp.listval
+        self.assertEqual(len(l.value), 2)
+        self.called = 0
+        l.subscribe(self.receive_listva_update)
+        l.value += [3]
+        self.assertEqual(len(l.value), 3)
+        time.sleep(0.1)
+        self.assertEqual(self.called, 1)
+        l.unsubscribe(self.receive_listva_update)
+
+    def receive_listva_update(self, value):
+        self.called += 1
+        self.last_value = value
+        self.assertIsInstance(value, list)
+
 # a basic server (component container)
 def ServerLoop(socket_name):
     try:
@@ -751,6 +767,8 @@ class MyComponent(model.Component):
         self.cont = model.FloatContinuous(2.0, [-1, 3.4], unit="C")
         self.enum = model.StringEnumerated("a", set(["a", "c", "bfds"]))
         self.cut = model.IntVA(0, setter=self._setCut)
+        self.listval = model.ListVA([2, 65])
+
     
     def _setCut(self, value):
         self.data.cut = value
