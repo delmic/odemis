@@ -51,7 +51,7 @@ KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_C
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
 
-#@unittest.skip("faster")
+@unittest.skip("faster")
 class TestController(unittest.TestCase):
     """
     directly test the low level class
@@ -247,11 +247,54 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
+    def test_linear_pos(self):
+        """
+        Check that the position reported during a move is always increasing
+        (or decreasing, depending on the direction)
+        """
+        stage = CLASS(**self.kwargs)
+
+        speed = max(stage.speed.range[0], 0.001) # try as slow as reasonable
+
+        move = {'x': 1 * speed} # => will last one second
+        self.prev_pos = stage.position.value
+        self.direction = 1
+        stage.position.subscribe(self.pos_listener)
+        
+        f = stage.moveRel(move)
+#        while not f.done():
+#            time.sleep(0.01)
+#            pos = stage.position.value["x"]
+
+        f.result() # wait
+        time.sleep(0.1) # make sure the listener has also received the info
+
+        # same, in the opposite direction
+        move = {'x':-1 * speed} # => will last one second
+        self.direction = -1
+        f = stage.moveRel(move)
+        f.result() # wait
+
+        stage.position.unsubscribe(self.pos_listener)
+
+        stage.terminate()
+    
+    def pos_listener(self, pos):
+        diff_pos = pos["x"] - self.prev_pos["x"]
+        if diff_pos == 0:
+            return # no update/change on X
+
+        self.prev_pos = pos
+
+        # TODO: on closed-loop axis it's actually possible to go very slightly
+        # back (at the end, in case of overshoot)
+        self.assertGreater(diff_pos * self.direction, 0) # negative means opposite dir
+
     def test_stop(self):
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         stage.stop()
 
-        move = {'x':100e-6}
+        move = {'x':-100e-6}
         f = stage.moveRel(move)
         stage.stop()
         self.assertTrue(f.cancelled())

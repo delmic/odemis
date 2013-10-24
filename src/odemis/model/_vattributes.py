@@ -78,6 +78,9 @@ class VigilantAttributeBase(object):
                 l(v)
             except WeakRefLostError:
                 self.unsubscribe(l)
+            except Exception:
+                logging.exception("Subscriber %r raised exception when "
+                                  "receiving value %s", l, v)
 
 
 class VigilantAttribute(VigilantAttributeBase):

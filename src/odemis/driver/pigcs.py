@@ -890,6 +890,7 @@ class Controller(object):
         """
         now = time.time()
         cur_pos = self._interpolatePosition(axis)
+        self._position[axis] = cur_pos
         self._start_move[axis] = now
         self._end_move[axis] = now + duration
         self._target[axis] = cur_pos + shift
@@ -899,31 +900,38 @@ class Controller(object):
         Save the fact that a move was stop immediately (maybe not achieved)
         """
         self._position[axis] = self._interpolatePosition(axis)
-        self._end_move[axis] = 0
+        self._end_move[axis] = None
 
     def _storeMoveComplete(self, axis):
         """
         Save the fact that the current move is complete (even if the end time
         is not yet achieved)
         """
-        now = time.time()
-        if now < self._end_move.get(axis, 0):
+        if self._end_move.get(axis) is not None:
             self._position[axis] = self._target[axis]
-            self._end_move[axis] = 0
+            self._end_move[axis] = None
 
     def _interpolatePosition(self, axis):
         """
         return (float): interpolated position at the current time
         """
         now = time.time()
-        if now > self._end_move.get(axis, 0):
+        end_move = self._end_move.get(axis)
+        if end_move is None:
+            logging.debug("Interpolating move by reporting last position reached: %g",
+                           self._position[axis])
             return self._position[axis]
+        elif now > end_move:
+            logging.debug("Interpolating move by reporting target position: %g",
+                           self._target[axis])
+            return self._target[axis]
         else:
             start = self._start_move[axis]
-            end = self._end_move[axis]
-            completion = (now - start) / (end - start)
+            completion = (now - start) / (end_move - start)
             pos = self._position[axis]
             cur_pos = pos + (self._target[axis] - pos) * completion
+            logging.debug("Interpolating move to %g %% of complete move: %g",
+                          completion * 100, cur_pos)
             return cur_pos
 
 
@@ -1685,7 +1693,6 @@ class Bus(model.Actuator):
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
     
-    # TODO: with CL, report position during move
     def _getPosition(self):
         """
         return (dict string -> float): axis name to (absolute) position
@@ -1703,7 +1710,7 @@ class Bus(model.Actuator):
         update the position VA
         Note: it should not be called while holding the lock to the serial port
         """
-        pos = self._getPosition() # TODO: improve efficiency
+        pos = self._getPosition() # TODO: improve efficiency (don't ask all controllers every times)
         logging.debug("Reporting new position at %s", pos)
 
         # it's read-only, so we change it via _value
@@ -1998,13 +2005,20 @@ class ActionManager(threading.Thread):
 
             try:
                 self.current_action._start_action()
-                self.current_action._wait_action()
             except futures.CancelledError:
                 # cancelled in the mean time: skip the action
-                pass
+                continue
+            
+            logging.debug("waiting for action")
+            while not self.current_action._wait_action(0.2):
+                # regularly update position (5 Hz)
+                logging.debug("updating position while moving")
+                self._bus._updatePosition()
 
-            # update position after the action is done
-            self._bus._updatePosition() # FIXME: should update position before calling the callbacks
+            # Update position one last time
+            # FIXME: should update position just _before_ calling the callbacks
+            logging.debug("updating position to final position")
+            self._bus._updatePosition()
 
     def cancel_all(self):
         must_terminate = False
@@ -2042,6 +2056,7 @@ class ActionManager(threading.Thread):
 
 MOVE_REL = "moveRel"
 MOVE_ABS = "moveAbs"
+MOVE_REF = "moveRef"
 
 PENDING = 'PENDING'
 RUNNING = 'RUNNING'
@@ -2170,12 +2185,15 @@ class ActionFuture(object):
             self._state = RUNNING
             duration = min(duration, 60) # => wait maximum 2 min
             self._expected_end = time.time() + duration
-            self._timeout = self._expected_end + duration + 1, # 2 *duration + 1s
+            self._timeout = self._expected_end + duration + 1 # 2 *duration + 1s
 
-    def _wait_action(self):
+    def _wait_action(self, timeout=None):
         """
         Wait for the action to finish normally. If the action finishes normally
         it's also in charge of calling all the callbacks.
+        timeout (float or None): maximum time to wait
+        return True if the action is finished/cancel, and False if it's still
+         running (so more waiting is needed) 
         Note: to be called without the lock (._condition) acquired.
         """
         # create a dict of controllers => channels
@@ -2188,13 +2206,25 @@ class ActionFuture(object):
             assert(self._expected_end is not None)
             # if it has been cancelled in the mean time
             if self._state != RUNNING:
-                return
+                return True
 
+            if timeout is None:
+                end_wait = self._timeout + 1 # => will never be triggered
+            else:
+                end_wait = time.time() + timeout
+                
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             logging.debug("Waiting %f s for the move to finish", self._expected_end - time.time())
-            while self._state == RUNNING and time.time() <= self._timeout:
-                duration = (self._expected_end - time.time()) / 2
+            while self._state == RUNNING:
+                now = time.time()
+                if now > self._timeout:
+                    logging.debug("Giving up waiting for move %g s late",
+                                  now - self._expected_end)
+                    break # move took too much time
+                if now > end_wait:
+                    return False # could wait more but the caller is not interested
+                duration = (self._expected_end - now) / 2
                 duration = max(0.01, duration)
                 self._condition.wait(duration)
                 if not self._isMoving(controllers):
@@ -2202,12 +2232,13 @@ class ActionFuture(object):
 
             # if cancelled, we don't update state
             if self._state != RUNNING:
-                return
+                return True
 
             self._state = FINISHED
             self._condition.notify_all()
 
         self._invoke_callbacks()
+        return True
 
     def _stop_action(self):
         """
@@ -2379,6 +2410,7 @@ class E861Simulator(object):
         # simulate timeout
         end_time = time.time() + self.timeout
 
+        # FIXME: to be correct, we'd need to take a lock
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
 
@@ -2414,7 +2446,7 @@ class E861Simulator(object):
     
     # TODO: some commands are read-only
     # Command name -> parameter number
-    _com_to_param = {"LIM": 0x32,
+    _com_to_param = {# "LIM": 0x32, # LIM actually report the opposite of 0x32
                      "TRS": 0x14,
                      "CTS": 0x3c,
                      "TMN": 0x30,
@@ -2536,6 +2568,13 @@ class E861Simulator(object):
                 except KeyError:
                     logging.debug("Unknown parameter %d", addr)
                     raise SimulatedError(56)
+            elif args[0] == "LIM?" and len(args) == 2: # Get Limit Switches
+                axis = int(args[1])
+                if axis == 1:
+                    # opposite of param 0x32
+                    out = "%s=%s" % (args[1], 1 - self._parameters[0x32])
+                else:
+                    self._errno = 15
             elif args[0] == "SVO" and len(args) == 3: # Set Servo State
                 axis, state = int(args[1]), int(args[2])
                 if axis == 1:
