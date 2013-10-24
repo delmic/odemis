@@ -542,8 +542,8 @@ class _VAList(list):
 
     # We must wrap any and all methods of `list` that can cause the value to
     # change
-    __add__ = _call_with_notifier(list.__add__)
     __iadd__ = _call_with_notifier(list.__iadd__)
+    __imul__ = _call_with_notifier(list.__imul__)
     __setitem__ = _call_with_notifier(list.__setitem__)
     __setslice__ = _call_with_notifier(list.__setslice__)
     __delitem__ = _call_with_notifier(list.__delitem__)

@@ -21,6 +21,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
 from concurrent import futures
 from odemis.driver import pigcs
 import logging
@@ -40,11 +41,15 @@ else:
 CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 CONFIG_CTRL_BASIC = (1, {1: False})
-CONFIG_BUS_CL = {"x":(1, 1, True)} # TODO: use it
+CONFIG_CTRL_CL = (1, {1: True})
+CONFIG_BUS_CL = {"x":(1, 1, True)}
+CONFIG_BUS_TWO_CL = {"x":(1, 1, True), "y":(2, 1, True)}
 
 CLASS = pigcs.FakeBus # use FakeBus if no hardware present
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
+KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL}
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
+KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
 
 #@unittest.skip("faster")
 class TestController(unittest.TestCase):
@@ -54,6 +59,7 @@ class TestController(unittest.TestCase):
     def setUp(self):
         self.ser = CLASS.openSerialPort(PORT)
         self.accesser = pigcs.BusAccesser(self.ser)
+        self.config_ctrl = CONFIG_CTRL_BASIC
 
     def test_scan(self):
         addresses = pigcs.Controller.scan(self.accesser)
@@ -64,7 +70,7 @@ class TestController(unittest.TestCase):
         Note: with C-867 open-looped (SMOController), speed is very imprecise,  
         so test failure might not indicate software bug.
         """
-        ctrl = pigcs.Controller(self.accesser, *CONFIG_CTRL_BASIC)
+        ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
         speed = ctrl.max_speed / 10
         self.assertGreater(ctrl.max_speed, 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
@@ -75,8 +81,6 @@ class TestController(unittest.TestCase):
         status = ctrl.GetStatus()
         ts = time.time()
         while ctrl.isMoving(set([1])):
-            ctrl.getPosition(1)
-            ctrl.IsOnTarget(1)
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
@@ -91,8 +95,6 @@ class TestController(unittest.TestCase):
 
         ts = time.time()
         while ctrl.isMoving(set([1])):
-            ctrl.getPosition(1)
-            ctrl.IsOnTarget(1)
             time.sleep(0.01)
         dur = time.time() - ts
         logging.debug("Took %f s to stop", dur)
@@ -100,7 +102,7 @@ class TestController(unittest.TestCase):
         self.assertLess(dur, 0.2)
 
     def test_timeout(self):
-        ctrl = pigcs.Controller(self.accesser, *CONFIG_CTRL_BASIC)
+        ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
 
         self.assertIn("Physik Instrumente", ctrl.GetIdentification())
         self.assertTrue(ctrl.IsReady())
@@ -109,7 +111,7 @@ class TestController(unittest.TestCase):
         self.assertTrue(ctrl.IsReady())
         self.assertEqual(0, ctrl.GetErrorNum())
 
-@unittest.skip("faster")
+#@unittest.skip("faster")
 class TestFake(TestController):
     """
     very basic test of the simulator, to ensure we always test it.
@@ -117,9 +119,25 @@ class TestFake(TestController):
     def setUp(self):
         self.ser = pigcs.FakeBus.openSerialPort(PORT)
         self.accesser = pigcs.BusAccesser(self.ser)
+        self.config_ctrl = CONFIG_CTRL_BASIC
+
+#@unittest.skip("faster")
+class TestFakeCL(TestController):
+    """
+    very basic test of the simulator and CL controller, to ensure we always test it.
+    """
+    def setUp(self):
+        self.ser = pigcs.FakeBus.openSerialPort(PORT, _addresses={1: True})
+        self.accesser = pigcs.BusAccesser(self.ser)
+        self.config_ctrl = CONFIG_CTRL_CL
+
 
 #@unittest.skip("faster")
 class TestActuator(unittest.TestCase):
+
+    def setUp(self):
+        self.kwargs = KWARGS
+        self.kwargs_two = KWARGS_TWO
 
     def tearDown(self):
         time.sleep(0.1) # to make sure all is sent
@@ -138,16 +156,17 @@ class TestActuator(unittest.TestCase):
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
     def test_simple(self):
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         move = {'x':0.01e-6}
         stage.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
+        stage.terminate()
 
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
 
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move = {'x':100e-6}
@@ -171,6 +190,7 @@ class TestActuator(unittest.TestCase):
         # timeout = 0.001s should be too short for such a long move
         self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
 
+        stage.terminate()
 
     def test_speed(self):
         """
@@ -179,7 +199,7 @@ class TestActuator(unittest.TestCase):
         """
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time
         # than a 0.001m/s move
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         # FIXME: 2.5 instead of 10.0 because C-867 doesn't report correct range
         expected_ratio = min(stage.speed.range[1] / stage.speed.range[0], 2.5) # 10.0
         delta_ratio = 2.0 # no unit
@@ -197,7 +217,7 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.01)
         pos = stage.position.value['x']
         act_speed = abs(pos - prev_pos) / dur_fast
-        print "took %f s => actual speed=%f" % (dur_fast, act_speed)
+        print "took %f s => actual speed=%g" % (dur_fast, act_speed)
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio / 2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
@@ -213,7 +233,7 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.01)
         pos = stage.position.value['x']
         act_speed = abs(pos - prev_pos) / dur_slow
-        print "took %f s => actual speed=%f" % (dur_slow, act_speed)
+        print "took %f s => actual speed=%g" % (dur_slow, act_speed)
         ratio = act_speed / stage.speed.value['x']
         if delta_ratio / 2 < ratio or ratio > delta_ratio:
             self.fail("Speed not consistent: %f m/s instead of %f m/s." %
@@ -225,6 +245,8 @@ class TestActuator(unittest.TestCase):
             self.fail("Speed not consistent: ratio of " + str(ratio) +
                          " instead of " + str(expected_ratio) + ".")
 
+        stage.terminate()
+
     def test_stop(self):
         stage = CLASS(**KWARGS)
         stage.stop()
@@ -233,13 +255,14 @@ class TestActuator(unittest.TestCase):
         f = stage.moveRel(move)
         stage.stop()
         self.assertTrue(f.cancelled())
+        stage.terminate()
 
     def test_queue(self):
         """
         Note: with C-867 open-looped (SMOController), speed is very imprecise,  
         so test failure might not indicate software bug.
         """
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         if isinstance(stage, pigcs.SMOController):
             logging.warning("Speed is very imprecise on device, test failure might not indicate software bug")
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
@@ -263,7 +286,7 @@ class TestActuator(unittest.TestCase):
         self.assertGreaterEqual(dur, expected_time)
 
     def test_cancel(self):
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed} # => 1s per move
@@ -291,8 +314,10 @@ class TestActuator(unittest.TestCase):
 
         f1.result() # wait for the move to be finished
 
+        stage.terminate()
+
     def test_not_cancel(self):
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         small_move_forth = {'x': speed / 10}  # => 0.1s per move
@@ -317,13 +342,19 @@ class TestActuator(unittest.TestCase):
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
 
+        stage.terminate()
+
     def test_move_circle(self):
         # check if we can run it
-        devices = CLASS.scan(PORT)
+        buses = CLASS.scan(PORT)
+        self.assertGreaterEqual(len(buses), 1)
+        b = buses.pop()
+        kwargs = b[1]
+        devices = kwargs["axes"]
         if len(devices) < 2:
             self.skipTest("Couldn't find two controllers")
 
-        stage = CLASS(**KWARGS_TWO)
+        stage = CLASS(**self.kwargs_two)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed, "y": speed}
         radius = 100e-6 # m
@@ -341,8 +372,10 @@ class TestActuator(unittest.TestCase):
             f.result() # wait
             cur_pos = next_pos
 
+        stage.terminate()
+
     def test_future_callback(self):
-        stage = CLASS(**KWARGS)
+        stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed / 10}  # => 0.1s per move
@@ -383,6 +416,8 @@ class TestActuator(unittest.TestCase):
         self.assertEquals(self.called, 1)
         self.assertTrue(f.cancelled())
 
+        stage.terminate()
+
     def callback_test_notify(self, future):
         self.assertTrue(future.done())
         self.called += 1
@@ -390,6 +425,11 @@ class TestActuator(unittest.TestCase):
     def callback_test_notify2(self, future):
         self.assertTrue(future.done())
         self.called += 1
+
+class TestActuatorCL(TestActuator):
+    def setUp(self):
+        self.kwargs = KWARGS_CL
+        self.kwargs_two = KWARGS_TWO_CL
 
 if __name__ == "__main__":
     unittest.main()

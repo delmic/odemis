@@ -229,6 +229,9 @@ class Controller(object):
         # dict axis -> boolean
         self._hasRefSwitch = dict([(a, self.HasRefSwitch(a)) for a in self._channels])
         self._position = {} # m (dict axis-> position)
+        self._target = {} # m (dict axis-> future position when a move is over)
+        self._end_move = {} # m (dict axis -> time the move will finish)
+        self._start_move = {} # m (dict axis -> time the move started)
 
 
         # If the controller is mis-configured for the actuator, things can go quite
@@ -877,13 +880,66 @@ class Controller(object):
                 return c
         return MODEL_UNKNOWN
 
+    def _storeMove(self, axis, shift, duration):
+        """
+        Save move information for interpolating the position
+        To be called when a new move is started
+        axis (int): the channel
+        shift (float): relative change in position (im m)
+        duration (0<float): time it will take (in s)
+        """
+        now = time.time()
+        cur_pos = self._interpolatePosition(axis)
+        self._start_move[axis] = now
+        self._end_move[axis] = now + duration
+        self._target[axis] = cur_pos + shift
+
+    def _storeStop(self, axis):
+        """
+        Save the fact that a move was stop immediately (maybe not achieved)
+        """
+        self._position[axis] = self._interpolatePosition(axis)
+        self._end_move[axis] = 0
+
+    def _storeMoveComplete(self, axis):
+        """
+        Save the fact that the current move is complete (even if the end time
+        is not yet achieved)
+        """
+        now = time.time()
+        if now < self._end_move.get(axis, 0):
+            self._position[axis] = self._target[axis]
+            self._end_move[axis] = 0
+
+    def _interpolatePosition(self, axis):
+        """
+        return (float): interpolated position at the current time
+        """
+        now = time.time()
+        if now > self._end_move.get(axis, 0):
+            return self._position[axis]
+        else:
+            start = self._start_move[axis]
+            end = self._end_move[axis]
+            completion = (now - start) / (end - start)
+            pos = self._position[axis]
+            cur_pos = pos + (self._target[axis] - pos) * completion
+            return cur_pos
+
+
     def getPosition(self, axis):
         """
-        Note: in open-loop mode it's very approximate.
+        Note: in open-loop mode it's very approximate (and interpolated)
         return (float): the current position of the given axis
         """
+        # This is using interpolation, closed-loop must override this method
         assert(axis in self._channels)
-        return self._position[axis]
+
+        # make sure that if a move finished early, we report the final position
+        if not self.isMoving(set([axis])):
+            self._storeMoveComplete(axis)
+
+        return self._interpolatePosition(axis)
 
     def setSpeed(self, axis, speed):
         """
@@ -1138,7 +1194,8 @@ class CLController(Controller):
         """
         assert(axis in self._channels)
         self._updateSpeedAccel(axis)
-        # TODO: check it's in range
+        # We trust the caller that it knows it's in range
+        # (worst case the hardware will not go further)
         self.MoveRel(axis, distance)
 
         return distance
@@ -1163,13 +1220,10 @@ class CLController(Controller):
         else:
             assert axes.issubset(self._channels)
 
-        if axes.isdisjoint(self.GetMotionStatus()):
-            return False
-
         # With servo on, it might constantly be _slightly_ moving (around the
         # target), so it's much better to use IsOnTarget info. The controller
         # needs to be correctly configured with the right window size.
-        for c in self._channels:
+        for c in axes:
             if not self.IsOnTarget(c):
                 return True
         return False
@@ -1185,7 +1239,7 @@ class CLController(Controller):
         else:
             raise NotImplementedError("Don't know how to reference to limit yet")
             self.ReferenceToLimit(axis)
-            # TODO: need to do that after it's done
+            # TODO: need to do that after the move is complete
             self.waitEndMotion(set(axis))
             # Go back to center
             pmin, pmax = self.GetMinPosition(axis), self.GetMaxPosition(axis)
@@ -1309,10 +1363,14 @@ class OLController(Controller):
         self.OLMoveStep(axis, steps)
         # TODO use OLAnalogDriving for very small moves (< 5µm)?
 
-        self._position[axis] += distance
+        duration = distance / self._speed[axis]
+        self._storeMove(axis, distance, duration)
         return distance
 
-
+    def stopMotion(self):
+        Controller.stopMotion(self)
+        for c in self._channels:
+            self._storeStop(c)
 
 class SMOController(Controller):
     """
@@ -1477,10 +1535,12 @@ class SMOController(Controller):
             return 0
         elif t < 1: # special small move command
             self.OLMovePID0(axis, v)
+            duration = 0.5e-3 # = 1/2 ms
         else:
             self.OLMovePID(axis, v, t)
+            duration = t / 1000
 
-        self._position[axis] += ad
+        self._storeMove(axis, ad, duration)
         return ad
 
     def isMoving(self, axes=None):
@@ -1505,6 +1565,7 @@ class SMOController(Controller):
         self.Stop() # doesn't seem to be effective with SMO macro
         for c in self._channels:
             self.StopOLViaPID(c)
+            self._storeStop(c)
 
 class Bus(model.Actuator):
     """
@@ -1751,7 +1812,7 @@ class Bus(model.Actuator):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
         _cls (class): only used for testing, override the class for opening the serial port
-        returns (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        returns (list of 2-tuple): name, kwargs (port, axes(channel -> CL?)
         Note: it's obviously not advised to call this function if moves on the motors are ongoing
         """
         _cls = _cls or cls # use _cls if forced
@@ -2272,16 +2333,23 @@ class E861Simulator(object):
 
     def _init_mem(self):
         # internal values to simulate the device
+        # Note: the type is used to know how it should be decoded, so it's
+        # important to differentiate between float and int.
         # Parameter table: address -> value
         self._parameters = {0x14: 1 if self._has_encoder else 0, # 0 = no ref switch, 1 = ref switch
                             0x32: 0 if self._has_encoder else 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
-                            # pos ref switch
-                            # unit num
-                            # unit denum
-#                            0x7000003: 10.0, # VEL
-#                            0x7000201: 3.2, # ACC
-#                            0x7000202: 0.9, # DEC
+                            0x15: 0.025, # TMX (in m)
+                            0x30: 0.0, # TMN (in m)
+                            0x16: 0.012, # value at ref pos
+                            0x49: 10.0, # VEL
+                            0x0B: 3.2, # ACC
+                            0x0C: 0.9, # DEC
+                            0x0A: 50.0, # max vel
+                            0x4A: 5.0, # max acc
+                            0x4B: 5.0, # max dec
+                            0x0E: 10000000, # unit num (note: normal default is 10000)
+                            0x0F: 1,       # unit denum
                             0x7000003: 10.0, # SSA
                             0x7000201: 3.2, # OVL
                             0x7000202: 0.9, # OAC
@@ -2336,7 +2404,7 @@ class E861Simulator(object):
         if self._servo != 1:
             raise SimulatedError(2)
         now = time.time()
-        if now > self._move_end:
+        if now > self._end_move:
             self._target = self._position
             return self._position
         else:
@@ -2349,11 +2417,11 @@ class E861Simulator(object):
     _com_to_param = {"LIM": 0x32,
                      "TRS": 0x14,
                      "CTS": 0x3c,
-                     "TMN": 0x44, #XXX
-                     "TMX": 0x44, #XXX
-                     "VEL": 0x44, #XXX
-                     "ACC": 0x44, #XXX
-                     "DEC": 0x44, #XXX
+                     "TMN": 0x30,
+                     "TMX": 0x15,
+                     "VEL": 0x49,
+                     "ACC": 0x0B,
+                     "DEC": 0x0C,
                      "OVL": 0x7000201,
                      "OAC": 0x7000202,
                      "ODC": 0x7000206,
@@ -2459,7 +2527,9 @@ class E861Simulator(object):
                 axis, addr = int(args[1]), int(args[2])
                 if axis != 1:
                     raise SimulatedError(15)
-                # TODO: special case for unit num/denum -> update all other values
+                if addr in [0x0E, 0x0F] and self._parameters[addr] != int(args[3]):
+                    # TODO: have a list of parameters to update
+                    raise NotImplementedError("Simulator cannot change unit")
                 try:
                     typeval = type(self._parameters[addr])
                     self._parameters[addr] = typeval(args[3])
@@ -2470,6 +2540,12 @@ class E861Simulator(object):
                 axis, state = int(args[1]), int(args[2])
                 if axis == 1:
                     self._servo = state
+                else:
+                    self._errno = 15
+            elif args[0] == "RON" and len(args) == 3: # Set Reference mode
+                axis, state = int(args[1]), int(args[2])
+                if axis == 1:
+                    self._ref_mode = state
                 else:
                     self._errno = 15
             elif args[0] == "OSM" and len(args) == 3: #Open-Loop Step Moving
@@ -2485,6 +2561,8 @@ class E861Simulator(object):
                 speed = self._parameters[self._com_to_param["VEL"]]
                 if axis != 1:
                     raise SimulatedError(15)
+                if self._ref_mode and not self._referenced:
+                    raise SimulatedError(8)
                 cur_pos = self._get_cur_pos_cl()
                 distance = cur_pos - pos
                 duration = abs(distance) / speed
@@ -2498,6 +2576,8 @@ class E861Simulator(object):
                 speed = self._parameters[self._com_to_param["VEL"]]
                 if axis != 1:
                     raise SimulatedError(15)
+                if self._ref_mode and not self._referenced:
+                    raise SimulatedError(8)
                 duration = abs(distance) / speed
                 logging.debug("Simulating a move of %f s", duration)
                 cur_pos = self._get_cur_pos_cl()
@@ -2527,7 +2607,7 @@ class E861Simulator(object):
                     raise SimulatedError(15)
                 self._referenced = 1
                 self._end_move = 0
-                self._position = 0.012# TODO: specific param
+                self._position = self._parameters[0x16] # value at reference
             elif args[0] == "SAI?" and len(args) <= 2: # List Of Current Axis Identifiers
                 # Can be followed by "ALL", but for us, it's the same
                 out = "1"
