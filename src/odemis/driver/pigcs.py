@@ -229,15 +229,16 @@ class Controller(object):
         # dict axis -> boolean
         self._hasRefSwitch = dict([(a, self.HasRefSwitch(a)) for a in self._channels])
         self._position = {} # m (dict axis-> position)
+
+        # only for interpolated position (on open-loop)
         self._target = {} # m (dict axis-> future position when a move is over)
         self._end_move = {} # m (dict axis -> time the move will finish)
         self._start_move = {} # m (dict axis -> time the move started)
 
-
         # If the controller is mis-configured for the actuator, things can go quite
         # wrong, so make it clear
-        logging.info("Controller %d is configured for actuator %s", address, self.GetStageName())
         for c in self._channels:
+            logging.info("Controller %d is configured for actuator %s", address, self.GetStageName(c))
             logging.info("Axis %s has %slimit switches and has %sreference switch",
                          c,
                          "" if self._hasLimitSwitches[c] else "no ",
@@ -245,14 +246,6 @@ class Controller(object):
         self._avail_params = self.GetAvailableParameters()
 
         self._try_recover = True # full feature only after init
-
-        # Default values, overridden by the subclasses
-        self.min_speed = 10e-6 # m/s (default low value)
-        self.max_speed = 0.5 # m/s
-        self.max_accel = 0.01 # m/s²
-        self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
-        self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
-        self._prev_speed_accel = (dict(), dict())
 
     def terminate(self):
         pass
@@ -335,15 +328,14 @@ class Controller(object):
         #GCS version, can be 1.0 (for GCS 1.0) or 2.0 (for GCS 2.0)
         return self._sendQueryCommand("CSV?\n")
 
-    def GetStageName(self):
+    def GetStageName(self, axis):
         """
         return (str) the name of the stage for which the controller is configured.
         Note that the actual stage might be different.
         """
-        # TODO: this is actually per axis.
         # CST? does this as well
         #parameter 0x3c
-        return self.GetParameter(1, 0x3C)
+        return self.GetParameter(axis, 0x3C)
 
     def GetAxes(self):
         """
@@ -418,15 +410,8 @@ class Controller(object):
         self._sendOrderCommand("SPA %d %d %s\n" % (axis, param, val))
         err = self.GetErrorNum()
         if err:
-            raise ValueError("Error %d: setting param %x with val %s failed." %
+            raise ValueError("Error %d: setting param 0x%X with val %s failed." %
                              (err, param, val), err)
-
-    def GetRecoderConfig(self):
-        """
-        you don't need this
-        """
-        #DRC? (get Data Recorder Configuration)
-        return self._sendQueryCommand("DRC?\n")
 
     def _readAxisValue(self, com, axis):
         """
@@ -888,6 +873,7 @@ class Controller(object):
         shift (float): relative change in position (im m)
         duration (0<float): time it will take (in s)
         """
+        logging.debug("storing move of %g m, for %g s", shift, duration)
         now = time.time()
         cur_pos = self._interpolatePosition(axis)
         self._position[axis] = cur_pos
@@ -900,31 +886,30 @@ class Controller(object):
         Save the fact that a move was stop immediately (maybe not achieved)
         """
         self._position[axis] = self._interpolatePosition(axis)
-        self._end_move[axis] = None
+        logging.debug("storing stopped move at %g m", self._position[axis])
+        self._target[axis] = self._position[axis]
+        self._end_move[axis] = 0
 
     def _storeMoveComplete(self, axis):
         """
         Save the fact that the current move is complete (even if the end time
         is not yet achieved)
         """
-        if self._end_move.get(axis) is not None:
-            self._position[axis] = self._target[axis]
-            self._end_move[axis] = None
+        self._position[axis] = self._target.get(axis, self._position[axis])
+        logging.debug("storing completed move to %g m", self._position[axis])
+        self._end_move[axis] = 0
 
     def _interpolatePosition(self, axis):
         """
         return (float): interpolated position at the current time
         """
         now = time.time()
-        end_move = self._end_move.get(axis)
-        if end_move is None:
-            logging.debug("Interpolating move by reporting last position reached: %g",
-                           self._position[axis])
-            return self._position[axis]
-        elif now > end_move:
+        end_move = self._end_move.get(axis, 0)
+        if now > end_move:
+            target = self._target.get(axis, self._position[axis])
             logging.debug("Interpolating move by reporting target position: %g",
-                           self._target[axis])
-            return self._target[axis]
+                           target)
+            return target
         else:
             start = self._start_move[axis]
             completion = (now - start) / (end_move - start)
@@ -933,7 +918,6 @@ class Controller(object):
             logging.debug("Interpolating move to %g %% of complete move: %g",
                           completion * 100, cur_pos)
             return cur_pos
-
 
     def getPosition(self, axis):
         """
@@ -1151,6 +1135,7 @@ class CLController(Controller):
                 self.max_accel = self._accel[a]
 
         self.min_speed = 10e-6 # m/s (default low value)
+        self._prev_speed_accel = ({}, {})
 
         # Note: setting position only works if ron is disabled. It's possible
         # also indirectly set it after referencing, but then it will conflict
@@ -1307,6 +1292,7 @@ class OLController(Controller):
 
         self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
         self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
+        self._prev_speed_accel = ({}, {})
 
     def _convertDistanceToDevice(self, distance):
         """
@@ -1371,7 +1357,7 @@ class OLController(Controller):
         self.OLMoveStep(axis, steps)
         # TODO use OLAnalogDriving for very small moves (< 5µm)?
 
-        duration = distance / self._speed[axis]
+        duration = abs(distance) / self._speed[axis]
         self._storeMove(axis, distance, duration)
         return distance
 
@@ -1405,7 +1391,7 @@ class SMOController(Controller):
         self._max_motor_out = int(self.GetParameter(1, 0x9))
         # official approx. min is 3V, but from test, it can go down to 1.5V,
         # so use 3V
-        self._min_motor_out = int((3 / 10) * 32767) # encoded as a ratio of 10 V * 32767
+        self._min_motor_out = int((4 / 10) * 32767) # encoded as a ratio of 10 V * 32767
         assert(self._max_motor_out > self._min_motor_out)
 
         # We simplify to a linear conversion, making sure that the min voltage
@@ -1427,7 +1413,7 @@ class SMOController(Controller):
               "%(n)d MAC END\n" % {"n": self.address}
         self._sendOrderCommand(mac)
 
-        # TODO: try a macro like this for short moves:
+        # For short moves
         mac = "MAC BEG OLSTEP0\n" \
               "%(n)d SMO 1 $1\n" \
               "%(n)d SAI? ALL\n" \
@@ -1436,10 +1422,10 @@ class SMOController(Controller):
         self._sendOrderCommand(mac)
 
         self.min_speed = self._min_motor_out / self._vpms # m/s
-        self.max_speed = 1.0 # m/s
+        self.max_speed = self._max_motor_out / self._vpms # m/s
         self.max_accel = 0.01 # m/s² (actually I've got no idea, and cannot be changed)
 
-        self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
+        self._speed = dict([(a, self.min_speed) for a in axes]) # m/s
         self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
 
     def StopOLViaPID(self, axis):
@@ -1458,7 +1444,7 @@ class SMOController(Controller):
         """
         # Uses MAC OLSTEP, based on SMO
         assert(axis == 1) # seems not possible to have 3 parameters?!
-        assert(-32766 <= voltage and voltage <= 32766)
+        assert(-32768 <= voltage <= 32767)
         assert(0 < t <= 9999)
 
         # From experiment: a delay of 0 means actually 2**16, and >= 10000 it's 0
@@ -1474,7 +1460,7 @@ class SMOController(Controller):
         """
         # Uses MAC OLSTEP0, based on SMO
         assert(axis == 1)
-        assert(-32766 <= voltage and voltage <= 32766)
+        assert(-32768 <= voltage <= 32767)
 
         self._sendOrderCommand("MAC START OLSTEP0 %d\n" % (voltage,))
 
@@ -1511,12 +1497,10 @@ class SMOController(Controller):
         if mv_time_ms < 10 and act_speed > self.min_speed:
             # small distance => try with the minimum speed to have a better precision
             return self._convertDistanceSpeedToPIDControl(distance, self.min_speed)
-        elif mv_time_ms < 1 and mv_time > 0.1e-3:
+        elif 0.1e-3 < mv_time and mv_time_ms < 1:
             # try our special super small step trick if at least 0.1 ms
-            # TODO: check it actually does something, and get better idea of how
-            # much it's moving
-            mv_time_ms = 0.1 # ms
-            voltage_u = self._max_motor_out # TODO: change according to requested distance?
+            mv_time_ms = 0.5 # ms
+            voltage_u = self._min_motor_out # TODO: change according to requested distance?
         elif mv_time_ms < 1:
             # really no hope
             return 0, 0, 0
@@ -1537,9 +1521,10 @@ class SMOController(Controller):
         assert(axis in self._channels)
         
         speed = self._speed[axis]
+        logging.debug("speed = %g m/s", speed)
         v, t, ad = self._convertDistanceSpeedToPIDControl(distance, speed)
-        logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32687), t)
         if t == 0: # if distance is too small, report it
+            logging.debug("Move of %g µm too small, not moving", distance * 1e-6)
             return 0
         elif t < 1: # special small move command
             self.OLMovePID0(axis, v)
@@ -1547,6 +1532,7 @@ class SMOController(Controller):
         else:
             self.OLMovePID(axis, v, t)
             duration = t / 1000
+        logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32767), duration)
 
         self._storeMove(axis, ad, duration)
         return ad
@@ -1686,7 +1672,7 @@ class Bus(model.Actuator):
         for axis, (ctrl, channel) in self._axis_to_cc.items():
             hwversions.append("'%s': %s (GCS %s) for %s" %
                               (axis, ctrl.GetIdentification(),
-                               ctrl.GetSyntaxVersion(), ctrl.GetStageName())
+                               ctrl.GetSyntaxVersion(), ctrl.GetStageName(channel))
                              )
         self._hwVersion = ", ".join(hwversions)
 
@@ -1897,7 +1883,7 @@ class BusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16)
+        assert(1 <= addr <= 16 or addr == 255)
         if addr is None:
             full_com = com
         else:
@@ -2288,6 +2274,7 @@ class ActionFuture(object):
             for controller, channels in axes.items():
                 for channel, distance in channels:
                     actual_dist = controller.moveRel(channel, distance)
+                    logging.debug("controller reporting moving %g m instead of %g @ %g m/s", actual_dist, distance, controller.getSpeed(channel))
                     #FIXME: it doesn't correspond in the C867 -> directly pass the time
                     duration = abs(actual_dist) / controller.getSpeed(channel)
                     max_duration = max(max_duration, duration)
@@ -2437,7 +2424,7 @@ class E861Simulator(object):
             raise SimulatedError(2)
         now = time.time()
         if now > self._end_move:
-            self._target = self._position
+            self._position = self._target
             return self._position
         else:
             completion = (now - self._start_move) / (self._end_move - self._start_move)
@@ -2589,19 +2576,19 @@ class E861Simulator(object):
                     self._errno = 15
             elif args[0] == "OSM" and len(args) == 3: #Open-Loop Step Moving
                 axis, steps = int(args[1]), float(args[2])
-                speed = self._parameters[self._com_to_param["OVL"]]
                 if axis != 1:
                     raise SimulatedError(15)
+                speed = self._parameters[self._com_to_param["OVL"]]
                 duration = abs(steps) / speed
                 logging.debug("Simulating a move of %f s", duration)
                 self._end_move = time.time() + duration # current move stopped
             elif args[0] == "MOV" and len(args) == 3: # Closed-Loop absolute move
                 axis, pos = int(args[1]), float(args[2])
-                speed = self._parameters[self._com_to_param["VEL"]]
                 if axis != 1:
                     raise SimulatedError(15)
                 if self._ref_mode and not self._referenced:
                     raise SimulatedError(8)
+                speed = self._parameters[self._com_to_param["VEL"]]
                 cur_pos = self._get_cur_pos_cl()
                 distance = cur_pos - pos
                 duration = abs(distance) / speed
@@ -2612,11 +2599,11 @@ class E861Simulator(object):
                 self._target = pos
             elif args[0] == "MVR" and len(args) == 3: # Closed-Loop relative move
                 axis, distance = int(args[1]), float(args[2])
-                speed = self._parameters[self._com_to_param["VEL"]]
                 if axis != 1:
                     raise SimulatedError(15)
                 if self._ref_mode and not self._referenced:
                     raise SimulatedError(8)
+                speed = self._parameters[self._com_to_param["VEL"]]
                 duration = abs(distance) / speed
                 logging.debug("Simulating a move of %f s", duration)
                 cur_pos = self._get_cur_pos_cl()
