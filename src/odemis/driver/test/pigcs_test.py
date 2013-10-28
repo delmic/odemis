@@ -41,7 +41,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyPIGCS" #"/dev/ttyUSB0"
 
-CONFIG_BUS_BASIC = {"x":(2, 1, False)}
+CONFIG_BUS_BASIC = {"x":(1, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 CONFIG_CTRL_BASIC = (1, {1: False})
 CONFIG_CTRL_CL = (1, {1: True})
@@ -297,7 +297,7 @@ class TestActuator(unittest.TestCase):
 
         # TODO: on closed-loop axis it's actually possible to go very slightly
         # back (at the end, in case of overshoot)
-        self.assertGreater(diff_pos * self.direction, -10e-6) # negative means opposite dir
+        self.assertGreater(diff_pos * self.direction, -20e-6) # negative means opposite dir
 
 #    @skip("faster")
     def test_stop(self):
@@ -414,7 +414,7 @@ class TestActuator(unittest.TestCase):
         stage = CLASS(**self.kwargs_two)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed, "y": speed}
-        radius = 10000e-6 # m
+        radius = 1000e-6 # m
         # each step has to be big enough so that each move is above imprecision
         steps = 100
         cur_pos = (0, 0)
