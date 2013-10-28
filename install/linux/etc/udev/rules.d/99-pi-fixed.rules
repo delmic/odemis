@@ -5,8 +5,11 @@
 # as found in the E-861
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="1008", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
+# We got one E-861, which had a different ids
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
+
 # as found in the C-867.160
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="1009", ATTRS{idVendor}=="1a72", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIGCS", GROUP="odemis"
 
 # just an off the shelf USB-serial port used for the Redstone
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="2303", ATTRS{idVendor}=="067b", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIRS", GROUP="odemis"
+#SUBSYSTEMS=="usb", ATTRS{idProduct}=="2303", ATTRS{idVendor}=="067b", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyPIRS", GROUP="odemis"
