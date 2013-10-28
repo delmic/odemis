@@ -123,6 +123,10 @@ When the Controller is free, the ActionManager pick the next action and convert
 it into a command for the Controller, which sends it to the actual PI controller
 and waits for it to finish.  
 
+Note: in some rare cases, the controller might not answer to commands correctly,
+reporting error 555. In that case, it's possible to do a factory reset with the
+hidden command (which must be followed by the reconfiguration of the parameters):
+zzz 100 parameter
 """
 # constants for model number
 MODEL_C867 = 867
@@ -873,7 +877,6 @@ class Controller(object):
         shift (float): relative change in position (im m)
         duration (0<float): time it will take (in s)
         """
-        logging.debug("storing move of %g m, for %g s", shift, duration)
         now = time.time()
         cur_pos = self._interpolatePosition(axis)
         self._position[axis] = cur_pos
@@ -886,7 +889,6 @@ class Controller(object):
         Save the fact that a move was stop immediately (maybe not achieved)
         """
         self._position[axis] = self._interpolatePosition(axis)
-        logging.debug("storing stopped move at %g m", self._position[axis])
         self._target[axis] = self._position[axis]
         self._end_move[axis] = 0
 
@@ -896,7 +898,6 @@ class Controller(object):
         is not yet achieved)
         """
         self._position[axis] = self._target.get(axis, self._position[axis])
-        logging.debug("storing completed move to %g m", self._position[axis])
         self._end_move[axis] = 0
 
     def _interpolatePosition(self, axis):
@@ -1406,6 +1407,8 @@ class SMOController(Controller):
         # First param is voltage between -32766 and 32766
         # Second param is delay in ms between 1 and 9999
         # Note: it seems it doesn't work to have a third param is the axis
+        # WARNING: it seems old firmware (<1.2) don't support macro arguments,
+        # but there is not a clear way to detect them.
         mac = "MAC BEG OLSTEP\n" \
               "%(n)d SMO 1 $1\n" \
               "%(n)d DEL $2\n"   \
@@ -1521,7 +1524,6 @@ class SMOController(Controller):
         assert(axis in self._channels)
         
         speed = self._speed[axis]
-        logging.debug("speed = %g m/s", speed)
         v, t, ad = self._convertDistanceSpeedToPIDControl(distance, speed)
         if t == 0: # if distance is too small, report it
             logging.debug("Move of %g µm too small, not moving", distance * 1e-6)
@@ -1587,8 +1589,7 @@ class Bus(model.Actuator):
 
         ser = self.openSerialPort(port, baudrate, _addresses)
         self.accesser = BusAccesser(ser)
-        # to acquire before sending anything on the serial port
-        self.ser_access = threading.Lock()
+
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
@@ -1684,10 +1685,9 @@ class Bus(model.Actuator):
         return (dict string -> float): axis name to (absolute) position
         """
         position = {}
-        with self.ser_access:
-            # request position from each controller
-            for axis, (controller, channel) in self._axis_to_cc.items():
-                position[axis] = controller.getPosition(channel)
+        # request position from each controller
+        for axis, (controller, channel) in self._axis_to_cc.items():
+            position[axis] = controller.getPosition(channel)
 
         return self._applyInversionAbs(position)
 
@@ -1720,7 +1720,6 @@ class Bus(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
-        logging.debug("received request to move by %s", shift)
         shift = self._applyInversionRel(shift)
         # converts the request into one action (= a dict controller -> channels + distance)
         action_axes = {}
@@ -1735,7 +1734,7 @@ class Bus(model.Actuator):
                 action_axes[controller] = []
             action_axes[controller].append((channel, distance))
 
-        action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
+        action = ActionFuture(MOVE_REL, action_axes)
         self._action_mgr.append_action(action)
         return action
 
@@ -1754,21 +1753,19 @@ class Bus(model.Actuator):
         if self._action_mgr:
             self._action_mgr.cancel_all()
 
-        # Stop every axes (even if there is no action going, or action on just
-        # some axes
-        with self.ser_access:
-            # TODO: use the broadcast address to request a stop to all 
-            # controllers on the bus at the same time?
-            # send stop to all controllers (including the ones not in action)
-            controllers = set()
-            for axis, (controller, channel) in self._axis_to_cc.items():
-                if controller not in controllers:
-                    controller.stopMotion()
-                    controllers.add(controller)
+        # TODO: use the broadcast address to request a stop to all
+        # controllers on the bus at the same time?
 
-            # wait all controllers are done moving
-            for controller in controllers:
-                controller.waitEndMotion()
+        # send stop to all controllers (including the ones not in action)
+        controllers = set()
+        for axis, (controller, channel) in self._axis_to_cc.items():
+            if controller not in controllers:
+                controller.stopMotion()
+                controllers.add(controller)
+
+        # wait all controllers are done moving
+        for controller in controllers:
+            controller.waitEndMotion()
 
     def terminate(self):
         if not hasattr(self, "_action_mgr"):
@@ -1781,11 +1778,10 @@ class Bus(model.Actuator):
             self._action_mgr.terminate()
             self._action_mgr = None
 
-        with self.ser_access:
-            controllers = set()
-            for axis, (controller, channel) in self._axis_to_cc.items():
-                if controller not in controllers:
-                    controller.terminate()
+        controllers = set()
+        for axis, (controller, channel) in self._axis_to_cc.items():
+            if controller not in controllers:
+                controller.terminate()
 
     def selfTest(self):
         """
@@ -1793,10 +1789,9 @@ class Bus(model.Actuator):
         """
         passed = True
         controllers = set([c for c, a in self._axis_to_cc.values()])
-        with self.ser_access:
-            for controller in controllers:
-                logging.info("Testing controller %d", controller.address)
-                passed &= controller.selfTest()
+        for controller in controllers:
+            logging.info("Testing controller %d", controller.address)
+            passed &= controller.selfTest()
 
         return passed
 
@@ -1872,8 +1867,8 @@ class BusAccesser(object):
     """
     def __init__(self, serial):
         self.serial = serial
-        # TODO: also handle the lock and move the acquistion of lock to inside
-        # each of these methods.
+        # to acquire before sending anything on the serial port
+        self.ser_access = threading.Lock()
 
     def sendOrderCommand(self, addr, com):
         """
@@ -1889,8 +1884,9 @@ class BusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-        self.serial.write(full_com)
-        # We don't flush, as it will be done anyway if an answer is needed
+        with self.ser_access:
+            self.serial.write(full_com)
+            # We don't flush, as it will be done anyway if an answer is needed
 
     def sendQueryCommand(self, addr, com):
         """
@@ -1899,7 +1895,9 @@ class BusAccesser(object):
         com (string): the command to send (without address prefix but with \n)
         return (string or list of strings): the report without prefix 
            (e.g.,"0 1") nor newline. 
-           If answer is multiline: returns a list of each line  
+           If answer is multiline: returns a list of each line
+        Note: multiline answers seem to always begin with a \x00 character, but
+         it's left as is.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
         assert(1 <= addr <= 16)
@@ -1908,28 +1906,29 @@ class BusAccesser(object):
         else:
             full_com = "%d %s" % (addr, com)
         logging.debug("Sending: '%s'", full_com.encode('string_escape'))
-        self.serial.write(full_com)
+        with self.ser_access:
+            self.serial.write(full_com)
 
-        # ensure everything is received, before expecting an answer
-        self.serial.flush()
+            # ensure everything is received, before expecting an answer
+            self.serial.flush()
 
-        char = self.serial.read() # empty if timeout
-        line = ""
-        lines = []
-        while char:
-            if char == "\n":
-                if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
-                    not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
-                    lines.append(line[:-1]) # don't include the space
-                    line = ""
+            char = self.serial.read() # empty if timeout
+            line = ""
+            lines = []
+            while char:
+                if char == "\n":
+                    if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
+                        not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
+                        lines.append(line[:-1]) # don't include the space
+                        line = ""
+                    else:
+                        # full end
+                        lines.append(line)
+                        break
                 else:
-                    # full end
-                    lines.append(line)
-                    break
-            else:
-                # normal char
-                line += char
-            char = self.serial.read()
+                    # normal char
+                    line += char
+                char = self.serial.read()
 
         if not char:
             raise IOError("Controller %d timeout." % addr)
@@ -1954,11 +1953,12 @@ class BusAccesser(object):
         """
         Ensure there is no more data queued to be read on the bus (=serial port)
         """
-        # Flush buffer + give it some time to recover from whatever
-        self.serial.flush()
-        self.serial.flushInput()
-        while self.serial.read():
-            pass
+        with self.ser_access:
+            # Flush buffer + give it some time to recover from whatever
+            self.serial.flush()
+            self.serial.flushInput()
+            while self.serial.read():
+                pass
 
 
 class ActionManager(threading.Thread):
@@ -1995,15 +1995,12 @@ class ActionManager(threading.Thread):
                 # cancelled in the mean time: skip the action
                 continue
             
-            logging.debug("waiting for action")
             while not self.current_action._wait_action(0.2):
                 # regularly update position (5 Hz)
-                logging.debug("updating position while moving")
                 self._bus._updatePosition()
 
             # Update position one last time
             # FIXME: should update position just _before_ calling the callbacks
-            logging.debug("updating position to final position")
             self._bus._updatePosition()
 
     def cancel_all(self):
@@ -2060,18 +2057,16 @@ class ActionFuture(object):
     possible_types = [MOVE_REL, MOVE_ABS]
 
     # TODO handle exception in action
-    def __init__(self, action_type, args, ser_access):
+    def __init__(self, action_type, args):
         """
         type (str): name of the action (only supported so far is "moveRel"
         args (tuple): arguments to pass to the action
-        ser_access (Lock): lock to access the serial port
         """
         assert(action_type in self.possible_types)
 
         logging.debug("New action of type %s with arguments %s", action_type, args)
         self._type = action_type
         self._args = args
-        self._ser_access = ser_access
         self._expected_end = None # when it expects to finish (only during RUNNING)
         self._timeout = None # really too late to be running normally
 
@@ -2245,23 +2240,21 @@ class ActionFuture(object):
         """
         axes (dict: Controller -> list (int)): controller to channel which must be check for move
         """
-        with self._ser_access:
-            moving = False
-            for controller, channels in axes.items():
-                if len(channels) == 0:
-                    logging.warning("Asked to check move on a controller without any axis")
-                else:
-                    moving |= controller.isMoving(set(channels))
-            return moving
+        moving = False
+        for controller, channels in axes.items():
+            if len(channels) == 0:
+                logging.warning("Asked to check move on a controller without any axis")
+            else:
+                moving |= controller.isMoving(set(channels))
+        return moving
 
     def _stopMotion(self, axes):
         """
         axes (dict: Controller -> list (int)): controller to channel which must be stopped
         """
-        with self._ser_access:
-            for controller in axes:
-                # it can only stop all axes (that's the point anyway)
-                controller.stopMotion()
+        for controller in axes:
+            # it can only stop all axes (that's the point anyway)
+            controller.stopMotion()
 
     def _moveRel(self, axes):
         """
@@ -2269,15 +2262,12 @@ class ActionFuture(object):
             controller to list of channel/distance to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
-        with self._ser_access:
-            max_duration = 0 #s
-            for controller, channels in axes.items():
-                for channel, distance in channels:
-                    actual_dist = controller.moveRel(channel, distance)
-                    logging.debug("controller reporting moving %g m instead of %g @ %g m/s", actual_dist, distance, controller.getSpeed(channel))
-                    #FIXME: it doesn't correspond in the C867 -> directly pass the time
-                    duration = abs(actual_dist) / controller.getSpeed(channel)
-                    max_duration = max(max_duration, duration)
+        max_duration = 0 #s
+        for controller, channels in axes.items():
+            for channel, distance in channels:
+                actual_dist = controller.moveRel(channel, distance)
+                duration = abs(actual_dist) / controller.getSpeed(channel)
+                max_duration = max(max_duration, duration)
 
         return max_duration
 
@@ -2287,13 +2277,12 @@ class ActionFuture(object):
             controller to list of channel/distance to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
-        with self._ser_access:
-            max_duration = 0 #s
-            for controller, channels in axes.items():
-                for channel, distance in channels:
-                    actual_dist = controller.moveAbs(channel, distance)
-                    duration = abs(actual_dist) / controller.getSpeed(channel)
-                    max_duration = max(max_duration, duration)
+        max_duration = 0 #s
+        for controller, channels in axes.items():
+            for channel, distance in channels:
+                actual_dist = controller.moveAbs(channel, distance)
+                duration = abs(actual_dist) / controller.getSpeed(channel)
+                max_duration = max(max_duration, duration)
 
         return max_duration
 
@@ -2479,7 +2468,8 @@ class E861Simulator(object):
         if self._errno:
             # if errno is not null, most commands don't work any more
             if com not in ["*IDN?", "RBT", "ERR?", "CSV?"]:
-                logging.debug("received command %s while errno = %d", com, self._errno)
+                logging.debug("received command %s while errno = %d",
+                              com.encode('string_escape'), self._errno)
                 return
 
         # TODO: to support more commands, we should have a table, with name of
@@ -2534,6 +2524,7 @@ class E861Simulator(object):
                 else:
                     raise SimulatedError(15)
             elif args[0] == "SPA?" and len(args) == 3: # GetParameter: axis, address
+                # TODO: when no arguments -> list all parameters
                 axis, addr = int(args[1]), int(args[2])
                 if axis != 1:
                     raise SimulatedError(15)

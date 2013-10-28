@@ -22,13 +22,16 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 from concurrent import futures
-from odemis.driver import pigcs
 import logging
 import math
+from odemis.driver import pigcs
 import os
 import time
 import unittest
+from unittest.case import skip
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -38,7 +41,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyPIGCS" #"/dev/ttyUSB0"
 
-CONFIG_BUS_BASIC = {"x":(1, 1, False)}
+CONFIG_BUS_BASIC = {"x":(2, 1, False)}
 CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 CONFIG_CTRL_BASIC = (1, {1: False})
 CONFIG_CTRL_CL = (1, {1: True})
@@ -51,7 +54,7 @@ KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_C
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
 
-@unittest.skip("faster")
+#@skip("faster")
 class TestController(unittest.TestCase):
     """
     directly test the low level class
@@ -111,7 +114,7 @@ class TestController(unittest.TestCase):
         self.assertTrue(ctrl.IsReady())
         self.assertEqual(0, ctrl.GetErrorNum())
 
-#@unittest.skip("faster")
+#@skip("faster")
 class TestFake(TestController):
     """
     very basic test of the simulator, to ensure we always test it.
@@ -121,7 +124,7 @@ class TestFake(TestController):
         self.accesser = pigcs.BusAccesser(self.ser)
         self.config_ctrl = CONFIG_CTRL_BASIC
 
-#@unittest.skip("faster")
+#@skip("faster")
 class TestFakeCL(TestController):
     """
     very basic test of the simulator and CL controller, to ensure we always test it.
@@ -132,7 +135,7 @@ class TestFakeCL(TestController):
         self.config_ctrl = CONFIG_CTRL_CL
 
 
-#@unittest.skip("faster")
+#@skip("faster")
 class TestActuator(unittest.TestCase):
 
     def setUp(self):
@@ -142,6 +145,7 @@ class TestActuator(unittest.TestCase):
     def tearDown(self):
         time.sleep(0.1) # to make sure all is sent
 
+#    @skip("faster")
     def test_scan(self):
         """
         Check that we can do a scan network. It can pass only if we are
@@ -155,6 +159,7 @@ class TestActuator(unittest.TestCase):
             stage = CLASS("test", "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
+#    @skip("faster")
     def test_simple(self):
         stage = CLASS(**self.kwargs)
         move = {'x':0.01e-6}
@@ -162,6 +167,7 @@ class TestActuator(unittest.TestCase):
         time.sleep(0.1) # wait for the move to finish
         stage.terminate()
 
+#    @skip("faster")
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
@@ -192,6 +198,7 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
+#    @skip("faster")
     def test_speed(self):
         """
         Note: with C-867 open-looped (SMOController), speed is very imprecise,  
@@ -247,6 +254,7 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
+#    @skip("faster")
     def test_linear_pos(self):
         """
         Check that the position reported during a move is always increasing
@@ -255,8 +263,9 @@ class TestActuator(unittest.TestCase):
         stage = CLASS(**self.kwargs)
 
         speed = max(stage.speed.range[0], 0.001) # try as slow as reasonable
+        stage.speed.value = {"x": speed}
 
-        move = {'x': 1 * speed} # => will last one second
+        move = {'x':1 * speed} # => will last one second
         self.prev_pos = stage.position.value
         self.direction = 1
         stage.position.subscribe(self.pos_listener)
@@ -288,8 +297,9 @@ class TestActuator(unittest.TestCase):
 
         # TODO: on closed-loop axis it's actually possible to go very slightly
         # back (at the end, in case of overshoot)
-        self.assertGreater(diff_pos * self.direction, 0) # negative means opposite dir
+        self.assertGreater(diff_pos * self.direction, -10e-6) # negative means opposite dir
 
+#    @skip("faster")
     def test_stop(self):
         stage = CLASS(**self.kwargs)
         stage.stop()
@@ -300,6 +310,7 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(f.cancelled())
         stage.terminate()
 
+#    @skip("faster")
     def test_queue(self):
         """
         Note: with C-867 open-looped (SMOController), speed is very imprecise,  
@@ -328,6 +339,7 @@ class TestActuator(unittest.TestCase):
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
 
+#    @skip("faster")
     def test_cancel(self):
         stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
@@ -359,6 +371,7 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
+#    @skip("faster")
     def test_not_cancel(self):
         stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
@@ -387,6 +400,7 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
+#    @skip("faster")
     def test_move_circle(self):
         # check if we can run it
         buses = CLASS.scan(PORT)
@@ -400,7 +414,7 @@ class TestActuator(unittest.TestCase):
         stage = CLASS(**self.kwargs_two)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed, "y": speed}
-        radius = 100e-6 # m
+        radius = 10000e-6 # m
         # each step has to be big enough so that each move is above imprecision
         steps = 100
         cur_pos = (0, 0)
@@ -417,6 +431,7 @@ class TestActuator(unittest.TestCase):
 
         stage.terminate()
 
+#    @skip("faster")
     def test_future_callback(self):
         stage = CLASS(**self.kwargs)
         speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
@@ -469,6 +484,7 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(future.done())
         self.called += 1
 
+#@skip("faster")
 class TestActuatorCL(TestActuator):
     def setUp(self):
         self.kwargs = KWARGS_CL
@@ -490,5 +506,26 @@ if __name__ == "__main__":
 #ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
 #ctrl.moveRel(1, 10e-6); ctrl.isMoving()
 
+# Example of macros
+#
+#1 MAC BEG OLSTEP0
+#1 SMO 1 10000
+#1 SAI? ALL
+#1 SMO 1 0
+#1 MAC END
+#
 
+#SVO 1 1
+#MAC BEG TARG
+#MVR 1 $1
+#MAC END
+#ERR?
+#MAC?
+#MAC START TARG 1.0
+#ERR?
+#
+#MAC BEG NA
+#MVR 1 1.0
+#MAC END
+#MAC START NA
 
