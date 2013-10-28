@@ -1235,21 +1235,6 @@ class StaticStream(Stream):
                                      (image.shape,))
                 image = image[(0,) * l1d]
 
-            # Find the depth
-            try:
-                self._irange = (0, 2 ** image.metadata[model.MD_BPP] - 1)
-                self.histogram._edges = self._irange
-            except KeyError:
-                # no MD_MPP => no problem, will be guessed by histogram computation
-                pass
-
-            # Avoid negative values
-            # FIXME: probably need to fix DataArray2wxImage() for such cases
-            # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
-            minv = numpy.array(image).min()
-            if minv < 0:  # signed?
-                self._depth += -minv
-
             self.onNewImage(None, image)
 
     def onActive(self, active):
