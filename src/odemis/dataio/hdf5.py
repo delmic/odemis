@@ -876,7 +876,6 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
         prevg = f.create_group("Preview")
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
         _add_image_info(prevg, ids, thumbnail)
-        _add_svi_info(prevg)
 
     # for each set of images from the same instrument, add them
     groups = _findImageGroups(ldata)

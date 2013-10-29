@@ -155,6 +155,10 @@ class OdemisGUIApp(wx.App):
             if os.path.exists(gc.manual_path):
                 self.main_frame.menu_item_manual.Enable(True)
 
+            # Note: "snapshot" menu is handled by acquisition controller
+            # TODO: add a "Save as...", which is somehow like snapshot, but ask
+            # for a name (and format).
+
             # TODO: re-organise the Help menu:
             # * Report a bug... (Opens a mail client to send an email to us?)
 
@@ -179,29 +183,6 @@ class OdemisGUIApp(wx.App):
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
-
-            # TODO: remove this, or move to developer menu (we now have an
-            # official way to open back images)
-            if not self.main_data.role or self.main_data.role == "sparc":
-                # works with the analysis tab
-                wx.EVT_MENU(self.main_frame,
-                            self.main_frame.menu_item_load1.GetId(),
-                            self.on_load_example_sparc1)
-                self.main_frame.menu_item_load2.Enable(False)
-            elif self.main_data.role == "secom":
-                # Displayed in the SECOM live view tab
-                # TODO: display in the analysis tab?
-                wx.EVT_MENU(self.main_frame,
-                            self.main_frame.menu_item_load1.GetId(),
-                            self.on_load_example_secom1)
-
-                wx.EVT_MENU(self.main_frame,
-                            self.main_frame.menu_item_load2.GetId(),
-                            self.on_load_example_secom2)
-            else:
-                self.main_frame.menu_item_load1.Enable(False)
-                self.main_frame.menu_item_load2.Enable(False)
-
 
             # The escape accelerator has to be added manually, because for some
             # reason, the 'ESC' key will not register using XRCED.
@@ -288,103 +269,6 @@ class OdemisGUIApp(wx.App):
     def _module_path(self):
         encoding = sys.getfilesystemencoding()
         return os.path.dirname(unicode(__file__, encoding))
-
-    def on_load_example_secom1(self, e):
-        """ Open the two files for example """
-        mtc = get_main_tab_controller()
-        secom_tab = mtc['secom_live']
-
-        pos = secom_tab.tab_data_model.focussedView.value.view_pos.value
-        opt_im = pkg_resources.resource_stream("odemis.gui.img",
-                                               "example/1-optical-rot7.png")
-        opt_iim = InstrumentalImage(wx.ImageFromStream(opt_im), 7.14286e-7, pos)
-
-        pos = (pos[0] + 2e-6, pos[1] - 1e-5)
-        sem_im = pkg_resources.resource_stream("odemis.gui.img",
-                                               "example/1-sem-bse.png")
-        sem_iim = InstrumentalImage(wx.ImageFromStream(sem_im), 4.54545e-7, pos)
-
-        stream_controller = secom_tab.stream_controller
-
-        stream_controller.addStatic("Fluorescence", opt_iim)
-        stream_controller.addStatic("Secondary electrons", sem_iim,
-                                    cls=StaticSEMStream)
-
-    def on_load_example_secom2(self, e):
-        """ Open the two files for example """
-        mtc = get_main_tab_controller()
-        secom_tab = mtc['secom_live']
-
-        sem_im = pkg_resources.resource_stream("odemis.gui.img",
-                                               "example/3-sem.png")
-        pos = secom_tab.tab_data_model.focussedView.value.view_pos.value
-        sem_iim = InstrumentalImage(wx.ImageFromStream(sem_im), 2.5e-07, pos)
-
-        pos = (pos[0] + 5.5e-06, pos[1] + 1e-6)
-        opt_im = pkg_resources.resource_stream("odemis.gui.img",
-                                               "example/3-optical.png")
-        opt_iim = InstrumentalImage(wx.ImageFromStream(opt_im), 1.34e-07, pos)
-
-        mtc = get_main_tab_controller()
-        stream_controller = secom_tab.stream_controller
-
-        stream_controller.addStatic("Fluorescence", opt_iim)
-        stream_controller.addStatic("Secondary electrons", sem_iim,
-                                    cls=StaticSEMStream)
-
-    def on_load_example_sparc1(self, e):
-        """ Open a SEM view and spectrum cube for example
-            Must be in the analysis tab of the Sparc
-        """
-        # It uses raw data, not images
-        try:
-            mtc = get_main_tab_controller()
-            # TODO: put all of it in an hdf5 file and use hdf5.read_data() +
-            # _display_new_data()
-            sem_mat = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "example/s1-sem-bse.mat")
-            mdsem = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
-                     model.MD_POS: (0, 0)}
-            semdata = scipy.io.loadmat(sem_mat)["sem"]
-            semdatas = model.DataArray(numpy.array(semdata - semdata.min(),
-                                                   dtype=numpy.float32),
-                                       mdsem)
-
-            spec_mat = pkg_resources.resource_stream("odemis.gui.img",
-                                                    "example/s1-spectrum.mat")
-            mdspec = {model.MD_PIXEL_SIZE: (178e-9, 178e-9),
-                      model.MD_POS: (0, 0),
-                      # 335px : 409nm -> 695 nm (about linear)
-                      model.MD_WL_POLYNOMIAL: [552e-9, 0.85373e-9]
-                      }
-            # first dim is the wavelength, then Y, X
-            specdata = scipy.io.loadmat(spec_mat)["spectraldat"]
-            specdatai = model.DataArray(numpy.array(specdata - specdata.min(),
-                                                    dtype=numpy.uint16),
-                                        mdspec)
-
-            # put only these streams and switch to the analysis tab
-            stream_controller = mtc['analysis'].stream_controller
-            stream_controller.clear()
-
-            stream_controller.addStatic("Secondary electrons", semdatas,
-                                        cls=StaticSEMStream,
-                                        add_to_all_views=True)
-            stream_controller.addStatic("Spectrum", specdatai,
-                                        cls=StaticSpectrumStream,
-                                        add_to_all_views=True)
-
-            tab_data_model = mtc['analysis'].tab_data_model
-            # This is just to fill the metadata
-            # TODO: avoid this by getting the metadata from the stream =>
-            # better metadata + avoid copy if packaged in an egg.
-            spec_fn = pkg_resources.resource_filename("odemis.gui.img",
-                                                      "example/s1-spectrum.mat")
-            tab_data_model.fileinfo.value = guimodel.FileInfo(spec_fn)
-            mtc.switch("analysis")
-        except KeyError:
-            self.main_data.debug.value = True
-            logging.exception("Failed to load example")
 
     def on_stop_axes(self, evt):
         if self.main_data:
