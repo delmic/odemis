@@ -32,7 +32,7 @@ def run_test():
 
     path = os.path.dirname(os.path.realpath(__file__))
 
-    for root, dirs, files in os.walk(path):
+    for _, _, files in os.walk(path):
         modules_to_test = [x[:-3] for x in files if x.endswith('test.py')]
 
         for file_name in modules_to_test:

@@ -268,7 +268,9 @@ class SecomStreamsTab(Tab):
 
         if enabled:
             # check whether we need to create a (first) bright-field stream
-            has_bf = any(isinstance(s, streammod.BrightfieldStream) for s in self.tab_data_model.streams)
+            has_bf = any(
+                        isinstance(s, streammod.BrightfieldStream)
+                        for s in self.tab_data_model.streams.value)
             if not has_bf:
                 sp = self._stream_controller.addBrightfield(add_to_all_views=True)
                 sp.show_remove_btn(False)
@@ -287,7 +289,9 @@ class SecomStreamsTab(Tab):
 
         if enabled:
             # check whether we need to create a (first) SEM stream
-            has_sem = any(isinstance(s, streammod.EM_STREAMS) for s in self.tab_data_model.streams)
+            has_sem = any(
+                        isinstance(s, streammod.EM_STREAMS)
+                        for s in self.tab_data_model.streams.value)
             if not has_sem:
                 sp = self._stream_controller.addSEMSED(add_to_all_views=True)
                 sp.show_remove_btn(False)
@@ -717,7 +721,7 @@ class AnalysisTab(Tab):
         self.display_new_data(fn, data)
         spec_cls = (streammod.SpectrumStream, streammod.StaticSpectrumStream)
 
-        for strm in self.tab_data_model.streams:
+        for strm in self.tab_data_model.streams.value:
             if isinstance(strm, spec_cls):
                 iimg = strm.image.value
                 ol = self.main_frame.vp_inspection_tl.canvas.point_overlay

@@ -296,7 +296,10 @@ class MicroscopyGUIData(object):
     def __init__(self, main):
         self.main = main
 
-        self.streams = set() # Streams available (handled by StreamController)
+        # Streams available (handled by StreamController)
+        # Note: we need to make sure ourselves that each stream in this
+        # attribute is unique (i.e. only occurs once in the list).
+        self.streams = model.ListVA()
 
         # Views available, (handled by ViewController)
         # The ViewController cares about position: they are top-left, top-right

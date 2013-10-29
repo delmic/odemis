@@ -152,18 +152,19 @@ class StreamController(object):
         returns (StreamPanel): the panel created
         """
         # Find a name not already taken
-        existing_names = [s.name.value for s in self._tab_data_model.streams]
+        names = [s.name.value for s in self._tab_data_model.streams.value]
         for i in range(1000):
             name = "Filtered colour %d" % i
-            if not name in existing_names:
+            if not name in names:
                 break
         else:
             logging.error("Failed to find a new unique name for stream")
             name = "Filtered colour"
 
-        s = FluoStream(name,
-                  self._main_data_model.ccd, self._main_data_model.ccd.data,
-                  self._main_data_model.light, self._main_data_model.light_filter)
+        s = FluoStream(
+                name,
+                self._main_data_model.ccd, self._main_data_model.ccd.data,
+                self._main_data_model.light, self._main_data_model.light_filter)
         return self._addStream(s, add_to_all_views, visible)
 
     def addBrightfield(self, add_to_all_views=False, visible=True):
@@ -219,19 +220,25 @@ class StreamController(object):
         returns (StreamPanel or Stream): stream entry or stream (if visible
          is False) that was created
         """
-        self._tab_data_model.streams.add(stream)
+
+        if stream not in self._tab_data_model.streams.value:
+            self._tab_data_model.streams.value.append(stream)
+
+
         if add_to_all_views:
             for v in self._tab_data_model.views.value:
-                if isinstance(stream, v.stream_classes):
+                if (hasattr(v, "stream_classes") and
+                        isinstance(stream, v.stream_classes)):
                     v.addStream(stream)
         else:
             v = self._tab_data_model.focussedView.value
-            if isinstance(stream, v.stream_classes):
+            if (hasattr(v, "stream_classes") and
+                        isinstance(stream, v.stream_classes)):
                 warn = "Adding stream incompatible with the current view"
                 logging.warning(warn)
             v.addStream(stream)
 
-        # TODO create a StreamScheduler
+        # TODO: create a StreamScheduler
         # call it like self._scheduler.addStream(stream)
         self._scheduleStream(stream)
 
@@ -391,7 +398,7 @@ class StreamController(object):
         Returns (set of Stream): streams which were actually paused
         """
         streams = set() # stream paused
-        for s in self._tab_data_model.streams:
+        for s in self._tab_data_model.streams.value:
             if isinstance(s, classes):
                 if s.should_update.value:
                     streams.add(s)
@@ -423,9 +430,13 @@ class StreamController(object):
 
         # Remove from the views
         for v in self._tab_data_model.views.value:
-            v.removeStream(stream)
+            if hasattr(v, "removeStream"):
+                v.removeStream(stream)
 
-        self._tab_data_model.streams.discard(stream)
+        try:
+            self._tab_data_model.streams.value.remove(stream)
+        except ValueError:
+            logging.warn("Stream not found, so not removed")
 
         logging.debug("Sending stream.ctrl.removed message")
         pub.sendMessage('stream.ctrl.removed',
@@ -447,13 +458,14 @@ class StreamController(object):
 
         # clear the interface model
         # (should handle cases where a new stream is added simultaneously)
-        while self._tab_data_model.streams:
-            stream = self._tab_data_model.streams.pop()
+        while self._tab_data_model.streams.value:
+            stream = self._tab_data_model.streams.value.pop()
             self._unscheduleStream(stream)
 
             # Remove from the views
             for v in self._tab_data_model.views.value:
-                v.removeStream(stream)
+                if hasattr(v, "removeStream"):
+                    v.removeStream(stream)
 
         if self._has_streams() or self._has_visible_streams():
             logging.warning("Failed to remove all streams")
