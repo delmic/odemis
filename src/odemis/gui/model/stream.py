@@ -27,20 +27,22 @@ Detector, Emitter and Dataflow associations.
 """
 
 from __future__ import division
+
+import logging
+import math
+import numpy
 from numpy.polynomial import polynomial
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import limit_invocation
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
-import logging
-import math
-import numpy
+import threading
+import time
+
 import odemis.gui.util.conversion as conversion
 import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
-import threading
-import time
 
 
 # to identify a ROI which must still be defined by the user
@@ -1486,6 +1488,11 @@ class StaticSpectrumStream(StaticStream):
             av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
             rgbim = img.DataArray2RGB(av_data, irange)
         else:
+            # Note: For now this method uses three independant bands. To give
+            # a better sense of continum, and be closer to reality when using
+            # the visible light's band, we should take a weighted average of the
+            # whole spectrum for each band.
+
             # divide the range into 3 sub-ranges of almost the same length
             len_rng = spec_range[1] - spec_range[0] + 1
             rrange = [spec_range[0], int(round(spec_range[0] + len_rng / 3)) - 1]
