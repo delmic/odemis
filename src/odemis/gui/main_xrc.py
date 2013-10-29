@@ -38,8 +38,6 @@ class xrcfr_main(wx.Frame):
         # Define variables for the controls, bind event handlers
         self.menu_item_qacquire = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_qacquire"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
-        self.menu_item_load1 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load1"))
-        self.menu_item_load2 = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_load2"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
@@ -219,21 +217,6 @@ def __init_resources():
         <object class="wxMenuItem" name="menu_item_halt">
           <label>Stop all axes</label>
           <accel>Esc</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="separator"/>
-        <object class="wxMenuItem" name="menu_item_load1">
-          <label>Load Example 1</label>
-          <accel>Ctrl+1</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_load2">
-          <label>Load Example 2</label>
-          <accel>Ctrl+2</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

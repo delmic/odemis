@@ -114,7 +114,7 @@ class ViewController(object):
             else:
                 view = model.View(**vkwargs)
 
-            self._data_model.views.append(view)
+            self._data_model.views.value.append(view)
             vp.setView(view, self._data_model)
 
     def swap_viewports(self, vpi1, vpi2):
@@ -173,7 +173,7 @@ class ViewController(object):
         """
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        assert not self._data_model.views # should still be empty
+        assert not self._data_model.views.value # should still be empty
         if isinstance(self._data_model, model.AnalysisGUIData):
             assert len(self._viewports) >= 4
             # TODO: should be dependent on the type of acquisition, and so
@@ -240,7 +240,7 @@ class ViewController(object):
                             focus0=None, # TODO: SEM focus or focus1?
                             stream_classes=EM_STREAMS
                          )
-                self._data_model.views.append(view)
+                self._data_model.views.value.append(view)
                 viewport.setView(view, self._data_model)
                 i += 1
 
@@ -256,7 +256,7 @@ class ViewController(object):
                             focus0=self._main_data_model.focus,
                             stream_classes=OPTICAL_STREAMS
                          )
-                self._data_model.views.append(view)
+                self._data_model.views.value.append(view)
                 viewport.setView(view, self._data_model)
                 i += 1
 
@@ -303,7 +303,7 @@ class ViewController(object):
                             self._main_data_model.stage,
                             focus0=self._main_data_model.focus
                          )
-                self._data_model.views.append(view)
+                self._data_model.views.value.append(view)
                 viewport.setView(view, self._data_model)
                 i += 1
 

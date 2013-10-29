@@ -140,7 +140,7 @@ class AcquisitionDialog(xrcfr_acq):
         view = self._tab_data_model.focussedView.value
 
         # go through all the streams available in the interface model
-        for s in self._tab_data_model.streams:
+        for s in self._tab_data_model.streams.value:
             if s in visible_streams:
                 self.added_streams.append(s)
                 # Do addstream first, so that the "visible" button is correct
