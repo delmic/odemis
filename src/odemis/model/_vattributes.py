@@ -599,7 +599,10 @@ class ListVA(VigilantAttribute):
         value = _NotifyingList(self.notify, value)
         VigilantAttribute._set_value(self, value)
 
-    value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
+    value = property(VigilantAttribute._get_value,
+                     _set_value,
+                     VigilantAttribute._del_value,
+                     "The actual value")
 
 class ListVAProxy(VigilantAttributeProxy):
     # VAProxy + listen to modifications inside the list

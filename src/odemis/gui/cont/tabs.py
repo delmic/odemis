@@ -73,7 +73,7 @@ class Tab(object):
         """ If the tab has a 2x2 view, this method will connect it to the 2x2
         view menu item (or ensure it's disabled).
         """
-        if len(self.tab_data_model.views) >= 4:
+        if len(self.tab_data_model.views.value) >= 4:
             # We assume it has a 2x2 view layout
             def set_22_menu_check(viewlayout):
                 """Called when the view layout changes"""

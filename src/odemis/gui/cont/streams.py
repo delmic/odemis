@@ -221,7 +221,7 @@ class StreamController(object):
         """
         self._tab_data_model.streams.add(stream)
         if add_to_all_views:
-            for v in self._tab_data_model.views:
+            for v in self._tab_data_model.views.value:
                 if isinstance(stream, v.stream_classes):
                     v.addStream(stream)
         else:
@@ -422,7 +422,7 @@ class StreamController(object):
         self._unscheduleStream(stream)
 
         # Remove from the views
-        for v in self._tab_data_model.views:
+        for v in self._tab_data_model.views.value:
             v.removeStream(stream)
 
         self._tab_data_model.streams.discard(stream)
@@ -452,7 +452,7 @@ class StreamController(object):
             self._unscheduleStream(stream)
 
             # Remove from the views
-            for v in self._tab_data_model.views:
+            for v in self._tab_data_model.views.value:
                 v.removeStream(stream)
 
         if self._has_streams() or self._has_visible_streams():

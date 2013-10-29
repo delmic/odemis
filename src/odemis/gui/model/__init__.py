@@ -301,7 +301,7 @@ class MicroscopyGUIData(object):
         # Views available, (handled by ViewController)
         # The ViewController cares about position: they are top-left, top-right
         # bottom-left, bottom-right.
-        self.views = []
+        self.views = model.ListVA()
 
         # Current tool selected (from the toolbar, cf cont.tools)
         self.tool = None # Needs to be overridden by a IntEnumerated
