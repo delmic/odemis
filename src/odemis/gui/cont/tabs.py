@@ -1240,10 +1240,15 @@ class MirrorAlignTab(Tab):
             goal_stream = streammod.StaticStream("Goal", goal_iim)
 
             # create a view on the microscope model
+            # TODO: A dirty 'trick' to get this to work was adding an empty
+            # 'stream_classes' list. Why didn't this viewport have stream
+            # classes to begin with?
             vpv = collections.OrderedDict([
                 (main_frame.vp_sparc_align,
                  {"name": "Optical",
-                  # no stage, or would need a fake stage to control X/Y of the mirror
+                  "stream_classes": None,
+                  # no stage, or would need a fake stage to control X/Y of the
+                  # mirror
                   # no focus, or could control yaw/pitch?
                   }),
                                        ])
