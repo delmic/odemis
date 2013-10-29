@@ -71,6 +71,8 @@ MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diam
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C data
 
+MD_AR_POLE = "Angular resolved pole position" # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
+
 # The following tags are not to be filled at acquisition, but by the user interface
 MD_DESCRIPTION = "Description" # (string) User-friendly name that describes what this acquisition is
 MD_USER_NOTE = "User note" # (string) Whatever comment the user has added to the image

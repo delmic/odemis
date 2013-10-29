@@ -43,6 +43,7 @@ import odemis.gui.util.conversion as conversion
 import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
+import collections
 
 
 # to identify a ROI which must still be defined by the user
@@ -883,11 +884,11 @@ class FluoStream(CameraStream):
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
 
-class SpectrumStream(Stream):
+
+class RepetitionStream(Stream):
     """
-    A Spectrum stream. Be aware that acquisition can be very long so should
-    not be used for live view. So it has no .image (for now).
-    See StaticSpectrumStream for displaying a stream.
+    Abstract class for streams which are actually a set multiple acquisition
+    repeated over a grid.
     """
 
     def __init__(self, name, detector, dataflow, emitter):
@@ -1092,25 +1093,23 @@ class SpectrumStream(Stream):
 
     def estimateAcquisitionTime(self):
         try:
-            res = list(self.repetition.value)
+            rep = list(self.repetition.value)
             # Typically there is few more pixels inserted at the beginning of
             # each line for the settle time of the beam. We guesstimate by just
             # adding 1 pixel to each line
-            if len(res) == 2:
-                res[1] += 1
-            else:
-                logging.warning(("Resolution of scanner is not 2 dimensional, "
-                                 "time estimation might be wrong"))
+            if len(rep) >= 2 and numpy.prod(rep[1:]) > 1:
+                rep[1] += 1
 
             # Each pixel x the exposure time (of the detector) + readout time +
-            # 20% overhead
-            exp = self._detector.exposureTime.value
+            # 40% overhead
             try:
                 ro_rate = self._detector.readoutRate.value
-                readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
+                res = self._detector.resolution.value
+                readout = numpy.prod(res) / ro_rate + 0.06
             except Exception:
-                readout = 0.05
-            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.40
+                readout = 0.06
+            exp = self._detector.exposureTime.value
+            duration = numpy.prod(rep) * (exp + readout) * 1.40
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -1120,15 +1119,19 @@ class SpectrumStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
+class SpectrumStream(RepetitionStream):
+    """
+    A Spectrum stream. Be aware that acquisition can be very long so should
+    not be used for live view. So it has no .image (for now).
+    See StaticSpectrumStream for displaying a stream.
+    """
     def getStatic(self):
         """
         return (StaticSpectrumStream): similar stream, but static
         """
-        ss = StaticSpectrumStream(self.name.value, self.raw[0])
-        return ss
+        raise NotImplementedError("Stream doesn't actually acquire data")
 
-
-class ARStream(Stream):
+class ARStream(RepetitionStream):
     """
     An angular-resolved stream, for a set of points (on the SEM).
     Be aware that acquisition can be very long so
@@ -1137,74 +1140,11 @@ class ARStream(Stream):
     just the current AR view.
     """
 
-    def __init__(self, name, detector, dataflow, emitter):
-        self.name = model.StringVA(name)
-
-        # Hardware Components
-        self._detector = detector # the CCD
-        self._emitter = emitter # the e-beam
-        # To acquire simultaneously other detector (ex: SEM secondary electrons)
-        # a separate stream must be used, and the acquisition manager will take
-        # care of doing both at the same time
-
-        # data-flow of the spectrometer
-        self._dataflow = dataflow
-
-        # all the information needed to acquire an image (in addition to the
-        # hardware component settings which can be directly set).
-
-
-        # Region of interest as left, top, right, bottom (in ratio from the
-        # whole area of the emitter => between 0 and 1)
-        self.roi = model.TupleContinuous((0, 0, 1, 1),
-                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
-                                         cls=(int, long, float))
-        # the number of pixels acquired in each dimension
-        # it will be assigned to the resolution of the emitter (but cannot be
-        # directly set, as one might want to use the emitter while configuring
-        # the stream).
-        self.repetition = model.ResolutionVA(emitter.resolution.value,
-                                             emitter.resolution.range)
-
-        # exposure time of each pixel is the exposure time of the detector,
-        # the dwell time of the emitter will be adapted before acquisition.
-
-    def estimateAcquisitionTime(self):
-        try:
-            res = list(self.repetition.value)
-            # Typically there is few more pixels inserted at the beginning of
-            # each line for the settle time of the beam. We guesstimate by just
-            # adding 1 pixel to each line
-            if len(res) == 2:
-                res[1] += 1
-            else:
-                logging.warning(("Resolution of scanner is not 2 dimensional, "
-                                 "time estimation might be wrong"))
-
-            # Each pixel x the exposure time (of the detector) + readout time +
-            # 20% overhead
-            exp = self._detector.exposureTime.value
-            try:
-                ro_rate = self._detector.readoutRate.value
-                readout = numpy.prod(self._detector.resolution.value) / ro_rate + 0.05
-            except Exception:
-                readout = 0.05
-            duration = numpy.prod(res) * (exp + readout + 0.01) * 1.40
-            # Add the setup time
-            duration += self.SETUP_OVERHEAD
-
-            return duration
-        except Exception:
-            msg = "Exception while estimating acquisition time of %s"
-            logging.exception(msg, self.name.value)
-            return Stream.estimateAcquisitionTime(self)
-
     def getStatic(self):
         """
         return (StaticARStream): similar stream, but static
         """
-        ss = StaticARStream(self.name.value, self.raw[0])
-        return ss
+        raise NotImplementedError("Stream doesn't actually acquire data")
 
 class StaticStream(Stream):
     """ Stream containing one static image.
@@ -1310,9 +1250,49 @@ class StaticFluoStream(StaticStream):
 
 class StaticARStream(StaticStream):
     """
-    Same as a StaticStream, but considered a AR stream
+    A angular resolved stream for one set of data.
+    
+    There is no directly nice (=obvious) format to store AR data.
+    The difficulty is that data is somehow 4 dimensions: SEM-X, SEM-Y, CCD-X,
+    CCD-Y. CCD-dimensions do not correspond directly to quantities, until
+    converted into angle/angle (knowing the position of the pole).
+    As it's possible that positions on the SEM are relatively random, and it
+    is convenient to have a simple format when only one SEM pixel is scanned,
+    we've picked the following convention:
+     * each CCD image is a separate DataArray
+     * each CCD image contains metadata about the SEM position (MD_POS, in m)
+       pole (MD_AR_POLE, in px), and acquisition time (MD_ACQ_DATE)
+     * multiple CCD images are grouped together in a list
     """
-    pass
+    def __init__(self, name, data):
+        """
+        name (string)
+        data (model.DataArray of shape (YX) or list of such DataArray). The 
+         metadata MD_POS and MD_AR_POLE should be provided
+        """
+        Stream.__init__(self, name, None, None, None)
+
+        if isinstance(data, InstrumentalImage):
+            raise NotImplementedError("ARStream needs a list of raw data")
+        elif not isinstance(data, collections.Iterable):
+            data = [data] # from now it's just a list of DataArray
+
+
+        # find positions of each acquisition
+        sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data  
+        for d in data:
+            try:
+                sempos[d.metadata[MD_POS]] = d
+            except KeyError:
+                logging.info("Skipping DataArray without known position")
+
+        self.raw = list(sempos.values())
+
+        # SEM position displayed
+        # TODO: TupleEnumerated, or just VAEnumerated?
+#        self.point = model.TupleEnumerated((None, None),
+#                                 choices=[(None, None)] + list(sempos.keys())])
+
 
 # Different projection types
 PROJ_ONE_POINT = 1
