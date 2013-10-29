@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent.futures._base import CancelledError
 from odemis import model
+from odemis.util.driver import get_backend_status, BACKEND_RUNNING
 import odemis.gui.model as guimodel
 from odemis.gui.acqmng import ProgressiveFuture, startAcquisition, \
     computeThumbnail
@@ -87,8 +88,16 @@ class TestNoBackend(unittest.TestCase):
 class TestWithBackend(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
 
+    backend_was_running = False
+
     @classmethod
     def setUpClass(cls):
+
+        if get_backend_status() == BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
         # run the backend as a daemon
         # we cannot run it normally as the child would also think it's in a unittest
         cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
@@ -113,13 +122,17 @@ class TestWithBackend(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        # cls.microscope.terminate()
-        # end the backend
-        cmdline = ODEMISD_CMD + " --kill"
-        subprocess.call(cmdline.split())
+        if not cls.backend_was_running:
+            # cls.microscope.terminate()
+            # end the backend
+            cmdline = ODEMISD_CMD + " --kill"
+            subprocess.call(cmdline.split())
         time.sleep(1) # time to stop
 
     def test_simple(self):
+        if self.backend_was_running:
+            raise unittest.SkipTest("Running backend found")
+
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
         f = startAcquisition(st.getStreams())
@@ -141,6 +154,9 @@ class TestWithBackend(unittest.TestCase):
         """
         Check we get some progress updates
         """
+        if self.backend_was_running:
+            raise unittest.SkipTest("Running backend found")
+
         # create a little complex streamTree
         st = stream.StreamTree(streams=[
                 self.streams[0],
@@ -161,6 +177,8 @@ class TestWithBackend(unittest.TestCase):
         """
         try a bit the cancelling possibility
         """
+        if self.backend_was_running:
+            raise unittest.SkipTest("Running backend found")
         # create a little complex streamTree
         st = stream.StreamTree(streams=[
                 self.streams[2],
