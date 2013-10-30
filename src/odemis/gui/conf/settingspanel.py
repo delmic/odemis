@@ -256,6 +256,15 @@ CONFIG = {
                     "control_type": odemis.gui.CONTROL_LABEL,
                 },
             },
+            "streamar":
+            {
+                # VAs from the stream, temporarily here
+                "repetition":
+                {
+                    "control_type": odemis.gui.CONTROL_COMBO,
+                    "choices": _resolution_from_range,
+                },
+            },
             "spectrograph":
             {
                 "wavelength":

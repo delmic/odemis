@@ -943,7 +943,7 @@ class SparcSettingsController(SettingsBarController):
         # Somewhat of a hack to get direct references to a couple of controls
         self.angular_rep_ent = None
         self.spectro_rep_ent = None
-
+        self.spec_pxs_ent = None
 
         if main_data.ebeam:
             self.add_component(
@@ -971,19 +971,18 @@ class SparcSettingsController(SettingsBarController):
                                             None,  #component
                                             CONFIG["streamspec"]["repetition"])
 
-                # Added for debug only
-                self._spectrum_panel.add_value(
-                        "pixelSize",
-                        s.pixelSize,
-                        None,  #component
-                        CONFIG["streamspec"]["pixelSize"])
+                self.spec_pxs_ent = self._spectrum_panel.add_value(
+                                            "pixelSize",
+                                            s.pixelSize,
+                                            None,  #component
+                                            CONFIG["streamspec"]["pixelSize"])
 
-                # Added for debug only
-                self._spectrum_panel.add_value(
-                        "roi",
-                        s.roi,
-                        None,  #component
-                        CONFIG["streamspec"]["roi"])
+#                # Added for debug only
+#                self._spectrum_panel.add_value(
+#                        "roi",
+#                        s.roi,
+#                        None,  #component
+#                        CONFIG["streamspec"]["roi"])
 
             # Add spectrograph control if available
             if main_data.spectrograph:
@@ -1018,7 +1017,7 @@ class SparcSettingsController(SettingsBarController):
                                         "repetition",
                                         s.repetition,
                                         None,  #component
-                                        CONFIG["streamspec"]["repetition"])
+                                        CONFIG["streamar"]["repetition"])
 
         else:
             parent_frame.fp_settings_sparc_angular.Hide()

@@ -23,9 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
 from Pyro4.core import isasync
 from collections import OrderedDict
+import collections
+import logging
+import math
 from odemis import dataio, model
+from odemis.gui.comp import overlay
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -35,19 +40,15 @@ from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion, \
     units, call_after
-import collections
-import logging
-import math
-import odemis.gui.comp.overlay as overlay
-import odemis.gui.cont.streams as streamcont
-import odemis.gui.cont.views as viewcont
-import odemis.gui.model as guimodel
-import odemis.gui.model.stream as streammod
 import os.path
 import pkg_resources
 import weakref
 import wx
 
+import odemis.gui.cont.streams as streamcont
+import odemis.gui.cont.views as viewcont
+import odemis.gui.model as guimodel
+import odemis.gui.model.stream as streammod
 
 
 class Tab(object):
@@ -345,8 +346,6 @@ class SparcAcquisitionTab(Tab):
                 main_data.sed.data,
                 main_data.ebeam
         )
-        # FIXME: this stream has a .roi VA which modifies the SEM settings
-        # even if not active => bad
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
 
@@ -404,7 +403,7 @@ class SparcAcquisitionTab(Tab):
         # We always create ar_stream because the setting controller needs to
         # initialise the widgets with it.
         if self._ar_stream:
-            self._roi_streams.remove(ar_stream)
+#            self._roi_streams.remove(ar_stream)
             acq_view.removeStream(ar_stream)
 
         # needs settings_controller
@@ -414,36 +413,32 @@ class SparcAcquisitionTab(Tab):
                                             self.settings_controller
                                        )
 
-        # TODO: maybe don't use this: just is_active + direct link of the
-        # buttons. At least, don't use the MicroscopeStateController
-        # to hide/show the instrument settings
-        # Turn on the live SEM stream
-        main_data.emState.value = guimodel.STATE_ON
-        # and subscribe to activate the live stream accordingly
-        # (also needed to ensure at exit, all the streams are unsubscribed)
-        # TODO: maybe should be handled by a simple stream controller?
-        main_data.emState.subscribe(self.onEMState, init=True)
-
         # Repetition visualisation
+        self._hover_stream = None # stream for which the repetition must be displayed
 
         # Grab the repetition entries, so we can use it to hook extra event
         # handlers to it.
-        self.spec_rep = self.settings_controller.spectro_rep_ent
+        self.spec_rep = self._settings_controller.spectro_rep_ent
         if self.spec_rep:
-            self.spec_rep.va.subscribe(self.on_spec_rep_change)
-            self.spec_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_spec_rep_focus)
-            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_spec_rep_unfocus)
+            self.spec_rep.va.subscribe(self.on_rep_change)
+            self.spec_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.spec_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
             self.spec_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
-
-        self.angu_rep = self.settings_controller.angular_rep_ent
+        self.spec_pxs = self._settings_controller.spec_pxs_ent
+        if self.spec_pxs:
+            self.spec_pxs.va.subscribe(self.on_rep_change)
+            self.spec_pxs.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.spec_pxs.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.spec_pxs.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+            self.spec_pxs.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+        self.angu_rep = self._settings_controller.angular_rep_ent
         if self.angu_rep:
-            self.angu_rep.va.subscribe(self.on_angu_rep_change)
-            mic_view.mpp.subscribe(self.on_angu_rep_change)
-            self.angu_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_angu_rep_focus)
-            self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_angu_rep_focus)
-            self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_angu_rep_enter)
-            self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_angu_rep_leave)
+            self.angu_rep.va.subscribe(self.on_rep_change)
+            self.angu_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
+            self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
 
         # Toolbar
         tb = self.main_frame.sparc_acq_toolbar
@@ -455,62 +450,65 @@ class SparcAcquisitionTab(Tab):
 
     # Special event handlers for repetition indication in the ROI selection
 
-    # Spectrometer
-    def on_spec_rep_change(self, rep):
-        self.update_spec_rep()
+    def update_roa_rep(self):
+        # Here is the global rule (in order):
+        # * if mouse is hovering an entry for AR or spec => display repetition for this one
+        # * if an entry for AR or spec has focus => display repetition for this one
+        # * don't display repetition
 
-    def update_spec_rep(self, show=False):
-        ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
+        if self._hover_stream:
+            stream = self._hover_stream
+        elif self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus():
+            stream = self._spec_stream
+        elif self.angu_rep.ctrl.HasFocus():
+            stream = self._ar_stream
+        else:
+            stream = None
 
-        if self.spec_rep.ctrl.HasFocus() or show:
-            ol.set_repetition(self.spec_rep.va.value)
-            ol.grid_fill()
-        elif not self.angu_rep.ctrl.HasFocus():
-            ol.clear_fill()
+        # Convert stream to right display
+        cvs = self.main_frame.vp_sparc_acq_view.canvas
+        if stream is None:
+            cvs.showRepetition(None)
+        else:
+            rep = stream.repetition.value
+            if isinstance(stream, streammod.AR_STREAMS):
+                style = overlay.FILL_POINT
+            else:
+                style = overlay.FILL_GRID
+            cvs.showRepetition(rep, style)
 
-    def on_spec_rep_focus(self, evt):
-        self.update_spec_rep()
+    def on_rep_focus(self, evt):
+        """
+        Called when any control related to the repetition get/loose focus
+        """
+        self.update_roa_rep()
         evt.Skip()
 
-    on_spec_rep_unfocus = on_spec_rep_focus
+    def on_rep_change(self, rep):
+        """
+        Called when any repetition VA is changed
+        """
+        self.update_roa_rep()
 
     def on_spec_rep_enter(self, evt):
-        self.update_spec_rep(True)
+        self._hover_stream = self._spec_stream
+        self.update_roa_rep()
         evt.Skip()
 
     def on_spec_rep_leave(self, evt):
-        if not self.spec_rep.ctrl.HasFocus():
-            self.update_spec_rep(False)
+        self._hover_stream = None
+        self.update_roa_rep()
         evt.Skip()
 
-    # Angular Resolved
-    def on_angu_rep_change(self, rep):
-        self.update_angu_rep()
-
-    def update_angu_rep(self, show=False):
-        ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-
-        if self.angu_rep.ctrl.HasFocus() or show:
-            ol.set_repetition(self.angu_rep.va.value)
-            ol.point_fill()
-        elif not self.spec_rep.ctrl.HasFocus():
-            ol.clear_fill()
-
-    def on_angu_rep_focus(self, evt):
-        self.update_angu_rep()
+    def on_ar_rep_enter(self, evt):
+        self._hover_stream = self._ar_stream
+        self.update_roa_rep()
         evt.Skip()
 
-    on_angu_rep_unfocus = on_angu_rep_focus
-
-    def on_angu_rep_enter(self, evt):
-        self.update_angu_rep(True)
+    def on_ar_rep_leave(self, evt):
+        self._hover_stream = None
+        self.update_roa_rep()
         evt.Skip()
-
-    def on_angu_rep_leave(self, evt):
-        if not self.angu_rep.ctrl.HasFocus():
-            self.update_angu_rep(False)
-        evt.Skip()
-
 
     @property
     def settings_controller(self):
@@ -519,18 +517,12 @@ class SparcAcquisitionTab(Tab):
     def onZoomFit(self, event):
         self._view_controller.fitCurrentViewToContent()
 
-    def onEMState(self, state):
-        if state in [guimodel.STATE_OFF, guimodel.STATE_PAUSE]:
-            self._sem_live_stream.is_active.value = False
-        elif state == guimodel.STATE_ON:
-            self._sem_live_stream.is_active.value = True
-
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
         # Turn on the SEM stream only when displaying this tab
         if show:
-            self.onEMState(self.tab_data_model.main.emState.value)
+            self._sem_live_stream.is_active.value = True
         else:
             self._sem_live_stream.is_active.value = False
 
@@ -554,28 +546,23 @@ class SparcAcquisitionTab(Tab):
         called when the Spectrometer roi is changed
         """
         # if only one stream => copy to ROI, otherwise leave it as is
-        if len(self._roi_streams) == 1 and self._spec_stream in self._roi_streams:
+        if self._spec_stream in self._roi_streams:
             # unsubscribe to be sure it won't call us back directly
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
-
-            ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            ol.set_repetition(self.spec_rep.va.value)
 
     def onARROI(self, roi):
         """
         called when the Angle resolved roi is changed
         """
-        # if only one stream => copy to ROI, otherwise leave it as is
+        # if the only stream => copy to ROI, otherwise leave it as is (will
+        # follow just Spectrum)
         if len(self._roi_streams) == 1 and self._ar_stream in self._roi_streams:
             # unsubscribe to be sure it won't call us back directly
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
-
-            ol = self.main_frame.vp_sparc_acq_view.canvas.roi_overlay
-            ol.set_repetition(self.angu_rep.va.value)
 
 class AnalysisTab(Tab):
 

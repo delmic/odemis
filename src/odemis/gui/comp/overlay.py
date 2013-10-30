@@ -826,8 +826,9 @@ FILL_POINT = 2
 class RepetitionSelectOverlay(WorldSelectOverlay):
     """
     Same as world selection overlay, but can also display a repetition over it.
-    The repetition is set with set_repetition().
-    The type of display for the repetition is set by the .*_fill() methods
+    The type of display for the repetition is set by the .fill and repetition
+    attributes. You must redraw the canvas for it to be updated.
+    # Note: 
     """
     def __init__(self, base, label,
                  sel_cur=None,
@@ -835,28 +836,30 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         super(RepetitionSelectOverlay, self).__init__(base, label)
 
-        self.fill = FILL_NONE
-        self.repetition = (0, 0)
-        self._bmp = None
+        self._fill = FILL_NONE
+        self._repetition = (0, 0)
+        self._bmp = None # used to cache repetition with FILL_POINT
         # ROI for which the bmp is valid
         self._bmp_bpos = (None, None, None, None)
 
-    def clear_fill(self):
-        self.fill = FILL_NONE
+    @property
+    def fill(self):
+        return self._fill
+
+    @fill.setter
+    def fill(self, val):
+        assert(val in [FILL_NONE, FILL_GRID, FILL_POINT])
+        self._fill = val
         self._bmp = None
 
-    # TODO: better put a getter/setter on .fill and automatically remove cache
-    # (and redraw)
-    def point_fill(self):
-        self.fill = FILL_POINT
-        self._bmp = None
+    @property
+    def repetition(self):
+        return self._repetition
 
-    def grid_fill(self):
-        self.fill = FILL_GRID
-        self._bmp = None
-
-    def set_repetition(self, repetition):
-        self.repetition = repetition
+    @repetition.setter
+    def repetition(self, val):
+        assert(len(val) == 2)
+        self._repetition = val
         self._bmp = None
 
     def _drawGrid(self, dc_buffer):

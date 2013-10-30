@@ -1021,9 +1021,9 @@ class RepetitionStream(Stream):
         roi, rep = self._updateROIAndPixelSize(self.roi.value, pxs)
 
         # update roi and rep without going through the checks
-        self.roi._value = roi
+        self.roi._value = tuple(roi)
         self.roi.notify(roi)
-        self.repetition._value = rep
+        self.repetition._value = tuple(rep)
         self.repetition.notify(rep)
 
         return pxs
@@ -1125,6 +1125,11 @@ class SpectrumStream(RepetitionStream):
     not be used for live view. So it has no .image (for now).
     See StaticSpectrumStream for displaying a stream.
     """
+    def __init__(self, name, detector, dataflow, emitter):
+        RepetitionStream.__init__(self, name, detector, dataflow, emitter)
+        # For SPARC: typical user wants density a bit lower than SEM
+        self.pixelSize.value *= 6
+
     def getStatic(self):
         """
         return (StaticSpectrumStream): similar stream, but static
@@ -1139,6 +1144,10 @@ class ARStream(RepetitionStream):
     See StaticARStream for displaying a stream, and CameraStream for displaying
     just the current AR view.
     """
+    def __init__(self, name, detector, dataflow, emitter):
+        RepetitionStream.__init__(self, name, detector, dataflow, emitter)
+        # For SPARC: typical user wants density much lower than SEM
+        self.pixelSize.value *= 30
 
     def getStatic(self):
         """

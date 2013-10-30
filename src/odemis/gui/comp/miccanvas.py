@@ -22,20 +22,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
 from decorator import decorator
+import logging
 from odemis import util, model
-import odemis.gui.model as guimodel
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
 from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
 from odemis.model._vattributes import VigilantAttributeBase
-import odemis.gui.comp.overlay as comp_overlay
-from wx.lib.pubsub import pub
-import logging
-import odemis.gui as gui
-import odemis.gui.comp.canvas as canvas
 import threading
 import wx
+from wx.lib.pubsub import pub
+
+import odemis.gui as gui
+import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.overlay as comp_overlay
+import odemis.gui.model as guimodel
+
 
 # Various modes canvas elements can go into.
 # TODO: directly use the TOOL_* values
@@ -876,6 +879,21 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._onSEMMag)
 
+    # TODO: maybe should not be called directly, but should be a VA on the view
+    # or the tab?
+    def showRepetition(self, rep, style=None):
+        """
+        Change/display repetition on the ROA, if the ROA is displayed
+        rep (None or tuple of 2 ints): if None, repetition is hidden
+        style (overlay.FILL_*): type of repetition display
+        """
+        if rep is None:
+            self.roi_overlay.fill = comp_overlay.FILL_NONE
+        else:
+            self.roi_overlay.fill = style
+            self.roi_overlay.repetition = rep
+
+        wx.CallAfter(self.ShouldUpdateDrawing)
 
     def OnLeftDown(self, event):
         # If one of the Sparc tools is activated...
