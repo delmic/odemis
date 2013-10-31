@@ -320,9 +320,6 @@ class SparcAcquisitionTab(Tab):
         super(SparcAcquisitionTab, self).__init__(name, button, panel,
                                                   main_frame, tab_data)
 
-
-        self._roi_streams = [] # stream which must have the same ROI as the SEM CL
-        self._prev_rois = {} # stream -> roi (tuple of4 floats)
         self._spec_stream = None
         self._ar_stream = None
 
@@ -349,9 +346,6 @@ class SparcAcquisitionTab(Tab):
         acq_view.addStream(semcl_stream)
         self._sem_cl_stream = semcl_stream
 
-        # TODO: link the Spectrometer/Angle resolved buttons to add/remove the
-        # streams. Both from the setting panels, the acquisition view and
-        # from ._roi_streams .
 
         if main_data.spectrometer:
             spec_stream = streammod.SpectrumStream(
@@ -360,7 +354,6 @@ class SparcAcquisitionTab(Tab):
                                         main_data.spectrometer.data,
                                         main_data.ebeam)
             acq_view.addStream(spec_stream)
-            self._roi_streams.append(spec_stream)
             spec_stream.roi.subscribe(self.onSpecROI)
             self._spec_stream = spec_stream
 
@@ -371,9 +364,9 @@ class SparcAcquisitionTab(Tab):
                                 main_data.ccd.data,
                                 main_data.ebeam)
             acq_view.addStream(ar_stream)
-            self._roi_streams.append(ar_stream)
             ar_stream.roi.subscribe(self.onARROI)
             self._ar_stream = ar_stream
+
 
         # indicate ROI must still be defined by the user
         semcl_stream.roi.value = streammod.UNDEFINED_ROI
@@ -395,16 +388,19 @@ class SparcAcquisitionTab(Tab):
                                         self.main_frame,
                                         self.tab_data_model,
                                     )
-
-        # FIXME: for now we disable the AR from the acquisition view, because we
-        # don't want to always acquire it, so we never acquire it. The good way
-        # is to add/remove the stream according to the "instrument" state, in
-        # the microscope controller.
-        # We always create ar_stream because the setting controller needs to
-        # initialise the widgets with it.
-        if self._ar_stream:
-#            self._roi_streams.remove(ar_stream)
+        # Bind the Spectrometer/Angle resolved buttons to add/remove the
+        # streams. Both from the setting panels and the acquisition view.
+        if self._ar_stream and self._spec_stream:
+            main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
+            main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
+            # TODO: listen to acq_view.streams and hide/show setting accordingly
+            main_frame.fp_settings_sparc_spectrum.Hide()
+            main_frame.fp_settings_sparc_angular.Hide()
+            acq_view.removeStream(spec_stream)
             acq_view.removeStream(ar_stream)
+        else:
+            # TODO: if only one detector => hide completely the buttons
+            pass # non-available settings are already hidden
 
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
@@ -538,15 +534,17 @@ class SparcAcquisitionTab(Tab):
         # update back their ROI with a modified value. It should normally
         # converge, but we must absolutely ensure it will never cause infinite
         # loops.
-        for s in self._roi_streams:
-            s.roi.value = roi
+        for s in self.tab_data_model.acquisitionView.getStreams():
+            if isinstance(s, streammod.AR_STREAMS + streammod.SPECTRUM_STREAMS):
+                logging.debug("setting roi of %s to %s", s.name.value, roi)
+                s.roi.value = roi
 
     def onSpecROI(self, roi):
         """
         called when the Spectrometer roi is changed
         """
-        # if only one stream => copy to ROI, otherwise leave it as is
-        if self._spec_stream in self._roi_streams:
+        # only copy ROI if the stream is activated
+        if self._spec_stream in self.tab_data_model.acquisitionView.getStreams():
             # unsubscribe to be sure it won't call us back directly
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
@@ -554,15 +552,60 @@ class SparcAcquisitionTab(Tab):
 
     def onARROI(self, roi):
         """
-        called when the Angle resolved roi is changed
+        called when the Angle Resolved roi is changed
         """
-        # if the only stream => copy to ROI, otherwise leave it as is (will
-        # follow just Spectrum)
-        if len(self._roi_streams) == 1 and self._ar_stream in self._roi_streams:
+        # copy ROI only if it's activated, and spectrum is not, otherwise
+        # Spectrum plays the role of "master of ROI".
+        streams = self.tab_data_model.acquisitionView.getStreams()
+        if self._ar_stream in streams and self._spec_stream not in streams:
             # unsubscribe to be sure it won't call us back directly
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
+    
+    def onToggleSpec(self, evt):
+        """
+        called when the Spectrometer button is toggled
+        """
+        acq_view = self.tab_data_model.acquisitionView
+
+        btn = evt.GetEventObject()
+        if btn.GetToggle():
+            # TODO: only remove AR if hardware to switch between optical path
+            # is not available (but for now, it's never available)
+            # Remove AR if currently activated
+            self.main_frame.fp_settings_sparc_angular.Hide()
+            acq_view.removeStream(self._ar_stream)
+            self.main_frame.acq_btn_angular.SetToggle(False)
+
+            # Add Spectrometer stream
+            self.main_frame.fp_settings_sparc_spectrum.Show()
+            acq_view.addStream(self._spec_stream)
+            self._spec_stream.roi.value = self._sem_cl_stream.roi.value
+        else:
+            self.main_frame.fp_settings_sparc_spectrum.Hide()
+            acq_view.removeStream(self._spec_stream)
+
+    def onToggleAR(self, evt):
+        """
+        called when the AR button is toggled
+        """
+        acq_view = self.tab_data_model.acquisitionView
+
+        btn = evt.GetEventObject()
+        if btn.GetToggle():
+            # Remove Spectrometer if currently activated
+            self.main_frame.fp_settings_sparc_spectrum.Hide()
+            acq_view.removeStream(self._spec_stream)
+            self.main_frame.acq_btn_spectrometer.SetToggle(False)
+
+            # Add AR stream
+            self.main_frame.fp_settings_sparc_angular.Show()
+            acq_view.addStream(self._ar_stream)
+            self._ar_stream.roi.value = self._sem_cl_stream.roi.value
+        else:
+            self.main_frame.fp_settings_sparc_angular.Hide()
+            acq_view.removeStream(self._ar_stream)
 
 class AnalysisTab(Tab):
 

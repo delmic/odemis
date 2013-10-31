@@ -752,7 +752,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         # TODO: move this to the overlay
         # If one of the Secom tools is activated...
         if self.current_mode in SECOM_MODES:
-            vpos = event.GetPosition()
+            vpos = event.GetPositionTuple()
             hover = self.active_overlay.is_hovering(vpos)
 
             # Clicked outside selection
@@ -800,7 +800,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def OnMouseMotion(self, event):
         if self.current_mode in SECOM_MODES and self.active_overlay:
-            vpos = event.GetPosition()
+            vpos = event.GetPositionTuple()
 
             # TODO: Make a better, more natural between the different kinds
             # of dragging (edge vs whole selection)
@@ -900,7 +900,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # current_mode is set through 'toggle_select_mode', which in
         # turn if activated by a pubsub event
         if self.current_mode in SPARC_MODES:
-            vpos = event.GetPosition()
+            vpos = event.GetPositionTuple()
             hover = self.active_overlay.is_hovering(vpos)
 
             # Clicked outside selection
@@ -949,7 +949,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
     def OnMouseMotion(self, event):
         if self.current_mode in SPARC_MODES and self.active_overlay:
-            vpos = event.GetPosition()
+            vpos = event.GetPositionTuple()
 
             if self.dragging:
                 if self.active_overlay.dragging:
@@ -1074,8 +1074,13 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             rel_rect[1] -= rel_rect[3] - 1
             rel_rect[3] = 1
 
-        # update roa
+        # Update ROA. We need to unsubscribe to be sure we don't received
+        # intermediary values as ROA is modified by the stream further on, and
+        # VA don't ensure the notifications are in ordered.
+        self._roa.unsubscribe(self._onROA)
         self._roa.value = rel_rect
+        self._roa.subscribe(self._onROA, init=True)
+        # FIXME: we receive both this value and the value updated by the stream
 
     def _onROA(self, roi):
         """

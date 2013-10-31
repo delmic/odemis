@@ -944,8 +944,7 @@ class RepetitionStream(Stream):
         """
         roi : ROI wanted (might be slightly changed)
         pxs (float): new pixel size (must be within allowed range, always respected)
-        Returns new ROI and repetition, but set internal value of .roi and .repetition, without
-         notify
+        Returns new ROI and repetition
         """
         # If ROI is undefined => everything is fine
         if roi == UNDEFINED_ROI:
@@ -992,7 +991,7 @@ class RepetitionStream(Stream):
             roi[1] = max(0, roi[1] - (roi[3] - 1))
             roi[3] = 1
 
-        return roi, rep
+        return tuple(roi), tuple(rep)
 
     def _setROI(self, roi):
         """
@@ -1001,10 +1000,41 @@ class RepetitionStream(Stream):
         roi (tuple of 4 floats)
         returns (tuple of 4 floats): new ROI
         """
-        roi, rep = self._updateROIAndPixelSize(roi, self.pixelSize.value)
+        # TODO: if only width or height changes, ensure we respect it by
+        # adapting pixel size to be a multiple of the new size
+        pxs = self.pixelSize.value
+
+        old_roi = self.roi.value
+        if old_roi != UNDEFINED_ROI and roi != UNDEFINED_ROI:
+            old_size = (old_roi[2] - old_roi[0], old_roi[3] - old_roi[1])
+            new_size = (roi[2] - roi[0], roi[3] - roi[1])
+            if abs(old_size[0] - new_size[0]) < 1e-6:
+                dim = 1
+                # If dim 1 is also equal -> new pixel size will not change
+            elif abs(old_size[1] - new_size[1]) < 1e-6:
+                dim = 0
+            else:
+                logging.debug("both dim changed: %s != %s", old_size, new_size)
+                dim = None
+
+            if dim is not None:
+                old_rep = self.repetition.value[dim]
+                new_phy_size = old_rep * pxs * new_size[dim] / old_size[dim]
+                new_rep_flt = new_phy_size / pxs
+                new_rep_int = max(1, round(new_rep_flt))
+                logging.debug("rep should be %g but is %d", new_rep_flt, new_rep_int)
+                pxs *= new_rep_flt / new_rep_int
+                pxs_range = self._getPixelSizeRange()
+                pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
+                logging.debug("adapting pxs from %g to %g", self.pixelSize.value, pxs)
+
+        roi, rep = self._updateROIAndPixelSize(roi, pxs)
+        logging.debug("setting ROI to %s %%", roi)
         # update repetition without going through the checks
         self.repetition._value = rep
         self.repetition.notify(rep)
+        self.pixelSize._value = pxs
+        self.pixelSize.notify(pxs)
 
         return roi
 
@@ -1017,13 +1047,14 @@ class RepetitionStream(Stream):
         # clamp
         pxs_range = self._getPixelSizeRange()
         pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
+        logging.debug("setting pixel size to %g", pxs)
 
         roi, rep = self._updateROIAndPixelSize(self.roi.value, pxs)
 
         # update roi and rep without going through the checks
-        self.roi._value = tuple(roi)
+        self.roi._value = roi
         self.roi.notify(roi)
-        self.repetition._value = tuple(rep)
+        self.repetition._value = rep
         self.repetition.notify(rep)
 
         return pxs
@@ -1067,6 +1098,7 @@ class RepetitionStream(Stream):
 
         # TODO: is this sufficient to adapt correctly H or V? might need change in ROI
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
+        logging.debug("setting repetition to %s", rep)
         # update roi and pixel size without going through the checks
         self.roi._value = roi
         self.roi.notify(roi)

@@ -87,6 +87,7 @@ changed.
 DrawTimer is set by ShouldUpdateDrawing
 
 """
+from __future__ import division
 import ctypes
 import inspect
 import logging
@@ -1022,13 +1023,12 @@ class DraggableCanvas(wx.Panel):
         return buffer_to_view_pos(pos, self.margins)
 
     def clip_to_viewport(self, pos):
-        """ Clip the given wx.Point to the current view size """
-        pos.x = max(1, min(pos.x, self.ClientSize.x - 1))
-        pos.y = max(1, min(pos.y, self.ClientSize.y - 1))
-        return pos
+        """ Clip the given tuple of 2 floats to the current view size """
+        return (max(1, min(pos[0], self.ClientSize.x - 1)),
+                max(1, min(pos[1], self.ClientSize.y - 1)))
 
     def clip_to_buffer(self, pos):
-        """ Clip the given wx.Point to the current buffer size """
+        """ Clip the given tuple of 2 floats to the current buffer size """
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
@@ -1044,10 +1044,13 @@ def world_to_buffer_pos(world_pos, buffcenter_wpos, scale, offset=None):
         back to its original position. See `buffer_to_world_pos` for more
         details.
     :return: (int, int)
-
     """
-    buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
-                int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
+    # TODO: check whether it's really important sometimes to be an int
+    # it's at least useful sometimes to keep the float (precision)
+#    buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
+#                int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
+    buff_pos = ((world_pos[0] - buffcenter_wpos[0]) * scale,
+                (world_pos[1] - buffcenter_wpos[1]) * scale)
     if offset:
         return (buff_pos[0] + offset[0], buff_pos[1] + offset[1])
     else:

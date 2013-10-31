@@ -170,6 +170,13 @@ class FoldPanelItem(wx.Panel):
 
         self._refresh()
 
+    def Show(self, show=True):
+        wx.Panel.Show(self, show)
+        self._refresh()
+
+    def Hide(self):
+        self.Show(False)
+
     def IsExpanded(self):
         return not self.caption_bar.IsCollapsed()
 

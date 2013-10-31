@@ -384,27 +384,27 @@ class SelectionMixin(object):
     def start_selection(self, start_pos):
         """ Start a new selection.
 
-        :param start_pos: (wx.Point) Pixel coordinates where the selection
+        :param start_pos: (list of 2 floats) Pixel coordinates where the selection
             starts
         """
 
         logging.debug("Starting selection at %s", start_pos)
 
         self.dragging = True
-        self.v_start_pos = self.v_end_pos = start_pos
+        self.v_start_pos = self.v_end_pos = list(start_pos)
 
 
     def update_selection(self, current_pos):
         """ Update the selection to reflect the given mouse position.
 
-        :param current_pos: (wx.Point) Pixel coordinates of the current end
+        :param current_pos: (list of 2 floats) Pixel coordinates of the current end
             point
         """
 
         #logging.debug("Updating selection to %s", current_pos)
 
         current_pos = self.base.clip_to_viewport(current_pos)
-        self.v_end_pos = current_pos
+        self.v_end_pos = list(current_pos)
 
     def stop_selection(self):
         """ End the creation of the current selection """
@@ -415,16 +415,11 @@ class SelectionMixin(object):
             logging.debug("Selection too small")
             self.clear_selection()
         else:
-
             # Make sure that the start and end positions are the top left and
             # bottom right respectively.
-            start_x = min(self.v_start_pos.x, self.v_end_pos.x)
-            start_y = min(self.v_start_pos.y, self.v_end_pos.y)
-            end_x = max(self.v_start_pos.x, self.v_end_pos.x)
-            end_y = max(self.v_start_pos.y, self.v_end_pos.y)
-
-            self.v_start_pos = wx.Point(start_x, start_y)
-            self.v_end_pos = wx.Point(end_x, end_y)
+            v_pos = normalize_rect(self.v_start_pos + self.v_end_pos)
+            self.v_start_pos = v_pos[:2]
+            self.v_end_pos = v_pos[2:4]
 
             self._calc_edges()
             self.dragging = False
@@ -468,14 +463,14 @@ class SelectionMixin(object):
 
         if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
             if self.edit_edge == gui.HOVER_TOP_EDGE:
-                self.v_start_pos.y = current_pos.y
+                self.v_start_pos[1] = current_pos[1]
             else:
-                self.v_end_pos.y = current_pos.y
+                self.v_end_pos[1] = current_pos[1]
         else:
             if self.edit_edge == gui.HOVER_LEFT_EDGE:
-                self.v_start_pos.x = current_pos.x
+                self.v_start_pos[0] = current_pos[0]
             else:
-                self.v_end_pos.x = current_pos.x
+                self.v_end_pos[0] = current_pos[0]
 
     def stop_edit(self):
         """ End the selection edit """
@@ -498,22 +493,13 @@ class SelectionMixin(object):
         # of the selection can be dragged off canvas. The commented part was a
         # first attempt at that, but it didn't work.
         current_pos = self.base.clip_to_viewport(current_pos)
-        diff = current_pos - self.edit_start_pos
-        self.v_start_pos += diff
-        self.v_end_pos += diff
+        diff = (current_pos[0] - self.edit_start_pos[0],
+                current_pos[1] - self.edit_start_pos[1])
+        self.v_start_pos = [self.v_start_pos[0] + diff[0],
+                            self.v_start_pos[1] + diff[1]]
+        self.v_end_pos = [self.v_end_pos[0] + diff[0],
+                          self.v_end_pos[1] + diff[1]]
         self.edit_start_pos = current_pos
-
-        # diff = current_pos - self.edit_start_pos
-        # new_start = self.v_start_pos + diff
-
-        # if new_start == self.base.clip_to_viewport(new_start):
-        #     new_end = self.v_start_pos + diff
-        #     if new_end == self.base.clip_to_viewport(new_end):
-        #         self.v_start_pos = new_start
-        #         self.v_end_pos = new_end
-
-        # self.edit_start_pos = current_pos
-
 
     def stop_drag(self):
         self.stop_selection()
@@ -529,23 +515,17 @@ class SelectionMixin(object):
             logging.warn("Updating view position of selection")
             self._last_shiftscale = shiftscale
 
-            self.v_start_pos = wx.Point(
-                                    *self.base.buffer_to_view_pos(b_start_pos))
-            self.v_end_pos = wx.Point(
-                                    *self.base.buffer_to_view_pos(b_end_pos))
+            self.v_start_pos = list(self.base.buffer_to_view_pos(b_start_pos))
+            self.v_end_pos = list(self.base.buffer_to_view_pos(b_end_pos))
             self._calc_edges()
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to
         the hover margin
         """
-
-        logging.debug("Calculating selection edges")
-        l, r = sorted([self.v_start_pos.x, self.v_end_pos.x])
-        t, b = sorted([self.v_start_pos.y, self.v_end_pos.y])
-
-        i_l, o_r, i_t, o_b = [v + self.hover_margin for v in [l, r, t, b]]
-        o_l, i_r, o_t, i_b = [v - self.hover_margin for v in [l, r, t, b]]
+        rect = normalize_rect(self.v_start_pos + self.v_end_pos)
+        i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
+        o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
 
         self.edges = {
             "i_l": i_l,
@@ -557,6 +537,7 @@ class SelectionMixin(object):
             "o_t": o_t,
             "i_b": i_b
         }
+        logging.debug("Calculating selection edges to %s", self.edges)
 
     def is_hovering(self, vpos):  #pylint: disable=R0911
         """ Check if the given position is on/near a selection edge or inside
@@ -564,37 +545,37 @@ class SelectionMixin(object):
 
         :return: (bool) Return False if not hovering, or the type of hover
         """
-
+        logging.debug("Comparing pos %s to edges %s ", vpos, self.edges)
         if self.edges:
             # If position outside outer box
-            if not self.edges["o_l"] < vpos.x < self.edges["o_r"] or \
-                not self.edges["o_t"] < vpos.y < self.edges["o_b"]:
+            if (not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
+                not self.edges["o_t"] < vpos[1] < self.edges["o_b"]):
                 return False
             # If position inside inner box
-            elif self.edges["i_l"] < vpos.x < self.edges["i_r"] and \
-                self.edges["i_t"] < vpos.y < self.edges["i_b"]:
+            elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
+                  self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
                 logging.debug("Selection hover")
                 return gui.HOVER_SELECTION
-            elif vpos.x < self.edges["i_l"]:
+            elif vpos[0] < self.edges["i_l"]:
                 logging.debug("Left edge hover")
                 return gui.HOVER_LEFT_EDGE
-            elif vpos.x > self.edges["i_r"]:
+            elif vpos[0] > self.edges["i_r"]:
                 logging.debug("Right edge hover")
                 return gui.HOVER_RIGHT_EDGE
-            elif vpos.y < self.edges["i_t"]:
+            elif vpos[1] < self.edges["i_t"]:
                 logging.debug("Top edge hover")
                 return gui.HOVER_TOP_EDGE
-            elif vpos.y > self.edges["i_b"]:
+            elif vpos[1] > self.edges["i_b"]:
                 logging.debug("Bottom edge hover")
                 return gui.HOVER_BOTTOM_EDGE
 
         return False
 
     def get_width(self):
-        return abs(self.v_start_pos.x - self.v_end_pos.x)
+        return abs(self.v_start_pos[0] - self.v_end_pos[0])
 
     def get_height(self):
-        return abs(self.v_start_pos.y - self.v_end_pos.y)
+        return abs(self.v_start_pos[1] - self.v_end_pos[1])
 
     def get_size(self):
         return (self.get_width(), self.get_height())
@@ -729,10 +710,10 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Update the world position to reflect the view position
         """
         if self.v_start_pos and self.v_end_pos:
-            offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
+            offset = [v // 2 for v in self.base._bmp_buffer_size]
             w_pos = (self.base.view_to_world_pos(self.v_start_pos, offset) +
                      self.base.view_to_world_pos(self.v_end_pos, offset))
-            w_pos = normalize_rect(w_pos)
+            w_pos = list(normalize_rect(w_pos))
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
 
@@ -742,13 +723,14 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if not self.w_start_pos or not self.w_end_pos:
             logging.warning("Asking to convert non-existing world positions")
             return
-        offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
+        offset = [v // 2 for v in self.base._bmp_buffer_size]
         v_pos = (self.base.world_to_view_pos(self.w_start_pos, offset) +
                  self.base.world_to_view_pos(self.w_end_pos, offset))
-        v_pos = normalize_rect(v_pos)
-        self.v_start_pos = wx.Point(v_pos[0], v_pos[1])
-        self.v_end_pos = wx.Point(v_pos[2], v_pos[3])
-        self._calc_edges() # TODO move to Mixin??
+        v_pos = list(normalize_rect(v_pos))
+        self.v_start_pos = v_pos[:2]
+        self.v_end_pos = v_pos[2:4]
+        logging.debug("selection set to %s px", v_pos)
+        self._calc_edges()
 
     def get_physical_sel(self):
         """
@@ -778,7 +760,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
-            offset = tuple(v // 2 for v in self.base._bmp_buffer_size)
+            offset = [v // 2 for v in self.base._bmp_buffer_size]
             b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
                      self.base.world_to_buffer_pos(self.w_end_pos, offset))
             b_pos = normalize_rect(b_pos)
@@ -1374,7 +1356,7 @@ class PointSelectOverlay(WorldOverlay):
         if not self.base.HasCapture():
             # ...and we have data for plotting pixels
             if self.values_are_set():
-                self._current_vpos = evt.GetPosition()
+                self._current_vpos = evt.GetPositionTuple()
                 old_pixel_pos = self._pixel_pos
                 self.view_to_pixel()
                 if self._pixel_pos != old_pixel_pos:
