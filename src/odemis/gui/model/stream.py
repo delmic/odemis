@@ -1000,7 +1000,7 @@ class RepetitionStream(Stream):
         roi (tuple of 4 floats)
         returns (tuple of 4 floats): new ROI
         """
-        # TODO: if only width or height changes, ensure we respect it by
+        # If only width or height changes, ensure we respect it by
         # adapting pixel size to be a multiple of the new size
         pxs = self.pixelSize.value
 
@@ -1014,7 +1014,6 @@ class RepetitionStream(Stream):
             elif abs(old_size[1] - new_size[1]) < 1e-6:
                 dim = 0
             else:
-                logging.debug("both dim changed: %s != %s", old_size, new_size)
                 dim = None
 
             if dim is not None:
@@ -1022,14 +1021,11 @@ class RepetitionStream(Stream):
                 new_phy_size = old_rep * pxs * new_size[dim] / old_size[dim]
                 new_rep_flt = new_phy_size / pxs
                 new_rep_int = max(1, round(new_rep_flt))
-                logging.debug("rep should be %g but is %d", new_rep_flt, new_rep_int)
                 pxs *= new_rep_flt / new_rep_int
                 pxs_range = self._getPixelSizeRange()
                 pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
-                logging.debug("adapting pxs from %g to %g", self.pixelSize.value, pxs)
 
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
-        logging.debug("setting ROI to %s %%", roi)
         # update repetition without going through the checks
         self.repetition._value = rep
         self.repetition.notify(rep)
@@ -1047,8 +1043,6 @@ class RepetitionStream(Stream):
         # clamp
         pxs_range = self._getPixelSizeRange()
         pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
-        logging.debug("setting pixel size to %g", pxs)
-
         roi, rep = self._updateROIAndPixelSize(self.roi.value, pxs)
 
         # update roi and rep without going through the checks
@@ -1098,7 +1092,6 @@ class RepetitionStream(Stream):
 
         # TODO: is this sufficient to adapt correctly H or V? might need change in ROI
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
-        logging.debug("setting repetition to %s", rep)
         # update roi and pixel size without going through the checks
         self.roi._value = roi
         self.roi.notify(roi)

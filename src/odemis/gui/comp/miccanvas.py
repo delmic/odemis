@@ -934,7 +934,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.active_overlay.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
-                logging.debug("ROA = %s", self.roi_overlay.get_physical_sel())
                 self._updateROA()
                 # force it to redraw the selection, even if the ROA hasn't changed
                 # because the selection is clipped identically
@@ -1104,7 +1103,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                          sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
                          sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
 
-        logging.debug("Selection now set to %s", phys_rect)
         self.roi_overlay.set_physical_sel(phys_rect)
         wx.CallAfter(self.ShouldUpdateDrawing)
 
@@ -1245,7 +1243,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.dragging = True
         self.drag_init_pos = event.GetPositionTuple()
 
-        logging.debug("Drag started at %s", self.drag_init_pos)
+#        logging.debug("Drag started at %s", self.drag_init_pos)
 
         if not self.HasCapture():
             self._position_focus_line(event)
