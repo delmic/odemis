@@ -1390,6 +1390,7 @@ class PointSelectOverlay(WorldOverlay):
         """ Change the mouse cursor to a cross """
         if self.enabled:
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+            self._is_over = True
         evt.Skip()
 
     def on_mouse_leave(self, evt):
@@ -1398,6 +1399,9 @@ class PointSelectOverlay(WorldOverlay):
             self.base.SetCursor(wx.STANDARD_CURSOR)
         self._current_vpos = None
         self._pixel_pos = None
+        # Update the drawing so any drawn selection will be cleared
+        self.base.UpdateDrawing()
+
         evt.Skip()
 
     # END Event handlers
@@ -1530,9 +1534,9 @@ class PointSelectOverlay(WorldOverlay):
                     ctx.fill()
 
             # Label for debugging purposes
-            # pos = self.base.view_to_buffer_pos((10, 16))
-            # self.write_label(ctx, dc.GetSize(), pos,
-            #                  self.label + str(rect))
+            pos = self.base.view_to_buffer_pos((10, 16))
+            self.write_label(ctx, dc.GetSize(), pos, str(self._pixel_pos))
+                             #self.label + str(rect))
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
