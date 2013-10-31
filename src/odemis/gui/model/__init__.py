@@ -301,19 +301,24 @@ class MicroscopyGUIData(object):
         # attribute is unique (i.e. only occurs once in the list).
         self.streams = model.ListVA()
 
-        # Views available, (handled by ViewController)
-        # The ViewController cares about position: they are top-left, top-right
-        # bottom-left, bottom-right.
+        # Available Views. The are handled by the ViewController.
+        # The `views` list basically keeps track of the relevant references.
         self.views = model.ListVA()
 
         # Current tool selected (from the toolbar, cf cont.tools)
         self.tool = None # Needs to be overridden by a IntEnumerated
 
-        # The MicroscopeView currently focused, it is one of the .views (or None)
+        # The MicroscopeView currently focused, it is one of the `views`
+        # or `None`.
         self.focussedView = VigilantAttribute(None)
 
         layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_22, choices=layouts)
+
+        # The subset of views taken from `views` that *can* actually displayed,
+        # but they might be hidden as well.
+        # This attribute is also handled and manipulated by the ViewController.
+        self.visible_views = model.ListVA()
 
 
 class LiveViewGUIData(MicroscopyGUIData):

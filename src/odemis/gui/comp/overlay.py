@@ -29,6 +29,7 @@ from odemis.util import normalize_rect
 import cairo
 import logging
 import math
+import odemis.model as model
 import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.gui.util as util
@@ -810,7 +811,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     Same as world selection overlay, but can also display a repetition over it.
     The type of display for the repetition is set by the .fill and repetition
     attributes. You must redraw the canvas for it to be updated.
-    # Note: 
+    # Note:
     """
     def __init__(self, base, label,
                  sel_cur=None,
@@ -1335,7 +1336,8 @@ class PointSelectOverlay(WorldOverlay):
         self._pysical_top_left = None # in meters (float, float)
         self._pixel_size = None # base size of the pixel block (float, float)
         self._pixel_pos = None # position of the current pixel (int, int)
-        self._selected_pixel = None # The pixel selected by the user
+        # The pixel selected by the user: TupleVA (int, int)
+        self._selected_pixel = None
 
         self.color = hex_to_frgba(gui.SELECTION_COLOR, 0.5)
         self.select_color = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
@@ -1375,10 +1377,11 @@ class PointSelectOverlay(WorldOverlay):
         """
 
         if self._pixel_pos and self.enabled and not self.was_dragged:
-            if self._selected_pixel != self._pixel_pos:
-                self._selected_pixel = self._pixel_pos
+            if self._selected_pixel.value != self._pixel_pos:
+                self._selected_pixel.value = self._pixel_pos
                 self.base.UpdateDrawing()
-                logging.debug("Pixel %s selected", str(self._selected_pixel))
+                logging.debug("Pixel %s selected",
+                              str(self._selected_pixel.value))
 
         self.was_dragged = False
         evt.Skip()
@@ -1399,7 +1402,7 @@ class PointSelectOverlay(WorldOverlay):
 
     # END Event handlers
 
-    def set_values(self, mpp, physical_center, resolution):
+    def set_values(self, mpp, physical_center, resolution, selected_pixel_va):
         """ Set the values needed for mapping mouse positions to pixel
         coordinates
         """
@@ -1412,11 +1415,17 @@ class PointSelectOverlay(WorldOverlay):
         self._physical_center = physical_center
         self._resolution = resolution
 
+        self._selected_pixel = selected_pixel_va
+        self._selected_pixel.subscribe(self._selection_made, init=True)
+
         self._calc_core_values()
 
     def values_are_set(self):
         """ Returns True if all needed values are set """
-        return None not in (self._mpp, self._physical_center, self._resolution)
+        return None not in (self._mpp,
+                            self._physical_center,
+                            self._resolution,
+                            self._selected_pixel)
 
     def _calc_core_values(self):
         """ Calculate the core values that only change when the external values
@@ -1494,13 +1503,17 @@ class PointSelectOverlay(WorldOverlay):
 
         return btop_left + util.tuple_multiply(self._pixel_size, scale)
 
+    def _selection_made(self, selected_pixel):
+        self.base.UpdateDrawing()
+
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
         if self.enabled:
 
-            if self._pixel_pos and self._selected_pixel != self._pixel_pos:
+            if (self._pixel_pos and
+                self._selected_pixel.value != self._pixel_pos):
                 rect = self.pixel_to_rect(self._pixel_pos, scale)
 
                 if rect:
@@ -1508,8 +1521,8 @@ class PointSelectOverlay(WorldOverlay):
                     ctx.rectangle(*rect)
                     ctx.fill()
 
-            if self._selected_pixel:
-                rect = self.pixel_to_rect(self._selected_pixel, scale)
+            if self._selected_pixel.value:
+                rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
                 if rect:
                     ctx.set_source_rgba(*self.select_color)
@@ -1517,11 +1530,13 @@ class PointSelectOverlay(WorldOverlay):
                     ctx.fill()
 
             # Label for debugging purposes
-            pos = self.base.view_to_buffer_pos((10, 16))
-            self.write_label(ctx, dc.GetSize(), pos,
-                             self.label + str(rect))
+            # pos = self.base.view_to_buffer_pos((10, 16))
+            # self.write_label(ctx, dc.GetSize(), pos,
+            #                  self.label + str(rect))
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
+        if enable and not self.values_are_set():
+            raise ValueError("Not all PointSelectOverlay values are set!")
         self.enabled = enable
         self.base.Refresh()
