@@ -55,8 +55,9 @@ MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre
 MD_SENSOR_SIZE = "Sensor size" # px, px
 MD_SENSOR_TEMP = "Sensor temperature" # C
 MD_POS = "Centre position" # (m, m), location of the picture centre relative to top-left of the sample)
-# Note that the following two might be a set of ranges
+# Note that for angular resolved acquisitions, MD_POS corresponds to the position of the e-beam on the sample
 MD_ROTATION = "Rotation" # degree (0<=float<360) rotation applied to the image (from its center) counter-clockwise
+# Note that the following two might be a set of ranges
 MD_IN_WL = "Input wavelength range" # (m, m), lower and upper range of the wavelength input
 MD_OUT_WL = "Output wavelength range"  # (m, m), lower and upper range of the filtered wavelength before the camera
 MD_LIGHT_POWER = "Light power" # W, power of the emitting light
