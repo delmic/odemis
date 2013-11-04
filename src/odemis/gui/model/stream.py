@@ -1320,19 +1320,19 @@ class StaticARStream(StaticStream):
 
 
         # find positions of each acquisition
-        sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data
+        self._sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data
         for d in data:
             try:
-                sempos[d.metadata[MD_POS]] = d
+                self._sempos[d.metadata[MD_POS]] = d
             except KeyError:
                 logging.info("Skipping DataArray without known position")
 
-        self.raw = list(sempos.values())
+        self.raw = list(self._sempos.values())
 
         # SEM position displayed
         # TODO: TupleEnumerated, or just VAEnumerated?
 #        self.point = model.TupleEnumerated((None, None),
-#                                 choices=[(None, None)] + list(sempos.keys())])
+#                                 choices=[(None, None)] + list(self_sempos.keys())])
 
 
 # Different projection types
@@ -1915,7 +1915,6 @@ class SEMARMDStream(MultipleDetectorStream):
           given X/Y in the repetition grid -> 2 floats corresponding to the 
           translation.
         """ 
-        # TODO: cf comedi
         repetition = tuple(self._ar_stream.repetition.value)
         roi = self._ar_stream.roi.value
         width = (roi[2] - roi[0], roi[3] - roi[1])
@@ -1936,13 +1935,14 @@ class SEMARMDStream(MultipleDetectorStream):
         posx[:, :] = numpy.linspace(lim_sem[0], lim_sem[2], repetition[0])
         # fill the X dimension
         pos[:, :, 1] = numpy.linspace(lim_sem[1], lim_sem[3], repetition[1])
-
         return pos
 
     def _runAcquisition(self):
         """
         Handles the whole acquisition procedure of a grid of AR images 
+        Warning: can be quite memory consuming if the grid is big
         """
+        # TODO: handle better very large grid acquisition (than memory oops)
         try:
             ccd_time = self._adjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
@@ -2006,6 +2006,7 @@ class SEMARMDStream(MultipleDetectorStream):
             self._ar_stream.raw = []
             self._sem_stream.raw = []
         finally:
+            del self._sem_data # regain a bit of memory
             self._acq_complete.set()
             self._acq_thread = None
             self.is_active.value = False

@@ -252,10 +252,11 @@ class AcquisitionTask(object):
             with self._condition:
                 # start stream
                 s.image.subscribe(self._image_listener)
-                # TODO: shall we also do s.updated.value = True?
+                # TODO: better have s.updated.value = True?, or a dataflow for raw data?
                 s.is_active.value = True
                 # TODO: give some callback to the stream, so that it can give
                 # better estimate on the acquisition times during acquisition.
+                # TODO: way for the stream to report error? Maybe change is_active to False?
 
                 # wait until one image acquired or cancelled
                 self._condition.wait()

@@ -790,6 +790,9 @@ class AnalysisTab(Tab):
             vp.microscope_view.getMPPFromNextImage = False
             vp.canvas.fitViewToNextImage = True
 
+        # AR data is special => all merged in one big stream
+        ar_data = []
+
         acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
         # Add each data as a stream of the correct type
         for d in data:
@@ -803,7 +806,7 @@ class AnalysisTab(Tab):
             # excepted for spectrums which have a 3rd dimensions on dim 5.
             # So if it's the case => separate into one stream per channel
             cdata = self._split_channels(d)
-
+            
             for cd in cdata:
                 # TODO: be more clever to detect the type of stream
                 if (model.MD_WL_LIST in cd.metadata or
@@ -811,6 +814,10 @@ class AnalysisTab(Tab):
                     (len(cd.shape) >= 5 and cd.shape[-5] > 1)):
                     desc = cd.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     cls = streammod.StaticSpectrumStream
+                elif model.MD_AR_POLE in cd.metadata:
+                    # AR data
+                    ar_data.append(cd)
+                    continue
                 elif ((model.MD_IN_WL in cd.metadata and
                       model.MD_OUT_WL in cd.metadata) or
                       model.MD_USER_TINT in cd.metadata):
@@ -834,10 +841,16 @@ class AnalysisTab(Tab):
                 else:
                     desc = cd.metadata.get(model.MD_DESCRIPTION, "Secondary electrons")
                     cls = streammod.StaticSEMStream
-                # TODO: ARStreams
 
                 self._stream_controller.addStatic(desc, cd, cls=cls,
                                                   add_to_all_views=True)
+
+        # Add one global AR stream
+        if ar_data:
+            self._stream_controller.addStatic("Angular", ar_data,
+                               cls=streammod.StaticARStream,
+                               add_to_all_views=True)
+
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
