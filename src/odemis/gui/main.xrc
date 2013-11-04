@@ -1732,9 +1732,9 @@
                           <object class="ImageTextToggleButton" name="acq_btn_spectrometer">
                             <label>SPECTROMETER</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_128x48.png</bitmap>
-                            <hover>img/btn_128x48_h.png</hover>
-                            <selected>img/btn_128x48_a.png</selected>
+                            <bitmap>img/btn_spec.png</bitmap>
+                            <hover>img/btn_spec_h.png</hover>
+                            <selected>img/btn_spec_on_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -1755,11 +1755,11 @@
                         </object>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="acq_btn_angular">
-                            <label>ANGULAR</label>
+                            <label>      ANGULAR</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_128x48.png</bitmap>
-                            <hover>img/btn_128x48_h.png</hover>
-                            <selected>img/btn_128x48_a.png</selected>
+                            <bitmap>img/btn_ang.png</bitmap>
+                            <hover>img/btn_ang_h.png</hover>
+                            <selected>img/btn_ang_on_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>

@@ -58,15 +58,16 @@ class ViewController(object):
             self._viewports = viewports
             self._createViewsAuto()
 
-        # First viewport is focused
-        tab_data.focussedView.value = self._viewports[0].microscope_view
+        # First view is focused
+        tab_data.focussedView.value = tab_data.visible_views.value[0]
 
         # Store the initial values, so we can reset
-        self._def_viewports = self._viewports
+        self._def_views = tab_data.visible_views.value
         self._def_layout = tab_data.viewLayout.value
-        self._def_focus = self._viewports[0].microscope_view
+        self._def_focus = tab_data.focussedView.value
 
         # subscribe to layout and view changes
+        tab_data.visible_views.subscribe(self._on_visible_views)
         tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
         tab_data.focussedView.subscribe(self._onView, init=True)
 
@@ -74,37 +75,23 @@ class ViewController(object):
     def viewports(self):
         return self._viewports
 
-    def reset(self):
-        """ Reset the view layout
-
-        This means that the viewport order, the viewport layout and the focus
-        will all be reset to as they were when the controller was created.
-        """
-
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
-
-        # Reset the order of the viewports
-        for i, dvp in enumerate(self._def_viewports):
-            # If a viewport has moved compared to the original order...
-            if self._viewports[i] != dvp:
-                # ...put it back in its original place
-                j = self._viewports.index(dvp)
-                self.swap_viewports(i, j)
-
-        # Reset the focus
-        self._data_model.focussedView.value = self._def_focus
-        # Reset the layout
-        self._data_model.viewLayout.value = self._def_layout
-
-        containing_window.Thaw()
-
     def _createViewsFixed(self, viewports):
         """ Create the different views displayed, according to viewtypes
         viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
 
         To be executed only once, at initialisation.
+
+        FIXME: Since we have 2 different Views at the moments and probably more
+        on the way, it's probably going to be beneficial to explicitly define
+        them in the viewport data
+
+        FIXME: Now views are created both in this method and in the
+        _createViewsAuto method. It's probably best to have all stream creation
+        done in the same place.
         """
+
+        views = []
+        visible_views = []
 
         for vp, vkwargs in viewports.items():
             # TODO: automatically set some clever values for missing arguments?
@@ -114,56 +101,14 @@ class ViewController(object):
             else:
                 view = model.View(**vkwargs)
 
-            self._data_model.views.value.append(view)
+            views.append(view)
+            if vp.Shown:
+                visible_views.append(view)
+
             vp.setView(view, self._data_model)
 
-    def swap_viewports(self, vpi1, vpi2):
-        """ Swap the positions of viewports denoted by indices vpi1 and vpi2
-
-        It is assumed that vpi1 points to one of the viewports visible in a 2x2
-        display, and that vpi2 is outside this 2x2 layout and invisible.
-        """
-
-        # Small shothand local variable
-        vp = self._viewports
-
-        # Get the sizer of the visible viewport
-        sizer1 = vp[vpi1].GetContainingSizer()
-        # And the one of the invisible one, which should be the containing sizer
-        # of sizer1
-        sizer2 = parent_sizer = vp[vpi2].GetContainingSizer()
-
-        # Get the sizer position of the first viewport, so we can use that
-        # to insert the other viewport
-        pos1 = util.get_sizer_position(vp[vpi1])
-
-        # Get the sizer item for the visible viewport, so we can access its
-        # sizer properties like proportion and flags
-        item1 = parent_sizer.GetItem(vp[vpi1], recursive=True)
-
-        # Move viewport 2 to sizer 1
-        sizer2.Detach(vp[vpi2])
-        sizer1.Insert(
-            pos1,
-            vp[vpi2],
-            proportion=item1.GetProportion(),
-            flag=item1.GetFlag(),
-            border=item1.GetBorder())
-
-        # Move viewport 1 to the end of the conaining sizer
-        sizer1.Detach(vp[vpi1])
-        parent_sizer.Add(vp[vpi1])
-
-        # Flip the visibility
-        vp[vpi1].Hide()
-        vp[vpi2].Show()
-
-        # Swap the viewports in the viewport list
-        vp[vpi1], vp[vpi2] = vp[vpi2], vp[vpi1]
-
-        # Refresh the Layout
-        parent_sizer.Layout()
-
+        self._data_model.views.value = views
+        self._data_model.visible_views.value = visible_views
 
     def _createViewsAuto(self):
         """ Create the different views displayed, according to the current
@@ -233,6 +178,10 @@ class ViewController(object):
         elif self._main_data_model.ebeam and not self._main_data_model.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
+
+            views = []
+            visible_views = []
+
             for viewport in self._viewports:
                 view = model.MicroscopeView(
                             "SEM %d" % i,
@@ -244,11 +193,22 @@ class ViewController(object):
                 viewport.setView(view, self._data_model)
                 i += 1
 
+                views.append(view)
+                if viewport.Shown:
+                    visible_views.append(view)
+
+            self._data_model.views.value = views
+            self._data_model.visible_views.value = visible_views
+
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
         elif not self._main_data_model.ebeam and self._main_data_model.light:
             logging.info("Creating Optical only viewport layout")
             i = 1
+
+            views = []
+            visible_views = []
+
             for viewport in self._viewports:
                 view = model.MicroscopeView(
                             "Optical %d" % i,
@@ -260,9 +220,17 @@ class ViewController(object):
                 viewport.setView(view, self._data_model)
                 i += 1
 
+                views.append(view)
+                if viewport.Shown:
+                    visible_views.append(view)
+
+            self._data_model.views.value = views
+            self._data_model.visible_views.value = visible_views
+
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
-        elif (self._main_data_model.ebeam and self._main_data_model.light and
-             len(self._viewports) == 4):
+        elif (self._main_data_model.ebeam and
+              self._main_data_model.light and
+              len(self._viewports) == 4):
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
             (self._viewports[0],  # focused view
@@ -309,6 +277,103 @@ class ViewController(object):
 
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
+    def _viewport_by_view(self, view):
+        """ Return the ViewPort associated with the given view
+        """
+
+        for vp in enumerate(self._viewports):
+            if vp.microscope_view == view:
+                return vp
+        raise ValueError("No ViewPort found for view %s" % view)
+
+    def _viewport_index_by_view(self, view):
+        """ Return the index number of the ViewPort associated with the given
+        view
+        """
+        return self._viewports.index(self._viewport_by_view(view))
+
+    def reset(self, views=None):
+        """ Reset the view layout
+
+        This means that the viewport order, the viewport layout and the focus
+        will all be reset to as they were when the controller was created.
+        """
+
+        containing_window = self._viewports[0].Parent
+        containing_window.Freeze()
+
+        # Reset the order of the viewports
+        for i, def_view in enumerate(views or self._def_views):
+            # If a viewport has moved compared to the original order...
+            if self._viewports[i].microscope_view != def_view:
+                # ...put it back in its original place
+                j = self._viewport_index_by_view(def_view)
+                self.swap_viewports(i, j)
+
+        # Reset the focus
+        self._data_model.focussedView.value = self._def_focus
+        # Reset the layout
+        self._data_model.viewLayout.value = self._def_layout
+
+        containing_window.Thaw()
+
+    def swap_viewports(self, vpi1, vpi2):
+        """ Swap the positions of viewports denoted by indices vpi1 and vpi2
+
+        It is assumed that vpi1 points to one of the viewports visible in a 2x2
+        display, and that vpi2 is outside this 2x2 layout and invisible.
+        """
+
+        # Small shothand local variable
+        vp = self._viewports
+
+        # Get the sizer of the visible viewport
+        sizer1 = vp[vpi1].GetContainingSizer()
+        # And the one of the invisible one, which should be the containing sizer
+        # of sizer1
+        sizer2 = parent_sizer = vp[vpi2].GetContainingSizer()
+
+        # Get the sizer position of the first viewport, so we can use that
+        # to insert the other viewport
+        pos1 = util.get_sizer_position(vp[vpi1])
+
+        # Get the sizer item for the visible viewport, so we can access its
+        # sizer properties like proportion and flags
+        item1 = parent_sizer.GetItem(vp[vpi1], recursive=True)
+
+        # Move viewport 2 to sizer 1
+        sizer2.Detach(vp[vpi2])
+        sizer1.Insert(
+            pos1,
+            vp[vpi2],
+            proportion=item1.GetProportion(),
+            flag=item1.GetFlag(),
+            border=item1.GetBorder())
+
+        # Move viewport 1 to the end of the conaining sizer
+        sizer1.Detach(vp[vpi1])
+        parent_sizer.Add(vp[vpi1])
+
+        # Flip the visibility
+        vp[vpi1].Hide()
+        vp[vpi2].Show()
+
+        # Swap the viewports in the viewport list
+        vp[vpi1], vp[vpi2] = vp[vpi2], vp[vpi1]
+
+        # Refresh the Layout
+        parent_sizer.Layout()
+
+    def _on_visible_views(self, visible_views):
+        """ This method is called when the visible views in the data model
+        change.
+        """
+
+        # Test if all provided views are known
+        for view in visible_views:
+            if view not in self._data_model.views:
+                raise ValueError("Unknown view %s!" % view)
+
     def _onView(self, view):
         """ Called when another focussed view changes.
 
@@ -338,15 +403,17 @@ class ViewController(object):
 
     def _onViewLayout(self, layout):
         """ Called when the view layout of the GUI must be changed
+
+        This method only manipulates ViewPort, since the only thing it needs to
+        change is the visibility of ViewPorts.
         """
 
         containing_window = self._viewports[0].Parent
+
         containing_window.Freeze()
 
         if layout == model.VIEW_LAYOUT_ONE:
             logging.debug("Showing only one view")
-            # TODO resize all the viewports now, so that there is no flickering
-            # when just changing view
             for viewport in self._viewports:
                 if viewport.microscope_view == self._data_model.focussedView.value:
                     viewport.Show()
@@ -365,6 +432,7 @@ class ViewController(object):
             raise NotImplementedError()
 
         containing_window.Layout()  # resize the viewports
+
         containing_window.Thaw()
 
     def fitCurrentViewToContent(self):

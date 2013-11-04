@@ -635,6 +635,19 @@ class BooleanVA(VigilantAttribute):
         if not isinstance(value, bool):
             raise TypeError("Value '%r' is not a boolean." % value)
 
+class TupleVA(VigilantAttribute):
+    """
+    A VA which contains a tuple
+    """
+
+    def __init__(self, value=None, *args, **kwargs):
+        VigilantAttribute.__init__(self, value, *args, **kwargs)
+
+    def _check(self, value):
+        # we really only accept tuple, to avoid hidden data changes
+        if not isinstance(value, tuple):
+            raise TypeError("Value '%r' is not a tuple." % value)
+
 # TODO maybe should provide a factory that can take a VigilantAttributeBase class and return it
 # either Continuous or Enumerated
 

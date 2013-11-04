@@ -1149,15 +1149,18 @@ class RepetitionStream(Stream):
             return Stream.estimateAcquisitionTime(self)
 
 class SpectrumStream(RepetitionStream):
-    """
-    A Spectrum stream. Be aware that acquisition can be very long so should
-    not be used for live view. So it has no .image (for now).
-    See StaticSpectrumStream for displaying a stream.
+    """ A Spectrum stream.
+
+    Be aware that acquisition can be very long so should not be used for live
+    view. So it has no .image (for now). See StaticSpectrumStream for displaying
+    a stream.
     """
     def __init__(self, name, detector, dataflow, emitter):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
+        # TODO: Does this class also need to keep track of a selected pixel like
+        # its Static cousin?
 
     def getStatic(self):
         """
@@ -1289,7 +1292,7 @@ class StaticFluoStream(StaticStream):
 class StaticARStream(StaticStream):
     """
     A angular resolved stream for one set of data.
-    
+
     There is no directly nice (=obvious) format to store AR data.
     The difficulty is that data is somehow 4 dimensions: SEM-X, SEM-Y, CCD-X,
     CCD-Y. CCD-dimensions do not correspond directly to quantities, until
@@ -1305,7 +1308,7 @@ class StaticARStream(StaticStream):
     def __init__(self, name, data):
         """
         name (string)
-        data (model.DataArray of shape (YX) or list of such DataArray). The 
+        data (model.DataArray of shape (YX) or list of such DataArray). The
          metadata MD_POS and MD_AR_POLE should be provided
         """
         Stream.__init__(self, name, None, None, None)
@@ -1317,7 +1320,7 @@ class StaticARStream(StaticStream):
 
 
         # find positions of each acquisition
-        sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data  
+        sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data
         for d in data:
             try:
                 sempos[d.metadata[MD_POS]] = d
@@ -1389,10 +1392,11 @@ class StaticSpectrumStream(StaticStream):
             width = (max_bw - min_bw) / 12
 
         # low/high values of the spectrum displayed
-        self.spectrumBandwidth = model.TupleContinuous((cwl - width, cwl + width),
-                                       range=((min_bw, min_bw), (max_bw, max_bw)),
-                                       unit=unit_bw,
-                                       cls=(int, long, float))
+        self.spectrumBandwidth = model.TupleContinuous(
+                                    (cwl - width, cwl + width),
+                                    range=((min_bw, min_bw), (max_bw, max_bw)),
+                                    unit=unit_bw,
+                                    cls=(int, long, float))
 
         # Whether the (per bandwidth) display should be split intro 3 sub-bands
         # which are applied to RGB
@@ -1400,22 +1404,27 @@ class StaticSpectrumStream(StaticStream):
 
         # TODO: min/max: tl and br points of the image in physical coordinates
         # TODO: also need the size of a point (and density?)
-#        self.point1 = model.ResolutionVA(unit="m") # FIXME: float
-#        self.point2 = model.ResolutionVA(unit="m") # FIXME: float
+        #self.point1 = model.ResolutionVA(unit="m") # FIXME: float
+        # self.point2 = model.ResolutionVA(unit="m") # FIXME: float
 
 
         self.projection = model.IntEnumerated(PROJ_AVERAGE_SPECTRUM,
           choices=set([PROJ_ONE_POINT, PROJ_ALONG_LINE, PROJ_AVERAGE_SPECTRUM]))
 
-#        # Avoid negative values
-#        # FIXME: probably need to fix DataArray2RGB() for such cases
-#        # cast to numpy.array to ensure it becomes a scalar (instead of a DataArray)
-#        minv = numpy.array(image).min()
-#        if minv < 0:  # signed?
-#            self._depth += -minv
-#
+        # Avoid negative values
+        # FIXME: probably need to fix DataArray2RGB() for such cases
+        # cast to numpy.array to ensure it becomes a scalar (instead of a
+        # DataArray)
+        # minv = numpy.array(image).min()
+        # if minv < 0:  # signed?
+        #     self._depth += -minv
+
         self._irange = None
         self._updateIRange()
+
+        # This attribute is used to keep track of any selected pixel within the
+        # data for the display of a spectrum
+        self.selected_pixel = model.TupleVA()
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
@@ -1465,7 +1474,7 @@ class StaticSpectrumStream(StaticStream):
 
         # Find the closest pixel position for the requested wavelength
         low_px = numpy.searchsorted(self._wl_px_values, low, side="left")
-        low_px = min(low_px, len(self._wl_px_values) - 1) # make sure it fits inside
+        low_px = min(low_px, len(self._wl_px_values) - 1) # make sure it fits
         # TODO: might need better handling to show just one pixel (in case it's
         # useful) as in almost all cases, it will end up displaying 2 pixels at
         # least

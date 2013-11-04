@@ -562,7 +562,7 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
-    
+
     def onToggleSpec(self, evt):
         """
         called when the Spectrometer button is toggled
@@ -754,12 +754,15 @@ class AnalysisTab(Tab):
         for strm in self.tab_data_model.streams.value:
             if isinstance(strm, spec_cls):
                 iimg = strm.image.value
-                ol = self.main_frame.vp_inspection_tl.canvas.point_overlay
-                ol.set_values(
-                                iimg.mpp,
-                                iimg.center,
-                                iimg.get_pixel_size()
-                )
+                for viewport in self._view_controller.viewports:
+                    if hasattr(viewport.canvas, "point_overlay"):
+                        ol = viewport.canvas.point_overlay
+                        ol.set_values(
+                                    iimg.mpp,
+                                    iimg.center,
+                                    iimg.get_pixel_size(),
+                                    strm.selected_pixel
+                        )
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break
         else:
@@ -849,7 +852,7 @@ class AnalysisTab(Tab):
         # Doing it this way, causes some unnecessary calls to the reset method
         # but it cannot be avoided. Subscribing to the tool VA will only
         # tell us what the new tool is and not what the previous, if any, was.
-        if tool != guimodel.TOOL_SPOT:
+        if tool != guimodel.TOOL_POINT:
             self._view_controller.reset()
 
     def _split_channels(self, data):
@@ -867,7 +870,6 @@ class AnalysisTab(Tab):
             das = []
             for c in range(data.shape[-3]):
                 das.append(data[..., c, :, :]) # metadata ref is copied
-
             return das
         else:
             # return just one DA
