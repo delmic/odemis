@@ -1047,8 +1047,9 @@ def world_to_buffer_pos(world_pos, buffcenter_wpos, scale, offset=None):
     """
     # TODO: check whether it's really important sometimes to be an int
     # it's at least useful sometimes to keep the float (precision)
-#    buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
-#                int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
+
+    # buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
+    #             int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
     buff_pos = ((world_pos[0] - buffcenter_wpos[0]) * scale,
                 (world_pos[1] - buffcenter_wpos[1]) * scale)
     if offset:
@@ -1380,7 +1381,7 @@ class PlotCanvas(wx.Panel):
         """
         if self._data:
             ticks = []
-            for i in range(self.ClientSize.x / self.tick_gap):
+            for i in range(self.ClientSize.x // self.tick_gap):
                 xpos = (i + 1) * self.tick_gap
                 ticks.append((xpos, self._pos_x_to_val_x(xpos)))
             return ticks
