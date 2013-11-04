@@ -30,7 +30,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.gui.model.stream import FluoStream, ARStream, SpectrumStream, \
-    SEMSpectrumMDStream, OPTICAL_STREAMS, EM_STREAMS
+    SEMSpectrumMDStream, OPTICAL_STREAMS, EM_STREAMS, SEMARMDStream
 from odemis.gui.util import img
 from odemis.model import ProgressiveFuture
 import sys
@@ -148,8 +148,14 @@ def _mergeStreams(streams):
                 merged.remove(semcl)
             merged.append(mds)
         
-        # TODO: same thing for AR
-    
+        for s in ars:
+            mds = SEMARMDStream("%s - %s" % (semcl.name.value, s.name.value),
+                                semcl, s)
+            merged.remove(s)
+            if semcl in merged:
+                merged.remove(semcl)
+            merged.append(mds)
+
     return merged
 
 def _executeTask(future, fn, *args, **kwargs):
@@ -189,12 +195,14 @@ def _weight_stream(stream):
             return 50 # can be done after any light
     elif isinstance(stream, SEMSpectrumMDStream):
         return 40 # at the same time as SEM CL
-    elif isinstance(stream, ARStream):
-        return 40 # at the same time as SEM CL
     elif isinstance(stream, SpectrumStream):
         return 40 # at the same time as SEM CL
+    elif isinstance(stream, SEMARMDStream):
+        return 40 # at the same time as SEM CL
+    elif isinstance(stream, ARStream):
+        return 40 # at the same time as SEM CL
     else:
-        logging.debug("Unexpected stream of type %s for SECOM", stream.__class__.__name__)
+        logging.debug("Unexpected stream of type %s", stream.__class__.__name__)
         return 0
 
 class AcquisitionTask(object):

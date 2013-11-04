@@ -536,7 +536,7 @@ class SparcAcquisitionTab(Tab):
         # loops.
         for s in self.tab_data_model.acquisitionView.getStreams():
             if isinstance(s, streammod.AR_STREAMS + streammod.SPECTRUM_STREAMS):
-                logging.debug("setting roi of %s to %s", s.name.value, roi)
+#                logging.debug("setting roi of %s to %s", s.name.value, roi)
                 s.roi.value = roi
 
     def onSpecROI(self, roi):

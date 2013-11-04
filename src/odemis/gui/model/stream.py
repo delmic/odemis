@@ -44,6 +44,8 @@ import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 import collections
+from odemis.util import TimeoutError
+from odemis.model._dataflow import MD_AR_POLE, MD_BINNING
 
 
 # to identify a ROI which must still be defined by the user
@@ -116,7 +118,7 @@ class Stream(object):
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
         self.roi = model.TupleContinuous((0, 0, 1, 1),
-                                         range=[(0, 0, 0, 0), (1, 1, 1, 1)],
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
         self._irange = None
@@ -128,14 +130,14 @@ class Stream(object):
         # Note: 1/256th is a nice value because on RGB, it means in degenerated
         # cases (like flat histogram), you still loose only one value on each
         # side.
-        self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=[0, 40])
+        self.auto_bc_outliers = model.FloatContinuous(100 / 256, range=(0, 40))
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
         # black/white. The .histogram always has
         # the first value mapped to 0 and last value mapped to 1.
         self.intensityRange = model.TupleContinuous((0, 1),
-                                                    range=[(0, 0), (1, 1)],
+                                                    range=((0, 0), (1, 1)),
                                                     cls=(int, long, float))
 
         # Histogram of the current image _or_ slightly older image.
@@ -904,6 +906,8 @@ class RepetitionStream(Stream):
         # data-flow of the spectrometer
         self._dataflow = dataflow
 
+        self.raw = [] # to contain data during acquisition (from MD streams)
+
         # all the information needed to acquire an image (in addition to the
         # hardware component settings which can be directly set).
 
@@ -1000,7 +1004,7 @@ class RepetitionStream(Stream):
         roi (tuple of 4 floats)
         returns (tuple of 4 floats): new ROI
         """
-        # TODO: if only width or height changes, ensure we respect it by
+        # If only width or height changes, ensure we respect it by
         # adapting pixel size to be a multiple of the new size
         pxs = self.pixelSize.value
 
@@ -1014,7 +1018,6 @@ class RepetitionStream(Stream):
             elif abs(old_size[1] - new_size[1]) < 1e-6:
                 dim = 0
             else:
-                logging.debug("both dim changed: %s != %s", old_size, new_size)
                 dim = None
 
             if dim is not None:
@@ -1022,14 +1025,11 @@ class RepetitionStream(Stream):
                 new_phy_size = old_rep * pxs * new_size[dim] / old_size[dim]
                 new_rep_flt = new_phy_size / pxs
                 new_rep_int = max(1, round(new_rep_flt))
-                logging.debug("rep should be %g but is %d", new_rep_flt, new_rep_int)
                 pxs *= new_rep_flt / new_rep_int
                 pxs_range = self._getPixelSizeRange()
                 pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
-                logging.debug("adapting pxs from %g to %g", self.pixelSize.value, pxs)
 
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
-        logging.debug("setting ROI to %s %%", roi)
         # update repetition without going through the checks
         self.repetition._value = rep
         self.repetition.notify(rep)
@@ -1047,8 +1047,6 @@ class RepetitionStream(Stream):
         # clamp
         pxs_range = self._getPixelSizeRange()
         pxs = max(pxs_range[0], min(pxs, pxs_range[1]))
-        logging.debug("setting pixel size to %g", pxs)
-
         roi, rep = self._updateROIAndPixelSize(self.roi.value, pxs)
 
         # update roi and rep without going through the checks
@@ -1098,7 +1096,6 @@ class RepetitionStream(Stream):
 
         # TODO: is this sufficient to adapt correctly H or V? might need change in ROI
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
-        logging.debug("setting repetition to %s", rep)
         # update roi and pixel size without going through the checks
         self.roi._value = roi
         self.roi.notify(roi)
@@ -1679,7 +1676,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         """
         # ROI
         repetition = self._spec_stream.repetition.value
-        roi = self._sem_stream.roi.value
+        roi = self._spec_stream.roi.value
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
@@ -1793,9 +1790,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
             logging.debug("raw data is now of shape %s",
                           ", ".join([str(d.shape) for d in self.raw]))
 
-            # update the image to a new empty one to signal everything is
-            # received
-
+            # update the image to a new empty one to signal everything is received
             self.image.value = InstrumentalImage(None)
         finally:
             self.is_active.value = False
@@ -1824,11 +1819,10 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
     def _assembleSpecData(self, data_list, metadata):
         """
         Take all the data received from the spectrometer and assemble it in a
-        cube
+        cube.
+        The result goes into .raw.
 
         data_list (list of M DataArray of shape (1, N)): all the data received
-        the result goes into .raw, and a new empty .image is added to inform
-        there is a new data.
         metadata (dict of string -> Value): the metadata values to be overridden
         """
         assert len(data_list) > 0
@@ -1851,6 +1845,251 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
 
         # save the new data
         self._spec_stream.raw = [spec_data]
+
+
+class SEMARMDStream(MultipleDetectorStream):
+    """
+    Multiple detector Stream made of SEM + AR.
+    It handles acquisition, but not rendering (so .image always returns an empty
+    image).
+    """
+    def __init__(self, name, sem_stream, ar_stream):
+        MultipleDetectorStream.__init__(self, name, [sem_stream, ar_stream])
+
+        self._sem_stream = sem_stream
+        self._ar_stream = ar_stream
+
+        assert sem_stream._emitter == ar_stream._emitter
+        self._emitter = sem_stream._emitter
+        # probably secondary electron detector
+        self._semd = self._sem_stream._detector
+        self._semd_df = self._sem_stream._dataflow
+        self._ar = self._ar_stream._detector
+        self._ar_df = self._ar_stream._dataflow
+
+        # it will always be an empty image, but a different one every time a new
+        # acquisition is finished (so subscribing to it, will at least work).
+        self.image = VigilantAttribute(InstrumentalImage(None))
+
+        # For the acqusition
+        self._acq_complete = threading.Event()
+        self._acq_must_stop = threading.Event()
+        self._acq_sem_complete = threading.Event()
+        self._acq_ar_complete = threading.Event()
+        self._acq_thread = None # thread
+
+        self.should_update = model.BooleanVA(False)
+        self.is_active = model.BooleanVA(False)
+        self.is_active.subscribe(self.onActive)
+
+    def estimateAcquisitionTime(self):
+        # that's the same as the AR stream
+        return self._ar_stream.estimateAcquisitionTime()
+
+    def _adjustHardwareSettings(self):
+        """
+        Read the SEM and AR stream settings and adapt the SEM scanner
+        accordingly.
+        return (float): estimated time for a whole CCD image
+        """
+        # Set SEM to spot mode, without caring about actual position (set later)
+        self._emitter.scale.value = (1, 1)
+        self._emitter.resolution.value = (1, 1)
+
+        # Dwell Time: a "little bit" more than the exposure time
+        exp = self._ar.exposureTime.value #s
+        ar_size = self._ar.resolution.value
+
+        # Dwell time as long as possible, but better be slightly shorter than
+        # CCD to be sure it is not slowing thing down.
+        readout = numpy.prod(ar_size) / self._ar.readoutRate.value
+        rng = self._emitter.dwellTime.range
+        self._emitter.dwellTime.value = sorted(rng + (exp + readout,))[1] # clip
+
+        return exp + readout
+
+    def _getSpotPositions(self):
+        """
+        Compute the positions of the e-beam for each point in the ROI
+        return (numpy ndarray of floats of shape (X,Y,2)): each value is for a 
+          given X/Y in the repetition grid -> 2 floats corresponding to the 
+          translation.
+        """ 
+        # TODO: cf comedi
+        repetition = tuple(self._ar_stream.repetition.value)
+        roi = self._ar_stream.roi.value
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        # Take into account the "border" around each pixel
+        pxs = (width[0] / repetition[0], width[1] / repetition[1])
+        lim = (roi[0] + pxs[0], roi[1] + pxs[1],
+               roi[2] - pxs[0], roi[3] - pxs[1])
+
+        shape = self._emitter.shape
+        # convert into SEM translation coordinates: distance in px from center
+        # (situated at 0.5, 0.5), can be floats
+        lim_sem = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5),
+                   shape[0] * (lim[2] - 0.5), shape[1] * (lim[3] - 0.5))
+
+        pos = numpy.empty(repetition + (2,), dtype=numpy.float)
+        posx = pos[:, :, 0].swapaxes(0, 1) # just a view to have X as last dim
+        posx[:, :] = numpy.linspace(lim_sem[0], lim_sem[2], repetition[0])
+        # fill the X dimension
+        pos[:, :, 1] = numpy.linspace(lim_sem[1], lim_sem[3], repetition[1])
+
+        return pos
+
+    def _runAcquisition(self):
+        """
+        Handles the whole acquisition procedure of a grid of AR images 
+        """
+        try:
+            ccd_time = self._adjustHardwareSettings()
+            dwell_time = self._emitter.dwellTime.value
+            spot_pos = self._getSpotPositions()
+            rep = self._ar_stream.repetition.value
+            self._sem_data = sem_data = []
+            self._ar_stream.raw = []
+            self._sem_stream.raw = []
+            logging.debug("Starting AR acquisition with components %s and %s",
+                          self._semd.name, self._ar.name)
+
+            for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
+                # set ebeam to position (which is ensured only once acquiring)
+                self._emitter.trans = spot_pos[i[::-1]]
+                self._acq_sem_complete.clear()
+                self._acq_ar_complete.clear()
+                self._semd_df.subscribe(self._onSEMImage)
+                self._ar_df.subscribe(self._onARImage)
+                if not self._acq_ar_complete.wait(ccd_time * 1.5 + 1):
+                    raise TimeoutError("Acquisition of AR for pixel %s timed out" % (i,))
+                ar_data = self._ar_stream.raw[-1]
+
+                # Normally, the SEM acquisition has already completed
+                if not self._acq_sem_complete.wait(dwell_time * 1.5 + 1):
+                    raise TimeoutError("Acquisition of SEM pixel %s timed out" % (i,))
+                self._semd_df.unsubscribe(self._onSEMImage)
+
+                if self._acq_must_stop.is_set():
+                    return
+                
+                # MD_POS default to the center of the stage, but it needs to be
+                # the position of the e-beam
+                ar_data.metadata[MD_POS] = sem_data[-1].metadata[MD_POS]
+                # Note: MD_AR_POLE is in theory dependant on MD_POS, but so
+                # slightly that we don't need to correct it.
+
+            # Compute center of area, from average of centered acquisitions
+            idx_center = rep[0] // 2
+            if idx_center * 2 == rep[0]: # even number => average
+                posx = (sem_data[idx_center - 1].metadata[MD_POS][0] +
+                        sem_data[idx_center].metadata[MD_POS][0]) / 2
+            else: # odd number => center
+                posx = sem_data[idx_center].metadata[MD_POS][0]
+            idx_center = rep[1] // 2
+            if idx_center * 2 == rep[1]: # even number => average
+                posy = (sem_data[rep[0] * (idx_center - 1)].metadata[MD_POS][1] +
+                        sem_data[rep[0] * idx_center].metadata[MD_POS][1]) / 2
+            else: # odd number => center
+                posy = sem_data[rep[0] * idx_center].metadata[MD_POS][1]
+
+            sem_md = {MD_POS: (posx, posy)}
+            self._assembleSEMData(rep[::-1], sem_data, sem_md) # shape is (Y, X)
+
+            logging.debug("raw data is now of shape %s",
+                          ", ".join([str(d.shape) for d in self.raw]))
+
+            # update the image to a new empty one to signal everything is received
+            self.image.value = InstrumentalImage(None)
+        except Exception:
+            logging.exception("Acquisition of Angular resolved failed")
+            self._ar_stream.raw = []
+            self._sem_stream.raw = []
+        finally:
+            self._acq_complete.set()
+            self._acq_thread = None
+            self.is_active.value = False
+
+    def _onSEMImage(self, df, data):
+        # Do not stop the acquisition, as it ensures the e-beam is at the right place
+        if not self._acq_sem_complete.is_set():
+            # only use the first data per pixel
+            self._sem_data.append(data)
+            self._acq_sem_complete.set()
+
+    def _onARImage(self, df, data):
+        df.unsubscribe(self._onARImage)
+        self._ar_stream.raw.append(data)
+        self._acq_ar_complete.set()
+
+    def _assembleSEMData(self, shape, data_list, metadata):
+        """
+        Take all the data received from the SEM and assemble it in a 2D image.
+        The result goes into .raw.
+
+        shape (tuple of ints): shape of the final data (Y, X)
+        data_list (list of M DataArray of shape (1, 1)): all the data received, 
+        with X variating first, then Y.
+        metadata (dict of string -> Value): the metadata values to be overridden
+        """
+        assert len(data_list) > 0
+
+        # concatenate data into one big array of (number of pixels,1)
+        sem_data = numpy.concatenate(data_list)
+        # reshape to (Y, X)
+        sem_data.shape = shape
+
+        # copy the metadata from the first point and add the ones from metadata
+        md = data_list[0].metadata
+        md.update(metadata)
+        sem_data = model.DataArray(sem_data, metadata=md)
+
+        # save the new data
+        self._sem_stream.raw = [sem_data]
+
+    def onActive(self, active):
+        """ Called when the Stream is activated or deactivated by setting the
+        is_active attribute
+        Note: due to the duration of the acquisition, the stream will
+            automatically reset itself to inactive after one acquisition fully
+            acquired.
+        """
+        # Acquisition on CCD is typically relatively long, so set up time is not
+        # much important. Therefore, we acquire each point as a separate
+        # acquisition (which tends to be more stable, and does not require to
+        # set up the synchronisation between emitter <-> detector). SEM image
+        # is reconstructed at the end.
+
+        # called only when the value _changes_
+        if active: # start acquisition
+            if not self.should_update.value:
+                msg = ("Trying to activate stream while it's not supposed to "
+                       "update")
+                logging.warning(msg)
+
+            # Check previous acquisition is fully over
+            if self._acq_thread:
+                self._acq_thread.join(10)
+                if self._acq_thread:
+                    logging.error("Acquisition thread cannot be stopped")
+
+            self._acq_complete.clear()
+            self._acq_thread = threading.Thread(target=self._runAcquisition,
+                                                name="SEM-AR acquisition")
+            self._acq_thread.start()
+
+        else: # stop acquisition
+            if self._acq_thread and not self._acq_complete.is_set():
+                msg = ("Cancelling acquisition of components %s and %s")
+                logging.debug(msg, self._semd.name, self._ar.name)
+                self._acq_must_stop.set()
+            # Do it in any case, to be sure
+            self._semd_df.unsubscribe(self._onSEMImage)
+            self._ar_df.unsubscribe(self._onARImage)
+            # set the events, so the acq thread doesn't wait for them
+            self._acq_sem_complete.set()
+            self._acq_ar_complete.set()
+
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them

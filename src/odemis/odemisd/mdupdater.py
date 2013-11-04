@@ -20,10 +20,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model
+
+import collections
 import gc
 import logging
 import numpy
+from odemis import model
 
 
 class MetadataUpdater(model.Component):
@@ -63,7 +65,7 @@ class MetadataUpdater(model.Component):
 #                    # update the image focus
 #                    self.observeFocus(a, d)
                 elif a.role == "lens":
-                    # update the pixel size
+                    # update the pixel size, mag, and pole position
                     self.observeLens(a, d)
 #                elif a.role == "filter":
 #                    # update the received light wavelength
@@ -105,15 +107,12 @@ class MetadataUpdater(model.Component):
         comp.updateMetadata(md)
         
         # we need to keep the information on the detector to update
-        def updatePixelDensity(unused):
+        def updatePixelDensity(unused, lens=lens, comp=comp):
             # the formula is very simple: actual MpP = CCD MpP * binning / Mag
             try:
                 binning = comp.binning.value
             except AttributeError:
-                binning = 1,1
-            # binning can be int or (int, int) 
-            if isinstance(binning, int):
-                binning = (binning, binning)
+                binning = 1, 1
             mag = lens.magnification.value
             mpp = (captor_mpp[0] * binning[0] / mag, captor_mpp[1] * binning[1] / mag) 
             md = {model.MD_PIXEL_SIZE: mpp,
@@ -128,10 +127,34 @@ class MetadataUpdater(model.Component):
         except AttributeError:
             pass            
         updatePixelDensity(None) # update it right now
+
+        # update pole position, if available
+        if isinstance(lens.polePosition.value, collections.Iterable):
+            def updatePolePos(unused, lens=lens, comp=comp):
+                # the formula is: Pole = Pole_no_binning / binning
+                try:
+                    binning = comp.binning.value
+                except AttributeError:
+                    binning = 1, 1
+                pole_pos = lens.polePosition.value
+                pp = (pole_pos[0] / binning[0], pole_pos[1] / binning[1])
+                md = {model.MD_AR_POLE: pp}
+                comp.updateMetadata(md)
+
+            lens.polePosition.subscribe(updatePolePos)
+            self._onTerminate.append((lens.polePosition.unsubscribe, (updatePolePos,)))
+            try:
+                comp.binning.subscribe(updatePolePos)
+                self._onTerminate.append((comp.binning.unsubscribe, (updatePolePos,)))
+            except AttributeError:
+                pass
+            updatePolePos(None) # update it right now
+
+
     
     def observeLight(self, light, comp):
 
-        def updateInputWL(emissions):
+        def updateInputWL(emissions, light=light, comp=comp):
             # TODO compute the min/max from the emissions which are not 0
             miniwl = 1 # 1m is huge
             maxiwl = 0
@@ -146,7 +169,7 @@ class MetadataUpdater(model.Component):
             md = {model.MD_IN_WL: (miniwl, maxiwl)}
             comp.updateMetadata(md)
         
-        def updateLightPower(power):
+        def updateLightPower(power, light=light, comp=comp):
             p = power * numpy.sum(light.emissions.value)
             md = {model.MD_LIGHT_POWER: p}
             comp.updateMetadata(md)     

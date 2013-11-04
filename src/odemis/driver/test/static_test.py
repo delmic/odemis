@@ -30,19 +30,19 @@ class TestLightFilter(unittest.TestCase):
     def test_simple(self):
         band = [(480e-9, 651e-9), (700e-9, 800e-9)]
         comp = static.LightFilter("test", "filter", band)
-        self.assertEqual(set(band), comp.band.value)
+        self.assertEqual(set(band), set(comp.band.value))
         comp.terminate()
 
     def test_one_band(self):
         band = (480e-9, 651e-9)
         comp = static.LightFilter("test", "filter", band)
-        self.assertEqual(set([band]), comp.band.value)
+        self.assertEqual(set([band]), set(comp.band.value))
         comp.terminate()
 
 class TestOpticalLens(unittest.TestCase):
     def test_simple(self):
         mag = 10.
-        comp = static.OpticalLens("test", "lens", mag)
+        comp = static.OpticalLens("test", "lens", mag, pole_pos=(512.3, 400))
         self.assertEqual(mag, comp.magnification.value)
         comp.terminate()
 

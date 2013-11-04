@@ -388,9 +388,6 @@ class SelectionMixin(object):
         :param start_pos: (list of 2 floats) Pixel coordinates where the selection
             starts
         """
-
-        logging.debug("Starting selection at %s", start_pos)
-
         self.dragging = True
         self.v_start_pos = self.v_end_pos = list(start_pos)
 
@@ -401,9 +398,6 @@ class SelectionMixin(object):
         :param current_pos: (list of 2 floats) Pixel coordinates of the current end
             point
         """
-
-        #logging.debug("Updating selection to %s", current_pos)
-
         current_pos = self.base.clip_to_viewport(current_pos)
         self.v_end_pos = list(current_pos)
 
@@ -449,7 +443,6 @@ class SelectionMixin(object):
         """ Start an edit to the current selection
         edge (gui.HOVER_*)
         """
-        logging.debug("Starting edit of edge %s at %s", edge, start_pos)
         self.edit_start_pos = start_pos
         self.edit_edge = edge
         self.edit = True
@@ -459,8 +452,6 @@ class SelectionMixin(object):
         edit action
         """
         current_pos = self.base.clip_to_viewport(current_pos)
-
-        logging.debug("Moving selection to %s", current_pos)
 
         if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
             if self.edit_edge == gui.HOVER_TOP_EDGE:
@@ -482,7 +473,6 @@ class SelectionMixin(object):
     ##### drag methods  #####
 
     def start_drag(self, start_pos):
-        logging.debug("Starting selection drag")
         self.edit_start_pos = start_pos
         self.edit = True
 
@@ -513,7 +503,7 @@ class SelectionMixin(object):
         """
 
         if self._last_shiftscale != shiftscale:
-            logging.warn("Updating view position of selection")
+            logging.debug("Updating view position of selection")
             self._last_shiftscale = shiftscale
 
             self.v_start_pos = list(self.base.buffer_to_view_pos(b_start_pos))
@@ -538,7 +528,6 @@ class SelectionMixin(object):
             "o_t": o_t,
             "i_b": i_b
         }
-        logging.debug("Calculating selection edges to %s", self.edges)
 
     def is_hovering(self, vpos):  #pylint: disable=R0911
         """ Check if the given position is on/near a selection edge or inside
@@ -546,7 +535,6 @@ class SelectionMixin(object):
 
         :return: (bool) Return False if not hovering, or the type of hover
         """
-        logging.debug("Comparing pos %s to edges %s ", vpos, self.edges)
         if self.edges:
             # If position outside outer box
             if (not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
@@ -730,7 +718,6 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         v_pos = list(normalize_rect(v_pos))
         self.v_start_pos = v_pos[:2]
         self.v_end_pos = v_pos[2:4]
-        logging.debug("selection set to %s px", v_pos)
         self._calc_edges()
 
     def get_physical_sel(self):
@@ -856,21 +843,21 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
                  self.base.world_to_buffer_pos(self.w_end_pos, offset))
         b_pos = normalize_rect(b_pos)
-        logging.debug("start and end buffer pos: %s", b_pos)
+#        logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
         # be wider and higher than the actual buffer.
         width = b_pos[2] - b_pos[0]
         height = b_pos[3] - b_pos[1]
 
-        logging.debug("width and height: %s %s", width, height)
+#        logging.debug("width and height: %s %s", width, height)
 
         # Clip the start and end positions using the actual buffer size
         start_x, start_y = self.base.clip_to_buffer(b_pos[:2])
         end_x, end_y = self.base.clip_to_buffer(b_pos[2:4])
 
-        logging.debug(
-            "clipped start and end: %s", (start_x, start_y, end_x, end_y))
+#        logging.debug(
+#            "clipped start and end: %s", (start_x, start_y, end_x, end_y))
 
         rep_x, rep_y = self.repetition
 
@@ -955,21 +942,21 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
                  self.base.world_to_buffer_pos(self.w_end_pos, offset))
         b_pos = normalize_rect(b_pos)
-        logging.debug("start and end buffer pos: %s", b_pos)
+#        logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
         # be wider and higher than the actual buffer.
         width = b_pos[2] - b_pos[0]
         height = b_pos[3] - b_pos[1]
 
-        logging.debug("width and height: %s %s", width, height)
+#        logging.debug("width and height: %s %s", width, height)
 
         # Clip the start and end positions using the actual buffer size
         start_x, start_y = self.base.clip_to_buffer(b_pos[:2])
         end_x, end_y = self.base.clip_to_buffer(b_pos[2:4])
 
-        logging.debug(
-            "clipped start and end: %s", (start_x, start_y, end_x, end_y))
+#        logging.debug(
+#            "clipped start and end: %s", (start_x, start_y, end_x, end_y))
 
         rep_x, rep_y = self.repetition
 

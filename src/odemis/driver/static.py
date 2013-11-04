@@ -37,10 +37,13 @@ class OpticalLens(model.HwComponent):
     A very simple class which just represent a lens with a given magnification.
     It should "affect" the detector on which it's in front of.
     """
-    def __init__(self, name, role, mag, **kwargs):
+    def __init__(self, name, role, mag, pole_pos=None, **kwargs):
         """
         name (string): should be the name of the product (for metadata)
         mag (float > 0): magnification ratio
+        pole_pos (2 floats > 0): position of the pole on the CCD (in px, without
+          binning). Used for angular resolved imaging on SPARC (only).
+          cf MD_AR_POLE
         """
         assert (mag > 0)
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -50,7 +53,13 @@ class OpticalLens(model.HwComponent):
 
         # allow the user to modify the value, if the lens is manually changed
         self.magnification = model.FloatContinuous(mag, range=[1e-3, 1e6], unit="")
-
+        
+        if pole_pos is not None:
+            if (not isinstance(pole_pos, collections.Iterable) or
+                len(pole_pos) != 2 or any(v < 0 for v in pole_pos)):
+                raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
+            self.polePosition = model.ResolutionVA(pole_pos,
+                                                   range=[(0, 0), (1e6, 1e6)])
 
 class LightFilter(model.HwComponent):
     """
@@ -74,25 +83,22 @@ class LightFilter(model.HwComponent):
 
         # Create a 2-tuple or a set of 2-tuples
         if not isinstance(band, collections.Iterable) or len(band) == 0:
-            raise TypeError("band must be a (list of a) list of 2 floats")
+            raise ValueError("band must be a (list of a) list of 2 floats")
         # is it a list of list?
         if isinstance(band[0], collections.Iterable):
             # => set of 2-tuples
-            new_band = []
             for sb in band:
                 if len(sb) != 2:
-                    raise TypeError("Expected only 2 floats in band, found %d" % len(sb))
+                    raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
                 if sb[0] > sb[1]:
-                    raise TypeError("Min of band must be first in list")
-                new_band.append(tuple(sb))
-            band = frozenset(new_band)
+                    raise ValueError("Min of band must be first in list")
         else:
             # 2-tuple
             if len(band) != 2:
-                raise TypeError("Expected only 2 floats in band, found %d" % len(band))
+                raise ValueError("Expected only 2 floats in band, found %d" % len(band))
             if band[0] > band[1]:
-                raise TypeError("Min of band must be first in list")
-            band = frozenset([tuple(band)])
+                raise ValueError("Min of band must be first in list")
+            band = [tuple(band)]
 
         # Check that the values are in m: they are typically within nm (< um!)
         max_val = 1e-6
