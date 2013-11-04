@@ -117,5 +117,7 @@ class StreamTestCase(unittest.TestCase):
 
         # changing pixel size to a huge number leads to a 1x1 repetition
 
+    # TODO: use simulator backend for testing acquisition from stream
+
 if __name__ == "__main__":
     unittest.main()
