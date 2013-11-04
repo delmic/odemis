@@ -52,11 +52,12 @@ class OverlayTestCase(test.GuiTestCase):
 
         psol = overlay.PointSelectOverlay(cnvs)
         # psol.set_values(33, (0.0, 0.0), (30, 30))
-        psol.set_values(30, (0.0, 0.0), (17, 19))
+        psol.set_values(30, (0.0, 0.0), (17, 19), omodel.TupleVA())
 
         cnvs.WorldOverlays.append(psol)
         test.gui_loop()
 
+    # @unittest.skip("simple")
     def test_view_select_overlay(self):
         # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -70,6 +71,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.active_overlay = vsol
         cnvs.current_mode = model.TOOL_ROI
 
+    # @unittest.skip("simple")
     def test_roa_select_overlay(self):
         # Create and add a miccanvas
         # TODO: Sparc canvas because it's now the only one which supports
@@ -101,6 +103,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.point_fill()
         test.gui_loop()
 
+    # @unittest.skip("simple")
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -117,7 +120,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-
+    # @unittest.skip("simple")
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)

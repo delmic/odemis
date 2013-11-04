@@ -86,6 +86,22 @@ changed.
 
 DrawTimer is set by ShouldUpdateDrawing
 
+Data and graphical orientations
+-------------------------------
+
+View:
+    The 0,0 origin is at the top left and left and down are the positive
+    directions.
+Buffer:
+    The 0,0 origin is at the top left and left and down are the positive
+    directions.
+World:
+    The 0,0 origin is in the center (usually) and left and down are the positive
+    directions.
+Physical:
+    The 0,0 origin is in the center (usually) and left and up are the positive
+    directions.
+
 """
 from __future__ import division
 import ctypes
@@ -1039,7 +1055,9 @@ def world_to_buffer_pos(world_pos, buffcenter_wpos, scale, offset=None):
 
     :param world_pos: (2-tuple float) the coordinates in the world
     :param buffcenter_wpos: the center of the buffer in world coordinates
-    :param scale: how much zoomed is the buffer compared to the world
+    :param scale: how much zoomed is the buffer compared to the world.
+        I.e.: with scale 2, 100px of the world are displayed using 50 buffer px.
+        (The world is zoomed out with a scale > 1)
     :param offset (int, int): The offset can be used to move the buffer origin
         back to its original position. See `buffer_to_world_pos` for more
         details.
@@ -1062,7 +1080,9 @@ def buffer_to_world_pos(buff_pos, buffcenter_wpos, scale, offset=None):
 
     :param buff_pos: (int, int) the buffer coordinates
     :param buffcenter_wpos: the center of the buffer in world coordinates
-    :param scale: how much zoomed is the buffer compared to the world
+    :param scale: how much zoomed is the buffer compared to the world.
+        I.e.: with scale 2, 100px of the buffer contain 50 world pixels.
+        (The world is zoomed in with a scale > 1
     :param offset (int, int): The offset can be used to align the origin of the
         buffer with that of the world. E.g. to align 0,0 (top left) of the
         buffer with the origin of the world (which is at the center), one would

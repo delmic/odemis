@@ -763,6 +763,7 @@ class AnalysisTab(Tab):
                                     iimg.get_pixel_size(),
                                     strm.selected_pixel
                         )
+                strm.selected_pixel.subscribe(self._on_spec_pixel)
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break
         else:
@@ -854,6 +855,13 @@ class AnalysisTab(Tab):
         # tell us what the new tool is and not what the previous, if any, was.
         if tool != guimodel.TOOL_POINT:
             self._view_controller.reset()
+
+    def _on_spec_pixel(self, selected_pixel):
+        """ Event handler for when a spectrum pixel is selected """
+        if self.tab_data_model.tool.value == guimodel.TOOL_POINT:
+            plot_view = self.main_frame.vp_inspection_plot.microscope_view
+            if not plot_view in self.tab_data_model.visible_views.value:
+                self.tab_data_model.visible_views.value[1] = plot_view
 
     def _split_channels(self, data):
         """
