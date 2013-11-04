@@ -84,6 +84,10 @@ class ViewController(object):
         FIXME: Since we have 2 different Views at the moments and probably more
         on the way, it's probably going to be beneficial to explicitly define
         them in the viewport data
+
+        FIXME: Now views are created both in this method and in the
+        _createViewsAuto method. It's probably best to have all stream creation
+        done in the same place.
         """
 
         views = []
@@ -174,6 +178,10 @@ class ViewController(object):
         elif self._main_data_model.ebeam and not self._main_data_model.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
+
+            views = []
+            visible_views = []
+
             for viewport in self._viewports:
                 view = model.MicroscopeView(
                             "SEM %d" % i,
@@ -185,11 +193,22 @@ class ViewController(object):
                 viewport.setView(view, self._data_model)
                 i += 1
 
+                views.append(view)
+                if viewport.Shown:
+                    visible_views.append(view)
+
+            self._data_model.views.value = views
+            self._data_model.visible_views.value = visible_views
+
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
         elif not self._main_data_model.ebeam and self._main_data_model.light:
             logging.info("Creating Optical only viewport layout")
             i = 1
+
+            views = []
+            visible_views = []
+
             for viewport in self._viewports:
                 view = model.MicroscopeView(
                             "Optical %d" % i,
@@ -200,6 +219,13 @@ class ViewController(object):
                 self._data_model.views.value.append(view)
                 viewport.setView(view, self._data_model)
                 i += 1
+
+                views.append(view)
+                if viewport.Shown:
+                    visible_views.append(view)
+
+            self._data_model.views.value = views
+            self._data_model.visible_views.value = visible_views
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
         elif (self._main_data_model.ebeam and

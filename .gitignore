@@ -44,6 +44,7 @@ xrced
 swap.sh
 *.autosave
 odemis.profile
+magic.odm.yaml
 
 #HTML documentation files
 doc/code/_build
