@@ -1477,9 +1477,9 @@ class PointSelectOverlay(WorldOverlay):
             self._pixel_pos = (max(0, min(pixel[0], self._resolution[0] - 1)),
                                max(0, min(pixel[1], self._resolution[1] - 1)))
 
-            lbl = "Pixel {},{}, pos {:10.8f},{:10.8f}, dist {:10.8f},{:10.8f}"
-            self.label =  lbl.format(
-                            *(pixel + (ppx, ppy) + dist))
+            # lbl = "Pixel {},{}, pos {:10.8f},{:10.8f}, dist {:10.8f},{:10.8f}"
+            # self.label =  lbl.format(
+            #                 *(pixel + (ppx, ppy) + dist))
 
     def pixel_to_rect(self, pixel, scale):
         """ Return a rectangle, in buffer coordinates, describing the current

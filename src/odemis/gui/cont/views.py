@@ -370,6 +370,7 @@ class ViewController(object):
         change.
         """
 
+        logging.debug("Visible view change detected")
         # Test if all provided views are known
         for view in visible_views:
             if view not in self._data_model.views.value:
