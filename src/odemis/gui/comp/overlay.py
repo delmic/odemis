@@ -1404,7 +1404,7 @@ class PointSelectOverlay(WorldOverlay):
         logging.debug(msg, mpp, physical_center, resolution)
         self._mpp = mpp
         # Y flip the center, to lign it up with the buffer
-        self._physical_center = physical_center[0], -physical_center[1]
+        self._physical_center = physical_center
         self._resolution = resolution
 
         self._selected_pixel = selected_pixel_va
@@ -1430,7 +1430,7 @@ class PointSelectOverlay(WorldOverlay):
             # Get the physical size of the external data
             physical_size = util.tuple_multiply(self._resolution, self._mpp)
             # Physical half width and height
-            phw, phh = util.tuple_fdiv(physical_size, 2)
+            phw, phh = util.tuple_fdiv(physical_size, 2.0)
 
             # Get the top left corner of the external data
             # Remember that in physical coordinates, up is positive!
@@ -1466,9 +1466,10 @@ class PointSelectOverlay(WorldOverlay):
             ppx, ppy = self.base.world_to_physical_pos(wpos)
 
             # Calculate the distance to the top left in meters
-            dist = ppx - self._phys_top_left[0], self._phys_top_left[1] - ppy
+            dist = ppx - self._phys_top_left[0], -(self._phys_top_left[1] - ppy)
 
-            # Calculate overlay pixels
+            # Calculate overlay pixels (0,0) is top left. Remember to flip the Y
+            # position, since dist is in physical units
             pixel = (int(dist[0] / self._mpp), -int(dist[1] / self._mpp))
 
             # Clip (subtract 1 from the resolution, since we get 0 based pixe
@@ -1476,7 +1477,9 @@ class PointSelectOverlay(WorldOverlay):
             self._pixel_pos = (max(0, min(pixel[0], self._resolution[0] - 1)),
                                max(0, min(pixel[1], self._resolution[1] - 1)))
 
-            self.label =  "Pixel %s" % str(self._pixel_pos)
+            lbl = "Pixel {},{}, pos {:10.8f},{:10.8f}, dist {:10.8f},{:10.8f}"
+            self.label =  lbl.format(
+                            *(pixel + (ppx, ppy) + dist))
 
     def pixel_to_rect(self, pixel, scale):
         """ Return a rectangle, in buffer coordinates, describing the current
@@ -1484,22 +1487,21 @@ class PointSelectOverlay(WorldOverlay):
 
         :param scale: (float) The scale to draw the pixel at.
         """
-
         # First we calculate the position of the top left in buffer pixels
+        # Note the Y flip again, since were going from pixel to physical
+        # coordinates
         top_left = util.tuple_add(
-                            self._phys_top_left,
-                            util.tuple_multiply(pixel, self._mpp)
+                        self._phys_top_left,
+                        util.tuple_multiply((pixel[0], -pixel[1]), self._mpp)
                    )
-        top_left = top_left[0], -top_left[1]
+        # top_left = top_left[0], -top_left[1]
 
         offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
-        # Note the Y flip again
+
+        # No need for an explicit Y flip here, since `physical_to_world_pos`
+        # takes care of that
         btop_left = self.base.world_to_buffer_pos(
-                            self.base.physical_to_world_pos(
-                                (top_left[0], -top_left[1])
-                            ),
-                            offset
-                    )
+                            self.base.physical_to_world_pos(top_left), offset)
 
         return btop_left + util.tuple_multiply(self._pixel_size, scale)
 
@@ -1531,7 +1533,7 @@ class PointSelectOverlay(WorldOverlay):
 
             # Label for debugging purposes
             pos = self.base.view_to_buffer_pos((10, 16))
-            self.write_label(ctx, dc.GetSize(), pos, self.label + str(rect))
+            self.write_label(ctx, dc.GetSize(), pos, self.label)
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
