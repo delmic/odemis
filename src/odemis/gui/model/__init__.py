@@ -536,6 +536,12 @@ class View(object):
         # composited image has changed.
         self.lastUpdate = model.FloatVA(time.time(), unit="s")
 
+    def __unicode__(self):
+        return u"{}".format(self.name.value)
+
+    def __str__(self):
+        return "{}".format(self.name.value)
+
 MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
 class MicroscopeView(View):
     """ Represents a view from a microscope and ways to alter it.

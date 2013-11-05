@@ -159,6 +159,12 @@ class VigilantAttribute(VigilantAttributeBase):
     def _del_value(self):
         del self._value
 
+    def __str__(self):
+        return str(self.value)
+
+    def __unicode__(self):
+        return unicode(self.value)
+
     value = property(_get_value, _set_value, _del_value, "The actual value")
 
     def _register(self, daemon):

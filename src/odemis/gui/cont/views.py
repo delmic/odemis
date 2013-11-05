@@ -62,7 +62,7 @@ class ViewController(object):
         tab_data.focussedView.value = tab_data.visible_views.value[0]
 
         # Store the initial values, so we can reset
-        self._def_views = tab_data.visible_views.value
+        self._def_views = list(tab_data.visible_views.value)
         self._def_layout = tab_data.viewLayout.value
         self._def_focus = tab_data.focussedView.value
 
@@ -299,24 +299,31 @@ class ViewController(object):
         will all be reset to as they were when the controller was created.
         """
 
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
+        # import traceback
+        # traceback.print_stack()
 
-        try:
-            # Reset the order of the viewports
-            for i, def_view in enumerate(views or self._def_views):
-                # If a viewport has moved compared to the original order...
-                if self._viewports[i].microscope_view != def_view:
+        msg = "Resetting views to %s"
+        msgdata = [str(v) for v in views] if not views is None else "default"
+        logging.debug(msg, msgdata)
+
+        # containing_window = self._viewports[0].Parent
+
+        # Reset the order of the viewports
+        for i, def_view in enumerate(views or self._def_views):
+            # If a viewport has moved compared to the original order...
+            if self._viewports[i].microscope_view != def_view:
+                # ...put it back in its original place
+                logging.debug("swapping %s and %s",
+                              self._viewports[i].microscope_view,
+                              def_view)
                     # ...put it back in its original place
-                    j = self._viewport_index_by_view(def_view)
-                    self.swap_viewports(i, j)
+                j = self._viewport_index_by_view(def_view)
+                self.swap_viewports(i, j)
 
-            # Reset the focus
-            self._data_model.focussedView.value = self._def_focus
-            # Reset the layout
-            self._data_model.viewLayout.value = self._def_layout
-        finally:
-            containing_window.Thaw()
+        # Reset the focus
+        self._data_model.focussedView.value = self._def_focus
+        # Reset the layout
+        self._data_model.viewLayout.value = self._def_layout
 
     def swap_viewports(self, vpi1, vpi2):
         """ Swap the positions of viewports denoted by indices vpi1 and vpi2
@@ -393,8 +400,8 @@ class ViewController(object):
                 if viewport.microscope_view == view:
                     viewport.SetFocus(True)
                     if layout == model.VIEW_LAYOUT_ONE:
-                        # TODO: maybe in that case, it's not necessary to display
-                        # the focus frame around?
+                        # TODO: maybe in that case, it's not necessary to
+                        # display the focus frame around?
                         viewport.Show()
                 else:
                     viewport.SetFocus(False)

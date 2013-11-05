@@ -46,7 +46,7 @@ class Overlay(object):
         """
 
         self.base = base
-        self.label = label
+        self.label = label or ""
 
     def set_label(self, label):
         self.label = unicode(label)
@@ -1303,7 +1303,7 @@ class PointSelectOverlay(WorldOverlay):
     """
 
     def __init__(self, base):
-        super(PointSelectOverlay, self).__init__(base, "PointSelectOverlay")
+        super(PointSelectOverlay, self).__init__(base)
 
         # Event binding
         self.base.Bind(wx.EVT_MOTION, self.on_motion)
