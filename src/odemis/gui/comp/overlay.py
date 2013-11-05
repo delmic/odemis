@@ -1403,7 +1403,8 @@ class PointSelectOverlay(WorldOverlay):
         msg = "Setting mpp to %s, physical center to %s and resolution to %s"
         logging.debug(msg, mpp, physical_center, resolution)
         self._mpp = mpp
-        self._physical_center = physical_center
+        # Y flip the center, to lign it up with the buffer
+        self._physical_center = physical_center[0], -physical_center[1]
         self._resolution = resolution
 
         self._selected_pixel = selected_pixel_va
