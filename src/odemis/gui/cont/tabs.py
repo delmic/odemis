@@ -47,7 +47,7 @@ import wx
 
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
-import odemis.gui.model as guimodel
+import odemis.gui.model as guimod
 import odemis.gui.model.stream as streammod
 
 
@@ -78,15 +78,15 @@ class Tab(object):
             # We assume it has a 2x2 view layout
             def set_22_menu_check(viewlayout):
                 """Called when the view layout changes"""
-                is_22 = viewlayout == guimodel.VIEW_LAYOUT_22
+                is_22 = viewlayout == guimod.VIEW_LAYOUT_22
                 self.main_frame.menu_item_22view.Check(is_22)
 
             def on_switch_22(evt):
                 """Called when menu changes"""
-                if self.tab_data_model.viewLayout.value == guimodel.VIEW_LAYOUT_22:
-                    self.tab_data_model.viewLayout.value = guimodel.VIEW_LAYOUT_ONE
+                if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_22:
+                    self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_ONE
                 else:
-                    self.tab_data_model.viewLayout.value = guimodel.VIEW_LAYOUT_22
+                    self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
             # Bind the function to the menu item, so it keeps the reference.
             # The VigillantAttribute will not unsubscribe it, until replaced.
@@ -104,24 +104,31 @@ class Tab(object):
             self.main_frame.menu_item_22view.vamethod = None # drop VA subscr.
 
     def _connect_crosshair_event(self):
-        """ If the tab contains views with a crosshair overlay, it will connect
-        an event to the view menu allowing for the toggling to the visibility
-        of those crosshairs.
+        """ Connect the cross hair menu event to the foccussed view and its
+        `show_crosshair` VA to the menu item
         """
         # only if there's a focussed view that we can track
         if hasattr(self.tab_data_model, 'focussedView'):
+
             def set_cross_check(fv):
                 """Called when focused view changes"""
-                is_shown = fv.show_crosshair.value
-                self.main_frame.menu_item_cross.Check(is_shown)
-                # TODO: just (un)subscribe to the show_crosshair
-                # (for now it works because the menu is the only place to change it)
+                if hasattr(fv, "show_crosshair"):
+                    fv.show_crosshair.subscribe(
+                            self.main_frame.menu_item_cross.Check,
+                            init=True)
+                    self.main_frame.menu_item_cross.Enable(True)
+                else:
+                    self.main_frame.menu_item_cross.Enable(False)
+                    self.main_frame.menu_item_cross.Check(False)
 
             def on_switch_crosshair(evt):
                 """Called when menu changes"""
-                show = self.main_frame.menu_item_cross.IsChecked()
                 foccused_view = self.tab_data_model.focussedView.value
-                foccused_view.show_crosshair.value = show
+                # Extra check, which shouldn't be needed since if there's no
+                # `show_crosshair`, this code should never be called.
+                if hasattr(foccused_view, "show_crosshair"):
+                    show = self.main_frame.menu_item_cross.IsChecked()
+                    foccused_view.show_crosshair.value = show
 
             # Bind the function to the menu item, so it keeps the reference.
             # The VigillantAttribute will not unsubscribe it, until replaced.
@@ -137,7 +144,7 @@ class Tab(object):
             # If the right elements are not found, simply disable the menu item
             self.main_frame.menu_item_cross.Enable(False)
             self.main_frame.menu_item_cross.Check(False)
-            self.main_frame.menu_item_cross.vamethod = None # drop VA subscription
+            self.main_frame.menu_item_cross.vamethod = None # drop VA subscr.
 
     def Hide(self):
         self.Show(False)
@@ -161,7 +168,7 @@ class SecomStreamsTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
 
-        tab_data = guimodel.LiveViewGUIData(main_data)
+        tab_data = guimod.LiveViewGUIData(main_data)
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
 
@@ -261,7 +268,7 @@ class SecomStreamsTab(Tab):
 
 
     def onOpticalState(self, state):
-        enabled = (state == guimodel.STATE_ON) and self.IsShown()
+        enabled = (state == guimod.STATE_ON) and self.IsShown()
         if self._opt_streams_enabled == enabled:
             return # no change
         else:
@@ -282,7 +289,7 @@ class SecomStreamsTab(Tab):
             self._opt_stream_to_restart = weakref.WeakSet(paused_st)
 
     def onEMState(self, state):
-        enabled = (state == guimodel.STATE_ON) and self.IsShown()
+        enabled = (state == guimod.STATE_ON) and self.IsShown()
         if self._sem_streams_enabled == enabled:
             return # no change
         else:
@@ -316,7 +323,7 @@ class SecomStreamsTab(Tab):
 class SparcAcquisitionTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimodel.ScannedAcquisitionGUIData(main_data)
+        tab_data = guimod.ScannedAcquisitionGUIData(main_data)
         super(SparcAcquisitionTab, self).__init__(name, button, panel,
                                                   main_frame, tab_data)
 
@@ -615,7 +622,7 @@ class AnalysisTab(Tab):
         """
         # TODO: automatically change the display type based on the acquisition
         # displayed
-        tab_data = guimodel.AnalysisGUIData(main_data)
+        tab_data = guimod.AnalysisGUIData(main_data)
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
@@ -676,14 +683,6 @@ class AnalysisTab(Tab):
         self.tb.enable_button(tools.TOOL_POINT, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
-        # TODO:
-        #   - Where should the swap take place (including the data loading) when
-        #     a point is selected?
-        #   - How should we handle the case that when the zoom is too small and
-        #     a single pixel on the screen is larger than a pixel in the
-        #     spectrum data?
-        #   - How to handle swapping back and forth between 1x1 and 2x2 view
-
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
     @property
@@ -720,7 +719,7 @@ class AnalysisTab(Tab):
             return
 
         # Reset any mode tool when a new image is being opened
-        self.tab_data_model.tool.value = guimodel.TOOL_NONE
+        self.tab_data_model.tool.value = guimod.TOOL_NONE
 
         # Reset the view
         self._view_controller.reset()
@@ -778,7 +777,7 @@ class AnalysisTab(Tab):
         data (list of model.DataArray): the data to display. Should have at
          least one DataArray.
         """
-        fi = guimodel.FileInfo(filename)
+        fi = guimod.FileInfo(filename)
 
         # remove all the previous streams
         self._stream_controller.clear()
@@ -866,15 +865,31 @@ class AnalysisTab(Tab):
         # Doing it this way, causes some unnecessary calls to the reset method
         # but it cannot be avoided. Subscribing to the tool VA will only
         # tell us what the new tool is and not what the previous, if any, was.
-        if tool != guimodel.TOOL_POINT:
+        if tool != guimod.TOOL_POINT:
             self._view_controller.reset()
 
     def _on_spec_pixel(self, selected_pixel):
         """ Event handler for when a spectrum pixel is selected """
-        if self.tab_data_model.tool.value == guimodel.TOOL_POINT:
+
+        # If the right tool is active...
+        if self.tab_data_model.tool.value == guimod.TOOL_POINT:
             plot_view = self.main_frame.vp_inspection_plot.microscope_view
+
+            # ...and the plot view is not visible yet
             if not plot_view in self.tab_data_model.visible_views.value:
-                self.tab_data_model.visible_views.value[1] = plot_view
+
+                if (self.tab_data_model.viewLayout.value ==
+                    guimod.VIEW_LAYOUT_ONE):
+                    self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
+
+                # Try and display the plot in the 2nd (= top right) spot...
+                pos = 1
+                # .., but go for the bottom right one when the spec pixel was
+                # selected in the top right viewport
+                if (self.tab_data_model.focussedView.value ==
+                    self.main_frame.vp_inspection_tr.microscope_view):
+                    pos = 3
+                self.tab_data_model.visible_views.value[pos] = plot_view
 
     def _split_channels(self, data):
         """
@@ -903,7 +918,7 @@ class LensAlignTab(Tab):
     """
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimodel.ActuatorGUIData(main_data)
+        tab_data = guimod.ActuatorGUIData(main_data)
         super(LensAlignTab, self).__init__(name, button, panel,
                                            main_frame, tab_data)
 
@@ -984,7 +999,7 @@ class LensAlignTab(Tab):
         # No need to check for resize events as it's handled by the canvas
         main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
         # force this view to never follow the tool mode (just standard view)
-        main_frame.vp_align_ccd.canvas.allowedModes = set([guimodel.TOOL_NONE])
+        main_frame.vp_align_ccd.canvas.allowedModes = set([guimod.TOOL_NONE])
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,
@@ -1026,7 +1041,7 @@ class LensAlignTab(Tab):
         # TODO: save and restore SEM state (for now, it does nothing anyway)
         # Turn on (or off) SEM
         # main_data = self.tab_data_model.main
-        # state = guimodel.STATE_ON if show else guimodel.STATE_PAUSE
+        # state = guimod.STATE_ON if show else guimod.STATE_PAUSE
         # main_data.emState.value = state
 
     def terminate(self):
@@ -1041,21 +1056,21 @@ class LensAlignTab(Tab):
         Called when the tool (mode) is changed
         """
         # Reset previous mode
-        if tool != guimodel.TOOL_DICHO:
+        if tool != guimod.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
             self.main_frame.lens_align_btn_to_center.Show(False)
             self.main_frame.lens_align_lbl_approc_center.Show(False)
 
-        if tool != guimodel.TOOL_SPOT:
+        if tool != guimod.TOOL_SPOT:
             self._sem_stream.spot.value = False
 
 
         # Set new mode
-        if tool == guimodel.TOOL_DICHO:
+        if tool == guimod.TOOL_DICHO:
             self.main_frame.lens_align_btn_to_center.Show(True)
             self.main_frame.lens_align_lbl_approc_center.Show(True)
-        elif tool == guimodel.TOOL_SPOT:
+        elif tool == guimod.TOOL_SPOT:
             self._sem_stream.spot.value = True
             # TODO: until the settings are directly connected to the hardware,
             # we need to disable/freeze the SEM settings in spot mode.
@@ -1259,7 +1274,7 @@ class MirrorAlignTab(Tab):
     # occur. The reason for this is still unknown.
 
     def __init__(self, name, button, panel, main_frame, main_data):
-        tab_data = guimodel.ActuatorGUIData(main_data)
+        tab_data = guimod.ActuatorGUIData(main_data)
         super(MirrorAlignTab, self).__init__(name, button, panel,
                                              main_frame, tab_data)
 

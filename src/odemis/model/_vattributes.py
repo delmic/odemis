@@ -160,10 +160,10 @@ class VigilantAttribute(VigilantAttributeBase):
         del self._value
 
     def __str__(self):
-        return str(self.value)
+        return "va: {}".format(str(self.value))
 
     def __unicode__(self):
-        return unicode(self.value)
+        return u"va: {}".format(unicode(self.value))
 
     value = property(_get_value, _set_value, _del_value, "The actual value")
 

@@ -665,12 +665,12 @@ class MicroscopeView(View):
         logging.debug("Sending move request of %s", move)
         return self._stage.moveRel(move)
 
-# def onStagePos(self, pos):
-#     # we want to recenter the viewports whenever the stage moves
-#     # Not sure whether that's really the right way to do it though...
-#     # TODO: avoid it to move the view when the user is dragging the view
-#     #  => might require cleverness
-#     # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+    # def onStagePos(self, pos):
+    #     # we want to recenter the viewports whenever the stage moves
+    #     # Not sure whether that's really the right way to do it though...
+    #     # TODO: avoid it to move the view when the user is dragging the view
+    #     #  => might require cleverness
+    #     # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
 
     def getStreams(self):
         """

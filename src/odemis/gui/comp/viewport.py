@@ -393,6 +393,7 @@ class PlotViewport(ViewPort):
         evt.Skip() # processed also by the parent
 
     def OnChildFocus(self, evt):
+        self._tab_data_model.focussedView.value = self._microscope_view
         evt.Skip()
 
     @property
@@ -404,8 +405,10 @@ class PlotViewport(ViewPort):
         Set the microscope view that this viewport is displaying/representing
         *Important*: Should be called only once, at initialisation.
 
-        :param microscope_view:(model.MicroscopeView)
+        :param microscope_view:(model.View)
         :param tab_data: (model.MicroscopyGUIData)
+
+        TODO: rename `microscope_view`, since this parameter is a regular view
         """
 
         # This is a kind of a kludge, as it'd be best to have the viewport
@@ -419,3 +422,5 @@ class PlotViewport(ViewPort):
         self._microscope_view = microscope_view
         self._tab_data_model = tab_data
 
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(microscope_view, tab_data)

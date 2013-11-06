@@ -292,15 +292,25 @@ class ViewController(object):
         """
         return self._viewports.index(self._viewport_by_view(view))
 
-    def reset(self, views=None):
-        """ Reset the view layout
+    def reset(self):
+        """ Reset the view layout to the default one
 
         This means that the viewport order, the viewport layout and the focus
         will all be reset to as they were when the controller was created.
         """
 
-        # import traceback
-        # traceback.print_stack()
+        self._data_model.visible_views.value = list(self._def_views)
+
+        self._reset(self._data_model.visible_views.value)
+
+        # Reset the focus
+        self._data_model.focussedView.value = self._def_focus
+        # Reset the layout
+        self._data_model.viewLayout.value = self._def_layout
+
+    def _reset(self, views):
+        """ Reset the view order to the one provided in the parameter
+        """
 
         msg = "Resetting views to %s"
         msgdata = [str(v) for v in views] if not views is None else "default"
@@ -313,17 +323,8 @@ class ViewController(object):
             # If a viewport has moved compared to the original order...
             if self._viewports[i].microscope_view != def_view:
                 # ...put it back in its original place
-                logging.debug("swapping %s and %s",
-                              self._viewports[i].microscope_view,
-                              def_view)
-                    # ...put it back in its original place
                 j = self._viewport_index_by_view(def_view)
                 self.swap_viewports(i, j)
-
-        # Reset the focus
-        self._data_model.focussedView.value = self._def_focus
-        # Reset the layout
-        self._data_model.viewLayout.value = self._def_layout
 
     def swap_viewports(self, vpi1, vpi2):
         """ Swap the positions of viewports denoted by indices vpi1 and vpi2
@@ -331,6 +332,10 @@ class ViewController(object):
         It is assumed that vpi1 points to one of the viewports visible in a 2x2
         display, and that vpi2 is outside this 2x2 layout and invisible.
         """
+
+        logging.debug("swapping %s and %s",
+                              self._viewports[vpi1].microscope_view,
+                              self._viewports[vpi2].microscope_view)
 
         # Small shothand local variable
         vp = self._viewports
@@ -383,7 +388,7 @@ class ViewController(object):
             if view not in self._data_model.views.value:
                 raise ValueError("Unknown view %s!" % view)
 
-        self.reset(visible_views)
+        self._reset(visible_views)
 
     def _onView(self, view):
         """ Called when another focussed view changes.
@@ -428,7 +433,8 @@ class ViewController(object):
             if layout == model.VIEW_LAYOUT_ONE:
                 logging.debug("Showing only one view")
                 for viewport in self._viewports:
-                    if viewport.microscope_view == self._data_model.focussedView.value:
+                    if (viewport.microscope_view ==
+                        self._data_model.focussedView.value):
                         viewport.Show()
                     else:
                         viewport.Hide()
