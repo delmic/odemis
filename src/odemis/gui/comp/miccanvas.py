@@ -291,7 +291,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 pass # it was already not displayed
 
 
-    #FIXME: seems like it might still be called while the Canvas has been destroyed
+    # FIXME: seems like it might still be called while the Canvas has been
+    # destroyed
     # => need to make sure that the object is garbage collected (= no more
     # references) once it's not used. (Or explicitly unsubscribe??)
     @ignore_dead
