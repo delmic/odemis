@@ -103,7 +103,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.app.MainLoop()
 
     # @unittest.skip("simple")
-    def test_CrosHair(self):
+    def test_CrossHair(self):
         # crosshair
         show_crosshair = self.view.show_crosshair #pylint: disable=E1103
         show_crosshair.value = True

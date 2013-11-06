@@ -393,6 +393,7 @@ class PlotViewport(ViewPort):
         evt.Skip() # processed also by the parent
 
     def OnChildFocus(self, evt):
+        self._tab_data_model.focussedView.value = self._microscope_view
         evt.Skip()
 
     @property
