@@ -1208,6 +1208,11 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         # is called, because they are used in the OnSize event handler.
         self.current_y_value = None
         self.current_x_value = None
+        # FIXME: This attribute should be renamed to simply `view`, but that would also
+        # require renaming the `microscope_view` attributes of the other Canvas
+        # classes.
+        self.microscope_view = None
+        self._tab_data_model = None
 
         super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)
 
@@ -1244,7 +1249,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.dragging = True
         self.drag_init_pos = event.GetPositionTuple()
 
-#        logging.debug("Drag started at %s", self.drag_init_pos)
+        # logging.debug("Drag started at %s", self.drag_init_pos)
 
         if not self.HasCapture():
             self._position_focus_line(event)
@@ -1294,6 +1299,41 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         #self.focusline_overlay.set_label(label)
         self.focusline_overlay.set_position(pos)
         self.Refresh()
+
+    def setView(self, microscope_view, tab_data):
+        """Set the microscope_view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
+
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
+        # details
+        assert(self.microscope_view is None)
+
+        self.microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+    @limit_invocation(2) # max 1/2 Hz
+    @call_after  # needed as it accesses the DC
+    @ignore_dead  # This method might get called after the canvas is destroyed
+    def _updateThumbnail(self):
+        csize = self.ClientSize
+        if (csize[0] * csize[1]) <= 0:
+            return # nothing to update
+
+        # new bitmap to copy the DC
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        dc = wx.MemoryDC()
+        dc.SelectObject(bitmap)
+
+        dc.BlitPointSize((0, 0), self.ClientSize, self._bmp_buffer, (0, 0))
+
+        # close the DC, to be sure the bitmap can be used safely
+        del dc
+
+        img = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = img
 
     def OnPaint(self, event=None):
         wx.BufferedPaintDC(self, self._bmp_buffer)

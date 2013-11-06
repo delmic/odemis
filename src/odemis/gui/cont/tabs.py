@@ -683,14 +683,6 @@ class AnalysisTab(Tab):
         self.tb.enable_button(tools.TOOL_POINT, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
-        # TODO:
-        #   - Where should the swap take place (including the data loading) when
-        #     a point is selected?
-        #   - How should we handle the case that when the zoom is too small and
-        #     a single pixel on the screen is larger than a pixel in the
-        #     spectrum data?
-        #   - How to handle swapping back and forth between 1x1 and 2x2 view
-
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
     @property
