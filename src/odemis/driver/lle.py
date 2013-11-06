@@ -556,7 +556,7 @@ class LLE(model.Emitter):
             timeout = 1 #s
         )
         
-        return ser 
+        return ser
     
 class FakeLLE(LLE):
     """
