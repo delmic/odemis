@@ -942,21 +942,21 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
                  self.base.world_to_buffer_pos(self.w_end_pos, offset))
         b_pos = normalize_rect(b_pos)
-#        logging.debug("start and end buffer pos: %s", b_pos)
+        # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
         # be wider and higher than the actual buffer.
         width = b_pos[2] - b_pos[0]
         height = b_pos[3] - b_pos[1]
 
-#        logging.debug("width and height: %s %s", width, height)
+        # logging.debug("width and height: %s %s", width, height)
 
         # Clip the start and end positions using the actual buffer size
         start_x, start_y = self.base.clip_to_buffer(b_pos[:2])
         end_x, end_y = self.base.clip_to_buffer(b_pos[2:4])
 
-#        logging.debug(
-#            "clipped start and end: %s", (start_x, start_y, end_x, end_y))
+        # logging.debug(
+            # "clipped start and end: %s", (start_x, start_y, end_x, end_y))
 
         rep_x, rep_y = self.repetition
 
