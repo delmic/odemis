@@ -440,6 +440,16 @@ def _parse_physical_data(pdgroup, da):
         except (KeyError, IndexError, ValueError):
             pass
 
+        try:
+            ds = pdgroup["PolePosition"]
+            pp = tuple(ds[i]) # px
+            state = _h5svi_get_state(ds)
+            if state and state[i] == ST_INVALID:
+                raise ValueError
+            md[model.MD_AR_POLE] = pp
+        except (KeyError, IndexError, ValueError):
+            pass
+
     return das
 
 # Enums used in SVI HDF5
@@ -653,6 +663,20 @@ def _add_image_metadata(group, images):
         gp["IntegrationTime"] = its
         _h5svi_set_state(gp["IntegrationTime"], st_its)
 
+    # PolePosition: position (in floating px) of the pole in the image
+    # (only meaningful for AR/SPARC)
+    pp, st_pp = [], []
+    for i in images:
+        if model.MD_AR_POLE in i.metadata:
+            pp.append(i.metadata[model.MD_AR_POLE])
+            st_pp.append(ST_REPORTED)
+        else:
+            pp.append((0, 0))
+            st_pp.append(ST_INVALID)
+    if not all(st == ST_INVALID for st in st_pp):
+        gp["PolePosition"] = pp
+        _h5svi_set_state(gp["PolePosition"], st_pp)
+
     # TODO: model.MD_EBEAM_ENERGY, model.MD_EBEAM_SPOT_DIAM
 
 def _add_svi_info(group):
@@ -732,11 +756,11 @@ def _findImageGroups(das):
             da0 = das[g[0]]
             if da0.shape != da.shape:
                 continue
-            if (da0.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None) or
-                da0.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)):
+            if (da0.metadata.get(model.MD_HW_NAME) != da.metadata.get(model.MD_HW_NAME) or
+                da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)):
                 continue
-            if (da0.metadata.get(model.MD_PIXEL_SIZE, None) != da.metadata.get(model.MD_PIXEL_SIZE, None) or
-                da0.metadata.get(model.MD_POS, None) != da.metadata.get(model.MD_POS, None)):
+            if (da0.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE) or
+                da0.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)):
                 continue
             # Found!
             g.append(i)
@@ -823,7 +847,8 @@ def _dataFromHDF5(filename):
     # if follows SVI convention => use the special function
     # If it has at least one directory like XXX/SVIData => it follows SVI conventions
     for obj in f.values():
-        if isinstance(obj.get("SVIData"), h5py.Group):
+        if (isinstance(obj, h5py.Group) and
+            isinstance(obj.get("SVIData"), h5py.Group)):
             return _dataFromSVIHDF5(f)
 
     data = []
