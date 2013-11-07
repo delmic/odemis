@@ -93,7 +93,7 @@ class DevxX(object):
         return (string): the report without prefix ("!") nor newline.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        full_com = "?" + com + r"\r"
+        full_com = "?" + com + "\r"
         logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         self._serial.write(full_com)
         
@@ -119,6 +119,8 @@ class DevxX(object):
 
         if not line[0] == "!":
             raise IOError("Answer prefix (!) not found.")
+        if line == "!Uk":
+            raise IOError("Unknown command.")
         
         return line[1:]
 
@@ -134,7 +136,7 @@ class DevxX(object):
         # Expects something like:
         # GFw Model code § Device-ID § Firmware
         try:
-            m = re.match(b"GFw(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
+            m = re.match(r"GFw(?P<model>.*)\xa7(?P<devid>.*)\xa7(?P<fw>.*)", ans)
             model, devid, fw = m.group("model"), m.group("devid"), m.group("fw")
         except Exception:
             raise ValueError("Failed to decode firmware answer '%s'" % ans.encode('string_escape'))
@@ -146,11 +148,11 @@ class DevxX(object):
         """
         Return (float, float): wavelength (m), theoritical maximum power (W)
         """
-        ans = self._sendCommand("GSi")
+        ans = self._sendCommand("GSI")
         # Expects something like:
         # GSi int (wl in nm) § int (power in mW)
         try:
-            m = re.match(b"GSi(?P<wl>\d+)\xa7(?P<power>\d+", ans)
+            m = re.match(r"GSI(?P<wl>\d+)\xa7(?P<power>\d+)", ans)
             wl = int(m.group("wl")) * 1e-9 # m
             power = int(m.group("power")) * 1e-3 # W
         except Exception:
@@ -166,7 +168,7 @@ class DevxX(object):
         # Expects something like:
         # GMP int (power in mW)
         try:
-            m = re.match(b"GMP(?P<power>\d+)", ans)
+            m = re.match(r"GMP(?P<power>\d+)", ans)
             power = int(m.group("power")) * 1e-3 # W
         except Exception:
             raise ValueError("Failed to decode max power answer '%s'" % ans.encode('string_escape'))
@@ -269,10 +271,10 @@ class MultixX(model.Emitter):
         for d, intens in zip(self._devices, intensities):
             p = min(power * intens, d.max_power)
             if p > 0:
-                p.LaserOn()
+                d.LaserOn()
                 d.SetLevelPower(p / d.max_power)
             else:
-                p.LaserOff()
+                d.LaserOff()
         
     def _updatePower(self, value):
         self._updateIntensities(value, self.emissions.value)
@@ -287,7 +289,7 @@ class MultixX(model.Emitter):
         # clamp intensities which cannot reach the maximum power
         cl_intens = []
         for d, intens in zip(self._devices, intensities):
-            cl_intens = min(intens, d.max_power / self.power.range[0])
+            cl_intens.append(min(intens, d.max_power / self.power.range[1]))
 
         self._updateIntensities(self.power.value, cl_intens)
         return cl_intens
