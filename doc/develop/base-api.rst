@@ -4,12 +4,12 @@ Basic objects of the component framework
 
 Each part of the software runs as a separate component. Components are isolated in containers, which are actually a Unix process listening for requests. In most cases this is transparent to the development. However, there are a couple of guidelines and restrictions.
 
-To get the microscope component, the special :py:meth:`model.getMicroscope` function will return the microscope component wherever it is (as long as it is available). To access a specific component it's also possible to use model.getObject(container_name, component_name) but it requires to know the name of the container. Only the name of the main back-end container is sure: model.BACKEND_NAME. In practice, most components are either on the back-end container or on a separate container with the same name as the component.
+To get the microscope component, the special :py:meth:`model.getMicroscope` function will return the microscope component wherever it is (as long as it is available). To access a specific component it's also possible to use model.getObject(container_name, component_name) but it requires to know the name of the container. Only the name of the main back-end container is sure: model.BACKEND_NAME. In practice, most components are either in the back-end container or in a separate container with the same name as the component.
 
 
 To stop the system, all the components should be terminated (.terminate()) and then the back-end container can be terminated (.terminate()). This container will ensure that all the other containers are also terminated.
 
-All the methods of a component are directly accessible remotely. However, not all attributes are remotely accessible. Only the DataFlows, VigilantAttributes, and roattributes are automatically shared. roattributes are read-only attributes which value must not be modified after initialisation. They are declared with the @roattribute decorator (like a property). Methods which return a future should be decorated with @isasync (it will work without it, but much slower). Methods which do not return any value and for which the caller never needs to know when it's finished can be decorated @oneway to improve performance.
+All the methods of a component are directly accessible remotely. However, not all attributes are remotely accessible. Only the DataFlows, VigilantAttributes, and roattributes are automatically shared. roattributes are read-only attributes which value must not be modified after initialisation. They are declared with the @roattribute decorator (like a property). Methods that return a future should be decorated with @isasync (it will work without it, but much slower). Methods that do not return any value and for which the caller never needs to know when they are finished can be decorated with @oneway to improve performance.
 When accessing an object running in the same container, a normal python object is always returned automatically. 
 
 .. TODO: probably needs more tweaking to be really true, like in the case of accessing .parent of a remote object.
@@ -18,17 +18,17 @@ In addition, when a component is accessed from a separate container (e.g., when
 accessing a hardware adapter from the GUI) the actual python object is a proxy
 to the real component. While in most cases this is transparent, you should be aware of:
 
-* :py:func:`isinstance`(and everything related to type) will not work as expected 
+* :py:func:`isinstance` (and everything related to type) will not work as expected 
   because all objects are actually :py:class:`Proxy`.
   So relying on class type to take a decision will not work.
   There is an (important) exception for the Component, VigilantAttribute, Future,
-  DataFlow, and Event classes, which have a all an equivalent \*Base classes from
-  which Proxy inherit. So for these types, isinstance() can be used.
+  DataFlow, and Event classes, which all have an equivalent \*Base classes from
+  which the Proxy inherits. So for these types, isinstance() can be used.
   
   .. TODO It's recommended to rely on the .capabilities attribute. TODO create .capabilities. Create also a ._realclass_ on proxy?
 
-* :py:func:`hasattr` (and everything related to accessing an non-existing attributes) will
-  not work as expected because Proxys always returns an object (a :py:meth:`Pyro4.core._RemoteMethod`).
+* :py:func:`hasattr` (and everything related to accessing non-existing attributes) will
+  not work as expected because Proxys always return an object from __getitem__() (a :py:meth:`Pyro4.core._RemoteMethod`). 
   
   .. TODO It is recommended to rely on the .capabilities attribute, or if an attribute is expected compare the type of the attribute to _RemoteMethod.
 
@@ -38,7 +38,7 @@ Component
 This is the generic type for representing a component. This is an abstract class,
 from which actual components classes inherit. It bears a parent and children in
 order to be able to construct a tree.
-No specific meaning it given to the tree structure,
+No specific meaning is given to the tree structure,
 but it is expected that children are instantiated *before* their parent.
 
 .. py:class:: model.Component(name[, parent=None][, children=None])
@@ -52,7 +52,7 @@ but it is expected that children are instantiated *before* their parent.
     :param parent: Parent of the component
     :type parent: Component or None
     :param children: Children of the component. The string corresponds to the 
-        the role that the children plays for the component and exact meaning is
+        role that the children plays for the component and exact meaning is
         implementation dependent.
     :type children: dict str → Component
 
@@ -60,13 +60,13 @@ but it is expected that children are instantiated *before* their parent.
         
         Stops the component, and frees the resources it uses. After a call to this 
         method, it is invalid to call any other method, or access attributes of the
-        instance. It is only possible to call this method again, and this is case it
+        instance. It is only possible to call this method again, and in this case it
         will do nothing.
 
     .. py:attribute:: name
         
         *(ro, str)* Name to be displayed/understood by the user.
-        Note: it should not be used by the implementation to affect the behaviour.
+        Note: it should only be stored, and should not be used to affect the behaviour of the component.
 
     .. py:attribute:: children
 
@@ -92,11 +92,11 @@ DataArray
 Set of data, with its metadata. It's a subclass of `Numpy ndarray 
 <http://docs.scipy.org/doc/numpy-1.6.0/reference/arrays.html>`_, with the 
 additional attribute :py:attr:`metadata` which contains information about the 
-data. 
+data.
 As a ndarray, it contains efficiently a multiple dimension array of data of one
 type. 
 All Numpy functions and routines that accept ndarrays should work with DataArrays.
-When using functions which take multiple arrays, the output array will in most
+When using functions that take multiple arrays, the output array will in most
 case contain the same metadata as the first array. 
 It might not be what is expected, and special care must be taken to update this
 metadata.
@@ -110,7 +110,7 @@ it might be safer to first cast it to an ndarray (ex: ``nd = numpy.ndarray(da)``
     Creates a DataArray.
     
     :param ndarray data: the data to contain. It can also be a python list, in
-        which case it will converted.
+        which case it will be converted.
     :param metadata: Metadata about the data. Each entry of the dictionary 
         represents one information about the data. For the list of metadata,
         refer to model.MD_* constants.
@@ -125,7 +125,7 @@ it might be safer to first cast it to an ndarray (ex: ``nd = numpy.ndarray(da)``
 
 DataFlow
 ========
-Represent a (possibly infinite) dataset which is generated by blocks over time
+Represents a (possibly infinite) dataset which is generated by blocks over time
 (as a *flow* along the time).
 For example, this allows to represent the output of a hardware detector,
 or the computed image whenever a user changes processing settings.
@@ -135,14 +135,17 @@ any client interested in the flow can *subscribe* to. From the moment it is
 subscribed, the client will receive data in form of a :py:class:`DataArray` 
 from this dataflow, and until it is *unsubscribed*. 
 
-When there is no subscribers, the dataflow can stop generating the data entirely.
+When there are no subscribers, the dataflow can stop generating the data entirely.
 This allows to turn off the related hardware component if necessary, and 
 reduce processor usage.
 It is up to the implementation to define precisely what to do if too much data
 is generated to be processed in time by the subscribers. Data might either be
-dropped, or queued. The callback of the subscriber might also be called multiple
-times in several threads with each DataArray.
-In any case, the data is always ordered in the same order it was generated.
+dropped, or queued. The callback of the subscriber (called by :py:meth:`Dataflow.notify`)
+might be executed in different threads. 
+Therefore, a call to the callback might not be finished processing before another call
+to the callback is started.
+Each call to the callback receives one DataArray.
+In any case, the calls to the callback are always ordered in the same order the data was generated.
 
 When the dataflow is already generating data (i.e. there is at least one 
 subscriber), the first data received by new subscriber might have been 
@@ -183,8 +186,12 @@ received).
 
     .. py:method:: synchronizedOn(Event or None)
 
-        Indicates that the acquisition should start just after (as close as possible) when the event happens. It can only wait for one event, or none at all (if None is passed).
+        Changes the configuration of the DataFlow so that an acquisition starts just after (as close as possible) the event is triggered.
+        A DataFlow can only wait for one event (or none).
+        If None is passed, no synchronization is taking place.
+        See :py:class:`Event` for more information on synchronization.
 
+	
     .. py:attribute:: parent
 
         The component which owns this data-flow.
@@ -209,7 +216,7 @@ received).
 Event
 =====
 
-Object used to indicate that a specific event has happened. It allows to wait for an event before doing an action. For example an scanning emitter moving to the next position (pixel), the end of a complete line scan. There is only one owner (generator) of the event, but there might be multiple listeners. Each listener has a separate queue, which ensures it will never miss the fact an event has happened.
+Object used to indicate that a specific event has happened. It allows to wait for an event before doing an action. For example a scanning emitter moving to the next position (pixel), the end of a complete line scan. There is only one owner (generator) of the event, but there might be multiple listeners. Each listener has a separate queue, which ensures it will never miss the fact an event has happened.
 
 
 .. py:class:: model.Event()
@@ -244,16 +251,15 @@ Future
 All asynchronous functions return a Future (:py:class:`concurrent.futures.Future`).
 This is standard Python class, see the `official documentation 
 <http://docs.python.org/dev/library/concurrent.futures.html>`_ for more information.
-Nevertheless, we use a slightly different semantic, as :py:meth:cancel might 
+Nevertheless, we use a slightly different semantic, as :py:meth:`concurrent.futures.Future.cancel` might 
 work while the task is being executed (oppositely to the official implementation
-which fails as soon as the tasked has started to be executed). 
+which fails as soon as the task has started to be executed). 
 
 Note that within the component framework every method returning a future must 
 be explicitly indicated. 
 This is done by decorating them with @\ :py:func:`isasync`.
-Although from a behavioural point of view, futures will work even if the
-method is not decorated,
-it will have a very big performance penalty when used remotely. 
+Futures will work even if the method is not decorated, however, from a behavioural point of view, 
+they imply a very big performance penalty when used remotely.
 The only exception is in case of the special :py:class:`InstantaneousFuture`.
 As it defines an action already completed, it is fine to not decorate the
 function specifically.
@@ -262,7 +268,7 @@ function specifically.
 
     .. py:method:: cancel()
 
-    Attempt to cancel the task. If the task is finished executing, it will fail
+    Attempt to cancel the task. If the task has finished executing, it will fail
     and return False. If the task is being executed, it will be done in best 
     effort manner. If possible, the execution will be stopped immediately, and
     the work done so far *might or might not* be undone.
@@ -368,10 +374,10 @@ VigilantAttribute
 
 VigilantAttributes are objects purposed to be used as attributes of other objects.
 As normal attributes, they contain a :py:attr:`value`, but they also provide
-mechanisms to validate the value and to be let interested code know when the
+mechanisms to validate the value and to let interested code know when the
 value changes.
 
-It can also contains metadata on the value with the :py:attr:`unit`, 
+It can also contain metadata on the value with the :py:attr:`unit`, 
 :py:attr:`range` and :py:attr:`choices` attributes.
 
 
@@ -390,7 +396,7 @@ Typically they are used to configure the device to a specific mode (e.g., change
         the exposure time of a CCD component, in which case the setter will 
         accept any positive value but return the actual value set).
     :param str unit: the unit of the value. The convention is to set *None* when
-        unknown or meaningless and "" if it a unit-less ratio.
+        unknown or meaningless and "" if it is a unit-less ratio.
 
     .. py:attribute:: value
 
@@ -502,13 +508,14 @@ The following two Mixin classes can be inherited by any VigilantAttribute class.
 Container
 =========
 A container is an isolated entity of execution. It executes Components in a 
-separate Unix process. In most cases, it is not necessary to be aware of 
+separate Unix process. 
+When developing a driver (i.e., one Component), it is not necessary to be aware of 
 containers. 
 
 .. py:class:: model.Container(name)
 
     Instantiate the container inside a newly created process.
-    Do no call directly. Use :py:func:`model.createNewContainer` to create a
+    Do not call directly. Use :py:func:`model.createNewContainer` to create a
     new container.
     
     
