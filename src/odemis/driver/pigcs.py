@@ -171,7 +171,7 @@ class Controller(object):
     
     
     def __init__(self, busacc, address=None, axes=None,
-                 dist_to_steps=None, min_dist=None, vpms=None):
+                 dist_to_steps=None, min_dist=None):
         """
         busacc: a BusAccesser (with at least a serial port opened)
         address 1<int<16: address as configured on the controller
@@ -201,13 +201,6 @@ class Controller(object):
             return
         if axes is None:
             raise LookupError("Need to have at least one axis configured")
-
-        if dist_to_steps and not (0 < dist_to_steps):
-            raise ValueError("dist_to_steps (%s) must be > 0", dist_to_steps)
-        if min_dist and not (0 <= min_dist < 1):
-            raise ValueError("min_dist (%s) must be between 0 and 1 m", min_dist)
-        if vpms and not (0 < vpms):
-            raise ValueError("vpms (%s) must be > 0", vpms)
 
         self.GetErrorNum() # make it happy again (in case it wasn't)
         # We don't reboot by default because:
@@ -1252,6 +1245,11 @@ class OLController(Controller):
     """
     def __init__(self, busacc, address=None, axes=None,
                  dist_to_steps=None, min_dist=None):
+        if dist_to_steps and not (0 < dist_to_steps):
+            raise ValueError("dist_to_steps (%s) must be > 0" % dist_to_steps)
+        if min_dist and not (0 <= min_dist < 1):
+            raise ValueError("min_dist (%s) must be between 0 and 1 m" % min_dist)
+
         super(OLController, self).__init__(busacc, address, axes,
                                            dist_to_steps=dist_to_steps,
                                            min_dist=min_dist)
@@ -1371,8 +1369,20 @@ class SMOController(Controller):
     """
     Controller managed via the test open-loop command "SMO" (ex: C-867)
     """
-    def __init__(self, busacc, address=None, axes=None, vpms=None):
-        super(SMOController, self).__init__(busacc, address, axes, vpms=vpms)
+    def __init__(self, busacc, address=None, axes=None, vmin=2., speed_base=0.03):
+        """
+        vmin (0.5 < float < 10): lowest voltage at which the actuator moves 
+          reliably in V. This is the voltage used when performing small moves
+          (~< 50 µm).
+        speed_base (0<float<10): speed in m/s at the base voltage (3.5V). The
+          base voltage is used for long moves (~> 50 µm). 
+        """
+        if not (0.5 < vmin < 10):
+            raise ValueError("vmin (%s) must be between 0.5 and 10 V" % vmin)
+        if not (0 < speed_base < 10):
+            raise ValueError("speed_base (%s) must be between 0 and 10 m/s" % speed_base)
+
+        super(SMOController, self).__init__(busacc, address, axes)
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
@@ -1383,50 +1393,48 @@ class SMOController(Controller):
             self.SetServo(a, False)
             self._position[a] = 0
 
-        vpms = vpms or 78 # V/(m/s)
-
         # Get maximum motor output parameter (0x9) allowed
         # Because some type of stages cannot bear as much as the full maximum
         # The maximum output voltage is calculated following this formula:
         # 200 Vpp*Maximum motor output/32767
         self._max_motor_out = int(self.GetParameter(1, 0x9))
-        # official approx. min is 3V, but from test, it can go down to 1.5V,
-        # so use 3V
-        self._min_motor_out = int((4 / 10) * 32767) # encoded as a ratio of 10 V * 32767
-        assert(self._max_motor_out > self._min_motor_out)
+        # official approx. min is 3V, but from test, it can go down to 1.5V.
+        self._min_motor_out = int((vmin / 10) * 32767) # encoded as a ratio of 10 V * 32767
+        if self._max_motor_out < self._min_motor_out:
+            raise ValueError("Controller report max voltage lower than vmin=%g V" % vmin)
 
-        # We simplify to a linear conversion, making sure that the min voltage
-        # is approximately the min speed. It will tend to overshoot if the speed
-        # is higher than the min speed and there is no load on the actuator.
-        # So it's recommended to use it always at the min speed (~0.03 m/s),
-        # which also gives the best precision.
-        self._vpms = vpms * (32767 / 10)
+        # FIXME: the manual somehow implies that writing macros writes on the
+        # flash, which is only possible a number of times. So only write macro
+        # if it's different?
 
         # Set up a macro that will do the job
-        # To be called like "MAC START OLSTEP 16000 500"
+        # To be called like "MAC START OS 16000 500"
         # First param is voltage between -32766 and 32766
         # Second param is delay in ms between 1 and 9999
         # Note: it seems it doesn't work to have a third param is the axis
-        # WARNING: it seems old firmware (<1.2) don't support macro arguments,
-        # but there is not a clear way to detect them.
-        mac = "MAC BEG OLSTEP\n" \
+        # WARNING: old firmware (<1.2) don't support macro arguments, but there
+        # is not a clear way to detect them (but checking firmware version)
+        # Note: macro name is short to be sure to have a short command line
+        mac = "MAC BEG OS\n" \
               "%(n)d SMO 1 $1\n" \
               "%(n)d DEL $2\n"   \
               "%(n)d SMO 1 0\n"  \
               "%(n)d MAC END\n" % {"n": self.address}
         self._sendOrderCommand(mac)
 
-        # For short moves
-        mac = "MAC BEG OLSTEP0\n" \
-              "%(n)d SMO 1 $1\n" \
-              "%(n)d SAI? ALL\n" \
-              "%(n)d SMO 1 0\n"  \
-              "%(n)d MAC END\n" % {"n": self.address}
-        self._sendOrderCommand(mac)
+#        # For short moves
+#        mac = "MAC BEG OS0\n" \
+#              "%(n)d SMO 1 $1\n" \
+#              "%(n)d SAI? ALL\n" \
+#              "%(n)d SMO 1 0\n"  \
+#              "%(n)d MAC END\n" % {"n": self.address}
+#        self._sendOrderCommand(mac)
 
-        self.min_speed = self._min_motor_out / self._vpms # m/s
-        self.max_speed = self._max_motor_out / self._vpms # m/s
-        self.max_accel = 0.01 # m/s² (actually I've got no idea, and cannot be changed)
+        # Don't authorize different speeds or accels
+        self._speed_base = speed_base
+        self.min_speed = speed_base # m/s
+        self.max_speed = speed_base # m/s
+        self.max_accel = 0.01 # m/s² (actually I've got no idea)
 
         self._speed = dict([(a, self.min_speed) for a in axes]) # m/s
         self._accel = dict([(a, self.max_accel) for a in axes]) # m/s² (both acceleration and deceleration)
@@ -1445,27 +1453,27 @@ class SMOController(Controller):
           the negative direction. 32766 is 10V
         t (0<int <= 9999): time in ms.
         """
-        # Uses MAC OLSTEP, based on SMO
+        # Uses MAC OS, based on SMO
         assert(axis == 1) # seems not possible to have 3 parameters?!
         assert(-32768 <= voltage <= 32767)
         assert(0 < t <= 9999)
 
         # From experiment: a delay of 0 means actually 2**16, and >= 10000 it's 0
-        self._sendOrderCommand("MAC START OLSTEP %d %d\n" % (voltage, t))
+        self._sendOrderCommand("MAC START OS %d %d\n" % (voltage, t))
 
-    def OLMovePID0(self, axis, voltage):
-        """
-        Moves an axis a very little bit. Can be done only with servo off.
-        Warning: it's completely hacky, there is no idea if it even moves
-        axis (1<int<16): axis number
-        voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
-          the negative direction. 32766 is 10V
-        """
-        # Uses MAC OLSTEP0, based on SMO
-        assert(axis == 1)
-        assert(-32768 <= voltage <= 32767)
-
-        self._sendOrderCommand("MAC START OLSTEP0 %d\n" % (voltage,))
+#    def OLMovePID0(self, axis, voltage):
+#        """
+#        Moves an axis a very little bit. Can be done only with servo off.
+#        Warning: it's completely hacky, there is no idea if it even moves
+#        axis (1<int<16): axis number
+#        voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
+#          the negative direction. 32766 is 10V
+#        """
+#        # Uses MAC OS0, based on SMO
+#        assert(axis == 1)
+#        assert(-32768 <= voltage <= 32767)
+#
+#        self._sendOrderCommand("MAC START OS0 %d\n" % (voltage,))
 
 
     def _isAxisMovingOLViaPID(self, axis):
@@ -1473,6 +1481,14 @@ class SMOController(Controller):
         axis (1<int<16): axis number
         returns (boolean): True moving axes for the axes controlled via PID
         """
+#        # FIXME: SMO doesn't seem to work any more with the fine grain firmware
+#        now = time.time()
+#        end_move = self._end_move.get(axis, 0)
+#        if now > end_move:
+#            return False
+#        else:
+#            return True
+
         # "SMO?" (Get Control Value)
         # Reports the speed set. If it's 0, it's not moving, otherwise, it is.
         answer = self._sendQueryCommand("SMO? %d\n" % axis)
@@ -1482,40 +1498,95 @@ class SMOController(Controller):
         else:
             return True
 
+    cycles_per_s = 20000 # 20 kHz for new experimental firmware
+    #cycles_per_s = 1000 # 1 kHz for normal firmware
+
+    _base_motor_out = int((3.5 / 10) * 32767) # High enough to ensures it's never stuck
+
     def _convertDistanceSpeedToPIDControl(self, distance, speed):
         """
         converts meters and speed to the units for this device (~V, ms) in
         open-loop via PID control.
         distance (float): meters (can be negative)
-        speed (0<float): meters/s (can be negative)
-        return (tuple: int, 0<number, float): PID control (in device unit, duration, distance)
+        speed (0<float): meters/s UNUSED
+        return (tuple: int, 0<number, float): PID control (in device unit),
+          duration (in device cycles), expected actual distance (in m)
         """
-        voltage_u = round(int(speed * self._vpms)) # uV
-        # clamp it to the possible values
-        voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
-        act_speed = voltage_u / self._vpms # m/s
+        # TODO: smooth transition of voltage between 50µm and 20µm?
+        if abs(distance) > 50e-6: # big move
+            # Use the fastest speed
+            voltage_u = max(self._min_motor_out, self._base_motor_out)
+            speed = self._speed_base # m/s
+        else: # small move
+            # Consider the speed linear of the voltage with:
+            # * vmin - 0.5 -> 0 m/s
+            # * base voltage -> speed_base
+            # * vmin -> 0.5 * speed_base / (bv - vmin +0.5) 
+            # It's totally wrong, but approximately correct
+            voltage_u = self._min_motor_out
+            bv = self._base_motor_out * (10 / 32767)
+            vmin = self._min_motor_out * (10 / 32767)
+            speed = 0.5 * self._speed_base / (bv - vmin + 0.5)
 
-        mv_time = abs(distance) / act_speed # s
-        mv_time_ms = int(round(mv_time * 1000)) # ms
-        if mv_time_ms < 10 and act_speed > self.min_speed:
-            # small distance => try with the minimum speed to have a better precision
-            return self._convertDistanceSpeedToPIDControl(distance, self.min_speed)
-        elif 0.1e-3 < mv_time and mv_time_ms < 1:
-            # try our special super small step trick if at least 0.1 ms
-            mv_time_ms = 0.5 # ms
-            voltage_u = self._min_motor_out # TODO: change according to requested distance?
-        elif mv_time_ms < 1:
+        mv_time = abs(distance) / speed # s
+        mv_time_cy = int(round(mv_time * self.cycles_per_s)) # cycles
+        if mv_time_cy < 1:
             # really no hope
             return 0, 0, 0
-        elif mv_time_ms >= 10000:
+        elif mv_time_cy < 5:
+            # On fine grain firmware, below 6 cyles gives always the same time
+            mv_time_cy = 5
+        elif mv_time_cy >= 10000:
             logging.debug("Too big distance of %f m, shortening it", distance)
-            mv_time_ms = 9999
+            mv_time_cy = 9999
+
+        act_dist = (mv_time_cy / self.cycles_per_s) * speed # m (very approximate)
 
         if distance < 0:
             voltage_u = -voltage_u
+            act_dist = -act_dist
 
-        act_dist = mv_time_ms * 1e-3 * voltage_u / self._vpms # m (very approximate)
-        return voltage_u, mv_time_ms, act_dist
+        return voltage_u, mv_time_cy, act_dist
+
+#    def _OLDconvertDistanceSpeedToPIDControl(self, distance, speed):
+#        """
+#        converts meters and speed to the units for this device (~V, ms) in
+#        open-loop via PID control.
+#        distance (float): meters (can be negative)
+#        speed (0<float): meters/s (can be negative)
+#        return (tuple: int, 0<number, float): PID control (in device unit),
+#          duration (in device cycles), distance (in m)
+#        """
+#        voltage_u = round(int(speed * self._vpms)) # uV
+#        # clamp it to the possible values
+#        voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
+#        act_speed = voltage_u / self._vpms # m/s
+#
+#        mv_time = abs(distance) / act_speed # s
+#        mv_time_cy = int(round(mv_time * self.cycles_per_s)) # cycles
+#        if mv_time < 1e-3 and act_speed > self.min_speed:
+#            # small distance => try with the minimum speed to have a better precision
+#            return self._convertDistanceSpeedToPIDControl(distance, self.min_speed)
+#        # FIXME: unused with new firmware
+#        elif 0.1e-3 < mv_time and mv_time_cy < 1:
+#            logging.error("Should not be called")
+#            # try our special super small step trick if at least 0.1 ms
+#            mv_time_cy = 0.5e-3 * self.cycles_per_s # 0.5 ms
+#            voltage_u = self._min_motor_out # TODO: change according to requested distance?
+#        # TODO: on new experimental firmware, below 6 cyles might not be possible
+#        # according to PI
+#        elif mv_time_cy < 1:
+#            # really no hope
+#            return 0, 0, 0
+#        elif mv_time_cy >= 10000:
+#            logging.debug("Too big distance of %f m, shortening it", distance)
+#            mv_time_cy = 9999
+#
+#        if distance < 0:
+#            voltage_u = -voltage_u
+#
+#        act_dist = (mv_time_cy / self.cycles_per_s) * voltage_u / self._vpms # m (very approximate)
+#        return voltage_u, mv_time_cy, act_dist
 
     def moveRel(self, axis, distance):
         """
@@ -1528,12 +1599,13 @@ class SMOController(Controller):
         if t == 0: # if distance is too small, report it
             logging.debug("Move of %g µm too small, not moving", distance * 1e-6)
             return 0
-        elif t < 1: # special small move command
-            self.OLMovePID0(axis, v)
-            duration = 0.5e-3 # = 1/2 ms
+#        elif t < 1: # special small move command
+#            logging.error("Should never be called")
+#            self.OLMovePID0(axis, v)
+#            duration = 0.5e-3 # = 1/2 ms
         else:
             self.OLMovePID(axis, v, t)
-            duration = t / 1000
+            duration = t / self.cycles_per_s
         logging.debug("Moving axis at %f V, for %f ms", v * (10 / 32767), duration)
 
         self._storeMove(axis, ad, duration)
@@ -1568,7 +1640,8 @@ class Bus(model.Actuator):
     Represent a chain of PIGCS controllers over a serial port
     """
     def __init__(self, name, role, port, axes, baudrate=38400,
-                 dist_to_steps=None, min_dist=None, vpms=None,
+                 dist_to_steps=None, min_dist=None,
+                 vmin=None, speed_base=None,
                  _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
@@ -1593,7 +1666,8 @@ class Bus(model.Actuator):
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
-        vpms = vpms or {}
+        vmin = vmin or {}
+        speed_base = speed_base or {}
 
         # Prepare initialisation by grouping axes from the same controller
         ac_to_axis = {} # address, channel -> axis name
@@ -1611,8 +1685,10 @@ class Bus(model.Actuator):
                 kwargs["dist_to_steps"] = dist_to_steps[axis]
             if axis in min_dist:
                 kwargs["min_dist"] = min_dist[axis]
-            if axis in vpms:
-                kwargs["vpms"] = vpms[axis]
+            if axis in vmin:
+                kwargs["vmin"] = vmin[axis]
+            if axis in speed_base:
+                kwargs["speed_base"] = speed_base[axis]
 
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
