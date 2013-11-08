@@ -245,10 +245,9 @@ class MultixX(model.Emitter):
         # set HW and SW version
         driver_name = driver.getSerialDriver(self._devices[0].port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        self._hwVersion = "Omicron xX" # TODO: get version from hardware
+        self._hwVersion = "Omicron xX" # TODO: get version from GetFirmware()
       
     def getMetadata(self):
-        # TODO
         metadata = {}
         # MD_IN_WL expects just min/max => if multiple sources, we need to combine
         wl_range = (None, None) # min, max in m
@@ -299,10 +298,11 @@ class MultixX(model.Emitter):
             d.terminate()
         self._devices = []
 
-    def _getAvailableDevices(self, ports):
+    @staticmethod
+    def _getAvailableDevices(ports):
         if os.name == "nt":
             # TODO
-            #ports = ["COM" + str(n) for n in range (0,8)]
+            #ports = ["COM" + str(n) for n in range (15)]
             raise NotImplementedError("Windows not supported")
         else:
             names = glob.glob(ports)
@@ -317,14 +317,26 @@ class MultixX(model.Emitter):
 
         return devices
 
-    # TODO: .scan
-#    @staticmethod
-#    def scan(ports=None):
-#        """
-#        ports (string): name of the serial port. If None, all the serial ports are tried
-#        returns (list of 2-tuple): name, args (port)
-#        Note: it's obviously not advised to call this function if a device is already under use
-#        """
+    @classmethod
+    def scan(cls, ports=None):
+        """
+        ports (string): name (or pattern) of the serial ports. If None, all the serial ports are tried
+        returns (list of 2 tuple): name, kwargs (ports)
+        Note: it's obviously not advised to call this function if a device is already under use
+        """
+        if ports is None:
+            if os.name == "nt":
+                # TODO
+                ports = ["COM" + str(n) for n in range(15)]
+                raise NotImplementedError("Windows not supported")
+            else:
+                ports = "/dev/tty*"
+
+        devices = cls._getAvailableDevices(ports)
+        if devices:
+            return [("OmicronxX", {"ports": ports})]
+        else:
+            return []
 
 
 # TODO: simulator
