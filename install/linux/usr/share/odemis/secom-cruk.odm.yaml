@@ -20,6 +20,18 @@ Spectra: {
     affects: [Clara],
 }
 
+# In case lasers are used instead of the Spectra:
+# (Spectra must be commented out and the SECOM definition updated)
+#LuxX: {
+#    class: omicronxx.MultixX,
+#    role: light,
+#    init: {
+#        port: "/dev/ttyOXX*",
+#        },
+#    affects: [Clara],
+#}
+
+
 # Quanta SEM driven via external X/Y connection, using a DAQ board
 "SEM ExtXY": {
     class: semcomedi.SEMComedi,
