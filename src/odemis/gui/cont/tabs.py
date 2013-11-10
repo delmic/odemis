@@ -751,8 +751,10 @@ class AnalysisTab(Tab):
         spec_cls = (streammod.SpectrumStream, streammod.StaticSpectrumStream)
 
         for strm in self.tab_data_model.streams.value:
+            # If a spectrum stream is found...
             if isinstance(strm, spec_cls):
                 iimg = strm.image.value
+                # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
                     if hasattr(viewport.canvas, "point_overlay"):
                         ol = viewport.canvas.point_overlay
@@ -767,8 +769,6 @@ class AnalysisTab(Tab):
                 break
         else:
             self.tb.enable_button(tools.TOOL_POINT, False)
-
-
 
     def display_new_data(self, filename, data):
         """
@@ -806,7 +806,7 @@ class AnalysisTab(Tab):
             # excepted for spectrums which have a 3rd dimensions on dim 5.
             # So if it's the case => separate into one stream per channel
             cdata = self._split_channels(d)
-            
+
             for cd in cdata:
                 # TODO: be more clever to detect the type of stream
                 if (model.MD_WL_LIST in cd.metadata or
@@ -889,7 +889,11 @@ class AnalysisTab(Tab):
                 if (self.tab_data_model.focussedView.value ==
                     self.main_frame.vp_inspection_tr.microscope_view):
                     pos = 3
+
                 self.tab_data_model.visible_views.value[pos] = plot_view
+
+        # FIXME: DUMMY DATA!
+        self.main_frame.vp_inspection_plot.canvas.set_1d_data(range(50), range(50))
 
     def _split_channels(self, data):
         """

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 23 Aug 2012
 
 @author: Éric Piel
@@ -8,17 +8,17 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms  of the GNU General Public License version 2 as published by the Free
+Software  Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY;  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR  PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 import logging
 import math
@@ -35,7 +35,7 @@ def findOptimalRange(hist, edges, outliers=0):
     hist (ndarray 1D of 0<=int): histogram
     edges (tuple of 2 numbers): the values corresponding to the first and last
       bin of the histogram. To get an index, use edges = (0, len(hist)).
-    outliers (0<float<0.5): ratio of outliers to discard (on both side). 0 
+    outliers (0<float<0.5): ratio of outliers to discard (on both side). 0
       discards no value, 0.5 discards every value (and so returns the median).
     """
     if outliers == 0:
@@ -60,7 +60,7 @@ def findOptimalRange(hist, edges, outliers=0):
         highi = numpy.searchsorted(cum_hist, highv, side="left")
 
         idxrng = lowi, highi
-    
+
     # convert index into intensity values
     a = edges[0]
     b = (edges[1] - edges[0]) / (hist.size - 1)
@@ -72,8 +72,8 @@ def compactHistogram(hist, length):
     Make a histogram smaller by summing bins together
     hist (ndarray 1D of 0<=int): histogram
     length (0<int<=hist.size): final length required. It must be a multiple of
-     the length of hist 
-    return (ndarray 1D of 0<=int): histogram representing the same bins, but 
+     the length of hist
+    return (ndarray 1D of 0<=int): histogram representing the same bins, but
       accumulated together as necessary to only have "length" bins.
     """
     if hist.size < length:
@@ -112,10 +112,10 @@ def histogram(data, irange=None):
     return hist, edges:
      hist (ndarray 1D of 0<=int): number of pixels with the given value
       Note that the length of the returned histogram is not fixed. If irange
-      is defined and data is integer, the length is always equal to 
-      irange[1] - irange[0] + 1. 
-     edges (tuple of numbers): lowest and highest bound of the histogram. 
-       edges[1] is included in the bin. If irange is defined, it's the same values. 
+      is defined and data is integer, the length is always equal to
+      irange[1] - irange[0] + 1.
+     edges (tuple of numbers): lowest and highest bound of the histogram.
+       edges[1] is included in the bin. If irange is defined, it's the same values.
     """
     if irange is None:
         if data.dtype.kind in "biu":

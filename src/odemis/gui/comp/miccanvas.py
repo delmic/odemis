@@ -1208,9 +1208,9 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         # is called, because they are used in the OnSize event handler.
         self.current_y_value = None
         self.current_x_value = None
-        # FIXME: This attribute should be renamed to simply `view`, but that would also
-        # require renaming the `microscope_view` attributes of the other Canvas
-        # classes.
+        # FIXME: This attribute should be renamed to simply `view`, but that
+        # would also  require renaming the `microscope_view` attributes of the
+        # other Canvas classes.
         self.microscope_view = None
         self._tab_data_model = None
 

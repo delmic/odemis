@@ -168,6 +168,7 @@ class ViewController(object):
                   }),
                 (self._viewports[4],
                  {"name": "Spectrum",
+                  "stream_classes": SPECTRUM_STREAMS,
                  }),
                                                ])
                 self._createViewsFixed(vpv)

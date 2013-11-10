@@ -155,7 +155,7 @@ class Stream(object):
         self._htread.daemon = True
         self._htread.start()
 
-#        self.histogram.subscribe(self._onHistogram) # FIXME -> update outliers and then image
+        # self.histogram.subscribe(self._onHistogram) # FIXME -> update outliers and then image
 
         # list of warnings to display to the user
         # TODO should be a set
@@ -164,6 +164,9 @@ class Stream(object):
     @property
     def emitter(self):
         return self._emitter
+
+    def __str__(self):
+        return self.name.value
 
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current
@@ -1351,8 +1354,9 @@ class StaticSpectrumStream(StaticStream):
     def __init__(self, name, image):
         """
         name (string)
-        image (model.DataArray of shape (CYX) or (C11YX)). The metadata MD_WL_POLYNOMIAL
-         should be included in order to associate the C to a wavelength.
+        image (model.DataArray of shape (CYX) or (C11YX)). The metadata
+        MD_WL_POLYNOMIAL should be included in order to associate the C to a
+        wavelength.
         """
         Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
@@ -1547,6 +1551,16 @@ class StaticSpectrumStream(StaticStream):
                                              self._findMPP(data),
                                              self._findPos(data))
 
+    def get_spectrum(self):
+        """ Return the spectrum belonging to the selected pixel or None if no
+        spectrum is selected.
+        """
+        if self.selected_pixel.value:
+            x, y = self.selected_pixel.value
+            print self.raw[0][:, 0, 0, y, x].shape
+            return self.raw[0][:, 0, 0, y, x]
+        return None
+
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
         """ Recomputes the image with all the raw data available
@@ -1563,10 +1577,10 @@ class StaticSpectrumStream(StaticStream):
             data = self.raw[0][:, 0, 0, :, :]
             if self.projection.value == PROJ_AVERAGE_SPECTRUM:
                 self._updateImageAverage(data)
-            # TODO PROJ_ONE_POINT
-            # TODO PROJ_ALONG_LINE
+            # TODO: PROJ_ONE_POINT
+            # TODO: PROJ_ALONG_LINE
             else:
-                raise NotImplementedError("Need to handle other projection types")
+                raise NotImplementedError("Unhandled projection type")
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:
@@ -1911,10 +1925,10 @@ class SEMARMDStream(MultipleDetectorStream):
     def _getSpotPositions(self):
         """
         Compute the positions of the e-beam for each point in the ROI
-        return (numpy ndarray of floats of shape (X,Y,2)): each value is for a 
-          given X/Y in the repetition grid -> 2 floats corresponding to the 
+        return (numpy ndarray of floats of shape (X,Y,2)): each value is for a
+          given X/Y in the repetition grid -> 2 floats corresponding to the
           translation.
-        """ 
+        """
         repetition = tuple(self._ar_stream.repetition.value)
         roi = self._ar_stream.roi.value
         width = (roi[2] - roi[0], roi[3] - roi[1])
@@ -1939,7 +1953,7 @@ class SEMARMDStream(MultipleDetectorStream):
 
     def _runAcquisition(self):
         """
-        Handles the whole acquisition procedure of a grid of AR images 
+        Handles the whole acquisition procedure of a grid of AR images
         Warning: can be quite memory consuming if the grid is big
         """
         # TODO: handle better very large grid acquisition (than memory oops)
@@ -1972,7 +1986,7 @@ class SEMARMDStream(MultipleDetectorStream):
 
                 if self._acq_must_stop.is_set():
                     return
-                
+
                 # MD_POS default to the center of the stage, but it needs to be
                 # the position of the e-beam
                 ar_data.metadata[MD_POS] = sem_data[-1].metadata[MD_POS]
@@ -2029,7 +2043,7 @@ class SEMARMDStream(MultipleDetectorStream):
         The result goes into .raw.
 
         shape (tuple of ints): shape of the final data (Y, X)
-        data_list (list of M DataArray of shape (1, 1)): all the data received, 
+        data_list (list of M DataArray of shape (1, 1)): all the data received,
         with X variating first, then Y.
         metadata (dict of string -> Value): the metadata values to be overridden
         """
@@ -2150,6 +2164,8 @@ class StreamTree(object):
         for s in streams:
             self.add_stream(s)
 
+    def __str__(self):
+        return "[" + ", ".join([str(s) for s in self.streams]) + "]"
 
     def __len__(self):
         acc = 0
@@ -2192,8 +2208,8 @@ class StreamTree(object):
 
     def getStreams(self):
         """
-        Return the set of streams used to compose the picture. IOW, the leaves
-        of the tree.
+        Return the set of streams used to compose the picture. In other words,
+        the leaves of the tree.
         """
         leaves = set()
         for s in self.streams:

@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.viewport module
 #===============================================================================
 
-import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.viewport as viewport
 import odemis.gui.test as test
 import unittest
@@ -79,7 +78,9 @@ class CanvasTestCase(test.GuiTestCase):
         # vwp.canvas.set_plot_mode(canvas.PLOT_MODE_LINE)
         self.add_control(vwp, wx.EXPAND, proportion=1)
 
-        vwp.canvas.set_1d_data(PLOTS[-1][0], PLOTS[-1][1])
+        for plot in PLOTS:
+            vwp.canvas.set_1d_data(plot[0], plot[1])
+            test.gui_loop(1000)
 
 
 if __name__ == "__main__":
