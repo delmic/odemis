@@ -50,6 +50,7 @@ CONFIG_BUS_TWO_CL = {"x":(1, 1, True), "y":(2, 1, True)}
 
 CLASS = pigcs.FakeBus # use FakeBus if no hardware present
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
+#KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC, "vmin":{"x": 2.4}}
 KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL}
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
@@ -74,7 +75,7 @@ class TestController(unittest.TestCase):
         so test failure might not indicate software bug.
         """
         ctrl = pigcs.Controller(self.accesser, *self.config_ctrl)
-        speed = ctrl.max_speed / 10
+        speed = max(ctrl.min_speed, ctrl.max_speed / 10)
         self.assertGreater(ctrl.max_speed, 100e-6, "Maximum speed is expected to be more than 100μm/s")
         ctrl.setSpeed(1, speed)
         distance = -ctrl.moveRel(1, -speed / 2) # should take 0.5s

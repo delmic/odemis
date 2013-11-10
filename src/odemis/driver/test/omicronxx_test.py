@@ -19,6 +19,7 @@ from __future__ import division
 import logging
 from odemis.driver import omicronxx
 import os
+import time
 import unittest
 from unittest.case import skip
 
@@ -33,20 +34,43 @@ else:
     PORTS = "/dev/ttyOXX*" #"/dev/tty*"
 
 class TestActuator(unittest.TestCase):
+    def setUp(self):
+        self.dev = CLASS("test", "light", PORTS)
+
+    def tearDown(self):
+        self.dev.terminate()
 
     def test_simple(self):
-        self.dev = CLASS("test", "light", PORTS)
         # should start off
         self.assertEqual(self.dev.power.value, 0)
 
-        # turn on first source to 50%
+        # turn on first source to 10%
         self.dev.power.value = self.dev.power.range[1]
         em = self.dev.emissions.value
-        em[0] = 0.5
+        em[0] = 0.1
         self.dev.emissions.value = em
         self.assertGreater(self.dev.emissions.value[0], 0)
 
-        self.dev.terminate()
+    def test_cycle(self):
+        """
+        Test each emission source for 2 seconds at maximum intensity and then 1s
+        at 10%.
+        """
+        em = self.dev.emissions.value
+        em = [0 for v in em]
+        self.dev.power.value = self.dev.power.range[1]
+
+        # can fully checked only by looking what the hardware is doing
+        print "Starting emission source cycle..."
+        for i in range(len(em)):
+            print "Turning on wavelength %g" % self.dev.spectra.value[i][2]
+            em[i] = 0.1
+            self.dev.emissions.value = em
+            time.sleep(5)
+            self.assertEqual(self.dev.emissions.value, em)
+            em[i] = 0
+            self.dev.emissions.value = em
+            self.assertEqual(self.dev.emissions.value, em)
 
 
 if __name__ == "__main__":

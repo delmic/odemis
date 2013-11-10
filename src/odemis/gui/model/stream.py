@@ -1970,7 +1970,7 @@ class SEMARMDStream(MultipleDetectorStream):
 
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
                 # set ebeam to position (which is ensured only once acquiring)
-                self._emitter.trans = spot_pos[i[::-1]]
+                self._emitter.translation.value = spot_pos[i[::-1]]
                 self._acq_sem_complete.clear()
                 self._acq_ar_complete.clear()
                 self._semd_df.subscribe(self._onSEMImage)
@@ -1989,6 +1989,7 @@ class SEMARMDStream(MultipleDetectorStream):
 
                 # MD_POS default to the center of the stage, but it needs to be
                 # the position of the e-beam
+                logging.debug("center pos from SEM: %s", sem_data[-1].metadata[MD_POS])
                 ar_data.metadata[MD_POS] = sem_data[-1].metadata[MD_POS]
                 # Note: MD_AR_POLE is in theory dependant on MD_POS, but so
                 # slightly that we don't need to correct it.
