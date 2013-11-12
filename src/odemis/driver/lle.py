@@ -147,9 +147,9 @@ class LLE(model.Emitter):
             raise
         self._try_recover = True
         
-        self._shape = (1)
-        self._max_power = 100
-        self.power = model.FloatContinuous(0, (0, self._max_power), unit="W")
+        self._shape = ()
+        self._max_power = 100.
+        self.power = model.FloatContinuous(0., (0., self._max_power), unit="W")
 
         # emissions is list of 0 <= floats <= 1.
         self._intensities = [0.] * len(spectra) # start off

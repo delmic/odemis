@@ -227,9 +227,10 @@ class MultixX(model.Emitter):
             spectra.append((wl - 1e-9, wl - 0.5e-9, wl, wl + 0.5e-9, wl + 1e-9))
             max_power.append(d.max_power)
 
+        self._shape = ()
 
         # power of the whole device (=> max power of the device with max power)
-        self.power = model.FloatContinuous(0, (0, max(max_power)), unit="W")
+        self.power = model.FloatContinuous(0., (0., max(max_power)), unit="W")
         self.power.subscribe(self._updatePower)
 
         # ratio of power per device
