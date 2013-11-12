@@ -258,7 +258,7 @@ class SettingsPanel(object):
                 # An exception will be raised if no range attribute is found
                 logging.debug("found range %s", va.range)
                 # TODO: if unit is "s" => scale=exp
-                if isinstance(va.value, (int, float)):
+                if isinstance(va.value, (int, long, float)):
                     return odemis.gui.CONTROL_SLIDER
             except (AttributeError, NotApplicableError):
                 pass
@@ -371,7 +371,7 @@ class SettingsPanel(object):
                 # it's then already value -> string (user-friendly display)
                 choices_fmt = choices.items()
             elif format and len(choices) > 1 \
-               and all([isinstance(c, (int, float)) for c in choices]):
+               and all([isinstance(c, (int, long, float)) for c in choices]):
                 # choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
@@ -433,9 +433,9 @@ class SettingsPanel(object):
             new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
 
             val = vigil_attr.value # only format if it's a number
-            if (isinstance(val, (int, float)) or
+            if (isinstance(val, (int, long, float)) or
                 (isinstance(val, collections.Iterable) and len(val) > 0
-                  and isinstance(val[0], (int, float)))
+                  and isinstance(val[0], (int, long, float)))
                 ):
                 def format_value(value, unit=unit):
                     new_ctrl.SetValue(readable_str(value, unit, sig=3))
@@ -448,10 +448,20 @@ class SettingsPanel(object):
         elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
 
-            if conf.get('type', "integer") == "integer":
-                klass = UnitIntegerSlider
+            if "type" in conf:
+                if conf["type"] == "integer":
+                    klass = UnitIntegerSlider
+                else:
+                    klass = UnitFloatSlider
             else:
-                klass = UnitFloatSlider
+                # guess from value(s)
+                known_values = [vigil_attr.value, min_val, max_val]
+                if choices is not None:
+                    known_values.extend(list(choices))
+                if any(isinstance(v, float) for v in known_values):
+                    klass = UnitFloatSlider
+                else:
+                    klass = UnitIntegerSlider
 
             new_ctrl = klass(self.panel,
                              value=vigil_attr.value,
@@ -460,7 +470,7 @@ class SettingsPanel(object):
                              scale=conf.get('scale', None),
                              unit=unit,
                              t_size=(50, -1),
-                             accuracy=conf.get('accuracy', None))
+                             accuracy=conf.get('accuracy', 4))
 
             vac = VigilantAttributeConnector(vigil_attr,
                                              new_ctrl,
@@ -664,9 +674,9 @@ class SettingsPanel(object):
         new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
 
         val = vigil_attr.value # only format if it's a number
-        if (isinstance(val, (int, float)) or
+        if (isinstance(val, (int, long, float)) or
             (isinstance(val, collections.Iterable) and len(val) > 0
-              and isinstance(val[0], (int, float)))
+              and isinstance(val[0], (int, long, float)))
             ):
             def format_value(value, unit=unit):
                 new_ctrl.SetValue(readable_str(value, unit, sig=3))
@@ -755,9 +765,9 @@ class SettingsPanel(object):
                 nice_str = time.strftime(u"%c", time.localtime(value))
             else:
                 # Still try to beautify a bit if it's a number
-                if (isinstance(value, (int, float)) or
+                if (isinstance(value, (int, long, float)) or
                     (isinstance(value, collections.Iterable) and len(value) > 0
-                      and isinstance(value[0], (int, float)))
+                      and isinstance(value[0], (int, long, float)))
                     ):
                     nice_str = readable_str(value, sig=3)
                 else:
