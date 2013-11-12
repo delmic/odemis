@@ -105,6 +105,22 @@ Clara: {
     }
 }
 
+# To use the Andor Neo:
+# (Comment out the Clara definition and replace references to Clara by Neo)
+#Neo: {
+#    class: andorcam3.AndorCam3,
+#    role: ccd,
+#    init: {
+#    init: {
+#           device: 0,  # if a real camera is plugged in, it's usually 0
+#           bitflow_install_dirs: "/usr/share/bitflow/", # the path where Bitflow data is installed
+#	       transpose: [2, -1], # rotation by 90°
+#    }, 
+#    properties: {
+#        exposureTime: 0.3, # s
+#    }
+#}
+
 # Use 3 CombinedActuators to separate the axes of the PIGCS over different roles
 
 # Axes should be synchronized with the camera
