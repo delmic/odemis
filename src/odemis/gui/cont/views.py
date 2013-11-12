@@ -472,7 +472,7 @@ class ViewSelector(object):
     them.
     """
 
-    def __init__(self, tab_data, main_frame, buttons):
+    def __init__(self, tab_data, main_frame, buttons, viewports=None):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope
             GUI
@@ -485,12 +485,23 @@ class ViewSelector(object):
         self._data_model = tab_data
 
         self.buttons = buttons
+        self.viewports = viewports
 
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
 
-        # subscribe to thumbnails
-        self._subscriptions = [] # list of functions
+        self._subscriptions = None
+        self._subscribe()
+
+        # subscribe to layout and view changes
+        self._data_model.viewLayout.subscribe(self._on_layout_change)
+        self._data_model.visible_views.subscribe(self._on_views_change)
+        self._data_model.focussedView.subscribe(self._on_focus_change,
+                                                init=True)
+
+    def _subscribe(self):
+
+        self._subscriptions = []
 
         # subscribe to change of name
         for btn, (vp, lbl) in self.buttons.items():
@@ -514,10 +525,6 @@ class ViewSelector(object):
 
             vp.microscope_view.name.subscribe(onName, init=True)
             self._subscriptions.append(onName)
-
-        # subscribe to layout and view changes
-        self._data_model.viewLayout.subscribe(self._onViewChange)
-        self._data_model.focussedView.subscribe(self._onViewChange, init=True)
 
     def toggleButtonForView(self, microscope_view):
         """
@@ -550,7 +557,7 @@ class ViewSelector(object):
         # Create an image from the 4 thumbnails in a 2x2 layout with small
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
-        btn_all = [b for b, (vp, lbl) in self.buttons.items() if vp is None][0]
+        btn_all = [b for b, (vp, _) in self.buttons.items() if vp is None][0]
         border_width = 2 # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
@@ -599,7 +606,34 @@ class ViewSelector(object):
         # set_overlay will rescale to the correct button size
         btn_all.set_overlay(im_22)
 
-    def _onViewChange(self, unused):
+    def _on_views_change(self, views):
+
+        if self.viewports:
+            new_viewports = set([vp for vp in self.viewports
+                                 if vp.microscope_view in views])
+            btn_viewports = set([vp for _, (vp, _) in self.buttons.items()
+                                 if vp is not None])
+
+            # Get the new viewport from new_viewports
+            new_viewport = new_viewports - btn_viewports
+            # Get the missing viewport from btn_viewports
+            old_viewport = btn_viewports - new_viewports
+
+
+            if len(new_viewport) == 1 and len(old_viewport) == 1:
+                new_viewport = new_viewport.pop()
+                old_viewport = old_viewport.pop()
+
+                for b, (vp, lbl) in self.buttons.items():
+                    if vp == old_viewport:
+                        self.buttons[b] = (new_viewport, lbl)
+                        break
+            else:
+                raise ValueError("Wrong number of ViewPorts found!")
+
+            self._subscribe()
+
+    def _on_layout_change(self, unused):
         """
         Called when another view is focused, or viewlayout is changed
         """
@@ -615,6 +649,7 @@ class ViewSelector(object):
             # otherwise (layout is 1) => select the right button
             self.toggleButtonForView(self._data_model.focussedView.value)
 
+    _on_focus_change = _on_layout_change
 
     def OnClick(self, evt):
         """

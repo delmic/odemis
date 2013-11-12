@@ -626,14 +626,16 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
+        viewports = [self.main_frame.vp_inspection_tl,
+                      self.main_frame.vp_inspection_tr,
+                      self.main_frame.vp_inspection_bl,
+                      self.main_frame.vp_inspection_br,
+                      self.main_frame.vp_inspection_plot]
+
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
-                                    [self.main_frame.vp_inspection_tl,
-                                     self.main_frame.vp_inspection_tr,
-                                     self.main_frame.vp_inspection_bl,
-                                     self.main_frame.vp_inspection_br,
-                                     self.main_frame.vp_inspection_plot],
+                                    viewports,
                                 )
 
         self._stream_controller = streamcont.StreamController(
@@ -667,7 +669,8 @@ class AnalysisTab(Tab):
         self._view_selector = viewcont.ViewSelector(
                                     self.tab_data_model,
                                     self.main_frame,
-                                    buttons
+                                    buttons,
+                                    viewports
                               )
 
         self.main_frame.btn_open_image.Bind(
