@@ -887,7 +887,14 @@ class SecomSettingsController(SettingsBarController):
             self.add_component("Camera",
                                 main_data.ccd,
                                 self._optical_panel)
-        # TODO: allow to change light.power
+
+            if main_data.light:
+                self._optical_panel.add_divider()
+
+                self._optical_panel.add_value(
+                                        "power",
+                                        main_data.light.power,
+                                        main_data.light)
 
         if main_data.ebeam:
             self.add_component("SEM", main_data.ebeam, self._sem_panel)

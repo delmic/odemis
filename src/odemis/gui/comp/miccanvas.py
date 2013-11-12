@@ -1335,6 +1335,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         img = wx.ImageFromBitmap(bitmap)
         self.microscope_view.thumbnail.value = img
 
+
     def OnPaint(self, event=None):
         wx.BufferedPaintDC(self, self._bmp_buffer)
         dc = wx.PaintDC(self)
