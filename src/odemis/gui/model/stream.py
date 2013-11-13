@@ -1590,7 +1590,7 @@ class StaticSpectrumStream(StaticStream):
     # within which the spectrum should be computed
     # TODO: should it also return the wavelength values? Or maybe another method
     # can do it?
-    def getSpectrum(self):
+    def getMeanSpectrum(self):
         """
         Compute the global spectrum of the data as an average over all the pixels
         returns (numpy.ndarray of float): average intensity for each wavelength

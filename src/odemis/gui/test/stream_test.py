@@ -90,7 +90,7 @@ class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
     def onActive(self, active):
         pass
 
-    def getSpectrum(self):
+    def getMeanSpectrum(self):
         return [5, 1, 4, 10, 8, 3] # fake spectrum
 
 
