@@ -791,7 +791,7 @@ class ViewButton(ImageTextToggleButton):
         self.SetFocus()
         self.Refresh()
 
-    def set_overlay(self, image):
+    def set_overlay_image(self, image):
         """ Changes the preview image of the button
 
         :param image: (wx.Image or None) Image to be displayed or a default

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 26 Mar 2012
 
 @author: Éric Piel
@@ -8,17 +8,17 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 import Pyro4
 from Pyro4.core import oneway
@@ -40,10 +40,10 @@ class NotApplicableError(Exception):
     pass
 
 class VigilantAttributeBase(object):
-    '''
+    """
     An abstract class for VigilantAttributes and its proxy
     It needs a .value member
-    '''
+    """
 
     def __init__(self, initval=None, unit=None):
         """
@@ -64,10 +64,15 @@ class VigilantAttributeBase(object):
         assert callable(listener)
         self._listeners.add(WeakMethod(listener))
 
+        # if hasattr(listener, 'name'):
+        #     if listener.name == "onThumbnail Optical":
+        #         print self._listeners
+        #         print WeakMethod(listener)
+
         if init:
             listener(self.value)  #pylint: disable=E1101
 
-        # TODO allow to pass custom additional parameters to the callback
+        # TODO: allow to pass custom additional parameters to the callback
 
     def unsubscribe(self, listener):
         self._listeners.discard(WeakMethod(listener))
@@ -84,11 +89,11 @@ class VigilantAttributeBase(object):
 
 
 class VigilantAttribute(VigilantAttributeBase):
-    '''
+    """
     A VigilantAttribute represents a value (an object) with:
      * meta-information (min, max, unit, read-only...)
      * observable behaviour (anyone can ask to be notified when the value changes)
-    '''
+    """
 
     def __init__(self, initval, readonly=False, setter=None, max_discard=100, *args, **kwargs):
         """

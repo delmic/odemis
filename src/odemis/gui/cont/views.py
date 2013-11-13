@@ -49,6 +49,7 @@ class ViewController(object):
         """
         self._data_model = tab_data
         self._main_data_model = tab_data.main
+        self.main_frame = main_frame
 
         if isinstance(viewports, collections.OrderedDict):
             self._viewports = viewports.keys()
@@ -375,8 +376,8 @@ class ViewController(object):
         # Swap the viewports in the viewport list
         vp[vpi1], vp[vpi2] = vp[vpi2], vp[vpi1]
 
-        # Refresh the Layout
-        parent_sizer.Layout()
+        vp[vpi1].Parent.Layout()
+
 
     def _on_visible_views(self, visible_views):
         """ This method is called when the visible views in the data model
@@ -490,7 +491,7 @@ class ViewSelector(object):
         for btn in self.buttons:
             btn.Bind(wx.EVT_BUTTON, self.OnClick)
 
-        self._subscriptions = None
+        self._subscriptions = {}
         self._subscribe()
 
         # subscribe to layout and view changes
@@ -501,7 +502,15 @@ class ViewSelector(object):
 
     def _subscribe(self):
 
-        self._subscriptions = []
+        # Explicitly unsubscribe the current event handlers
+        for btn, (vp, _) in self.buttons.items():
+            if btn in self._subscriptions:
+                vp.microscope_view.thumbnail.unsubscribe(
+                                            self._subscriptions[btn]["thumb"])
+                vp.microscope_view.name.unsubscribe(
+                                            self._subscriptions[btn]["label"])
+        # Clear the subscriptions
+        self._subscriptions = {}
 
         # subscribe to change of name
         for btn, (vp, lbl) in self.buttons.items():
@@ -511,20 +520,29 @@ class ViewSelector(object):
 
             @call_after
             def onThumbnail(im, btn=btn): # save btn in scope
-                btn.set_overlay(im)
+                # import traceback
+                # traceback.print_stack()
+                btn.set_overlay_image(im)
+            onThumbnail.name = "onThumbnail {}".format(
+                                                vp.microscope_view.name.value)
 
             vp.microscope_view.thumbnail.subscribe(onThumbnail, init=True)
             # keep ref of the functions so that they are not dropped
-            self._subscriptions.append(onThumbnail)
+            self._subscriptions[btn] = {"thumb" : onThumbnail}
 
             # also subscribe for updating the 2x2 button
             vp.microscope_view.thumbnail.subscribe(self._update22Thumbnail)
 
             def onName(name, lbl=lbl): # save lbl in scope
                 lbl.SetLabel(name)
+            onName.name = "onName {}".format(vp.microscope_view.name.value)
 
+            btn.Freeze()
             vp.microscope_view.name.subscribe(onName, init=True)
-            self._subscriptions.append(onName)
+            btn.Parent.Layout()
+            btn.Thaw()
+
+            self._subscriptions[btn]["label"] = onName
 
     def toggleButtonForView(self, microscope_view):
         """
@@ -533,7 +551,7 @@ class ViewSelector(object):
                                     button (2x2) is to be toggled
         Note: it does _not_ change the view
         """
-        for b, (vp, lbl) in self.buttons.items():
+        for b, (vp, _) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
             if ((vp is None and microscope_view is None) or
                 (vp and vp.microscope_view == microscope_view)):
@@ -553,7 +571,6 @@ class ViewSelector(object):
         the first button.
         im (unused)
         """
-
         # Create an image from the 4 thumbnails in a 2x2 layout with small
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
@@ -569,7 +586,7 @@ class ViewSelector(object):
 
         i = 0
 
-        for vp, lbl in self.buttons.values():
+        for vp, _ in self.buttons.values():
             if vp is None: # 2x2 layout
                 continue
 
@@ -603,11 +620,13 @@ class ViewSelector(object):
 
             i += 1
 
-        # set_overlay will rescale to the correct button size
-        btn_all.set_overlay(im_22)
+        # set_overlay_image will rescale to the correct button size
+        btn_all.set_overlay_image(im_22)
 
     def _on_views_change(self, views):
-
+        """ When the visible views change, this method makes sure that each
+        button is associated with the correct viewport
+        """
         if self.viewports:
             new_viewports = set([vp for vp in self.viewports
                                  if vp.microscope_view in views])
@@ -619,19 +638,25 @@ class ViewSelector(object):
             # Get the missing viewport from btn_viewports
             old_viewport = btn_viewports - new_viewports
 
-
             if len(new_viewport) == 1 and len(old_viewport) == 1:
                 new_viewport = new_viewport.pop()
                 old_viewport = old_viewport.pop()
 
                 for b, (vp, lbl) in self.buttons.items():
                     if vp == old_viewport:
+                        # pylint: disable=E1103
+                        # Remove the subscription of the old viewport
+                        old_viewport.microscope_view.thumbnail.unsubscribe(
+                                                self._subscriptions[b]["thumb"])
+                        old_viewport.microscope_view.name.unsubscribe(
+                                                self._subscriptions[b]["label"])
                         self.buttons[b] = (new_viewport, lbl)
+                        self._subscribe()
                         break
             else:
                 raise ValueError("Wrong number of ViewPorts found!")
-
-            self._subscribe()
+        else:
+            logging.warn("Could not handle view change, viewports unknown!")
 
     def _on_layout_change(self, unused):
         """

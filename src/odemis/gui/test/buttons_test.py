@@ -80,7 +80,7 @@ class ButtonsTestCase(test.GuiTestCase):
                                                 data.getpreview_blockBitmap(),
                                                 label_delta=1,
                                                 style=wx.ALIGN_CENTER)
-        cls.buttons['ViewButton'].set_overlay(data.geticon128Image())
+        cls.buttons['ViewButton'].set_overlay_image(data.geticon128Image())
         cls.buttons['ViewButton'].SetBitmaps(data.getpreview_block_aBitmap())
 
 

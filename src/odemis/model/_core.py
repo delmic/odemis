@@ -284,10 +284,10 @@ class WeakRefLostError(Exception):
 
 class WeakMethodBound(object):
     def __init__(self, f):
-        self.f = f.im_func
-        self.c = weakref.ref(f.im_self)
+        self.f = f.__func__
+        self.c = weakref.ref(f.__self__)
         # cache the hash so that it's the same after deref'd
-        self.hash = hash(f.im_func) + hash(f.im_self)
+        self.hash = hash(f.__func__) + hash(f.__self__)
 
     def __call__(self, *arg, **kwargs):
         ins = self.c()
@@ -329,12 +329,14 @@ class WeakMethodFree(object):
         except:
             return False
 
-#    def __ne__(self, other):
-#        return not self == other
+    # def __ne__(self, other):
+    #    return not self == other
 
 def WeakMethod(f):
     try:
-        f.im_func
+        # Check if the paramater has a function object, which is the case
+        # if it's a bound function (ie.e a method)
+        f.__func__
     except AttributeError:
         return WeakMethodFree(f)
     return WeakMethodBound(f)
