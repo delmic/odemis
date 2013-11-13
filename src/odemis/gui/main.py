@@ -115,9 +115,7 @@ class OdemisGUIApp(wx.App):
         #self.main_frame.Bind(wx.EVT_CHAR, self.on_key)
 
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug)
-        logging.info("***********************************************")
-        logging.info("************  Starting Odemis GUI  ************")
-        logging.info("***********************************************")
+        logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info(wx.version())
 
         self.init_gui()

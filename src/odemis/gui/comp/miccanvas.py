@@ -1314,7 +1314,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    @limit_invocation(2) # max 1/2 Hz
+    @limit_invocation(0.5) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     @ignore_dead  # This method might get called after the canvas is destroyed
     def _updateThumbnail(self):
@@ -1324,10 +1324,12 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
+        context = wx.ClientDC(self)
+
         dc = wx.MemoryDC()
         dc.SelectObject(bitmap)
 
-        dc.BlitPointSize((0, 0), self.ClientSize, self._bmp_buffer, (0, 0))
+        dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
 
         # close the DC, to be sure the bitmap can be used safely
         del dc
@@ -1342,6 +1344,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         for o in self.overlays:
             o.Draw(dc)
+
+        self._updateThumbnail()
 
     def add_overlay(self, ol):
         self.overlays.append(ol)
