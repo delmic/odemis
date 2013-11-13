@@ -1309,7 +1309,7 @@ class StreamPanel(wx.PyPanel):
     @limit_invocation(0.2)
     def on_new_spec_data(self, image):
         # Display the global spectrum in the visual range slider
-        gspec = self.stream.getSpectrum()
+        gspec = self.stream.getMeanSpectrum()
         if len(gspec) <= 1:
             logging.warning("Strange spectrum of len %d", len(gspec))
             return
