@@ -292,7 +292,7 @@ class WeakMethodBound(object):
     def __call__(self, *arg, **kwargs):
         ins = self.c()
         if ins == None:
-            raise WeakRefLostError, 'Method called on dead object'
+            raise WeakRefLostError('Method called on dead object')
         return self.f(ins, *arg, **kwargs)
 
     def __hash__(self):
@@ -317,7 +317,7 @@ class WeakMethodFree(object):
     def __call__(self, *arg, **kwargs):
         fun = self.f()
         if fun == None:
-            raise WeakRefLostError, 'Function no longer exist'
+            raise WeakRefLostError('Function no longer exist')
         return fun(*arg, **kwargs)
 
     def __hash__(self):

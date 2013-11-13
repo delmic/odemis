@@ -59,6 +59,38 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertTrue(prop.value == 0)
         self.assertTrue(self.called == 2)
 
+    def test_unsubscribe(self):
+        prop = model.IntVA(2)
+        self.called = 0
+        prop.subscribe(self.callback_test_notify)
+        # now count
+        prop.value = 3 # +1
+        prop.unsubscribe(self.callback_test_notify)
+        prop.value = 0 # +0
+        prop.value = 0 # +0
+        prop.value = 1 # +0
+        prop.value = 0 # +0
+
+        self.assertTrue(prop.value == 0)
+        self.assertTrue(self.called == 1)
+
+        # Bounded and unbounded methods are treated differently, so test both
+        def unbound_func(v):
+            self.called += 1
+
+        self.called = 0
+        prop.subscribe(unbound_func)
+        # now count
+        prop.value = 3 # +1
+        prop.unsubscribe(unbound_func)
+        prop.value = 0 # +0
+        prop.value = 0 # +0
+        prop.value = 1 # +0
+        prop.value = 0 # +0
+
+        self.assertTrue(prop.value == 0)
+        self.assertTrue(self.called == 1)
+
     def test_notify_init(self):
         prop = model.FloatVA(2.0)
         self.called = 0
