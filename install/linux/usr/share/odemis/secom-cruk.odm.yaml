@@ -22,11 +22,11 @@ Spectra: {
 
 # In case lasers are used instead of the Spectra:
 # (Spectra must be commented out and the SECOM definition updated)
-#LuxX: {
+#LightHub: {
 #    class: omicronxx.MultixX,
 #    role: light,
 #    init: {
-#        port: "/dev/ttyOXX*",
+#        ports: "/dev/ttyOXX*",
 #        },
 #    affects: [Clara],
 #}
@@ -78,7 +78,7 @@ Spectra: {
 "Nikon Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 60.0}, # ratio (actually of the complete light path)
+    init: {mag: 150.0}, # ratio (actually of the complete light path)
     affects: [Clara]
 }
 
@@ -93,7 +93,7 @@ Spectra: {
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
-Clara: {
+Clara: { # Also works with iXon Ultra
     class: andorcam2.AndorCam2,
     role: ccd,
     init: {
@@ -104,22 +104,6 @@ Clara: {
         exposureTime: 0.3, # s
     }
 }
-
-# To use the Andor Neo:
-# (Comment out the Clara definition and replace references to Clara by Neo)
-#Neo: {
-#    class: andorcam3.AndorCam3,
-#    role: ccd,
-#    init: {
-#    init: {
-#           device: 0,  # if a real camera is plugged in, it's usually 0
-#           bitflow_install_dirs: "/usr/share/bitflow/", # the path where Bitflow data is installed
-#	       transpose: [2, -1], # rotation by 90°
-#    }, 
-#    properties: {
-#        exposureTime: 0.3, # s
-#    }
-#}
 
 # Use 3 CombinedActuators to separate the axes of the PIGCS over different roles
 
