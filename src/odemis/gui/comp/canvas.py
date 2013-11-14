@@ -1171,15 +1171,11 @@ PLOT_CLOSE_STRAIGHT = 1
 PLOT_CLOSE_BOTTOM = 2
 PLOT_MODE_LINE = 1
 PLOT_MODE_BAR = 2
-PLOT_TICKS_HORZ = 1
-PLOT_TICKS_VERT = 2
 
 class PlotCanvas(wx.Panel):
-    """ This canvas can plot numerical data in various ways and allows
-    the querying of values by visual means.
+    """ This is a general canvas for plotting numerical data in various ways
 
     All values used by this class will be mapped to pixel values as needed.
-
     """
 
     def __init__(self, *args, **kwargs):
@@ -1211,9 +1207,6 @@ class PlotCanvas(wx.Panel):
         # Determines if the graph should be closed, and if so, how.
         self.closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
-        self.ticks = None
-        # The number of pixels to space ticks at
-        self.tick_gap = 40
 
         ## Event binding
 
@@ -1234,76 +1227,11 @@ class PlotCanvas(wx.Panel):
     def OnPaint(self, event=None):
         pass
 
-    # Value calculation methods
-
-    def value_to_position(self, value_point):
-        """ Translate a value tuple to a pixel position tuple """
-
-        if None in (self.width_x, self.width_y):
-            logging.warn("No plot data set")
-            return (0, 0)
-
-        x, y = value_point
-        w, h = self.ClientSize
-
-        perc_x = float(x - self.min_x) / self.width_x
-        perc_y = float(self.max_y - y) / self.width_y
-        # logging.debug("%s %s", px, py)
-
-        result = (perc_x * w, perc_y * h)
-        # logging.debug("Point translated from %s to %s", value_point, result)
-
-        return result
-
-    # Cached calculation methods. These should be flushed when the relevant
-    # data changes (e.g. when the canvas changes size).
-
-    # @memoize
-    def _val_y_to_pos_y(self, val_y):
-        perc_y = float(self.max_y - val_y) / self.width_y
-        return perc_y * self.ClientSize[1]
-
-    # @memoize
-    def _val_x_to_pos_x(self, val_x):
-        val = [(x, y) for x, y in self._data if x >= val_x]
-        if val:
-            x1, _ = self.value_to_position(val[0])
-
-            if len(val) > 1:
-                x2, _ = self.value_to_position(val[1])
-                return x1 + (x2 - x1) / 2
-            else:
-                return x1
-
-        return 0
-
-    # FIXME: When the memoize on the method is activated,
-    # _pos_x_to_val_x starts returning weird value.
-    # Reproduce: draw the smallest graph in the test case and drage back and
-    # forth between 0 and 1
-
-    #@memoize
-    def _val_x_to_val_y(self, val_x):
-        """ Map the give x pixel value to a y value """
-        res = [y for x, y in self._data if x <= val_x][-1]
-        return res
-
-    #@memoize
-    def _pos_x_to_val_x(self, pos_x):
-        w, _ = self.ClientSize
-        perc_x = pos_x / float(w)
-        val_x = (perc_x * self.width_x) + self.min_x
-        val_x = max(min(val_x, self.max_x), self.min_x)
-        return [x for x, _ in self._data if x <= val_x][-1]
-
-    # Getters and Setters
+     # Getters and Setters
 
     def set_1d_data(self, horz, vert):
-        """ Construct the data by zipping the wo provided 1D iterables """
-        if not all(horz[i] <= horz[i + 1] for i in xrange(len(horz) - 1)):
-            raise ValueError("The horizontal data should be sorted!")
-        self._data = zip(horz, vert)
-        self.reset_dimensions()
+        """ Construct the data by zipping the two provided 1D iterables """
+        self.set_data(zip(horz, vert))
 
     def set_data(self, data):
         """ Set the data to be plotted
@@ -1317,18 +1245,6 @@ class PlotCanvas(wx.Panel):
 
         self._data = data
         self.reset_dimensions()
-
-    def SetForegroundColour(self, *args, **kwargs):
-        super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
-        self.line_colour = wxcol_to_frgb(self.ForegroundColour)
-        self.fill_colour = change_brightness(self.line_colour, -0.2)
-
-    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
-        self.closed = closed
-
-    def set_plot_mode(self, mode):
-        self.plot_mode = mode
-        self.UpdateImage()
 
     # Attribute calculators
 
@@ -1370,6 +1286,81 @@ class PlotCanvas(wx.Panel):
         )
         self.UpdateImage()
 
+    # Value calculation methods
+
+    def value_to_position(self, value_tuple):
+        """ Translate a value tuple to a pixel position tuple """
+
+        if None in (self.width_x, self.width_y):
+            logging.warn("No plot data set")
+            return (0, 0)
+
+        x, y = value_tuple
+        w, h = self.ClientSize
+
+        perc_x = float(x - self.min_x) / self.width_x
+        perc_y = float(self.max_y - y) / self.width_y
+        # logging.debug("%s %s", px, py)
+
+        result = (perc_x * w, perc_y * h)
+        # logging.debug("Point translated from %s to %s", value_tuple, result)
+
+        return result
+
+    # Cached calculation methods. These should be flushed when the relevant
+    # data changes (e.g. when the canvas changes size).
+
+    # FIXME: When the memoize on the method is activated,
+    # _pos_x_to_val_x starts returning weird value.
+    # Reproduce: draw the smallest graph in the test case and drage back and
+    # forth between 0 and 1
+
+    # @memoize
+    def _val_y_to_pos_y(self, val_y):
+        perc_y = float(self.max_y - val_y) / self.width_y
+        return perc_y * self.ClientSize[1]
+
+    # @memoize
+    def _val_x_to_pos_x(self, val_x):
+        val = [(x, y) for x, y in self._data if x >= val_x]
+        if val:
+            x1, _ = self.value_to_position(val[0])
+
+            if len(val) > 1:
+                x2, _ = self.value_to_position(val[1])
+                return x1 + (x2 - x1) / 2
+            else:
+                return x1
+
+        return 0
+
+    #@memoize
+    def _val_x_to_val_y(self, val_x):
+        """ Map the give x pixel value to a y value """
+        res = [y for x, y in self._data if x <= val_x][-1]
+        return res
+
+    #@memoize
+    def _pos_x_to_val_x(self, pos_x):
+        w, _ = self.ClientSize
+        perc_x = pos_x / float(w)
+        val_x = (perc_x * self.width_x) + self.min_x
+        val_x = max(min(val_x, self.max_x), self.min_x)
+        return [x for x, _ in self._data if x <= val_x][-1]
+
+
+    def SetForegroundColour(self, *args, **kwargs):
+        super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
+        self.line_colour = wxcol_to_frgb(self.ForegroundColour)
+        self.fill_colour = self.line_colour
+
+    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
+        self.closed = closed
+
+    def set_plot_mode(self, mode):
+        self.plot_mode = mode
+        self.UpdateImage()
+
     # Image generation
 
     def UpdateImage(self):
@@ -1386,29 +1377,29 @@ class PlotCanvas(wx.Panel):
         dc.Clear() # make sure you clear the bitmap!
 
         ctx = wxcairo.ContextFromDC(dc)
-        width, height = self.ClientSize
-        self._plot_data(ctx, width, height)
+        # width, height = self.ClientSize
+        self._plot_data(ctx)
 
         del dc # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
 
-    def get_ticks(self):
-        """ Get a list of (x position, x value) tuples where the position
-        is given as a pixel value.
+    # def get_ticks(self):
+    #     """ Get a list of (x position, x value) tuples where the position
+    #     is given as a pixel value.
 
-        If no data is present, an empty list will be returned.
-        """
-        if self._data:
-            ticks = []
-            for i in range(self.ClientSize.x // self.tick_gap):
-                xpos = (i + 1) * self.tick_gap
-                ticks.append((xpos, self._pos_x_to_val_x(xpos)))
-            return ticks
-        else:
-            return []
+    #     If no data is present, an empty list will be returned.
+    #     """
+    #     if self._data:
+    #         ticks = []
+    #         for i in range(self.ClientSize.x // self.tick_gap):
+    #             xpos = (i + 1) * self.tick_gap
+    #             ticks.append((xpos, self._pos_x_to_val_x(xpos)))
+    #         return ticks
+    #     else:
+    #         return []
 
-    def _plot_data(self, ctx, width, height):
+    def _plot_data(self, ctx):
         if self._data:
             if self.plot_mode == PLOT_MODE_LINE:
                 self._line_plot(ctx)
@@ -1431,7 +1422,7 @@ class PlotCanvas(wx.Panel):
             line_to(x, y)
 
         # Store the line path for later use
-        line_path = ctx.copy_path()
+        # line_path = ctx.copy_path()
 
         # Close the path in the desired way, so we can fill it
         if self.closed == PLOT_CLOSE_BOTTOM:
@@ -1447,14 +1438,11 @@ class PlotCanvas(wx.Panel):
         # Fill the current path. (Filling also clears the path when done)
         ctx.fill()
 
-        # Reload the stored line path
-        ctx.append_path(line_path)
-        ctx.set_source_rgb(*self.line_colour)
-        # Draw the line
-        ctx.stroke()
-
-        if self.ticks:
-            self._tick_plot(ctx)
+        # # Reload the stored line path
+        # ctx.append_path(line_path)
+        # ctx.set_source_rgb(*self.line_colour)
+        # # Draw the line
+        # ctx.stroke()
 
     def _line_plot(self, ctx):
 
@@ -1479,19 +1467,5 @@ class PlotCanvas(wx.Panel):
         ctx.set_line_width(self.line_width)
         ctx.set_source_rgb(*self.fill_colour)
         ctx.fill_preserve()
-        ctx.set_source_rgb(*self.line_colour)
-        ctx.stroke()
-
-        if self.ticks:
-            self._tick_plot(ctx)
-
-    def _tick_plot(self, ctx):
-        ctx.set_line_width(2)
-        ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        ctx.set_source_rgba(0.0, 0, 0, 0.5)
-
-        for xpos, _ in self.get_ticks():
-            ctx.move_to(xpos, self.ClientSize.y - 5)
-            ctx.line_to(xpos, self.ClientSize.y)
-
-        ctx.stroke()
+        # ctx.set_source_rgb(*self.line_colour)
+        # ctx.stroke()

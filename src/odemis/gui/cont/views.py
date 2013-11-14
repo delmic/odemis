@@ -149,29 +149,29 @@ class ViewController(object):
             else:
                 logging.info("Creating generic static viewport layout")
                 vpv = collections.OrderedDict([
-                (self._viewports[0],  # focused view
-                 {"name": "SEM",
-                  "stream_classes": EM_STREAMS,
-                  }),
-                (self._viewports[1],
-                 {"name": "Optical",
-                  "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
-                (self._viewports[2],
-                 {"name": "Combined 1",
-                  "stream_classes":
-                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
-                (self._viewports[3],
-                 {"name": "Combined 2",
-                  "stream_classes":
-                        EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                  }),
-                (self._viewports[4],
-                 {"name": "Spectrum",
-                  "stream_classes": SPECTRUM_STREAMS,
-                 }),
-                                               ])
+                    (self._viewports[0],  # focused view
+                     {"name": "SEM",
+                      "stream_classes": EM_STREAMS,
+                      }),
+                    (self._viewports[1],
+                     {"name": "Optical",
+                      "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      }),
+                    (self._viewports[2],
+                     {"name": "Combined 1",
+                      "stream_classes":
+                            EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      }),
+                    (self._viewports[3],
+                     {"name": "Combined 2",
+                      "stream_classes":
+                            EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      }),
+                    (self._viewports[4],
+                     {"name": "Spectrum",
+                      "stream_classes": SPECTRUM_STREAMS
+                     }),
+                ])
                 self._createViewsFixed(vpv)
 
         # If SEM only: all SEM

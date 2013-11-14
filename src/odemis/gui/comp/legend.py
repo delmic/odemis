@@ -27,6 +27,7 @@ import cairo
 import wx
 
 import odemis.gui as gui
+import odemis.gui.util.units as units
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
@@ -214,8 +215,15 @@ class AxisLegend(wx.Panel):
         self.label = None
         self.label_pos = None
 
+        self.ticks = None
+        self.tick_gap = 100
+        self.OnSize(None)
+
     def OnPaint(self, event=None):
-        ticks = self.Parent.canvas.get_ticks()
+
+        if not self.ticks:
+            self.calc_ticks()
+
         ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -228,14 +236,35 @@ class AxisLegend(wx.Panel):
 
         ctx.set_source_rgb(*self.tick_colour)
 
-        for xpos, xval in ticks:
-            label = str(xval)
+        ctx.set_line_width(2)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+
+        for xpos, xval in self.ticks:
+            label = units.readable_str(xval, "m", 2)
             _, _, width, height, _, _ = ctx.text_extents(label)
-            ctx.move_to(xpos - (width / 2), height + 5)
+            ctx.move_to(xpos - (width / 2), height + 8)
             ctx.show_text(label)
+
+            ctx.move_to(xpos, 5)
+            ctx.line_to(xpos, 0)
+            ctx.stroke()
 
         if self.label and self.label_pos:
             self.write_label(ctx, self.label, self.label_pos)
+
+    def calc_ticks(self):
+        self.ticks = []
+
+        # No ticks at the start and end
+        num_ticks = self.ClientSize.x // self.tick_gap
+        num_ticks -= 1 if not self.ClientSize.x % self.tick_gap else 0
+
+        for i in range(num_ticks):
+            xpos = (i + 1) * self.tick_gap
+            xval = self.Parent.canvas._pos_x_to_val_x(xpos)
+            xval = units.round_significant(xval, 2)
+            xpos = int(self.Parent.canvas._val_x_to_pos_x(xval))
+            self.ticks.append((xpos, xval))
 
     def set_label(self, label, pos_x):
         self.label = unicode(label)
@@ -253,7 +282,7 @@ class AxisLegend(wx.Panel):
         margin_x = 5
 
         _, _, width, _, _, _ = ctx.text_extents(label)
-        x, y = pos_x, 30
+        x, y = pos_x, 34
         x = x - width / 2
 
         if x + width + margin_x > self.ClientSize.x:
@@ -266,6 +295,7 @@ class AxisLegend(wx.Panel):
         ctx.set_source_rgba(*hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT))
         ctx.move_to(x, y)
         ctx.show_text(label)
+
 
     def OnSize(self, event):
         self.Refresh(eraseBackground=False)

@@ -1231,10 +1231,9 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.closed = canvas.PLOT_CLOSE_BOTTOM
         self.plot_mode = canvas.PLOT_MODE_BAR
-        self.ticks = canvas.PLOT_TICKS_HORZ
 
-        self.focusline_overlay = comp_overlay.MarkingLineOverlay(self)
-        self.add_overlay(self.focusline_overlay)
+        self.markline_overlay = comp_overlay.MarkingLineOverlay(self)
+        self.add_overlay(self.markline_overlay)
 
         ## Event binding
 
@@ -1242,6 +1241,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
         # self.Bind(wx.EVT_SIZE, self.OnSize)
+
 
     # Event handlers
 
@@ -1266,7 +1266,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         event.Skip()
 
     def OnMouseMotion(self, event):
-        if self.dragging and self.focusline_overlay:
+        if self.dragging and self.markline_overlay:
             self._position_focus_line(event)
         event.Skip()
 
@@ -1276,7 +1276,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         if None not in (self.current_x_value, self.current_y_value):
             pos = (self._val_x_to_pos_x(self.current_x_value),
                    self._val_y_to_pos_y(self.current_y_value))
-            self.focusline_overlay.set_position(pos)
+            self.markline_overlay.set_position(pos)
 
     def _position_focus_line(self, event):
         """ Position the focus line at the position of the given mouse event """
@@ -1296,8 +1296,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self.Parent.legend_panel.set_label(label, x)
             self.Parent.legend_panel.Refresh()
 
-        #self.focusline_overlay.set_label(label)
-        self.focusline_overlay.set_position(pos)
+        #self.markline_overlay.set_label(label)
+        self.markline_overlay.set_position(pos)
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):

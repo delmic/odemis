@@ -767,7 +767,9 @@ class AnalysisTab(Tab):
                                     iimg.get_pixel_size(),
                                     strm.selected_pixel
                         )
-                strm.selected_pixel.subscribe(self._on_spec_pixel)
+                strm.selected_pixel.subscribe(
+                                        self._on_spec_pixel,
+                                        init=True)
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break
         else:
@@ -894,9 +896,6 @@ class AnalysisTab(Tab):
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
-
-        # FIXME: DUMMY DATA!
-        self.main_frame.vp_inspection_plot.canvas.set_1d_data(range(50), range(50))
 
     def _split_channels(self, data):
         """

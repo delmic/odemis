@@ -45,7 +45,7 @@ import odemis.gui.util.units as units
 import odemis.model as model
 import collections
 from odemis.util import TimeoutError
-from odemis.model._dataflow import MD_AR_POLE, MD_BINNING
+from odemis.model._dataflow import MD_AR_POLE
 
 
 # to identify a ROI which must still be defined by the user
@@ -1458,7 +1458,7 @@ class StaticSpectrumStream(StaticStream):
             pn = da.metadata[MD_WL_POLYNOMIAL]
             pn = polynomial.polytrim(pn)
             if len(pn) >= 2:
-                npn = polynomial.Polynomial(pn,
+                npn = polynomial.Polynomial(pn,  #pylint: disable=E1101
                                             domain=[0, da.shape[0] - 1],
                                             window=[0, da.shape[0] - 1])
                 return npn.linspace(da.shape[0])[1]
@@ -1551,13 +1551,18 @@ class StaticSpectrumStream(StaticStream):
                                              self._findMPP(data),
                                              self._findPos(data))
 
-    def get_spectrum(self):
+    def get_spectrum_range(self):
+        if self.selected_pixel.value:
+            x, y = self.selected_pixel.value
+            return self._get_wavelength_per_pixel(self.raw[0][:, 0, 0, y, x])
+        return None
+
+    def get_pixel_spectrum(self):
         """ Return the spectrum belonging to the selected pixel or None if no
         spectrum is selected.
         """
         if self.selected_pixel.value:
             x, y = self.selected_pixel.value
-            print self.raw[0][:, 0, 0, y, x].shape
             return self.raw[0][:, 0, 0, y, x]
         return None
 
@@ -2179,11 +2184,16 @@ class StreamTree(object):
 
         return acc
 
+    def __getitem__(self, index):
+        """ Return the Stream of StreamTree using index reference val[i] """
+        return self.streams[index]
+
     def add_stream(self, stream):
         if isinstance(stream, (Stream, StreamTree)):
             self.streams.append(stream)
             if hasattr(stream, 'should_update'):
-                stream.should_update.subscribe(self.stream_update_changed, init=True)
+                stream.should_update.subscribe(self.stream_update_changed,
+                                               init=True)
             # print "stream added %s" % stream.should_update.value
         else:
             msg = "Illegal type %s found in add_stream!" % type(stream)
@@ -2258,3 +2268,21 @@ class StreamTree(object):
             lraw.extend(s.raw)
 
         return lraw
+
+    @property
+    def spectrum_streams(self):
+        """ Return a flat list of spectrum streams """
+        return self._get_streams(SPECTRUM_STREAMS)
+
+    def _get_streams(self, stream_types):
+        """ Return a flat list of streams of `stream_type` within the StreamTree
+        """
+        streams = []
+
+        for s in self.streams:
+            if isinstance(s, StreamTree):
+                streams.extend(s._get_streams(stream_types))
+            elif isinstance(s, stream_types):
+                streams.append(s)
+
+        return streams

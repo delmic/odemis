@@ -70,6 +70,8 @@ class ViewPort(wx.Panel):
 
         ##### Legend
 
+        self.legend_panel = None
+
         if self.legend_class:
             # It's made of multiple controls positioned via sizers
             # TODO: allow the user to pick which information is displayed in the
@@ -388,6 +390,10 @@ class PlotViewport(ViewPort):
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
+        # We need a local reference to the spectrum stream, because if we rely
+        # on the reference within the MicorscopeView, it might be replaced
+        # before we get an explicit chance to unsubscribe event handlers
+        self.spectrum_stream = None
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
@@ -399,6 +405,34 @@ class PlotViewport(ViewPort):
     @property
     def microscope_view(self):
         return self._microscope_view
+
+    def connect_stream(self, should_update=None):
+        """ This method will connect this ViewPort to the Spectrum Stream so it
+        it can react to spectrum pixel selection.
+        """
+        if should_update:
+            ss = self.microscope_view.stream_tree.spectrum_streams
+
+            # There should be exactly one Spectrum stream. In the future there
+            # might be scenarios where there are more than one.
+            if len(ss) != 1:
+                raise ValueError("Unexpected number of Spectrum Streams found!")
+
+            # TODO: Remove following code once we know for sure explicit
+            # unsubscription is not needed.
+
+            # if self.spectrum_stream:
+            #     self.spectrum_stream.selected_pixel.unsubscribe(
+            #                                             self._on_spec_pixel)
+
+            self.spectrum_stream = ss[0]
+            self.spectrum_stream.selected_pixel.subscribe(self._on_spec_pixel)
+
+    def _on_spec_pixel(self, pixel):
+        data = self.spectrum_stream.get_pixel_spectrum()
+        domain = self.spectrum_stream.get_spectrum_range()
+        self.canvas.set_1d_data(domain, data)  #pylint: disable=E1101
+
 
     def setView(self, microscope_view, tab_data):
         """
@@ -424,3 +458,7 @@ class PlotViewport(ViewPort):
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
+
+        # Keep an eye on the stream tree, so we can (re)connect when it changes
+        microscope_view.stream_tree.should_update.subscribe(
+                                                        self.connect_stream)
