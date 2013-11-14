@@ -24,7 +24,16 @@ import logging
 import math
 import numpy
 import scipy.misc
+from matplotlib import mlab
 import wx
+
+from odemis import model
+
+# Global variables
+xmax = 13.25
+hole_diameter = 0.6
+focus_distance = 0.5
+f = 2.5
 
 # various functions to convert and modify images (DataArray and wxImage)
 
@@ -369,3 +378,144 @@ def Average(images, rect, mpp, merge=0.5):
     # TODO (once the operator callable is clearly defined)
     raise NotImplementedError()
 
+
+def AngleResolved2Polar(data, output_size):
+    """
+    Converts an angle resolved image to polar representation
+    data (model.DataArray): The DataArray that was obtained by reading the image file
+    output_size (int): The size of the output DataArray (assumed to be square)
+    returns (model.DataArray): converted image in polar view
+    """
+    # TODO change everything to SI
+    image = data
+
+    # Get the metadata
+    # Raise exception if not square
+    pixel_size, pixel_size = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
+    mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+    binning = data.metadata[model.MD_BINNING]
+    magnification = data.metadata[model.MD_LENS_MAG]
+
+    # TODO change output_size
+    h_output_size = int(output_size / 2)
+    angle_data = numpy.zeros(shape=(image.size, 3))
+    k = 0
+
+    superinput = model.DataArray(image)
+
+    inverted_image = numpy.zeros(shape=image.shape)
+    inverted_image = model.DataArray(inverted_image)
+
+
+    for i, item_i in enumerate(image):
+        for j, item_j in enumerate(item_i):
+            inverted_image[i][j] = image[j][i]
+
+    superinvinput = model.DataArray(inverted_image)
+
+    eff_pixel_size = pixel_size * binning / magnification
+    parabola_parameter = 1 / (4 * f)
+
+    # TODO try to use xrange (more efficient)
+    for i, item_i in enumerate(inverted_image):
+        for j, item_j in enumerate(item_i):
+            xpix = -(j - mirror_x)
+            ypix = -(i - mirror_y) + (2 * f) / eff_pixel_size
+            theta_phi_omega = FindAngle(xpix, ypix, parabola_parameter, eff_pixel_size)
+            angle_data[k] = [theta_phi_omega[0], theta_phi_omega[1], inverted_image[i][j] / theta_phi_omega[2]]
+            k = k + 1
+
+    polar_grid = angle_data
+
+    for i, item_i in enumerate(polar_grid):
+        theta = angle_data[i][0] * h_output_size / numpy.pi * 2
+        phi = angle_data[i][1]
+        polar_grid[i][0] = math.cos(phi) * theta
+        polar_grid[i][1] = math.sin(phi) * theta
+
+    # interpolation
+    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+    qz = mlab.griddata(polar_grid[:, 0], polar_grid[:, 1], polar_grid[:, 2], xi, yi, interp="linear")
+    result = model.DataArray(qz, image.metadata)
+
+    return result
+
+
+def FindAngle(xpix, ypix, parabola_parameter, pixel_size):
+    """
+    For a given pixel, finds the angle of the corresponding ray 
+    xpix (float): x coordinate of the pixel
+    ypix (float): y coordinate of the pixel
+    parabola_parameter (float): 1 / (4 * f)
+    pixel_size (float): CCD pixelsize
+    returns (List): list with theta phi and omega
+    """
+    y = xpix * pixel_size
+    z = ypix * pixel_size
+    r2 = math.pow(y, 2) + math.pow(z, 2)
+    xfocus = parabola_parameter * r2 - 1 / (4 * parabola_parameter)
+    xfocus2plusr2 = math.pow(xfocus, 2) + r2
+    sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
+    theta_phi_omega = []
+    
+    # theta
+    theta_phi_omega.append(math.acos(z / sqrtxfocus2plusr2))
+    
+    # phi
+    theta_phi_omega.append(math.atan2(y, xfocus))
+    if theta_phi_omega[1] < 0:
+        theta_phi_omega[1] = theta_phi_omega[1] + 2 * numpy.pi
+        
+    # omega
+    theta_phi_omega.append(math.pow(pixel_size, 2) * (2 * parabola_parameter * r2 - xfocus) / sqrtxfocus2plusr2 / xfocus2plusr2)
+
+    return theta_phi_omega
+
+def InMirror(data):
+    """
+    Crops the part of the image that is outside the boundaries of the mirror
+    data (model.DataArray): The DataArray with the image
+    returns (model.DataArray): Cropped image
+    """
+    image = data
+    ccd_size = 10000
+    parabola_parameter = 1 / (4 * f)
+    image_size, image_size = image.shape  # expected to be square
+    h_image_size = int(image_size / 2)
+    xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
+    yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
+
+    for ii, item_ii in enumerate(xi):
+        for jj, item_jj in enumerate(yi):
+            # TODO xi[ii], yi[jj] directly to InMirror
+            xval = xi[ii]
+            yval = yi[jj]
+            theta = numpy.sqrt(math.pow(xval, 2) + math.pow(yval, 2)) / h_image_size * numpy.pi / 2
+            phi = math.atan2(yval, xval)
+
+            p1 = 1 / (4 * parabola_parameter)  # TODO change it to p1 = f
+            p2 = 0
+            p3 = 0
+            v1 = math.sin(theta) * math.cos(phi)
+            v2 = math.sin(theta) * math.sin(phi)
+            v3 = math.cos(theta)
+
+            A = (math.pow(v2, 2) + math.pow(v3, 2))
+            B = (2 * p2 * v2 + 2 * v3 * p3) - v1 / parabola_parameter
+            C = (math.pow(p2, 2) + math.pow(p3, 2)) - p1 / parabola_parameter
+
+            if A == 0:
+                t = -C / B
+            else:
+                t = (-B + numpy.sqrt(math.pow(B, 2) - 4 * A * C)) / (2 * A)
+
+            point = [p1 + t * v1, p2 + t * v2, p3 + t * v3]
+
+            if ~(point[0] <= xmax and
+                 point[2] >= focus_distance and
+                 (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((hole_diameter / 2), 2) and
+                 abs(point[1]) < ccd_size / 2):
+                image[jj][ii] = 0
+
+    return image
