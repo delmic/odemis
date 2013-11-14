@@ -133,18 +133,7 @@ class MainGUIData(object):
             for e in microscope.emitters:
                 if e.role == "light":
                     self.light = e
-                    # pick a nice value to turn on the light
-                    if self.light.power.value > 0:
-                        self._light_power_on = self.light.power.value
-                    else:
-                        try:
-                            self._light_power_on = max(self.light.power.range)
-                        except (AttributeError, model.NotApplicableError):
-                            try:
-                                self._light_power_on = max(self.light.power.choices)
-                            except (AttributeError, model.NotApplicableError):
-                                self._light_power_on = 1
-                                logging.warning("Unknown light power value")
+                    self._light_power_on = None # None = unknown
                 elif e.role == "filter":
                     self.light_filter = e
                 elif e.role == "e-beam":
@@ -205,10 +194,21 @@ class MainGUIData(object):
                     self._light_power_on = self.light.power.value
                 self.light.power.value = 0
         elif state == STATE_ON:
-            # the image acquisition from the camera is handled solely by the
-            # streams
+            # the image acquisition from the camera is handled solely by the streams
             if self.light:
-                self.light.power.value = self._light_power_on
+                if self._light_power_on: # re-use previous value
+                    self.light.power.value = self._light_power_on
+                else:
+                    # pick a nice value (=max), if not already on
+                    if self.light.power.value == 0:
+                        try:
+                            self.light.power.value = max(self.light.power.range)
+                        except (AttributeError, model.NotApplicableError):
+                            try:
+                                self.light.power.value = max(self.light.power.choices)
+                            except (AttributeError, model.NotApplicableError):
+                                logging.error("Unknown light power range, setting to 1 W")
+                                self.light.power.value = 1
 
     def onEMState(self, state):
         """ Event handler for when the state of the electron microscope changes
