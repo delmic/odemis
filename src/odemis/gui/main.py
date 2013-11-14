@@ -201,7 +201,7 @@ class OdemisGUIApp(wx.App):
             tab_defs = [
                 (
                     ("secom",),
-                    ("LENS ALIGNMENT", ),
+                    ("LENS ALIGNMENT",),
                     "secom_align",
                     tabs.LensAlignTab,
                     self.main_frame.btn_tab_secom_align,
@@ -232,8 +232,8 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.pnl_tab_sparc_acqui
                 ),
                 (
-                    (None, "secom", "sparc"),
-                    ("GALLERY", "GALLERY", "ANALYSIS"),
+                    (None, "secom", "sem", "optical", "sparc"),
+                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS"),
                     "analysis",
                     tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,
