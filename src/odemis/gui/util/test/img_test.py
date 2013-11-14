@@ -3,15 +3,20 @@ Created on 19 Sep 2012
 
 @author: piel
 '''
-from odemis.gui.util import img
-from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
-    FindOptimalBC, DataArray2RGB
-from unittest.case import skip
 import logging
 import numpy
 import time
 import unittest
 import wx
+
+from odemis import model
+from odemis import dataio
+from odemis.dataio import hdf5
+from odemis.gui.util import img
+from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
+    FindOptimalBC, DataArray2RGB
+
+
 logging.getLogger().setLevel(logging.DEBUG)
 
 def GetRGB(im, x, y):
@@ -23,7 +28,66 @@ def GetRGB(im, x, y):
     b = im.GetBlue(x, y)
     
     return (r, g, b)
-    
+
+class TestAngleResolved2Polar(unittest.TestCase):
+    """
+    Test AngleResolved2Polar
+    """
+    def test_precomputed(self):
+        """
+        Compares the output of AngleResolved2Polar to the output of the corresponding matlab function.
+        """
+        data = hdf5.read_data("myh5file.h5")
+        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_LENS_MAG] = 0.4917
+        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        result = img.AngleResolved2Polar(data[0], 200)
+        dataio.hdf5.export("test_polar_precomputed_output", result, thumbnail=None)
+
+        desired_output = numpy.loadtxt(open("finalimage.csv", "rb"), delimiter=",", skiprows=0)
+
+        numpy.testing.assert_allclose(result, desired_output, rtol=1e-04)
+
+class TestInMirror(unittest.TestCase):
+    """
+    Test InMirror
+    """
+    def test_precomputed(self):
+        """
+        Compares the output of InMirror to the output of the corresponding matlab function.
+        """
+        # data = hdf5.read_data("test_polar_precomputed_output")
+        data = numpy.loadtxt(open("finalpython.csv", "rb"), delimiter=",", skiprows=0)
+        cropped_result = img.InMirror(model.DataArray(data))
+        dataio.hdf5.export("test_cropped_precomputed_output", cropped_result, thumbnail=None)
+
+        desired_output = numpy.loadtxt(open("desiredimage.csv", "rb"), delimiter=",", skiprows=0)
+
+        numpy.testing.assert_allclose(cropped_result, desired_output, rtol=1e-04)
+
+class TestPolarConversion(unittest.TestCase):
+    """
+    Test AngleResolved2Polar and InMirror combination
+    """
+    def test_precomputed(self):
+        """
+        Feeds the output of AngleResolved2Polar to InMirror and compares its output to the corresponding 
+        matlab function.
+        """
+        data = hdf5.read_data("myh5file.h5")
+        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_LENS_MAG] = 0.4917
+        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        result = img.AngleResolved2Polar(data[0], 200)
+        cropped_result = img.InMirror(result)
+        dataio.hdf5.export("test_combined_precomputed_output", cropped_result, thumbnail=None)
+
+        desired_output = numpy.loadtxt(open("desiredimage.csv", "rb"), delimiter=",", skiprows=0)
+
+        numpy.testing.assert_allclose(cropped_result, desired_output, rtol=1e-04)
+
 
 class TestFindOptimalBC(unittest.TestCase):
     def test_simple(self):
