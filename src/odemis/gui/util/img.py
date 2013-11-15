@@ -24,9 +24,10 @@ import logging
 import math
 import numpy
 import scipy.misc
-from matplotlib import mlab
+import scipy.interpolate
+import time
 import wx
-
+from matplotlib import mlab
 from odemis import model
 
 # Global variables
@@ -396,7 +397,7 @@ def AngleResolved2Polar(data, output_size):
     binning = data.metadata[model.MD_BINNING]
     magnification = data.metadata[model.MD_LENS_MAG]
 
-    # TODO change output_size
+    # TODO add exception
     h_output_size = int(output_size / 2)
     angle_data = numpy.zeros(shape=(image.size, 3))
     k = 0
@@ -437,6 +438,10 @@ def AngleResolved2Polar(data, output_size):
     xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
     yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
     qz = mlab.griddata(polar_grid[:, 0], polar_grid[:, 1], polar_grid[:, 2], xi, yi, interp="linear")
+    # mesh = numpy.meshgrid(xi, yi)
+    # start = time.clock()
+    # qz = scipy.interpolate.griddata(polar_grid[:, 0:2], polar_grid[:, 2], mesh, method='linear')
+    # print time.clock() - start
     result = model.DataArray(qz, image.metadata)
 
     return result
@@ -472,17 +477,23 @@ def FindAngle(xpix, ypix, parabola_parameter, pixel_size):
 
     return theta_phi_omega
 
-def InMirror(data):
+def InMirror(data, hole=True):
     """
     Crops the part of the image that is outside the boundaries of the mirror
     data (model.DataArray): The DataArray with the image
+    hole (boolean): If True, hole is made in the center of the output image
     returns (model.DataArray): Cropped image
     """
     image = data
     ccd_size = 10000
+
+    if hole == True:
+        our_hole_diameter = hole_diameter
+    else:
+        our_hole_diameter = 0.0
     parabola_parameter = 1 / (4 * f)
-    image_size, image_size = image.shape  # expected to be square
-    h_image_size = int(image_size / 2)
+    image_size_x, image_size_y = image.shape  # expected to be square
+    h_image_size = int(image_size_x / 2)
     xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
     yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
 
@@ -514,7 +525,7 @@ def InMirror(data):
 
             if ~(point[0] <= xmax and
                  point[2] >= focus_distance and
-                 (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((hole_diameter / 2), 2) and
+                 (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((our_hole_diameter / 2), 2) and
                  abs(point[1]) < ccd_size / 2):
                 image[jj][ii] = 0
 
