@@ -20,21 +20,24 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from libtiff import TIFF
-from odemis import model
+
 import calendar
-import libtiff.libtiff_ctypes as T # for the constant names
+from libtiff import TIFF
 import logging
 import numpy
+from numpy.polynomial import polynomial
+from odemis import model
 import odemis
 import re
 import time
-import xml.etree.ElementTree as ET
-#pylint: disable=E1101
 
+import libtiff.libtiff_ctypes as T # for the constant names
+import xml.etree.ElementTree as ET
+
+
+#pylint: disable=E1101
 # Note about libtiff: it's a pretty ugly library, with 2 different wrappers.
 # We use only the C wrapper (not the Python implementation).
-
 # Note concerning the image format: it follows the numpy convention. The first
 # dimension is the height, and second one is the width. (This is so because
 # in memory the height is the slowest changing dimension, so it is first in C
@@ -44,7 +47,6 @@ import xml.etree.ElementTree as ET
 # order (but that should not matter).
 # PIL and wxPython have images with the size expressed as (width, height), although
 # in memory it corresponds to the same representation.
-
 # User-friendly name
 FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
@@ -386,17 +388,11 @@ def _updateMDFromOME(root, das):
         except (KeyError, ValueError):
             pass
 
-        try:
-            a = float(pxe.attrib["WaveStart"]) * 1e-9
-            b = float(pxe.attrib["WaveIncrement"]) * 1e-9
-            md[model.MD_WL_POLYNOMIAL] = [a, b]
-        except (KeyError, ValueError):
-            pass
-
         ctz_2_ifd = _getIFDsFromOME(pxe)
 
         # Channels are a bit tricky, because apparently they are associated to
         # each C only by the order they are specified.
+        wl_list = [] # we'll know it only once all the channels are passed
         chan = 0
         for che in pxe.findall("Channel"):
             mdc = {}
@@ -413,7 +409,12 @@ def _updateMDFromOME(root, das):
 
             try:
                 owl = float(che.attrib["EmissionWavelength"]) * 1e-9 # nm -> m
-                mdc[model.MD_OUT_WL] = (owl, owl)
+                if che.attrib["AcquisitionMode"] == "SpectralImaging":
+                    # Spectrum => on the whole data cube
+                    wl_list.append(owl)
+                else:
+                    # Fluorescence
+                    mdc[model.MD_OUT_WL] = (owl, owl)
             except (KeyError, ValueError):
                 pass
 
@@ -457,7 +458,21 @@ def _updateMDFromOME(root, das):
                 da.metadata.update(mdc)
 
             chan += 1
-            
+
+        # Update metadata of each da, so that they will be merged
+        if wl_list:
+            if len(wl_list) != chan:
+                logging.warning("WL_LIST has length %d, while expected %d",
+                                len(wl_list), chan)
+            for ifd in ctz_2_ifd.flat:
+                if ifd == -1:
+                    continue
+                da = das[ifd]
+                if da is None:
+                    continue
+                da.metadata.update({model.MD_WL_LIST: wl_list})
+
+
         # Plane (= one per CTZ -> IFD)
         for ple in pxe.findall("Plane"):
             mdp = {}
@@ -838,31 +853,33 @@ def _addImageElement(root, das, ifd):
     # For each DataArray, add a Channel, TiffData, and Plane, but be careful
     # because they all have to be grouped and in this order.
 
-    # TODO: for spectrum images, adding 1 channel per wavelength seem extremely
-    # inefficient, there must be a better way to describe them in OME-XML
-    # Channel Element.
-    # => "Each Logical Channel is composed of one or more
-    # ChannelComponents.  For example, an entire spectrum in an FTIR experiment may be stored in a single Logical Channel with each discrete wavenumber of the spectrum
-    # constituting a ChannelComponent of the FTIR Logical Channel."
+    # For spectrum images, 1 channel per wavelength. As suggested on the
+    # OME-devel mailing list, we use EmissionWavelength to store it.
     # http://trac.openmicroscopy.org.uk/ome/ticket/7355 mentions spectrum can
     # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
     # not so pretty.
-    # Some very old versions of the standard had WaveStart/WaveIncrement on Image
-    # WaveIncrement needs to be a float, as it's easily < 1 if the spectrum is
-    # fine.
-
     if model.MD_WL_POLYNOMIAL in globalMD:
-        # we store a subset of the metadata in a non-standard attribute :-(
+        # we store it by computing the actual values of each channel
         pn = globalMD[model.MD_WL_POLYNOMIAL]
-        if len(pn) >= 1:
-            pixels.attrib["WaveStart"] = "%f" % (pn[0] * 1e9) # in nm
-        if len(pn) >= 2:
-            pixels.attrib["WaveIncrement"] = "%f" % (pn[1] * 1e9) # in nm/px
+        l = gshape[0]
+        npn = polynomial.Polynomial(pn, domain=[0, l - 1], window=[0, l - 1])
+        wl_list = npn.linspace(l)[1]
+#        if len(pn) >= 1:
+#            pixels.attrib["WaveStart"] = "%f" % (pn[0] * 1e9) # in nm
+#        if len(pn) >= 2:
+#            pixels.attrib["WaveIncrement"] = "%f" % (pn[1] * 1e9) # in nm/px
     elif model.MD_WL_LIST in globalMD:
-        lwl = globalMD[model.MD_WL_LIST]
-        inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
-        pixels.attrib["WaveStart"] = "%f" % (lwl[0] * 1e9) # in nm
-        pixels.attrib["WaveIncrement"] = "%f" % (inc * 1e9) # in nm/px
+        wl_list = globalMD[model.MD_WL_LIST]
+        if len(wl_list) != da.shape[0]:
+            logging.warning("WL_LIST metadata has length of %d, while expected "
+                            "%d, skipping it", len(wl_list), da.shape[0])
+            wl_list = None
+
+#        inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
+#        pixels.attrib["WaveStart"] = "%f" % (lwl[0] * 1e9) # in nm
+#        pixels.attrib["WaveIncrement"] = "%f" % (inc * 1e9) # in nm/px
+    else:
+        wl_list = None
 
     subid = 0
     for da in das:
@@ -876,7 +893,7 @@ def _addImageElement(root, das, ifd):
             if is_rgb:
                 chan.attrib["SamplesPerPixel"] = "%d" % dshape[0]
                 
-            # TODO Name attrib for Filtered color streams?
+            # Name can be different for each channel in case of fluroescence
             if model.MD_DESCRIPTION in da.metadata:
                 chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
     
@@ -902,6 +919,16 @@ def _addImageElement(root, das, ifd):
                 ewl = numpy.mean(owl) * 1e9 # in nm
                 chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
     
+            if wl_list is not None and len(wl_list) > 0:
+                if model.MD_OUT_WL in da.metadata:
+                    logging.warning("DataArray contains both OUT_WL (%s) and "
+                                    "incompatible WL_LIST metadata",
+                                    da.metadata[model.MD_OUT_WL])
+                else:
+                    chan.attrib["AcquisitionMode"] = "SpectralImaging"
+                    # It should be an int, but that looses too much precision
+                    chan.attrib["EmissionWavelength"] = "%f" % (wl_list[c] * 1e9)
+                 
             if model.MD_USER_TINT in da.metadata:
                 # user tint is 3 tuple int
                 # color is hex RGBA (eg: #FFFFFFFF)
@@ -910,6 +937,7 @@ def _addImageElement(root, das, ifd):
                     tint = tint + (255,) # need alpha channel
                 hex_str = "".join("%.2x" % c for c in tint) # copy of conversion.rgb_to_hex()
                 chan.attrib["Color"] = "#%s" % hex_str
+
 
             # Add info on detector
             attrib = {}

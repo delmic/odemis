@@ -431,11 +431,11 @@ class TestTiffIO(unittest.TestCase):
                 pn = md[model.MD_WL_POLYNOMIAL]
                 # 2 formats possible
                 if model.MD_WL_LIST in im.metadata:
-                    l = ldata[i].shape[2]
+                    l = ldata[i].shape[0]
                     npn = polynomial.Polynomial(pn,
                                     domain=[0, l - 1],
                                     window=[0, l - 1])
-                    wl = npn.linspace(l)
+                    wl = npn.linspace(l)[1]
                     self.assertTupleAlmostEqual(im.metadata[model.MD_WL_LIST], wl)
                 else:
                     self.assertTupleAlmostEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
