@@ -447,6 +447,88 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
 
+    def testReadMDAR(self):
+        """
+        Checks that we can read back the metadata of an Angular Resolved image
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "sem survey",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 2), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_LENS_MAG: 1200, # ratio
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake ccd",
+                     model.MD_DESCRIPTION: "AR",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_POS: (1.2e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_AR_POLE: (253.1, 65.1)
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake ccd",
+                     model.MD_DESCRIPTION: "AR",
+                     model.MD_ACQ_DATE: time.time(),
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
+                     model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_AR_POLE: (253.1, 65.1)
+                    },
+                    ]
+        # create 2 simple greyscale images
+        sizes = [(512, 256), (500, 400), (500, 400)] # different sizes to ensure different acquisitions
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for s, md in zip(sizes, metadata):
+            a = model.DataArray(numpy.zeros(s[::-1], dtype), md)
+            ldata.append(a)
+
+        # thumbnail : small RGB completely red
+        tshape = (sizes[0][1] // 8, sizes[0][0] // 8, 3)
+        tdtype = numpy.uint8
+        thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
+        thumbnail[:, :, 1] += 255 # green
+
+        # export
+        tiff.export(FILENAME, ldata, thumbnail)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for im, md in zip(rdata, metadata):
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
+            numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            if model.MD_AR_POLE in md:
+                numpy.testing.assert_allclose(im.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
+            if model.MD_LENS_MAG in md:
+                self.assertAlmostEqual(im.metadata[model.MD_LENS_MAG], md[model.MD_LENS_MAG])
+
+        # check thumbnail
+        rthumbs = tiff.read_thumbnail(FILENAME)
+        self.assertEqual(len(rthumbs), 1)
+        im = rthumbs[0]
+        self.assertEqual(im.shape, tshape)
+        self.assertEqual(im[0, 0].tolist(), [0, 255, 0])
+
 #    @skip("simple")
     def testReadMDFluo(self):
         """
