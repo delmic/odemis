@@ -275,7 +275,7 @@ def _add_image_info(group, dataset, image):
                 # pixel index explicitly. We follow another way to express
                 # scaling in HDF5.
                 pnl = polynomial.Polynomial(pn, domain=[0, image.shape[l - 5] - 1])
-                n, px_values = pnl.linspace(image.shape[l - 5])
+                _, px_values = pnl.linspace(image.shape[l - 5])
                 group["DimensionScaleC"] = px_values # m
             if len(pn) > 1:
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
