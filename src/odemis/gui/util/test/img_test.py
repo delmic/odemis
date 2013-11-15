@@ -40,7 +40,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         """
         data = hdf5.read_data("myh5file.h5")
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -60,7 +60,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0] = data[0].astype(numpy.uint16)
         dataio.hdf5.export("test_polar_uint16_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -81,7 +81,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0] = data[0].astype(numpy.int8)
         dataio.hdf5.export("test_polar_int8_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -100,7 +100,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data = hdf5.read_data("myh5file.h5")
         data[0] = data[0].astype(numpy.float)
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -205,7 +205,7 @@ class TestPolarConversion(unittest.TestCase):
         """
         data = hdf5.read_data("myh5file.h5")
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -226,7 +226,7 @@ class TestPolarConversion(unittest.TestCase):
         data[0] = data[0].astype(numpy.int16)
         dataio.hdf5.export("test_combined_uint16_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -248,7 +248,7 @@ class TestPolarConversion(unittest.TestCase):
         data[0] = data[0].astype(numpy.int8)
         dataio.hdf5.export("test_combined_int8_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
@@ -268,7 +268,7 @@ class TestPolarConversion(unittest.TestCase):
         data = hdf5.read_data("myh5file.h5")
         data[0] = data[0].astype(numpy.float)
         data[0].metadata[model.MD_BINNING] = 4
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-3, 13e-3)
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         result = img.AngleResolved2Polar(data[0], 200)
