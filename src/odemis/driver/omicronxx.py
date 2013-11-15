@@ -52,7 +52,7 @@ class DevxX(object):
         try:
             self.GetFirmware()
         except Exception:
-            raise IOError("No xX device dectected on port '%s'", port)
+            raise IOError("No xX device dectected on port '%s'" % port)
         
         # Fill in some info
         wl, power = self.GetSpecInfo()
@@ -216,7 +216,7 @@ class MultixX(model.Emitter):
         self._ports = ports
         self._devices = self._getAvailableDevices(ports)
         if not self._devices:
-            raise ValueError("No Omicron xX device found for ports '%s'", ports)
+            raise ValueError("No Omicron xX device found for ports '%s'" % ports)
         
         spectra = [] # list of tuples: 99% low, 25% low, centre, 25% high, 99% high in m
         max_power = [] # list of float (W)

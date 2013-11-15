@@ -346,7 +346,7 @@ class StreamController(object):
             # All streams with should_update are active
             stream.is_active.value = updated
         else:
-            raise NotImplementedError("Unknown scheduling policy %s", self._sched_policy)
+            raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.

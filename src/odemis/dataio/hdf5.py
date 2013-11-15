@@ -113,7 +113,7 @@ def _read_image_dataset(dataset):
     """
     # check basic format
     if len(dataset.shape) < 2:
-        raise IOError("Image has a shape of %s", dataset.shape)
+        raise IOError("Image has a shape of %s" % (dataset.shape,))
 
     if dataset.attrs.get("IMAGE_VERSION") != "1.2":
         logging.info("Trying to read an HDF5 image of unsupported version")
@@ -125,7 +125,7 @@ def _read_image_dataset(dataset):
         image = dataset[...]
     elif subclass == "IMAGE_TRUECOLOR":
         if len(dataset.shape) != 3:
-            raise IOError("Truecolor image has a shape of %s", dataset.shape)
+            raise IOError("Truecolor image has a shape of %s" % (dataset.shape,))
 
         try:
             il_mode = dataset.attrs.get("INTERLACE_MODE")
@@ -137,7 +137,7 @@ def _read_image_dataset(dataset):
         if cm == "RGB":
             image = dataset[...]
         else:
-            raise NotImplementedError("Unable to handle images of colormodel '%s'", cm)
+            raise NotImplementedError("Unable to handle images of colormodel '%s'" % cm)
 
         if il_mode == "INTERLACE_PLANE":
             # move colour from first to last dim
@@ -145,10 +145,10 @@ def _read_image_dataset(dataset):
         elif il_mode == "INTERLACE_PIXEL":
             pass # nothing to do
         else:
-            raise NotImplementedError("Unable to handle images of subclass '%s'", subclass)
+            raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
     else:
-        raise NotImplementedError("Unable to handle images of subclass '%s'", subclass)
+        raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
 
     # TODO: support DISPLAY_ORIGIN

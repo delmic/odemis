@@ -216,7 +216,7 @@ class PVCam(model.DigitalCamera):
                 raise IOError("Failed to find PI PVCam camera %s" % device)
             self._devname = device
         else:
-            raise ValueError("Unexpected type for device: %s", device)
+            raise ValueError("Unexpected type for device: %s" % device)
 
         try:
             # TODO : can be ~15s for ST133: don't say anything on the PIXIS
@@ -510,7 +510,7 @@ class PVCam(model.DigitalCamera):
         elif tp.value in (pv.TYPE_VOID_PTR, pv.TYPE_VOID_PTR_PTR):
             raise ValueError("Cannot handle arguments of type pointer")
         else:
-            raise NotImplementedError("Argument of unknown type %d", tp.value)
+            raise NotImplementedError("Argument of unknown type %d" % tp.value)
 
         # read the parameter
         self.pvcam.pl_get_param(self._handle, param, value, byref(content))
@@ -546,7 +546,7 @@ class PVCam(model.DigitalCamera):
         elif tp.value in (pv.TYPE_VOID_PTR, pv.TYPE_VOID_PTR_PTR):
             raise ValueError("Cannot handle arguments of type pointer")
         else:
-            raise NotImplementedError("Argument of unknown type %d", tp.value)
+            raise NotImplementedError("Argument of unknown type %d" % tp.value)
 
         self.pvcam.pl_set_param(self._handle, param, byref(content))
 

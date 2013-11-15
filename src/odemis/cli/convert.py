@@ -45,7 +45,7 @@ def open_acq(fn):
         fmt_mng = dataio.hdf5
 
     if not hasattr(fmt_mng, "read_data"):
-        raise NotImplementedError("No support for importing format %s", fmt_mng.FORMAT)
+        raise NotImplementedError("No support for importing format %s" % fmt_mng.FORMAT)
 
     try:
         data = fmt_mng.read_data(fn)
@@ -127,8 +127,8 @@ def minus(data_a, data_b):
             r = da_sub(a, b)
             ret.append(r)
     else:
-        raise ValueError("Cannot subtract %d images from %d images",
-                         len(data_b), len(data_a))
+        raise ValueError("Cannot subtract %d images from %d images" %
+                         (len(data_b), len(data_a)))
     return ret
 
 def main(args):

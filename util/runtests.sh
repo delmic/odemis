@@ -6,6 +6,11 @@
 TESTLOG=./test.log
 ODEMISPATH="$(readlink -m "./src/odemis")"
 
+# Not related to tests, but to QA in general: Expections usually take only 1 argument
+# So a comma is probably a sign of syntax error and should be replace by a %
+grep -IrE --colour 'raise.*",' src/odemis/
+
+
 PYTHONPATH=./src/:../Pyro4/src/
 if [ -f /etc/odemis.conf ]; then
     # use the odemis config if it's available

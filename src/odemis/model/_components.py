@@ -571,8 +571,8 @@ class Actuator(HwComponent):
         self._inverted = frozenset(inverted)
         if not self._inverted <= self._axes:
             non_existing = self._inverted - self._axes
-            raise ValueError("Actuator %s has non-existing inverted axes: %s.",
-                                ", ".join(non_existing))
+            raise ValueError("Actuator %s has non-existing inverted axes: %s." %
+                             (name, ", ".join(non_existing)))
 
         self._ranges = ranges or {}
 

@@ -100,11 +100,12 @@ class LightFilter(model.HwComponent):
                 raise ValueError("Min of band must be first in list")
             band = [tuple(band)]
 
-        # Check that the values are in m: they are typically within nm (< um!)
+        # Check that the values are in m: they are typically within nm (< µm!)
         max_val = 1e-6
         for low, high in band:
             if low > max_val or high > max_val:
-                raise ValueError("Band contains very high values for light wavelength, ensure the value is in meters: %r.", band)
+                raise ValueError("Band contains very high values for light "
+                     "wavelength, ensure the value is in meters: %r." % band)
 
         # not readonly to allow the user to change manually the filter
         self.band = model.ListVA(band, unit="m")
@@ -165,7 +166,7 @@ class Spectrograph(model.Actuator):
                 self.position._value[axis] = value
                 self.position.notify(self.position.value)
             else:
-                raise LookupError("Axis '%s' doesn't exist", axis)
+                raise LookupError("Axis '%s' doesn't exist" % axis)
 
         return model.InstantaneousFuture()
 

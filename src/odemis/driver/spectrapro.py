@@ -315,7 +315,7 @@ class SpectraPro(model.Actuator):
         res = self._sendQuery("?turret")
         val = int(res)
         if val < 1 or val > 3:
-            raise SPError("Unexpected turret number '%s'", res)
+            raise SPError("Unexpected turret number '%s'" % res)
         return val
     
     def SetTurret(self, t):
@@ -381,7 +381,7 @@ class SpectraPro(model.Actuator):
         gstring = self.grating.choices[gid]
         m = self.RE_GDENSITY.search(gstring)
         if not m:
-            raise ValueError("Failed to find groove density in '%s'", gstring)
+            raise ValueError("Failed to find groove density in '%s'" % gstring)
         density = float(m.group(1)) * 1e3 # l/m
         return density
     
@@ -396,7 +396,7 @@ class SpectraPro(model.Actuator):
         res = self._sendQuery("?grating")
         val = int(res)
         if val < 1 or val > 9:
-            raise SPError("Unexpected grating number '%s'", res)
+            raise SPError("Unexpected grating number '%s'" % res)
         return val
     
     def SetGrating(self, g):
@@ -430,7 +430,7 @@ class SpectraPro(model.Actuator):
         m = re.search("\s*(\d+.\d+)( nm)?", res)
         wl = float(m.group(1)) * 1e-9
         if wl > 1e-3:
-            raise SPError("Unexpected wavelength of '%s'", res)
+            raise SPError("Unexpected wavelength of '%s'" % res)
         return wl
     
     def SetWavelength(self, wl):
@@ -520,12 +520,12 @@ class SpectraPro(model.Actuator):
         # light check it's in the ranges (can only check it's not too huge)    
         for axis, value in shift.items():
             if not axis in self._axes:
-                raise LookupError("Axis '%s' doesn't exist", axis)
+                raise LookupError("Axis '%s' doesn't exist" % axis)
                 
             minp, maxp = self._ranges[axis] 
             if abs(value) > maxp:
-                raise ValueError("Move by %f of axis '%s' bigger than %f",
-                                 value, axis, maxp) 
+                raise ValueError("Move by %f of axis '%s' bigger than %f" %
+                                 (value, axis, maxp))
         
         for axis in shift:
             if axis == "wavelength":
@@ -545,12 +545,12 @@ class SpectraPro(model.Actuator):
         # check it's in the ranges    
         for axis, value in pos.items():
             if not axis in self._axes:
-                raise LookupError("Axis '%s' doesn't exist", axis)
+                raise LookupError("Axis '%s' doesn't exist" % axis)
                 
             minp, maxp = self._ranges[axis] 
             if value < minp or maxp < value:
-                raise ValueError("Position %f of axis '%s' not within range %f→%f",
-                                 value, axis, minp, maxp) 
+                raise ValueError("Position %f of axis '%s' not within range %f→%f" %
+                                 (value, axis, minp, maxp))
     
         for axis in pos:
             if axis == "wavelength":
@@ -566,8 +566,8 @@ class SpectraPro(model.Actuator):
             # it's only now that we can check the absolute position is wrong
             minp, maxp = self._ranges["wavelength"]
             if pos < minp or maxp < pos:
-                raise ValueError("Position %f of axis '%s' not within range %f→%f",
-                                 pos, "wavelength", minp, maxp)
+                raise ValueError("Position %f of axis '%s' not within range %f→%f" %
+                                 (pos, "wavelength", minp, maxp))
             self.SetWavelength(pos)
         self._updatePosition()
         

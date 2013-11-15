@@ -782,7 +782,7 @@ class AndorCam2(model.DigitalCamera):
                 if speed == hsspeed.value * 1e6:
                     return channel, i
 
-        raise KeyError("Couldn't find readout rate %f", speed)
+        raise KeyError("Couldn't find readout rate %f" % speed)
 
     def SetPreAmpGain(self, gain):
         """

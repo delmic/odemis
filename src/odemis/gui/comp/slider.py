@@ -768,8 +768,8 @@ class VisualRangeSlider(BaseSlider):
         logging.debug("Setting range to %s, %s", min_value, max_value)
 
         if min_value >= max_value:
-            raise ValueError("Minimum %s is bigger than maximum %s.",
-                             min_value, max_value)
+            raise ValueError("Minimum %s is bigger than maximum %s." %
+                             (min_value, max_value))
 
         self.min_value = min_value
         self.max_value = max_value

@@ -150,11 +150,11 @@ class SEMComedi(model.HwComponent):
             # The detector children will do more thorough checks
             nchan = comedi.get_n_channels(self._device, self._ai_subdevice)
             if nchan < 1:
-                raise IOError("DAQ device '%s' has only %d input channels", nchan)
+                raise IOError("DAQ device '%s' has only %d input channels" % nchan)
             # The scanner child will do more thorough checks
             nchan = comedi.get_n_channels(self._device, self._ao_subdevice)
             if nchan < 2:
-                raise IOError("DAQ device '%s' has only %d output channels", nchan)
+                raise IOError("DAQ device '%s' has only %d output channels" % nchan)
         except comedi.ComediError:
             raise ValueError("Failed to find both input and output on DAQ device '%s'" % device)
 
@@ -1415,7 +1415,7 @@ class SEMComedi(model.HwComponent):
         # to be thread-safe (simultaneous calls to start/stop_acquire())
         with self._acquisition_data_lock:
             if detector in self._acquisitions:
-                raise KeyError("Channel %d already set up for acquisition.", detector.channel)
+                raise KeyError("Channel %d already set up for acquisition." % detector.channel)
 
             self._acquisitions[detector] = callback
 

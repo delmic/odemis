@@ -645,7 +645,7 @@ def _foldArraysFromOME(root, das):
         # Check if the IFDs are 2D or 3D, based on the first one
         fifd = imsetn[0, 0, 0]
         if fifd == -1:
-            raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
+            raise ValueError("Not all IFDs defined for image %d" % len(omedas) + 1)
 
         fim = das[fifd]
         if fim == None:
@@ -666,7 +666,7 @@ def _foldArraysFromOME(root, das):
             continue
 
         if -1 in imsetn:
-            raise ValueError("Not all IFDs defined for image %d", len(omedas) + 1)
+            raise ValueError("Not all IFDs defined for image %d" % len(omedas) + 1)
 
         # TODO: Position might also be different. Probably should be grouped
         # by position too, as Odemis doesn't support such case.
@@ -765,7 +765,7 @@ def _dtype2OMEtype(dtype):
     elif dtype.kind == "b":
         return "bit"
     else:
-        raise NotImplementedError("data type %s is not support by OME", dtype)    
+        raise NotImplementedError("data type %s is not support by OME" % dtype)
     
 
 def _addImageElement(root, das, ifd):

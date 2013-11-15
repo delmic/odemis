@@ -351,7 +351,7 @@ class TestCompositedSpectrometer(unittest.TestCase):
                 self.spectrograph.grating.value = n
                 break
         else:
-            raise IOError("Failed to find grating with density %d l/mm", gdensity)
+            raise IOError("Failed to find grating with density %d l/mm" % gdensity)
         
     def test_known_calib(self):
         """

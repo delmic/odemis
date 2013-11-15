@@ -230,7 +230,7 @@ def get_component_from_set(comp_name, components):
             break
 
     if component is None:
-        raise LookupError("Failed to find component '%s'", comp_name)
+        raise LookupError("Failed to find component '%s'" % comp_name)
 
     return component
 
