@@ -31,10 +31,10 @@ from matplotlib import mlab
 from odemis import model
 
 # Global variables
-xmax = 13.25
-hole_diameter = 0.6
-focus_distance = 0.5
-f = 2.5
+xmax = 13.25e-3
+hole_diameter = 0.6e-3
+focus_distance = 0.5e-3
+f = 2.5e-3
 
 # various functions to convert and modify images (DataArray and wxImage)
 
