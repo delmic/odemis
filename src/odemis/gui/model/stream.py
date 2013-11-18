@@ -45,7 +45,6 @@ import odemis.gui.util.units as units
 import odemis.model as model
 import collections
 from odemis.util import TimeoutError
-from odemis.model._dataflow import MD_AR_POLE
 
 
 # to identify a ROI which must still be defined by the user
@@ -166,7 +165,7 @@ class Stream(object):
         return self._emitter
 
     def __str__(self):
-        return self.name.value
+        return "%s %s" % (self.__class__.__name__, self.name.value)
 
     def estimateAcquisitionTime(self):
         """ Estimate the time it will take to acquire one image with the current
@@ -257,6 +256,29 @@ class Stream(object):
 
         self._irange = irange
 
+    def _getDisplayIRange(self):
+        """
+        return the min/max values to display. It also updates the intensityRange
+         VA if needed.
+        """
+        if self.auto_bc.value:
+            # The histogram might be slightly old, but not too much
+            irange = img.findOptimalRange(self.histogram._full_hist,
+                                          self.histogram._edges,
+                                          self.auto_bc_outliers.value / 100)
+
+            # Also update the intensityRanges if auto BC
+            edges = self.histogram._edges
+            rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
+            self.intensityRange.value = tuple(rrange)
+        else:
+            # just convert from the user-defined (as ratio) to actual values
+            rrange = sorted(self.intensityRange.value)
+            edges = self.histogram._edges
+            irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+
+        return irange
+
     def _findPos(self, data):
         """
         Find the (center) position of the given image. Guess if necessary.
@@ -304,23 +326,7 @@ class Stream(object):
         try:
             self._running_upd_img = True
             data = self.raw[0]
-
-            if self.auto_bc.value:
-                # The histogram might be slightly old, but not too much
-                irange = img.findOptimalRange(self.histogram._full_hist,
-                                              self.histogram._edges,
-                                              self.auto_bc_outliers.value / 100)
-
-                # Also update the intensityRanges if auto BC
-                edges = self.histogram._edges
-                rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
-                self.intensityRange.value = tuple(rrange)
-            else:
-                # just convert from the user-defined (as ratio) to actual values
-                rrange = sorted(self.intensityRange.value)
-                edges = self.histogram._edges
-                irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
-
+            irange = self._getDisplayIRange()
             rgbim = img.DataArray2RGB(data, irange, tint)
             im = img.NDImage2wxImage(rgbim)
             im.InitAlpha() # it's a different buffer so useless to do it in numpy
@@ -356,12 +362,15 @@ class Stream(object):
         # synchronization allows to delay it (without accumulation).
         self._ht_needs_recompute.set()
 
-    def _updateHistogram(self):
+    def _updateHistogram(self, data=None):
+        """
+        data (DataArray): the raw data to use, default to .raw[0]
+        """
         # Compute histogram and compact version
-        if not self.raw:
+        if not self.raw and not data:
             return
 
-        data = self.raw[0]
+        data = data or self.raw[0]
         # Initially, _irange might be None, in which case it will be guessed
         hist, edges = img.histogram(data, irange=self._irange)
         if hist.size > 256:
@@ -1321,7 +1330,6 @@ class StaticARStream(StaticStream):
         elif not isinstance(data, collections.Iterable):
             data = [data] # from now it's just a list of DataArray
 
-
         # find positions of each acquisition
         self._sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data
         for d in data:
@@ -1332,10 +1340,47 @@ class StaticARStream(StaticStream):
 
         self.raw = list(self._sempos.values())
 
-        # SEM position displayed
-        # TODO: TupleEnumerated, or just VAEnumerated?
-#        self.point = model.TupleEnumerated((None, None),
-#                                 choices=[(None, None)] + list(self_sempos.keys())])
+        # SEM position displayed, (None, None) == no point selected
+        self.point = model.VAEnumerated((None, None),
+                     choices=frozenset([(None, None)] + list(self._sempos.keys())))
+        self.point.subscribe(self._onPoint)
+
+    @limit_invocation(0.1) # Max 10 Hz
+    def _updateImage(self):
+        """ Recomputes the image with all the raw data available for the current
+        selected point.
+        """
+        # check to avoid running it if there is already one running
+        if self._running_upd_img or not self.raw:
+            return
+
+        try:
+            self._running_upd_img = True
+            
+            if self.point.value == (None, None):
+                self.image.value = InstrumentalImage(None)
+            else:
+                data = self._sempos[self.point.value]
+                irange = self._getDisplayIRange()
+
+                # TODO: convert to Polar view + occult
+                rgbim = img.DataArray2RGB(data, irange)
+                im = img.NDImage2wxImage(rgbim)
+                im.InitAlpha()
+
+                # TODO: Special InstrumentalImage for polar view, with center position?
+                self.image.value = InstrumentalImage(im)
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+        finally:
+            self._running_upd_img = False
+
+    def _onPoint(self, pos):
+        if pos != (None, None):
+            data = self._sempos[self.point.value]
+            # update the histrogram
+            self._updateHistogram(data)
+        self._updateImage()
 
 
 # Different projection types
