@@ -563,6 +563,41 @@ def _updateMDFromOME(root, das):
                 continue # might be a thumbnail, it's alright
             da.metadata.update(mdp)
 
+        # ROIs (for now we only care about PolePosition)
+        for roirfe in ime.findall("ROIRef"):
+            try:
+                roie = _findElementByID(root, roirfe.attrib["ID"], "ROI")
+                unione = roie.find("Union")
+                shpe = unione.find("Shape")
+                name = roie.attrib["Name"]
+            except (AttributeError, KeyError, ValueError):
+                continue
+
+            if name == "PolePosition":
+                try:
+                    pointe = shpe.find("Point")
+                    pos = float(pointe.attrib["X"]), float(pointe.attrib["Y"])
+                except (AttributeError, KeyError, ValueError):
+                    continue
+                md = {model.MD_AR_POLE: pos}
+
+                # In theory, the shape can specify CTZ, and when not, it's applied to
+                # all. Currently we only support (not) specifying C.
+                try:
+                    chan = int(shpe.attrib["TheC"])
+                except KeyError:
+                    chan = slice(None) # all
+
+                # update all the IFDs related to this channel
+                for ifd in ctz_2_ifd[chan].flat:
+                    if ifd == -1:
+                        continue
+                    da = das[ifd]
+                    if da is None:
+                        continue
+                    # First apply the global MD, then per-channel
+                    da.metadata.update(md)
+
 def _getIFDsFromOME(pixele):
     """
     Return the IFD containing the 2D data for each high dimension of an array.
@@ -1273,6 +1308,9 @@ def _reconstructFromOMETIFF(xml, data):
     # It's not beautiful, but the simplest with ET to handle expected namespaces.
     xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                  "", xml, count=1)
+    # Remove ROI namespace too
+    xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                 "", xml)
     root = ET.fromstring(xml)
     _updateMDFromOME(root, data)
     omedata = _foldArraysFromOME(root, data)
