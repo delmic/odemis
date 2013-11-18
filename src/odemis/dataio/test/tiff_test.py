@@ -41,13 +41,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 FILENAME = "test" + tiff.EXTENSIONS[0] 
 class TestTiffIO(unittest.TestCase):
 
-    def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
-        """
-        check two tuples are almost equal (value by value)
-        """
-        for f, s in zip(first, second):
-            self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
-
     def tearDown(self):
         # clean up
         try:
@@ -419,10 +412,8 @@ class TestTiffIO(unittest.TestCase):
         for i, im in enumerate(rdata):
             md = metadata[i]
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
-            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
-            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
-            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
-            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
+            numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
             self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
@@ -436,9 +427,9 @@ class TestTiffIO(unittest.TestCase):
                                     domain=[0, l - 1],
                                     window=[0, l - 1])
                     wl = npn.linspace(l)[1]
-                    self.assertTupleAlmostEqual(im.metadata[model.MD_WL_LIST], wl)
+                    numpy.testing.assert_allclose(im.metadata[model.MD_WL_LIST], wl)
                 else:
-                    self.assertTupleAlmostEqual(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+                    numpy.testing.assert_allclose(im.metadata[model.MD_WL_POLYNOMIAL], pn)
 
         # check thumbnail
         rthumbs = tiff.read_thumbnail(FILENAME)
@@ -472,7 +463,8 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                      model.MD_POS: (1.2e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_AR_POLE: (253.1, 65.1)
+                     model.MD_AR_POLE: (253.1, 65.1), # px
+                     model.MD_LENS_MAG: 60, # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake ccd",
@@ -484,7 +476,8 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_AR_POLE: (253.1, 65.1)
+                     model.MD_AR_POLE: (253.1, 65.1), # px
+                     model.MD_LENS_MAG: 60, # ratio
                     },
                     ]
         # create 2 simple greyscale images
@@ -604,10 +597,8 @@ class TestTiffIO(unittest.TestCase):
         for i, im in enumerate(rdata):
             md = metadata[i]
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
-            self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
-            self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
-            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][0], md[model.MD_PIXEL_SIZE][0])
-            self.assertAlmostEqual(im.metadata[model.MD_PIXEL_SIZE][1], md[model.MD_PIXEL_SIZE][1])
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
+            numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
             self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])

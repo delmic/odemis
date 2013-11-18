@@ -429,10 +429,12 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                     model.MD_POS: (1e-3, -30e-3), # m
+                     model.MD_POS: (1.2e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_AR_POLE: (253.1, 65.1)
+                     model.MD_AR_POLE: (253.1, 65.1),
+                     model.MD_LENS_MAG: 60, # ratio
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake ccd",
@@ -440,10 +442,12 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_ACQ_DATE: time.time(),
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1), # px, px
+                     model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
                      model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
                      model.MD_POS: (1e-3, -30e-3), # m
                      model.MD_EXP_TIME: 1.2, # s
-                     model.MD_AR_POLE: (253.1, 65.1)
+                     model.MD_AR_POLE: (253.1, 65.1),
+                     model.MD_LENS_MAG: 60, # ratio
                     },
                     ]
         # create 2 simple greyscale images
