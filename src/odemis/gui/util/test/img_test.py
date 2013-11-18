@@ -43,8 +43,9 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        dataio.hdf5.export("test_polar_precomputed_output", result, thumbnail=None)
 
         desired_output = hdf5.read_data("finalimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -58,13 +59,13 @@ class TestAngleResolved2Polar(unittest.TestCase):
         """
         data = hdf5.read_data("myh5file.h5")
         data[0] = data[0].astype(numpy.uint16)
-        dataio.hdf5.export("test_polar_uint16_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        dataio.hdf5.export("test_polar_uint16_output", result, thumbnail=None)
 
         desired_output = hdf5.read_data("finalimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -77,15 +78,16 @@ class TestAngleResolved2Polar(unittest.TestCase):
         Tests for input of DataArray with int8 ndarray.
         """
         data = hdf5.read_data("myh5file.h5")
+        data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        dataio.hdf5.export("test_polar_int8_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        dataio.hdf5.export("test_polar_int8_output", result, thumbnail=None)
 
         desired_output = hdf5.read_data("finalimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -103,8 +105,9 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        dataio.hdf5.export("test_polar_float_output", result, thumbnail=None)
 
         desired_output = hdf5.read_data("finalimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -120,13 +123,11 @@ class TestInMirror(unittest.TestCase):
         """
         Compares the output of InMirror to the output of the corresponding matlab function.
         """
-        data = hdf5.read_data("test_polar_precomputed_output")
+        data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
         # InMirror expects 2d array
         data[0].shape = Y, X
         cropped_result = img.InMirror(data[0])
-        # cropped_result = img.InMirror(model.DataArray(data))
-        dataio.hdf5.export("test_cropped_precomputed_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -138,16 +139,14 @@ class TestInMirror(unittest.TestCase):
         """
         Tests for input of DataArray with uint16 ndarray.
         """
-        data = hdf5.read_data("test_polar_precomputed_output")
+        data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
         # InMirror expects 2d array
         data[0].shape = Y, X
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 12)
         data[0] = data[0].astype(numpy.uint16)
-        dataio.hdf5.export("test_cropped_uint16_input", data[0], thumbnail=None)
         cropped_result = img.InMirror(data[0])
-        dataio.hdf5.export("test_cropped_uint16_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -159,16 +158,14 @@ class TestInMirror(unittest.TestCase):
         """
         Tests for input of DataArray with int8 ndarray.
         """
-        data = hdf5.read_data("test_polar_precomputed_output")
+        data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
         # InMirror expects 2d array
         data[0].shape = Y, X
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 21)
         data[0] = data[0].astype(numpy.int8)
-        dataio.hdf5.export("test_cropped_int8_input", data[0], thumbnail=None)
         cropped_result = img.InMirror(data[0])
-        dataio.hdf5.export("test_cropped_int8_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -180,13 +177,12 @@ class TestInMirror(unittest.TestCase):
         """
         Tests for input of DataArray with float ndarray.
         """
-        data = hdf5.read_data("test_polar_precomputed_output")
+        data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
         # InMirror expects 2d array
         data[0].shape = Y, X
         data[0] = data[0].astype(numpy.float)
         cropped_result = img.InMirror(data[0])
-        dataio.hdf5.export("test_cropped_float_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -208,9 +204,10 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
         cropped_result = img.InMirror(result)
-        dataio.hdf5.export("test_combined_precomputed_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -224,14 +221,14 @@ class TestPolarConversion(unittest.TestCase):
         """
         data = hdf5.read_data("myh5file.h5")
         data[0] = data[0].astype(numpy.int16)
-        dataio.hdf5.export("test_combined_uint16_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
         cropped_result = img.InMirror(result)
-        dataio.hdf5.export("test_combined_uint16_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -244,16 +241,17 @@ class TestPolarConversion(unittest.TestCase):
         Tests for input of DataArray with int8 ndarray.
         """
         data = hdf5.read_data("myh5file.h5")
+        data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        dataio.hdf5.export("test_combined_int8_input", data[0], thumbnail=None)
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
         cropped_result = img.InMirror(result)
-        dataio.hdf5.export("test_combined_int8_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -271,11 +269,72 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
         cropped_result = img.InMirror(result)
-        dataio.hdf5.export("test_combined_float_output", cropped_result, thumbnail=None)
 
         desired_output = hdf5.read_data("desiredimage")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1e-04)
+
+@unittest.skip("class skipping")
+class TestPolarConversionOutput(unittest.TestCase):
+    """
+    Test AngleResolved2Polar and InMirror combination for various output sizes
+    """
+    def test_100x100(self):
+        data = hdf5.read_data("myh5file.h5")
+        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
+        data[0].metadata[model.MD_LENS_MAG] = 0.4917
+        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        result = img.AngleResolved2Polar(data[0], 100)
+        cropped_result = img.InMirror(result)
+
+        desired_output = hdf5.read_data("desired100x100image")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1e-04)
+
+    def test_1000x1000(self):
+        data = hdf5.read_data("myh5file.h5")
+        data[0] = data[0].astype(numpy.int64)
+        data[0] = numpy.right_shift(data[0], 8)
+        data[0] = data[0].astype(numpy.int8)
+        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
+        data[0].metadata[model.MD_LENS_MAG] = 0.4917
+        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        result = img.AngleResolved2Polar(data[0], 1000)
+        cropped_result = img.InMirror(result)
+
+        desired_output = hdf5.read_data("desired1000x1000image")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1)
+
+    def test_2000x2000(self):
+        data = hdf5.read_data("myh5file.h5")
+        data[0] = data[0].astype(numpy.float)
+        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
+        data[0].metadata[model.MD_LENS_MAG] = 0.4917
+        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        result = img.AngleResolved2Polar(data[0], 2000)
+        cropped_result = img.InMirror(result)
+
+        desired_output = hdf5.read_data("desired2000x2000image")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
