@@ -370,6 +370,23 @@ def _convertToOMEMD(images):
               ET.tostring(root, encoding="utf-8"))
     return ometxt
 
+def _findElementByID(root, eid, tag=None):
+    """
+    Find the element with the given ID.
+    Note: OME conformant documents cannot have multiple elements with the same
+      ID. It is assumed to be correct. 
+    root (ET.Element): the root element to start the search
+    eid (str): the ID to match
+    tag (str or None): the tag of the element to match. If None, any element
+      with the given ID will be looked for.
+    return (ET.Element): the element with .ID=eid, or None
+    """
+    for el in root.iter(tag):
+        if "ID" in el.attrib and el.attrib["ID"] == eid:
+            return el
+         
+    return None
+
 def _updateMDFromOME(root, das):
     """
     Updates the metadata of DAs according to OME XML
@@ -399,6 +416,14 @@ def _updateMDFromOME(root, das):
                 md[model.MD_ACQ_DATE] = calendar.timegm(time.strptime(val, "%Y-%m-%dT%H:%M:%S"))
             except (OverflowError, ValueError):
                 pass
+
+        objse = ime.find("ObjectiveSettings")
+        try:
+            obje = _findElementByID(root, objse.attrib["ID"], "Objective")
+            mag = obje.attrib["CalibratedMagnification"]
+            md[model.MD_LENS_MAG] = float(mag)
+        except (AttributeError, KeyError, ValueError):
+            pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
         try:
@@ -817,6 +842,14 @@ def _addImageElement(root, das, ifd, rois):
     for da in das:
         globalMD.update(da.metadata)
 
+    globalAD = None
+    if model.MD_ACQ_DATE in globalMD:
+        # Need to find the earliest time
+        globalAD = min(d.metadata[model.MD_ACQ_DATE]
+                        for d in das if model.MD_ACQ_DATE in d.metadata)
+        ad = ET.SubElement(ime, "AcquisitionDate")
+        ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
+
     # find out about the common attribute (Name)
     if model.MD_DESCRIPTION in globalMD:
         ime.attrib["Name"] = globalMD[model.MD_DESCRIPTION]
@@ -826,13 +859,11 @@ def _addImageElement(root, das, ifd, rois):
         desc = ET.SubElement(ime, "Description")
         desc.text = globalMD[model.MD_USER_NOTE]
 
-    globalAD = None
-    if model.MD_ACQ_DATE in globalMD:
-        # Need to find the earliest time
-        globalAD = min(d.metadata[model.MD_ACQ_DATE]
-                        for d in das if model.MD_ACQ_DATE in d.metadata)
-        ad = ET.SubElement(ime, "AcquisitionDate")
-        ad.text = time.strftime("%Y-%m-%dT%H:%M:%S", time.gmtime(globalAD))
+    if model.MD_LENS_MAG in globalMD:
+        # add ref to Objective
+        ose = ET.SubElement(ime, "ObjectiveSettings",
+                            attrib={"ID": "Objective:%d" % ifd})
+
 
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1. 
@@ -975,6 +1006,9 @@ def _addImageElement(root, das, ifd, rois):
             if model.MD_READOUT_TIME in da.metadata:
                 ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
                 attrib["ReadOutRate"] = "%f" % ror
+            if model.MD_EBEAM_ENERGY in da.metadata:
+                # Schema only mentions PMT, but we use it for the e-beam too
+                attrib["Voltage"] = "%f" % da.metadata[model.MD_EBEAM_ENERGY] # V
     
             if attrib:
                 # detector of the group has the same id as first IFD of the group
