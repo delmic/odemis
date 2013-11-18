@@ -55,6 +55,16 @@ class VigilantAttributeBase(object):
         self._value = initval
         self.unit = unit
 
+    def __str__(self):
+        if self.unit is None:
+            val = "%s" % (self._value,)
+        else:
+            val = "%s %s" % (self._value, self.unit)
+
+        return "%s (value = %s) with %d subscribers" % (self.__class__.__name__,
+                                                        val,
+                                                        len(self._listeners))
+
     def subscribe(self, listener, init=False, **kwargs):
         """
         Register a callback function to be called when the VigilantAttributeBase
@@ -165,12 +175,6 @@ class VigilantAttribute(VigilantAttributeBase):
 
     def _del_value(self):
         del self._value
-
-    def __str__(self):
-        return "va: {}".format(str(self.value))
-
-    def __unicode__(self):
-        return u"va: {}".format(unicode(self.value))
 
     value = property(_get_value, _set_value, _del_value, "The actual value")
 
@@ -699,7 +703,7 @@ class Continuous(object):
                                    % (str(new_range[0]), str(new_range[1])))
         if hasattr(self, "value"):
             #pylint: disable=E1101
-            if self.value < new_range[0] or self.value > new_range[1]:
+            if not new_range[0] <= self.value <= new_range[1]:
                 raise IndexError("Current value '%s' is outside of the range %s→%s." %
                             (self.value, str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
@@ -720,7 +724,7 @@ class Continuous(object):
         Raises:
             IndexError if the value is not within the authorised range
         """
-        if value < self._range[0] or value > self._range[1]:
+        if not self._range[0] <= value <= self._range[1]:
             raise IndexError("Trying to assign value '%s' outside of the range %s→%s." %
                         (str(value), str(self._range[0]), str(self._range[1])))
 
@@ -773,14 +777,31 @@ class Enumerated(object):
     def choices(self):
         del self._choices
 
+class VAEnumerated(VigilantAttribute, Enumerated):
+    """
+    VigilantAttribute which contains any kind of values from a given set.
+    """
+
+    def __init__(self, value, choices, **kwargs):
+        """
+        choices (set or dict (value -> str)): all the possible value that can be
+         assigned, or if it's a dict all the values that can be assigned and a
+         user-readable description of the values.
+        """
+        Enumerated.__init__(self, choices)
+        VigilantAttribute.__init__(self, value, **kwargs)
+
+    def _check(self, value):
+        Enumerated._check(self, value)
+        VigilantAttribute._check(self, value)
 
 class FloatContinuous(FloatVA, Continuous):
     """
     A simple class which is both floating and continuous
     """
-    def __init__(self, value, range, unit="", **kwargs):
+    def __init__(self, value, range, **kwargs):
         Continuous.__init__(self, range)
-        FloatVA.__init__(self, value, unit=unit, **kwargs)
+        FloatVA.__init__(self, value, **kwargs)
 
     def _check(self, value):
         Continuous._check(self, value)
@@ -790,9 +811,9 @@ class StringEnumerated(StringVA, Enumerated):
     """
     A simple class which is both string and Enumerated
     """
-    def __init__(self, value, choices, unit="", **kwargs):
+    def __init__(self, value, choices, **kwargs):
         Enumerated.__init__(self, choices)
-        StringVA.__init__(self, value, unit=unit, **kwargs)
+        StringVA.__init__(self, value, **kwargs)
 
     def _check(self, value):
         Enumerated._check(self, value)
@@ -802,9 +823,9 @@ class FloatEnumerated(FloatVA, Enumerated):
     """
     A simple class which is both floating and enumerated
     """
-    def __init__(self, value, choices, unit="", **kwargs):
+    def __init__(self, value, choices, **kwargs):
         Enumerated.__init__(self, choices)
-        FloatVA.__init__(self, value, unit=unit, **kwargs)
+        FloatVA.__init__(self, value, **kwargs)
 
     def _check(self, value):
         Enumerated._check(self, value)
@@ -816,9 +837,9 @@ class IntEnumerated(IntVA, Enumerated):
     """
     A simple class which is both int and enumerated
     """
-    def __init__(self, value, choices, unit="", **kwargs):
+    def __init__(self, value, choices, **kwargs):
         Enumerated.__init__(self, choices)
-        IntVA.__init__(self, value, unit=unit, **kwargs)
+        IntVA.__init__(self, value, **kwargs)
 
     def _check(self, value):
         Enumerated._check(self, value)
@@ -846,6 +867,8 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
             if v <= 0 or v < self._range[0] or v > self._range[1]:
                 raise IndexError("Trying to assign axis '%s' value '%s' outside of the range %s→%s." %
                             (str(axis), str(value), str(self._range[0]), str(self._range[1])))
+
+
 
 class TupleContinuous(VigilantAttribute, Continuous):
     """

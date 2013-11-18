@@ -59,6 +59,22 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertTrue(prop.value == 0)
         self.assertTrue(self.called == 2)
 
+    def test_pretty_str(self):
+        prop = model.IntVA(2)
+        pretty_str = str(prop)
+        self.assertIn("IntVA", pretty_str)
+        self.assertIn(str(prop.value), pretty_str)
+
+        prop = model.ListVA([2, 3], unit=u"µm")
+        pretty_str = str(prop)
+        self.assertIn("ListVA", pretty_str)
+        self.assertIn(str(prop.value), pretty_str)
+
+        prop = model.FloatContinuous(2.3, unit=u"µm", range=(1.0, 9))
+        pretty_str = unicode(prop)
+        self.assertIn("FloatContinuous", pretty_str)
+        self.assertIn(unicode(prop.value), pretty_str)
+
     def test_unsubscribe(self):
         prop = model.IntVA(2)
         self.called = 0
@@ -266,6 +282,12 @@ class VigilantAttributeTest(unittest.TestCase):
         prop.unsubscribe(self.callback_test_notify)
 
         self.assertTrue(self.called == 1)
+
+        # It's also allowed to use dict as choices
+        prop = model.VAEnumerated((1, 2), {(1, 2): "aaa", (3, 5): "doo"})
+        for v in prop.choices:
+            prop.value = v # they all should work
+
 
     def test_resolution(self):
         va = model.ResolutionVA((10,10), ((1,1), (100, 150)))
