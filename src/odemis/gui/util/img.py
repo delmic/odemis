@@ -28,6 +28,7 @@ import scipy.interpolate
 import time
 import wx
 from matplotlib import mlab
+from odemis import dataio
 from odemis import model
 
 # Global variables
@@ -35,6 +36,7 @@ xmax = 13.25e-3
 hole_diameter = 0.6e-3
 focus_distance = 0.5e-3
 f = 2.5e-3
+ccd_size = 10000
 
 # various functions to convert and modify images (DataArray and wxImage)
 
@@ -387,61 +389,53 @@ def AngleResolved2Polar(data, output_size):
     output_size (int): The size of the output DataArray (assumed to be square)
     returns (model.DataArray): converted image in polar view
     """
-    # TODO change everything to SI
+    assert(len(data.shape) == 2)  # => 2D with greyscale
     image = data
 
     # Get the metadata
-    # Raise exception if not square
-    pixel_size, pixel_size = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
+    # Assume pixel is square
+    assert(data.metadata[model.MD_SENSOR_PIXEL_SIZE] is not None)
+    pixel_size_x, pixel_size_y = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
+    assert(data.metadata[model.MD_AR_POLE] is not None)
     mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+    assert(data.metadata[model.MD_BINNING] is not None)
     binning = data.metadata[model.MD_BINNING]
+    assert(data.metadata[model.MD_LENS_MAG] is not None)
     magnification = data.metadata[model.MD_LENS_MAG]
 
-    # TODO add exception
+    # Round to the nearest even number
     h_output_size = int(output_size / 2)
+    logging.debug("Creating image with size %d x %d", 2 * h_output_size, 2 * h_output_size)
     angle_data = numpy.zeros(shape=(image.size, 3))
     k = 0
 
-    superinput = model.DataArray(image)
-
-    inverted_image = numpy.zeros(shape=image.shape)
-    inverted_image = model.DataArray(inverted_image)
-
-
-    for i, item_i in enumerate(image):
-        for j, item_j in enumerate(item_i):
-            inverted_image[i][j] = image[j][i]
-
-    superinvinput = model.DataArray(inverted_image)
-
-    eff_pixel_size = pixel_size * binning / magnification
+    eff_pixel_size = pixel_size_x * binning / magnification
     parabola_parameter = 1 / (4 * f)
 
+    # For each pixel of the input ndarray, input metadata is used to
+    # calculate the corresponding theta, phi and radiant intensity
     # TODO try to use xrange (more efficient)
-    for i, item_i in enumerate(inverted_image):
+    for i, item_i in enumerate(image):
         for j, item_j in enumerate(item_i):
             xpix = -(j - mirror_x)
             ypix = -(i - mirror_y) + (2 * f) / eff_pixel_size
             theta_phi_omega = FindAngle(xpix, ypix, parabola_parameter, eff_pixel_size)
-            angle_data[k] = [theta_phi_omega[0], theta_phi_omega[1], inverted_image[i][j] / theta_phi_omega[2]]
+            angle_data[k] = [theta_phi_omega[0], theta_phi_omega[1], image[i][j] / theta_phi_omega[2]]
             k = k + 1
 
     polar_grid = angle_data
 
+    # Convert into polar coordinates
     for i, item_i in enumerate(polar_grid):
         theta = angle_data[i][0] * h_output_size / numpy.pi * 2
         phi = angle_data[i][1]
         polar_grid[i][0] = math.cos(phi) * theta
         polar_grid[i][1] = math.sin(phi) * theta
 
-    # interpolation
+    # Interpolation into 2d array
     xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
     yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
     qz = mlab.griddata(polar_grid[:, 0], polar_grid[:, 1], polar_grid[:, 2], xi, yi, interp="linear")
-    # mesh = numpy.meshgrid(xi, yi)
-    # start = time.clock()
-    # qz = scipy.interpolate.griddata(polar_grid[:, 0:2], polar_grid[:, 2], mesh, method='linear')
-    # print time.clock() - start
     result = model.DataArray(qz, image.metadata)
 
     return result
@@ -484,13 +478,14 @@ def InMirror(data, hole=True):
     hole (boolean): If True, hole is made in the center of the output image
     returns (model.DataArray): Cropped image
     """
+    assert(len(data.shape) == 2)  # => 2D with greyscale
     image = data
-    ccd_size = 10000
 
     if hole == True:
         our_hole_diameter = hole_diameter
     else:
         our_hole_diameter = 0.0
+
     parabola_parameter = 1 / (4 * f)
     image_size_x, image_size_y = image.shape  # expected to be square
     h_image_size = int(image_size_x / 2)
@@ -505,6 +500,7 @@ def InMirror(data, hole=True):
             theta = numpy.sqrt(math.pow(xval, 2) + math.pow(yval, 2)) / h_image_size * numpy.pi / 2
             phi = math.atan2(yval, xval)
 
+            # Express the ray position corresponding to each pixel in data as p+v*t
             p1 = 1 / (4 * parabola_parameter)  # TODO change it to p1 = f
             p2 = 0
             p3 = 0
@@ -512,6 +508,7 @@ def InMirror(data, hole=True):
             v2 = math.sin(theta) * math.sin(phi)
             v3 = math.cos(theta)
 
+            # Plug ray position in parabola x=ar^2 y^2+z^2=r^2
             A = (math.pow(v2, 2) + math.pow(v3, 2))
             B = (2 * p2 * v2 + 2 * v3 * p3) - v1 / parabola_parameter
             C = (math.pow(p2, 2) + math.pow(p3, 2)) - p1 / parabola_parameter
@@ -523,6 +520,8 @@ def InMirror(data, hole=True):
 
             point = [p1 + t * v1, p2 + t * v2, p3 + t * v3]
 
+            # Based on the p+v*t, parabola_parameter, hole_diameter, xmax and focus_distance decide if
+            # each pixel is in or out of the mirror
             if ~(point[0] <= xmax and
                  point[2] >= focus_distance and
                  (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((our_hole_diameter / 2), 2) and
