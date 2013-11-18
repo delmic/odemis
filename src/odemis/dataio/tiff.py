@@ -42,9 +42,10 @@ import xml.etree.ElementTree as ET
 # dimension is the height, and second one is the width. (This is so because
 # in memory the height is the slowest changing dimension, so it is first in C
 # order.)
-# So an image of W horizontal pixels, H vertical pixels, and 3 colours is an
+# So an RGB image of W horizontal pixels and H vertical pixels is an
 # array of shape (H, W, 3). It is recommended to have the image in memory in C
-# order (but that should not matter).
+# order (but that should not matter). For raw data, the convention is to have
+# 5 dimensions in the order CTZYX.
 # PIL and wxPython have images with the size expressed as (width, height), although
 # in memory it corresponds to the same representation.
 # User-friendly name
@@ -59,7 +60,7 @@ EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
 # Note that it could be possible to use more TIFF tags, from DNG and LSM for
 # example.
 # See also MicroManager OME-TIFF format with additional tricks for ImageJ:
-# http://valelab.ucsf.edu/~MM/MMwiki/index.php/Micro-Manager_File_Formats
+# http://micro-manager.org/wiki/Micro-Manager_File_Formats
 
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
@@ -210,9 +211,11 @@ def _guessModelName(das):
     """
     # If any image has MD_IN_WL => fluorescence => SECOM
     # If any image has MD_WL_* => spectra => SPARC
+    # If any image has MD_AR_POLE => angular resolved => SPARC
     for da in das:
         md = da.metadata
-        if model.MD_WL_LIST in md or model.MD_WL_POLYNOMIAL in md:
+        if (model.MD_WL_LIST in md or model.MD_WL_POLYNOMIAL in md or
+            model.MD_AR_POLE in md):
             return "SPARC"
         elif model.MD_IN_WL in md:
             return "SECOM"
@@ -238,6 +241,8 @@ def _indent(elem, level=0):
     else:
         if level and (not elem.tail or not elem.tail.strip()):
             elem.tail = i
+
+_ROI_NS = "http://www.openmicroscopy.org/Schemas/ROI/2012-06"
 
 def _convertToOMEMD(images):
     """
@@ -277,9 +282,25 @@ def _convertToOMEMD(images):
 #            + DetectorSettings
 #          + Plane (*)     # physical dimensions/position of each images
 #          + TiffData (*)  # where to find the data in the tiff file (IFD)
-#                          # we explicitly reference each dataarray to avoid
+#                          # we explicitly reference each DataArray to avoid
 #                          # potential ordering problems of the "Image" elements
-#
+#        + ROIRef (*)
+#      + ROI (*)
+#        . ID
+#        . Name
+#        + Union
+#          + Shape (*)
+#            . ID
+#            . TheC
+#            + Point
+#                . X
+#                . Y
+
+# For fluorescence microscopy, the schema usage is straight-forwards. For SEM
+# images, some metadata might be difficult to fit. For spectrum acquisitions
+# (i.e., a C11YX cube), we use the channels to encode each spectrum.
+# For AR acquisition, CCDX and CCDY are mapped to X/Y, and AR_POLE is recorded
+# as an ROI Point with Name "PolePosition" and coordinates in pixel (like AR_POLE).
 
     # To create and manipulate the XML, we use the Python ElementTree API.
 
@@ -333,8 +354,12 @@ def _convertToOMEMD(images):
 
     # TODO: filters (with TransmittanceRange)
 
+    rois = {} # dict str->ET.Element (ROI ID -> ROI XML element)
     for ifd, g in groups.items():
-        _addImageElement(root, g, ifd)
+        _addImageElement(root, g, ifd, rois)
+
+    # ROIs have to come _after_ images, so add them only now
+    root.extend(rois.values())
 
     # TODO add tag to each image with "Odemis", so that we can find them back
     # easily in a database?
@@ -768,13 +793,15 @@ def _dtype2OMEtype(dtype):
         raise NotImplementedError("data type %s is not support by OME" % dtype)
     
 
-def _addImageElement(root, das, ifd):
+def _addImageElement(root, das, ifd, rois):
     """
     Add the metadata of a list of DataArray to a OME-XML root element
     root (Element): the root element
     das (list of DataArray): all the images to describe. Each DataArray
      can have up to 5 dimensions in the order CTZYX. IOW, RGB images have C=3. 
     ifd (int): the IFD of the first DataArray
+    rois (dict str -> ET element): all ROIs added so, and will be updated as
+      needed. 
     Note: the images in das must be added in the final TIFF in the same order
      and contiguously
     """
@@ -1002,6 +1029,50 @@ def _addImageElement(root, das, ifd):
             plane.attrib["PositionY"] = "%.12f" % pos[1]
 
         subid += 1
+
+    # ROIs (= ROIRefs + new ROI elements)
+    # For now, we use them only to store AR_POLE metadata
+    for chan, da in enumerate(das):
+        # Note: we assume the
+        if model.MD_AR_POLE in da.metadata:
+            rid = _createPointROI(rois, "PolePosition",
+                                  da.metadata[model.MD_AR_POLE],
+                                  shp_attrib={"TheC": "%d" % chan})
+            ET.SubElement(ime, "ROIRef", attrib={"xmlns": _ROI_NS, "ID": rid})
+
+def _createPointROI(rois, name, p, shp_attrib=None):
+    """
+    Create a new Point ROI XML element and add it to the dict
+    rois (dict str-> ET.Element): list of all current ROIs
+    name (str or None): name of the ROI (if None -> no name)
+    p (tuple of 2 floats): values to put in X and Y (arbitrary)
+    shp_attrib (dict or None): attributes for the shape element
+    return id (str): ROI ID for referencing
+    """
+    shp_attrib = shp_attrib or {}
+    # Find an ID not yet used
+    for n in range(len(rois), -1, -1):
+        rid = "ROI:%d" % n
+        if not rid in rois: # very likely
+            shapeid = "Shape:%d" % n # for now, assume 1 shape <-> 1 ROI
+            break
+    else:
+        raise IndexError("Couldn't find an available ID")
+
+    # Create ROI/Union/Shape/Point
+    roie = ET.Element("ROI", attrib={"xmlns": _ROI_NS, "ID": rid})
+    if name is not None:
+        roie.attrib["Name"] = name
+    unione = ET.SubElement(roie, "Union")
+    shapee = ET.SubElement(unione, "Shape", attrib={"ID": shapeid})
+    shapee.attrib.update(shp_attrib)
+    pointe = ET.SubElement(shapee, "Point", attrib={"X": "%f" % p[0],
+                                                    "Y": "%f" % p[1]})
+
+    # Add the element to all the ROIs
+    rois[rid] = roie
+    return rid
+
 
 def _saveAsTiffLT(filename, data, thumbnail):
     """
