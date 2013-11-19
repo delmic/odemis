@@ -1289,7 +1289,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.current_y_value = self._val_x_to_val_y(self.current_x_value)
         pos = (x, self._val_y_to_pos_y(self.current_y_value))
 
-        label = "%s" % units.readable_str(self.current_y_value, self.unit_y, 3)
+        label = "%s"  % units.readable_str(
+                                    self.current_x_value,
+                                    self.unit_x,
+                                    3)
 
         # TODO: find a more elegant way to link the legend.
         if hasattr(self.Parent, 'legend_panel'):

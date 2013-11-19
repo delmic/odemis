@@ -192,9 +192,10 @@ class InfoLegend(wx.Panel):
         self.Layout()
 
 class AxisLegend(wx.Panel):
+    """ This legend can be used to show ticks and values to indicate the scale
+    of a canvas plot.
     """
-    This legend mainly shows ticks and the name of the axis
-    """
+
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER):
 
@@ -216,6 +217,7 @@ class AxisLegend(wx.Panel):
         self.label_pos = None
 
         self.ticks = None
+        # The distance between tick in pixel
         self.tick_gap = 100
         self.OnSize(None)
 
@@ -253,18 +255,40 @@ class AxisLegend(wx.Panel):
             self.write_label(ctx, self.label, self.label_pos)
 
     def calc_ticks(self):
+        """ Determine where the ticks should be placed """
         self.ticks = []
 
-        # No ticks at the start and end
-        num_ticks = self.ClientSize.x // self.tick_gap
-        num_ticks -= 1 if not self.ClientSize.x % self.tick_gap else 0
+        # Calculate value distance for the current tick_gap
+        val1 = self.Parent.canvas._pos_x_to_val_x(0)
+        val2 = self.Parent.canvas._pos_x_to_val_x(self.tick_gap)
 
-        for i in range(num_ticks):
-            xpos = (i + 1) * self.tick_gap
-            xval = self.Parent.canvas._pos_x_to_val_x(xpos)
-            xval = units.round_significant(xval, 2)
-            xpos = int(self.Parent.canvas._val_x_to_pos_x(xval))
-            self.ticks.append((xpos, xval))
+        dist = val2 - val1
+
+        # Calculate the best step size in powers of 10, so it will cover at
+        # lest the distance `dist`
+        step = 1e-12
+        min_x = self.Parent.canvas.min_x
+
+        while step < dist:
+            step *= 10
+
+        # If the pixel distance of step is bigger than `tick_gap`, divide it
+        # by 2
+        pixel_step = (self.Parent.canvas._val_x_to_pos_x(min_x + step) -
+                      self.Parent.canvas._val_x_to_pos_x(min_x))
+
+        if 2 * pixel_step > self.tick_gap:
+            step /= 2
+
+        num_ticks = self.ClientSize.x // self.tick_gap
+
+        first_tick = (step % min_x) + min_x
+        ticks = [first_tick + i * step for i in range(num_ticks)]
+
+        for tick in ticks:
+            xpos = self.Parent.canvas._val_x_to_pos_x(tick)
+            if xpos <= self.ClientSize.x - step:
+                self.ticks.append((xpos, tick))
 
     def set_label(self, label, pos_x):
         self.label = unicode(label)
@@ -298,4 +322,5 @@ class AxisLegend(wx.Panel):
 
 
     def OnSize(self, event):
+        self.ticks = None
         self.Refresh(eraseBackground=False)

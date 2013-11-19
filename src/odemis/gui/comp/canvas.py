@@ -1289,23 +1289,17 @@ class PlotCanvas(wx.Panel):
     # Value calculation methods
 
     def value_to_position(self, value_tuple):
-        """ Translate a value tuple to a pixel position tuple """
+        """ Translate a value tuple to a pixel position tuple
 
-        if None in (self.width_x, self.width_y):
-            logging.warn("No plot data set")
-            return (0, 0)
+        If a value (x or y) is out of range, it will be clippped.
 
+        :param value_tuple: (float, float) The value coordinates to translate
+
+        :return: (int, int)
+        """
         x, y = value_tuple
-        w, h = self.ClientSize
 
-        perc_x = float(x - self.min_x) / self.width_x
-        perc_y = float(self.max_y - y) / self.width_y
-        # logging.debug("%s %s", px, py)
-
-        result = (perc_x * w, perc_y * h)
-        # logging.debug("Point translated from %s to %s", value_tuple, result)
-
-        return result
+        return (self._val_x_to_pos_x(x), self._val_y_to_pos_y(y))
 
     # Cached calculation methods. These should be flushed when the relevant
     # data changes (e.g. when the canvas changes size).
@@ -1316,38 +1310,30 @@ class PlotCanvas(wx.Panel):
     # forth between 0 and 1
 
     # @memoize
-    def _val_y_to_pos_y(self, val_y):
-        perc_y = float(self.max_y - val_y) / self.width_y
-        return perc_y * self.ClientSize[1]
-
-    # @memoize
     def _val_x_to_pos_x(self, val_x):
-        val = [(x, y) for x, y in self._data if x >= val_x]
-        if val:
-            x1, _ = self.value_to_position(val[0])
+        """ Translate an x value to an x position in pixels """
+        x = min(max(self.min_x, val_x), self.max_x)
+        perc_x = float(x - self.min_x) / self.width_x
+        return int(round(perc_x * self.ClientSize.x))
 
-            if len(val) > 1:
-                x2, _ = self.value_to_position(val[1])
-                return x1 + (x2 - x1) / 2
-            else:
-                return x1
+    def _val_y_to_pos_y(self, val_y):
+        """ Translate an y value to an y position in pixels """
+        y = min(max(self.min_y, val_y), self.max_y)
+        perc_y = float(self.max_y - y) / self.width_y
+        return int(round(perc_y * self.ClientSize.y))
 
-        return 0
+    #@memoize
+    def _pos_x_to_val_x(self, pos_x):
+        perc_x = pos_x / float(self.ClientSize.x)
+        val_x = (perc_x * self.width_x) + self.min_x
+        val_x = max(min(val_x, self.max_x), self.min_x)
+        return val_x
 
     #@memoize
     def _val_x_to_val_y(self, val_x):
         """ Map the give x pixel value to a y value """
         res = [y for x, y in self._data if x <= val_x][-1]
         return res
-
-    #@memoize
-    def _pos_x_to_val_x(self, pos_x):
-        w, _ = self.ClientSize
-        perc_x = pos_x / float(w)
-        val_x = (perc_x * self.width_x) + self.min_x
-        val_x = max(min(val_x, self.max_x), self.min_x)
-        return [x for x, _ in self._data if x <= val_x][-1]
-
 
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
@@ -1384,30 +1370,16 @@ class PlotCanvas(wx.Panel):
         self.Refresh(eraseBackground=False)
         self.Update()
 
-    # def get_ticks(self):
-    #     """ Get a list of (x position, x value) tuples where the position
-    #     is given as a pixel value.
-
-    #     If no data is present, an empty list will be returned.
-    #     """
-    #     if self._data:
-    #         ticks = []
-    #         for i in range(self.ClientSize.x // self.tick_gap):
-    #             xpos = (i + 1) * self.tick_gap
-    #             ticks.append((xpos, self._pos_x_to_val_x(xpos)))
-    #         return ticks
-    #     else:
-    #         return []
-
     def _plot_data(self, ctx):
+        """ Plot the current `_data` to the given context """
         if self._data:
             if self.plot_mode == PLOT_MODE_LINE:
                 self._line_plot(ctx)
             elif self.plot_mode == PLOT_MODE_BAR:
                 self._bar_plot(ctx)
-            # logging.debug("moving to %s", self.value_to_position(self._data[0]))
 
     def _bar_plot(self, ctx):
+        """ Do a bar plot of the current `_data` """
         value_to_position = self.value_to_position
         line_to = ctx.line_to
 
@@ -1445,7 +1417,7 @@ class PlotCanvas(wx.Panel):
         # ctx.stroke()
 
     def _line_plot(self, ctx):
-
+        """ Do a line plot of the current `_data` """
         ctx.move_to(*self.value_to_position(self._data[0]))
 
         value_to_position = self.value_to_position
