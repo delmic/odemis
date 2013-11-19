@@ -416,11 +416,9 @@ def AngleResolved2Polar(data, output_size):
     image_x, image_y = image.shape
     jj = numpy.linspace(0, image_y - 1, image_y).astype(numpy.int)
     xpix = -(jj - mirror_x)
-    ii = numpy.empty(image_y)
 
     for i in xrange(image_x):
-        ii.fill(i)
-        ypix = -(ii - mirror_y) + (2 * f) / eff_pixel_size
+        ypix = -(i - mirror_y) + (2 * f) / eff_pixel_size
         theta, phi, omega = FindAngle(xpix, ypix, parabola_parameter, eff_pixel_size)
 
         angle_data[k:((i + 1) * image_y), 0] = theta
@@ -493,12 +491,10 @@ def InMirror(data, hole=True):
     xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
     yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
     yval = yi
-    xval = numpy.empty(xi.size)
 
     for ii in xi:
-        xval.fill(xi[ii])
+        xval = xi[ii]
 
-        # yval = yi[jj]
         theta = numpy.sqrt(numpy.power(xval, 2) + numpy.power(yval, 2)) / h_image_size * numpy.pi / 2
         phi = numpy.arctan2(yval, xval)
 
