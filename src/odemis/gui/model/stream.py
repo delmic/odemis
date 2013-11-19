@@ -370,7 +370,7 @@ class Stream(object):
         if not self.raw and not data:
             return
 
-        data = data or self.raw[0]
+        data = self.raw[0] if data is None else data
         # Initially, _irange might be None, in which case it will be guessed
         hist, edges = img.histogram(data, irange=self._irange)
         if hist.size > 256:
@@ -1334,7 +1334,7 @@ class StaticARStream(StaticStream):
         self._sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data
         for d in data:
             try:
-                self._sempos[d.metadata[MD_POS]] = d
+                self._sempos[d.metadata[MD_POS]] = img.ensure2DImage(d)
             except KeyError:
                 logging.info("Skipping DataArray without known position")
 
@@ -1344,6 +1344,9 @@ class StaticARStream(StaticStream):
         self.point = model.VAEnumerated((None, None),
                      choices=frozenset([(None, None)] + list(self._sempos.keys())))
         self.point.subscribe(self._onPoint)
+
+        if self._sempos:
+            self.point.value = list(self._sempos.keys())[0]
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
@@ -1368,8 +1371,8 @@ class StaticARStream(StaticStream):
                 im = img.NDImage2wxImage(rgbim)
                 im.InitAlpha()
 
-                # TODO: Special InstrumentalImage for polar view, with center position?
-                self.image.value = InstrumentalImage(im)
+                # TODO: Special InstrumentalImage for polar view, without MPP nor pos?
+                self.image.value = InstrumentalImage(im, self._findMPP(data), (0, 0))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:
