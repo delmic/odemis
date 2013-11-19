@@ -484,6 +484,8 @@ def InMirror(data, hole=True):
     """
     assert(len(data.shape) == 2)  # => 2D with greyscale
     image = data
+    hole_radius = hole_diameter / 2
+
 
     parabola_parameter = 1 / (4 * f)
     image_size_x, image_size_y = image.shape  # expected to be square
@@ -499,7 +501,7 @@ def InMirror(data, hole=True):
         phi = numpy.arctan2(yval, xval)
 
         # Express the ray position corresponding to each pixel in data as p+v*t
-        p1 = 1 / (4 * parabola_parameter)  # TODO change it to p1 = f
+        p1 = f  # TODO change it to p1 = f
         p2 = 0
         p3 = 0
         v1 = numpy.sin(theta) * numpy.cos(phi)
@@ -515,7 +517,7 @@ def InMirror(data, hole=True):
             if A[jj] == 0:
                 t = -C / B[jj]
             else:
-                t = (-B[jj] + math.sqrt(math.pow(B[jj], 2) - 4 * A[jj] * C)) / (2 * A[jj])
+                t = (-B[jj] + math.sqrt(B[jj] ** 2 - 4 * A[jj] * C)) / (2 * A[jj])
 
             point = [p1 + t * v1[jj], p2 + t * v2[jj], p3 + t * v3[jj]]
 
@@ -523,7 +525,7 @@ def InMirror(data, hole=True):
             # each pixel is in or out of the mirror
             if ~(point[0] <= xmax and
                  point[2] >= focus_distance and
-                 (hole and (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((hole_diameter / 2), 2)) and
+                 (hole and ((point[0] - f) ** 2 + point[1] ** 2) > hole_radius ** 2) and
                  abs(point[1]) < ccd_size / 2):
                 image[jj][ii] = 0
 
