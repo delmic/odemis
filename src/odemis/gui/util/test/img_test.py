@@ -30,6 +30,7 @@ def GetRGB(im, x, y):
     
     return (r, g, b)
 
+@unittest.skip("class skipping")
 class TestAngleResolved2Polar(unittest.TestCase):
     """
     Test AngleResolved2Polar
@@ -115,6 +116,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
+@unittest.skip("class skipping")
 class TestInMirror(unittest.TestCase):
     """
     Test InMirror
@@ -190,6 +192,7 @@ class TestInMirror(unittest.TestCase):
 
         numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1e-04)
 
+@unittest.skip("class skipping")
 class TestPolarConversion(unittest.TestCase):
     """
     Test AngleResolved2Polar and InMirror combination
@@ -280,7 +283,6 @@ class TestPolarConversion(unittest.TestCase):
 
         numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1e-04)
 
-@unittest.skip("class skipping")
 class TestPolarConversionOutput(unittest.TestCase):
     """
     Test AngleResolved2Polar and InMirror combination for various output sizes
@@ -293,8 +295,15 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
+        start1 = time.clock()
         result = img.AngleResolved2Polar(data[0], 100)
-        cropped_result = img.InMirror(result)
+        end1 = time.clock() - start1
+        print end1
+        hdf5.export("check", result, thumbnail=None)
+        start2 = time.clock()
+        cropped_result = img.InMirror(result, True)
+        end2 = time.clock() - start2
+        print end2
 
         desired_output = hdf5.read_data("desired100x100image")
         C, T, Z, Y, X = desired_output[0].shape
@@ -313,8 +322,14 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
+        start1 = time.clock()
         result = img.AngleResolved2Polar(data[0], 1000)
-        cropped_result = img.InMirror(result)
+        end1 = time.clock() - start1
+        print end1
+        start2 = time.clock()
+        cropped_result = img.InMirror(result, True)
+        end2 = time.clock() - start2
+        print end2
 
         desired_output = hdf5.read_data("desired1000x1000image")
         C, T, Z, Y, X = desired_output[0].shape
@@ -331,8 +346,14 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
+        start1 = time.clock()
         result = img.AngleResolved2Polar(data[0], 2000)
-        cropped_result = img.InMirror(result)
+        end1 = time.clock() - start1
+        print end1
+        start2 = time.clock()
+        cropped_result = img.InMirror(result, True)
+        end2 = time.clock() - start2
+        print end2
 
         desired_output = hdf5.read_data("desired2000x2000image")
         C, T, Z, Y, X = desired_output[0].shape
