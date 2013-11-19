@@ -381,10 +381,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # frequently be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
-        if not self.microscope_view:
-            return
-
-        self._updateThumbnail()
+        if self.microscope_view:
+            self._updateThumbnail()
 
     @limit_invocation(2) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
@@ -1348,7 +1346,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         for o in self.overlays:
             o.Draw(dc)
 
-        self._updateThumbnail()
+        if self.microscope_view:
+            self._updateThumbnail()
 
     def add_overlay(self, ol):
         self.overlays.append(ol)
