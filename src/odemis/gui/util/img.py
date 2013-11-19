@@ -285,7 +285,7 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         # see http://docs.opencv.org/doc/tutorials/core/basic_linear_transform/basic_linear_transform.html
         # and http://pippin.gimp.org/image-processing/chap_point.html
         # However we apply brightness first (before contrast) so that it can
-        # always be experessed between -1 and 1
+        # always be expressed between -1 and 1
         # contrast is between 1/(depth) -> (depth): = depth^our_contrast
         # brightness: newpixel = origpix + brightness*(depth-1)
         # contrast: newpixel = (origpix - depth-1/2) * contrast + depth-1/2
@@ -329,6 +329,23 @@ def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(25
         numpy.multiply(drescaled, btint / 255, out=rgb[:,:,2])
 
     return NDImage2wxImage(rgb)
+
+def ensure2DImage(data):
+    """
+    Reshape data to make sure it's 2D by trimming all the low dimensions (=1).
+    Odemis' convention is to have data organized as CTZYX. If CTZ=111, then it's
+    a 2D image, but it has too many dimensions for functions which want only 2D.
+    data (DataArray): the data to reshape
+    return DataArray: view to the same data but with 2D shape
+    raise ValueError: if the data is not 2D (CTZ != 111)
+    """
+    d = data.view()
+    if len(d.shape) < 2:
+        d.shape = (1,) * (2 - len(d.shape)) + d.shape
+    elif len(d.shape) > 2:
+        d.shape = d.shape[-2:] # raise ValueError if it will not work
+
+    return d
 
 # Note: it's also possible to directly generate a wx.Bitmap from a buffer, but
 # always implies a memory copy.
