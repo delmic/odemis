@@ -408,29 +408,33 @@ def AngleResolved2Polar(data, output_size):
     logging.debug("Creating image with size %d x %d", 2 * h_output_size, 2 * h_output_size)
     angle_data = numpy.zeros(shape=(image.size, 3))
     k = 0
-
     eff_pixel_size = pixel_size_x * binning / magnification
     parabola_parameter = 1 / (4 * f)
 
     # For each pixel of the input ndarray, input metadata is used to
     # calculate the corresponding theta, phi and radiant intensity
-    # TODO try to use xrange (more efficient)
-    for i, item_i in enumerate(image):
-        for j, item_j in enumerate(item_i):
-            xpix = -(j - mirror_x)
-            ypix = -(i - mirror_y) + (2 * f) / eff_pixel_size
-            theta_phi_omega = FindAngle(xpix, ypix, parabola_parameter, eff_pixel_size)
-            angle_data[k] = [theta_phi_omega[0], theta_phi_omega[1], image[i][j] / theta_phi_omega[2]]
-            k = k + 1
+    image_x, image_y = image.shape
+    jj = numpy.linspace(0, image_y - 1, image_y).astype(numpy.int)
+    xpix = -(jj - mirror_x)
+    ii = numpy.empty(image_y)
+
+    for i in xrange(image_x):
+        ii.fill(i)
+        ypix = -(ii - mirror_y) + (2 * f) / eff_pixel_size
+        theta, phi, omega = FindAngle(xpix, ypix, parabola_parameter, eff_pixel_size)
+
+        angle_data[k:((i + 1) * image_y), 0] = theta
+        angle_data[k:((i + 1) * image_y), 1] = phi
+        angle_data[k:((i + 1) * image_y), 2] = image[i] / omega
+        k = k + image_y
 
     polar_grid = angle_data
 
     # Convert into polar coordinates
-    for i, item_i in enumerate(polar_grid):
-        theta = angle_data[i][0] * h_output_size / numpy.pi * 2
-        phi = angle_data[i][1]
-        polar_grid[i][0] = math.cos(phi) * theta
-        polar_grid[i][1] = math.sin(phi) * theta
+    theta = angle_data[:, 0] * h_output_size / numpy.pi * 2
+    phi = angle_data[:, 1]
+    polar_grid[:, 0] = numpy.cos(phi) * theta
+    polar_grid[:, 1] = numpy.sin(phi) * theta
 
     # Interpolation into 2d array
     xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
@@ -443,33 +447,35 @@ def AngleResolved2Polar(data, output_size):
 
 def FindAngle(xpix, ypix, parabola_parameter, pixel_size):
     """
-    For a given pixel, finds the angle of the corresponding ray 
-    xpix (float): x coordinate of the pixel
-    ypix (float): y coordinate of the pixel
+    For given pixels, finds the angle of the corresponding ray 
+    xpix (numpy.array): x coordinate of the pixels
+    ypix (numpy.array): y coordinate of the pixels
     parabola_parameter (float): 1 / (4 * f)
     pixel_size (float): CCD pixelsize
     returns (List): list with theta phi and omega
     """
     y = xpix * pixel_size
     z = ypix * pixel_size
-    r2 = math.pow(y, 2) + math.pow(z, 2)
+    r2 = numpy.power(y, 2) + numpy.power(z, 2)
     xfocus = parabola_parameter * r2 - 1 / (4 * parabola_parameter)
-    xfocus2plusr2 = math.pow(xfocus, 2) + r2
+    xfocus2plusr2 = numpy.power(xfocus, 2) + r2
     sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
-    theta_phi_omega = []
+    # theta_phi_omega = numpy.empty(shape=(3, xpix.size))
     
     # theta
-    theta_phi_omega.append(math.acos(z / sqrtxfocus2plusr2))
+    theta = numpy.arccos(z / sqrtxfocus2plusr2)
     
     # phi
-    theta_phi_omega.append(math.atan2(y, xfocus))
-    if theta_phi_omega[1] < 0:
-        theta_phi_omega[1] = theta_phi_omega[1] + 2 * numpy.pi
+    phi = numpy.arctan2(y, xfocus)
+
+    for i in xrange(phi.size):
+        if phi[i] < 0:
+            phi[i] = phi[i] + 2 * math.pi
         
     # omega
-    theta_phi_omega.append(math.pow(pixel_size, 2) * (2 * parabola_parameter * r2 - xfocus) / sqrtxfocus2plusr2 / xfocus2plusr2)
+    omega = numpy.power(pixel_size, 2) * (2 * parabola_parameter * r2 - xfocus) / sqrtxfocus2plusr2 / xfocus2plusr2
 
-    return theta_phi_omega
+    return theta, phi, omega
 
 def InMirror(data, hole=True):
     """
@@ -481,50 +487,47 @@ def InMirror(data, hole=True):
     assert(len(data.shape) == 2)  # => 2D with greyscale
     image = data
 
-    if hole == True:
-        our_hole_diameter = hole_diameter
-    else:
-        our_hole_diameter = 0.0
-
     parabola_parameter = 1 / (4 * f)
     image_size_x, image_size_y = image.shape  # expected to be square
     h_image_size = int(image_size_x / 2)
     xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
     yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
+    yval = yi
+    xval = numpy.empty(xi.size)
 
-    for ii, item_ii in enumerate(xi):
-        for jj, item_jj in enumerate(yi):
-            # TODO xi[ii], yi[jj] directly to InMirror
-            xval = xi[ii]
-            yval = yi[jj]
-            theta = numpy.sqrt(math.pow(xval, 2) + math.pow(yval, 2)) / h_image_size * numpy.pi / 2
-            phi = math.atan2(yval, xval)
+    for ii in xi:
+        xval.fill(xi[ii])
 
-            # Express the ray position corresponding to each pixel in data as p+v*t
-            p1 = 1 / (4 * parabola_parameter)  # TODO change it to p1 = f
-            p2 = 0
-            p3 = 0
-            v1 = math.sin(theta) * math.cos(phi)
-            v2 = math.sin(theta) * math.sin(phi)
-            v3 = math.cos(theta)
+        # yval = yi[jj]
+        theta = numpy.sqrt(numpy.power(xval, 2) + numpy.power(yval, 2)) / h_image_size * numpy.pi / 2
+        phi = numpy.arctan2(yval, xval)
 
-            # Plug ray position in parabola x=ar^2 y^2+z^2=r^2
-            A = (math.pow(v2, 2) + math.pow(v3, 2))
-            B = (2 * p2 * v2 + 2 * v3 * p3) - v1 / parabola_parameter
-            C = (math.pow(p2, 2) + math.pow(p3, 2)) - p1 / parabola_parameter
+        # Express the ray position corresponding to each pixel in data as p+v*t
+        p1 = 1 / (4 * parabola_parameter)  # TODO change it to p1 = f
+        p2 = 0
+        p3 = 0
+        v1 = numpy.sin(theta) * numpy.cos(phi)
+        v2 = numpy.sin(theta) * numpy.sin(phi)
+        v3 = numpy.cos(theta)
 
-            if A == 0:
-                t = -C / B
+        # Plug ray position in parabola x=ar^2 y^2+z^2=r^2
+        A = (numpy.power(v2, 2) + numpy.power(v3, 2))
+        B = (2 * p2 * v2 + 2 * v3 * p3) - v1 / parabola_parameter
+        C = (numpy.power(p2, 2) + numpy.power(p3, 2)) - p1 / parabola_parameter
+
+        for jj in yi:
+            if A[jj] == 0:
+                t = -C / B[jj]
             else:
-                t = (-B + numpy.sqrt(math.pow(B, 2) - 4 * A * C)) / (2 * A)
+                t = (-B[jj] + math.sqrt(math.pow(B[jj], 2) - 4 * A[jj] * C)) / (2 * A[jj])
 
-            point = [p1 + t * v1, p2 + t * v2, p3 + t * v3]
+            point = [p1 + t * v1[jj], p2 + t * v2[jj], p3 + t * v3[jj]]
 
             # Based on the p+v*t, parabola_parameter, hole_diameter, xmax and focus_distance decide if
             # each pixel is in or out of the mirror
             if ~(point[0] <= xmax and
                  point[2] >= focus_distance and
-                 (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((our_hole_diameter / 2), 2) and
+                 (hole and (math.pow((point[0] - 1 / (4 * parabola_parameter)), 2) + point[1] ** 2) > math.pow((hole_diameter / 2), 2)) and
                  abs(point[1]) < ccd_size / 2):
                 image[jj][ii] = 0
 
