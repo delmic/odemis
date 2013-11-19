@@ -5,12 +5,12 @@ Created on 19 Sep 2012
 '''
 import logging
 import numpy
+import os
 import time
 import unittest
 import wx
 
-from odemis import model
-from odemis import dataio
+from odemis import dataio, model
 from odemis.dataio import hdf5
 from odemis.gui.util import img
 from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
@@ -30,7 +30,6 @@ def GetRGB(im, x, y):
     
     return (r, g, b)
 
-@unittest.skip("class skipping")
 class TestAngleResolved2Polar(unittest.TestCase):
     """
     Test AngleResolved2Polar
@@ -116,7 +115,6 @@ class TestAngleResolved2Polar(unittest.TestCase):
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
-@unittest.skip("class skipping")
 class TestInMirror(unittest.TestCase):
     """
     Test InMirror
@@ -192,7 +190,6 @@ class TestInMirror(unittest.TestCase):
 
         numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1e-04)
 
-@unittest.skip("class skipping")
 class TestPolarConversion(unittest.TestCase):
     """
     Test AngleResolved2Polar and InMirror combination
@@ -338,7 +335,7 @@ class TestPolarConversionOutput(unittest.TestCase):
         numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1)
 
     def test_2000x2000(self):
-        data = hdf5.read_data("myh5file.h5")
+        data = hdf5.read_data(os.path.dirname(__file__) + "/myh5file.h5")
         data[0] = data[0].astype(numpy.float)
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
@@ -919,5 +916,7 @@ class TestWxImage2NDImage(unittest.TestCase):
     # TODO alpha channel
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.test']
-    unittest.main()
+#     import sys;sys.argv = ['', 'TestPolarConversionOutput.test_2000x2000']
+#     unittest.main()
+    import cProfile
+    cProfile.run("unittest.main()" , "polar-test.profile")
