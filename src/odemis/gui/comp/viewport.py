@@ -395,6 +395,8 @@ class PlotViewport(ViewPort):
         # before we get an explicit chance to unsubscribe event handlers
         self.spectrum_stream = None
 
+        self.canvas.set_x_unit("m") #pylint: disable=E1101
+
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
 
