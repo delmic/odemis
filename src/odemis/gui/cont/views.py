@@ -144,6 +144,12 @@ class ViewController(object):
                       "stream_classes":
                             EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
                       }),
+                    # Spectrum viewport is *also* needed for Analysis tab in the
+                    # Sparc configuration
+                    (self._viewports[4],
+                     {"name": "Spectrum",
+                      "stream_classes": SPECTRUM_STREAMS
+                     }),
                 ])
                 self._createViewsFixed(vpv)
             else:
@@ -523,8 +529,6 @@ class ViewSelector(object):
                 # import traceback
                 # traceback.print_stack()
                 btn.set_overlay_image(im)
-            onThumbnail.name = "onThumbnail {}".format(
-                                                vp.microscope_view.name.value)
 
             vp.microscope_view.thumbnail.subscribe(onThumbnail, init=True)
             # keep ref of the functions so that they are not dropped
@@ -535,7 +539,6 @@ class ViewSelector(object):
 
             def onName(name, lbl=lbl): # save lbl in scope
                 lbl.SetLabel(name)
-            onName.name = "onName {}".format(vp.microscope_view.name.value)
 
             btn.Freeze()
             vp.microscope_view.name.subscribe(onName, init=True)

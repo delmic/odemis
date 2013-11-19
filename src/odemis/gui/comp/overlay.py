@@ -1541,3 +1541,9 @@ class PointSelectOverlay(WorldOverlay):
             raise ValueError("Not all PointSelectOverlay values are set!")
         self.enabled = enable
         self.base.Refresh()
+
+
+class AngleOverlay(ViewOverlay):
+
+    def Draw(self, dc):
+        pass
