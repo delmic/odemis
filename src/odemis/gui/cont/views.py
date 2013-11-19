@@ -144,6 +144,12 @@ class ViewController(object):
                       "stream_classes":
                             EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
                       }),
+                    # Spectrum viewport is *also* needed for Analysis tab in the
+                    # Sparc configuration
+                    (self._viewports[4],
+                     {"name": "Spectrum",
+                      "stream_classes": SPECTRUM_STREAMS
+                     }),
                 ])
                 self._createViewsFixed(vpv)
             else:
