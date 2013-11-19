@@ -1497,7 +1497,7 @@ class StaticSpectrumStream(StaticStream):
         # MD_WL_LIST has priority
         if model.MD_WL_LIST in da.metadata:
             wl = da.metadata[model.MD_WL_LIST]
-            if len(wl) == len(da.shape[0]):
+            if len(wl) == da.shape[0]:
                 return wl
             else:
                 logging.warning("MD_WL_LIST is not the same length as the data")
