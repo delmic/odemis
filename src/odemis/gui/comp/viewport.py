@@ -464,3 +464,32 @@ class PlotViewport(ViewPort):
         # Keep an eye on the stream tree, so we can (re)connect when it changes
         microscope_view.stream_tree.should_update.subscribe(
                                                         self.connect_stream)
+
+class AngularResolvedViewport(ViewPort):
+
+    # Default class
+    canvas_class = miccanvas.AngularResolvedCanvas
+    legend_class = None
+
+    def __init__(self, *args, **kwargs):
+        ViewPort.__init__(self, *args, **kwargs)
+
+
+    def setView(self, microscope_view, tab_data):
+        """
+        """
+
+        # This is a kind of a kludge, as it'd be best to have the viewport
+        # created after the microscope view, but they are created independently
+        # via XRC.
+        assert(self._microscope_view is None)
+
+        # import traceback
+        # traceback.print_stack()
+
+        self._microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(microscope_view, tab_data)
+

@@ -381,10 +381,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # frequently be updated?
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
-        if not self.microscope_view:
-            return
-
-        self._updateThumbnail()
+        if self.microscope_view:
+            self._updateThumbnail()
 
     @limit_invocation(2) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
@@ -1348,7 +1346,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         for o in self.overlays:
             o.Draw(dc)
 
-        self._updateThumbnail()
+        if self.microscope_view:
+            self._updateThumbnail()
 
     def add_overlay(self, ol):
         self.overlays.append(ol)
@@ -1362,3 +1361,79 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def set_y_unit(self, unit):
         self.unit_y = unit
+
+class AngularResolvedCanvas(canvas.DraggableCanvas):
+    """ Angular resovled canvas
+    """
+
+    def __init__(self, *args, **kwargs):
+
+        self.microscope_view = None
+        self._tab_data_model = None
+
+        super(AngularResolvedCanvas, self).__init__(*args, **kwargs)
+
+        ## Overlays
+
+        self.angle_overlay = comp_overlay.AngleOverlay(self)
+        self.ViewOverlays.append(self.angle_overlay)
+
+        ## Event binding
+
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
+        # self.Bind(wx.EVT_SIZE, self.OnSize)
+
+
+    # Event handlers
+
+    def OnLeftDown(self, event):
+        event.Skip()
+
+    def OnLeftUp(self, event):
+        event.Skip()
+
+    def OnMouseMotion(self, event):
+        event.Skip()
+
+    def OnSize(self, event):  #pylint: disable=W0222
+        """ Update the position of the focus line """
+        super(AngularResolvedCanvas, self).OnSize(event)
+
+    def setView(self, microscope_view, tab_data):
+        """Set the microscope_view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
+
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
+        # details
+        assert(self.microscope_view is None)
+
+        self.microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+    @limit_invocation(0.5) # max 1/2 Hz
+    @call_after  # needed as it accesses the DC
+    @ignore_dead  # This method might get called after the canvas is destroyed
+    def _updateThumbnail(self):
+        csize = self.ClientSize
+        if (csize[0] * csize[1]) <= 0:
+            return # nothing to update
+
+        # new bitmap to copy the DC
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        context = wx.ClientDC(self)
+
+        dc = wx.MemoryDC()
+        dc.SelectObject(bitmap)
+
+        dc.BlitPointSize((0, 0), self.ClientSize, context, (0, 0))
+
+        # close the DC, to be sure the bitmap can be used safely
+        del dc
+
+        img = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = img
