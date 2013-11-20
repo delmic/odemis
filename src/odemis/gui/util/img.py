@@ -24,11 +24,8 @@ import logging
 import math
 import numpy
 import scipy.misc
-import scipy.interpolate
-import time
 import wx
 from matplotlib import mlab
-from odemis import dataio
 from odemis import model
 
 # Global variables
@@ -475,7 +472,7 @@ def FindAngle(xpix, ypix, parabola_parameter, pixel_size):
 
     return theta, phi, omega
 
-def InMirror(data, hole=True):
+def CropMirror(data, hole=True):
     """
     Crops the part of the image that is outside the boundaries of the mirror
     data (model.DataArray): The DataArray with the image
@@ -486,13 +483,13 @@ def InMirror(data, hole=True):
     image = data
     hole_radius = hole_diameter / 2
 
-
     parabola_parameter = 1 / (4 * f)
     image_size_x, image_size_y = image.shape  # expected to be square
     h_image_size = int(image_size_x / 2)
     xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
     yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
     yval = yi
+    p1 = f
 
     for ii in xi:
         xval = xi[ii]
@@ -501,17 +498,15 @@ def InMirror(data, hole=True):
         phi = numpy.arctan2(yval, xval)
 
         # Express the ray position corresponding to each pixel in data as p+v*t
-        p1 = f  # TODO change it to p1 = f
-        p2 = 0
-        p3 = 0
-        v1 = numpy.sin(theta) * numpy.cos(phi)
-        v2 = numpy.sin(theta) * numpy.sin(phi)
+        sin_theta = numpy.sin(theta)
+        v1 = sin_theta * numpy.cos(phi)
+        v2 = sin_theta * numpy.sin(phi)
         v3 = numpy.cos(theta)
 
         # Plug ray position in parabola x=ar^2 y^2+z^2=r^2
         A = (numpy.power(v2, 2) + numpy.power(v3, 2))
-        B = (2 * p2 * v2 + 2 * v3 * p3) - v1 / parabola_parameter
-        C = (numpy.power(p2, 2) + numpy.power(p3, 2)) - p1 / parabola_parameter
+        B = -v1 / parabola_parameter
+        C = -p1 / parabola_parameter
 
         for jj in yi:
             if A[jj] == 0:
@@ -519,7 +514,7 @@ def InMirror(data, hole=True):
             else:
                 t = (-B[jj] + math.sqrt(B[jj] ** 2 - 4 * A[jj] * C)) / (2 * A[jj])
 
-            point = [p1 + t * v1[jj], p2 + t * v2[jj], p3 + t * v3[jj]]
+            point = [p1 + t * v1[jj], t * v2[jj], t * v3[jj]]
 
             # Based on the p+v*t, parabola_parameter, hole_diameter, xmax and focus_distance decide if
             # each pixel is in or out of the mirror
@@ -527,6 +522,6 @@ def InMirror(data, hole=True):
                  point[2] >= focus_distance and
                  (hole and ((point[0] - f) ** 2 + point[1] ** 2) > hole_radius ** 2) and
                  abs(point[1]) < ccd_size / 2):
-                image[jj][ii] = 0
+                image[jj, ii] = 0
 
     return image
