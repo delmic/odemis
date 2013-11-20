@@ -895,5 +895,6 @@ class TestWxImage2NDImage(unittest.TestCase):
 if __name__ == "__main__":
 #     import sys;sys.argv = ['', 'TestPolarConversionOutput.test_2000x2000']
 #     unittest.main()
-    import cProfile
-    cProfile.run("unittest.main()" , "polar-test.profile")
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestPolarConversionOutput)
+    unittest.TextTestRunner(verbosity=2).run(suite)
+
