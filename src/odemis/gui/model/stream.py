@@ -1403,7 +1403,6 @@ class StaticSpectrumStream(StaticStream):
         """
         Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
-        #  * projection type (1-point, line, avg. spectrum)
         #  * information about the current bandwidth displayed (avg. spectrum)
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
