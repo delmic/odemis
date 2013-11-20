@@ -10,7 +10,7 @@ import time
 import unittest
 import wx
 
-from odemis import dataio, model
+from odemis import model
 from odemis.dataio import hdf5
 from odemis.gui.util import img
 from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
@@ -19,7 +19,6 @@ from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("class skipping")
 def GetRGB(im, x, y):
     """
     return the r,g,b tuple corresponding to a pixel
@@ -115,19 +114,19 @@ class TestAngleResolved2Polar(unittest.TestCase):
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
-class TestInMirror(unittest.TestCase):
+class TestCropMirror(unittest.TestCase):
     """
-    Test InMirror
+    Test CropMirror
     """
     def test_precomputed(self):
         """
-        Compares the output of InMirror to the output of the corresponding matlab function.
+        Compares the output of CropMirror to the output of the corresponding matlab function.
         """
         data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
-        # InMirror expects 2d array
+        # CropMirror expects 2d array
         data[0].shape = Y, X
-        cropped_result = img.InMirror(data[0])
+        cropped_result = img.CropMirror(data[0])
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -141,12 +140,12 @@ class TestInMirror(unittest.TestCase):
         """
         data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
-        # InMirror expects 2d array
+        # CropMirror expects 2d array
         data[0].shape = Y, X
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 12)
         data[0] = data[0].astype(numpy.uint16)
-        cropped_result = img.InMirror(data[0])
+        cropped_result = img.CropMirror(data[0])
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -160,12 +159,12 @@ class TestInMirror(unittest.TestCase):
         """
         data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
-        # InMirror expects 2d array
+        # CropMirror expects 2d array
         data[0].shape = Y, X
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 21)
         data[0] = data[0].astype(numpy.int8)
-        cropped_result = img.InMirror(data[0])
+        cropped_result = img.CropMirror(data[0])
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -179,10 +178,10 @@ class TestInMirror(unittest.TestCase):
         """
         data = hdf5.read_data("finalimage")
         C, T, Z, Y, X = data[0].shape
-        # InMirror expects 2d array
+        # CropMirror expects 2d array
         data[0].shape = Y, X
         data[0] = data[0].astype(numpy.float)
-        cropped_result = img.InMirror(data[0])
+        cropped_result = img.CropMirror(data[0])
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -192,11 +191,11 @@ class TestInMirror(unittest.TestCase):
 
 class TestPolarConversion(unittest.TestCase):
     """
-    Test AngleResolved2Polar and InMirror combination
+    Test AngleResolved2Polar and CropMirror combination
     """
     def test_precomputed(self):
         """
-        Feeds the output of AngleResolved2Polar to InMirror and compares its output to the corresponding 
+        Feeds the output of AngleResolved2Polar to CropMirror and compares its output to the corresponding 
         matlab function.
         """
         data = hdf5.read_data("myh5file.h5")
@@ -207,7 +206,7 @@ class TestPolarConversion(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        cropped_result = img.InMirror(result)
+        cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -228,7 +227,7 @@ class TestPolarConversion(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        cropped_result = img.InMirror(result)
+        cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -251,7 +250,7 @@ class TestPolarConversion(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        cropped_result = img.InMirror(result)
+        cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -272,7 +271,7 @@ class TestPolarConversion(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
-        cropped_result = img.InMirror(result)
+        cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desiredimage")
         C, T, Z, Y, X = desired_output[0].shape
@@ -282,7 +281,7 @@ class TestPolarConversion(unittest.TestCase):
 
 class TestPolarConversionOutput(unittest.TestCase):
     """
-    Test AngleResolved2Polar and InMirror combination for various output sizes
+    Test AngleResolved2Polar and CropMirror combination for various output sizes
     """
     def test_100x100(self):
         data = hdf5.read_data("myh5file.h5")
@@ -292,15 +291,9 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        start1 = time.clock()
+
         result = img.AngleResolved2Polar(data[0], 100)
-        end1 = time.clock() - start1
-        print end1
-        hdf5.export("check", result, thumbnail=None)
-        start2 = time.clock()
-        cropped_result = img.InMirror(result, True)
-        end2 = time.clock() - start2
-        print end2
+        cropped_result = img.CropMirror(result, True)
 
         desired_output = hdf5.read_data("desired100x100image")
         C, T, Z, Y, X = desired_output[0].shape
@@ -319,14 +312,9 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        start1 = time.clock()
+
         result = img.AngleResolved2Polar(data[0], 1000)
-        end1 = time.clock() - start1
-        print end1
-        start2 = time.clock()
-        cropped_result = img.InMirror(result, True)
-        end2 = time.clock() - start2
-        print end2
+        cropped_result = img.CropMirror(result, True)
 
         desired_output = hdf5.read_data("desired1000x1000image")
         C, T, Z, Y, X = desired_output[0].shape
@@ -343,14 +331,9 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        start1 = time.clock()
+
         result = img.AngleResolved2Polar(data[0], 2000)
-        end1 = time.clock() - start1
-        print end1
-        start2 = time.clock()
-        cropped_result = img.InMirror(result, True)
-        end2 = time.clock() - start2
-        print end2
+        cropped_result = img.CropMirror(result, True)
 
         desired_output = hdf5.read_data("desired2000x2000image")
         C, T, Z, Y, X = desired_output[0].shape
@@ -358,7 +341,6 @@ class TestPolarConversionOutput(unittest.TestCase):
 
         numpy.testing.assert_allclose(cropped_result, desired_output[0], rtol=1e-04)
 
-@unittest.skip("class skipping")
 class TestFindOptimalBC(unittest.TestCase):
     def test_simple(self):
         size = (1024, 512)
@@ -439,7 +421,6 @@ class TestFindOptimalBC(unittest.TestCase):
         
         self.assertTrue(numpy.all(img_auto==img_manu))
 
-@unittest.skip("class skipping")
 class TestFindOptimalRange(unittest.TestCase):
     """
     Test findOptimalRange
@@ -562,7 +543,6 @@ class TestFindOptimalRange(unittest.TestCase):
 
         numpy.testing.assert_equal(img_auto, img_manu)
 
-@unittest.skip("class skipping")
 class TestHistogram(unittest.TestCase):
     # 8 and 16 bit short-cuts test
     def test_uint8(self):
@@ -639,7 +619,6 @@ class TestHistogram(unittest.TestCase):
         nchist = img.compactHistogram(hist, depth)
         numpy.testing.assert_array_equal(hist, nchist)
 
-@unittest.skip("class skipping")
 class TestDataArray2RGB(unittest.TestCase):
     @staticmethod
     def CountValues(array):
@@ -769,7 +748,6 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertTrue(numpy.all(pixel0 <= pixelg))
         self.assertTrue(numpy.all(pixelg <= pixel1))
 
-@unittest.skip("class skipping")
 class TestDataArray2wxImage(unittest.TestCase):
     def test_simple(self):
         # test with everything auto
@@ -901,8 +879,7 @@ class TestDataArray2wxImage(unittest.TestCase):
         self.assertGreater(pixel1, pixel0)
         self.assertGreater(pixelg, pixel0)
         self.assertGreater(pixel1, pixelg)
-                
-@unittest.skip("class skipping")
+
 class TestWxImage2NDImage(unittest.TestCase):
     
     def test_simple(self):
