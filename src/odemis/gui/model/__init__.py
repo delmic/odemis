@@ -196,11 +196,13 @@ class MainGUIData(object):
         elif state == STATE_ON:
             # the image acquisition from the camera is handled solely by the streams
             if self.light:
-                if self._light_power_on: # re-use previous value
-                    self.light.power.value = self._light_power_on
-                else:
-                    # pick a nice value (=max), if not already on
-                    if self.light.power.value == 0:
+                # if power is above 0 already, it's probably the user who wants
+                # to force to a specific value, respect that.
+                if self.light.power.value == 0:
+                    if self._light_power_on: # re-use previous value
+                        self.light.power.value = self._light_power_on
+                    else:
+                        # pick a nice value (=max), if not already on
                         try:
                             self.light.power.value = max(self.light.power.range)
                         except (AttributeError, model.NotApplicableError):
