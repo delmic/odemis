@@ -480,7 +480,7 @@ def AngleResolved2Polar(data, output_size):
     triang = tri.delaunay.Triangulation(theta_data.flat, phi_data.flat)
     interp = triang.linear_interpolator(omega_data.flat, default_value=0)
     qz = interp[-h_output_size:h_output_size:complex(0, 2 * h_output_size + 1), # Y
-                - h_output_size:h_output_size:complex(0, 2 * h_output_size + 1)] # X
+                -h_output_size:h_output_size:complex(0, 2 * h_output_size + 1)] # X
     qz = qz.swapaxes(0, 1)[:, ::-1] # rotate by 90°
     result = model.DataArray(qz, image.metadata)
 
@@ -507,12 +507,8 @@ def FindAngle(xpix, ypix, pixel_size):
     theta = numpy.arccos(z / sqrtxfocus2plusr2)
     
     # phi
-    phi = numpy.arctan2(y, xfocus)
+    phi = numpy.arctan2(y, xfocus) % (2 * math.pi)
 
-    for i in xrange(phi.size):
-        if phi[i] < 0:
-            phi[i] = phi[i] + 2 * math.pi
-        
     # omega
     omega = (pixel_size ** 2) * ((1 / (2 * AR_PARABOLA_F)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
 
