@@ -288,7 +288,8 @@ class Stream(object):
         try:
             pos = data.metadata[MD_POS]
         except KeyError:
-            logging.warning("Position of image unknown")
+            # Note: this log message is disabled to prevent log flooding
+            # logging.warning("Position of image unknown")
             pos = (0, 0)
         return pos
 
@@ -305,7 +306,9 @@ class Stream(object):
                 # Hopefully it'll be within the same magnitude
                 mpp = (data.metadata[MD_SENSOR_PIXEL_SIZE][0]
                         * data.metadata.get(model.MD_BINNING, (1, 1))[0])
-                logging.warning("Pixel density of image unknown, using sensor size")
+                # Note: this log message is disabled to prevent log flooding
+                # msg = "Pixel density of image unknown, using sensor size"
+                # logging.warning(msg)
             except KeyError:
                 logging.error("Image has no pixel density known")
                 mpp = 20e-6 # m/px (typical sensor size)
@@ -1359,7 +1362,7 @@ class StaticARStream(StaticStream):
 
         try:
             self._running_upd_img = True
-            
+
             if self.point.value == (None, None):
                 self.image.value = InstrumentalImage(None)
             else:

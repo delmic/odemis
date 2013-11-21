@@ -63,14 +63,17 @@ class ViewController(object):
         tab_data.focussedView.value = tab_data.visible_views.value[0]
 
         # Store the initial values, so we can reset
-        self._def_views = list(tab_data.visible_views.value)
-        self._def_layout = tab_data.viewLayout.value
-        self._def_focus = tab_data.focussedView.value
+        self.cache()
 
         # subscribe to layout and view changes
         tab_data.visible_views.subscribe(self._on_visible_views)
         tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
         tab_data.focussedView.subscribe(self._onView, init=True)
+
+    def cache(self):
+        self._def_views = list(self._data_model.visible_views.value)
+        self._def_layout = self._data_model.viewLayout.value
+        self._def_focus = self._data_model.focussedView.value
 
     @property
     def viewports(self):
@@ -99,14 +102,12 @@ class ViewController(object):
             # If stream classes are defined we assume a MicroscopeView is needed
             if 'stream_classes' in vkwargs:
                 view = model.MicroscopeView(**vkwargs)
-            else:
-                view = model.View(**vkwargs)
 
-            views.append(view)
-            if vp.Shown:
-                visible_views.append(view)
+                views.append(view)
+                if vp.Shown:
+                    visible_views.append(view)
 
-            vp.setView(view, self._data_model)
+                vp.setView(view, self._data_model)
 
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views
@@ -136,8 +137,8 @@ class ViewController(object):
                       "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
                       }),
                     (self._viewports[2],
-                     {"name": "Angle resolved",
-                      "stream_classes": AR_STREAMS,
+                     {"name": "Dummy",  # This one should be swapped out
+                      "stream_classes": [],
                       }),
                     (self._viewports[3],
                      {"name": "SEM CL",
@@ -147,8 +148,12 @@ class ViewController(object):
                     # Spectrum viewport is *also* needed for Analysis tab in the
                     # Sparc configuration
                     (self._viewports[4],
-                     {"name": "Spectrum",
+                     {"name": "Spectrum plot",
                       "stream_classes": SPECTRUM_STREAMS
+                     }),
+                    (self._viewports[5],
+                     {"name": "Angle resolved",
+                      "stream_classes": AR_STREAMS
                      }),
                 ])
                 self._createViewsFixed(vpv)
@@ -174,8 +179,12 @@ class ViewController(object):
                             EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
                       }),
                     (self._viewports[4],
-                     {"name": "Spectrum",
+                     {"name": "Spectrum plot",
                       "stream_classes": SPECTRUM_STREAMS
+                     }),
+                    (self._viewports[5],
+                     {"name": "Angle resolved",
+                      "stream_classes": AR_STREAMS
                      }),
                 ])
                 self._createViewsFixed(vpv)
@@ -334,55 +343,70 @@ class ViewController(object):
                 j = self._viewport_index_by_view(def_view)
                 self.swap_viewports(i, j)
 
-    def swap_viewports(self, vpi1, vpi2):
-        """ Swap the positions of viewports denoted by indices vpi1 and vpi2
+    def swap_viewports(self, visible_idx, hidden_idx):
+        """ Swap the positions of viewports denoted by indices visible_idx and
+        hidden_idx.
 
-        It is assumed that vpi1 points to one of the viewports visible in a 2x2
-        display, and that vpi2 is outside this 2x2 layout and invisible.
+        It is assumed that visible_idx points to one of the viewports visible in
+        a 2x2 display, and that hidden_idx is outside this 2x2 layout and
+        invisible.
         """
-
-        logging.debug("swapping %s and %s",
-                              self._viewports[vpi1].microscope_view,
-                              self._viewports[vpi2].microscope_view)
 
         # Small shothand local variable
         vp = self._viewports
 
-        # Get the sizer of the visible viewport
-        sizer1 = vp[vpi1].GetContainingSizer()
-        # And the one of the invisible one, which should be the containing sizer
-        # of sizer1
-        sizer2 = parent_sizer = vp[vpi2].GetContainingSizer()
+        visible_vp = vp[visible_idx]
+        hidden_vp = vp[hidden_idx]
 
-        # Get the sizer position of the first viewport, so we can use that
+        logging.debug("swapping visible %s and hidden %s",
+                      visible_vp,
+                      hidden_vp)
+
+        # Get the sizer of the visible viewport
+        visible_sizer = visible_vp.GetContainingSizer()
+        # And the one of the invisible one, which should be the containing sizer
+        # of visible_sizer
+        hidden_sizer = parent_sizer = hidden_vp.GetContainingSizer()
+
+        # Get the sizer position of the visible viewport, so we can use that
         # to insert the other viewport
-        pos1 = util.get_sizer_position(vp[vpi1])
+        visible_pos = util.get_sizer_position(visible_vp)
+        hidden_pos = util.get_sizer_position(hidden_vp)
 
         # Get the sizer item for the visible viewport, so we can access its
         # sizer properties like proportion and flags
-        item1 = parent_sizer.GetItem(vp[vpi1], recursive=True)
+        visible_item = parent_sizer.GetItem(visible_vp, recursive=True)
+        hidden_item = parent_sizer.GetItem(hidden_vp, recursive=True)
 
-        # Move viewport 2 to sizer 1
-        sizer2.Detach(vp[vpi2])
-        sizer1.Insert(
-            pos1,
-            vp[vpi2],
-            proportion=item1.GetProportion(),
-            flag=item1.GetFlag(),
-            border=item1.GetBorder())
+        # Move hidden viewport to visible sizer
+        hidden_sizer.Detach(hidden_vp)
+        visible_sizer.Insert(
+            visible_pos,
+            hidden_vp,
+            proportion=visible_item.GetProportion(),
+            flag=visible_item.GetFlag(),
+            border=visible_item.GetBorder())
 
         # Move viewport 1 to the end of the conaining sizer
-        sizer1.Detach(vp[vpi1])
-        parent_sizer.Add(vp[vpi1])
+        visible_sizer.Detach(visible_vp)
+        hidden_sizer.Insert(
+            hidden_pos,
+            visible_vp,
+            proportion=hidden_item.GetProportion(),
+            flag=hidden_item.GetFlag(),
+            border=hidden_item.GetBorder())
 
         # Flip the visibility
-        vp[vpi1].Hide()
-        vp[vpi2].Show()
+        visible_vp.Hide()
+        logging.debug("Hiding %s", visible_vp)
+        hidden_vp.Show()
+        logging.debug("Showing %s", hidden_vp)
 
         # Swap the viewports in the viewport list
-        vp[vpi1], vp[vpi2] = vp[vpi2], vp[vpi1]
+        vp[visible_idx], vp[hidden_idx] = vp[hidden_idx], vp[visible_idx]
 
-        vp[vpi1].Parent.Layout()
+        # vp[visible_idx].Parent.Layout()
+        parent_sizer.Layout()
 
 
     def _on_visible_views(self, visible_views):
