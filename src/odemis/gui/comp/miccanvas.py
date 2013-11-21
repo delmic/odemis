@@ -1420,6 +1420,54 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
+        # any image changes
+        self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+
+    def _getStreamsImages(self, streams):
+        """
+        Create a list of each stream's image
+        streams (list of Streams) the streams to order
+        return (list of InstrumentalImage)
+        """
+        images = []
+        for s in streams:
+            if not s:
+                # should not happen, but let's not completely fail on this
+                logging.error("StreamTree has a None stream")
+                continue
+
+            if hasattr(s, "image"):
+                iim = s.image.value
+                if iim is None or iim.image is None:
+                    continue
+
+                images.append(iim)
+
+        return images
+
+    def _convertStreamsToImages(self):
+        """ Temporary function to convert the StreamTree to a list of images as
+        the canvas currently expects.
+        """
+        # Normally the view.streamtree should have only one image anyway
+        streams = self.microscope_view.getStreams()
+        # get the images, in order
+        images = self._getStreamsImages(streams)
+
+        # remove all the images (so they can be garbage collected)
+        self.Images = [None]
+
+        # add the images in order
+        for i, iim in enumerate(images):
+            if iim is None:
+                continue
+            # image is always centered
+            self.SetImage(i, iim.image, (0, 0), 1)
+
+    def _onViewImageUpdate(self, t):
+        self._convertStreamsToImages()
+        wx.CallAfter(self.ShouldUpdateDrawing)
+
     def OnPaint(self, event=None):
         wx.BufferedPaintDC(self, self._bmp_buffer)
         dc = wx.PaintDC(self)
