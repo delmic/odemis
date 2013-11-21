@@ -57,7 +57,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 200)
@@ -77,10 +77,11 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
+        self.assertEqual(result.shape, (201, 201))
 
         desired_output = hdf5.read_data("desired-no-crop.h5")
         C, T, Z, Y, X = desired_output[0].shape
@@ -99,10 +100,10 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
 
         desired_output = hdf5.read_data("desired-no-crop.h5")
         C, T, Z, Y, X = desired_output[0].shape
@@ -119,10 +120,10 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
 
         desired_output = hdf5.read_data("desired-no-crop.h5")
         C, T, Z, Y, X = desired_output[0].shape
@@ -218,10 +219,10 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
         cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desired201x201image.h5")
@@ -239,10 +240,10 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
         cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desired201x201image.h5")
@@ -262,10 +263,10 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
         cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desired201x201image.h5")
@@ -283,10 +284,10 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
         cropped_result = img.CropMirror(result)
 
         desired_output = hdf5.read_data("desired201x201image.h5")
@@ -304,11 +305,11 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        result = img.AngleResolved2Polar(data[0], 100)
+        result = img.AngleResolved2Polar(data[0], 101)
         cropped_result = img.CropMirror(result, True)
 
         desired_output = hdf5.read_data("desired100x100image.h5")
@@ -325,11 +326,11 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        result = img.AngleResolved2Polar(data[0], 1000)
+        result = img.AngleResolved2Polar(data[0], 1001)
         cropped_result = img.CropMirror(result, True)
 
         desired_output = hdf5.read_data("desired1000x1000image.h5")
@@ -344,11 +345,11 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0].metadata[model.MD_BINNING] = 4
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 139.449038462)
+        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        result = img.AngleResolved2Polar(data[0], 2000)
+        result = img.AngleResolved2Polar(data[0], 2001)
         cropped_result = img.CropMirror(result, True)
 
         desired_output = hdf5.read_data("desired2000x2000image.h5")

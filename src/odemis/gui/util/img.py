@@ -23,13 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # various functions to convert and modify images (DataArray and wxImage)
 
 from __future__ import division
+
 import logging
 import math
+from matplotlib import mlab, tri
 import numpy
+from odemis import model
 import scipy.misc
 import wx
-from matplotlib import mlab
-from odemis import model
+
 
 # Variables to be used in CropMirror and AngleResolved2Polar
 # These values correspond to SPARC 2014
@@ -399,7 +401,9 @@ def Average(images, rect, mpp, merge=0.5):
 def AngleResolved2Polar(data, output_size):
     """
     Converts an angle resolved image to polar representation
-    data (model.DataArray): The DataArray that was obtained by reading the image file
+    data (model.DataArray): The image that was projected on the CCD after being
+      relefted on the parabolic mirror. The flat line of the D shape is
+      expected to be horizontal, at the top. 
     output_size (int): The size of the output DataArray (assumed to be square)
     returns (model.DataArray): converted image in polar view
     """
@@ -419,13 +423,16 @@ def AngleResolved2Polar(data, output_size):
         raise ValueError("Metadata required: MD_SENSOR_PIXEL_SIZE, MD_AR_POLE, MD_BINNING and MD_LENS_MAG.")
 
     # Round to the nearest even number
+    # FIXME: result.shape is output_size + 1. Need to either acept odd number,
+    # and maybe also make it working with even numbers?
     h_output_size = int(output_size / 2)
-    if output_size % 2 != 0:
-        logging.warn("Odd number as output size. It will be rounded to the previous even number.")
+    if output_size % 2 == 0:
+        logging.warn("Even number as output size. It will be rounded to %d.",
+                     2 * h_output_size + 1)
 
-    theta_data = numpy.zeros(shape=image.shape)
-    phi_data = numpy.zeros(shape=image.shape)
-    omega_data = numpy.zeros(shape=image.shape)
+    theta_data = numpy.empty(shape=image.shape)
+    phi_data = numpy.empty(shape=image.shape)
+    omega_data = numpy.empty(shape=image.shape)
     eff_pixel_size = pixel_size_x * binning / magnification
 
     # For each pixel of the input ndarray, input metadata is used to
@@ -435,7 +442,7 @@ def AngleResolved2Polar(data, output_size):
     xpix = mirror_x - jj
 
     for i in xrange(image_x):
-        ypix = (mirror_y - i) + (2 * AR_PARABOLA_F) / eff_pixel_size
+        ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / eff_pixel_size
         theta, phi, omega = FindAngle(xpix, ypix, eff_pixel_size)
 
         theta_data[i, :] = theta
@@ -449,9 +456,17 @@ def AngleResolved2Polar(data, output_size):
     phi_data = numpy.sin(phi) * theta
 
     # Interpolation into 2d array
-    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
-    qz = mlab.griddata(theta_data.flat, phi_data.flat, omega_data.flat, xi, yi, interp="linear")
+#    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+#    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+#    qz = mlab.griddata(phi_data.flat, theta_data.flat, omega_data.flat, xi, yi, interp="linear")
+
+    # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
+    # interpolation by 3 ?!
+    triang = tri.delaunay.Triangulation(theta_data.flat, phi_data.flat)
+    interp = triang.linear_interpolator(omega_data.flat, default_value=0)
+    qz = interp[-h_output_size:h_output_size:complex(0, 2 * h_output_size + 1), # Y
+                - h_output_size:h_output_size:complex(0, 2 * h_output_size + 1)] # X
+    qz = qz.swapaxes(0, 1)[:, ::-1] # rotate by 90°
     result = model.DataArray(qz, image.metadata)
 
     return result
@@ -488,10 +503,23 @@ def FindAngle(xpix, ypix, pixel_size):
 
     return theta, phi, omega
 
+# TODO: it work the same to crop the input, but as the input is a half circle,
+# it should be much faster:
+# * create an image of the same size of the output with the same hole position,
+#   hole diameter, AR_FOCUS_DISTANCE defines where exactly is the circle half cut,
+#   AR_XMAX defines how big is the circle
+#s = 1024, 1024 # size
+#r = 300 # radius
+#a, b = 512, 512 # center
+#y, x = numpy.ogrid[-a:s[0] - a, -b:s[1] - b]
+#circle_mask = x * x + y * y <= r * r
+#circle_mask[:,250:] = False
+#image = numpy.where(circle_mask, image, 0) # or image = image[circle_mask] # how come it works??
+
 def CropMirror(data, hole=True):
     """
     Crops the part of the image that is outside the boundaries of the mirror
-    data (model.DataArray): The DataArray with the image
+    data (model.DataArray): The DataArray with the image, will be modified
     hole (boolean): If True, hole is made in the center of the output image
     returns (model.DataArray): Cropped image
     """
@@ -542,6 +570,6 @@ def CropMirror(data, hole=True):
                  # as float in m
                  # abs(point[1]) < ccd_size_y / 2) and
                  (hole and ((point[0] - AR_PARABOLA_F) ** 2 + point[1] ** 2) > hole_radius ** 2)):
-                image[jj, ii] = 0
+                image[ii, jj] = 0
 
     return image
