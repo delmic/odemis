@@ -141,6 +141,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
+        # This overlay was added here because of the way the design currently
+        # is (nov. 2013).
+        self.points_overlay = comp_overlay.PointsOverlay(self)
+        self.WorldOverlays.append(self.points_overlay)
+
     def setView(self, microscope_view, tab_data):
         """
         Set the microscope_view that this canvas is displaying/representing
@@ -1414,6 +1419,16 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
+
+    def OnPaint(self, event=None):
+        wx.BufferedPaintDC(self, self._bmp_buffer)
+        dc = wx.PaintDC(self)
+
+        for o in self.ViewOverlays:
+            o.Draw(dc)
+
+        if self.microscope_view:
+            self._updateThumbnail()
 
     @limit_invocation(0.5) # max 1/2 Hz
     @call_after  # needed as it accesses the DC

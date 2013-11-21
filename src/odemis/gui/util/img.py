@@ -67,7 +67,8 @@ def findOptimalRange(hist, edges, outliers=0):
         # if exactly lowv -> remove this bin too, otherwise include the bin
         if hist[lowi] == lowv:
             lowi += 1
-        # same with highv (note: it's always found, so highi is always within hist)
+        # same with highv (note: it's always found, so highi is always
+        # within hist)
         highi = numpy.searchsorted(cum_hist, highv, side="left")
 
         idxrng = lowi, highi
@@ -110,7 +111,8 @@ def compactHistogram(hist, length):
 # * numpy.histogram(a, bins=256, range=(0,depth)) => slow (~0.09s for a
 #   2048x2048 array) but works exactly as needed directly in every case.
 # * see weave? (~ 0.01s for 2048x2048 array of uint16) eg:
-#  timeit.timeit("counts=numpy.zeros((2**16), dtype=numpy.uint32); weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100)
+#  timeit.timeit("counts=numpy.zeros((2**16), dtype=numpy.uint32);
+#  weave.inline( code, ['counts', 'idxa'])", "import numpy;from scipy import weave; code=r\"for (int i=0; i<Nidxa[0]; i++) { COUNTS1( IDXA1(i)>>8)++; }\"; idxa=numpy.ones((2048*2048), dtype=numpy.uint16)+15", number=100)
 # * see cython?
 # for comparison, a.min() + a.max() are 0.01s for 2048x2048 array
 
@@ -126,7 +128,8 @@ def histogram(data, irange=None):
       is defined and data is integer, the length is always equal to
       irange[1] - irange[0] + 1.
      edges (tuple of numbers): lowest and highest bound of the histogram.
-       edges[1] is included in the bin. If irange is defined, it's the same values.
+       edges[1] is included in the bin. If irange is defined, it's the same
+       values.
     """
     if irange is None:
         if data.dtype.kind in "biu":
@@ -158,12 +161,14 @@ def histogram(data, irange=None):
 
 def FindOptimalBC(data, depth):
     """
-    Computes the (mathematically) optimal brightness and contrast. It returns the
-    brightness and contrast values used by DataArray2wxImage in auto contrast/
-    brightness.
-    data (numpy.ndarray of unsigned int): 2D image greyscale
-    depth (1<int): maximum value possibly encoded (12 bits => 4096)
-    returns (-1<=float<=1, -1<=float<=1): brightness and contrast
+    Computes the (mathematically) optimal brightness and contrast.
+
+    It returns the brightness and contrast values used by DataArray2wxImage in
+    auto contrast/brightness.
+
+    :param data: (numpy.ndarray of unsigned int) 2D image greyscale
+    :param depth: (1<int): maximum value possibly encoded (12 bits => 4096)
+    :return: (-1<=float<=1, -1<=float<=1): brightness and contrast
     """
     assert(depth >= 1)
 
@@ -188,15 +193,20 @@ def FindOptimalBC(data, depth):
 # => might improve the greys, but might be "too" clever
 def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     """
-    data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
-    irange (None or tuple of 2 unsigned int): min/max intensities mapped to black/white
-        None => auto (min, max are from the data); 0, max val of data => whole range is mapped.
+    :param data: (numpy.ndarray of unsigned int) 2D image greyscale (unsigned
+        float might work as well)
+    :param irange: (None or tuple of 2 unsigned int) min/max intensities mapped
+        to black/white
+        None => auto (min, max are from the data);
+        0, max val of data => whole range is mapped.
         min must be < max, and must be of the same type as data.dtype.
-    tint (3-tuple of 0 < int <256): RGB colour of the final image (each pixel is
-        multiplied by the value. Default is white.
-    returns (numpy.ndarray of 3*shape of uint8): converted image in RGB with the same dimension
+    :param tint: (3-tuple of 0 < int <256) RGB colour of the final image (each
+        pixel is multiplied by the value. Default is white.
+    :return: (numpy.ndarray of 3*shape of uint8) converted image in RGB with the
+        same dimension
     """
-    # TODO: add a depth value to override idt.max? (allows to avoid clip when not userful
+    # TODO: add a depth value to override idt.max? (allows to avoid clip when
+    #       not useful
     # TODO: handle signed values
     assert(len(data.shape) == 2) # => 2D with greyscale
 
@@ -223,8 +233,8 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             if irange[0] > idt.min or irange[1] < idt.max:
                 data = data.clip(*irange)
         else: # floats et al. => always clip
-            # TODO: might not work correctly if range is in middle of data values
-            # trick to ensure B&W image
+            # TODO: might not work correctly if range is in middle of data
+            # values trick to ensure B&W image
             if irange[0] >= irange[1] and irange[0] > float(data.min()):
                 force_white = True
             else:
@@ -235,10 +245,13 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         drescaled = scipy.misc.bytescale(data, cmin=irange[0], cmax=irange[1])
 
 
-    # Now duplicate it 3 times to make it rgb (as a simple approximation of greyscale)
+    # Now duplicate it 3 times to make it rgb (as a simple approximation of
+    # greyscale)
     # dstack doesn't work because it doesn't generate in C order (uses strides)
     # apparently this is as fast (or even a bit better):
-    rgb = numpy.empty(data.shape + (3,), dtype="uint8", order='C') # 0 copy (1 malloc)
+
+    # 0 copy (1 malloc)
+    rgb = numpy.empty(data.shape + (3,), dtype="uint8", order='C')
 
     # Tint (colouration)
     if tint == (255, 255, 255):
@@ -252,7 +265,8 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     else:
         rtint, gtint, btint = tint
         # multiply by a float, cast back to type of out, and put into out array
-        # TODO: multiplying by float(x/255) is the same as multiplying by int(x) and >> 8
+        # TODO: multiplying by float(x/255) is the same as multiplying by int(x)
+        #       and >> 8
         numpy.multiply(drescaled, rtint / 255, out=rgb[:, :, 0])
         numpy.multiply(drescaled, gtint / 255, out=rgb[:, :, 1])
         numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2])
@@ -260,7 +274,8 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     return rgb
 
 # Deprecated
-def DataArray2wxImage(data, depth=None, brightness=None, contrast=None, tint=(255, 255, 255)):
+def DataArray2wxImage(data, depth=None, brightness=None, contrast=None,
+                      tint=(255, 255, 255)):
     """
     data (numpy.ndarray of unsigned int): 2D image greyscale (unsigned float might work as well)
     depth (None or 1<int): maximum value possibly encoded (12 bits => depth=4096)
@@ -382,7 +397,7 @@ def wxImage2NDImage(image, keep_alpha=True):
     return numpy.ndarray(buffer=image.DataBuffer, shape=shape, dtype=numpy.uint8)
 
 
-# TODO use VIPS to be fast?
+# TODO: use VIPS to be fast?
 def Average(images, rect, mpp, merge=0.5):
     """
     mix the given images into a big image so that each pixel is the average of each
@@ -391,10 +406,10 @@ def Average(images, rect, mpp, merge=0.5):
     merge (0<=float<=1): merge ratio of the first and second image (IOW: the
       first image is weighted by merge and second image by (1-merge))
     """
-    # TODO is ok to have a image = None?
+    # TODO: is ok to have a image = None?
 
 
-    # TODO (once the operator callable is clearly defined)
+    # TODO: (once the operator callable is clearly defined)
     raise NotImplementedError()
 
 

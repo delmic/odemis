@@ -90,6 +90,14 @@ class ViewPort(wx.Panel):
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
+    def __str__(self):
+        return "{0} {2} {1}".format(
+            self.__class__.__name__,
+            self._microscope_view.name.value if self._microscope_view else "",
+            id(self))
+
+    __repr__ = __str__
+
     @property
     def microscope_view(self):
         return self._microscope_view

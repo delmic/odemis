@@ -626,17 +626,32 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
-        viewports = [self.main_frame.vp_inspection_tl,
-                      self.main_frame.vp_inspection_tr,
-                      self.main_frame.vp_inspection_bl,
-                      self.main_frame.vp_inspection_br,
-                      self.main_frame.vp_inspection_plot]
+        viewports = [
+            self.main_frame.vp_inspection_tl,
+            self.main_frame.vp_inspection_tr,
+            self.main_frame.vp_inspection_bl,
+            self.main_frame.vp_inspection_br,
+            self.main_frame.vp_inspection_plot,
+            self.main_frame.vp_angular
+        ]
 
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
                                     viewports,
                                 )
+
+        # FIXME: Way too hacky approach to get the right viewport shown,
+        # so we need to rethink and re-do it. (Will involve creating more
+        # view types then the MicroscopeView)
+        # Also see the button definition below.
+        if main_data.role == "sparc":
+            for view in tab_data.views.value:
+                if view.name.value == "Angle resolved":
+                    tab_data.visible_views.value[2] = view
+                    # Call 'cache' to make the current line up the default
+                    self._view_controller.cache()
+                    break
 
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
@@ -649,6 +664,13 @@ class AnalysisTab(Tab):
                                         self.tab_data_model
                                     )
 
+        # Whacky hacky
+        bottom_left = self.main_frame.vp_inspection_bl
+        if main_data.role == "sparc":
+            # self._view_controller.swap_viewports(2, 5)
+            # self._view_controller.fixate()
+            bottom_left = self.main_frame.vp_angular
+
         buttons = OrderedDict([
             (self.main_frame.btn_sparc_view_all,
                     (None, self.main_frame.lbl_sparc_view_all)),
@@ -659,7 +681,7 @@ class AnalysisTab(Tab):
                     (self.main_frame.vp_inspection_tr,
                      self.main_frame.lbl_sparc_view_tr)),
             (self.main_frame.btn_sparc_view_bl,
-                    (self.main_frame.vp_inspection_bl,
+                    (bottom_left,
                      self.main_frame.lbl_sparc_view_bl)),
             (self.main_frame.btn_sparc_view_br,
                     (self.main_frame.vp_inspection_br,
@@ -829,9 +851,16 @@ class AnalysisTab(Tab):
 
         # Add one global AR stream
         if ar_data:
-            self._stream_controller.addStatic("Angular", ar_data,
-                               cls=streammod.StaticARStream,
-                               add_to_all_views=True)
+            stream_panel = self._stream_controller.addStatic(
+                                        "Angular",
+                                        ar_data,
+                                        cls=streammod.StaticARStream,
+                                        add_to_all_views=True)
+
+            # Hackish hookup for the points overlay
+            canvas = self.main_frame.vp_inspection_br.canvas
+            canvas.points_overlay.set_points(stream_panel.stream.point)
+
 
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date

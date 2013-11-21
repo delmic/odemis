@@ -2332,6 +2332,14 @@
                     </XRCED>
                   </object>
                 </object>
+                <object class="sizeritem">
+                  <object class="AngularResolvedViewport" name="vp_angular">
+                    <hidden>1</hidden>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                </object>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>

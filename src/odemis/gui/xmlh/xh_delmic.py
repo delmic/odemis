@@ -703,6 +703,15 @@ class PlotViewportXmlHandler(MicroscopeViewportXmlHandler):
         return self.IsOfClass(node, "PlotViewport")
 HANDLER_CLASS_LIST.append(PlotViewportXmlHandler)
 
+class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.AngularResolvedViewport
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "AngularResolvedViewport")
+HANDLER_CLASS_LIST.append(AngularResolvedViewportXmlHandler)
+
 ##################################
 # Sliders
 ##################################

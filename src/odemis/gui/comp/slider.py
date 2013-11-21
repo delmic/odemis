@@ -745,6 +745,11 @@ class VisualRangeSlider(BaseSlider):
         if all([self.min_value <= i <= self.max_value for i in val]):
             if val[0] <= val[1]:
                 self.value = val
+                # FIXME: It might be possible that the value is passed with a
+                # 'pixel' unit instead of 'meter'. We need to detect the
+                # difference, according to the unit set for the
+                # VigilantAttribute. See the StaticSpectrumStream constructor
+                # for more info and '_add_bc_controls' in comp.stream
                 self._update_pixel_value()
                 self.Refresh()
             else:
