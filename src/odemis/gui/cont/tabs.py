@@ -773,29 +773,6 @@ class AnalysisTab(Tab):
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self.display_new_data(fn, data)
-        spec_cls = (streammod.SpectrumStream, streammod.StaticSpectrumStream)
-
-        for strm in self.tab_data_model.streams.value:
-            # If a spectrum stream is found...
-            if isinstance(strm, spec_cls):
-                iimg = strm.image.value
-                # ... set the PointOverlay values for each viewport
-                for viewport in self._view_controller.viewports:
-                    if hasattr(viewport.canvas, "point_overlay"):
-                        ol = viewport.canvas.point_overlay
-                        ol.set_values(
-                                    iimg.mpp,
-                                    iimg.center,
-                                    iimg.get_pixel_size(),
-                                    strm.selected_pixel
-                        )
-                strm.selected_pixel.subscribe(
-                                        self._on_spec_pixel,
-                                        init=True)
-                self.tb.enable_button(tools.TOOL_POINT, True)
-                break
-        else:
-            self.tb.enable_button(tools.TOOL_POINT, False)
 
     def display_new_data(self, filename, data):
         """
@@ -888,6 +865,30 @@ class AnalysisTab(Tab):
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
+
+        # Share spectrum pixel positions with other viewports
+        # TODO: a better place for this code?
+        for strm in self.tab_data_model.streams.value:
+            # If a spectrum stream is found...
+            if isinstance(strm, streammod.SPECTRUM_STREAMS):
+                iimg = strm.image.value
+                # ... set the PointOverlay values for each viewport
+                for viewport in self._view_controller.viewports:
+                    if hasattr(viewport.canvas, "point_overlay"):
+                        ol = viewport.canvas.point_overlay
+                        ol.set_values(
+                                    iimg.mpp,
+                                    iimg.center,
+                                    iimg.get_digital_size(),
+                                    strm.selected_pixel
+                        )
+                strm.selected_pixel.subscribe(
+                                        self._on_spec_pixel,
+                                        init=True)
+                self.tb.enable_button(tools.TOOL_POINT, True)
+                break
+        else:
+            self.tb.enable_button(tools.TOOL_POINT, False)
 
     @call_after
     def _onTool(self, tool):

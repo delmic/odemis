@@ -1027,7 +1027,7 @@ def _addImageElement(root, das, ifd, rois):
                 # color is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
                 if len(tint) == 3:
-                    tint = tint + (255,) # need alpha channel
+                    tint = tuple(tint) + (255,) # need alpha channel
                 hex_str = "".join("%.2x" % c for c in tint) # copy of conversion.rgb_to_hex()
                 chan.attrib["Color"] = "#%s" % hex_str
 

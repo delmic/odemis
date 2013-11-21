@@ -53,15 +53,10 @@ class InstrumentalImage(object):
         self.center = center
         self.rotation = rotation
 
-    def get_pixel_size(self):
+    def get_digital_size(self):
         if self.image:
             return self.image.GetSize()
 
     def get_phy_size(self):
-        return tuple([d * self.mpp for d in self.get_pixel_size()])
-
-    def get_phy_surface(self):
-        x, y = self.get_phy_size()
-        return x * y
-
+        return tuple([d * self.mpp for d in self.get_digital_size()])
 

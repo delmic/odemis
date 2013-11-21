@@ -1390,11 +1390,6 @@ class StaticARStream(StaticStream):
         self._updateImage()
 
 
-# Different projection types
-PROJ_ONE_POINT = 1
-PROJ_ALONG_LINE = 2
-PROJ_AVERAGE_SPECTRUM = 3
-
 class StaticSpectrumStream(StaticStream):
     """
     A Spectrum stream which displays only one static image/data.
@@ -1412,7 +1407,6 @@ class StaticSpectrumStream(StaticStream):
         """
         Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
-        #  * projection type (1-point, line, avg. spectrum)
         #  * information about the current bandwidth displayed (avg. spectrum)
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
@@ -1463,9 +1457,6 @@ class StaticSpectrumStream(StaticStream):
         #self.point1 = model.ResolutionVA(unit="m") # FIXME: float
         # self.point2 = model.ResolutionVA(unit="m") # FIXME: float
 
-
-        self.projection = model.IntEnumerated(PROJ_AVERAGE_SPECTRUM,
-          choices=set([PROJ_ONE_POINT, PROJ_ALONG_LINE, PROJ_AVERAGE_SPECTRUM]))
 
         # Avoid negative values
         # FIXME: probably need to fix DataArray2RGB() for such cases
@@ -1604,10 +1595,25 @@ class StaticSpectrumStream(StaticStream):
                                              self._findPos(data))
 
     def get_spectrum_range(self):
-        if self.selected_pixel.value:
-            x, y = self.selected_pixel.value
-            return self._get_wavelength_per_pixel(self.raw[0][:, 0, 0, y, x])
-        return None
+        """
+        Return the wavelength for each pixel of a (complete) spectrum
+        returns (list of numbers or None): one wavelength per spectrum pixel.
+          Values are in meters, unless the spectrum cannot be determined, in
+          which case integers representing pixels index is returned. 
+          If no data is available, None is returned.  
+        """
+        # TODO return unit too? (i.e., m or px)
+        if not self.raw:
+            return None
+
+        data = self.raw[0]
+        try:
+            return self._get_wavelength_per_pixel(data)
+        except (ValueError, KeyError):
+            # useless polynomial => just show pixels values (ex: -50 -> +50 px)
+            max_bw = data.shape[0] // 2
+            min_bw = (max_bw - data.shape[0]) + 1
+            return range(min_bw, max_bw + 1)
 
     def get_pixel_spectrum(self):
         """ Return the spectrum belonging to the selected pixel or None if no
@@ -1632,12 +1638,7 @@ class StaticSpectrumStream(StaticStream):
         try:
             self._running_upd_img = True
             data = self.raw[0][:, 0, 0, :, :]
-            if self.projection.value == PROJ_AVERAGE_SPECTRUM:
-                self._updateImageAverage(data)
-            # TODO: PROJ_ONE_POINT
-            # TODO: PROJ_ALONG_LINE
-            else:
-                raise NotImplementedError("Unhandled projection type")
+            self._updateImageAverage(data)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:

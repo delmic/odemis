@@ -307,11 +307,11 @@ regenerate the ``data.py`` file::
 
 Speed optimization
 ===================
-First, you need to profile the code to see where is the bottleneck. This allows
-to run the profiler on the GUI::
+First, you need to profile the code to see where is the bottleneck. One option is 
+to use the cProfile. This allows to run the cProfile on the GUI::
 
     PYTHONPATH=./src/ python -m cProfile -o odemis.profile src/odemis/gui/main.py
-
+    
 Then use the features you want to measure/optimize, and eventually close the GUI.
 
 After the program is closed, you can read the profile with the following commands::
@@ -320,3 +320,13 @@ After the program is closed, you can read the profile with the following command
     > sort time
     > stats
 
+Another option for line-by-line profiling is the line_profiler. To use it, you need 
+to install the python package via pip::
+
+    pip install line_profiler
+    
+Then you have to add the @profile decorator to the functions that you want to profile 
+(importing the corresponding package is not needed). With the below line you will get
+detailed profile statistics for the decorated functions within your module::
+
+    kernprof.py -l -v your_module.py

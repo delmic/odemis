@@ -4,7 +4,7 @@ Created on 23 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2013 Éric Piel & Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -19,15 +19,24 @@ PARTICULAR  PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
+# various functions to convert and modify images (DataArray and wxImage)
+
 from __future__ import division
 import logging
 import math
 import numpy
 import scipy.misc
 import wx
+from matplotlib import mlab
+from odemis import model
 
-# various functions to convert and modify images (DataArray and wxImage)
-
+# Variables to be used in CropMirror and AngleResolved2Polar
+# These values correspond to SPARC 2014
+AR_XMAX = 13.25e-3  # m, the distance between the parabola origin and the cutoff position
+AR_HOLE_DIAMETER = 0.6e-3  # m, diameter the hole in the mirror
+AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the distance between the mirror and the sample
+AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/4f
 
 def findOptimalRange(hist, edges, outliers=0):
     """
@@ -401,3 +410,153 @@ def Average(images, rect, mpp, merge=0.5):
     # TODO: (once the operator callable is clearly defined)
     raise NotImplementedError()
 
+
+def AngleResolved2Polar(data, output_size):
+    """
+    Converts an angle resolved image to polar representation
+    data (model.DataArray): The DataArray that was obtained by reading the image file
+    output_size (int): The size of the output DataArray (assumed to be square)
+    returns (model.DataArray): converted image in polar view
+    """
+    assert(len(data.shape) == 2)  # => 2D with greyscale
+    image = data
+
+    # Get the metadata
+    # Assume pixel is square
+    try:
+        pixel_size_x, pixel_size_y = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
+        if pixel_size_x != pixel_size_y:
+            logging.warn("Pixel expected to be square. Only X dimension will be taken into consideration.")
+        mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+        binning = data.metadata[model.MD_BINNING]
+        magnification = data.metadata[model.MD_LENS_MAG]
+    except KeyError:
+        raise ValueError("Metadata required: MD_SENSOR_PIXEL_SIZE, MD_AR_POLE, MD_BINNING and MD_LENS_MAG.")
+
+    # Round to the nearest even number
+    h_output_size = int(output_size / 2)
+    if output_size % 2 != 0:
+        logging.warn("Odd number as output size. It will be rounded to the previous even number.")
+
+    theta_data = numpy.zeros(shape=image.shape)
+    phi_data = numpy.zeros(shape=image.shape)
+    omega_data = numpy.zeros(shape=image.shape)
+    eff_pixel_size = pixel_size_x * binning / magnification
+
+    # For each pixel of the input ndarray, input metadata is used to
+    # calculate the corresponding theta, phi and radiant intensity
+    image_x, image_y = image.shape
+    jj = numpy.linspace(0, image_y - 1, image_y)
+    xpix = mirror_x - jj
+
+    for i in xrange(image_x):
+        ypix = (mirror_y - i) + (2 * AR_PARABOLA_F) / eff_pixel_size
+        theta, phi, omega = FindAngle(xpix, ypix, eff_pixel_size)
+
+        theta_data[i, :] = theta
+        phi_data[i, :] = phi
+        omega_data[i, :] = image[i] / omega
+
+    # Convert into polar coordinates
+    theta = theta_data * (h_output_size / math.pi * 2)
+    phi = phi_data
+    theta_data = numpy.cos(phi) * theta
+    phi_data = numpy.sin(phi) * theta
+
+    # Interpolation into 2d array
+    xi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+    yi = numpy.linspace(-h_output_size, h_output_size, 2 * h_output_size + 1)
+    qz = mlab.griddata(theta_data.flat, phi_data.flat, omega_data.flat, xi, yi, interp="linear")
+    result = model.DataArray(qz, image.metadata)
+
+    return result
+
+
+def FindAngle(xpix, ypix, pixel_size):
+    """
+    For given pixels, finds the angle of the corresponding ray 
+    xpix (numpy.array): x coordinate of the pixels
+    ypix (numpy.array): y coordinate of the pixels
+    pixel_size (float): CCD pixelsize
+    returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd) 
+                              and omega (solid angle)
+    """
+    y = xpix * pixel_size
+    z = ypix * pixel_size
+    r2 = numpy.power(y, 2) + numpy.power(z, 2)
+    xfocus = (1 / (4 * AR_PARABOLA_F)) * r2 - AR_PARABOLA_F
+    xfocus2plusr2 = numpy.power(xfocus, 2) + r2
+    sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
+    
+    # theta
+    theta = numpy.arccos(z / sqrtxfocus2plusr2)
+    
+    # phi
+    phi = numpy.arctan2(y, xfocus)
+
+    for i in xrange(phi.size):
+        if phi[i] < 0:
+            phi[i] = phi[i] + 2 * math.pi
+        
+    # omega
+    omega = (pixel_size ** 2) * ((1 / (2 * AR_PARABOLA_F)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+
+    return theta, phi, omega
+
+def CropMirror(data, hole=True):
+    """
+    Crops the part of the image that is outside the boundaries of the mirror
+    data (model.DataArray): The DataArray with the image
+    hole (boolean): If True, hole is made in the center of the output image
+    returns (model.DataArray): Cropped image
+    """
+    assert(len(data.shape) == 2)  # => 2D with greyscale
+    image = data
+    hole_radius = AR_HOLE_DIAMETER / 2
+
+    parabola_parameter = 1 / (4 * AR_PARABOLA_F)
+    image_size_x, image_size_y = image.shape  # expected to be square
+    h_image_size = int(image_size_x / 2)
+    if image_size_x != image_size_y:
+        logging.warn("Image expected to be square. Only X dimension will be taken into consideration.")
+    xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
+    yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
+    yval = yi
+    p1 = AR_PARABOLA_F
+
+    for ii in xi:
+        xval = xi[ii]
+
+        theta = numpy.sqrt(numpy.power(xval, 2) + numpy.power(yval, 2)) / h_image_size * numpy.pi / 2
+        phi = numpy.arctan2(yval, xval)
+
+        # Express the ray position corresponding to each pixel in data as p+v*t
+        sin_theta = numpy.sin(theta)
+        v1 = sin_theta * numpy.cos(phi)
+        v2 = sin_theta * numpy.sin(phi)
+        v3 = numpy.cos(theta)
+
+        # Plug ray position in parabola x=ar^2 y^2+z^2=r^2
+        A = (numpy.power(v2, 2) + numpy.power(v3, 2))
+        B = -v1 / parabola_parameter
+        C = -p1 / parabola_parameter
+
+        for jj in yi:
+            if A[jj] == 0:
+                t = -C / B[jj]
+            else:
+                t = (-B[jj] + math.sqrt(B[jj] ** 2 - 4 * A[jj] * C)) / (2 * A[jj])
+
+            point = [p1 + t * v1[jj], t * v2[jj], t * v3[jj]]
+
+            # Based on the p+v*t, parabola_parameter, AR_HOLE_DIAMETER, AR_XMAX and AR_FOCUS_DISTANCE decide if
+            # each pixel is in or out of the mirror
+            if ~(point[0] <= AR_XMAX and
+                 point[2] >= AR_FOCUS_DISTANCE and
+                 # if we want to crop with regards to the ccd size, ccd_size_y has to be defined
+                 # as float in m
+                 # abs(point[1]) < ccd_size_y / 2) and
+                 (hole and ((point[0] - AR_PARABOLA_F) ** 2 + point[1] ** 2) > hole_radius ** 2)):
+                image[jj, ii] = 0
+
+    return image
