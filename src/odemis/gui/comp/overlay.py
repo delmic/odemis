@@ -1544,6 +1544,48 @@ class PointSelectOverlay(WorldOverlay):
 
 
 class AngleOverlay(ViewOverlay):
-
+    """ Overlay with radials for Angular Resolve viewport """
     def Draw(self, dc):
         pass
+
+
+class PointsOverlay(WorldOverlay):
+    """ Overlay showing the available points and allowing the selection of one
+    """
+
+    def __init__(self, base):
+        super(PointsOverlay, self).__init__(base)
+
+        self.choices = {}
+        self.point = None
+
+        self.point_colour = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
+        self.select_colour = hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT, 0.5)
+
+    def set_points(self, point_va):
+        """ Set the available points and connect to the given point VA """
+        self.choices = {}
+
+        # Translate
+        for point in [c for c in point_va.choices if None not in c]:
+            world_pos = self.base.physical_to_world_pos(point)
+            self.choices[world_pos] = point
+
+        self.point = point_va
+        self.point.subscribe(self._point_selected)
+
+    def Draw(self, dc, shift=(0, 0), scale=1.0):
+
+        ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+        ctx.set_source_rgba(*self.point_colour)
+
+        for world_pos in self.choices.keys():
+            bposx, bposy = self.base.world_to_buffer_pos(world_pos)
+            print str((bposx, bposy))
+            ctx.arc(bposx, bposy, 5.5, 0, 2*math.pi)
+            ctx.fill()
+
+    def _point_selected(self, selected_point):
+        """ Update the overlay when a point has been selected """
+        self.base.UpdateDrawing()

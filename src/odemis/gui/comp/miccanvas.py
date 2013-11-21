@@ -141,6 +141,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
 
+        # This overlay was added here because of the way the design currently
+        # is (nov. 2013).
+        self.points_overlay = comp_overlay.PointsOverlay(self)
+        self.WorldOverlays.append(self.points_overlay)
+
     def setView(self, microscope_view, tab_data):
         """
         Set the microscope_view that this canvas is displaying/representing

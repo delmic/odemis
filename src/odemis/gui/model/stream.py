@@ -1334,7 +1334,8 @@ class StaticARStream(StaticStream):
             data = [data] # from now it's just a list of DataArray
 
         # find positions of each acquisition
-        self._sempos = {} # tuple of 2 floats -> DataArray: position on SEM -> data
+        # tuple of 2 floats -> DataArray: position on SEM -> data
+        self._sempos = {}
         for d in data:
             try:
                 self._sempos[d.metadata[MD_POS]] = img.ensure2DImage(d)

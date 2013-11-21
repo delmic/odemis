@@ -874,9 +874,16 @@ class AnalysisTab(Tab):
 
         # Add one global AR stream
         if ar_data:
-            self._stream_controller.addStatic("Angular", ar_data,
-                               cls=streammod.StaticARStream,
-                               add_to_all_views=True)
+            stream_panel = self._stream_controller.addStatic(
+                                        "Angular",
+                                        ar_data,
+                                        cls=streammod.StaticARStream,
+                                        add_to_all_views=True)
+
+            # Hackish hookup for the points overlay
+            canvas = self.main_frame.vp_inspection_br.canvas
+            canvas.points_overlay.set_points(stream_panel.stream.point)
+
 
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
