@@ -428,11 +428,9 @@ def AngleResolved2Polar(data, output_size):
     # Get the metadata
     # Assume pixel is square
     try:
-        pixel_size_x, pixel_size_y = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
-        if pixel_size_x != pixel_size_y:
-            logging.warn("Pixel expected to be square. Only X dimension will be taken into consideration.")
-        mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
+        pixel_size = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
         binning = data.metadata[model.MD_BINNING]
+        mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
         magnification = data.metadata[model.MD_LENS_MAG]
     except KeyError:
         raise ValueError("Metadata required: MD_SENSOR_PIXEL_SIZE, MD_AR_POLE, MD_BINNING and MD_LENS_MAG.")
@@ -448,7 +446,8 @@ def AngleResolved2Polar(data, output_size):
     theta_data = numpy.empty(shape=image.shape)
     phi_data = numpy.empty(shape=image.shape)
     omega_data = numpy.empty(shape=image.shape)
-    eff_pixel_size = pixel_size_x * binning / magnification
+    eff_pixel_size = (pixel_size[0] * binning[0] / magnification,
+                      pixel_size[1] * binning[1] / magnification)
 
     # For each pixel of the input ndarray, input metadata is used to
     # calculate the corresponding theta, phi and radiant intensity
@@ -457,7 +456,7 @@ def AngleResolved2Polar(data, output_size):
     xpix = mirror_x - jj
 
     for i in xrange(image_x):
-        ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / eff_pixel_size
+        ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / eff_pixel_size[1]
         theta, phi, omega = FindAngle(xpix, ypix, eff_pixel_size)
 
         theta_data[i, :] = theta
@@ -492,15 +491,15 @@ def FindAngle(xpix, ypix, pixel_size):
     For given pixels, finds the angle of the corresponding ray 
     xpix (numpy.array): x coordinate of the pixels
     ypix (numpy.array): y coordinate of the pixels
-    pixel_size (float): CCD pixelsize
+    pixel_size (2 floats): CCD pixelsize (X/Y)
     returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd) 
                               and omega (solid angle)
     """
-    y = xpix * pixel_size
-    z = ypix * pixel_size
+    y = xpix * pixel_size[0]
+    z = ypix * pixel_size[1]
     r2 = numpy.power(y, 2) + numpy.power(z, 2)
     xfocus = (1 / (4 * AR_PARABOLA_F)) * r2 - AR_PARABOLA_F
-    xfocus2plusr2 = numpy.power(xfocus, 2) + r2
+    xfocus2plusr2 = xfocus ** 2 + r2
     sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
     
     # theta
@@ -510,7 +509,8 @@ def FindAngle(xpix, ypix, pixel_size):
     phi = numpy.arctan2(y, xfocus) % (2 * math.pi)
 
     # omega
-    omega = (pixel_size ** 2) * ((1 / (2 * AR_PARABOLA_F)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+#    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (2 * AR_PARABOLA_F)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
+    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (4 * AR_PARABOLA_F)) * r2 + AR_PARABOLA_F) / (sqrtxfocus2plusr2 * xfocus2plusr2)
 
     return theta, phi, omega
 

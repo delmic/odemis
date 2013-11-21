@@ -54,13 +54,13 @@ class TestAngleResolved2Polar(unittest.TestCase):
         Compares the output of AngleResolved2Polar to the output of the corresponding matlab function.
         """
         data = hdf5.read_data("ar-example-input.h5")
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        result = img.AngleResolved2Polar(data[0], 200)
+        result = img.AngleResolved2Polar(data[0], 201)
 
         desired_output = hdf5.read_data("desired-no-crop.h5")
         C, T, Z, Y, X = desired_output[0].shape
@@ -74,7 +74,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         """
         data = hdf5.read_data("ar-example-input.h5")
         data[0] = data[0].astype(numpy.uint16)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -97,7 +97,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -117,7 +117,7 @@ class TestAngleResolved2Polar(unittest.TestCase):
         """
         data = hdf5.read_data("ar-example-input.h5")
         data[0] = data[0].astype(numpy.float)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -216,7 +216,7 @@ class TestPolarConversion(unittest.TestCase):
         matlab function.
         """
         data = hdf5.read_data("ar-example-input.h5")
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -237,7 +237,7 @@ class TestPolarConversion(unittest.TestCase):
         """
         data = hdf5.read_data("ar-example-input.h5")
         data[0] = data[0].astype(numpy.int16)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -260,7 +260,7 @@ class TestPolarConversion(unittest.TestCase):
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -281,7 +281,7 @@ class TestPolarConversion(unittest.TestCase):
         """
         data = hdf5.read_data("ar-example-input.h5")
         data[0] = data[0].astype(numpy.float)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -302,7 +302,7 @@ class TestPolarConversionOutput(unittest.TestCase):
     """
     def test_100x100(self):
         data = hdf5.read_data("ar-example-input.h5")
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -323,7 +323,7 @@ class TestPolarConversionOutput(unittest.TestCase):
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -342,7 +342,7 @@ class TestPolarConversionOutput(unittest.TestCase):
     def test_2000x2000(self):
         data = hdf5.read_data(os.path.dirname(__file__) + "/ar-example-input.h5")
         data[0] = data[0].astype(numpy.float)
-        data[0].metadata[model.MD_BINNING] = 4
+        data[0].metadata[model.MD_BINNING] = (4, 4)
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
         data[0].metadata[model.MD_LENS_MAG] = 0.4917
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
@@ -911,7 +911,7 @@ class TestWxImage2NDImage(unittest.TestCase):
 
 if __name__ == "__main__":
 #     import sys;sys.argv = ['', 'TestPolarConversionOutput.test_2000x2000']
-#     unittest.main()
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestPolarConversionOutput)
-    unittest.TextTestRunner(verbosity=2).run(suite)
+    unittest.main()
+#    suite = unittest.TestLoader().loadTestsFromTestCase(TestPolarConversionOutput)
+#    unittest.TextTestRunner(verbosity=2).run(suite)
 
