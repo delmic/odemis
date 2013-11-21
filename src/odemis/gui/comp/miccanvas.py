@@ -1415,6 +1415,16 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
+    def OnPaint(self, event=None):
+        wx.BufferedPaintDC(self, self._bmp_buffer)
+        dc = wx.PaintDC(self)
+
+        for o in self.ViewOverlays:
+            o.Draw(dc)
+
+        if self.microscope_view:
+            self._updateThumbnail()
+
     @limit_invocation(0.5) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     @ignore_dead  # This method might get called after the canvas is destroyed

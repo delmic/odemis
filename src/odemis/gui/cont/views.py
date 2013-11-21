@@ -526,7 +526,7 @@ class ViewSelector(object):
 
         # subscribe to layout and view changes
         self._data_model.viewLayout.subscribe(self._on_layout_change)
-        self._data_model.visible_views.subscribe(self._on_views_change)
+        self._data_model.visible_views.subscribe(self._on_visible_views_change)
         self._data_model.focussedView.subscribe(self._on_focus_change,
                                                 init=True)
 
@@ -650,13 +650,13 @@ class ViewSelector(object):
         # set_overlay_image will rescale to the correct button size
         btn_all.set_overlay_image(im_22)
 
-    def _on_views_change(self, views):
+    def _on_visible_views_change(self, visible_views):
         """ When the visible views change, this method makes sure that each
         button is associated with the correct viewport
         """
         if self.viewports:
             new_viewports = set([vp for vp in self.viewports
-                                 if vp.microscope_view in views])
+                                 if vp.microscope_view in visible_views])
             btn_viewports = set([vp for _, (vp, _) in self.buttons.items()
                                  if vp is not None])
 

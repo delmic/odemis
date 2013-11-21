@@ -641,9 +641,10 @@ class AnalysisTab(Tab):
                                     viewports,
                                 )
 
-        # FIXME: Way to hacky approach to get the right viewport shown,
+        # FIXME: Way too hacky approach to get the right viewport shown,
         # so we need to rethink and re-do it. (Will involve creating more
         # view types then the MicroscopeView)
+        # Also see the button definition below.
         if main_data.role == "sparc":
             for view in tab_data.views.value:
                 if view.name.value == "Angle resolved":
@@ -663,9 +664,8 @@ class AnalysisTab(Tab):
                                         self.tab_data_model
                                     )
 
-        bottom_left = self.main_frame.vp_inspection_bl
-
         # Whacky hacky
+        bottom_left = self.main_frame.vp_inspection_bl
         if main_data.role == "sparc":
             # self._view_controller.swap_viewports(2, 5)
             # self._view_controller.fixate()
