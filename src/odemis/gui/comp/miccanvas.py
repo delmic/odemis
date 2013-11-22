@@ -1368,13 +1368,14 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.unit_y = unit
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
-    """ Angular resovled canvas
+    """ Angular resolved canvas
     """
 
     def __init__(self, *args, **kwargs):
 
         self.microscope_view = None
         self._tab_data_model = None
+        self.backgroundBrush = wx.SOLID # background is always black
 
         super(AngularResolvedCanvas, self).__init__(*args, **kwargs)
 
@@ -1403,7 +1404,8 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         event.Skip()
 
     def OnSize(self, event):  #pylint: disable=W0222
-        """ Update the position of the focus line """
+        """ Called when the canvas is resized """
+        self.fitViewToContent()
         super(AngularResolvedCanvas, self).OnSize(event)
 
     def setView(self, microscope_view, tab_data):
@@ -1422,6 +1424,13 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+
+    # TODO: should be simplified
+    def fitViewToContent(self, recenter=None):
+        """ Adapts the MPP to fit to the current content
+        recenter: never used (it's always centered)
+        """
+        super(AngularResolvedCanvas, self).fitViewToContent(recenter=True)
 
     def _getStreamsImages(self, streams):
         """
@@ -1461,22 +1470,23 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         for i, iim in enumerate(images):
             if iim is None:
                 continue
-            # image is always centered
+            # image is always centered, fitting the whole canvas
             self.SetImage(i, iim.image, (0, 0), 1)
 
     def _onViewImageUpdate(self, t):
         self._convertStreamsToImages()
+        self.fitViewToContent()
         wx.CallAfter(self.ShouldUpdateDrawing)
 
-    def OnPaint(self, event=None):
-        wx.BufferedPaintDC(self, self._bmp_buffer)
-        dc = wx.PaintDC(self)
-
-        for o in self.ViewOverlays:
-            o.Draw(dc)
-
-        if self.microscope_view:
-            self._updateThumbnail()
+#    def OnPaint(self, event=None):
+#        wx.BufferedPaintDC(self, self._bmp_buffer)
+#        dc = wx.PaintDC(self)
+#
+#        for o in self.ViewOverlays:
+#            o.Draw(dc)
+#
+#        if self.microscope_view:
+#            self._updateThumbnail()
 
     @limit_invocation(0.5) # max 1/2 Hz
     @call_after  # needed as it accesses the DC

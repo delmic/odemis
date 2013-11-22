@@ -1371,7 +1371,14 @@ class StaticARStream(StaticStream):
                 irange = self._getDisplayIRange()
 
                 # TODO: convert to Polar view + occult
-                rgbim = img.DataArray2RGB(data, irange)
+                try:
+                    # TODO: copy pixel size to sensor pixel size if missing
+                    size = min(data.shape[-2:]) # same size as original image (on smallest axis)
+                    polar = img.AngleResolved2Polar(data, size)
+                except Exception:
+                    logging.exception("Failed to convert to azymuthal projection")
+                    polar = data # display it raw as fallback
+                rgbim = img.DataArray2RGB(polar, irange)
                 im = img.NDImage2wxImage(rgbim)
                 im.InitAlpha()
 

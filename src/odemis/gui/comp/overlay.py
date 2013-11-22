@@ -1582,7 +1582,7 @@ class PointsOverlay(WorldOverlay):
 
         for world_pos in self.choices.keys():
             bposx, bposy = self.base.world_to_buffer_pos(world_pos)
-            print str((bposx, bposy))
+            #print str((bposx, bposy))
             ctx.arc(bposx, bposy, 5.5, 0, 2*math.pi)
             ctx.fill()
 
