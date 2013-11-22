@@ -554,6 +554,9 @@ def _call_with_notifier(func):
     notifier method is called if the value actually changes.
     """
     def newfunc(self, *args, **kwargs):
+        if not hasattr(self, "_notifier"):
+            return func(self, *args, **kwargs)
+
         # This might get expensive with long lists!
         old_val = list(self)
         res = func(self, *args, **kwargs)
@@ -574,9 +577,15 @@ class _NotifyingList(list):
         This notifier must be a callable and it must be provided at creation
         time.
     """
-    def __init__(self, notifier, *args):
-        list.__init__(self, *args)
-        self._notifier = WeakMethod(notifier)
+    def __init__(self, *args, **kwargs):
+        """
+        notifier (callable): if present, will be called with the list itself
+          whenever it's changed.
+        """
+        if "notifier" in kwargs:
+            notifier = kwargs.pop("notifier")
+            self._notifier = WeakMethod(notifier)
+        list.__init__(self, *args, **kwargs)
 
     # transform back to a normal list when pickled
     def __reduce__(self):
@@ -604,7 +613,7 @@ class ListVA(VigilantAttribute):
     """
 
     def __init__(self, value=None, *args, **kwargs):
-        value = _NotifyingList(self.notify, [] if value is None else value)
+        value = _NotifyingList([] if value is None else value, notifier=self.notify)
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
@@ -613,7 +622,7 @@ class ListVA(VigilantAttribute):
 
     # Redefine the setter, so we can force to listen to internal modifications
     def _set_value(self, value):
-        value = _NotifyingList(self.notify, value)
+        value = _NotifyingList(value, notifier=self.notify)
         VigilantAttribute._set_value(self, value)
 
     value = property(VigilantAttribute._get_value,
@@ -630,7 +639,7 @@ class ListVAProxy(VigilantAttributeProxy):
         # Transform a normal list into a notifying one
         raw_list = Pyro4.Proxy.__getattr__(self, "_get_value")()
         # When value change, directly call the remote setter
-        val = _NotifyingList(Pyro4.Proxy.__getattr__(self, "_set_value"), raw_list)
+        val = _NotifyingList(raw_list, notifier=Pyro4.Proxy.__getattr__(self, "_set_value"))
         return val
 
     @value.setter
