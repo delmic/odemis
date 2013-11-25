@@ -29,6 +29,7 @@ import math
 from matplotlib import mlab, tri
 import numpy
 from odemis import model
+from odemis import dataio
 import scipy.misc
 import wx
 
@@ -413,13 +414,14 @@ def Average(images, rect, mpp, merge=0.5):
     raise NotImplementedError()
 
 
-def AngleResolved2Polar(data, output_size):
+def AngleResolved2Polar(data, output_size, hole=True):
     """
     Converts an angle resolved image to polar representation
     data (model.DataArray): The image that was projected on the CCD after being
       relefted on the parabolic mirror. The flat line of the D shape is
       expected to be horizontal, at the top. 
     output_size (int): The size of the output DataArray (assumed to be square)
+    hole (boolean): Crop the pole if True
     returns (model.DataArray): converted image in polar view
     """
     assert(len(data.shape) == 2)  # => 2D with greyscale
@@ -435,6 +437,12 @@ def AngleResolved2Polar(data, output_size):
     except KeyError:
         raise ValueError("Metadata required: MD_SENSOR_PIXEL_SIZE, MD_AR_POLE, MD_BINNING and MD_LENS_MAG.")
 
+    eff_pixel_size = (pixel_size[0] * binning[0] / magnification,
+                      pixel_size[1] * binning[1] / magnification)
+
+    # Crop the input image to half circle
+    cropped_image = CropHalfCircle(image, eff_pixel_size, mirror_y)
+
     # Round to the nearest even number
     # FIXME: result.shape is output_size + 1. Need to either acept odd number,
     # and maybe also make it working with even numbers?
@@ -443,15 +451,13 @@ def AngleResolved2Polar(data, output_size):
         logging.warn("Even number as output size. It will be rounded to %d.",
                      2 * h_output_size + 1)
 
-    theta_data = numpy.empty(shape=image.shape)
-    phi_data = numpy.empty(shape=image.shape)
-    omega_data = numpy.empty(shape=image.shape)
-    eff_pixel_size = (pixel_size[0] * binning[0] / magnification,
-                      pixel_size[1] * binning[1] / magnification)
+    theta_data = numpy.empty(shape=cropped_image.shape)
+    phi_data = numpy.empty(shape=cropped_image.shape)
+    omega_data = numpy.empty(shape=cropped_image.shape)
 
     # For each pixel of the input ndarray, input metadata is used to
     # calculate the corresponding theta, phi and radiant intensity
-    image_x, image_y = image.shape
+    image_x, image_y = cropped_image.shape
     jj = numpy.linspace(0, image_y - 1, image_y)
     xpix = mirror_x - jj
 
@@ -461,7 +467,7 @@ def AngleResolved2Polar(data, output_size):
 
         theta_data[i, :] = theta
         phi_data[i, :] = phi
-        omega_data[i, :] = image[i] / omega
+        omega_data[i, :] = cropped_image[i] / omega
 
     # Convert into polar coordinates
     theta = theta_data * (h_output_size / math.pi * 2)
@@ -514,73 +520,36 @@ def FindAngle(xpix, ypix, pixel_size):
 
     return theta, phi, omega
 
-# TODO: it work the same to crop the input, but as the input is a half circle,
-# it should be much faster:
-# * create an image of the same size of the output with the same hole position,
-#   hole diameter, AR_FOCUS_DISTANCE defines where exactly is the circle half cut,
-#   AR_XMAX defines how big is the circle
-#s = 1024, 1024 # size
-#r = 300 # radius
-#a, b = 512, 512 # center
-#y, x = numpy.ogrid[-a:s[0] - a, -b:s[1] - b]
-#circle_mask = x * x + y * y <= r * r
-#circle_mask[:,250:] = False
-#image = numpy.where(circle_mask, image, 0) # or image = image[circle_mask] # how come it works??
 
-def CropMirror(data, hole=True):
+def CropHalfCircle(data, eff_pixel_size, mirror_y, hole=True):
     """
-    Crops the part of the image that is outside the boundaries of the mirror
+    Crops the image to half circle shape based on AR_FOCUS_DISTANCE and AR_XMAX
     data (model.DataArray): The DataArray with the image, will be modified
-    hole (boolean): If True, hole is made in the center of the output image
+    eff_pixel_size (float): pixel_size * binning / magnification # m
+    mirror_y (float): y coordinate of MD_AR_POLE
+    hole (boolean): Crop the pole if True
     returns (model.DataArray): Cropped image
     """
-    assert(len(data.shape) == 2)  # => 2D with greyscale
-    image = data
-    hole_radius = AR_HOLE_DIAMETER / 2
+    X, Y = data.shape
+    center_x, y = data.metadata[model.MD_AR_POLE]
 
-    parabola_parameter = 1 / (4 * AR_PARABOLA_F)
-    image_size_x, image_size_y = image.shape  # expected to be square
-    h_image_size = int(image_size_x / 2)
-    if image_size_x != image_size_y:
-        logging.warn("Image expected to be square. Only X dimension will be taken into consideration.")
-    xi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
-    yi = numpy.linspace(-h_image_size, h_image_size, 2 * h_image_size + 1)
-    yval = yi
-    p1 = AR_PARABOLA_F
+    # Calculate the y coordinate of the cutoff of half circle
+    center_y = mirror_y - ((2 * AR_PARABOLA_F - AR_FOCUS_DISTANCE) / eff_pixel_size[1])
 
-    for ii in xi:
-        xval = xi[ii]
+    # Compute the radius
+    r = (2 * math.sqrt(AR_XMAX * AR_PARABOLA_F)) / eff_pixel_size[1]
+    y, x = numpy.ogrid[-center_y:X - center_y, -center_x:Y - center_x]
+    circle_mask = x * x + y * y <= r * r
 
-        theta = numpy.sqrt(numpy.power(xval, 2) + numpy.power(yval, 2)) / h_image_size * numpy.pi / 2
-        phi = numpy.arctan2(yval, xval)
-
-        # Express the ray position corresponding to each pixel in data as p+v*t
-        sin_theta = numpy.sin(theta)
-        v1 = sin_theta * numpy.cos(phi)
-        v2 = sin_theta * numpy.sin(phi)
-        v3 = numpy.cos(theta)
-
-        # Plug ray position in parabola x=ar^2 y^2+z^2=r^2
-        A = (numpy.power(v2, 2) + numpy.power(v3, 2))
-        B = -v1 / parabola_parameter
-        C = -p1 / parabola_parameter
-
-        for jj in yi:
-            if A[jj] == 0:
-                t = -C / B[jj]
-            else:
-                t = (-B[jj] + math.sqrt(B[jj] ** 2 - 4 * A[jj] * C)) / (2 * A[jj])
-
-            point = [p1 + t * v1[jj], t * v2[jj], t * v3[jj]]
-
-            # Based on the p+v*t, parabola_parameter, AR_HOLE_DIAMETER, AR_XMAX and AR_FOCUS_DISTANCE decide if
-            # each pixel is in or out of the mirror
-            if ~(point[0] <= AR_XMAX and
-                 point[2] >= AR_FOCUS_DISTANCE and
-                 # if we want to crop with regards to the ccd size, ccd_size_y has to be defined
-                 # as float in m
-                 # abs(point[1]) < ccd_size_y / 2) and
-                 (hole and ((point[0] - AR_PARABOLA_F) ** 2 + point[1] ** 2) > hole_radius ** 2)):
-                image[ii, jj] = 0
+    # Create half circle mask
+    circle_mask[:center_y, :] = False
+    image = numpy.where(circle_mask, data, 0)
+    
+    # Crop the pole making hole of AR_HOLE_DIAMETER
+    if hole == True:
+        r = (AR_HOLE_DIAMETER / 2) / eff_pixel_size[1]
+        y, x = numpy.ogrid[-mirror_y:X - mirror_y, -center_x:Y - center_x]
+        circle_mask_hole = x * x + y * y <= r * r
+        image = numpy.where(circle_mask_hole, 0, image)
 
     return image
