@@ -21,21 +21,22 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from Pyro4.errors import CommunicationError
+import argparse
+import grp
+import logging
+from logging.handlers import RotatingFileHandler
 from odemis import model
+import odemis
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
 from odemis.util.driver import BACKEND_RUNNING, BACKEND_DEAD, BACKEND_STOPPED, \
     get_backend_status
-import argparse
-import grp
-import logging
-import odemis
 import os
 import signal
 import stat
 import sys
 import time
+
 
 # TODO the way metadata is updated has probably to be completely changed
 # cf specification (=> send all the metadata to the data generator)
@@ -328,13 +329,16 @@ def main(args):
     if options.logtarget == "auto":
         # default to SysLogHandler ?
         if options.daemon:
-            handler = logging.FileHandler("odemis.log")
+            # Rotate the log, with max 500Mb used
+            handler = RotatingFileHandler("odemis.log",
+                                    maxBytes=100 * (2 ** 20), backupCount=5)
         else:
             handler = logging.StreamHandler()
     elif options.logtarget == "stderr":
         handler = logging.StreamHandler()
     else:
-        handler = logging.FileHandler(options.logtarget)
+        handler = RotatingFileHandler(options.logtarget,
+                                      maxBytes=100 * (2 ** 20), backupCount=5)
     logging.getLogger().setLevel(loglev)
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)

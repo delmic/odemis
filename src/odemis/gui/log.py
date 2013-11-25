@@ -49,17 +49,14 @@ def create_gui_logger(log_field, error_va=None):
 
     # Path to the log file
     logfile_path = os.path.join(os.path.expanduser("~"), LOG_FILE)
-    # Maximum size of the log file before it's rotated
-    max_logfile_size = 1024**2
-    # Maximum number of (rotated) log files
-    max_logfile_count = 5
     # Formatting string for logging messages to file
     frm = "%(asctime)s %(levelname)-7s %(module)s:%(lineno)d: %(message)s"
     file_format = logging.Formatter(frm)
 
-    file_handler = RotatingFileHandler(logfile_path, 'w',
-                                       max_logfile_size,
-                                       max_logfile_count)
+    # Max 5 log files of 10Mb
+    file_handler = RotatingFileHandler(logfile_path,
+                                       maxBytes=10 * (2 ** 20),
+                                       backupCount=5)
 
     file_handler.setFormatter(file_format)
 
