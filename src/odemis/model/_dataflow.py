@@ -371,7 +371,137 @@ class DataFlow(DataFlowBase):
             self.stop_generate()
         self._unregister()
 
-# DataFlowBase object automatically created on the client (in an Odemic component)
+
+# TODO: CachedDataFlow: on subscription, if already some listeners, the new
+# listener immediately is notified with the last data sent.   
+# Useful for dataflows with sporadic output (ex: data recomputed only when the
+# user change a setting). 
+# Same API, + ._cached=None for the sub-class to reset cache when it is invalidated
+
+class CachedDataFlow(DataFlow):
+    """
+    A special DataFlow, adapted to sporadic outputs. 
+    The main difference is that on subscription, if there are already some 
+    listeners, the new listener immediately is notified with the latest data 
+    sent. Useful for when the last data generated is useful and the next 
+    generation might be long. For example, when data is recomputed only when the
+    user changes a setting.
+    """
+    
+    def __init__(self, **kwargs):
+        DataFlow.__init__(self, **kwargs)
+        self._cached = None
+    
+    def notify(self, data):
+        self._cached = data
+        DataFlow.notify(self, data)
+
+#    def get(self):
+#        # This is optimization, but everything should work without that
+#        if self._cached is None:
+#            return DataFlow.get(self)
+#        else:
+#            return self._cached
+
+    @oneway
+    def subscribe(self, listener):
+        DataFlow.subscribe(self, listener)
+
+        # send the cached data (if worthy)
+        if self._cached is not None:
+            logging.debug("Sending cached data")
+            # TODO: re-factor/re-use code
+            data = self._cached
+            if isinstance(listener, basestring):
+                dformat = {"dtype": str(data.dtype), "shape": data.shape}
+                self.pipe.send_pyobj(dformat, zmq.SNDMORE)
+                self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
+                try:
+                    self.pipe.send(numpy.getbuffer(data), copy=False)
+                except TypeError:
+                    # not all buffers can be sent zero-copy (e.g., has strides)
+                    # try harder by copying (which removes the strides)
+                    logging.debug("Failed to send data with zero-copy")
+                    self.pipe.send(numpy.getbuffer(data.copy()), copy=False)
+            else:
+                listener(self, data)
+
+#    @oneway
+#    def unsubscribe(self, listener):
+#        DataFlow.unsubscribe(self, listener)
+#        if self._count_listeners() == 0:
+#            self._cached = None
+
+class SimpleSporadicDataFlow(CachedDataFlow):
+    """
+    Helper class that simplifies creating a dataflow which generates data only
+    when events arrive, and at a maximum frequency 
+    """
+
+    # very basic cached dataflow
+    def __init__(self, period=None, *args, **kwargs):
+        """
+        period (int): minimum period between 2 generations
+        """
+        super(SimpleSporadicDataFlow, self).__init__(*args, **kwargs)
+        # The thread will automatically finish when we
+        self._thread = threading.Thread(target=self._thread_main, name="cached flow thread")
+        self._thread.start()
+        self._thread_must_stop = threading.Event()
+        self._thread_must_generate = threading.Event()
+        self._thread = None
+        self.i = 0
+
+
+    # To be overridden
+    def generate_data(self):
+        return None
+
+    def obsolete_data(self):
+        self._cached = None # indicate data is not valid anymore
+        self._thread_must_generate.set()
+
+    def _thread_main(self):
+        # generate a stupid array maximum every 0.1s
+        try:
+            while True:
+                self._thread_must_generate.wait()
+                logging.debug("Generating one more array")
+                if self._thread_must_stop.is_set():
+                    logging.debug("Thread must stop after unblock")
+                    return
+                self._thread_must_generate.clear()
+                data = model.DataArray([[self.i, 0], [0, 0]],
+                                       metadata={"a": 3, "num": self.i})
+                self.i += 1
+                self.notify(data)
+                if self._thread_must_stop.wait(0.1):
+                    logging.debug("Thread must stop after notification")
+                    return
+        finally:
+            self._thread_must_stop.clear()
+
+    def start_generate(self):
+        # if there is already a thread, wait for it to finish before starting a new one
+        if self._thread:
+            self._thread.join(10)
+            assert not self._thread_must_stop.is_set()
+            self._thread = None
+
+        if self._cached is None:
+            self._thread_must_generate.set() # we want fresh data immediately
+
+
+    def stop_generate(self):
+        assert self._thread
+        assert not self._thread_must_stop.is_set()
+        # we don't wait for the thread to stop fully
+        self._thread_must_stop.set()
+        self._thread_must_generate.set() # to unblock the thread
+
+
+
+# DataFlowBase object automatically created on the client (in an Odemis component)
 class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
