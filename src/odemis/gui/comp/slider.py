@@ -162,7 +162,6 @@ class Slider(BaseSlider):
         self.min_value = min_val
         self.max_value = max_val
 
-        self.range_span = max_val - min_val
         # event.GetX() position or Horizontal position across Panel
         self.x = 0
         # position of the drag handle within the slider, ranging from 0 to
@@ -300,11 +299,11 @@ class Slider(BaseSlider):
         dc.DrawLine(self.half_h_width, half_height,
                     width - self.half_h_width, half_height)
 
-
         # ticks
         steps = [v / 10 for v in range(1, 10)]
+        range_span = self.max_value - self.min_value
         for s in steps:
-            v = (self.range_span * s) + self.min_value
+            v = (range_span * s) + self.min_value
             pix_x = self._val_to_pixel(v) + self.half_h_width
             dc.DrawLine(pix_x, half_height - 1,
                         pix_x, half_height + 2)
@@ -485,33 +484,23 @@ class Slider(BaseSlider):
         return self.GetSize()[1]
 
     def SetRange(self, min_value, max_value):
-        self.range_span = max_value - min_value
-        self.SetMin(min_value)
-        self.SetMax(max_value)
+        if min_value >= max_value:
+            raise ValueError("Minimum %s is bigger than maximum %s." %
+                             (min_value, max_value))
+
+        self.min_value = min_value
+        self.max_value = max_value
+        if min_value <= self.current_value <= max_value:
+            self.Refresh()
+        else:
+            logging.debug("Range %s set outside of current value %s",
+                          (self.min_value, self.max_value), self.current_value)
 
     def SetMin(self, min_value):
-        if min_value <= self.max_value:
-            if self.current_value and self.current_value < min_value:
-                logging.warning("Minimum %s is larger than current value %s!",
-                                min_value, self.current_value)
-            else:
-                self.min_value = min_value
-                self.Refresh()
-        else:
-            logging.warning("Minimum %s is larger than maximum %s!",
-                            min_value, self.max_value)
+        self.SetRange(min_value, self.max_value)
 
     def SetMax(self, max_value):
-        if max_value >= self.min_value:
-            if self.current_value and self.current_value < max_value:
-                logging.warning("Maximum %s is smaller than current value %s!",
-                                max_value, self.current_value)
-            else:
-                self.max_value = max_value
-                self.Refresh()
-        else:
-            logging.warning("Maximum %s is smaller than minimum %s!",
-                            max_value, self.min_value)
+        self.SetRange(self.min_value, max_value)
 
     def GetRange(self):
         return (self.min_value, self.max_value)
