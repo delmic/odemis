@@ -280,7 +280,7 @@ class TestSEM(unittest.TestCase):
         rate of the AI device. 
         """
         # values to test
-        periods = [
+        periods = [0.8e-6,
                    1e-6,
                    3e-6,
                    1e-5,
@@ -288,13 +288,16 @@ class TestSEM(unittest.TestCase):
                    6.68952e-06,
                    0.000365129,
                    0.000579224,
+                   23,
                    ]
         min_ai_period = self.sem._min_ai_periods[1]
         for p in periods:
-            period, osr = self.sem.find_best_oversampling_rate(p)
-            ai_period = period/osr
+            period, osr, dpr = self.sem.find_best_oversampling_rate(p)
+            print p, period, osr, dpr
+            ai_period = (period / dpr) / osr
             self.assertLess(ai_period, min_ai_period * 5, 
-                            "Got osr=%d, while expected something around %s" % (osr, period/min_ai_period))
+                            "Got osr=%d, while expected something around %s"
+                            % (osr, (period / dpr) / min_ai_period))
 
 #    @unittest.skip("too long")
     def test_acquire_high_osr(self):

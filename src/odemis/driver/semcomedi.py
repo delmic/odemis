@@ -87,6 +87,12 @@ import weakref
 # We ended up with using our own wrapper "comedi_simple". It's actually just a
 # wrapper of python-comedilib to remove the "comedi_" part of each function, and
 # generate the right exception in case of errors.
+#
+# TODO: the entire code should be reorganised. We should have a low-level
+# component (running in its own thread) which keeps scanning (it could stop as
+# merely an optimisation). Next to it, a high-level component should decide the
+# scanning area, period and channels, and interface with the rest of Odemis.
+# Communication between both component is only via queues.
 
 NI_TRIG_AI_START1 = 18 # Trigger number for AI Start1 (= beginning of a command)
 
@@ -673,60 +679,28 @@ class SEMComedi(model.HwComponent):
             if rc != 0:
                 raise IOError("failed to prepare command (%d)" % rc)
 
-    def find_closest_dwell_time(self, period):
-        """
-        Returns the closest dwell time _longer_ than the given time compatible
-          with the device.
-        period (float): dwell time requested (in s)
-        returns (0<float): a value slightly smaller, or larger than the period (in s)
-        raises:
-            ValueError if no compatible dwell time can be found
-        Note: the dwell time is computed assuming all the detectors are active
-           simultaneously.
-        """
-        # TODO: min dwell time should be just for one input channel, and adapt if
-        # more than one channel is read simultaneously => pass nrchans?
-
-        nwchans = 2 # always
-        nrchans = len(self._detectors) # one channel per detector
-        period_ns = int(period * 1e9)  # in nanoseconds
-
-        # should be finding it in 2 steps in normal cases
-        for i in range(10):
-            rcmd = comedi.cmd_struct()
-            comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                      rcmd, nrchans, period_ns)
-            wcmd = comedi.cmd_struct()
-            if self._test:
-                wcmd.scan_begin_arg = rcmd.scan_begin_arg
-            else:
-                comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
-                                                      wcmd, nwchans, period_ns)
-            # scan_begin_arg contains a possible period for the subdevice
-            if rcmd.scan_begin_arg == wcmd.scan_begin_arg:
-                return rcmd.scan_begin_arg / 1e9
-
-            # try again with the longest of both periods
-            period_ns = max(rcmd.scan_begin_arg, wcmd.scan_begin_arg)
-
-        # no compatible dwell time found
-        raise ValueError("No compatible dwell time found for %g s." % period)
-
     def find_best_oversampling_rate(self, period, max_osr=2 ** 24):
         """
         Returns the closest dwell time _longer_ than the given time compatible
           with the output device and the highest over-sampling rate compatible 
-          with the input device.
+          with the input device. If the period is longer than what can be 
         period (float): dwell time requested (in s)
         max_osr (1<=int): maximum over-sampling rate returned
         returns (2-tuple: period (0<float), osr (1<=int)):
          period: a value slightly smaller, or larger than the period (in s)
          osr: a ratio indicating how many times faster runs the input clock
+         dpr: how many times the acquisition should be duplicated
         raises:
             ValueError if no compatible dwell time can be found
         Note: the dwell time is computed assuming all the detectors are active
            simultaneously.
         """
+        # We've got to find the lowest common denominator, but the main
+        # difficulty is that we don't know what are the allowed values for read
+        # and write periods. So we just try read values as small as possible and
+        # from there find a dwell time multiple of it, not too far from the
+        # requested one.
+
         # TODO: min dwell time should be just for one input channel, and adapt if
         # more than one channel is read simultaneously => pass nrchans?
         assert(max_osr >= 1)
@@ -734,55 +708,61 @@ class SEMComedi(model.HwComponent):
         nrchans = len(self._detectors) # one channel per detector
         period_ns = int(period * 1e9)  # in nanoseconds
 
+        # If impossible to do a write so long, do multiple acquisitions
+        if period_ns > 2 ** 32 - 1:
+            dpr = 1 + (period_ns >> 32) # = ceil(period_ns / (2 ** 32 - 1))
+            period_ns = int(period_ns / dpr)
+        else:
+            dpr = 1
+
         # let's find a compatible minimum dwell time for the output device
         wcmd = comedi.cmd_struct()
         if self._test:
-            wcmd.scan_begin_arg = period_ns
+            wcmd.scan_begin_arg = period_ns # + ((-period_ns) % 800) # TEST
         else:
             comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, period_ns)
-        period_ns = float(wcmd.scan_begin_arg)
-
-        # the best osr we can get for this dwell time
-        min_rperiod_ns = self._min_ai_periods[nrchans] * 1e9
-        rperiod_ns = max(period_ns, min_rperiod_ns)
-        max_osr = min(max_osr, int(math.ceil(rperiod_ns / min_rperiod_ns)))
+        period_ns = wcmd.scan_begin_arg
 
         # The read period should be as close as possible from the minimum read
         # period (as long as it's equal or above). Then try to find a write
         # period compatible with this read period, more or less in the same order
         # of time as given
+        orig_rperiod_ns = rperiod_ns = int(self._min_ai_periods[nrchans] * 1e9)
         rcmd = comedi.cmd_struct()
         wcmd = comedi.cmd_struct()
-
-        rperiod_ns = int(min_rperiod_ns)
-        for i in range(5):
+        while rperiod_ns < 5 * orig_rperiod_ns:
             # it'll probably work on the first time, but just in case, we try
             # 5 times, with slighly bigger read periods
-            comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
-                                                      rcmd, nrchans, rperiod_ns)
-            rperiod_ns = rcmd.scan_begin_arg
 
+            # the best osr we can hope for with this dwell time and read period
+            best_osr = max(1, min(int(math.ceil(period_ns / rperiod_ns)), max_osr))
             # get a write period multiple of it
-            for osr in range(max_osr, max_osr + 5):
+            for osr in range(best_osr, best_osr + 5):
                 wperiod_ns = rperiod_ns * osr
                 if self._test:
-                    return wperiod_ns / 1e9, osr
-                # check this _exact_ write period is compatible
-                comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                    wcmd.scan_begin_arg = wperiod_ns # + ((-wperiod_ns) % 800) # TEST
+                else:
+                    # check this _exact_ write period is compatible
+                    comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, wperiod_ns)
                 if wcmd.scan_begin_arg == wperiod_ns:
                     # we've found it!
                     logging.debug("Found over-sampling rate: %g ns x %d = %g ns", rperiod_ns, osr, wperiod_ns)
-                    return wperiod_ns / 1e9, osr
+                    return dpr * wperiod_ns / 1e9, osr, dpr
 
             # try a bigger read period
-            rperiod_ns = int(math.ceil(rperiod_ns * 1.1))
+            prev_rperiod_ns = rperiod_ns
+            i = 1
+            while rperiod_ns == prev_rperiod_ns:
+                comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                             rcmd, nrchans, rperiod_ns + 2 ** i)
+                i += 1
+                rperiod_ns = rcmd.scan_begin_arg
 
         # We ought to never come here, but just in case, don't completely fail
         logging.error("Failed to find compatible over-sampling rate for dwell time of %g s", period)
-        period = self.find_closest_dwell_time(period)
-        return period, 1
+        return dpr * self._min_ai_periods[nrchans], 1, dpr
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
                             start_src=comedi.TRIG_INT, start_arg=0,
@@ -2024,9 +2004,9 @@ class Scanner(model.Emitter):
                                               readonly=True)
 
         # max dwell time is purely arbitrary
-        range_dwell = (parent.find_closest_dwell_time(0), 100) # s
-        self._osr = 1
-        self.dwellTime = model.FloatContinuous(range_dwell[0], range_dwell,
+        min_dt, self._osr, self._dpr = parent.find_best_oversampling_rate(0)
+        range_dwell = (min_dt, 4) # s
+        self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
 
         # event to allow another component to synchronize on the beginning of
@@ -2085,7 +2065,8 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, value):
-        dt, self._osr = self.parent.find_best_oversampling_rate(value)
+        # FIXME: use DPR
+        dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value)
         return dt
 
     def _setScale(self, value):
