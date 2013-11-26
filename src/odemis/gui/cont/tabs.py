@@ -1193,7 +1193,7 @@ class LensAlignTab(Tab):
                   fov_size[1] * ((t + b) / 2 - 0.5))
 
         # same formula as InclinedStage._convertPosToChild()
-        ang = math.radians(-135)
+        ang = math.radians(45) # TODO: check it's correct on the real hardware (-135 seemed to go opposite direction)
         ac, bc = [xc * math.cos(ang) - yc * math.sin(ang),
                   xc * math.sin(ang) + yc * math.cos(ang)]
 
