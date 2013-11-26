@@ -298,6 +298,40 @@ class SEMComedi(model.HwComponent):
         else:
             self._test = False
 
+    def getSwVersion(self):
+        """
+        Returns (string): displayable string showing the driver version
+        """
+        driver = comedi.get_driver_name(self._device)
+        version = comedi.get_version_code(self._device)
+        lversion = []
+        for i in range(3):
+            lversion.insert(0, version & 0xff)  # grab lowest 8 bits
+            version >>= 8  # shift over 8 bits
+        sversion = '.'.join(str(x) for x in lversion)
+        return "%s v%s" % (driver, sversion)
+
+    def getHwName(self):
+        """
+        Returns (string): displayable string showing whatever can be found out 
+          about the actual hardware.
+        """
+        return comedi.get_board_name(self._device)
+
+    def getMetadata(self):
+        return self._metadata
+
+    def updateMetadata(self, md):
+        """
+        Update the metadata associated with every image acquired to these
+        new values. It's accumulative, so previous metadata values will be kept
+        if they are not given.
+        md (dict string -> value): the metadata
+        """
+        # We receive as MD_POS the _center_ position. When applied to an image,
+        # the scanner translation will be added to it.
+        self._metadata.update(md)
+
     def _get_min_periods(self):
         """
         Read the minimum scan periods for the AI and AO subdevices
@@ -366,40 +400,6 @@ class SEMComedi(model.HwComponent):
             pass
 
         return bufsz
-
-    def getSwVersion(self):
-        """
-        Returns (string): displayable string showing the driver version
-        """
-        driver = comedi.get_driver_name(self._device)
-        version = comedi.get_version_code(self._device)
-        lversion = []
-        for i in range(3):
-            lversion.insert(0, version & 0xff)  # grab lowest 8 bits
-            version >>= 8  # shift over 8 bits
-        sversion = '.'.join(str(x) for x in lversion)
-        return "%s v%s" % (driver, sversion)
-
-    def getHwName(self):
-        """
-        Returns (string): displayable string showing whatever can be found out 
-          about the actual hardware.
-        """
-        return comedi.get_board_name(self._device)
-
-    def getMetadata(self):
-        return self._metadata
-
-    def updateMetadata(self, md):
-        """
-        Update the metadata associated with every image acquired to these
-        new values. It's accumulative, so previous metadata values will be kept
-        if they are not given.
-        md (dict string -> value): the metadata
-        """
-        # We receive as MD_POS the _center_ position. When applied to an image,
-        # the scanner translation will be added to it.
-        self._metadata.update(md)
 
     def _get_converter_actual(self, subdevice, channel, range, direction):
         """
@@ -659,57 +659,6 @@ class SEMComedi(model.HwComponent):
             logging.debug("Canceling resting command")
             comedi.cancel(self._device, self._ao_subdevice)
 
-    def _get_data(self, channels, period, size):
-        """
-        read n data from the given analog input channel
-        channels (list of int): channels 
-        period (float): sampling period in s
-        size (0<int): number of data to read
-        return (numpy.array with shape=(size, len(channels)) and dtype=float) 
-        Note: this is only for testing, and will go away in the final version
-        """
-        nchans = len(channels) #number of channels
-        nscans = size
-        period_ns = int(round(period * 1e9))  # in nanoseconds
-        expected_time = nscans * period # s
-
-        rranges = []
-        for i, channel in enumerate(channels):
-            data_lim = (-10, 10)
-            try:
-                best_range = comedi.find_range(self._device, self._ai_subdevice,
-                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-            except comedi.ComediError:
-                logging.exception("Data range between %g and %g V is too high for hardware." %
-                              (data_lim[0], data_lim[1]))
-                raise
-
-            rranges.append(best_range)
-
-        self._reader.prepare(nscans * nchans, expected_time)
-
-        # run the commands
-        logging.debug("Going to start the command")
-        self.setup_timed_command(self._ai_subdevice, channels, rranges, period_ns,
-                    start_src=comedi.TRIG_NOW, # start immediately
-                    stop_arg=nscans)
-        self._reader.run()
-
-        timeout = (nscans * period) * 1.10 + 1 # s   == expected time + 10% + 1s
-        rbuf = self._reader.wait(timeout)
-        rbuf.shape = (nscans, nchans)
-
-        # convert data to physical values
-        logging.debug("Converting raw data to physical: %s", rbuf)
-        # Allocate a separate memory block per channel as they'll later be used
-        # completely separately
-        parrays = []
-        for i, c in enumerate(channels):
-            parrays.append(self._array_to_phys(self._ai_subdevice,
-                                   [c], [rranges[i]], rbuf[:, i, numpy.newaxis]))
-
-        return parrays
-
     def _prepare_command(self, cmd):
         """
         Prepare a command for the comedi device (try to make it fits the device
@@ -839,152 +788,6 @@ class SEMComedi(model.HwComponent):
         logging.error("Failed to find compatible over-sampling rate for dwell time of %g s", period)
         period = self.find_closest_dwell_time(period)
         return period, 1
-
-    def write_data(self, channels, period, data):
-        """
-        write n data on the given analog output channels
-        channels (list of int): channels to write (in same the order as data) 
-        period (float): sampling period in s
-        data (numpy.ndarray of float): two dimension array to write (physical values)
-          first dimension is along the time, second is along the channels
-        Note: this is only for testing, and will go away in the final version
-        """
-        #construct a comedi command
-        nchans = data.shape[1]
-        nscans = data.shape[0]
-        assert len(channels) == nchans
-
-        # create a chanlist
-        ranges = []
-        for i, channel in enumerate(channels):
-            data_lim = (data[:, i].min(), data[:, i].max())
-            try:
-                best_range = comedi.find_range(self._device, self._ao_subdevice,
-                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-            except comedi.ComediError:
-                logging.exception("Data range between %g and %g V is too high for hardware." %
-                              (data_lim[0], data_lim[1]))
-                raise
-
-            ranges.append(best_range)
-
-        logging.debug("Generating a new command for %d scans", nscans)
-        period_ns = int(round(period * 1e9))  # in nanoseconds
-        self.setup_timed_command(self._ao_subdevice, channels, ranges, period_ns,
-                    stop_arg=nscans)
-
-        # convert physical values to raw data
-        # Note: on the NI 6251, as probably many other devices, conversion is linear.
-        # So it might be much more efficient to generate raw data directly
-        dtype = self._get_dtype(self._ao_subdevice)
-        # forcing the order is not necessary but just to ensure good performance
-        buf = numpy.empty(shape=data.shape, dtype=dtype, order='C')
-        converters = []
-        for i, c in enumerate(channels):
-            converters.append(self._get_converter(self._ao_subdevice, c, ranges[i],
-                                                comedi.FROM_PHYSICAL)
-                              )
-        # TODO: check if it's possible to avoid multiple type conversion in the call
-        for i, v in numpy.ndenumerate(data):
-            buf[i] = converters[i[1]](v)
-        # flatten the array
-        buf = numpy.reshape(buf, nscans * nchans, order='C')
-
-        logging.debug("Converted physical value to raw data: %s", buf)
-
-        # preload the buffer with enough data first
-        dev_buf_size = comedi.get_buffer_size(self._device, self._ao_subdevice)
-        preload_size = dev_buf_size / buf.itemsize
-        logging.debug("Going to preload %d bytes", buf[:preload_size].nbytes)
-        buf[:preload_size].tofile(self._writer.file)
-        logging.debug("Going to flush")
-        self._writer.file.flush()
-
-        # run the command
-        logging.debug("Going to start the command")
-
-        start_time = time.time()
-        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
-
-        logging.debug("Going to write %d bytes more", buf[preload_size:].nbytes)
-        buf[preload_size:].tofile(self._writer.file)
-        logging.debug("Going to flush")
-        self._writer.file.flush()
-
-        # According to https://groups.google.com/forum/?fromgroups=#!topic/comedi_list/yr2U179x8VI
-        # To finish a write fully, we need to do a cancel().
-        # Wait until SDF_RUNNING is gone, then cancel() to reset SDF_BUSY
-        expected = nscans * period
-        left = start_time + expected - time.time()
-        logging.debug("Waiting %g s for the write to finish", left)
-        if left > 0:
-            time.sleep(left)
-        end_time = start_time + expected * 1.10 + 1 # s = expected time + 10% + 1s
-        had_timeout = True
-        while time.time() < end_time:
-            flags = comedi.get_subdevice_flags(self._device, self._ao_subdevice)
-            if not (flags & comedi.SDF_RUNNING):
-                had_timeout = False
-                break
-            time.sleep(0.001)
-
-        comedi.cancel(self._device, self._ao_subdevice)
-        if had_timeout:
-            raise IOError("Write command stopped due to timeout after %g s" % (time.time() - start_time))
-
-    def write_read_2d_data_phys(self, wchannels, rchannels, rranges, period,
-                                margin, osr, data):
-        """
-        write data on the given analog output channels and read the same amount 
-         synchronously on the given analog input channels
-        wchannels (list of int): channels to write (in same the order as data)
-        rchannels (list of int): channels to write (in same the order as data)
-        period (float): sampling period in s (time between two writes on the same
-         channel)
-        osr (1<=int): over-sampling rate, how many input samples should be acquired by pixel
-        data (numpy.ndarray of float): two dimension array to write (physical values)
-          first dimension is along the time, second is along the channels
-        return (list of 1D numpy.array with shape=data.shape[0] and dtype=float)
-            the data read converted to physical value (volt) for each channel
-        """
-        # XXX broken: need to update for new write_read_2d_data_raw()
-        assert len(wchannels) == data.shape[1]
-
-        # pick nice ranges according to the data to write
-        wranges = []
-        for i, channel in enumerate(wchannels):
-            data_lim = (data[:, i].min(), data[:, i].max())
-            try:
-                best_range = comedi.find_range(self._device, self._ao_subdevice,
-                                  channel, comedi.UNIT_volt, data_lim[0], data_lim[1])
-            except comedi.ComediError:
-                logging.exception("Data range between %g and %g V is too high for hardware." %
-                              (data_lim[0], data_lim[1]))
-                raise
-
-            wranges.append(best_range)
-
-        # convert physical values to raw data
-        # Note: on the NI 6251, as probably many other devices, conversion is linear.
-        # So it might be much more efficient to generate raw data directly
-        wbuf = self._array_from_phys(self._ao_subdevice, wchannels, wranges, data)
-
-        # write and read the raw data
-        rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels, rranges,
-                                           period, margin, osr, wbuf)
-
-        # convert data to physical values
-        logging.debug("Converting raw data to physical: %s", rbuf)
-        # Allocate a separate memory block per channel as they'll later be used
-        # completely separately
-        parrays = []
-        for i, c in enumerate(rchannels):
-            # FIXME: rbuf is now already n arrays
-            parrays.append(self._array_to_phys(self._ai_subdevice,
-                                   [c], [rranges[i]], rbuf[:, i, numpy.newaxis]))
-
-        return parrays
-
 
     def setup_timed_command(self, subdevice, channels, ranges, period_ns,
                             start_src=comedi.TRIG_INT, start_arg=0,
