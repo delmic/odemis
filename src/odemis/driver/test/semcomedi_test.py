@@ -197,7 +197,7 @@ class TestSEM(unittest.TestCase):
         im = self.sed.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
+        self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
@@ -293,11 +293,14 @@ class TestSEM(unittest.TestCase):
         min_ai_period = self.sem._min_ai_periods[1]
         for p in periods:
             period, osr, dpr = self.sem.find_best_oversampling_rate(p)
-            print p, period, osr, dpr
             ai_period = (period / dpr) / osr
             self.assertLess(ai_period, min_ai_period * 5, 
                             "Got osr=%d, while expected something around %s"
                             % (osr, (period / dpr) / min_ai_period))
+            if p <= ((2 ** 32 - 1) / 1e9):
+                self.assertEqual(dpr, 1)
+            else:
+                self.assertGreater(dpr, 1)
 
 #    @unittest.skip("too long")
     def test_acquire_high_osr(self):
@@ -316,6 +319,25 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.size[-1:-3:-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+    def test_long_dwell_time(self):
+        """
+        one pixel only, but long dwell time (> 4s), which means it uses 
+        duplication rate.
+        """
+        self.scanner.resolution.value = self.scanner.resolution.range[0]
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 10 # DPR should be 3
+        expected_duration = self.compute_expected_duration() # same as dwell time
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
 
 #    @unittest.skip("too long")
     def test_acquire_long_short(self):
@@ -409,7 +431,7 @@ class TestSEM(unittest.TestCase):
         
         self.assertLessEqual(self.left, 10000 - 1)
 
-#     @unittest.skip("simple")
+#    @unittest.skip("simple")
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
@@ -429,6 +451,7 @@ class TestSEM(unittest.TestCase):
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
 
+#    @unittest.skip("simple")
     def test_new_position_event(self):
         """
         check the new position works at least when the frequency is not too high

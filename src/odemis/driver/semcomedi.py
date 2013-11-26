@@ -805,7 +805,7 @@ class SEMComedi(model.HwComponent):
         comedi.command(self._device, cmd)
 
     def write_read_2d_data_raw(self, wchannels, wranges, rchannels, rranges,
-                            period, margin, osr, data):
+                            period, margin, osr, dpr, data):
         """
         write data on the given analog output channels and read synchronously on
          the given analog input channels and convert back to 2d array 
@@ -813,10 +813,11 @@ class SEMComedi(model.HwComponent):
         wranges (list of int): ranges of each write channel
         rchannels (list of int): channels to read (in same the order as data)
         rranges (list of int): ranges of each read channel
-        period (float): sampling period in s (time between two writes on the same
+        period (float): sampling period in s (time between two pixels on the same
          channel)
         margin (0 <= int): number of additional pixels at the begginning of each line
         osr: over-sampling rate, how many input samples should be acquired by pixel
+        dpr: duplication rate, how many times each pixel should be re-acquired
         data (3D numpy.ndarray of int): array to write (raw values)
           first dimension is along the slow axis, second is along the fast axis,
           third is along the channels
@@ -827,7 +828,7 @@ class SEMComedi(model.HwComponent):
         # We write at the given period, and read "osr" samples for each pixel
         nrchans = len(rchannels)
 
-        if self._scanner.newPosition.hasListeners() and period >= 1e-3:
+        if dpr > 1 or (self._scanner.newPosition.hasListeners() and period >= 1e-3):
             # if the newPosition event is used, prefer the per pixel write/read
             # as it's much more precise (albeit a bit slower). It just needs to
             # not be too costly (1 ms should be higher than the setup cost).
@@ -844,14 +845,14 @@ class SEMComedi(model.HwComponent):
                          period, margin, osr, lines, data)
 
         # fit a pixel
-        pixelsz = nrchans * osr * self._reader.dtype.itemsize
+        pixelsz = nrchans * osr * dpr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
             logging.warning("Going to try to read very large buffer of %g MB.", pixelsz / 2.**20)
 
         # TODO: read several pixels at a time => need clever placement
         return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges,
-                         period, margin, osr, data)
+                                         period, margin, osr, dpr, data)
 
 
     def _write_read_2d_lines(self, wchannels, wranges, rchannels, rranges,
@@ -921,7 +922,7 @@ class SEMComedi(model.HwComponent):
             umath.true_divide(acc, osr, out=oarray, casting='unsafe', subok=False)
 
     def _write_read_2d_pixel(self, wchannels, wranges, rchannels, rranges,
-                            period, margin, osr, data):
+                            period, margin, osr, dpr, data):
         """
         Implementation of write_read_2d_data_raw by reading the input data one 
           pixel at a time.
@@ -929,6 +930,7 @@ class SEMComedi(model.HwComponent):
         logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
                       osr * len(rchannels), period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
+        wdata = numpy.empty((dpr, 2), dtype=data.dtype) # just one pixel
 
         # allocate one full buffer per channel
         buf = []
@@ -938,28 +940,29 @@ class SEMComedi(model.HwComponent):
 
         # read one pixel at a time
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
-            wdata = data[x, y, :] # just one pixel
-            wdata.shape = (1, data.shape[2]) # reshape to 2D
+            wdata[:] = data[x, y, :] # copy the same pixel data * dpr
             if y < margin:
-                ss = 1
+                ss = dpr
             else:
                 ss = 0
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
-                                                rranges, period, osr, wdata, ss)
+                                        rranges, period / dpr, osr, wdata, ss)
 
             # decimate into each buffer
             for i, b in enumerate(buf):
-                self._scan_raw_to_pixel(rshape, margin, osr, x, y, rbuf[..., i], b, adtype)
+                self._scan_raw_to_pixel(rshape, margin, osr, dpr, x, y,
+                                        rbuf[..., i], b, adtype)
 
         return buf
 
     @staticmethod
-    def _scan_raw_to_pixel(shape, margin, osr, x, y, data, oarray, adtype):
+    def _scan_raw_to_pixel(shape, margin, osr, dpr, x, y, data, oarray, adtype):
         """
         Converts acquired data for one pixel resulting into the pixel for the a 2D array
         shape (2-tuple int): H,W dimension of the scanned image (margin not included)
         margin (int): amount of useless pixels at the beginning of each line
         osr (int): over-sampling rate
+        dpr (int): duplication rate
         x (int): x position of the pixel in the input array
         y (int): y position of the pixel in the input array
         data (1D ndarray): the raw data (including oversampling), of one channel
@@ -967,7 +970,7 @@ class SEMComedi(model.HwComponent):
         """
         if y < margin:
             return
-        oarray[x, y - margin] = numpy.sum(data, dtype=adtype) / osr
+        oarray[x, y - margin] = numpy.sum(data, dtype=adtype) / (osr * dpr)
 
     def _fake_write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges,
                                  period, osr, data, settling_samples):
@@ -1267,12 +1270,13 @@ class SEMComedi(model.HwComponent):
                 rranges = [d._range for d in detectors]
 
                 # get the scan values (automatically updated to the latest needs)
-                scan, period, shape, margin, wchannels, wranges, osr = self._scanner.get_scan_data()
+                (scan, period, shape, margin,
+                 wchannels, wranges, osr, dpr) = self._scanner.get_scan_data()
 
                 metadata = dict(self._metadata) # duplicate
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
                 metadata[model.MD_DWELL_TIME] = period
-                metadata[model.MD_SAMPLES_PER_PIXEL] = osr
+                metadata[model.MD_SAMPLES_PER_PIXEL] = osr * dpr
 
                 # add scanner translation to the center
                 center = metadata.get(model.MD_POS, (0, 0))
@@ -1283,7 +1287,7 @@ class SEMComedi(model.HwComponent):
                 # write and read the raw data
                 try:
                     rbuf = self.write_read_2d_data_raw(wchannels, wranges, rchannels,
-                                                    rranges, period, margin, osr, scan)
+                                        rranges, period, margin, osr, dpr, scan)
                 except (IOError, comedi.ComediError):
                     # could be genuine or just due to cancellation
                     if self._acquisition_must_stop.is_set():
@@ -2005,7 +2009,7 @@ class Scanner(model.Emitter):
 
         # max dwell time is purely arbitrary
         min_dt, self._osr, self._dpr = parent.find_best_oversampling_rate(0)
-        range_dwell = (min_dt, 4) # s
+        range_dwell = (min_dt, 1000) # s
         self.dwellTime = model.FloatContinuous(min_dt, range_dwell,
                                                unit="s", setter=self._setDwellTime)
 
@@ -2176,7 +2180,8 @@ class Scanner(model.Emitter):
             to allow for the settling time
           channels: the output channels to use
           ranges: the range index of each output channel
-          osr: over-sampling rate, how many input samples should be acquired by pixel 
+          osr: over-sampling rate, how many input samples should be acquired by pixel
+          dpr: duplication rate, how many times each pixel should be re-acquired
         Note: it only recomputes the scanning array if the settings have changed
         Note: it's not thread-safe, you must ensure no simultaneous calls.
         """
@@ -2200,7 +2205,7 @@ class Scanner(model.Emitter):
             self._prev_settings = new_settings
 
         return (self._scan_array, dwell_time, resolution[::-1],
-                margin, self._channels, self._ranges, self._osr)
+                margin, self._channels, self._ranges, self._osr, self._dpr)
 
     def _update_raw_scan_array(self, shape, scale, translation, margin):
         """
