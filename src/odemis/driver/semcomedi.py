@@ -748,11 +748,6 @@ class SEMComedi(model.HwComponent):
         rperiod_ns = max(period_ns, min_rperiod_ns)
         max_osr = min(max_osr, int(math.ceil(rperiod_ns / min_rperiod_ns)))
 
-        if max_osr == 1:
-            # go the obvious way:
-            period = self.find_closest_dwell_time(period)
-            return period, 1
-
         # The read period should be as close as possible from the minimum read
         # period (as long as it's equal or above). Then try to find a write
         # period compatible with this read period, more or less in the same order
@@ -1391,25 +1386,11 @@ class SEMComedi(model.HwComponent):
             self._writer.close()
 
     def selfTest(self):
-        # let's see if we can get data from each channel, any data is good
-        channels = []
-        for d in self._detectors.values():
-            channel = d.channel
-            channels.append(channel)
-            try:
-                data = comedi.data_read(self._device, self._ai_subdevice,
-                                        channel, 0, comedi.AREF_GROUND)
-            except comedi.ComediError:
-                logging.info("Failed to read data from channel %d", channel)
-                return False
-
-        # try to read multiple values from all the channel simultaneously
+        # let's see if we can write some data
         try:
-            array = self._get_data(channels, self._min_ai_periods[len(channels)], 10)
+            self.set_to_resting_position()
         except comedi.ComediError:
-            array = None
-        if not array or len(array) != len(channels) or array[0].shape != (10, 1):
-            logging.info("Failed to read multiple data from channels %r", channels)
+            logging.info("Failed to write data to resting position")
             return False
 
         return True
@@ -2181,7 +2162,8 @@ class Scanner(model.Emitter):
             channels: the output channels to use
             ranges: the range index of each output channel
         """
-        # Let's put it at the top-left, where the next acquisition will start.
+        # Let's put it at the top-left, where the next acquisition will start,
+        # if the ROI is the full frame.
         # It has the advantage of not being in the center, so less noticable
         # if there is an optical camera aligned.
         pos = [self._limits[0][0], self._limits[1][0]]
@@ -2194,8 +2176,8 @@ class Scanner(model.Emitter):
 
         # computes the position in raw values
         rpos = self.parent._array_from_phys(self.parent._ao_subdevice,
-                                              self._channels, ranges,
-                                              numpy.array(pos, dtype=numpy.double))
+                                            self._channels, ranges,
+                                            numpy.array(pos, dtype=numpy.double))
         return rpos, self._channels, ranges
 
     def get_scan_data(self):
@@ -2221,18 +2203,22 @@ class Scanner(model.Emitter):
         resolution = self.resolution.value
         scale = self.scale.value
         translation = self.translation.value
-        margin = int(math.ceil(self._settle_time / dwell_time))
+
+        # settle_time is proportional to the size of the ROI (and =0 if only 1 px)
+        st = self._settle_time * (
+                  scale[0] * (resolution[0] - 1) / (self._shape[0] - 1))
+        margin = int(math.ceil(st / dwell_time))
 
         new_settings = [resolution, scale, translation, margin]
         if self._prev_settings != new_settings:
             # TODO: if only margin changes, just duplicate the margin columns
             # need to recompute the scanning array
-            self._update_raw_scan_array(resolution[-1::-1], scale[-1::-1],
-                                        translation[-1::-1], margin)
+            self._update_raw_scan_array(resolution[::-1], scale[::-1],
+                                        translation[::-1], margin)
 
             self._prev_settings = new_settings
 
-        return (self._scan_array, dwell_time, resolution[-1::-1],
+        return (self._scan_array, dwell_time, resolution[::-1],
                 margin, self._channels, self._ranges, self._osr)
 
     def _update_raw_scan_array(self, shape, scale, translation, margin):
@@ -2246,7 +2232,7 @@ class Scanner(model.Emitter):
         Warning: the dimensions follow the numpy convention, so opposite of user API
         returns nothing, but update ._scan_array and ._ranges.
         """
-        area_shape = self._shape[-1::-1]
+        area_shape = self._shape[::-1]
         # adapt limits according to the scale and translation so that if scale
         # == 1,1 and translation == 0,0 , the area is centered and a pixel is
         # the size of pixelSize
