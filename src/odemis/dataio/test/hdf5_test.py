@@ -93,8 +93,8 @@ class TestHDF5IO(unittest.TestCase):
         im = numpy.array(f["Acquisition0/ImageData/Image"])
         for i in range(num):
             subim = im[i, 0, 0] # just one channel
-            self.assertEqual(subim.shape, size[-1:-3:-1])
-            self.assertEqual(subim[white[-1:-3:-1]], 124)
+            self.assertEqual(subim.shape, size[::-1])
+            self.assertEqual(subim[white[::-1]], 124)
 
         os.remove(FILENAME)
 
@@ -106,7 +106,7 @@ class TestHDF5IO(unittest.TestCase):
         ldata = []
         num = 2
         for i in range(num):
-            ldata.append(model.DataArray(numpy.zeros(size[-1:-3:-1], dtype)))
+            ldata.append(model.DataArray(numpy.zeros(size[::-1], dtype)))
 
         # thumbnail : small RGB completely red
         tshape = (size[1] // 8, size[0] // 8, 3)
@@ -114,7 +114,7 @@ class TestHDF5IO(unittest.TestCase):
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
-        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+        thumbnail[blue[::-1]] = [0, 0, 255]
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
@@ -128,7 +128,9 @@ class TestHDF5IO(unittest.TestCase):
         im = f["Preview/Image"]
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
-        self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
+        self.assertEqual(im[blue[::-1]].tolist(), [0, 0, 255])
+        for exp_name, dim in zip("YXC", im.dims):
+            self.assertEqual(exp_name, dim.label)
 
         # check the number of channels
         im = numpy.array(f["Acquisition0/ImageData/Image"])
@@ -283,8 +285,8 @@ class TestHDF5IO(unittest.TestCase):
         num = 2
         # TODO: check support for combining channels when same data shape
         for i in range(num):
-            a = model.DataArray(numpy.zeros(sizes[i][-1:-3:-1], dtype))
-            a[white[-1:-3:-1]] = 1027
+            a = model.DataArray(numpy.zeros(sizes[i][::-1], dtype))
+            a[white[::-1]] = 1027
             ldata.append(a)
 
         # thumbnail : small RGB completely red
@@ -293,7 +295,7 @@ class TestHDF5IO(unittest.TestCase):
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
-        thumbnail[blue[-1:-3:-1]] = [0, 0, 255]
+        thumbnail[blue[::-1]] = [0, 0, 255]
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
@@ -317,8 +319,7 @@ class TestHDF5IO(unittest.TestCase):
         im = rthumbs[0]
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
-        self.assertEqual(im[blue[-1:-3:-1]].tolist(), [0, 0, 255])
-
+        self.assertEqual(im[blue[::-1]].tolist(), [0, 0, 255])
 
     def testReadMDSpec(self):
         """
