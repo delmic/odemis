@@ -1342,6 +1342,10 @@ class StaticARStream(StaticStream):
             except KeyError:
                 logging.info("Skipping DataArray without known position")
 
+        # Cached conversion of the CCD image to polar representation
+        self._polar = {} # dict tuple 2 floats -> DataArray
+        # TODO: automatically fill it a background thread
+
         self.raw = list(self._sempos.values())
 
         # SEM position displayed, (None, None) == no point selected
@@ -1352,6 +1356,34 @@ class StaticARStream(StaticStream):
         if self._sempos:
             self.point.value = list(self._sempos.keys())[0]
 
+    def _getPolarProjection(self, pos):
+        """
+        Return the polar projection of the image at the given position.
+        pos (tuple of 2 floats): position (must be part of the ._sempos
+        returns DataArray: the polar projection
+        """
+        if pos in self._polar:
+            polar = self._polar[pos]
+        else:
+            # Compute the polar representation
+            data = self._sempos[pos]
+            try:
+                # TODO: First compute quickly a low resolution and then
+                # compute a high resolution version.
+                # TODO: could use the size of the canvas that will display
+                # the image to save some computation time.
+
+                # same size as original image (on smallest axis) and at most
+                # the size of a full-screen canvas
+                size = min(min(data.shape[-2:]), 1124)
+                polar = img.AngleResolved2Polar(data, size, hole=False)
+                self._polar[pos] = polar
+            except Exception:
+                logging.exception("Failed to convert to azymuthal projection")
+                return data # display it raw as fallback
+        
+        return polar
+
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
         """ Recomputes the image with all the raw data available for the current
@@ -1361,39 +1393,33 @@ class StaticARStream(StaticStream):
         if self._running_upd_img or not self.raw:
             return
 
+        pos = self.point.value
         try:
             self._running_upd_img = True
 
-            if self.point.value == (None, None):
+            if pos == (None, None):
                 self.image.value = InstrumentalImage(None)
             else:
-                data = self._sempos[self.point.value]
+                polar = self._getPolarProjection(pos)
+                # update the histrogram
+                # TODO: cache the histogram per image
+                self._updateHistogram(polar)
                 irange = self._getDisplayIRange()
+                logging.debug("irange = %s", irange)
 
-                # TODO: convert to Polar view + occult
-                try:
-                    # TODO: copy pixel size to sensor pixel size if missing
-                    size = min(data.shape[-2:]) # same size as original image (on smallest axis)
-                    polar = img.AngleResolved2Polar(data, size)
-                except Exception:
-                    logging.exception("Failed to convert to azymuthal projection")
-                    polar = data # display it raw as fallback
+                # Convert to RGB
                 rgbim = img.DataArray2RGB(polar, irange)
                 im = img.NDImage2wxImage(rgbim)
                 im.InitAlpha()
 
                 # TODO: Special InstrumentalImage for polar view, without MPP nor pos?
-                self.image.value = InstrumentalImage(im, self._findMPP(data), (0, 0))
+                self.image.value = InstrumentalImage(im, 0.001, (0, 0))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:
             self._running_upd_img = False
 
     def _onPoint(self, pos):
-        if pos != (None, None):
-            data = self._sempos[self.point.value]
-            # update the histrogram
-            self._updateHistogram(data)
         self._updateImage()
 
 
