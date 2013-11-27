@@ -577,6 +577,17 @@ class DraggableCanvas(wx.Panel):
 
         wx.CallAfter(self.ShouldUpdateDrawing)
 
+    def Repaint(self):
+        """ Repaint the canvas
+
+        This convenience method was added, because requesting a repaint from an
+        overlay using `UpdateDrawing`, could cause the view to 'jump' while
+        dragging.
+        """
+        self.Draw()
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
     def ShouldUpdateDrawing(self, delay=0.1):
         """ Schedule the update of the buffer
 

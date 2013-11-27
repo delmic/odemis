@@ -23,17 +23,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 from abc import ABCMeta, abstractmethod
-from odemis.gui.util.conversion import hex_to_frgba, change_brightness
 from odemis.gui.util.units import readable_str
 from odemis.util import normalize_rect
 import cairo
 import logging
 import math
-import odemis.model as model
 import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.gui.util as util
 import odemis.gui.util.units as units
+import odemis.gui.util.conversion as conversion
 import wx
 
 
@@ -197,9 +196,9 @@ class StreamIconOverlay(ViewOverlay):
         self.pause = False # if True: displayed
         self.play = 0 # opacity of the play icon
 
-        self.colour = hex_to_frgba(
-                            gui.FOREGROUND_COLOUR_HIGHLIGHT,
-                            self.opacity)
+        self.colour = conversion.hex_to_frgba(
+                                        gui.FOREGROUND_COLOUR_HIGHLIGHT,
+                                        self.opacity)
 
     def hide_pause(self, hidden=True):
         """
@@ -248,7 +247,8 @@ class StreamIconOverlay(ViewOverlay):
 
         ctx.set_line_width(1)
         ctx.set_source_rgba(
-            *hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
+            *conversion.hex_to_frgba(
+                gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
 
         ctx.move_to(x, y)
 
@@ -377,7 +377,7 @@ class SelectionMixin(object):
 
         self.edges = {}
 
-        self.color = hex_to_frgba(color)
+        self.color = conversion.hex_to_frgba(color)
         self.center = center
 
     ##### selection methods  #####
@@ -1020,7 +1020,7 @@ class MarkingLineOverlay(ViewOverlay):
                  center=(0, 0)):
 
         super(MarkingLineOverlay, self).__init__(base, label)
-        self.color = hex_to_frgba(color)
+        self.color = conversion.hex_to_frgba(color)
         self.vposx = None
         self.vposy = None
 
@@ -1034,7 +1034,7 @@ class MarkingLineOverlay(ViewOverlay):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
         if self.vposy:
-            r, g, b, a = change_brightness(self.color, -0.2)
+            r, g, b, a = conversion.change_brightness(self.color, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)
@@ -1072,11 +1072,11 @@ class DichotomyOverlay(ViewOverlay):
         """
         super(DichotomyOverlay, self).__init__(base)
 
-        self.color = hex_to_frgba(color)
+        self.color = conversion.hex_to_frgba(color)
         # Color for quadrant that will expand the sequence
-        self.hover_forw = hex_to_frgba(color, 0.5)
+        self.hover_forw = conversion.hex_to_frgba(color, 0.5)
         # Color for quadrant that will cut the sequence
-        self.hover_back = change_brightness(self.hover_forw, -0.2)
+        self.hover_back = conversion.change_brightness(self.hover_forw, -0.2)
 
         self.sequence_va = sequence_va
         self.sequence_rect = []
@@ -1326,8 +1326,9 @@ class PointSelectOverlay(WorldOverlay):
         # The pixel selected by the user: TupleVA (int, int)
         self._selected_pixel = None
 
-        self.color = hex_to_frgba(gui.SELECTION_COLOR, 0.5)
-        self.select_color = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
+        self.color = conversion.hex_to_frgba(gui.SELECTION_COLOR, 0.5)
+        self.select_color = conversion.hex_to_frgba(
+                                    gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
         self.enabled = False
 
         # This attribute is used to check if the base was dragged while the
@@ -1549,6 +1550,8 @@ class AngleOverlay(ViewOverlay):
         pass
 
 
+MAX_DOT_SIZE = 10.5
+
 class PointsOverlay(WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one
     """
@@ -1556,35 +1559,97 @@ class PointsOverlay(WorldOverlay):
     def __init__(self, base):
         super(PointsOverlay, self).__init__(base)
 
+        # The possible choices for point as a world pos => point mapping
         self.choices = {}
         self.point = None
 
-        self.point_colour = hex_to_frgba(gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
-        self.select_colour = hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT, 0.5)
+        self.point_colour = conversion.hex_to_frgb(
+                                        gui.FOREGROUND_COLOUR_HIGHLIGHT)
+        self.select_colour = conversion.hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT)
+
+        # The float radius of the dots to draw
+        self.dot_size = None
+        # The position of the mouse in buffer coordinates
+        self.cursor_buffer_pos = None
+        # None or the point over which the mouse is hovering
+        self.cursor_over_point = None
+
+        self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
+
+    def _on_mpp(self, mpp):
+        """ Adjust the size of the painted dots when the mpp value changes
+
+        I.e. when the zoom level of the canvas changes.
+        """
+        self.dot_size = min(5.5 * (5e-9 / mpp), MAX_DOT_SIZE)
+
+    def on_mouse_up(self, evt):
+        """ Set the seleceted point if the mouse cursor is hovering over one """
+        if self.cursor_over_point:
+            self.point.value = self.choices[self.cursor_over_point]
+            logging.debug("Point %s selected", self.point.value)
+        evt.Skip()
+
+    def on_mouse_motion(self, evt):
+        """ Highlight dots when the mouse hovers over them """
+        if not self.base.dragging and self.choices:
+            vx, vy = evt.GetPositionTuple()
+            self.cursor_buffer_pos = self.base.view_to_buffer_pos((vx, vy))
+            self.base.Repaint()
+
+        if self.cursor_over_point:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        else:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+
+        evt.Skip()
 
     def set_points(self, point_va):
         """ Set the available points and connect to the given point VA """
         self.choices = {}
 
-        # Translate
+        # Translate physical to world coordinates
         for point in [c for c in point_va.choices if None not in c]:
             world_pos = self.base.physical_to_world_pos(point)
             self.choices[world_pos] = point
 
         self.point = point_va
         self.point.subscribe(self._point_selected)
+        self.base.microscope_view.mpp.subscribe(self._on_mpp, init=True)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
+        if not self.choices:
+            return
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
-        ctx.set_source_rgba(*self.point_colour)
+        offset = [v // 2 for v in self.base._bmp_buffer_size]
+        cursor_over = None
+        opacity = max(0.5, 1.0 - (self.dot_size / MAX_DOT_SIZE))
 
         for world_pos in self.choices.keys():
-            bposx, bposy = self.base.world_to_buffer_pos(world_pos)
-            #print str((bposx, bposy))
-            ctx.arc(bposx, bposy, 5.5, 0, 2*math.pi)
+            bposx, bposy = self.base.world_to_buffer_pos(world_pos, offset)
+
+            ctx.set_source_rgba(0, 0, 0, 1 - opacity)
+            ctx.set_line_width(1)
+            ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
+            ctx.stroke_preserve()
+            # ctx.fill()
+
+            ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
+
+            if self.cursor_buffer_pos and ctx.in_fill(*self.cursor_buffer_pos):
+                cursor_over = world_pos
+                ctx.set_source_rgb(*self.select_colour)
+            elif self.point.value == self.choices[world_pos]:
+                ctx.set_source_rgb(*self.select_colour)
+            else:
+                ctx.set_source_rgba(*(self.point_colour + (opacity,)))
+
             ctx.fill()
+
+        self.cursor_over_point = cursor_over
+
 
     def _point_selected(self, selected_point):
         """ Update the overlay when a point has been selected """
