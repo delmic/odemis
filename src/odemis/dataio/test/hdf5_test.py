@@ -115,6 +115,8 @@ class TestHDF5IO(unittest.TestCase):
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
         thumbnail[blue[::-1]] = [0, 0, 255]
+        thumbnail.metadata[model.MD_POS] = (0.1, -2)
+        thumbnail.metadata[model.MD_PIXEL_SIZE] = (13e-6, 13e-6)
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
@@ -296,6 +298,9 @@ class TestHDF5IO(unittest.TestCase):
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
         thumbnail[blue[::-1]] = [0, 0, 255]
+        thumbnail.metadata[model.MD_POS] = (0.1, -2)
+        thumbnail.metadata[model.MD_PIXEL_SIZE] = (13e-6, 13e-6)
+
 
         # export
         hdf5.export(FILENAME, ldata, thumbnail)
@@ -320,6 +325,7 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im.shape, tshape)
         self.assertEqual(im[0, 0].tolist(), [255, 0, 0])
         self.assertEqual(im[blue[::-1]].tolist(), [0, 0, 255])
+        self.assertAlmostEqual(im.metadata[model.MD_POS], thumbnail.metadata[model.MD_POS])
 
     def testReadMDSpec(self):
         """

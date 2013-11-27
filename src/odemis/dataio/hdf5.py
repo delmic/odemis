@@ -807,11 +807,19 @@ def _thumbFromHDF5(filename):
         # an image? (== has the attribute CLASS: IMAGE)
         if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == "IMAGE":
             try:
-                nd = _read_image_dataset(ds)
-                thumbs.append(model.DataArray(nd))
+                da = model.DataArray(_read_image_dataset(ds))
             except Exception:
                 logging.info("Skipping image '%s' which couldn't be read.", name)
+                continue
 
+            if name == "Image":
+                try:
+                    da.metadata = _read_image_info(grp)
+                except Exception:
+                    logging.debug("Failed to parse metadata of acquisition '%s'", name)
+                    continue
+
+            thumbs.append(da)
 
     return thumbs
 
