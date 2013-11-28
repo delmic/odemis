@@ -51,7 +51,7 @@ class Overlay(object):
         self.label = unicode(label)
 
     def write_label(self, ctx, size, vpos, label, flip=True,
-                    align=wx.ALIGN_LEFT):
+                    align=wx.ALIGN_LEFT, colour=(1.0, 1.0, 1.0)):
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
@@ -86,7 +86,7 @@ class Overlay(object):
         ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
 
-        ctx.set_source_rgb(1.0, 1.0, 1.0)
+        ctx.set_source_rgb(*colour)
         ctx.move_to(x, y)
         ctx.show_text(label)
 
@@ -1683,8 +1683,11 @@ class PolarOverlay(ViewOverlay):
         self.ticksize = 10
 
         # Value attributes
+        self.vx, self.vy = None, None
+
         self.phi = None
         self.phi_line_pos = None
+        self.theta = None
         self.theta_radius = None
 
         self.base.Bind(wx.EVT_SIZE, self.on_size)
@@ -1698,9 +1701,9 @@ class PolarOverlay(ViewOverlay):
         self.on_size()
 
     def on_mouse_motion(self, evt):
-        vx, vy = evt.GetPositionTuple()
+        self.vx, self.vy = evt.GetPositionTuple()
         # Angle in radians from the origin
-        dx, dy = vx - self.center_x, self.center_y - vy
+        dx, dy = self.vx - self.center_x, self.center_y - self.vy
         self.phi = math.atan2(dx, dy) % self.tau
         phi = self.phi - math.pi / 2
         # Pixel to which to draw a line from the origin
@@ -1708,8 +1711,8 @@ class PolarOverlay(ViewOverlay):
         y = self.center_y + self.radius * math.sin(phi)
 
         self.phi_line_pos = (x, y)
-
-        self.theta_radius = math.sqrt(dx * dx + dy * dy)
+        self.theta_radius = min(math.sqrt(dx * dx + dy * dy), self.inner_radius)
+        self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
 
         self.base.Repaint()
 
@@ -1740,6 +1743,8 @@ class PolarOverlay(ViewOverlay):
             ly = self.center_y + (self.radius - self.ticksize) * math.sin(phi)
 
             self.ticks.append((sx, sy, lx, ly, phi))
+
+        self.base.Repaint()
 
     def text(self, ctx, string, pos, phi):
         ctx.save()
@@ -1772,7 +1777,7 @@ class PolarOverlay(ViewOverlay):
     def Draw(self, dc):
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        if self.phi_line_pos:
+        if self.phi is not None:
             # Set formatting
             ctx.set_line_width(2)
             ctx.set_dash([3,])
@@ -1784,15 +1789,41 @@ class PolarOverlay(ViewOverlay):
             # Draw Arc
             ctx.arc(self.center_x, self.center_y, self.theta_radius, 0, self.tau)
             ctx.stroke()
-
             ctx.set_dash([])
+
 
         # Draw Frame
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
         ctx.set_source_rgb(0.2, 0.2, 0.2)
         ctx.rectangle(0, 0, self.base.ClientSize.x, self.base.ClientSize.y)
         ctx.arc(self.center_x, self.center_y, self.inner_radius, 0, self.tau)
+        mouse_inside = self.phi is None or not ctx.in_fill(self.vx, self.vy)
         ctx.fill()
+
+        if self.phi is not None:
+            phi_str = u"Phi %0.1f°" % math.degrees(self.phi)
+            self.write_label(ctx,
+                             self.base.ClientSize,
+                             (10, self.base.ClientSize.y - 10),
+                             phi_str,
+                             colour=self.colour)
+            theta_str = u"Theta %0.1f°" % math.degrees(self.theta)
+            self.write_label(ctx,
+                             self.base.ClientSize,
+                             (self.base.ClientSize.x - 10,
+                              self.base.ClientSize.y - 10),
+                             theta_str,
+                             align=wx.ALIGN_RIGHT,
+                             colour=self.colour)
+
+            if mouse_inside:
+                intensity = u"Dummy %0.1f°" % math.degrees(self.theta / (self.phi or 0.0001))
+                self.write_label(ctx,
+                                 self.base.ClientSize,
+                                 (self.vx + 2, self.vy - 2),
+                                 intensity,
+                                 flip=True)
+            ctx.stroke()
 
         # Draw Azimuth circle
         ctx.set_line_width(2)
