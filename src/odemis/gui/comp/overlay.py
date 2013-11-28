@@ -1550,7 +1550,8 @@ class AngleOverlay(ViewOverlay):
         pass
 
 
-MAX_DOT_SIZE = 10.5
+MAX_DOT_SIZE = 15.5
+MIN_DOT_SIZE = 5.5
 
 class PointsOverlay(WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one
@@ -1565,7 +1566,8 @@ class PointsOverlay(WorldOverlay):
 
         self.point_colour = conversion.hex_to_frgb(
                                         gui.FOREGROUND_COLOUR_HIGHLIGHT)
-        self.select_colour = conversion.hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT)
+        self.select_colour = conversion.hex_to_frgba(
+                                        gui.FOREGROUND_COLOUR_EDIT, 0.5)
 
         # The float radius of the dots to draw
         self.dot_size = None
@@ -1584,7 +1586,7 @@ class PointsOverlay(WorldOverlay):
 
         I.e. when the zoom level of the canvas changes.
         """
-        self.dot_size = min(5.5 * (5e-9 / mpp), MAX_DOT_SIZE)
+        self.dot_size = min(MIN_DOT_SIZE * (10e-9 / mpp), MAX_DOT_SIZE)
 
     def on_mouse_up(self, evt):
         """ Set the seleceted point if the mouse cursor is hovering over one """
@@ -1627,27 +1629,27 @@ class PointsOverlay(WorldOverlay):
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
         offset = [v // 2 for v in self.base._bmp_buffer_size]
         cursor_over = None
-        opacity = max(0.5, 1.0 - (self.dot_size / MAX_DOT_SIZE))
 
         for world_pos in self.choices.keys():
             bposx, bposy = self.base.world_to_buffer_pos(world_pos, offset)
-
-            ctx.set_source_rgba(0, 0, 0, 1 - opacity)
-            ctx.set_line_width(1)
-            ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
-            ctx.stroke_preserve()
-            # ctx.fill()
 
             ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
 
             if self.cursor_buffer_pos and ctx.in_fill(*self.cursor_buffer_pos):
                 cursor_over = world_pos
-                ctx.set_source_rgb(*self.select_colour)
+                ctx.set_source_rgba(*self.select_colour)
             elif self.point.value == self.choices[world_pos]:
-                ctx.set_source_rgb(*self.select_colour)
+                ctx.set_source_rgba(*self.select_colour)
             else:
-                ctx.set_source_rgba(*(self.point_colour + (opacity,)))
+                ctx.set_source_rgba(1, 1, 1, 0.1)
 
+            ctx.fill()
+
+            ctx.set_line_width(1)
+            ctx.arc(bposx, bposy, 1.5, 0, 2*math.pi)
+            ctx.set_source_rgba(*(self.point_colour + (0.5,)))
+            ctx.stroke_preserve()
+            ctx.set_source_rgb(*self.point_colour)
             ctx.fill()
 
         self.cursor_over_point = cursor_over
