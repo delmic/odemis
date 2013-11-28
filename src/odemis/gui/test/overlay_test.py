@@ -74,6 +74,15 @@ class OverlayTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
     # @unittest.skip("simple")
+    def test_ploar_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        psol = overlay.PolarOverlay(cnvs)
+        cnvs.ViewOverlays.append(psol)
+        test.gui_loop()
+
+    @unittest.skip("simple")
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
@@ -103,7 +112,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_point_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -115,7 +124,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.WorldOverlays.append(psol)
         test.gui_loop()
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_view_select_overlay(self):
         # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -129,7 +138,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.active_overlay = vsol
         cnvs.current_mode = model.TOOL_ROI
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_roa_select_overlay(self):
         # Create and add a miccanvas
         # TODO: Sparc canvas because it's now the only one which supports
@@ -161,7 +170,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.fill = overlay.FILL_POINT
         test.gui_loop()
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -178,7 +187,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)

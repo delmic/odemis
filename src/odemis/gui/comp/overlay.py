@@ -1664,3 +1664,106 @@ class PointsOverlay(WorldOverlay):
     def _point_selected(self, selected_point):
         """ Update the overlay when a point has been selected """
         self.base.Repaint()
+
+
+class PolarOverlay(ViewOverlay):
+    def __init__(self, base):
+        super(PolarOverlay, self).__init__(base)
+
+        self.center_x = None
+        self.center_y = None
+        self.radius = None
+        self.inner_radius = None
+        self.tau = 2*math.pi
+        self.num_ticks = 6
+        self.ticks = []
+
+        self.padding = 20
+        self.ticksize = 10
+
+        self.base.Bind(wx.EVT_SIZE, self.on_size)
+        self.on_size()
+
+    def on_size(self, evt=None):
+        self.center_x = self.base.ClientSize.x / 2
+        self.center_y = self.base.ClientSize.y / 2
+        self.radius = max(self.center_x, self.center_y) - self.padding
+        self.inner_radius = self.radius - (self.ticksize / 1.5)
+        self.ticks = []
+
+        # Top middle
+        for i in range(self.num_ticks):
+            phi = (self.tau / self.num_ticks * i) - (math.pi / 2)
+            sx = self.center_x + self.radius * math.cos(phi)
+            sy = self.center_y + self.radius * math.sin(phi)
+            lx = self.center_x + (self.radius - self.ticksize) * math.cos(phi)
+            ly = self.center_y + (self.radius - self.ticksize) * math.sin(phi)
+            self.ticks.append((sx, sy, lx, ly, phi))
+
+        # # Top right
+        # sx = self.center_x
+        # sy = self.padding
+        # lx = self.center_x
+        # ly = self.padding + self.ticksize
+        # self.ticks.append((sx, sy, lx, ly))
+
+    def text(self, ctx, string, pos, phi):
+        ctx.save()
+
+        # build up an appropriate font
+        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
+        ctx.select_font_face(
+                font.GetFaceName(),
+                cairo.FONT_SLANT_NORMAL,
+                cairo.FONT_WEIGHT_NORMAL
+        )
+        ctx.set_font_size(font.GetPointSize())
+
+        _, _, fheight, _, _ = ctx.font_extents()
+        tw = ctx.text_extents(string)[2]
+        nx = -tw/2.0
+        ny = -fheight/3.0
+
+        if phi == math.pi:
+            phi -= math.pi
+            ny = fheight/1.0
+
+        ctx.translate(pos[0], pos[1])
+        ctx.rotate(phi)
+        ctx.translate(nx, ny)
+        ctx.move_to(0, 0)
+        ctx.show_text(string)
+        ctx.restore()
+
+    def Draw(self, dc):
+        ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+        # Draw Frame
+        ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+        ctx.set_source_rgb(0.2, 0.2, 0.2)
+        ctx.rectangle(0, 0, self.base.ClientSize.x, self.base.ClientSize.y)
+        ctx.arc(self.center_x, self.center_y, self.inner_radius, 0, self.tau)
+        ctx.fill()
+
+        # Draw Azimuth circle
+        ctx.set_line_width(2)
+        ctx.set_source_rgb(0.5, 0.5, 0.5)
+        ctx.arc(self.center_x, self.center_y, self.radius, 0, self.tau)
+        ctx.stroke()
+
+        # Draw ticks
+        ctx.set_line_width(1)
+        for sx, sy, lx, ly, _ in self.ticks:
+            ctx.move_to(sx, sy)
+            ctx.line_to(lx, ly)
+        ctx.stroke()
+
+        # Draw labels
+        ctx.set_source_rgb(0.8, 0.8, 0.8)
+        for sx, sy, lx, ly, phi in self.ticks:
+            # ctx.move_to(self.center_x, self.center_y)
+            # ctx.rotate(phi)
+            # ctx.move_to(lx, ly)
+
+            deg = str(int(round(180 * phi / math.pi) + 90)) + u"°"
+            self.text(ctx, deg, (sx, sy), phi + (math.pi / 2))
