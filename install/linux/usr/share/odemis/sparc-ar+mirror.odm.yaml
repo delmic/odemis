@@ -62,7 +62,10 @@ SPARC-AMOLF: {
 ARCam: {
     class: pvcam.PVCam,
     role: ccd,
-    init: {device: "rspipixis"} # use 0 if this symlink is no created
+    init: {
+           device: "rspipixis", # use 0 if this symlink is no created
+           transpose: [1, -2], # mirrored on Y axis
+           }
 }
 
 Spec10: {

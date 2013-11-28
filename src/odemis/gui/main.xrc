@@ -1203,8 +1203,8 @@
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_py">
-                          <label>+Y</label>
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1221,8 +1221,8 @@
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_my">
-                          <label>-Y</label>
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1277,7 +1277,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_py">
-                          <label>▵</label>
+                          <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1302,7 +1302,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_my">
-                          <label>▿</label>
+                          <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1327,7 +1327,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_px">
-                          <label>◃</label>
+                          <label>←</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1350,7 +1350,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_mx">
-                          <label>▹</label>
+                          <label>→</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1419,8 +1419,8 @@
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pry">
-                          <label>+Pitch</label>
+                        <object class="wxStaticText" name="lbl_mry">
+                          <label>-Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1437,8 +1437,8 @@
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mry">
-                          <label>-Pitch</label>
+                        <object class="wxStaticText" name="lbl_pry">
+                          <label>+Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1493,7 +1493,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_pry">
-                          <label>▵</label>
+                          <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1518,7 +1518,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_mry">
-                          <label>▿</label>
+                          <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1543,7 +1543,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_mrz">
-                          <label>↻</label>
+                          <label>←</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
@@ -1566,7 +1566,7 @@
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_prz">
-                          <label>↺</label>
+                          <label>→</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
                           <hover>img/btn_64x48_h.png</hover>
