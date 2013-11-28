@@ -1407,8 +1407,8 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_py">
-                          <label>+Y</label>
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1425,8 +1425,8 @@ def __init_resources():
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_my">
-                          <label>-Y</label>
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1481,7 +1481,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_py">
-                          <label>▵</label>
+                          <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1506,7 +1506,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_my">
-                          <label>▿</label>
+                          <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1531,7 +1531,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_px">
-                          <label>◃</label>
+                          <label>←</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1554,7 +1554,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_mx">
-                          <label>▹</label>
+                          <label>→</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1623,8 +1623,8 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pry">
-                          <label>+Pitch</label>
+                        <object class="wxStaticText" name="lbl_mry">
+                          <label>-Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1641,8 +1641,8 @@ def __init_resources():
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mry">
-                          <label>-Pitch</label>
+                        <object class="wxStaticText" name="lbl_pry">
+                          <label>+Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1697,7 +1697,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_pry">
-                          <label>▵</label>
+                          <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1722,7 +1722,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_mry">
-                          <label>▿</label>
+                          <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1747,7 +1747,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_mrz">
-                          <label>↻</label>
+                          <label>←</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>
@@ -1770,7 +1770,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="mirror_align_btn_prz">
-                          <label>↺</label>
+                          <label>→</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
                           <hover>img_btn_64x48_h_png</hover>

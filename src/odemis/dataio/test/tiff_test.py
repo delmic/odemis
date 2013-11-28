@@ -54,10 +54,10 @@ class TestTiffIO(unittest.TestCase):
         # create a simple greyscale image
         size = (256, 512)
         dtype = numpy.uint16
-        data = model.DataArray(numpy.zeros(size[-1:-3:-1], dtype))
+        data = model.DataArray(numpy.zeros(size[::-1], dtype))
         white = (12, 52) # non symmetric position
         # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
-        data[white[-1:-3:-1]] = 124
+        data[white[::-1]] = 124
         
         # export
         tiff.export(FILENAME, data)
@@ -79,8 +79,8 @@ class TestTiffIO(unittest.TestCase):
         ldata = []
         num = 2
         for i in range(num):
-            a = model.DataArray(numpy.zeros(size[-1:-3:-1], dtype))
-            a[white[-1:-3:-1]] = 124
+            a = model.DataArray(numpy.zeros(size[::-1], dtype))
+            a[white[::-1]] = 124
             ldata.append(a)
 
         # export
@@ -108,7 +108,7 @@ class TestTiffIO(unittest.TestCase):
         ldata = []
         num = 2
         for i in range(num):
-            ldata.append(model.DataArray(numpy.zeros(size[-1:-3:-1], dtype)))
+            ldata.append(model.DataArray(numpy.zeros(size[::-1], dtype)))
 
         # thumbnail : small RGB completely red
         tshape = (size[1]//8, size[0]//8, 3)
@@ -116,7 +116,7 @@ class TestTiffIO(unittest.TestCase):
         thumbnail = model.DataArray(numpy.zeros(tshape, tdtype))
         thumbnail[:, :, 0] += 255 # red
         blue = (12, 22) # non symmetric position
-        thumbnail[blue[-1:-3:-1]] = [0,0,255]
+        thumbnail[blue[::-1]] = [0, 0, 255]
         
         # export
         tiff.export(FILENAME, ldata, thumbnail)

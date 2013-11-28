@@ -1085,8 +1085,8 @@ def _addImageElement(root, das, ifd, rois):
             exp = da.metadata[model.MD_EXP_TIME]
             plane.attrib["ExposureTime"] = "%.12f" % exp
         elif model.MD_DWELL_TIME in da.metadata:
-            # typical for scanning techniques => more or less correct
-            exp = da.metadata[model.MD_DWELL_TIME] * numpy.prod(da.shape)
+            # save it as is (it's the time each pixel receives "energy")
+            exp = da.metadata[model.MD_DWELL_TIME]
             plane.attrib["ExposureTime"] = "%.12f" % exp
 
         # Note that Position has no official unit, which prevents Tiling to be
