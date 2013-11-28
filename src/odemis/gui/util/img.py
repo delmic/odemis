@@ -26,10 +26,9 @@ from __future__ import division
 
 import logging
 import math
-from matplotlib import mlab, tri
+from matplotlib import tri
 import numpy
 from odemis import model
-from odemis import dataio
 import scipy.misc
 import wx
 
@@ -438,9 +437,8 @@ def AngleResolved2Polar(data, output_size, hole=True):
     # Crop the input image to half circle
     cropped_image = CropHalfCircle(image, pixel_size, mirror_y)
 
-    # Round to the nearest even number
-    # FIXME: result.shape is output_size + 1. Need to either acept odd number,
-    # and maybe also make it working with even numbers?
+    # TODO: Need to be able to generate acept even number sizes too
+    # Round to the nearest odd number
     h_output_size = int(output_size / 2)
     if output_size % 2 == 0:
         logging.warn("Even number as output size. It will be rounded to %d.",
