@@ -37,6 +37,7 @@ losslessly and with metadata attached.
 """
 
 # This list of constants are used as key for the metadata
+# TODO: merge exposure time with dwell time, and call them "integration time"?
 MD_EXP_TIME = "Exposure time" # s
 MD_ACQ_DATE = "Acquisition date" # s since epoch
 # distance between two points on the sample that are seen at the centre of two
