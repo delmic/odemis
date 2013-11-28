@@ -42,9 +42,66 @@ test.goto_manual()
 def do_stuff(sequence):
     logging.debug("Doing stuff...")
 
+class Object(object):
+    pass
+
+class FakeMicroscopeModel(object):
+    """
+    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
+    """
+    def __init__(self):
+        fview = model.MicroscopeView("fakeview")
+        self.focussedView = model.VigilantAttribute(fview)
+
+        self.main = Object() #pylint: disable=E0602
+        self.main.light = None
+        self.main.ebeam = None
+        self.main.debug = model.VigilantAttribute(fview)
+        self.focussedView = model.VigilantAttribute(fview)
+
+        self.light = None
+        self.light_filter = None
+        self.ccd = None
+        self.sed = None
+        self.ebeam = None
+        self.tool = None
+        self.subscribe = None
+
+        self.mpp = omodel.FloatContinuous(10e-6, range=(10e-12, 1e-3))
+
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
+
+    # @unittest.skip("simple")
+    def test_points_select_overlay(self):
+        # Create stuff
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        mmodel = FakeMicroscopeModel()
+        view = mmodel.focussedView.value
+        view.mpp.value = 5e-10
+        cnvs.setView(view, mmodel)
+
+        phys_points = [
+            (-100,  100), ( -50,  100), (0,  100), (50,  100), (100,  100),
+            (-100,   50), ( -50,   50), (0,   50), (50,   50), (100,   50),
+            (-100,    0), ( -50,    0), (0,    0), (50,    0), (100,    0),
+            (-100,  -50), ( -50,  -50), (0, - 50), (50,  -50), (100,  -50),
+            (-100, -100), ( -50, -100), (0, -100), (50, -100), (100, -100),
+        ]
+
+        point = omodel.VAEnumerated(
+                    phys_points[0],
+                    choices=frozenset(phys_points))
+
+        psol = overlay.PointsOverlay(cnvs)
+        psol.set_points(point)
+        cnvs.WorldOverlays.append(psol)
+        cnvs.current_mode = model.TOOL_POINT
+        psol.enable(True)
+
+        test.gui_loop()
 
     # @unittest.skip("simple")
     def test_point_select_overlay(self):
