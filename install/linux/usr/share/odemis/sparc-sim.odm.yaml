@@ -53,7 +53,7 @@ SimSPARC: {
 "AR Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 2.0, # ratio
+    init: {mag: 0.5, # ratio
            pole_pos: [695.5, 624], # (px, px), position of the pole (aka the hole in the mirror)
           }, 
     affects: ["ARSimCam"]

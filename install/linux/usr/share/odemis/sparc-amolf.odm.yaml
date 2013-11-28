@@ -1,5 +1,6 @@
 # Configuration for the SPARC system at AMOLF. 
 # The main difference with the typical SPARC is that camera are Princeton-Instruments.
+
 SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
