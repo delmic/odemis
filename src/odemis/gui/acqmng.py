@@ -8,15 +8,15 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -88,28 +88,28 @@ def estimateTime(streams):
 
 def computeThumbnail(streamTree, acqTask):
     """
-    compute the thumbnail of a given (finished) acquisition according to a 
+    compute the thumbnail of a given (finished) acquisition according to a
     streamTree
     streamTree (StreamTree): the tree of rendering
-    acqTask (Future): a Future specifically returned by startAcquisition(), 
+    acqTask (Future): a Future specifically returned by startAcquisition(),
       representing an acquisition task
     returns model.DataArray: the thumbnail with metadata
     """
     raw_data = acqTask.result() # get all the raw data from the acquisition
-    
-    # FIXME: need to use the raw images of the acqTask as the source in the 
-    # streams of the streamTree 
-    
+
+    # FIXME: need to use the raw images of the acqTask as the source in the
+    # streams of the streamTree
+
     # FIXME: this call now doesn't work. We need a hack to call the canvas
     # method from outside the canvas, or use a canvas to render everything
-#   thumbnail = self._streamTree.getImage()
+    # thumbnail = self._streamTree.getImage()
 
     # poor man's implementation: take the first image of the streams, hoping
     # it actually has a renderer (.image)
     streams = sorted(streamTree.getStreams(), key=_weight_stream,
                                reverse=True)
     iim = streams[0].image.value
-    
+
     # convert the RGB image into a DataArray
     thumbnail = img.wxImage2NDImage(iim.image, keep_alpha=False)
     # add some basic info to the image
@@ -120,14 +120,14 @@ def computeThumbnail(streamTree, acqTask):
 
 def _mergeStreams(streams):
     """
-    Modifies a list of streams by merging possible streams into 
+    Modifies a list of streams by merging possible streams into
     MultipleDetectorStreams
     streams (list of streams): the original list of streams
-    return (list of streams): the same list or a shorter one  
+    return (list of streams): the same list or a shorter one
     """
-    # TODO: move the logic to all the MDStreams? Each class would be able to 
+    # TODO: move the logic to all the MDStreams? Each class would be able to
     # say whether it finds some potential streams to merge?
-    
+
     merged = list(streams)
     # For now, this applies only to the SPARC streams
     # SEM CL + Spectrum => SEMSpectrumMD
@@ -139,7 +139,7 @@ def _mergeStreams(streams):
         if len(semcls) > 1:
             logging.warning("More than one SEM CL stream, not sure how to use them")
         semcl = semcls[0]
-        
+
         for s in specs:
             mds = SEMSpectrumMDStream("%s - %s" % (semcl.name.value, s.name.value),
                                       semcl, s)
@@ -147,7 +147,7 @@ def _mergeStreams(streams):
             if semcl in merged:
                 merged.remove(semcl)
             merged.append(mds)
-        
+
         for s in ars:
             mds = SEMARMDStream("%s - %s" % (semcl.name.value, s.name.value),
                                 semcl, s)
@@ -207,7 +207,7 @@ def _weight_stream(stream):
 
 class AcquisitionTask(object):
 
-    # TODO: needs a better handling of the stream dependencies. Also, features 
+    # TODO: needs a better handling of the stream dependencies. Also, features
     # like drift-compensation might need a special handling.
     def __init__(self, streams, future):
         self._streams = streams
@@ -321,7 +321,7 @@ class AcquisitionTask(object):
             # let the thread know it's done
             self._condition.notify_all()
 
-        
+
 
 # TODO: presets shouldn't work on SettingEntries (GUI-only objects), but on
 # Stream (and HwComponents).
@@ -329,7 +329,7 @@ def apply_preset(preset):
     """
     Apply the presets. It tries to ensure that they are set in the right order
      if the hardware needs it.
-    preset (dict SettingEntries -> value): new value for each SettingEntry that 
+    preset (dict SettingEntries -> value): new value for each SettingEntry that
             should be modified.
     """
     # TODO: Once presets only affect the streams, we don't have dependency order
@@ -371,7 +371,7 @@ def _get_entry(entries, comp, name):
             return e
     else:
         return None
-    
+
 
 # Quality setting presets
 def preset_hq(entries):
@@ -381,7 +381,7 @@ def preset_hq(entries):
     returns (dict SettingEntries -> value): new value for each SettingEntry that should be modified
     """
     ret = {}
-    
+
     for entry in entries:
         if not entry.va or entry.va.readonly:
             # not a real setting, just info
@@ -408,7 +408,7 @@ def preset_hq(entries):
         elif entry.name == "scale": # for scanners only
             # => smallest = 1,1
             value = tuple(1 for v in entry.va.value)
-            
+
             # TODO: ensure it still fits
 
         elif entry.name == "binning":

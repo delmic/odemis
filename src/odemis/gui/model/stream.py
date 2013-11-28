@@ -1631,8 +1631,8 @@ class StaticSpectrumStream(StaticStream):
         Return the wavelength for each pixel of a (complete) spectrum
         returns (list of numbers or None): one wavelength per spectrum pixel.
           Values are in meters, unless the spectrum cannot be determined, in
-          which case integers representing pixels index is returned. 
-          If no data is available, None is returned.  
+          which case integers representing pixels index is returned.
+          If no data is available, None is returned.
         """
         # TODO return unit too? (i.e., m or px)
         if not self.raw:
@@ -2364,9 +2364,14 @@ class StreamTree(object):
     @property
     def spectrum_streams(self):
         """ Return a flat list of spectrum streams """
-        return self._get_streams(SPECTRUM_STREAMS)
+        return self.get_streams(SPECTRUM_STREAMS)
 
-    def _get_streams(self, stream_types):
+    @property
+    def angle_resolve_streams(self):
+        """ Return a flat list of spectrum streams """
+        return self.get_streams(AR_STREAMS)
+
+    def get_streams(self, stream_types):
         """ Return a flat list of streams of `stream_type` within the StreamTree
         """
         streams = []
