@@ -65,6 +65,10 @@ def gui_loop(slp=None):
 def sleep(ms=None):
     wx.MilliSleep(ms or SLEEP_TIME)
 
+def set_sleep_time(slp_tm):
+    global SLEEP_TIME
+    SLEEP_TIME = slp_tm
+
 # Default wxPython App that can be used as a basis for testing
 class GuiTestApp(wx.App):
 

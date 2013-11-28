@@ -37,15 +37,16 @@ import wx
 
 test.goto_manual()
 # logging.getLogger().setLevel(logging.DEBUG)
+# test.set_sleep_time(1000)
 
 def do_stuff(sequence):
-    logging.error("New sequence %s", sequence)
+    logging.debug("Doing stuff...")
 
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-
+    # @unittest.skip("simple")
     def test_point_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -95,12 +96,12 @@ class OverlayTestCase(test.GuiTestCase):
             self.assertAlmostEqual(o, b,
                        msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
 
-        rsol.set_repetition((3, 2))
-        rsol.grid_fill()
+        rsol.repetition = (3, 2)
+        rsol.fill = overlay.FILL_GRID
         test.gui_loop()
 
-        rsol.set_repetition((4, 5))
-        rsol.point_fill()
+        rsol.repetition  = (4, 5)
+        rsol.fill = overlay.FILL_POINT
         test.gui_loop()
 
     # @unittest.skip("simple")
