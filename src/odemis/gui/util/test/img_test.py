@@ -63,6 +63,34 @@ class TestPolarConversion(unittest.TestCase):
                spxs[1] * binning[1] / mag)
         data[0].metadata[model.MD_PIXEL_SIZE] = pxs
         self.data = data 
+
+        white_data_512 = hdf5.read_data("white_data_512.h5")
+        white_mag_512 = 0.4917
+        white_spxs_512 = (13e-6, 13e-6)
+        white_binning_512 = (2, 2)
+        white_data_512[0].metadata[model.MD_BINNING] = white_binning_512
+        white_data_512[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = white_spxs_512
+        white_data_512[0].metadata[model.MD_LENS_MAG] = white_mag_512
+        white_data_512[0].metadata[model.MD_AR_POLE] = (283, 259)
+        white_mag_512 = white_data_512[0].metadata[model.MD_LENS_MAG]
+        white_pxs_512 = (white_spxs_512[0] * white_binning_512[0] / white_mag_512,
+               white_spxs_512[1] * white_binning_512[1] / white_mag_512)
+        white_data_512[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_512
+        self.white_data_512 = white_data_512
+
+        white_data_1024 = hdf5.read_data("white_data_1024.h5")
+        white_mag_1024 = 0.4917
+        white_spxs_1024 = (13e-6, 13e-6)
+        white_binning_1024 = (2, 2)
+        white_data_1024[0].metadata[model.MD_BINNING] = white_binning_1024
+        white_data_1024[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = white_spxs_1024
+        white_data_1024[0].metadata[model.MD_LENS_MAG] = white_mag_1024
+        white_data_1024[0].metadata[model.MD_AR_POLE] = (283, 259)
+        white_mag_1024 = white_data_1024[0].metadata[model.MD_LENS_MAG]
+        white_pxs_1024 = (white_spxs_1024[0] * white_binning_1024[0] / white_mag_1024,
+               white_spxs_1024[1] * white_binning_1024[1] / white_mag_1024)
+        white_data_1024[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_1024
+        self.white_data_1024 = white_data_1024
     
     def test_precomputed(self):
         data = self.data
@@ -168,6 +196,35 @@ class TestPolarConversion(unittest.TestCase):
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
+    def test_512x512(self):
+        """
+        Test for 512x512 white image input
+        """
+        white_data_512 = self.white_data_512
+        C, T, Z, Y, X = white_data_512[0].shape
+        white_data_512[0].shape = Y, X
+        result = img.AngleResolved2Polar(white_data_512[0], 201)
+
+        desired_output = hdf5.read_data("desired_white_512.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
+
+    def test_1024x1024(self):
+        """
+        Test for 1024x1024 white image input
+        """
+        white_data_1024 = self.white_data_1024
+        C, T, Z, Y, X = white_data_1024[0].shape
+        white_data_1024[0].shape = Y, X
+        result = img.AngleResolved2Polar(white_data_1024[0], 201)
+
+        desired_output = hdf5.read_data("desired_white_1024.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
 class TestFindOptimalBC(unittest.TestCase):
     def test_simple(self):

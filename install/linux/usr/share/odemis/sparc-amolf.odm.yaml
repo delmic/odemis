@@ -1,5 +1,6 @@
 # Configuration for the SPARC system at AMOLF. 
 # The main difference with the typical SPARC is that camera are Princeton-Instruments.
+
 SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
@@ -51,7 +52,7 @@ SPARC-AMOLF: {
 "AR Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 2.0, # ratio
+    init: {mag: 0.4917, # ratio
            pole_pos: [566, 506], # (px, px), position of the pole (aka the hole in the mirror) without binning
           }, 
     affects: ["ARCam"]

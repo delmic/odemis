@@ -101,7 +101,10 @@ Spectra: {
     role: ccd,
     init: {device: 0,
            transpose: [-2, 1], # rotated 90° clockwise
-          }
+          },
+    properties: {
+        targetTemperature: -75, # °C
+    }
 }
 
 "OLStage": {

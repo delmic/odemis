@@ -101,13 +101,18 @@ Type the folowing commands::
     wget http://download.eclipse.org/technology/epp/downloads/release/kepler/SR1/eclipse-standard-kepler-SR1-linux-gtk.tar.gz
     tar xf eclipse-standard-kepler-SR1-linux-gtk.tar.gz
     ~/usr/eclipse/eclipse
- 
+
 Go to *Help/Marketplace...*. Search for PyDev, and install it.
 Optionally, you can also install *Eclipse Color Theme* and *hunspell4eclipse*.
- 
-In the Eclipse preference window, go to PyDev/PyLint and as location of the 
+
+In the Eclipse preference window, go to *PyDev/PyLint* and as location of the 
 pylint executable, indicate your lint.py, which is approximately at this place:
 ``/usr/local/lib/python2.7/dist-packages/pylint-1.0.0-py2.7.egg/pylint/lint.py``
+
+Optionally, if you want to edit the microscope configuration file (``*.odm.yaml``), 
+add a file association with the Python editor. For this, in the preference 
+window, go to *General/Editors/File Association* and add a file type "``*.yaml``". As
+default editor, add the Python editor.
 
 Edit Odemis with Eclipse
 """""""""""""""""""""""""

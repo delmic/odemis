@@ -1405,7 +1405,6 @@ class StaticARStream(StaticStream):
                 # TODO: cache the histogram per image
                 self._updateHistogram(polar)
                 irange = self._getDisplayIRange()
-                logging.debug("irange = %s", irange)
 
                 # Convert to RGB
                 rgbim = img.DataArray2RGB(polar, irange)
@@ -1982,6 +1981,7 @@ class SEMARMDStream(MultipleDetectorStream):
         self._acq_sem_complete = threading.Event()
         self._acq_ar_complete = threading.Event()
         self._acq_thread = None # thread
+        self._acqPixelStart = model.Event() # for synchronizing the camera
 
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
@@ -2066,6 +2066,12 @@ class SEMARMDStream(MultipleDetectorStream):
                 self._acq_ar_complete.clear()
                 self._semd_df.subscribe(self._onSEMImage)
                 self._ar_df.subscribe(self._onARImage)
+                # TODO: We need to use event because without it, we could just
+                # subscribe/unsubscribe for each image, but the overhead is very
+                # high (especially if the unsubscribes is received after the
+                # next image started being acquired). df.get() would have less
+                # overhead, but it's impossible to cancel.
+
                 if not self._acq_ar_complete.wait(ccd_time * 1.5 + 1):
                     raise TimeoutError("Acquisition of AR for pixel %s timed out" % (i,))
                 ar_data = self._ar_stream.raw[-1]

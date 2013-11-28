@@ -102,6 +102,8 @@ Clara: { # Also works with iXon Ultra
     }, 
     properties: {
         exposureTime: 0.3, # s
+        # For the Clara, the default (-45 °C), should be correct
+        targetTemperature: -50, # °C , for iXon Ultra (as the default is too low)
     }
 }
 
@@ -174,4 +176,3 @@ PIGCS: {
         #dist_to_steps: {"a": 100000, "b": 100000}, # step/m
     },
 }
-
