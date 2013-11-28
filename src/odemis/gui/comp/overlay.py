@@ -1670,6 +1670,7 @@ class PolarOverlay(ViewOverlay):
     def __init__(self, base):
         super(PolarOverlay, self).__init__(base)
 
+        # Rendering attributes
         self.center_x = None
         self.center_y = None
         self.radius = None
@@ -1681,10 +1682,47 @@ class PolarOverlay(ViewOverlay):
         self.padding = 20
         self.ticksize = 10
 
+        # Value attributes
+        self.phi = None
+        self.phi_line_pos = None
+        self.theta_radius = None
+
         self.base.Bind(wx.EVT_SIZE, self.on_size)
+        self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_down)
+        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
+
+        self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOR)
+
+        # Calculate the characteristic values for the first time
         self.on_size()
 
+    def on_mouse_motion(self, evt):
+        vx, vy = evt.GetPositionTuple()
+        # Angle in radians from the origin
+        dx, dy = vx - self.center_x, self.center_y - vy
+        self.phi = math.atan2(dx, dy) % self.tau
+        phi = self.phi - math.pi / 2
+        # Pixel to which to draw a line from the origin
+        x = self.center_x + self.radius * math.cos(phi)
+        y = self.center_y + self.radius * math.sin(phi)
+
+        self.phi_line_pos = (x, y)
+
+        self.theta_radius = math.sqrt(dx * dx + dy * dy)
+
+        self.base.Repaint()
+
+        evt.Skip()
+
+    def on_mouse_down(self, evt):
+        evt.Skip()
+
+    def on_mouse_up(self, evt):
+        evt.Skip()
+
     def on_size(self, evt=None):
+        # Calculate the characteristic values
         self.center_x = self.base.ClientSize.x / 2
         self.center_y = self.base.ClientSize.y / 2
         self.radius = max(self.center_x, self.center_y) - self.padding
@@ -1693,19 +1731,15 @@ class PolarOverlay(ViewOverlay):
 
         # Top middle
         for i in range(self.num_ticks):
+            # phi needs to be rotated 90 degrees counter clockwise, otherwise
+            # 0 degrees will be at the right side of the circle
             phi = (self.tau / self.num_ticks * i) - (math.pi / 2)
             sx = self.center_x + self.radius * math.cos(phi)
             sy = self.center_y + self.radius * math.sin(phi)
             lx = self.center_x + (self.radius - self.ticksize) * math.cos(phi)
             ly = self.center_y + (self.radius - self.ticksize) * math.sin(phi)
-            self.ticks.append((sx, sy, lx, ly, phi))
 
-        # # Top right
-        # sx = self.center_x
-        # sy = self.padding
-        # lx = self.center_x
-        # ly = self.padding + self.ticksize
-        # self.ticks.append((sx, sy, lx, ly))
+            self.ticks.append((sx, sy, lx, ly, phi))
 
     def text(self, ctx, string, pos, phi):
         ctx.save()
@@ -1737,6 +1771,21 @@ class PolarOverlay(ViewOverlay):
 
     def Draw(self, dc):
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
+
+        if self.phi_line_pos:
+            # Set formatting
+            ctx.set_line_width(2)
+            ctx.set_dash([3,])
+            ctx.set_source_rgb(*self.colour)
+            # Draw line
+            ctx.move_to(self.center_x, self.center_y)
+            ctx.line_to(*self.phi_line_pos)
+            ctx.stroke()
+            # Draw Arc
+            ctx.arc(self.center_x, self.center_y, self.theta_radius, 0, self.tau)
+            ctx.stroke()
+
+            ctx.set_dash([])
 
         # Draw Frame
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
