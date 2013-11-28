@@ -1574,6 +1574,8 @@ class PointsOverlay(WorldOverlay):
         # None or the point over which the mouse is hovering
         self.cursor_over_point = None
 
+        self.enabled = False
+
         self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
 
@@ -1586,19 +1588,19 @@ class PointsOverlay(WorldOverlay):
 
     def on_mouse_up(self, evt):
         """ Set the seleceted point if the mouse cursor is hovering over one """
-        if self.cursor_over_point:
+        if self.cursor_over_point and self.enabled:
             self.point.value = self.choices[self.cursor_over_point]
             logging.debug("Point %s selected", self.point.value)
         evt.Skip()
 
     def on_mouse_motion(self, evt):
         """ Highlight dots when the mouse hovers over them """
-        if not self.base.dragging and self.choices:
+        if not self.base.dragging and self.choices and self.enabled:
             vx, vy = evt.GetPositionTuple()
             self.cursor_buffer_pos = self.base.view_to_buffer_pos((vx, vy))
             self.base.Repaint()
 
-        if self.cursor_over_point:
+        if self.cursor_over_point and self.enabled:
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
         else:
             self.base.SetCursor(wx.STANDARD_CURSOR)
@@ -1619,7 +1621,7 @@ class PointsOverlay(WorldOverlay):
         self.base.microscope_view.mpp.subscribe(self._on_mpp, init=True)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
-        if not self.choices:
+        if not self.choices or not self.enabled:
             return
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
@@ -1650,7 +1652,13 @@ class PointsOverlay(WorldOverlay):
 
         self.cursor_over_point = cursor_over
 
+    def enable(self, enable=True):
+        """ Enable of disable the overlay """
+        if enable and not self.point:
+            raise ValueError("No points set for PointsOverlay!")
+        self.enabled = enable
+        self.base.Repaint()
 
     def _point_selected(self, selected_point):
         """ Update the overlay when a point has been selected """
-        self.base.UpdateDrawing()
+        self.base.Repaint()

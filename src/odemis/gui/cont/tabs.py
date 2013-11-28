@@ -857,11 +857,6 @@ class AnalysisTab(Tab):
                                         cls=streammod.StaticARStream,
                                         add_to_all_views=True)
 
-            # Hackish hookup for the points overlay
-            canvas = self.main_frame.vp_inspection_br.canvas
-            canvas.points_overlay.set_points(stream_panel.stream.point)
-
-
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.fileinfo.value = fi
@@ -885,6 +880,22 @@ class AnalysisTab(Tab):
                 strm.selected_pixel.subscribe(
                                         self._on_spec_pixel,
                                         init=True)
+                self.tb.enable_button(tools.TOOL_POINT, True)
+                break
+            # If an angle resolve stream is found...
+            elif isinstance(strm, streammod.AR_STREAMS):
+                iimg = strm.image.value
+                # ... set the PointOverlay values for each viewport
+                for viewport in self._view_controller.viewports:
+                    if hasattr(viewport.canvas, "points_overlay"):
+                        ol = viewport.canvas.points_overlay
+                        ol.set_points(strm.point)
+                strm.point.subscribe(self._on_ar_point, init=True)
+
+            #     # Hackish hookup for the points overlay
+            # canvas = self.main_frame.vp_inspection_br.canvas
+            # canvas.points_overlay.set_points(stream_panel.stream.point)
+
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break
         else:
@@ -926,6 +937,10 @@ class AnalysisTab(Tab):
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
+
+    def _on_ar_point(self, selected_pixel):
+        """ Event handler for when a angle resolve point is selected """
+        pass
 
     def _split_channels(self, data):
         """
