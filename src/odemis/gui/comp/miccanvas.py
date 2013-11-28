@@ -130,6 +130,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.focus_overlay = None
         self.roi_overlay = None
         self.point_overlay = None
+        self.points_overlay = None
 
         # play/pause icon
         self.icon_overlay = comp_overlay.StreamIconOverlay(self)
@@ -140,11 +141,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
         self.WorldOverlays.append(self.update_overlay)
-
-        # This overlay was added here because of the way the design currently
-        # is (nov. 2013).
-        self.points_overlay = comp_overlay.PointsOverlay(self)
-        self.WorldOverlays.append(self.points_overlay)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -178,6 +174,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if guimodel.TOOL_POINT in tab_data.tool.choices:
                 self.point_overlay = comp_overlay.PointSelectOverlay(self)
                 self.WorldOverlays.append(self.point_overlay)
+                self.points_overlay = comp_overlay.PointsOverlay(self)
+                self.WorldOverlays.append(self.points_overlay)
 
         self.microscope_view.mpp.subscribe(self._onMPP)
 
@@ -223,6 +221,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: fix with the rest of the todos
         if self.point_overlay:
             self.point_overlay.enable(False)
+            self.points_overlay.enable(False)
 
         # TODO: one mode <-> one overlay (type)
         # TODO: create the overlay on the fly, the first time it's requested
@@ -230,10 +229,24 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.current_mode = MODE_SPARC_SELECT
             self.active_overlay = self.roi_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool == guimodel.TOOL_POINT and hasattr(self, 'point_overlay'):
-            self.current_mode = MODE_SPARC_PICK
-            self.active_overlay = self.point_overlay
-            self.point_overlay.enable(True)
+        elif tool == guimodel.TOOL_POINT:
+            # Enable the Spectrum point select overlay when a spectrum stream
+            # is attached to the view
+            if (self.point_overlay and
+                    self.microscope_view.stream_tree.spectrum_streams):
+                self.current_mode = MODE_SPARC_PICK
+                self.active_overlay = self.point_overlay
+                self.point_overlay.enable(True)
+            # Enable the Angular Resolve point select overlay when there's a
+            # AR stream known anywhere in the data model (and the view has
+            # streams).
+            elif (self.points_overlay and
+                  len(self.microscope_view.stream_tree) and
+                  any([isinstance(s, stream.AR_STREAMS) for s
+                       in self._tab_data_model.streams.value])):
+                self.current_mode = MODE_SPARC_PICK
+                self.active_overlay = self.points_overlay
+                self.points_overlay.enable(True)
         elif tool == guimodel.TOOL_ROI:
             self.current_mode = MODE_SECOM_UPDATE
             self.active_overlay = self.update_overlay
