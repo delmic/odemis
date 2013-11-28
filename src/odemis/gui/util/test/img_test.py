@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 import numpy
-import os
 import time
 import unittest
 import wx
@@ -31,7 +30,6 @@ from odemis.dataio import hdf5
 from odemis.gui.util import img
 from odemis.gui.util.img import DataArray2wxImage, wxImage2NDImage, \
     FindOptimalBC, DataArray2RGB
-from scipy import misc
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -51,12 +49,23 @@ class TestPolarConversion(unittest.TestCase):
     """
     Test AngleResolved2Polar
     """
-    def test_precomputed(self):
+    def setUp(self):
         data = hdf5.read_data("ar-example-input.h5")
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
+        mag = 0.4917
+        spxs = (13e-6, 13e-6)
+        binning = (4, 4)
+        data[0].metadata[model.MD_BINNING] = binning
+        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
+        data[0].metadata[model.MD_LENS_MAG] = mag
         data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
+        mag = data[0].metadata[model.MD_LENS_MAG]
+        pxs = (spxs[0] * binning[0] / mag,
+               spxs[1] * binning[1] / mag)
+        data[0].metadata[model.MD_PIXEL_SIZE] = pxs
+        self.data = data 
+    
+    def test_precomputed(self):
+        data = self.data
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 201)
@@ -71,12 +80,7 @@ class TestPolarConversion(unittest.TestCase):
         """
         Tests for input of DataArray with uint16 ndarray.
         """
-        data = hdf5.read_data("ar-example-input.h5")
-        data[0] = data[0].astype(numpy.int16)
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
+        data = self.data
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 201)
@@ -91,14 +95,10 @@ class TestPolarConversion(unittest.TestCase):
         """
         Tests for input of DataArray with int8 ndarray.
         """
-        data = hdf5.read_data("ar-example-input.h5")
+        data = self.data
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 201)
@@ -113,12 +113,8 @@ class TestPolarConversion(unittest.TestCase):
         """
         Tests for input of DataArray with float ndarray.
         """
-        data = hdf5.read_data("ar-example-input.h5")
+        data = self.data
         data[0] = data[0].astype(numpy.float)
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 201)
@@ -130,16 +126,8 @@ class TestPolarConversion(unittest.TestCase):
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
 
-class TestPolarConversionOutput(unittest.TestCase):
-    """
-    Test AngleResolved2Polar and CropMirror combination for various output sizes
-    """
     def test_100x100(self):
-        data = hdf5.read_data("ar-example-input.h5")
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
+        data = self.data
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
@@ -152,14 +140,10 @@ class TestPolarConversionOutput(unittest.TestCase):
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
 
     def test_1000x1000(self):
-        data = hdf5.read_data("ar-example-input.h5")
+        data = self.data
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
@@ -172,12 +156,7 @@ class TestPolarConversionOutput(unittest.TestCase):
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1)
 
     def test_2000x2000(self):
-        data = hdf5.read_data("ar-example-input.h5")
-        data[0] = data[0].astype(numpy.float)
-        data[0].metadata[model.MD_BINNING] = (4, 4)
-        data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = (13e-6, 13e-6)
-        data[0].metadata[model.MD_LENS_MAG] = 0.4917
-        data[0].metadata[model.MD_AR_POLE] = (141, 255 - 139.449038462)
+        data = self.data
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 

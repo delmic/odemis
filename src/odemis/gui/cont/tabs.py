@@ -104,7 +104,7 @@ class Tab(object):
             self.main_frame.menu_item_22view.vamethod = None # drop VA subscr.
 
     def _connect_crosshair_event(self):
-        """ Connect the cross hair menu event to the foccussed view and its
+        """ Connect the cross hair menu event to the focused view and its
         `show_crosshair` VA to the menu item
         """
         # only if there's a focussed view that we can track

@@ -3,7 +3,7 @@
 SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY"],
+    emitters: ["EBeam ExtXY", "AR Lens"],
     detectors: ["SED ExtXY", "ARCam", "Spec10"],
     actuators: ["MirrorMover"],
 }
@@ -28,7 +28,7 @@ SPARC-AMOLF: {
         channels: [0, 1],
         limits: [[3, -3], [-4, 4]], # V
         settle_time: 10.e-6, # s
-        hfw_nomag: 0.2, # m
+        hfw_nomag: 0.1067, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
@@ -46,6 +46,15 @@ SPARC-AMOLF: {
         channel: 0,
         limits: [-3, 3] # V
     },
+}
+
+"AR Lens": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 2.0, # ratio
+           pole_pos: [566, 506], # (px, px), position of the pole (aka the hole in the mirror) without binning
+          }, 
+    affects: ["ARCam"]
 }
 
 # PIXIS via USB

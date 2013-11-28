@@ -155,27 +155,39 @@ def _read_image_dataset(dataset):
     return image
 
 
-def _add_image_info(group, dataset, image):
+def _add_image_info(group, dataset, image, rgb=False):
     """
     Adds the basic metadata information about an image (scale and offset)
     group (HDF Group): the group that contains the dataset
     dataset (HDF Dataset): the image dataset
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
+    rgb (bool): If True, will consider the dimension of length 3 as channel
     """
-
     # Note: DimensionScale support is only part of h5py since v2.1
+    
     # Dimensions
-    # The order of the dimension is reversed (the slowest changing is last)
-    l = len(dataset.dims)
-    dataset.dims[l - 1].label = "X"
-    dataset.dims[l - 2].label = "Y"
-    # support more dimensions if available:
-    if l >= 3:
-        dataset.dims[l - 3].label = "Z"
-    if l >= 4:
-        dataset.dims[l - 4].label = "T"
-    if l >= 5:
-        dataset.dims[l - 5].label = "C"
+    if rgb:
+        # expect 3 dimensions, with one of len==3 (=> C)
+        left_dim = ["X", "Y"]
+        for i, d in enumerate(dataset.dims):
+            if image.shape[i] == 3:
+                dname = "C"
+            else:
+                dname = left_dim.pop()
+            d.label = dname
+        l = 2 # trick to force to only put info for X and Y
+    else:
+        # The order of the dimension is reversed (the slowest changing is last)
+        l = len(dataset.dims)
+        dataset.dims[l - 1].label = "X"
+        dataset.dims[l - 2].label = "Y"
+        # support more dimensions if available:
+        if l >= 3:
+            dataset.dims[l - 3].label = "Z"
+        if l >= 4:
+            dataset.dims[l - 4].label = "T"
+        if l >= 5:
+            dataset.dims[l - 5].label = "C"
 
     # Offset
     if model.MD_POS in image.metadata:
@@ -237,20 +249,14 @@ def _add_image_info(group, dataset, image):
         dataset.dims[l - 2].attach_scale(group["DimensionScaleY"])
 
     # Unknown data, but SVI needs them to take the scales into consideration
-    if l >= 4:
+    if l >= 3:
         group["ZOffset"] = 0.0
         _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
         group["DimensionScaleZ"] = 1e-3 # m
         group["DimensionScaleZ"].attrs["UNIT"] = "m"
-        group["DimensionScaleT"] = 1.0 # s
-        group["DimensionScaleT"].attrs["UNIT"] = "s"
-        # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
         _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-        dataset.dims.create_scale(group["DimensionScaleT"], "T")
-        _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
         dataset.dims[l - 3].attach_scale(group["DimensionScaleZ"])
-        dataset.dims[l - 4].attach_scale(group["DimensionScaleT"])
 
         # Put here to please Huygens
         # Seems to be the coverslip position, ie, the lower and upper glass of
@@ -259,6 +265,14 @@ def _add_image_info(group, dataset, image):
         _h5svi_set_state(group["PrimaryGlassMediumInterfacePosition"], ST_DEFAULT)
         group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
         _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
+
+    if l >= 4:
+        group["DimensionScaleT"] = 1.0 # s
+        group["DimensionScaleT"].attrs["UNIT"] = "s"
+        # No clear what's the relation between this name and the label
+        dataset.dims.create_scale(group["DimensionScaleT"], "T")
+        _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
+        dataset.dims[l - 4].attach_scale(group["DimensionScaleT"])
 
     # Wavelength (for spectrograms)
     if l >= 5:
@@ -793,11 +807,19 @@ def _thumbFromHDF5(filename):
         # an image? (== has the attribute CLASS: IMAGE)
         if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == "IMAGE":
             try:
-                nd = _read_image_dataset(ds)
-                thumbs.append(model.DataArray(nd))
+                da = model.DataArray(_read_image_dataset(ds))
             except Exception:
                 logging.info("Skipping image '%s' which couldn't be read.", name)
+                continue
 
+            if name == "Image":
+                try:
+                    da.metadata = _read_image_info(grp)
+                except Exception:
+                    logging.debug("Failed to parse metadata of acquisition '%s'", name)
+                    continue
+
+            thumbs.append(da)
 
     return thumbs
 
@@ -900,7 +922,7 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
         # Save the image as-is in a special group "Preview"
         prevg = f.create_group("Preview")
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
-        _add_image_info(prevg, ids, thumbnail)
+        _add_image_info(prevg, ids, thumbnail, rgb=(len(thumbnail.shape) == 3))
 
     # for each set of images from the same instrument, add them
     groups = _findImageGroups(ldata)

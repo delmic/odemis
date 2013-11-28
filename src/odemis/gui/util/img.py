@@ -419,7 +419,8 @@ def AngleResolved2Polar(data, output_size, hole=True):
     Converts an angle resolved image to polar representation
     data (model.DataArray): The image that was projected on the CCD after being
       relefted on the parabolic mirror. The flat line of the D shape is
-      expected to be horizontal, at the top. 
+      expected to be horizontal, at the top. It needs PIXEL_SIZE and AR_POLE
+      metadata. Pixel size is the sensor pixel size * binning / magnification.
     output_size (int): The size of the output DataArray (assumed to be square)
     hole (boolean): Crop the pole if True
     returns (model.DataArray): converted image in polar view
@@ -428,20 +429,14 @@ def AngleResolved2Polar(data, output_size, hole=True):
     image = data
 
     # Get the metadata
-    # Assume pixel is square
     try:
-        pixel_size = data.metadata[model.MD_SENSOR_PIXEL_SIZE]
-        binning = data.metadata[model.MD_BINNING]
+        pixel_size = data.metadata[model.MD_PIXEL_SIZE]
         mirror_x, mirror_y = data.metadata[model.MD_AR_POLE]
-        magnification = data.metadata[model.MD_LENS_MAG]
     except KeyError:
-        raise ValueError("Metadata required: MD_SENSOR_PIXEL_SIZE, MD_AR_POLE, MD_BINNING and MD_LENS_MAG.")
-
-    eff_pixel_size = (pixel_size[0] * binning[0] / magnification,
-                      pixel_size[1] * binning[1] / magnification)
+        raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
     # Crop the input image to half circle
-    cropped_image = CropHalfCircle(image, eff_pixel_size, mirror_y)
+    cropped_image = CropHalfCircle(image, pixel_size, mirror_y)
 
     # Round to the nearest even number
     # FIXME: result.shape is output_size + 1. Need to either acept odd number,
@@ -462,8 +457,8 @@ def AngleResolved2Polar(data, output_size, hole=True):
     xpix = mirror_x - jj
 
     for i in xrange(image_x):
-        ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / eff_pixel_size[1]
-        theta, phi, omega = FindAngle(xpix, ypix, eff_pixel_size)
+        ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / pixel_size[1]
+        theta, phi, omega = FindAngle(xpix, ypix, pixel_size)
 
         theta_data[i, :] = theta
         phi_data[i, :] = phi
@@ -495,15 +490,15 @@ def AngleResolved2Polar(data, output_size, hole=True):
 def FindAngle(xpix, ypix, pixel_size):
     """
     For given pixels, finds the angle of the corresponding ray 
-    xpix (numpy.array): x coordinate of the pixels
-    ypix (numpy.array): y coordinate of the pixels
+    xpix (numpy.array): x coordinates of the pixels
+    ypix (float): y coordinate of the pixel
     pixel_size (2 floats): CCD pixelsize (X/Y)
     returns (3 numpy.arrays): theta, phi (the corresponding spherical coordinates for each pixel in ccd) 
                               and omega (solid angle)
     """
     y = xpix * pixel_size[0]
     z = ypix * pixel_size[1]
-    r2 = numpy.power(y, 2) + numpy.power(z, 2)
+    r2 = y ** 2 + z ** 2
     xfocus = (1 / (4 * AR_PARABOLA_F)) * r2 - AR_PARABOLA_F
     xfocus2plusr2 = xfocus ** 2 + r2
     sqrtxfocus2plusr2 = numpy.sqrt(xfocus2plusr2)
