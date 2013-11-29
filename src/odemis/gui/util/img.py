@@ -435,7 +435,7 @@ def AngleResolved2Polar(data, output_size, hole=True):
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
     # Crop the input image to half circle
-    cropped_image = CropHalfCircle(image, pixel_size, mirror_y)
+    cropped_image = CropHalfCircle(image, pixel_size, (mirror_x, mirror_y), hole=hole)
 
     # TODO: Need to be able to generate acept even number sizes too
     # Round to the nearest odd number
@@ -514,20 +514,22 @@ def FindAngle(xpix, ypix, pixel_size):
     return theta, phi, omega
 
 
-def CropHalfCircle(data, eff_pixel_size, mirror_y, hole=True):
+def CropHalfCircle(data, eff_pixel_size, pole_pos, hole=True):
     """
-    Crops the image to half circle shape based on AR_FOCUS_DISTANCE and AR_XMAX
-    data (model.DataArray): The DataArray with the image, will be modified
+    Crops the image to half circle shape based on AR_FOCUS_DISTANCE, AR_XMAX,
+      AR_PARABOLA_F, and AR_HOLE_DIAMETER
+    data (model.DataArray): The DataArray with the image
     eff_pixel_size (float): pixel_size * binning / magnification # m
-    mirror_y (float): y coordinate of MD_AR_POLE
-    hole (boolean): Crop the pole if True
+    pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
+    hole (boolean): Crop the area around the pole if True
     returns (model.DataArray): Cropped image
     """
     X, Y = data.shape
-    center_x, y = data.metadata[model.MD_AR_POLE]
+    pole_x, pole_y = pole_pos
 
-    # Calculate the y coordinate of the cutoff of half circle
-    center_y = mirror_y - ((2 * AR_PARABOLA_F - AR_FOCUS_DISTANCE) / eff_pixel_size[1])
+    # Calculate the coordinates of the cutoff of half circle
+    center_x = pole_x
+    center_y = pole_y - ((2 * AR_PARABOLA_F - AR_FOCUS_DISTANCE) / eff_pixel_size[1])
 
     # Compute the radius
     r = (2 * math.sqrt(AR_XMAX * AR_PARABOLA_F)) / eff_pixel_size[1]
@@ -539,9 +541,9 @@ def CropHalfCircle(data, eff_pixel_size, mirror_y, hole=True):
     image = numpy.where(circle_mask, data, 0)
     
     # Crop the pole making hole of AR_HOLE_DIAMETER
-    if hole == True:
+    if hole:
         r = (AR_HOLE_DIAMETER / 2) / eff_pixel_size[1]
-        y, x = numpy.ogrid[-mirror_y:X - mirror_y, -center_x:Y - center_x]
+        y, x = numpy.ogrid[-pole_y:X - pole_y, -pole_x:Y - pole_x]
         circle_mask_hole = x * x + y * y <= r * r
         image = numpy.where(circle_mask_hole, 0, image)
 
