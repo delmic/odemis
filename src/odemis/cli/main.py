@@ -592,7 +592,8 @@ def main(args):
     """
 
     # arguments handling
-    parser = argparse.ArgumentParser(description=odemis.__fullname__)
+    parser = argparse.ArgumentParser(prog="odemis-cli",
+                                     description=odemis.__fullname__)
 
     parser.add_argument('--version', dest="version", action='store_true',
                         help="show program's version number and exit")
@@ -646,6 +647,7 @@ def main(args):
     # Set up logging before everything else
     if options.loglev < 0:
         parser.error("log-level must be positive.")
+    # TODO: allow to put logging level so low that nothing is ever output
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
 

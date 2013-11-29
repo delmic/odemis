@@ -1,0 +1,47 @@
+# bash completion for odemis-cli
+
+have odemis-cli &&
+_odemis_cli()
+{
+    local cur prev
+    COMPREPLY=()
+    _get_comp_words_by_ref cur prev
+    # TODO: handle 2nd argument for --set-attr (=type:va)
+    case $prev in
+        --list-prop|-L|--move|-m|--position|-p|--set-attr|-s|--acquire|-a|--live)
+            # TODO: For some commands, only actuators or detectors are valid.
+            odemis-cli --check || return 0
+            local components=$(odemis-cli --list --machine|cut -f1)
+            local IFS=$'\n'
+            SCOMPREPLY=($(compgen -W "$components" -- "$cur"))
+            if [ -n "$SCOMPREPLY" ]; then
+                COMPREPLY=($(printf "%q\n" "${SCOMPREPLY[@]}")) # escape spaces
+            fi
+            return 0
+            ;;
+        --output|-o)
+            COMPREPLY=($(compgen -o filenames -o plusdirs -f -- "$cur"))
+            return 0
+            ;;
+    esac
+
+    case $cur in
+        *)
+            COMPREPLY=( $(compgen -W '--help --log-level --machine \
+                --kill --check --scan --list --list-prop --set-attr \
+                --move --position --stop --acquire --output --live' -- "$cur") )
+            return 0
+            ;;
+    esac
+
+    return 0
+} &&
+complete -F _odemis_cli odemis-cli -o filenames
+
+# Local variables:
+# mode: shell-script
+# sh-basic-offset: 4
+# sh-indent-comment: t
+# indent-tabs-mode: nil
+# End:
+# ex: ts=4 sw=4 et filetype=sh
