@@ -20,10 +20,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-import numpy
 import unittest
 
-from numpy import genfromtxt
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.align import coordinates
