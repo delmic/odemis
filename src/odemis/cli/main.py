@@ -86,73 +86,84 @@ def kill_backend():
         return 127
     return 0
 
-def print_component(comp, level):
+def print_component(comp, pretty=True, level=0):
     """
     Pretty print on one line a component
     comp (Component): the component to print
+    pretty (bool): if True, display with pretty-printing
     level (int > 0): hierarchy level (for indentation)
     """
-    if level == 0:
-        indent = ""
+    if pretty:
+        if level == 0:
+            indent = ""
+        else:
+            indent = "  "*level + u"↳ "
+        print u"%s%s\trole:%s" % (indent, comp.name, comp.role)
     else:
-        indent = "  "*level + "↳ "
-    print indent + comp.name + "\trole:" + comp.role
+        pstr = ""
+        try:
+            pname = comp.parent.name
+            if isinstance(pname, (str, unicode)):
+                pstr = u"\tparent:" + pname
+        except AttributeError:
+            pass
+        print u"%s\trole:%s%s" % (comp.name, comp.role, pstr)
     # TODO would be nice to display which class is the component
     # TODO:
     # * if emitter, display .shape
     # * if detector, display .shape
     # * if actuator, display .axes
 
-def print_component_tree(root, level=0):
+def print_component_tree(root, pretty=True, level=0):
     """
     Print all the components starting from the root.
     root (Component): the component at the root of the tree
+    pretty (bool): if True, display with pretty-printing
     level (int > 0): hierarchy level (for pretty printing)
     """
-    # first print the root component
-    print_component(root, level)
+    if pretty:
+        # first print the root component
+        print_component(root, pretty, level)
 
-    # display all the children
-    for comp in root.children:
-            print_component_tree(comp, level + 1)
+        children = set(root.children)
+        # For microscope, it doesn't have anything in children
+        if isinstance(root.detectors, collections.Set):
+            children = root.detectors | root.emitters | root.actuators
 
-def print_microscope_tree(mic):
+        # display all the children
+        for comp in children:
+            print_component_tree(comp, pretty, level + 1)
+    else:
+        for c in model.getComponents():
+            print_component(c, pretty)
+
+def list_components(pretty=True):
     """
-    Print all the components starting from the microscope.
-    root (Microscope): a microscope
+    pretty (bool): if True, display with pretty-printing
     """
-    # first print the microscope
-    print_component(mic, 0)
-    # Microscope is a special case
-    for comp in mic.detectors:
-        print_component_tree(comp, 1)
-    for comp in mic.emitters:
-        print_component_tree(comp, 1)
-    for comp in mic.actuators:
-        print_component_tree(comp, 1)
-    # no children
-
-def list_components():
     # We actually just browse as a tree the microscope
     try:
         microscope = model.getMicroscope()
     except:
         logging.error("Failed to contact the back-end")
         return 127
-    print_microscope_tree(microscope)
+    print_component_tree(microscope, pretty=pretty)
     return 0
 
-def print_roattribute(name, value):
-    print "\t" + name + " (RO Attribute)\t value: %s" % str(value)
+def print_roattribute(name, value, pretty):
+    if pretty:
+        print "\t%s (RO Attribute)\tvalue: %s" % (name, value)
+    else:
+        print "%s\ttype:roattr\tvalue:%s" % (name, value)
 
 non_roattributes_names = ("name", "role", "parent", "children", "affects",
                           "actuators", "detectors", "emitters")
-def print_roattributes(component):
+def print_roattributes(component, pretty):
     for name, value in model.getROAttributes(component).items():
         # some are handled specifically
         if name in non_roattributes_names:
             continue
-        print_roattribute(name, value)
+        print_roattribute(name, value, pretty)
 
 def print_data_flow(name, df):
     print "\t" + name + " (Data-flow)"
@@ -170,48 +181,69 @@ def print_events(component):
     for name, value in model.getEvents(component).items():
         print_event(name, value)
 
-def print_vattribute(name, va):
+def print_vattribute(name, va, pretty):
     if va.unit:
-        unit = " (unit: %s)" % va.unit
+        if pretty:
+            unit = " (unit: %s)" % va.unit
+        else:
+            unit = "\tunit:%s" % va.unit
     else:
         unit = ""
 
     if va.readonly:
-        readonly = "RO "
+        if pretty:
+            readonly = "RO "
+        else:
+            readonly = "ro"
     else:
         readonly = ""
 
     # we cannot discover if it continuous or enumerated, just try and see if it fails
     try:
         varange = va.range
-        str_range = " (range: %s → %s)" % (str(varange[0]), str(varange[1]))
+        if pretty:
+            str_range = u" (range: %s → %s)" % (str(varange[0]), str(varange[1]))
+        else:
+            str_range = u"\trange:%s" % unicode(varange)
     except (AttributeError, model.NotApplicableError):
         str_range = ""
 
     try:
         vachoices = va.choices # set or dict
-        if isinstance(va.choices, dict):
-            str_choices = " (choices: %s)" % ", ".join(
-                            ["%s: '%s'" % i for i in vachoices.items()])
+        if pretty:
+            if isinstance(va.choices, dict):
+                str_choices = " (choices: %s)" % ", ".join(
+                                ["%s: '%s'" % i for i in vachoices.items()])
+            else:
+                str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
         else:
-            str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
+            str_choices = u"\tchoices:%s" % unicode(vachoices)
     except (AttributeError, model.NotApplicableError):
         str_choices = ""
 
-    print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
-          (readonly, str(va.value), unit, str_range, str_choices))
+    if pretty:
+        print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
+              (readonly, str(va.value), unit, str_range, str_choices))
+    else:
+        print("%s\ttype:%sva\tvalue:%s%s%s%s" %
+              (name, readonly, str(va.value), unit, str_range, str_choices))
 
-def print_vattributes(component):
+def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
-        print_vattribute(name, value)
+        print_vattribute(name, value, pretty)
 
-def print_attributes(component):
-    print "Component '%s':" % component.name
-    print "\trole: %s" % component.role
-    print "\taffects: " + ", ".join(["'" + c.name + "'" for c in component.affects])
-    print_roattributes(component)
-    print_vattributes(component)
-    print_data_flows(component)
+def print_attributes(component, pretty):
+    if pretty:
+        print "Component '%s':" % component.name
+        print "\trole: %s" % component.role
+        print "\taffects: " + ", ".join(["'" + c.name + "'" for c in component.affects])
+    else:
+        print "name\tvalue:%s" % component.name
+        print "role\tvalue:%s" % component.role
+        print "affects\tvalue:" + "\t".join([c.name for c in component.affects])
+    print_roattributes(component, pretty)
+    print_vattributes(component, pretty)
+    print_data_flows(component) # TODO: pretty
     print_events(component)
 
 def get_component_from_set(comp_name, components):
@@ -257,10 +289,11 @@ def get_detector(comp_name):
     microscope = model.getMicroscope()
     return get_component_from_set(comp_name, microscope.detectors)
 
-def list_properties(comp_name):
+def list_properties(comp_name, pretty=True):
     """
-    print the data-flows and vattributes of a component
+    print the data-flows and VAs of a component
     comp_name (string): name of the component
+    pretty (bool): if True, display with pretty-printing
     """
     logging.debug("Looking for component %s", comp_name)
     try:
@@ -272,7 +305,7 @@ def list_properties(comp_name):
         logging.error("Failed to contact the back-end")
         return 127
 
-    print_attributes(component)
+    print_attributes(component, pretty)
     return 0
 
 
@@ -566,6 +599,8 @@ def main(args):
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
                         default=0, help="set verbosity level (0-2, default = 0)")
+    opt_grp.add_argument("--machine", dest="machine", action="store_true", default=False,
+                         help="display in a machine-friendly way (i.e., no pretty printing)")
     dm_grp = parser.add_argument_group('Microscope management')
     dm_grpe = dm_grp.add_mutually_exclusive_group()
     dm_grpe.add_argument("--kill", "-k", dest="kill", action="store_true", default=False,
@@ -666,9 +701,9 @@ def main(args):
         odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
 
         if options.list:
-            return list_components()
+            return list_components(pretty=not options.machine)
         elif options.listprop is not None:
-            return list_properties(options.listprop)
+            return list_properties(options.listprop, pretty=not options.machine)
         elif options.setattr is not None:
             for c, a, v in options.setattr:
                 ret = set_attr(c, a, v)
