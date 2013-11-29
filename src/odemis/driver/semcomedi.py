@@ -185,6 +185,7 @@ class SEMComedi(model.HwComponent):
 
         # TODO only look for 2 output channels and len(detectors) input channels
         self._min_ai_periods, self._min_ao_periods = self._get_min_periods()
+        self._max_ao_period_ns = self._get_max_ao_period_ns()
         # On the NI-6251, according to the doc:
         # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
         # AO is 2.86/2.0 MHz for one/two channels
@@ -345,40 +346,61 @@ class SEMComedi(model.HwComponent):
          of channel, and AO period for each number of channels (times are in
          seconds). 
         """
+        # we request a timed command with a very short period (1 ns) and see
+        # what period we actually get back.
+
         min_ai_periods = [0] # 0 channel == as fast as you like
         nchans = comedi.get_n_channels(self._device, self._ai_subdevice)
         for n in range(1, nchans + 1):
-            min_ai_periods.append(self._get_min_period(self._ai_subdevice, n))
+            try:
+                p = self._get_closest_period(self._ai_subdevice, n, 0) / 1e9
+            except IOError:
+                p = 0
+            min_ai_periods.append(p)
 
         min_ao_periods = [0]
         nchans = comedi.get_n_channels(self._device, self._ao_subdevice)
         for n in range(1, nchans + 1):
-            min_ao_periods.append(self._get_min_period(self._ao_subdevice, n))
+            try:
+                p = self._get_closest_period(self._ao_subdevice, n, 0) / 1e9
+            except IOError:
+                p = 0
+            min_ao_periods.append(p)
 
         return min_ai_periods, min_ao_periods
 
-    def _get_min_period(self, subdevice, nchannels):
+    def _get_max_ao_period_ns(self):
+        """
+        returns (int): maximum write period supported by the hardware in ns
+        """
+        # Try the maximum fitting on an uint32 (with 2 channels)
+        try:
+            return self._get_closest_period(self._ao_subdevice, 2, 2 ** 32 - 1)
+        except IOError:
+            return 2 ** 32 - 1 # Whatever (for test driver)
+
+    def _get_closest_period(self, subdevice, nchannels, period):
         """
         subdevice (int): subdevice ID
         nchannels (0< int): number of channels to be accessed simultaneously
-        returns (float): min scan period for the given subdevice with the given
-        amount of channels  
+        period (0<int): requested period in ns
+        returns (int): min scan period for the given subdevice with the given
+          amount of channels in ns
+        raises:
+            IOError: if no timed period possible on the subdevice
         """
-        # we create a timed command for the given parameters with a very short
-        # period (1 ns) and see what period we actually get back.
         cmd = comedi.cmd_struct()
         try:
-            comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, 1)
+            comedi.get_cmd_generic_timed(self._device, subdevice, cmd, nchannels, period)
         except comedi.ComediError:
             # happens with the comedi_test driver
             pass
 
         if cmd.scan_begin_src != comedi.TRIG_TIMER:
-            logging.warning("Failed to find minimum period for subdevice %d with %d channels",
+            logging.warning("Failed to find timed period for subdevice %d with %d channels",
                             subdevice, nchannels)
-            return 0
-        period = cmd.scan_begin_arg / 1e9
-        return period
+            raise IOError("Timed period not supported")
+        return cmd.scan_begin_arg
 
     def _get_max_buffer_size(self):
         """
@@ -709,8 +731,14 @@ class SEMComedi(model.HwComponent):
         period_ns = int(period * 1e9)  # in nanoseconds
 
         # If impossible to do a write so long, do multiple acquisitions
-        if period_ns > 2 ** 32 - 1:
-            dpr = 1 + (period_ns >> 32) # = ceil(period_ns / (2 ** 32 - 1))
+#        if period_ns > 2 ** 32 - 1:
+#            dpr = 1 + (period_ns >> 32) # = ceil(period_ns / (2 ** 32 - 1))
+#            period_ns = int(period_ns / dpr)
+#        else:
+#            dpr = 1
+
+        if period_ns > self._max_ao_period_ns:
+            dpr = int(math.ceil(period_ns / self._max_ao_period_ns))
             period_ns = int(period_ns / dpr)
         else:
             dpr = 1
@@ -983,6 +1011,7 @@ class SEMComedi(model.HwComponent):
         nwchans = data.shape[1]
         nrscans = nwscans * osr
         nrchans = len(rchannels)
+        period_ns = int(round(period * 1e9))  # in nanoseconds
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
 
@@ -992,7 +1021,9 @@ class SEMComedi(model.HwComponent):
             # methods will have enough effect to stop the acquisition
             if self._acquisition_must_stop.is_set():
                 raise CancelledError("Acquisition cancelled during preparation")
-
+            logging.debug("Not generating new write command for %d scans on "
+                          "channels %r with period = %d ns",
+                          nwscans, wchannels, period_ns)
             logging.debug("Generating a new read command for %d scans", nrscans)
 
             # flatten the array
