@@ -41,24 +41,18 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
     list_len = len(electron_coordinates)  # We assume that both lists have the same length
     x_array = numpy.zeros(shape=(2 * list_len, 4))
     x_array[0:list_len, 2].fill(1)
-    x_array[0:list_len, 0:2] = electron_array
+    x_array[0:list_len, 0:2] = optical_array
     x_array[list_len:2 * list_len, 3].fill(1)
-    x_array[list_len:2 * list_len, 0] = electron_array[:, 1]
-    x_array[list_len:2 * list_len, 1] = -electron_array[:, 0]
-    print x_array
+    x_array[list_len:2 * list_len, 0] = optical_array[:, 1]
+    x_array[list_len:2 * list_len, 1] = -optical_array[:, 0]
 
     # Make matrix U
     u_array = numpy.zeros(shape=(2 * list_len, 1))
-    u_array[0: list_len, 0] = optical_array[:, 0]
-    u_array[list_len: 2 * list_len, 0] = optical_array[:, 1]
-    print u_array
+    u_array[0: list_len, 0] = electron_array[:, 0]
+    u_array[list_len: 2 * list_len, 0] = electron_array[:, 1]
 
-    # Divide matrices
-    """
-    x_inv = numpy.invert(x_array.astype(int))
-    r_array = numpy.multiply(x_inv, u_array)
-    print r_array
-    """
+    # Make matrix R
+    r_array, resid, rank, s = numpy.linalg.lstsq(x_array, u_array)
 
     """
     translation_x = 
