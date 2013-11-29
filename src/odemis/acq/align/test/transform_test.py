@@ -23,6 +23,7 @@ import logging
 import numpy
 import unittest
 
+from numpy import genfromtxt
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.align import transform
@@ -37,8 +38,11 @@ class TestTransformationParams(unittest.TestCase):
         """
         Test CalculateTransform
         """
-        optical_coordinates = [(1.01, 1.01), (1.01, 2.01), (2.01, 1.01), (2.01, 2.01)]
-        electron_coordinates = [(1, 1), (1, 2), (2, 1), (2, 2)]
+        optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
+        electron_coordinates = [(0, 1), (0, 2), (1, 0), (1, 4)]
+
+        # optical_coordinates = genfromtxt('doc1.csv', delimiter=',')
+        # electron_coordinates = genfromtxt('doc2.csv', delimiter=',')
 
         transform.CalculateTransform(optical_coordinates, electron_coordinates)
         # translation, scaling, rotation = transform.CalculateTransform(optical_coordinates, electron_coordinates)
