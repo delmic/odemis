@@ -47,6 +47,24 @@ def index_closest(val, l):
     else:
         return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
+def almost_equal(a, b, atol=1e-18, rtol=1e-7):
+    """
+    Compares two floats within a margin (to handle rounding errors).
+    a (float)
+    b (float)
+    rtol (float): relative tolerance
+    returns (bool): True if a and b are almost equal
+    """
+    if a == b:
+        return True
+
+    tol = max(atol, max(abs(a), abs(b)) * rtol)
+    if abs(a - b) <= tol:
+        return True
+
+    return False
+
+
 def rect_intersect(ra, rb):
     """
     Computes the rectangle representing the intersection area of two rectangles

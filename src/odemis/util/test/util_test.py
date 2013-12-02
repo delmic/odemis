@@ -79,6 +79,22 @@ def relative_boxes(bb):
 
     return outside_boxes, touching_boxes, overlap_boxes
 
+class AlmostEqualTestCase(unittest.TestCase):
+
+    def test_simple(self):
+        in_exp = {(0., 0): True,
+                  (-5, -5.): True,
+                  (1., 1. - 1e-9): True,
+                  (1., 1. - 1e-3): False,
+                  (1., 1. + 1e-3): False,
+                  (-5e-8, -5e-8 + 1e-19): True,
+                  (5e18, 5e18 + 1): True,
+                  }
+        for i, eo in in_exp.items():
+            o = util.almost_equal(*i)
+            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+
 class CanvasTestCase(unittest.TestCase):
 
     def test_clipping(self):
