@@ -99,11 +99,26 @@ Clara: { # Also works with iXon Ultra
     init: {
         device: 0, # the only Andor camera connected so always 0
         transpose: [2, -1], # rotation by 90°
+        # Look-up table for recommended EMCCD Real Gain (for iXon Ultra)
+        # readout rate, gain, real gain (integer)
+        emgains: [[17.e+6, 1, 200],
+                  [17.e+6, 2, 150],
+                  [17.e+6, 3, 100],
+                  [10.e+6, 1, 200],
+                  [10.e+6, 2, 100],
+                  [10.e+6, 3, 100],
+                  [ 5.e+6, 1, 100],
+                  [ 5.e+6, 2,  50],
+                  [ 5.e+6, 3,  50],
+                  [ 1.e+6, 1,  50],
+                  [ 1.e+6, 2,  50],
+                  [ 1.e+6, 3,  50],
+                 ],
     }, 
     properties: {
         exposureTime: 0.3, # s
         # For the Clara, the default (-45 °C), should be correct
-        targetTemperature: -50, # °C , for iXon Ultra (as the default is too low)
+        targetTemperature: -70, # °C , for iXon Ultra (as the default is too low)
     }
 }
 

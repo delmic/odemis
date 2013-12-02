@@ -150,7 +150,7 @@ class AndorCapabilities(Structure):
     CameraTypes = {
         CAMERATYPE_CLARA: "Clara",
         CAMERATYPE_IVAC: "iVac",
-        CAMERATYPE_IXONULTRA: "iXon Utlra", # FIXME: currently not working
+        CAMERATYPE_IXONULTRA: "iXon Utlra",
         }
 
 class AndorV2DLL(CDLL):
@@ -362,11 +362,14 @@ class AndorCam2(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, _fake=False, **kwargs):
+    def __init__(self, name, role, device=None, emgains=None, _fake=False, **kwargs):
         """
         Initialises the device
         device (None or int): number of the device to open, as defined by Andor, cd scan()
-          if None, uses the system handle, which allows very limited access to some information
+          if None, uses the system handle, which allows very limited access to 
+          some information.
+        emgains (list of (0<float, 0<float, 1 <= int <=300)): Look-up table for
+         the EMCCD real gain. Readout rate, Gain, Real Gain.
         _fake (boolean): for internal use only (will make a fake device)
         Raise an exception if the device cannot be opened.
         """
@@ -479,6 +482,31 @@ class AndorCam2(model.DigitalCamera):
         self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
                                           setter=self.setGain)
 
+        # For EM CCD cameras only: tuple 2 floats -> int
+        self._lut_emgains = {} # (readout rate, gain) -> EMCCD gain
+        emgains = emgains or []
+        try:
+            for (rr, gain, emgain) in emgains:
+                # get exact values
+                exc_rr = util.find_closest(rr, ror_choices)
+                exc_gain = util.find_closest(gain, gain_choices)
+                if (not util.almost_equal(exc_rr, rr) or
+                    not util.almost_equal(exc_gain, gain)):
+                    logging.warning("Failed to find RR/gain couple (%s Hz / %s) "
+                                    "in the device properties (%s/%s)",
+                                    rr, gain, ror_choices, gain_choices)
+                    continue
+                if not 1 <= emgain <= 300 or not isinstance(emgain, (int)):
+                    raise ValueError("emgain must be 1 <= integer <= 300, but "
+                                     "got %s" % (emgain,))
+                if (exc_rr, exc_gain) in self._lut_emgains:
+                    raise ValueError("emgain defined multiple times RR=%s Hz, "
+                                     "gain=%s." % (exc_rr, exc_gain))
+                self._lut_emgains[(exc_rr, exc_gain)] = emgain
+        except (TypeError, AttributeError):
+            raise ValueError("Failed to parse emgains, which must be in the "
+                             "form [[rr, gain, emgain], ...]: '%s'" % (emgains,))
+
         current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
@@ -509,6 +537,10 @@ class AndorCam2(model.DigitalCamera):
 #        self.atcore.SetFilterMode(2) # 2 = on
 #        metadata['Filter'] = "Cosmic Ray filter"
 
+        # EM Gain set in "Real Gain" values
+        if self.hasFeature(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
+            self.atcore.SetEMGainMode(3) # 3 = Real Gain mode
+            logging.debug("Initial EMCCD range is %s", self.GetEMGainRange())
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
@@ -713,6 +745,15 @@ class AndorCam2(model.DigitalCamera):
         status = self.atcore.GetTemperature(byref(temp))
         return temp.value
 
+    def GetEMGainRange(self):
+        """
+        Can only be called on cameras which have the GETFUNCTION_EMCCDGAIN feature
+        returns (int, int): min, max EMCCD gain  
+        """
+        low, high = c_int(), c_int()
+        self.GetEMGainRange(byref(low), byref(high))
+        return low.value, high.value
+
     def GetAcquisitionTimings(self):
         """
         returns (3-tuple float): exposure, accumulate, kinetic time in seconds
@@ -807,6 +848,27 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.GetPreAmpGain(i, byref(gain))
             gains.append(gain.value)
         return gains
+
+    def _setBestEMGain(self, rr, gain):
+        """
+        Set the best EM gain for the current settings. If the camera doesn't
+        support it, it does nothing.
+        rr (float): current readout rate
+        gain (float): current gain
+        """
+        # Check whether the camera supports it
+        if self.hasFeature(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
+            # Lookup the right EM gain in the table
+            try:
+                emgain = self._lut_emgains[(rr, gain)]
+            except KeyError:
+                emgain = 50 # not too bad gain
+                logging.warning("No known EM real gain for RR = %s Hz, gain = "
+                                "%s, will use %d", rr, gain, emgain)
+
+            logging.debug("EMCCD range is %s", self.GetEMGainRange())
+            logging.debug("Setting EMCCD gain to %s", emgain)
+            self.atcore.SetEMCCDGain(emgain)
 
     # High level methods
     def select(self):
@@ -1160,10 +1222,14 @@ class AndorCam2(model.DigitalCamera):
 
         if prev_gain != self._gain:
             logging.debug("Updating gain to %f", self._gain)
-            # EMCCDGAIN, DDGTIMES, DDGIO, EMADVANCED => lots of gain settings
-            # None supported on the Clara?
+            # DDGTIMES, DDGIO => other gain settings, but neither Clara nor
+            # iXon Ultra seem to care
             self.SetPreAmpGain(self._gain)
             self._metadata[model.MD_GAIN] = self._gain
+
+        if prev_readout_rate != self._readout_rate or prev_gain != self._gain:
+            # Good EMCCD Gain is dependent on gain & readout rate
+            self._setBestEMGain(self._readout_rate, self._gain)
 
         new_image_settings = self._binning + self._image_rect
         if prev_image_settings != new_image_settings:
