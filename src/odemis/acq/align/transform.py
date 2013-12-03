@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import numpy
+import math
 
 def CalculateTransform(optical_coordinates, electron_coordinates):
     """
@@ -30,7 +31,7 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
     optical_coordinates (List of tuples): Coordinates of spots in optical image
     electron_coordinates (List of tuples): Coordinates of spots in electron image
     returns translation (Tuple of 2 floats), 
-            scaling (Float), 
+            scaling (Tuple of 2 floats), 
             rotation (Float): Transformation parameters
     """
     # Create numpy arrays out of the coordinate lists
@@ -51,13 +52,12 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
     u_array[0: list_len, 0] = electron_array[:, 0]
     u_array[list_len: 2 * list_len, 0] = electron_array[:, 1]
 
-    # Make matrix R
+    # Calculate matrix R, R = X\U
     r_array, resid, rank, s = numpy.linalg.lstsq(x_array, u_array)
 
-    """
-    translation_x = 
-    translation_y = 
-    scaling = 
-    rotation =
-    """
-    return
+    translation_x = r_array[2][0]
+    translation_y = r_array[3][0]
+    scaling_x, scaling_y = r_array[1][0], r_array[0][0]  # 1 / math.sqrt((r_array[1][0] ** 2) + (r_array[0][0] ** 2))
+    rotation = (180 / math.pi) * math.atan2(-r_array[1][0], r_array[0][0])
+
+    return (translation_x, translation_y), (scaling_x, scaling_y), rotation
