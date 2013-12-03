@@ -1524,7 +1524,7 @@ class PointSelectOverlay(WorldOverlay):
                     ctx.rectangle(*rect)
                     ctx.fill()
 
-            if self._selected_pixel.value:
+            if self._selected_pixel.value != (None, None):
                 rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
                 if rect:

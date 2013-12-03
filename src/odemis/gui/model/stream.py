@@ -28,6 +28,8 @@ Detector, Emitter and Dataflow associations.
 
 from __future__ import division
 
+import Pyro4
+import collections
 import logging
 import math
 import numpy
@@ -36,15 +38,16 @@ from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import limit_invocation
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL
+from odemis.util import TimeoutError
+import os
 import threading
 import time
+import urllib
 
 import odemis.gui.util.conversion as conversion
 import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
-import collections
-from odemis.util import TimeoutError
 
 
 # to identify a ROI which must still be defined by the user
@@ -1145,7 +1148,7 @@ class RepetitionStream(Stream):
                 rep[1] += 1
 
             # Each pixel x the exposure time (of the detector) + readout time +
-            # 40% overhead
+            # 20% overhead
             try:
                 ro_rate = self._detector.readoutRate.value
                 res = self._detector.resolution.value
@@ -1153,7 +1156,7 @@ class RepetitionStream(Stream):
             except Exception:
                 readout = 0.06
             exp = self._detector.exposureTime.value
-            duration = numpy.prod(rep) * (exp + readout) * 1.40
+            duration = numpy.prod(rep) * (exp + readout) * 1.20
             # Add the setup time
             duration += self.SETUP_OVERHEAD
 
@@ -1174,8 +1177,6 @@ class SpectrumStream(RepetitionStream):
         RepetitionStream.__init__(self, name, detector, dataflow, emitter)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
-        # TODO: Does this class also need to keep track of a selected pixel like
-        # its Static cousin?
 
     def getStatic(self):
         """
@@ -1373,9 +1374,9 @@ class StaticARStream(StaticStream):
                 # TODO: could use the size of the canvas that will display
                 # the image to save some computation time.
 
-                # same size as original image (on smallest axis) and at most
+                # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                size = min(min(data.shape[-2:]), 1124)
+                size = min(min(data.shape[-2:]) * 2, 1134)
                 polar = img.AngleResolved2Polar(data, size, hole=False)
                 self._polar[pos] = polar
             except Exception:
@@ -1487,23 +1488,14 @@ class StaticSpectrumStream(StaticStream):
         # TODO: min/max: tl and br points of the image in physical coordinates
         # TODO: also need the size of a point (and density?)
         #self.point1 = model.ResolutionVA(unit="m") # FIXME: float
-        # self.point2 = model.ResolutionVA(unit="m") # FIXME: float
-
-
-        # Avoid negative values
-        # FIXME: probably need to fix DataArray2RGB() for such cases
-        # cast to numpy.array to ensure it becomes a scalar (instead of a
-        # DataArray)
-        # minv = numpy.array(image).min()
-        # if minv < 0:  # signed?
-        #     self._depth += -minv
+        #self.point2 = model.ResolutionVA(unit="m") # FIXME: float
 
         self._irange = None
         self._updateIRange()
 
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
-        self.selected_pixel = model.TupleVA()
+        self.selected_pixel = model.TupleVA((None, None)) # int, int
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
@@ -1651,7 +1643,7 @@ class StaticSpectrumStream(StaticStream):
         """ Return the spectrum belonging to the selected pixel or None if no
         spectrum is selected.
         """
-        if self.selected_pixel.value:
+        if self.selected_pixel.value != (None, None):
             x, y = self.selected_pixel.value
             return self.raw[0][:, 0, 0, y, x]
         return None
@@ -1934,7 +1926,7 @@ class SEMSpectrumMDStream(MultipleDetectorStream):
         # each element of acq_spect_buf has a shape of (1, N)
         # reshape to (N, 1)
         for e in data_list:
-            e.shape = e.shape[-1::-1]
+            e.shape = e.shape[::-1]
         # concatenate into one big array of (N, number of pixels)
         spec_data = numpy.concatenate(data_list, axis=1)
         # reshape to (C, 1, 1, Y, X) (as C must be the 5th dimension)
@@ -1987,6 +1979,30 @@ class SEMARMDStream(MultipleDetectorStream):
         self.is_active = model.BooleanVA(False)
         self.is_active.subscribe(self.onActive)
 
+        # create Pyro daemon, to share the Event
+        # TODO: don't create a new daemon every time. One singleton is enough.
+        name = "SemAR Acq"
+        self._ipc_name = model.BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
+        if os.path.exists(self._ipc_name):
+            try:
+                os.remove(self._ipc_name)
+                logging.warning("The file '%s' was deleted to create container '%s'.", self._ipc_name, name)
+            except OSError:
+                logging.error("Impossible to delete file '%s', needed to create container '%s'.", self._ipc_name, name)
+
+        self._daemon = Pyro4.Daemon(unixsocket=self._ipc_name)
+        self._daemon.register(self._acqPixelStart)
+        self._daemon_thread = threading.Thread(name=name,
+                                               target=self._daemon.requestLoop)
+        self._daemon_thread.daemon = True
+        self._daemon_thread.start()
+        
+    def __del__(self):
+        # stops the Pyro daemon (and the thread will end)
+        if self._daemon:
+            self._daemon.unregister(self._acqPixelStart)
+            self._daemon.shutdown()
+        
     def estimateAcquisitionTime(self):
         # that's the same as the AR stream
         return self._ar_stream.estimateAcquisitionTime()
@@ -1998,7 +2014,7 @@ class SEMARMDStream(MultipleDetectorStream):
         return (float): estimated time for a whole CCD image
         """
         # Set SEM to spot mode, without caring about actual position (set later)
-        self._emitter.scale.value = (1, 1)
+        self._emitter.scale.value = (1, 1) # min, to avoid limits on translation
         self._emitter.resolution.value = (1, 1)
 
         # Dwell Time: a "little bit" more than the exposure time
@@ -2026,14 +2042,15 @@ class SEMARMDStream(MultipleDetectorStream):
 
         # Take into account the "border" around each pixel
         pxs = (width[0] / repetition[0], width[1] / repetition[1])
-        lim = (roi[0] + pxs[0], roi[1] + pxs[1],
-               roi[2] - pxs[0], roi[3] - pxs[1])
+        lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
+               roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
 
         shape = self._emitter.shape
         # convert into SEM translation coordinates: distance in px from center
         # (situated at 0.5, 0.5), can be floats
         lim_sem = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5),
                    shape[0] * (lim[2] - 0.5), shape[1] * (lim[3] - 0.5))
+        logging.debug("Generating points in the SEM area %s", lim_sem)
 
         pos = numpy.empty(repetition + (2,), dtype=numpy.float)
         posx = pos[:, :, 0].swapaxes(0, 1) # just a view to have X as last dim
@@ -2042,22 +2059,38 @@ class SEMARMDStream(MultipleDetectorStream):
         pos[:, :, 1] = numpy.linspace(lim_sem[1], lim_sem[3], repetition[1])
         return pos
 
+    # TODO: re-factor into 2 functions with identical signature:
+    # * software-synchronised SEM/CCD acquisition
+    # * driver-synchronised SEM/CCD acquisition
+    # => take the dwelltime + parameter + call back for each CCD image and
+    # returns with the SEM image.
     def _runAcquisition(self):
         """
         Handles the whole acquisition procedure of a grid of AR images
         Warning: can be quite memory consuming if the grid is big
         """
+        # Acquires SEM/CCD acquisition via software synchronisation. The
+        # advantage of software synchronisation is that the SEM spot can wait
+        # for the
+
         # TODO: handle better very large grid acquisition (than memory oops)
         try:
             ccd_time = self._adjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
             spot_pos = self._getSpotPositions()
             rep = self._ar_stream.repetition.value
+            roi = self._ar_stream.roi.value
             self._sem_data = sem_data = []
             self._ar_stream.raw = []
             self._sem_stream.raw = []
             logging.debug("Starting AR acquisition with components %s and %s",
                           self._semd.name, self._ar.name)
+
+            # We need to use synchronisation event because without it, either we
+            # use .get() but it's not possible to cancel the acquisition, or we
+            # subscribe/unsubscribe for each image, but the overhead is high.
+            self._ar_df.synchronizedOn(self._acqPixelStart)
+            self._ar_df.subscribe(self._onARImage)
 
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
                 # set ebeam to position (which is ensured only once acquiring)
@@ -2065,14 +2098,9 @@ class SEMARMDStream(MultipleDetectorStream):
                 self._acq_sem_complete.clear()
                 self._acq_ar_complete.clear()
                 self._semd_df.subscribe(self._onSEMImage)
-                self._ar_df.subscribe(self._onARImage)
-                # TODO: We need to use event because without it, we could just
-                # subscribe/unsubscribe for each image, but the overhead is very
-                # high (especially if the unsubscribes is received after the
-                # next image started being acquired). df.get() would have less
-                # overhead, but it's impossible to cancel.
+                self._acqPixelStart.notify()
 
-                if not self._acq_ar_complete.wait(ccd_time * 1.5 + 1):
+                if not self._acq_ar_complete.wait(ccd_time * 2 + 1):
                     raise TimeoutError("Acquisition of AR for pixel %s timed out" % (i,))
                 ar_data = self._ar_stream.raw[-1]
 
@@ -2091,23 +2119,10 @@ class SEMARMDStream(MultipleDetectorStream):
                 # Note: MD_AR_POLE is in theory dependant on MD_POS, but so
                 # slightly that we don't need to correct it.
 
-            # Compute center of area, from average of centered acquisitions
-            idx_center = rep[0] // 2
-            if idx_center * 2 == rep[0]: # even number => average
-                posx = (sem_data[idx_center - 1].metadata[MD_POS][0] +
-                        sem_data[idx_center].metadata[MD_POS][0]) / 2
-            else: # odd number => center
-                posx = sem_data[idx_center].metadata[MD_POS][0]
-            idx_center = rep[1] // 2
-            if idx_center * 2 == rep[1]: # even number => average
-                posy = (sem_data[rep[0] * (idx_center - 1)].metadata[MD_POS][1] +
-                        sem_data[rep[0] * idx_center].metadata[MD_POS][1]) / 2
-            else: # odd number => center
-                posy = sem_data[rep[0] * idx_center].metadata[MD_POS][1]
+            self._ar_df.unsubscribe(self._onARImage)
+            self._ar_df.synchronizedOn(None)
 
-            sem_md = {MD_POS: (posx, posy)}
-            self._assembleSEMData(rep[::-1], sem_data, sem_md) # shape is (Y, X)
-
+            self._assembleSEMData(rep, roi, sem_data) # shape is (Y, X)
             logging.debug("raw data is now of shape %s",
                           ", ".join([str(d.shape) for d in self.raw]))
 
@@ -2117,6 +2132,10 @@ class SEMARMDStream(MultipleDetectorStream):
             logging.exception("Acquisition of Angular resolved failed")
             self._ar_stream.raw = []
             self._sem_stream.raw = []
+            # make sure it's all stopped
+            self._semd_df.unsubscribe(self._onSEMImage)
+            self._ar_df.unsubscribe(self._onARImage)
+            self._ar_df.synchronizedOn(None)
         finally:
             del self._sem_data # regain a bit of memory
             self._acq_complete.set()
@@ -2131,30 +2150,53 @@ class SEMARMDStream(MultipleDetectorStream):
             self._acq_sem_complete.set()
 
     def _onARImage(self, df, data):
-        df.unsubscribe(self._onARImage)
         self._ar_stream.raw.append(data)
         self._acq_ar_complete.set()
 
-    def _assembleSEMData(self, shape, data_list, metadata):
+    def _assembleSEMData(self, rep, roi, data_list):
         """
         Take all the data received from the SEM and assemble it in a 2D image.
         The result goes into .raw.
 
-        shape (tuple of ints): shape of the final data (Y, X)
+        rep (tuple of 2 0<ints): X/Y repetition
+        roi (tupel of 3 0<floats<=1): region of interest in logical coordinates
         data_list (list of M DataArray of shape (1, 1)): all the data received,
         with X variating first, then Y.
-        metadata (dict of string -> Value): the metadata values to be overridden
         """
         assert len(data_list) > 0
+
+        # start with the metadata from the first point
+        md = dict(data_list[0].metadata)
+
+        # Compute center of area, from average of centered acquisitions
+        idx_center = rep[0] // 2
+        if idx_center * 2 == rep[0]: # even number => average
+            posx = (data_list[idx_center - 1].metadata[MD_POS][0] +
+                    data_list[idx_center].metadata[MD_POS][0]) / 2
+        else: # odd number => center
+            posx = data_list[idx_center].metadata[MD_POS][0]
+        idx_center = rep[1] // 2
+        if idx_center * 2 == rep[1]: # even number => average
+            posy = (data_list[rep[0] * (idx_center - 1)].metadata[MD_POS][1] +
+                    data_list[rep[0] * idx_center].metadata[MD_POS][1]) / 2
+        else: # odd number => center
+            posy = data_list[rep[0] * idx_center].metadata[MD_POS][1]
+
+        # Pixel size is the size of field of view divided by the repetition
+        sem_pxs = self._emitter.pixelSize.value
+        sem_shape = self._emitter.shape[:2]
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        fov = (width[0] * sem_shape[0] * sem_pxs[0],
+               width[1] * sem_shape[1] * sem_pxs[1])
+        pxs = (fov[0] / rep[0], fov[1] / rep[1])
+
+        md.update({MD_POS: (posx, posy),
+                   MD_PIXEL_SIZE: pxs})
 
         # concatenate data into one big array of (number of pixels,1)
         sem_data = numpy.concatenate(data_list)
         # reshape to (Y, X)
-        sem_data.shape = shape
-
-        # copy the metadata from the first point and add the ones from metadata
-        md = data_list[0].metadata
-        md.update(metadata)
+        sem_data.shape = rep[::-1]
         sem_data = model.DataArray(sem_data, metadata=md)
 
         # save the new data
