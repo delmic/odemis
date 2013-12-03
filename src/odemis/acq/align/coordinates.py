@@ -23,6 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import numpy
+import math
+import scipy
+import scipy.signal
+import scipy.ndimage as ndimage
+import scipy.ndimage.filters as filters
+from odemis import model
+from odemis import dataio
+
+neighborhood_size = 15
 
 def FindCenterCoordinates(subimages):
     """
@@ -33,37 +42,122 @@ def FindCenterCoordinates(subimages):
     returns (List of tuples): Coordinates of spot centers
     """
     number_of_subimages = subimages.__len__()
+    spot_coordinates = []
 
     # Pop each subimage from the list
     for i in xrange(number_of_subimages):
-        subimage = subimages.pop(i)
+        subimage = subimages[i]
         subimage_x, subimage_y = subimage.shape
-        
-        """
-        # For any set of four pixels of indices {(i, j), (i+1, j), (i, j+1), (i+1, j+1)} calculate
-        # the gradient at the midpoint
-        dIdu = subimage[1:subimage_x - 1, 2:subimage_y] - subimage[2:subimage_x, 1:subimage_y - 1]
-        dIdv = subimage[1:subimage_x - 1, 1:subimage_y - 1] - subimage[2:subimage_x, 2:subimage_y]
-        
-        #The slope of the gradient at the midpoint in the xy coordinate system
-        m = -(dIdv + dIdu) / (dIdu - dIdv)
-        
-        # x_m = tile([(-(subimage_y-1)/2.0+0.5):((subimage_y-1)/2.0-0.5)],(subimage_x-1,1))
-        """
-        # to be provided
-        m = numpy.array()
-        b = numpy.array()
-        w = numpy.array()
+        xk_onerow = numpy.arange(-(subimage_y - 1) / 2 + 0.5, (subimage_y - 1) / 2, 1)
+        (xk_onerow_x,) = xk_onerow.shape
+        xk = numpy.tile(xk_onerow, subimage_x - 1)
+        xk = xk.reshape((subimage_x - 1, xk_onerow_x))
+        yk_onecol = numpy.arange((subimage_x - 1) / 2 - 0.5, -(subimage_x - 1) / 2, -1)
+        (yk_onecol_x,) = yk_onecol.shape
+        yk_onecol = yk_onecol.reshape((yk_onecol_x, 1))
+        yk = numpy.tile(yk_onecol, subimage_y - 1)
+        dIdu = subimage[0:subimage_x - 1, 1:subimage_y] - subimage[1:subimage_x, 0:subimage_y - 1]
+        dIdv = subimage[0:subimage_x - 1, 0:subimage_y - 1] - subimage[1:subimage_x, 1:subimage_y]
+        h = numpy.tile(numpy.ones(3) / 9, 3).reshape(3, 3)
+        dIdu = scipy.signal.convolve2d(dIdu, h, mode='same', fillvalue=0)
+        dIdv = scipy.signal.convolve2d(dIdv, h, mode='same', fillvalue=0)
+        dIdx = dIdu - dIdv
+        dIdy = dIdu + dIdv
+        a = -dIdy
+        b = dIdx
+        I2 = numpy.hypot(a, b)
+        s = (I2 != 0)
+        a[s] = a[s] / I2[s]
+        b[s] = b[s] / I2[s]
 
-        wm2p1 = w / (m * m + 1)
-        sum_wm2p1 = numpy.sum(wm2p1)
-        sum_mmwm2p1 = numpy.sum(m * m * wm2p1)
-        sum_mwm2p1 = numpy.sum(m * wm2p1)
-        sum_mbwm2p1 = numpy.sum(m * b * wm2p1)
-        sum_bwm2p1 = numpy.sum(b * wm2p1)
-        det = sum_mwm2p1 * sum_mwm2p1 - sum_mmwm2p1 * sum_wm2p1
-        #relative to image center
-        xc = (sum_mbwm2p1 * sum_wm2p1 - sum_mwm2p1 * sum_bwm2p1) / det
-        yc = (sum_mbwm2p1 * sum_mwm2p1 - sum_mmwm2p1 * sum_bwm2p1) / det
-        
-    return subimage
+        c1 = -a * xk
+        c = -a * xk - b * yk
+        dI2 = dIdu * dIdu + dIdv * dIdv
+        sdI2 = numpy.sum(dI2[:])
+        x0 = numpy.sum(dI2[:] * xk[:]) / sdI2
+        y0 = numpy.sum(dI2[:] * yk[:]) / sdI2
+        w = dI2 / (0.05 + numpy.sqrt((xk - x0) * (xk - x0) + (yk - y0) * (yk - y0)))
+        w[0, :] = 0
+        w[w.shape[0] - 1, :] = 0
+        w[:, 0] = 0
+        w[:, w.shape[1] - 1] = 0
+        swa2 = numpy.sum(w[:] * a[:] * a[:])
+        swab = numpy.sum(w[:] * a[:] * b[:])
+        swb2 = numpy.sum(w[:] * b[:] * b[:])
+        swac = numpy.sum(w[:] * a[:] * c[:])
+        swbc = numpy.sum(w[:] * b[:] * c[:])
+        det = swa2 * swb2 - swab * swab
+        xc = (swab * swbc - swb2 * swac) / det
+        yc = (swab * swac - swa2 * swbc) / det
+        xc = xc + (subimage_y + 1) / 2
+        yc = -yc + (subimage_x + 1) / 2
+        spot_coordinates.append((xc, yc))
+
+    return spot_coordinates
+
+def DivideInNeighborhoods(image, number_of_spots):
+    """
+    Given an image that includes N spots, divides it in N subimages with each of them 
+    to include one spot. Briefly, it filters the image, finds the N “brightest” spots 
+    and crops the region around them generating the subimages. This process is repeated 
+    until image division is feasible.
+    image (model.DataArray): 2D array containing the intensity of each pixel
+    number_of_spots (int,int): The number of CL spots
+    returns subimages (List of DataArrays): One subimage per spot
+            subimage_coordinates(List of tuples): The coordinates of the center of each 
+                                                subimage with respect to the overall image
+    """
+    (image_x, image_y) = image.shape
+    number_of_spots_x, number_of_spots_y = number_of_spots
+    subimage_coordinates = []
+    subimages = []
+
+    # TODO: smarter way to decide on this.
+    subimage_size = (image_x / (number_of_spots_x ** 2))
+
+    # Determine the size of the parts of the array to be passed to the filter
+    # Intuitively it is proportional to the image size and number of spots
+    # TODO: smarter way to decide on this.
+    # neighborhood_size = math.sqrt(image_x * image_y)
+    # threshold = 0
+    threshold = 650
+
+    data_max = filters.maximum_filter(image, neighborhood_size)
+    maxima = (image == data_max)
+    data_min = filters.minimum_filter(image, neighborhood_size)
+    diff = ((data_max - data_min) > threshold)
+    maxima[diff == 0] = 0
+    
+    labeled, num_objects = ndimage.label(maxima)
+    slices = ndimage.find_objects(labeled)
+
+    for dy,dx in slices:
+        x_center = (dx.start + dx.stop - 1) / 2
+        y_center = (dy.start + dy.stop - 1) / 2
+
+        subimage_coordinates.append((x_center, y_center))
+        subimage_width = dx.stop - dx.start
+        subimage_height = dy.stop - dy.start
+        # TODO: change +10 and -10 to number relative to spot size
+        subimage = image[(dy.start - neighborhood_size):(dy.stop + 1 + neighborhood_size), (dx.start - neighborhood_size):(dx.stop + 1 + neighborhood_size)]
+        subimages.append(subimage)
+
+    return subimages, subimage_coordinates
+
+def ReconstructImage(subimage_coordinates, spot_coordinates):
+    """
+    Given the coordinates of each subimage as also the coordinates of the spot into it, 
+    generates the coordinates of the spots with respect to the overall image.
+    subimage_coordinates (List of tuples): The coordinates of the 
+                                        center of each subimage with 
+                                        respect to the overall image
+    spot_coordinates (List of tuples): Coordinates of spot centers
+    returns (List of tuples): Coordinates of spots in optical image
+    """
+    optical_coordinates = []
+    for ta, tb in zip(subimage_coordinates, spot_coordinates):
+        t = tuple(a + (b - neighborhood_size) for a, b in zip(ta, tb))
+        optical_coordinates.append(t)
+
+    return optical_coordinates
+
