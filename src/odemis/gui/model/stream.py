@@ -2241,6 +2241,7 @@ class SEMARMDStream(MultipleDetectorStream):
             # Do it in any case, to be sure
             self._semd_df.unsubscribe(self._onSEMImage)
             self._ar_df.unsubscribe(self._onARImage)
+            self._ar_df.synchronizedOn(None)
             # set the events, so the acq thread doesn't wait for them
             self._acq_sem_complete.set()
             self._acq_ar_complete.set()
