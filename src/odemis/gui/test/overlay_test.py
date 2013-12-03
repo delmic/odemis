@@ -74,7 +74,7 @@ class OverlayTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
     # @unittest.skip("simple")
-    def test_ploar_overlay(self):
+    def test_polar_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 

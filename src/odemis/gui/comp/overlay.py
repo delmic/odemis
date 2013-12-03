@@ -51,7 +51,7 @@ class Overlay(object):
         self.label = unicode(label)
 
     def write_label(self, ctx, size, vpos, label, flip=True,
-                    align=wx.ALIGN_LEFT, colour=(1.0, 1.0, 1.0)):
+                    align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=(1.0, 1.0, 1.0)):
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
@@ -66,8 +66,13 @@ class Overlay(object):
         _, _, width, height, _, _ = ctx.text_extents(label)
         x, y = vpos
 
-        if align == wx.ALIGN_RIGHT:
+        if align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
             x = x - width
+        elif align & wx.ALIGN_CENTER == wx.ALIGN_CENTER:
+            x = x - (width / 2)
+
+        if align & wx.ALIGN_BOTTOM == wx.ALIGN_BOTTOM:
+            y = y + height
 
         if flip:
             if x + width + margin_x > size.x:
@@ -75,7 +80,7 @@ class Overlay(object):
             elif x < margin_x:
                 x = margin_x
 
-            if y + height + margin_x > size.y:
+            if y + margin_x > size.y:
                 y = self.base.ClientSize[1] - height
             elif y < height:
                 y = height
@@ -1670,12 +1675,14 @@ class PolarOverlay(ViewOverlay):
     def __init__(self, base):
         super(PolarOverlay, self).__init__(base)
 
+        self.base.canDrag = False
+
         # Rendering attributes
         self.center_x = None
         self.center_y = None
         self.radius = None
         self.inner_radius = None
-        self.tau = 2*math.pi
+        self.tau = 2 * math.pi
         self.num_ticks = 6
         self.ticks = []
 
@@ -1683,53 +1690,111 @@ class PolarOverlay(ViewOverlay):
         self.ticksize = 10
 
         # Value attributes
-        self.vx, self.vy = None, None
+        self.px, self.py = None, None
+        self.tx, self.ty = None, None
 
+        # Angle in radians. Top is 0 degrees
         self.phi = None
+        self.phi_line_rad = None
         self.phi_line_pos = None
         self.theta = None
         self.theta_radius = None
+        self.intersection = None
 
         self.base.Bind(wx.EVT_SIZE, self.on_size)
         self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_down)
+        self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
 
         self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOR)
+        self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOR, 0.5)
+        self.colour_highlight = conversion.hex_to_frgb(
+                                            gui.FOREGROUND_COLOUR_HIGHLIGHT)
+        self.intensity = None
+
+        self.dragging = False
 
         # Calculate the characteristic values for the first time
         self.on_size()
 
     def on_mouse_motion(self, evt):
-        self.vx, self.vy = evt.GetPositionTuple()
-        # Angle in radians from the origin
-        dx, dy = self.vx - self.center_x, self.center_y - self.vy
-        self.phi = math.atan2(dx, dy) % self.tau
-        phi = self.phi - math.pi / 2
-        # Pixel to which to draw a line from the origin
-        x = self.center_x + self.radius * math.cos(phi)
-        y = self.center_y + self.radius * math.sin(phi)
+        # Only change the values when the user is dragging
+        if self.dragging:
+            # Store the view coordinates of the mouse
+            vx, vy = evt.GetPositionTuple()
+            # Angle in radians from the origin
+            dx, dy = vx - self.center_x, self.center_y - vy
+            self.phi = math.atan2(dx, dy) % self.tau
+            # We store a separate Phi radian angle, for drawing the line, since
+            # normally 0 is to the right, and we need it to be drawn at the top
+            self.phi_line_rad = self.phi - math.pi / 2
 
-        self.phi_line_pos = (x, y)
-        self.theta_radius = min(math.sqrt(dx * dx + dy * dy), self.inner_radius)
-        self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
+            # Pixel to which to draw the Phi line to
+            phi_x = self.center_x + self.radius * math.cos(self.phi_line_rad)
+            phi_y = self.center_y + self.radius * math.sin(self.phi_line_rad)
+            self.phi_line_pos = (phi_x, phi_y)
 
-        self.base.Repaint()
+            # Get the radius and the angle for Theta
+            self.theta_radius = min(math.sqrt(dx * dx + dy * dy),
+                                    self.inner_radius)
+            self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
+
+            # Calc Phi label pos
+            if (self.theta_radius > self.inner_radius / 2):
+                radius = self.inner_radius * 0.25
+            else:
+                radius = self.inner_radius * 0.75
+            self.px = self.center_x + (radius) * math.cos(self.phi_line_rad)
+            self.py = self.center_y + (radius) * math.sin(self.phi_line_rad)
+
+            # Calc Theta label pos
+            if self.theta_radius < self.center_y / 2:
+                self.ty = self.center_y + self.theta_radius + 4
+            else:
+                self.ty = self.center_y + self.theta_radius - 16
+            self.tx = self.center_x
+
+            # Calculate the intersecion between Phi and Theta
+            x = self.center_x + self.theta_radius * math.cos(self.phi_line_rad)
+            y = self.center_y + self.theta_radius * math.sin(self.phi_line_rad)
+            # x = (self.center_x +
+            #      (phi_x - self.center_x) * (self.theta_radius /
+            #      self.inner_radius))
+            # y = self.center_y + self.theta_radius * math.sin(self.phi_line_rad)
+
+            self.intersection = (x, y)
+
+            self.base.Repaint()
 
         evt.Skip()
 
     def on_mouse_down(self, evt):
+        if not self.base.HasCapture():
+            self.dragging = True
+            self.base.CaptureMouse()
         evt.Skip()
 
     def on_mouse_up(self, evt):
+        if self.base.HasCapture():
+            self.on_mouse_motion(evt)
+            self.dragging = False
+            self.base.ReleaseMouse()
+
+            self.intensity = None
+            if 0 < self.intersection[0] < self.base.ClientSize.x:
+                if 0 < self.intersection[1] < self.base.ClientSize.y:
+                    # Determine actual value here
+                    self.intensity = "Bingo!"
+
+            self.base.Repaint()
         evt.Skip()
 
     def on_size(self, evt=None):
         # Calculate the characteristic values
         self.center_x = self.base.ClientSize.x / 2
         self.center_y = self.base.ClientSize.y / 2
-        self.radius = max(self.center_x, self.center_y) - self.padding
-        self.inner_radius = self.radius - (self.ticksize / 1.5)
+        self.inner_radius = min(self.center_x, self.center_y)
+        self.radius = self.inner_radius + (self.ticksize / 1.5)
         self.ticks = []
 
         # Top middle
@@ -1746,9 +1811,8 @@ class PolarOverlay(ViewOverlay):
 
         self.base.Repaint()
 
-    def text(self, ctx, string, pos, phi):
+    def text(self, ctx, string, pos, phi, flip=False):
         ctx.save()
-
         # build up an appropriate font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
@@ -1767,6 +1831,9 @@ class PolarOverlay(ViewOverlay):
             phi -= math.pi
             ny = fheight/1.0
 
+        if flip:
+            phi -= math.pi
+
         ctx.translate(pos[0], pos[1])
         ctx.rotate(phi)
         ctx.translate(nx, ny)
@@ -1777,66 +1844,84 @@ class PolarOverlay(ViewOverlay):
     def Draw(self, dc):
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
+        # If the angles are set, draw the angle indicators
         if self.phi is not None:
             # Set formatting
             ctx.set_line_width(2)
             ctx.set_dash([3,])
-            ctx.set_source_rgb(*self.colour)
-            # Draw line
+            if self.dragging:
+                ctx.set_source_rgba(*self.colour_drag)
+            else:
+                ctx.set_source_rgb(*self.colour)
+            # Draw Phi line
             ctx.move_to(self.center_x, self.center_y)
             ctx.line_to(*self.phi_line_pos)
             ctx.stroke()
-            # Draw Arc
-            ctx.arc(self.center_x, self.center_y, self.theta_radius, 0, self.tau)
+            # Draw azimuthal circle
+            ctx.arc(self.center_x, self.center_y,
+                    self.theta_radius, 0, self.tau)
             ctx.stroke()
             ctx.set_dash([])
 
-
-        # Draw Frame
+        # Draw frame that covers everything outside the center circle
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
         ctx.set_source_rgb(0.2, 0.2, 0.2)
         ctx.rectangle(0, 0, self.base.ClientSize.x, self.base.ClientSize.y)
         ctx.arc(self.center_x, self.center_y, self.inner_radius, 0, self.tau)
-        mouse_inside = self.phi is None or not ctx.in_fill(self.vx, self.vy)
+        # mouse_inside = not ctx.in_fill(float(self.vx or 0), float(self.vy or 0))
         ctx.fill()
 
-        if self.phi is not None:
-            phi_str = u"Phi %0.1f°" % math.degrees(self.phi)
-            self.write_label(ctx,
-                             self.base.ClientSize,
-                             (10, self.base.ClientSize.y - 10),
-                             phi_str,
-                             colour=self.colour)
-            theta_str = u"Theta %0.1f°" % math.degrees(self.theta)
-            self.write_label(ctx,
-                             self.base.ClientSize,
-                             (self.base.ClientSize.x - 10,
-                              self.base.ClientSize.y - 10),
-                             theta_str,
-                             align=wx.ALIGN_RIGHT,
-                             colour=self.colour)
-
-            if mouse_inside:
-                intensity = u"Dummy %0.1f°" % math.degrees(self.theta / (self.phi or 0.0001))
-                self.write_label(ctx,
-                                 self.base.ClientSize,
-                                 (self.vx + 2, self.vy - 2),
-                                 intensity,
-                                 flip=True)
-            ctx.stroke()
-
-        # Draw Azimuth circle
+        # Draw Azimuth degree circle
         ctx.set_line_width(2)
         ctx.set_source_rgb(0.5, 0.5, 0.5)
         ctx.arc(self.center_x, self.center_y, self.radius, 0, self.tau)
         ctx.stroke()
 
-        # Draw ticks
+        # Draw Azimuth degree ticks
         ctx.set_line_width(1)
         for sx, sy, lx, ly, _ in self.ticks:
             ctx.move_to(sx, sy)
             ctx.line_to(lx, ly)
         ctx.stroke()
+
+        if self.phi is not None:
+            ctx.set_source_rgb(*self.colour)
+
+            # Phi label
+            phi_str = u"φ %0.1f°" % math.degrees(self.phi)
+            self.text(ctx, phi_str, (self.px, self.py), self.phi_line_rad,
+                      flip=self.phi > math.pi)
+
+            # Theta label
+            theta_str = u"θ %0.1f°" % math.degrees(self.theta)
+            self.write_label(
+                        ctx,
+                        self.base.ClientSize,
+                        (self.tx, self.ty),
+                        theta_str,
+                        colour=self.colour,
+                        align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
+
+            if self.intensity is not None and not self.dragging:
+                ctx.set_source_rgb(*self.colour_highlight)
+                ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
+                ctx.fill()
+
+                x, y = self.intersection
+                y -= 18
+                if y < 40:
+                    y += 40
+
+                self.write_label(
+                        ctx,
+                        self.base.ClientSize,
+                        (x, y),
+                        self.intensity,
+                        flip=True,
+                        align=wx.ALIGN_CENTER,
+                        colour=self.colour_highlight)
+
+            ctx.stroke()
 
         # Draw labels
         ctx.set_source_rgb(0.8, 0.8, 0.8)
