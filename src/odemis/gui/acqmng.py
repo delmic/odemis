@@ -81,7 +81,9 @@ def estimateTime(streams):
     return (0 <= float): estimated time in s.
     """
     tot_time = 0
-    for s in _mergeStreams(streams):
+    # We don't use mergeStreams() as it creates new streams at every call, and
+    # anyway sum of each stream should give already a good estimation.
+    for s in streams:
         tot_time += s.estimateAcquisitionTime()
 
     return tot_time
