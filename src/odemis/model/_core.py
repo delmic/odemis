@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.core import oneway
-from multiprocessing.process import Process
 import Pyro4
 import logging
 import multiprocessing
@@ -233,18 +232,23 @@ def getObject(container_name, object_name):
     container = getContainer(container_name, validate=False)
     return container.getObject(urllib.quote(object_name))
 
-def createNewContainer(name, validate=True):
+def createNewContainer(name, validate=True, in_own_process=True):
     """
     creates a new container in an independent and isolated process
-    validate (boolean): if the connection should be validated
+    validate (bool): if the connection should be validated
+    in_own_process (bool): if True, creates the container in a separate process
+     (so can run fully asynchronously). Otherwise, it is run in a thread. 
     returns the (proxy to the) new container
     """
     # create a container separately
-    isready = multiprocessing.Event()
-    p = Process(name="Container "+name, target=_manageContainer, args=(name,isready))
-    # TODO allow to select between process and thread, for debugging
-#    isready = threading.Event()
-#    p = threading.Thread(name="Container "+name, target=_manageContainer, args=(name,isready))
+    if in_own_process:
+        isready = multiprocessing.Event()
+        p = multiprocessing.Process(name="Container " + name, target=_manageContainer,
+                                    args=(name, isready))
+    else:
+        isready = threading.Event()
+        p = threading.Thread(name="Container " + name, target=_manageContainer,
+                             args=(name, isready))
     p.start()
     if not isready.wait(3): # wait maximum 3s
         logging.error("Container %s is taking too long to get ready", name)
