@@ -549,8 +549,8 @@ def _updateMDFromOME(root, das):
 
             try:
                 # We assume it's in meters, as we write it (but there is no official unit)
-                psx = float(pxe.attrib["PositionX"])
-                psy = float(pxe.attrib["PositionY"])
+                psx = float(ple.attrib["PositionX"])
+                psy = float(ple.attrib["PositionY"])
                 mdp[model.MD_POS] = (psx, psy)
             except (KeyError, ValueError):
                 pass
