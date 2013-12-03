@@ -23,9 +23,6 @@ import logging
 import numpy
 import unittest
 
-from numpy import genfromtxt
-from odemis import model
-from odemis.dataio import hdf5
 from odemis.acq.align import transform
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -36,14 +33,13 @@ class TestTransformationParams(unittest.TestCase):
     """
     def test_calculate_transform(self):
         """
-        Test CalculateTransform
+        Test CalculateTransform, compare to precomputed values
         """
         optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
         electron_coordinates = [(0, 1), (0, 2), (1, 0), (1, 4)]
 
-        # optical_coordinates = genfromtxt('doc1.csv', delimiter=',')
-        # electron_coordinates = genfromtxt('doc2.csv', delimiter=',')
+        (translation_x, translation_y), (scaling_x, scaling_y), rotation = transform.CalculateTransform(optical_coordinates, electron_coordinates)
+        numpy.testing.assert_almost_equal((translation_x, translation_y, scaling_x, scaling_y, rotation), (-1.3000132631489385, -2.3999740720548788, -0.35848080974616847, 0.51197021124249875, 34.9996552027154), 6)
 
-        transform.CalculateTransform(optical_coordinates, electron_coordinates)
-        # translation, scaling, rotation = transform.CalculateTransform(optical_coordinates, electron_coordinates)
-        # print translation, scaling, rotation
+    # TODO: Calculate optical coordinates given the electron coordinates and translation, rotation and scale values
+    #        and test.
