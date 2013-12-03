@@ -66,8 +66,13 @@ class Overlay(object):
         _, _, width, height, _, _ = ctx.text_extents(label)
         x, y = vpos
 
-        if align == wx.ALIGN_RIGHT:
+        if align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
             x = x - width
+        elif align & wx.ALIGN_CENTER == wx.ALIGN_CENTER:
+            x = x - (width / 2)
+
+        if align & wx.ALIGN_TOP == wx.ALIGN_TOP:
+            y = y + height
 
         if flip:
             if x + width + margin_x > size.x:
@@ -1728,8 +1733,8 @@ class PolarOverlay(ViewOverlay):
         # Calculate the characteristic values
         self.center_x = self.base.ClientSize.x / 2
         self.center_y = self.base.ClientSize.y / 2
-        self.radius = max(self.center_x, self.center_y) - self.padding
-        self.inner_radius = self.radius - (self.ticksize / 1.5)
+        self.inner_radius = min(self.center_x, self.center_y)
+        self.radius = self.inner_radius + (self.ticksize / 1.5)
         self.ticks = []
 
         # Top middle
@@ -1746,9 +1751,8 @@ class PolarOverlay(ViewOverlay):
 
         self.base.Repaint()
 
-    def text(self, ctx, string, pos, phi):
+    def text(self, ctx, string, pos, phi, flip=False):
         ctx.save()
-
         # build up an appropriate font
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
@@ -1766,6 +1770,9 @@ class PolarOverlay(ViewOverlay):
         if phi == math.pi:
             phi -= math.pi
             ny = fheight/1.0
+
+        if flip:
+            phi -= math.pi
 
         ctx.translate(pos[0], pos[1])
         ctx.rotate(phi)
@@ -1801,26 +1808,33 @@ class PolarOverlay(ViewOverlay):
         ctx.fill()
 
         if self.phi is not None:
-            phi_str = u"Phi %0.1f°" % math.degrees(self.phi)
-            self.write_label(ctx,
-                             self.base.ClientSize,
-                             (10, self.base.ClientSize.y - 10),
-                             phi_str,
-                             colour=self.colour)
-            theta_str = u"Theta %0.1f°" % math.degrees(self.theta)
-            self.write_label(ctx,
-                             self.base.ClientSize,
-                             (self.base.ClientSize.x - 10,
-                              self.base.ClientSize.y - 10),
-                             theta_str,
-                             align=wx.ALIGN_RIGHT,
-                             colour=self.colour)
+            ctx.set_source_rgb(*self.colour)
+
+            phi_str = u"φ %0.1f°" % math.degrees(self.phi)
+            x, y = self.phi_line_pos
+
+            phi = self.phi - math.pi / 2
+            x = self.center_x + (self.radius / 2) * math.cos(phi)
+            y = self.center_y + (self.radius / 2) * math.sin(phi)
+            self.text(ctx, phi_str, (x, y), self.phi + (math.pi * 1.5),
+                      flip=self.phi > math.pi)
+
+
+            theta_str = u"θ %0.1f°" % math.degrees(self.theta)
+            self.write_label(
+                        ctx,
+                        self.base.ClientSize,
+                        (self.center_x, self.center_y + self.theta_radius + 2),
+                        theta_str,
+                        colour=self.colour,
+                        align=wx.ALIGN_CENTER|wx.ALIGN_TOP)
+
 
             if mouse_inside:
                 intensity = u"Dummy %0.1f°" % math.degrees(self.theta / (self.phi or 0.0001))
                 self.write_label(ctx,
                                  self.base.ClientSize,
-                                 (self.vx + 2, self.vy - 2),
+                                 (self.vx + 12, self.vy - 12),
                                  intensity,
                                  flip=True)
             ctx.stroke()
