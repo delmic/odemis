@@ -347,7 +347,7 @@ def _convertToOMEMD(images):
         if model.MD_LENS_MAG in da0.metadata:
             obj = ET.SubElement(instr, "Objective", attrib={
                       "ID": "Objective:%d" % oid,
-                      "CalibratedMagnification": "%f" % da0.metadata[model.MD_LENS_MAG]
+                      "CalibratedMagnification": "%.15f" % da0.metadata[model.MD_LENS_MAG]
                       })
             if model.MD_LENS_NAME in da0.metadata:
                 obj.attrib["Model"] = da0.metadata[model.MD_LENS_NAME]
@@ -936,8 +936,8 @@ def _addImageElement(root, das, ifd, rois):
     # Add optional values
     if model.MD_PIXEL_SIZE in globalMD:
         pxs = globalMD[model.MD_PIXEL_SIZE]
-        pixels.attrib["PhysicalSizeX"] = "%f" % (pxs[0] * 1e6) # in µm
-        pixels.attrib["PhysicalSizeY"] = "%f" % (pxs[1] * 1e6)
+        pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
+        pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
     
     if model.MD_BPP in globalMD:
         bpp = globalMD[model.MD_BPP]
@@ -957,20 +957,12 @@ def _addImageElement(root, das, ifd, rois):
         l = gshape[0]
         npn = polynomial.Polynomial(pn, domain=[0, l - 1], window=[0, l - 1])
         wl_list = npn.linspace(l)[1]
-#        if len(pn) >= 1:
-#            pixels.attrib["WaveStart"] = "%f" % (pn[0] * 1e9) # in nm
-#        if len(pn) >= 2:
-#            pixels.attrib["WaveIncrement"] = "%f" % (pn[1] * 1e9) # in nm/px
     elif model.MD_WL_LIST in globalMD:
         wl_list = globalMD[model.MD_WL_LIST]
         if len(wl_list) != da.shape[0]:
             logging.warning("WL_LIST metadata has length of %d, while expected "
                             "%d, skipping it", len(wl_list), da.shape[0])
             wl_list = None
-
-#        inc = (lwl[-1] - lwl[0]) / (len(lwl) - 1)
-#        pixels.attrib["WaveStart"] = "%f" % (lwl[0] * 1e9) # in nm
-#        pixels.attrib["WaveIncrement"] = "%f" % (inc * 1e9) # in nm/px
     else:
         wl_list = None
 
@@ -1020,7 +1012,7 @@ def _addImageElement(root, das, ifd, rois):
                 else:
                     chan.attrib["AcquisitionMode"] = "SpectralImaging"
                     # It should be an int, but that looses too much precision
-                    chan.attrib["EmissionWavelength"] = "%f" % (wl_list[c] * 1e9)
+                    chan.attrib["EmissionWavelength"] = "%.15f" % (wl_list[c] * 1e9)
                  
             if model.MD_USER_TINT in da.metadata:
                 # user tint is 3 tuple int
@@ -1037,13 +1029,13 @@ def _addImageElement(root, das, ifd, rois):
             if model.MD_BINNING in da.metadata:
                 attrib["Binning"] = "%dx%d" % da.metadata[model.MD_BINNING]
             if model.MD_GAIN in da.metadata:
-                attrib["Gain"] = "%f" % da.metadata[model.MD_GAIN]
+                attrib["Gain"] = "%.15f" % da.metadata[model.MD_GAIN]
             if model.MD_READOUT_TIME in da.metadata:
                 ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
-                attrib["ReadOutRate"] = "%f" % ror
+                attrib["ReadOutRate"] = "%.15f" % ror
             if model.MD_EBEAM_ENERGY in da.metadata:
                 # Schema only mentions PMT, but we use it for the e-beam too
-                attrib["Voltage"] = "%f" % da.metadata[model.MD_EBEAM_ENERGY] # V
+                attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_ENERGY] # V
     
             if attrib:
                 # detector of the group has the same id as first IFD of the group
@@ -1079,23 +1071,23 @@ def _addImageElement(root, das, ifd, rois):
                                })
         if model.MD_ACQ_DATE in da.metadata:
             diff = da.metadata[model.MD_ACQ_DATE] - globalAD
-            plane.attrib["DeltaT"] = "%.12f" % diff
+            plane.attrib["DeltaT"] = "%.15f" % diff
 
         if model.MD_EXP_TIME in da.metadata:
             exp = da.metadata[model.MD_EXP_TIME]
-            plane.attrib["ExposureTime"] = "%.12f" % exp
+            plane.attrib["ExposureTime"] = "%.15f" % exp
         elif model.MD_DWELL_TIME in da.metadata:
             # save it as is (it's the time each pixel receives "energy")
             exp = da.metadata[model.MD_DWELL_TIME]
-            plane.attrib["ExposureTime"] = "%.12f" % exp
+            plane.attrib["ExposureTime"] = "%.15f" % exp
 
         # Note that Position has no official unit, which prevents Tiling to be
         # usable. In one OME-TIFF official example of tiles, they use pixels
         # (and ModuloAlongT "tile")
         if model.MD_POS in da.metadata:
             pos = da.metadata[model.MD_POS]
-            plane.attrib["PositionX"] = "%.12f" % pos[0] # any unit is allowed => m
-            plane.attrib["PositionY"] = "%.12f" % pos[1]
+            plane.attrib["PositionX"] = "%.15f" % pos[0] # any unit is allowed => m
+            plane.attrib["PositionY"] = "%.15f" % pos[1]
 
         subid += 1
 
@@ -1135,8 +1127,8 @@ def _createPointROI(rois, name, p, shp_attrib=None):
     unione = ET.SubElement(roie, "Union")
     shapee = ET.SubElement(unione, "Shape", attrib={"ID": shapeid})
     shapee.attrib.update(shp_attrib)
-    pointe = ET.SubElement(shapee, "Point", attrib={"X": "%f" % p[0],
-                                                    "Y": "%f" % p[1]})
+    pointe = ET.SubElement(shapee, "Point", attrib={"X": "%.15f" % p[0],
+                                                    "Y": "%.15f" % p[1]})
 
     # Add the element to all the ROIs
     rois[rid] = roie
