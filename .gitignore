@@ -26,6 +26,7 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+.lprof
 nosetests.xml
 
 # Dev environment
