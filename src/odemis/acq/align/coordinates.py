@@ -30,8 +30,10 @@ import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 from odemis import model
 from odemis import dataio
+from numpy import unravel_index
+from numpy import argsort
+from numpy import histogram
 
-neighborhood_size = 15
 
 def FindCenterCoordinates(subimages):
     """
@@ -48,6 +50,8 @@ def FindCenterCoordinates(subimages):
     for i in xrange(number_of_subimages):
         subimage = subimages[i]
         subimage_x, subimage_y = subimage.shape
+
+        # See Parthasarathy's paper for details
         xk_onerow = numpy.arange(-(subimage_y - 1) / 2 + 0.5, (subimage_y - 1) / 2, 1)
         (xk_onerow_x,) = xk_onerow.shape
         xk = numpy.tile(xk_onerow, subimage_x - 1)
@@ -56,31 +60,46 @@ def FindCenterCoordinates(subimages):
         (yk_onecol_x,) = yk_onecol.shape
         yk_onecol = yk_onecol.reshape((yk_onecol_x, 1))
         yk = numpy.tile(yk_onecol, subimage_y - 1)
+
         dIdu = subimage[0:subimage_x - 1, 1:subimage_y] - subimage[1:subimage_x, 0:subimage_y - 1]
         dIdv = subimage[0:subimage_x - 1, 0:subimage_y - 1] - subimage[1:subimage_x, 1:subimage_y]
-        h = numpy.tile(numpy.ones(3) / 9, 3).reshape(3, 3)
+
+        # Smoothing
+        h = numpy.tile(numpy.ones(3) / 9, 3).reshape(3, 3)  # simple 3x3 averaging filter
         dIdu = scipy.signal.convolve2d(dIdu, h, mode='same', fillvalue=0)
         dIdv = scipy.signal.convolve2d(dIdv, h, mode='same', fillvalue=0)
+
+        # Calculate intensity gradient in xy coordinate system
         dIdx = dIdu - dIdv
         dIdy = dIdu + dIdv
+
+        # Assign a,b
         a = -dIdy
         b = dIdx
+
+        # Normalize such that a^2 + b^2 = 1
         I2 = numpy.hypot(a, b)
         s = (I2 != 0)
         a[s] = a[s] / I2[s]
         b[s] = b[s] / I2[s]
 
-        c1 = -a * xk
+        # Solve for c
         c = -a * xk - b * yk
+
+        # Weighting: weight by square of gradient magnitude and inverse distance to gradient intensity centroid.
         dI2 = dIdu * dIdu + dIdv * dIdv
         sdI2 = numpy.sum(dI2[:])
         x0 = numpy.sum(dI2[:] * xk[:]) / sdI2
         y0 = numpy.sum(dI2[:] * yk[:]) / sdI2
         w = dI2 / (0.05 + numpy.sqrt((xk - x0) * (xk - x0) + (yk - y0) * (yk - y0)))
+
+        # Make the edges zero, because of the filter
         w[0, :] = 0
         w[w.shape[0] - 1, :] = 0
         w[:, 0] = 0
         w[:, w.shape[1] - 1] = 0
+
+        # Find radial center
         swa2 = numpy.sum(w[:] * a[:] * a[:])
         swab = numpy.sum(w[:] * a[:] * b[:])
         swb2 = numpy.sum(w[:] * b[:] * b[:])
@@ -89,6 +108,8 @@ def FindCenterCoordinates(subimages):
         det = swa2 * swb2 - swab * swab
         xc = (swab * swbc - swb2 * swac) / det
         yc = (swab * swac - swa2 * swbc) / det
+
+        # Output relative to upper left coordinate
         xc = xc + (subimage_y + 1) / 2
         yc = -yc + (subimage_x + 1) / 2
         spot_coordinates.append((xc, yc))
@@ -104,47 +125,50 @@ def DivideInNeighborhoods(image, number_of_spots):
     image (model.DataArray): 2D array containing the intensity of each pixel
     number_of_spots (int,int): The number of CL spots
     returns subimages (List of DataArrays): One subimage per spot
-            subimage_coordinates(List of tuples): The coordinates of the center of each 
+            subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
+            subimage_size (int): One dimension because it is square
     """
-    (image_x, image_y) = image.shape
-    number_of_spots_x, number_of_spots_y = number_of_spots
     subimage_coordinates = []
     subimages = []
 
-    # TODO: smarter way to decide on this.
-    subimage_size = (image_x / (number_of_spots_x ** 2))
+    # Determine size of filter window
+    filter_window_size = int((image.shape[0] * image.shape[1]) / (3 * ((number_of_spots[0] * number_of_spots[1]) ** 2)))
 
-    # Determine the size of the parts of the array to be passed to the filter
-    # Intuitively it is proportional to the image size and number of spots
-    # TODO: smarter way to decide on this.
-    # neighborhood_size = math.sqrt(image_x * image_y)
-    # threshold = 0
-    threshold = 650
+    # Determine threshold
+    i_max, j_max = unravel_index(image.argmax(), image.shape)
+    i_min, j_min = unravel_index(image.argmin(), image.shape)
+    max_diff = image[i_max, j_max] - image[i_min, j_min]
+    threshold = max_diff / 3
 
-    data_max = filters.maximum_filter(image, neighborhood_size)
+    # Filter the parts of the image with variance in intensity greater
+    # than the threshold
+    data_max = filters.maximum_filter(image, filter_window_size)
     maxima = (image == data_max)
-    data_min = filters.minimum_filter(image, neighborhood_size)
+    data_min = filters.minimum_filter(image, filter_window_size)
     diff = ((data_max - data_min) > threshold)
     maxima[diff == 0] = 0
     
     labeled, num_objects = ndimage.label(maxima)
     slices = ndimage.find_objects(labeled)
 
+    # Go through these parts and crop the subimages based on the neighborhood_size value
     for dy,dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
         y_center = (dy.start + dy.stop - 1) / 2
 
         subimage_coordinates.append((x_center, y_center))
-        subimage_width = dx.stop - dx.start
-        subimage_height = dy.stop - dy.start
         # TODO: change +10 and -10 to number relative to spot size
-        subimage = image[(dy.start - neighborhood_size):(dy.stop + 1 + neighborhood_size), (dx.start - neighborhood_size):(dx.stop + 1 + neighborhood_size)]
+        subimage = image[(dy.start - filter_window_size):(dy.stop + 1 + filter_window_size), (dx.start - filter_window_size):(dx.stop + 1 + filter_window_size)]
         subimages.append(subimage)
 
-    return subimages, subimage_coordinates
+    #Take care of fault spots (e.g. cosmic ray)
+    clean_subimages, clean_subimage_coordinates = FilterCosmicRay(image, subimages, subimage_coordinates)
+    subimage_size = subimage.shape[0]
 
-def ReconstructImage(subimage_coordinates, spot_coordinates):
+    return clean_subimages, clean_subimage_coordinates, subimage_size
+
+def ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size):
     """
     Given the coordinates of each subimage as also the coordinates of the spot into it, 
     generates the coordinates of the spots with respect to the overall image.
@@ -152,12 +176,42 @@ def ReconstructImage(subimage_coordinates, spot_coordinates):
                                         center of each subimage with 
                                         respect to the overall image
     spot_coordinates (List of tuples): Coordinates of spot centers
+    subimage_size(int): One dimension because it is square
     returns (List of tuples): Coordinates of spots in optical image
     """
     optical_coordinates = []
+    center_position = (subimage_size / 2) - 1
     for ta, tb in zip(subimage_coordinates, spot_coordinates):
-        t = tuple(a + (b - neighborhood_size) for a, b in zip(ta, tb))
+        t = tuple(a + (b - center_position) for a, b in zip(ta, tb))
         optical_coordinates.append(t)
 
     return optical_coordinates
 
+def FilterCosmicRay(image, subimages, subimage_coordinates):
+    """
+    It removes subimages that contain cosmic rays.
+    image (model.DataArray): 2D array containing the intensity of each pixel
+    subimages (List of model.DataArray): List of 2D arrays containing pixel intensity
+    returns (List of model.DataArray): List of subimages without the ones containing
+                                       cosmic ray
+            (List of tuples): The coordinates of the center of each subimage with respect 
+                            to the overall image
+    """
+    number_of_subimages = subimages.__len__()
+    clean_subimages = []
+    clean_subimage_coordinates = []
+    for i in xrange(number_of_subimages):
+        hist, bin_edges = histogram(subimages[i], bins=10)
+        # Remove subimage if its istogram implies a cosmic ray
+        if ~((hist[3:7] == numpy.zeros(4)).all()):
+            clean_subimages.append(subimages[i])
+            clean_subimage_coordinates.append(subimage_coordinates[i])
+            
+    # If we removed more than 3 subimages give up and return the initial list
+    # This is based on the assumption that each image would contain at maximum
+    # 3 cosmic rays.
+    if (((subimages.__len__()-clean_subimages.__len__())>3) or (clean_subimages.__len__()==0)):
+        clean_subimages = subimages
+        clean_subimage_coordinates = subimage_coordinates
+
+    return clean_subimages, clean_subimage_coordinates
