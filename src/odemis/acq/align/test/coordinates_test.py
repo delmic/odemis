@@ -22,12 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 import numpy
-import csv
 
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.align import coordinates
-from scipy import misc
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -77,7 +75,7 @@ class TestSpotCoordinates(unittest.TestCase):
         spot_image = numpy.zeros(shape=(256, 256))
         spot_image[112:120, 114:122].fill(255)
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(spot_image, (1, 1))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image, (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
     @unittest.skip("skip")
@@ -94,7 +92,7 @@ class TestSpotCoordinates(unittest.TestCase):
                 y_start_in = y_start_in + 40
             x_start = x_start + 40
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_image, (3, 3))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_image, (3, 3))
         self.assertEqual(subimages.__len__(), 9)
 
     @unittest.skip("skip")
@@ -106,7 +104,7 @@ class TestSpotCoordinates(unittest.TestCase):
         C, T, Z, Y, X = spot_image[0].shape
         spot_image[0].shape = Y, X
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
     @unittest.skip("skip")
@@ -118,24 +116,31 @@ class TestSpotCoordinates(unittest.TestCase):
         C, T, Z, Y, X = spot_image[0].shape
         spot_image[0].shape = Y, X
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         # hdf5.export("subimage.h5", subimages[0], thumbnail=None)
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        # print spot_coordinates
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        expected_coordinates = [(23, 18)]
+        numpy.testing.assert_almost_equal(optical_coordinates, expected_coordinates, 0)
 
     def test_devide_and_find_center_grid(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
         """
-        grid_data = numpy.genfromtxt('grid4.csv', delimiter=',')
+        grid_data = numpy.genfromtxt('grid2.csv', delimiter=',')
+        # grid_data[33, 113] = 4700
+        hdf5.export("input_grid.h5", model.DataArray(grid_data), thumbnail=None)
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data, (10, 10))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data, (10, 10))
         print subimage_coordinates.__len__()
 
-        hdf5.export("subimage.h5", model.DataArray(subimages[1]), thumbnail=None)
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates)
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+
+        for i, (a, b) in enumerate(optical_coordinates):
+            grid_data[b, a] = 1797693134862315700000
         # a = numpy.array([tuple(i) for i in optical_coordinates], dtype=(float, 2))
         # numpy.savetxt("optical_coordinates.csv", a, delimiter=",")
-        print optical_coordinates
+        hdf5.export("centers_grid.h5", model.DataArray(grid_data), thumbnail=None)
+        # print optical_coordinates
 
