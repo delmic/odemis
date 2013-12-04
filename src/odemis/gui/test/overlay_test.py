@@ -82,6 +82,13 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.ViewOverlays.append(psol)
         test.gui_loop()
 
+        test.sleep(1000)
+
+        psol.phi_deg = 90
+        psol.theta_deg = 45
+        psol.base.Repaint()
+        test.gui_loop()
+
     @unittest.skip("simple")
     def test_points_select_overlay(self):
         # Create stuff
