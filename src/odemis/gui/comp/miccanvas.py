@@ -1386,23 +1386,24 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def __init__(self, *args, **kwargs):
 
+        super(AngularResolvedCanvas, self).__init__(*args, **kwargs)
+
         self.microscope_view = None
         self._tab_data_model = None
-        self.backgroundBrush = wx.SOLID # background is always black
 
-        super(AngularResolvedCanvas, self).__init__(*args, **kwargs)
+        self.backgroundBrush = wx.SOLID # background is always black
 
         ## Overlays
 
-        self.angle_overlay = comp_overlay.AngleOverlay(self)
-        self.ViewOverlays.append(self.angle_overlay)
+        self.polar_overlay = comp_overlay.PolarOverlay(self)
+        self.ViewOverlays.append(self.polar_overlay)
 
         ## Event binding
 
         self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
         self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
         self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
-        # self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
 
 
     # Event handlers
@@ -1420,6 +1421,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         """ Called when the canvas is resized """
         self.fitViewToContent()
         super(AngularResolvedCanvas, self).OnSize(event)
+        event.Skip()
 
     def setView(self, microscope_view, tab_data):
         """Set the microscope_view that this canvas is displaying/representing
@@ -1491,15 +1493,11 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.fitViewToContent()
         wx.CallAfter(self.ShouldUpdateDrawing)
 
-#    def OnPaint(self, event=None):
-#        wx.BufferedPaintDC(self, self._bmp_buffer)
-#        dc = wx.PaintDC(self)
-#
-#        for o in self.ViewOverlays:
-#            o.Draw(dc)
-#
-#        if self.microscope_view:
-#            self._updateThumbnail()
+    def UpdateDrawing(self):
+        super(AngularResolvedCanvas, self).UpdateDrawing()
+
+        if self.microscope_view:
+            self._updateThumbnail()
 
     @limit_invocation(0.5) # max 1/2 Hz
     @call_after  # needed as it accesses the DC

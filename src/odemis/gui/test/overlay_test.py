@@ -76,6 +76,8 @@ class OverlayTestCase(test.GuiTestCase):
     # @unittest.skip("simple")
     def test_polar_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.canDrag = False
+
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         psol = overlay.PolarOverlay(cnvs)

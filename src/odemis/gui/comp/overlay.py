@@ -1548,6 +1548,13 @@ class PointSelectOverlay(WorldOverlay):
         self.enabled = enable
         self.base.Refresh()
 
+
+class AngleOverlay(ViewOverlay):
+    """ Overlay with radials for Angular Resolve viewport """
+    def Draw(self, dc):
+        pass
+
+
 MAX_DOT_SIZE = 15.5
 MIN_DOT_SIZE = 5.5
 
@@ -1668,8 +1675,7 @@ class PolarOverlay(ViewOverlay):
     def __init__(self, base):
         super(PolarOverlay, self).__init__(base)
 
-        self.base.canDrag = False
-
+        # self.base.canDrag = False
         # Rendering attributes
         self.center_x = None
         self.center_y = None
@@ -1719,7 +1725,7 @@ class PolarOverlay(ViewOverlay):
     def phi_rad(self, phi_rad):
         self.phi = phi_rad
         self._calculate_values()
-        self.base.Repaint()
+        self.base.Refresh()
 
     @property
     def phi_deg(self):
@@ -1739,7 +1745,7 @@ class PolarOverlay(ViewOverlay):
         self.theta = theta_rad
         self.theta_radius = (theta_rad / (math.pi / 2 )) * self.inner_radius
         self._calculate_values()
-        self.base.Repaint()
+        self.base.Refresh()
 
     @property
     def theta_deg(self):
@@ -1756,7 +1762,7 @@ class PolarOverlay(ViewOverlay):
         # Only change the values when the user is dragging
         if self.dragging:
             self._calculate_values(evt.GetPositionTuple())
-            self.base.Repaint()
+            self.base.Refresh()
 
         evt.Skip()
 
@@ -1823,7 +1829,7 @@ class PolarOverlay(ViewOverlay):
             self.dragging = False
             self.base.ReleaseMouse()
 
-            self.base.Repaint()
+            self.base.Refresh()
         evt.Skip()
 
     def on_size(self, evt=None):
@@ -1848,7 +1854,7 @@ class PolarOverlay(ViewOverlay):
 
         self._calculate_values()
 
-        self.base.Repaint()
+        self.base.Refresh()
 
     def text(self, ctx, string, pos, phi, flip=False):
         ctx.save()
