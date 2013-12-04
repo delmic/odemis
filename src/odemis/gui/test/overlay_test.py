@@ -26,11 +26,11 @@
 # Test module for Odemis' gui.comp.overlay module
 #===============================================================================
 
-from odemis.gui import model
 import logging
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.overlay as overlay
 import odemis.gui.test as test
+import odemis.gui.model as gmodel
 import odemis.model as omodel
 import unittest
 import wx
@@ -39,41 +39,15 @@ test.goto_manual()
 # logging.getLogger().setLevel(logging.DEBUG)
 # test.set_sleep_time(1000)
 
-def do_stuff(sequence):
-    logging.debug("Doing stuff...")
 
-class Object(object):
-    pass
-
-class FakeMicroscopeModel(object):
-    """
-    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
-    """
-    def __init__(self):
-        fview = model.MicroscopeView("fakeview")
-        self.focussedView = model.VigilantAttribute(fview)
-
-        self.main = Object() #pylint: disable=E0602
-        self.main.light = None
-        self.main.ebeam = None
-        self.main.debug = model.VigilantAttribute(fview)
-        self.focussedView = model.VigilantAttribute(fview)
-
-        self.light = None
-        self.light_filter = None
-        self.ccd = None
-        self.sed = None
-        self.ebeam = None
-        self.tool = None
-        self.subscribe = None
-
-        self.mpp = omodel.FloatContinuous(10e-6, range=(10e-12, 1e-3))
+def do_stuff(value):
+    print "value", value
 
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_polar_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         cnvs.canDrag = False
@@ -91,23 +65,22 @@ class OverlayTestCase(test.GuiTestCase):
         psol.base.Repaint()
         test.gui_loop()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        mmodel = FakeMicroscopeModel()
+        mmodel = test.FakeMicroscopeModel()
         view = mmodel.focussedView.value
-        view.mpp.value = 5e-10
         cnvs.setView(view, mmodel)
 
-        phys_points = [
-            (-100,  100), ( -50,  100), (0,  100), (50,  100), (100,  100),
-            (-100,   50), ( -50,   50), (0,   50), (50,   50), (100,   50),
-            (-100,    0), ( -50,    0), (0,    0), (50,    0), (100,    0),
-            (-100,  -50), ( -50,  -50), (0, - 50), (50,  -50), (100,  -50),
-            (-100, -100), ( -50, -100), (0, -100), (50, -100), (100, -100),
-        ]
+        # view.mpp.subscribe(do_stuff, init=True)
+
+        from itertools import product
+
+        # phys_points = product(xrange(-1000, 1001, 50), xrange(-1000, 1001, 50))
+        phys_points = product(xrange(-200, 201, 50), xrange(-200, 201, 50))
+        phys_points = [(a / 1.0e9, b / 1.0e9) for a, b in phys_points]
 
         point = omodel.VAEnumerated(
                     phys_points[0],
@@ -116,9 +89,12 @@ class OverlayTestCase(test.GuiTestCase):
         psol = overlay.PointsOverlay(cnvs)
         psol.set_points(point)
         cnvs.WorldOverlays.append(psol)
-        cnvs.current_mode = model.TOOL_POINT
+        cnvs.current_mode = gmodel.TOOL_POINT
         psol.enable(True)
 
+        test.gui_loop()
+
+        view.mpp.value = 1.25e-9
         test.gui_loop()
 
     @unittest.skip("simple")
@@ -145,7 +121,7 @@ class OverlayTestCase(test.GuiTestCase):
         vsol = overlay.ViewSelectOverlay(cnvs, "test selection")
         cnvs.ViewOverlays.append(vsol)
         cnvs.active_overlay = vsol
-        cnvs.current_mode = model.TOOL_ROI
+        cnvs.current_mode = gmodel.TOOL_ROI
 
     @unittest.skip("simple")
     def test_roa_select_overlay(self):
@@ -160,7 +136,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol = overlay.RepetitionSelectOverlay(cnvs, "Region of acquisition")
         cnvs.WorldOverlays.append(rsol)
         cnvs.active_overlay = rsol
-        cnvs.current_mode = model.TOOL_ROA
+        cnvs.current_mode = gmodel.TOOL_ROA
 
         test.gui_loop()
         wroi = [-0.1, 0.3, 0.2, 0.4] # in m

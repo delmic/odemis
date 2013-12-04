@@ -1010,6 +1010,7 @@ class DraggableCanvas(wx.Panel):
 
         pos (2-tuple floats): the coordinates in the world
         """
+
         bp = world_to_buffer_pos(
                     pos,
                     self.buffer_center_world_pos,
@@ -1074,9 +1075,6 @@ def world_to_buffer_pos(world_pos, buffcenter_wpos, scale, offset=None):
         details.
     :return: (int, int)
     """
-    # TODO: check whether it's really important sometimes to be an int
-    # it's at least useful sometimes to keep the float (precision)
-
     # buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
     #             int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
     buff_pos = ((world_pos[0] - buffcenter_wpos[0]) * scale,
