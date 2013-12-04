@@ -133,7 +133,7 @@ def DivideInNeighborhoods(image, number_of_spots):
     subimages = []
 
     # Determine size of filter window
-    filter_window_size = int((image.shape[0] * image.shape[1]) / (3 * ((number_of_spots[0] * number_of_spots[1]) ** 2)))
+    filter_window_size = int(image.size / (3 * ((number_of_spots[0] * number_of_spots[1]) ** 2)))
 
     # Determine threshold
     i_max, j_max = unravel_index(image.argmax(), image.shape)
