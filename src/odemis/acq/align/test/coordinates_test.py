@@ -23,6 +23,8 @@ import logging
 import unittest
 import numpy
 
+from numpy import random
+from numpy import reshape
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.align import coordinates
@@ -144,3 +146,27 @@ class TestSpotCoordinates(unittest.TestCase):
         hdf5.export("centers_grid.h5", model.DataArray(grid_data), thumbnail=None)
         # print optical_coordinates
 
+    def test_devide_and_find_center_grid_noise(self):
+        """
+        Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input
+        """
+        grid_data = numpy.genfromtxt('grid2.csv', delimiter=',')
+        # grid_data[33, 113] = 4700
+        hdf5.export("input_grid.h5", model.DataArray(grid_data), thumbnail=None)
+        noise = random.normal(0, 40, grid_data.size)
+        noise_array = noise.reshape(grid_data.shape[0], grid_data.shape[1])
+        noisy_grid_data = grid_data + noise_array
+        hdf5.export("noisy_input_grid.h5", model.DataArray(noisy_grid_data), thumbnail=None)
+
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+        print subimage_coordinates.__len__()
+
+        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+
+        for i, (a, b) in enumerate(optical_coordinates):
+            grid_data[b, a] = 1797693134862315700000
+        # a = numpy.array([tuple(i) for i in optical_coordinates], dtype=(float, 2))
+        # numpy.savetxt("optical_coordinates.csv", a, delimiter=",")
+        hdf5.export("centers_grid.h5", model.DataArray(grid_data), thumbnail=None)
+        # print optical_coordinates
