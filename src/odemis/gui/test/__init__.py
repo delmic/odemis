@@ -26,7 +26,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import os.path
 import unittest
 import wx
+
 import odemis.gui.test.test_gui
+import odemis.gui.model as gmodel
+import odemis.model as omodel
+
 from odemis.gui.xmlh import odemis_get_test_resources
 
 
@@ -156,3 +160,29 @@ class GuiTestCase(unittest.TestCase):
             cls.sizer.Remove(child.Window)
             child.Window.Destroy()
         cls.sizer.Layout()
+
+# Dummy clases for testing purposes
+class Object(object):
+    pass
+
+class FakeMicroscopeModel(object):
+    """
+    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
+    """
+    def __init__(self):
+        fview = gmodel.MicroscopeView("fakeview")
+        self.focussedView = omodel.VigilantAttribute(fview)
+
+        self.main = Object() #pylint: disable=E0602
+        self.main.light = None
+        self.main.ebeam = None
+        self.main.debug = omodel.VigilantAttribute(fview)
+        self.focussedView = omodel.VigilantAttribute(fview)
+
+        self.light = None
+        self.light_filter = None
+        self.ccd = None
+        self.sed = None
+        self.ebeam = None
+        self.tool = None
+        self.subscribe = None

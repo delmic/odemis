@@ -1555,8 +1555,8 @@ class AngleOverlay(ViewOverlay):
         pass
 
 
-MAX_DOT_SIZE = 15.5
-MIN_DOT_SIZE = 5.5
+MAX_DOT_SIZE = 25.5
+MIN_DOT_SIZE = 3.5
 
 class PointsOverlay(WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one
@@ -1568,6 +1568,8 @@ class PointsOverlay(WorldOverlay):
         # The possible choices for point as a world pos => point mapping
         self.choices = {}
         self.point = None
+
+        self.min_dist = None
 
         self.point_colour = conversion.hex_to_frgb(
                                         gui.FOREGROUND_COLOUR_HIGHLIGHT)
@@ -1591,7 +1593,7 @@ class PointsOverlay(WorldOverlay):
 
         I.e. when the zoom level of the canvas changes.
         """
-        self.dot_size = min(MIN_DOT_SIZE * (10e-9 / mpp), MAX_DOT_SIZE)
+        self.dot_size = min(MAX_DOT_SIZE, self.base.scale * self.min_dist)
 
     def on_mouse_up(self, evt):
         """ Set the seleceted point if the mouse cursor is hovering over one """
@@ -1618,10 +1620,19 @@ class PointsOverlay(WorldOverlay):
         """ Set the available points and connect to the given point VA """
         self.choices = {}
 
+        def distance(p1, p2):
+            return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+
         # Translate physical to world coordinates
-        for point in [c for c in point_va.choices if None not in c]:
+        for point in (c for c in point_va.choices if None not in c):
             world_pos = self.base.physical_to_world_pos(point)
             self.choices[world_pos] = point
+            self.min_dist = min(
+                    distance(point, d)
+                    for d in point_va.choices if None not in d and d != point
+            )
+
+        self.min_dist /= 2
 
         self.point = point_va
         self.point.subscribe(self._point_selected)
@@ -1635,14 +1646,18 @@ class PointsOverlay(WorldOverlay):
         offset = [v // 2 for v in self.base._bmp_buffer_size]
         cursor_over = None
 
+        # Used to limit the mouse overs to only 1 hit
+        hit = False
+
         for world_pos in self.choices.keys():
             bposx, bposy = self.base.world_to_buffer_pos(world_pos, offset)
 
             ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
 
-            if self.cursor_buffer_pos and ctx.in_fill(*self.cursor_buffer_pos):
+            if not hit and self.cursor_buffer_pos and ctx.in_fill(*self.cursor_buffer_pos):
                 cursor_over = world_pos
                 ctx.set_source_rgba(*self.select_colour)
+                hit = True
             elif self.point.value == self.choices[world_pos]:
                 ctx.set_source_rgba(*self.select_colour)
             else:
@@ -1675,8 +1690,7 @@ class PolarOverlay(ViewOverlay):
     def __init__(self, base):
         super(PolarOverlay, self).__init__(base)
 
-        self.base.canDrag = False
-
+        # self.base.canDrag = False
         # Rendering attributes
         self.center_x = None
         self.center_y = None
@@ -1717,27 +1731,80 @@ class PolarOverlay(ViewOverlay):
         # Calculate the characteristic values for the first time
         self.on_size()
 
+    # Property Getters/Setters
+    @property
+    def phi_rad(self):
+        return self.phi
+
+    @phi_rad.setter
+    def phi_rad(self, phi_rad):
+        self.phi = phi_rad
+        self._calculate_values()
+        self.base.Refresh()
+
+    @property
+    def phi_deg(self):
+        return math.degrees(self.phi)
+
+    @phi_deg.setter
+    def phi_deg(self, phi_deg):
+        self.phi_rad = math.radians(phi_deg)
+
+
+    @property
+    def theta_rad(self):
+        return self.theta
+
+    @theta_rad.setter
+    def theta_rad(self, theta_rad):
+        self.theta = theta_rad
+        self.theta_radius = (theta_rad / (math.pi / 2 )) * self.inner_radius
+        self._calculate_values()
+        self.base.Refresh()
+
+    @property
+    def theta_deg(self):
+        return math.degrees(self.theta)
+
+    @theta_deg.setter
+    def theta_deg(self, theta_deg):
+        self.theta_rad = math.radians(theta_deg)
+
+
+    # END Property Getters/Setters
+
     def on_mouse_motion(self, evt):
         # Only change the values when the user is dragging
         if self.dragging:
-            # Store the view coordinates of the mouse
-            vx, vy = evt.GetPositionTuple()
+            self._calculate_values(evt.GetPositionTuple())
+            self.base.Refresh()
+
+        evt.Skip()
+
+    def _calculate_values(self, view_pos=None):
+        # Calculate angle related values when a view position is provided
+        if view_pos:
+            vx, vy = view_pos
             # Angle in radians from the origin
             dx, dy = vx - self.center_x, self.center_y - vy
             self.phi = math.atan2(dx, dy) % self.tau
-            # We store a separate Phi radian angle, for drawing the line, since
-            # normally 0 is to the right, and we need it to be drawn at the top
-            self.phi_line_rad = self.phi - math.pi / 2
-
-            # Pixel to which to draw the Phi line to
-            phi_x = self.center_x + self.radius * math.cos(self.phi_line_rad)
-            phi_y = self.center_y + self.radius * math.sin(self.phi_line_rad)
-            self.phi_line_pos = (phi_x, phi_y)
 
             # Get the radius and the angle for Theta
             self.theta_radius = min(math.sqrt(dx * dx + dy * dy),
                                     self.inner_radius)
+
+
+        # Calculate pixel values when the angles are set
+        if None not in (self.phi, self.theta_radius):
+            # We store a separate Phi radian angle, for drawing the line, since
+            # normally 0 is to the right, and we need it to be drawn at the top
+            self.phi_line_rad = self.phi - math.pi / 2
+
             self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
+            # Pixel to which to draw the Phi line to
+            phi_x = self.center_x + self.radius * math.cos(self.phi_line_rad)
+            phi_y = self.center_y + self.radius * math.sin(self.phi_line_rad)
+            self.phi_line_pos = (phi_x, phi_y)
 
             # Calc Phi label pos
             if (self.theta_radius > self.inner_radius / 2):
@@ -1757,16 +1824,13 @@ class PolarOverlay(ViewOverlay):
             # Calculate the intersecion between Phi and Theta
             x = self.center_x + self.theta_radius * math.cos(self.phi_line_rad)
             y = self.center_y + self.theta_radius * math.sin(self.phi_line_rad)
-            # x = (self.center_x +
-            #      (phi_x - self.center_x) * (self.theta_radius /
-            #      self.inner_radius))
-            # y = self.center_y + self.theta_radius * math.sin(self.phi_line_rad)
 
             self.intersection = (x, y)
 
-            self.base.Repaint()
-
-        evt.Skip()
+            if (0 < self.intersection[0] < self.base.ClientSize.x and
+                0 < self.intersection[1] < self.base.ClientSize.y):
+                    # Determine actual value here
+                    self.intensity = None #"Bingo!"
 
     def on_mouse_down(self, evt):
         if not self.base.HasCapture():
@@ -1780,13 +1844,7 @@ class PolarOverlay(ViewOverlay):
             self.dragging = False
             self.base.ReleaseMouse()
 
-            self.intensity = None
-            if 0 < self.intersection[0] < self.base.ClientSize.x:
-                if 0 < self.intersection[1] < self.base.ClientSize.y:
-                    # Determine actual value here
-                    self.intensity = "Bingo!"
-
-            self.base.Repaint()
+            self.base.Refresh()
         evt.Skip()
 
     def on_size(self, evt=None):
@@ -1809,7 +1867,9 @@ class PolarOverlay(ViewOverlay):
 
             self.ticks.append((sx, sy, lx, ly, phi))
 
-        self.base.Repaint()
+        self._calculate_values()
+
+        self.base.Refresh()
 
     def text(self, ctx, string, pos, phi, flip=False):
         ctx.save()
@@ -1845,7 +1905,7 @@ class PolarOverlay(ViewOverlay):
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
         # If the angles are set, draw the angle indicators
-        if self.phi is not None:
+        if None not in (self.phi, self.theta_radius):
             # Set formatting
             ctx.set_line_width(2)
             ctx.set_dash([3,])
@@ -1884,7 +1944,7 @@ class PolarOverlay(ViewOverlay):
             ctx.line_to(lx, ly)
         ctx.stroke()
 
-        if self.phi is not None:
+        if None not in (self.phi, self.theta_radius):
             ctx.set_source_rgb(*self.colour)
 
             # Phi label
@@ -1902,7 +1962,7 @@ class PolarOverlay(ViewOverlay):
                         colour=self.colour,
                         align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
 
-            if self.intensity is not None and not self.dragging:
+            if self.intensity is not None: # and not self.dragging:
                 ctx.set_source_rgb(*self.colour_highlight)
                 ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
                 ctx.fill()
