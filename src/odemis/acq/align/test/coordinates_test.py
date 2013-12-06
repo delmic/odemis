@@ -36,7 +36,7 @@ class TestSpotCoordinates(unittest.TestCase):
     """
     Test SpotCoordinates functions
     """
-    @unittest.skip("skip")
+  #  @unittest.skip("skip")
     def test_find_center(self):
         """
         Test FindCenterCoordinates
@@ -56,7 +56,7 @@ class TestSpotCoordinates(unittest.TestCase):
                                 (4.1433, 6.7063), (6.4313, 7.2690), (4.9355, 5.1400), (5.0209, 4.9929)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
-    @unittest.skip("skip")
+  #  @unittest.skip("skip")
     def test_devide_neighborhoods_spot(self):
         """
         Test DivideInNeighborhoods for white spot in black image
@@ -67,7 +67,7 @@ class TestSpotCoordinates(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image, (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
-    @unittest.skip("skip")
+ #   @unittest.skip("skip")
     def test_devide_neighborhoods_grid(self):
         """
         Test DivideInNeighborhoods for 3x3 grid of white spots in black image
@@ -84,7 +84,7 @@ class TestSpotCoordinates(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_image, (3, 3))
         self.assertEqual(subimages.__len__(), 9)
 
-    @unittest.skip("skip")
+#    @unittest.skip("skip")
     def test_devide_neighborhoods_real_sample(self):
         """
         Test DivideInNeighborhoods for one spot real image
@@ -96,7 +96,7 @@ class TestSpotCoordinates(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
-    @unittest.skip("skip")
+#    @unittest.skip("skip")
     def test_devide_and_find_center_spot(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
@@ -218,12 +218,12 @@ class TestSpotCoordinates(unittest.TestCase):
         """
         Test MatchCoordinates
         """
-        optical_coordinates = [(2, 3), (3.0, 2.0)]
-        electron_coordinates = [(3, 0), (-4, -1)]
+        optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
+        electron_coordinates = [(0, 1), (0, 2), (1, 0), (1, 4)]
 
         index = coordinates.KNNsearch(optical_coordinates, electron_coordinates)
 
         print index
-        print coordinates.TransfromCoordinates(optical_coordinates, (-2.9999999999999938, 16.999999999999982), -126.869897646, 5.0)
+        print coordinates.TransfromCoordinates(optical_coordinates, (-1.3000132631489385, -2.3999740720548788), 34.9996552027, 0.62499759052)
         # print coordinates.TransfromCoordinates(optical_coordinates, (0, 0), 90, 1)
 
