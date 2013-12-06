@@ -271,7 +271,6 @@ class TestPolarConversion(unittest.TestCase):
         data[0].shape = Y, X
         clean_data = img.AR_BackgroundSubtract(data[0])
         result = img.AngleResolved2Polar(clean_data, 201)
-        hdf5.export("sub_im.h5", model.DataArray(result), thumbnail=None)
 
         desired_output = img.AngleResolved2Polar(data[0].astype(float), 201)
 
