@@ -31,6 +31,9 @@ import numpy
 from odemis import model
 import scipy.misc
 import wx
+from numpy import ma
+
+from odemis import dataio
 
 
 # Variables to be used in CropMirror and AngleResolved2Polar
@@ -525,7 +528,60 @@ def CropHalfCircle(data, eff_pixel_size, pole_pos, hole=True):
     returns (model.DataArray): Cropped image
     """
     X, Y = data.shape
-    pole_x, pole_y = pole_pos
+
+    # Create mirror mask and apply to the image
+    circle_mask = CreateMirrorMask(data, hole)
+    image = numpy.where(circle_mask, data, 0)
+
+    return image
+
+def AR_BackgroundSubtract(data):
+    """
+    Substracts the "baseline" (i.e. the average intensity of the background) from the image.
+    This function can be called before AngleResolved2Polar in order to take a better image output.
+    data (model.DataArray): The DataArray with the image
+    returns (model.DataArray): Filtered image
+    """
+    image = data
+    baseline = 0
+    try:
+        # Try to obtain the baseline from the metadata
+        baseline = data.metadata[model.MD_BASELINE]
+    except:
+        # If baseline is not provided we calculate it, taking the average intensity of the
+        # background (i.e. the pixels that are outside the half circle)
+        circle_mask = CreateMirrorMask(data, False)
+        masked_image = ma.array(image, mask=circle_mask)
+
+        # Calculate the average value of the outside pixels
+        baseline = masked_image.mean()
+
+    # Clip values that will result to negative numbers
+    # after the substraction
+    ret_data = numpy.where(image < baseline, baseline, image)
+
+    # Substract background
+    ret_data -= baseline
+        
+    result = model.DataArray(ret_data, data.metadata)
+    return result
+
+def CreateMirrorMask(data, hole):
+    """
+    Creates half circle mask (i.e. True inside half circle, False outside it) based on
+    the MD_AR_POLE, MD_PIXEL_SIZE metadata and AR_PARABOLA_F and AR_FOCUS_DISTANCE values.
+    data (model.DataArray): The DataArray with the image
+    hole (boolean): Crop the area around the pole if True
+    returns (boolean ndarray): Mask
+    """
+    # Get image metadata
+    try:
+        eff_pixel_size = data.metadata[model.MD_PIXEL_SIZE]
+        pole_x, pole_y = data.metadata[model.MD_AR_POLE]
+    except KeyError:
+        raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
+
+    X, Y = data.shape
 
     # Calculate the coordinates of the cutoff of half circle
     center_x = pole_x
@@ -538,13 +594,12 @@ def CropHalfCircle(data, eff_pixel_size, pole_pos, hole=True):
 
     # Create half circle mask
     circle_mask[:center_y, :] = False
-    image = numpy.where(circle_mask, data, 0)
-    
+
     # Crop the pole making hole of AR_HOLE_DIAMETER
     if hole:
         r = (AR_HOLE_DIAMETER / 2) / eff_pixel_size[1]
         y, x = numpy.ogrid[-pole_y:X - pole_y, -pole_x:Y - pole_x]
         circle_mask_hole = x * x + y * y <= r * r
-        image = numpy.where(circle_mask_hole, 0, image)
+        circle_mask = numpy.where(circle_mask_hole, 0, circle_mask)
 
-    return image
+    return circle_mask
