@@ -1110,10 +1110,21 @@ class RepetitionStream(Stream):
         if prev_rep[0] == repetition[0]:
             # TODO: move the computations inside
             pxs = (epxs[1] * eshape[1] * roi_size[1]) / repetition[1]
-        else:
+        elif prev_rep[1] == repetition[1]:
             pxs = (epxs[0] * eshape[0] * roi_size[0]) / repetition[0]
+        else:
+            # the whole repetition changed => keep area and adapt ROI
+            roi_center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
+            area_ratio = math.sqrt(numpy.prod(prev_rep) / numpy.prod(repetition))
+            rel_pxs = roi_size[0] / prev_rep[0] #, roi_size[1] / prev_rep[1])
+            roi_size = [area_ratio * rel_pxs * repetition[0],
+                        area_ratio * rel_pxs * repetition[1]]
+            roi = [roi_center[0] - roi_size[0] / 2,
+                   roi_center[1] - roi_size[1] / 2,
+                   roi_center[0] + roi_size[0] / 2,
+                   roi_center[1] + roi_size[1] / 2]
+            pxs = self.pixelSize.value * area_ratio
 
-        # TODO: is this sufficient to adapt correctly H or V? might need change in ROI
         roi, rep = self._updateROIAndPixelSize(roi, pxs)
         # update roi and pixel size without going through the checks
         self.roi._value = roi
@@ -1805,8 +1816,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
             return cls._daemon
         # Otherwise, create it (copied from model._core) 
         name = "SEM-CCD Acquisition"
-        SEMCCDMDStream._ipc_name = model.BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
-        if os.path.exists(SEMCCDMDStream._ipc_name):
+        cls._ipc_name = model.BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
+        if os.path.exists(cls._ipc_name):
             try:
                 os.remove(cls._ipc_name)
                 logging.warning("The file '%s' was deleted to create container '%s'.",
