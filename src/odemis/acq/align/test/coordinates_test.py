@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 import numpy
+import math
 
 from numpy import random
 from numpy import reshape
@@ -40,28 +41,14 @@ class TestSpotCoordinates(unittest.TestCase):
         """
         Test FindCenterCoordinates
         """
-        data1 = numpy.genfromtxt('image1.csv', delimiter=',')
-        data2 = numpy.genfromtxt('image2.csv', delimiter=',')
-        data3 = numpy.genfromtxt('image3.csv', delimiter=',')
-        data4 = numpy.genfromtxt('image4.csv', delimiter=',')
-        data5 = numpy.genfromtxt('image5.csv', delimiter=',')
-        data6 = numpy.genfromtxt('image6.csv', delimiter=',')
-        data7 = numpy.genfromtxt('image7.csv', delimiter=',')
-        data8 = numpy.genfromtxt('image8.csv', delimiter=',')
-        data9 = numpy.genfromtxt('image9.csv', delimiter=',')
-        data10 = numpy.genfromtxt('image10.csv', delimiter=',')
-
+        data = []
         subimages = []
-        subimages.append(model.DataArray(data1))
-        subimages.append(model.DataArray(data2))
-        subimages.append(model.DataArray(data3))
-        subimages.append(model.DataArray(data4))
-        subimages.append(model.DataArray(data5))
-        subimages.append(model.DataArray(data6))
-        subimages.append(model.DataArray(data7))
-        subimages.append(model.DataArray(data8))
-        subimages.append(model.DataArray(data9))
-        subimages.append(model.DataArray(data10))
+
+        for i in xrange(10):
+            data.append(hdf5.read_data("image" + str(i+1) + ".h5"))
+            C, T, Z, Y, X = data[i][0].shape
+            data[i][0].shape = Y, X
+            subimages.append(data[i][0])
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
         expected_coordinates = [(4.9998, 4.9768), (5.4181, 4.2244), (15.5542, 15.4534),
@@ -72,7 +59,7 @@ class TestSpotCoordinates(unittest.TestCase):
     @unittest.skip("skip")
     def test_devide_neighborhoods_spot(self):
         """
-        Test DivideInNeighborhoods for one spot image
+        Test DivideInNeighborhoods for white spot in black image
         """
         spot_image = numpy.zeros(shape=(256, 256))
         spot_image[112:120, 114:122].fill(255)
@@ -83,7 +70,7 @@ class TestSpotCoordinates(unittest.TestCase):
     @unittest.skip("skip")
     def test_devide_neighborhoods_grid(self):
         """
-        Test DivideInNeighborhoods for 3x3 grid
+        Test DivideInNeighborhoods for 3x3 grid of white spots in black image
         """
         grid_image = numpy.zeros(shape=(256, 256))
         x_start, y_start = 70, 64
@@ -119,7 +106,6 @@ class TestSpotCoordinates(unittest.TestCase):
         spot_image[0].shape = Y, X
 
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
-        # hdf5.export("subimage.h5", subimages[0], thumbnail=None)
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
         optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
         expected_coordinates = [(23, 18)]
@@ -129,44 +115,115 @@ class TestSpotCoordinates(unittest.TestCase):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
         """
-        grid_data = numpy.genfromtxt('grid2.csv', delimiter=',')
-        # grid_data[33, 113] = 4700
-        hdf5.export("input_grid.h5", model.DataArray(grid_data), thumbnail=None)
+        grid_data = hdf5.read_data("grid_10x10.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data, (10, 10))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10))
         print subimage_coordinates.__len__()
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
         optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
 
         for i, (a, b) in enumerate(optical_coordinates):
-            grid_data[b, a] = 1797693134862315700000
+            grid_data[0][b, a] = 1797693134862315700000
         # a = numpy.array([tuple(i) for i in optical_coordinates], dtype=(float, 2))
         # numpy.savetxt("optical_coordinates.csv", a, delimiter=",")
-        hdf5.export("centers_grid.h5", model.DataArray(grid_data), thumbnail=None)
-        # print optical_coordinates
+        hdf5.export("centers_grid.h5", grid_data, thumbnail=None)
+        print optical_coordinates
 
     def test_devide_and_find_center_grid_noise(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input
         """
-        grid_data = numpy.genfromtxt('grid2.csv', delimiter=',')
-        # grid_data[33, 113] = 4700
-        hdf5.export("input_grid.h5", model.DataArray(grid_data), thumbnail=None)
-        noise = random.normal(0, 40, grid_data.size)
-        noise_array = noise.reshape(grid_data.shape[0], grid_data.shape[1])
-        noisy_grid_data = grid_data + noise_array
-        hdf5.export("noisy_input_grid.h5", model.DataArray(noisy_grid_data), thumbnail=None)
+        grid_data = hdf5.read_data("grid_10x10.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+
+        # Add Gaussian noise
+        noise = random.normal(0, 40, grid_data[0].size)
+        noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
+        noisy_grid_data = grid_data[0] + noise_array
 
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
-        print subimage_coordinates.__len__()
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
         optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
 
-        for i, (a, b) in enumerate(optical_coordinates):
-            grid_data[b, a] = 1797693134862315700000
-        # a = numpy.array([tuple(i) for i in optical_coordinates], dtype=(float, 2))
-        # numpy.savetxt("optical_coordinates.csv", a, delimiter=",")
-        hdf5.export("centers_grid.h5", model.DataArray(grid_data), thumbnail=None)
-        # print optical_coordinates
+        self.assertEqual(subimages.__len__(), 100)
+
+    def test_devide_and_find_center_grid_missing_point(self):
+        """
+        Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
+        """
+        grid_data = hdf5.read_data("grid_missing_point.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+
+        # Add Gaussian noise
+        noise = random.normal(0, 40, grid_data[0].size)
+        noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
+        noisy_grid_data = grid_data[0] + noise_array
+
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+
+        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+
+        self.assertEqual(subimages.__len__(), 99)
+
+    def test_devide_and_find_center_grid_cosmic_ray(self):
+        """
+        Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
+        and contains cosmic ray
+        """
+        grid_data = hdf5.read_data("grid_cosmic_ray.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+
+        # Add Gaussian noise
+        noise = random.normal(0, 40, grid_data[0].size)
+        noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
+        noisy_grid_data = grid_data[0] + noise_array
+
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+
+        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+
+        self.assertEqual(subimages.__len__(), 99)
+
+    def test_devide_and_find_center_grid_noise_missing_point_cosmic_ray(self):
+        """
+        Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input that
+        misses one point and contains cosmic ray
+        """
+        grid_data = hdf5.read_data("grid_cosmic_ray.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+
+        # Add Gaussian noise
+        noise = random.normal(0, 40, grid_data[0].size)
+        noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
+        noisy_grid_data = grid_data[0] + noise_array
+
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+
+        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+
+        self.assertEqual(subimages.__len__(), 99)
+
+    def test_match_coordinates(self):
+        """
+        Test MatchCoordinates
+        """
+        optical_coordinates = [(2, 3), (3.0, 2.0)]
+        electron_coordinates = [(3, 0), (-4, -1)]
+
+        index = coordinates.KNNsearch(optical_coordinates, electron_coordinates)
+
+        print index
+        print coordinates.TransfromCoordinates(optical_coordinates, (-2.9999999999999938, 16.999999999999982), -126.869897646, 5.0)
+        # print coordinates.TransfromCoordinates(optical_coordinates, (0, 0), 90, 1)
+
