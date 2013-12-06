@@ -20,11 +20,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Test module for model.Stream classes
 
+import logging
+import numpy
 from odemis import model
 from odemis.gui.model import stream
+import os
+import subprocess
+import threading
+import time
 import unittest
 
+logging.getLogger().setLevel(logging.DEBUG)
 
+ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../../install/linux/usr/share/odemis/"
+SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class FakeEBeam(model.Emitter):
     """
@@ -102,7 +114,6 @@ class StreamTestCase(unittest.TestCase):
 
         # 1x1 repetition leads to a square ROI
         ss.repetition.value = (1, 1)
-        ss.repetition.value = (1, 1) # needs to be set twice to change both dim
         new_roi = ss.roi.value
         roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
         self.assertAlmostEqual(roi_size[0], roi_size[1])
@@ -117,7 +128,102 @@ class StreamTestCase(unittest.TestCase):
 
         # changing pixel size to a huge number leads to a 1x1 repetition
 
+        # TODO: Check that changing both repetition dims, they are both respected
+
     # TODO: use simulator backend for testing acquisition from stream
+
+class SPARCTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARC
+    """
+    @classmethod
+    def setUpClass(cls):
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1) # time to start
+
+        # Find CCD & SEM components
+        cls.microscope = model.getMicroscope()
+        for comp in model.getComponents():
+            if comp.role == "ccd":
+                cls.ccd = comp
+            elif comp.role == "spectrometer":
+                cls.spec = comp
+            elif comp.role == "e-beam":
+                cls.ebeam = comp
+            elif comp.role == "se-detector":
+                cls.sed = comp
+
+    @classmethod
+    def tearDownClass(cls):
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._components._microscope = None # force reset of the microscope for next connection
+        time.sleep(1) # time to stop
+    
+    def test_acq_ar(self):
+        """
+        Test short & long acquisition for AR
+        """
+        self.acq_over = threading.Event()
+        self.image = None
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test ar", sems, ars)
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4) # hopefully always supported
+
+        # Long acquisition (small rep to avoid being too long)
+        # The acquisition method is different for time > 0.1 s, but we had bugs
+        # with dwell time > 4s, so let's directly test both.
+        self.ccd.exposureTime.value = 5 # s
+        ars.repetition.value = (2, 3)
+        num_ar = numpy.prod(ars.repetition.value)
+
+        sas.image.subscribe(self.receive_image)
+        # Start acquisition
+        self.acq_over.clear()
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        sas.is_active.value = True
+        is_over = self.acq_over.wait(timeout)
+        if not is_over:
+            # just to make help the rest of the tests to pass
+            sas.is_active.value = False
+        self.assertTrue(is_over)
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(len(ars.raw), num_ar)
+
+        # Short acquisition (< 0.1s)
+        self.ccd.exposureTime.value = 0.03 # s
+        ars.repetition.value = (30, 20)
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        self.acq_over.clear()
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        sas.is_active.value = True
+        is_over = self.acq_over.wait(timeout)
+        if not is_over:
+            # just to make help the rest of the tests to pass
+            sas.is_active.value = False
+        self.assertTrue(is_over)
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(len(ars.raw), num_ar)
+
+        sas.image.unsubscribe(self.receive_image)
+
+    def receive_image(self, im):
+        self.image = im
+        self.acq_over.set()
+
 
 if __name__ == "__main__":
     unittest.main()
