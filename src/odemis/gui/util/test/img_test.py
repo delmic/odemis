@@ -54,6 +54,7 @@ class TestPolarConversion(unittest.TestCase):
         mag = 0.4917
         spxs = (13e-6, 13e-6)
         binning = (4, 4)
+        # data[0].metadata[model.MD_BASELINE] = 820
         data[0].metadata[model.MD_BINNING] = binning
         data[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = spxs
         data[0].metadata[model.MD_LENS_MAG] = mag
@@ -124,6 +125,7 @@ class TestPolarConversion(unittest.TestCase):
         Tests for input of DataArray with int8 ndarray.
         """
         data = self.data
+        # scipy.misc.bytescale(data)
         data[0] = data[0].astype(numpy.int64)
         data[0] = numpy.right_shift(data[0], 8)
         data[0] = data[0].astype(numpy.int8)
@@ -131,11 +133,9 @@ class TestPolarConversion(unittest.TestCase):
         data[0].shape = Y, X
         result = img.AngleResolved2Polar(data[0], 201)
 
-        desired_output = hdf5.read_data("desired201x201image.h5")
-        C, T, Z, Y, X = desired_output[0].shape
-        desired_output[0].shape = Y, X
+        desired_output = img.AngleResolved2Polar(data[0].astype(float), 201)
 
-        numpy.testing.assert_allclose(result, desired_output[0], rtol=1)
+        numpy.testing.assert_allclose(result, desired_output, rtol=1e-04)
 
     def test_float_input(self):
         """
@@ -152,7 +152,6 @@ class TestPolarConversion(unittest.TestCase):
         desired_output[0].shape = Y, X
 
         numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
-
 
     def test_100x100(self):
         data = self.data
@@ -221,6 +220,75 @@ class TestPolarConversion(unittest.TestCase):
         result = img.AngleResolved2Polar(white_data_1024[0], 201)
 
         desired_output = hdf5.read_data("desired_white_1024.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
+
+    def test_background_substraction_precomputed(self):
+        """
+        Test clean up before polar conversion
+        """
+        data = self.data
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        clean_data = img.AR_BackgroundSubtract(data[0])
+        result = img.AngleResolved2Polar(clean_data, 201)
+
+        desired_output = hdf5.read_data("substracted_background_image.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
+
+    def test_background_substraction_uint16_input(self):
+        """
+        Tests for input of DataArray with uint16 ndarray.
+        """
+        data = self.data
+        data[0] = data[0].astype(numpy.uint16)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        clean_data = img.AR_BackgroundSubtract(data[0])
+        result = img.AngleResolved2Polar(clean_data, 201)
+
+        desired_output = hdf5.read_data("substracted_background_image.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
+
+    def test_background_substraction_int8_input(self):
+        """
+        Tests for input of DataArray with int8 ndarray.
+        """
+        data = self.data
+        # scipy.misc.bytescale(data)
+        data[0] = data[0].astype(numpy.int64)
+        data[0] = numpy.right_shift(data[0], 8)
+        data[0] = data[0].astype(numpy.int8)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        clean_data = img.AR_BackgroundSubtract(data[0])
+        result = img.AngleResolved2Polar(clean_data, 201)
+        hdf5.export("sub_im.h5", model.DataArray(result), thumbnail=None)
+
+        desired_output = img.AngleResolved2Polar(data[0].astype(float), 201)
+
+        numpy.testing.assert_allclose(result, desired_output, rtol=1)
+
+    def test_background_substraction_float_input(self):
+        """
+        Tests for input of DataArray with float ndarray.
+        """
+        data = self.data
+        data[0] = data[0].astype(numpy.float)
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        clean_data = img.AR_BackgroundSubtract(data[0])
+        result = img.AngleResolved2Polar(clean_data, 201)
+
+        desired_output = hdf5.read_data("substracted_background_image.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 
