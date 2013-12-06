@@ -25,6 +25,7 @@ from __future__ import division
 import numpy
 import math
 import scipy
+import operator
 import scipy.signal
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
@@ -33,6 +34,7 @@ from odemis import dataio
 from numpy import unravel_index
 from numpy import argsort
 from numpy import histogram
+from scipy.spatial import cKDTree
 
 
 def FindCenterCoordinates(subimages):
@@ -215,3 +217,108 @@ def FilterCosmicRay(image, subimages, subimage_coordinates):
         clean_subimage_coordinates = subimage_coordinates
 
     return clean_subimages, clean_subimage_coordinates
+
+def KNNsearch(x_coordinates, y_coordinates):
+    """
+    Applies K-nearest neighbors search to the lists x_coordinates and y_coordinates.
+    x_coordinates (List of tuples): List of coordinates
+    y_coordinates (List of tuples): List of coordinates
+    returns (List of integers): Contains the index of nearest neighbor in x_coordinates 
+                                for the corresponding element in y_coordinates
+    """
+    points = numpy.array(x_coordinates)
+    tree = cKDTree(points)
+    distance, index = tree.query(y_coordinates)
+
+    return index
+
+def TransfromCoordinates(x_coordinates, translation, rotation, scale):
+    """
+    Transforms the x_coordinates according to the parameters.
+    x_coordinates (List of tuples): List of coordinates
+    translation (Tuple of floats): Translation
+    rotation (float): Rotation #degrees
+    scale (float): Scaling
+    returns (List of tuples): Transformed coordinates
+    """
+    #x_move, y_move = translation
+    transformed_coordinates = []
+    for ta in x_coordinates:
+        # (a, b) = zip(ta)
+        # rts
+        """
+        x, y = ta
+        rad_rotation = rotation * (math.pi / 180)  # rotation in radians
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        translated = tuple(map(operator.add, rotated, translation))
+        # x_translated, y_translated = translated
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, translated, tuple_scale))
+        transformed_coordinates.append(scaled)
+        """
+        # str
+        """
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, ta, tuple_scale))
+
+        translated = tuple(map(operator.add, scaled, translation))
+        x, y = translated
+        rad_rotation = (rotation) * (math.pi / 180)  # rotation in radians, clockwise
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        transformed_coordinates.append(rotated)
+        """
+        # tsr
+        """
+        translated = tuple(map(operator.add, ta, translation))
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, translated, tuple_scale))
+        x, y = scaled
+        rad_rotation = rotation * (math.pi / 180)  # rotation in radians, clockwise
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        transformed_coordinates.append(rotated)
+        """
+        # rst
+        """
+        x, y = ta
+        rad_rotation = rotation * (math.pi / 180)  # rotation in radians
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, rotated, tuple_scale))
+        translated = tuple(map(operator.add, scaled, translation))
+        transformed_coordinates.append(translated)
+        """
+        # srt
+
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, ta, tuple_scale))
+
+        x, y = scaled
+        rad_rotation = rotation * (math.pi / 180)  # rotation in radians, clockwise
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        translated = tuple(map(operator.add, rotated, translation))
+        transformed_coordinates.append(translated)
+
+        # trs
+        """
+        translated = tuple(map(operator.add, ta, translation))
+        x, y = translated
+        rad_rotation = (rotation) * (math.pi / 180)  # rotation in radians, clockwise
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, rotated, tuple_scale))
+        transformed_coordinates.append(scaled)
+        """
+
+    return transformed_coordinates
