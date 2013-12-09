@@ -115,7 +115,7 @@ class Overlay(object):
     def on_right_up(self, evt):
         evt.Skip()
 
-    def on_right_up(self, evt):
+    def on_right_down(self, evt):
         evt.Skip()
 
     def on_motion_up(self, evt):
