@@ -23,12 +23,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 from abc import ABCMeta, abstractmethod
+from odemis.gui.util import limit_invocation, call_after
 from odemis.gui.util.units import readable_str
 from odemis.util import normalize_rect
+from functools import partial
 import cairo
 import logging
 import math
 import odemis.gui as gui
+import odemis.gui.comp.canvas as canvas
 import odemis.gui.img.data as img
 import odemis.gui.util as util
 import odemis.gui.util.units as units
@@ -1514,6 +1517,7 @@ class PointSelectOverlay(WorldOverlay):
     def _selection_made(self, selected_pixel):
         self.base.UpdateDrawing()
 
+    # @profile
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
@@ -1583,31 +1587,142 @@ class PointsOverlay(WorldOverlay):
         # None or the point over which the mouse is hovering
         self.cursor_over_point = None
 
+        self.hitboxes = None
+        self.hover_box = None
+        self.offset = None
+
         self.enabled = False
 
         self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
         self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
+        self.base.Bind(wx.EVT_SIZE, self.on_size)
+        self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
+
+        self.on_size()
 
     def _on_mpp(self, mpp):
-        """ Adjust the size of the painted dots when the mpp value changes
+        """ Calculate the values dependant on the mpp attribute
 
         I.e. when the zoom level of the canvas changes.
         """
-        self.dot_size = min(MAX_DOT_SIZE, self.base.scale * self.min_dist)
+        # Calculate the scale ourselves, because somethimes the base.scale
+        # wouldn't be updated in time for our calculation
+        if self.min_dist:
+            scale = self.base.mpwu / mpp
+            self.dot_size = min(MAX_DOT_SIZE, scale * self.min_dist)
+            self._calc_hitboxes()
+
+    def set_points(self, point_va):
+        """ Set the available points and connect to the given point VA """
+
+        # Connect the provided VA to the overlay
+        self.point = point_va
+        self.point.subscribe(self._point_selected)
+        self._calc_min_distance()
+        self._calc_choices()
+        self.base.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+
+    def _calc_hitboxes(self):
+        """ Calculate the square hitboxes in view coordinates"""
+
+        logging.debug("Calculating hit boxes")
+
+        if self.dot_size:
+            self.hitboxes = {}
+
+            left = -self.dot_size
+            right = self.base.ClientSize.x + self.dot_size
+            top = -self.dot_size
+            bottom = self.base.ClientSize.y + self.dot_size
+
+            # For all known world positions...
+            for world_pos in self.choices.keys():
+                x, y = canvas.world_to_view_pos(
+                            world_pos,
+                            self.base.requested_world_pos,
+                            self.base.margins,
+                            self.base.scale,
+                            self.offset)
+                # If x and y are in view...
+                if left <= x <= right and top <= y <= bottom:
+                    # ... add the hitbox => world pos combo to the dictionary
+                    self.hitboxes[(x - self.dot_size,
+                                   y - self.dot_size,
+                                   x + self.dot_size,
+                                   y + self.dot_size)] = world_pos
+
+            logging.debug("%d Hitboxes found", len(self.hitboxes))
+
+    def _calc_choices(self):
+        """ Create a mapping between world coordinates and physical points
+
+        The minimum physical distance between points is also calculated
+        """
+
+        logging.debug("Calculating choices as buffer positions")
+
+        self.choices = {}
+
+        # Translate physical to buffer coordinates
+        for point in (c for c in self.point.choices if None not in c):
+            world_pos = self.base.physical_to_world_pos(point)
+            self.choices[world_pos] = point
+
+
+    def _calc_min_distance(self):
+        """ Calculate the minimal distance between the physical points
+
+        TODO: What do we know about points that may allow us to implement
+        something that isn't O(n**2)
+        """
+        def distance(p1, p2):
+            return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
+
+        for point in (c for c in self.point.choices if None not in c):
+            self.min_dist = min(
+                    distance(point, d)
+                    for d in self.point.choices if None not in d and d != point
+            )
+
+        self.min_dist /= 2 # Divide by 2, because we use it as a radius
+
+    def on_mouse_leave(self, evt):
+        self.cursor_buffer_pos = None
+        evt.Skip()
+
+    def on_size(self, evt=None):
+        self.offset = [v // 2 for v in self.base._bmp_buffer_size]
+        wx.CallAfter(self._calc_hitboxes)
 
     def on_mouse_up(self, evt):
         """ Set the seleceted point if the mouse cursor is hovering over one """
-        if self.cursor_over_point and self.enabled:
+        # We call the handler ourselves, so *no* evt.Skip()!!
+        if self.hover_box and self.cursor_over_point and self.enabled:
             self.point.value = self.choices[self.cursor_over_point]
             logging.debug("Point %s selected", self.point.value)
+        self._calc_hitboxes()
         evt.Skip()
 
+
     def on_mouse_motion(self, evt):
-        """ Highlight dots when the mouse hovers over them """
+        """ Detect when the cursor hovers over a dot """
+
         if not self.base.dragging and self.choices and self.enabled:
             vx, vy = evt.GetPositionTuple()
             self.cursor_buffer_pos = self.base.view_to_buffer_pos((vx, vy))
-            self.base.Repaint()
+
+            hover_box = None
+
+            for l, t, r, b in self.hitboxes.keys():
+                if l <= vx <= r and t <= vy <= b:
+                    hover_box = (l, t, r, b)
+                    # logging.debug("Hitbox found")
+                    break
+
+            if self.hover_box != hover_box:
+                # logging.debug("Hitbox changed %s", hover_box)
+                self.hover_box = hover_box
+                self.base.Repaint()
 
         if self.cursor_over_point and self.enabled:
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
@@ -1616,48 +1731,30 @@ class PointsOverlay(WorldOverlay):
 
         evt.Skip()
 
-    def set_points(self, point_va):
-        """ Set the available points and connect to the given point VA """
-        self.choices = {}
-
-        def distance(p1, p2):
-            return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
-
-        # Translate physical to world coordinates
-        for point in (c for c in point_va.choices if None not in c):
-            world_pos = self.base.physical_to_world_pos(point)
-            self.choices[world_pos] = point
-            self.min_dist = min(
-                    distance(point, d)
-                    for d in point_va.choices if None not in d and d != point
-            )
-
-        self.min_dist /= 2
-
-        self.point = point_va
-        self.point.subscribe(self._point_selected)
-        self.base.microscope_view.mpp.subscribe(self._on_mpp, init=True)
-
     def Draw(self, dc, shift=(0, 0), scale=1.0):
-        if not self.choices or not self.enabled:
+
+        if not self.choices or not self.enabled or not self.dot_size:
             return
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
-        offset = [v // 2 for v in self.base._bmp_buffer_size]
+
+        # logging.debug("Draw")
+
+        if self.hover_box:
+            l, t = self.base.view_to_buffer_pos(self.hover_box[:2])
+            r, b = self.base.view_to_buffer_pos(self.hover_box[2:])
+
         cursor_over = None
 
-        # Used to limit the mouse overs to only 1 hit
-        hit = False
-
         for world_pos in self.choices.keys():
-            bposx, bposy = self.base.world_to_buffer_pos(world_pos, offset)
+            bposx, bposy = self.base.world_to_buffer_pos(world_pos, self.offset)
+            ctx.move_to(bposx, bposy)
 
             ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
 
-            if not hit and self.cursor_buffer_pos and ctx.in_fill(*self.cursor_buffer_pos):
+            if self.hover_box and l <= bposx <= r and t <= bposy <= b:
                 cursor_over = world_pos
                 ctx.set_source_rgba(*self.select_colour)
-                hit = True
             elif self.point.value == self.choices[world_pos]:
                 ctx.set_source_rgba(*self.select_colour)
             else:
@@ -1665,19 +1762,29 @@ class PointsOverlay(WorldOverlay):
 
             ctx.fill()
 
-            ctx.set_line_width(1)
+            ctx.arc(bposx, bposy, 2.0, 0, 2*math.pi)
+            ctx.set_source_rgb(0.0, 0.0, 0.0)
+            ctx.fill()
+
             ctx.arc(bposx, bposy, 1.5, 0, 2*math.pi)
-            ctx.set_source_rgba(*(self.point_colour + (0.5,)))
-            ctx.stroke_preserve()
             ctx.set_source_rgb(*self.point_colour)
             ctx.fill()
+
+        # if self.hitboxes:
+        #     # ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+        #     ctx.set_line_width(1)
+        #     ctx.set_source_rgb(1.0, 1.0, 1.0)
+
+        #     ox, oy = self.base.margins
+        #     s = 2 * self.dot_size
+        #     for (l, t, r, b) in self.hitboxes.keys():
+        #         ctx.rectangle(l + ox, t + oy, s, s)
+        #         ctx.stroke()
 
         self.cursor_over_point = cursor_over
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
-        if enable and not self.point:
-            raise ValueError("No points set for PointsOverlay!")
         self.enabled = enable
         self.base.Repaint()
 

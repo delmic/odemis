@@ -36,7 +36,7 @@ import unittest
 import wx
 
 test.goto_manual()
-# logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 # test.set_sleep_time(1000)
 
 
@@ -53,6 +53,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.canDrag = False
 
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.Refresh()
 
         psol = overlay.PolarOverlay(cnvs)
         cnvs.ViewOverlays.append(psol)
@@ -73,8 +74,10 @@ class OverlayTestCase(test.GuiTestCase):
         mmodel = test.FakeMicroscopeModel()
         view = mmodel.focussedView.value
         cnvs.setView(view, mmodel)
-
-        # view.mpp.subscribe(do_stuff, init=True)
+        psol = overlay.PointsOverlay(cnvs)
+        cnvs.WorldOverlays.append(psol)
+        cnvs.current_mode = gmodel.TOOL_POINT
+        psol.enable(True)
 
         from itertools import product
 
@@ -86,15 +89,11 @@ class OverlayTestCase(test.GuiTestCase):
                     phys_points[0],
                     choices=frozenset(phys_points))
 
-        psol = overlay.PointsOverlay(cnvs)
-        psol.set_points(point)
-        cnvs.WorldOverlays.append(psol)
-        cnvs.current_mode = gmodel.TOOL_POINT
-        psol.enable(True)
-
         test.gui_loop()
 
+        psol.set_points(point)
         view.mpp.value = 1.25e-9
+
         test.gui_loop()
 
     @unittest.skip("simple")
@@ -185,4 +184,9 @@ class OverlayTestCase(test.GuiTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    #unittest.main()
+
+    suit = unittest.TestSuite()
+    suit.addTest( OverlayTestCase("test_points_select_overlay") )
+    runner = unittest.TextTestRunner()
+    runner.run(suit)
