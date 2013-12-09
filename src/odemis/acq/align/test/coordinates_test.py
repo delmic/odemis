@@ -23,8 +23,10 @@ import logging
 import unittest
 import numpy
 import math
+import operator
 
 from numpy import random
+from random import gauss
 from numpy import reshape
 from odemis import model
 from odemis.dataio import hdf5
@@ -211,7 +213,7 @@ class TestSpotCoordinates(unittest.TestCase):
 
     def test_match_coordinates_simple(self):
         """
-        Test MatchCoordinates using shuffled electron coordinates
+        Test MatchCoordinates using noisy and shuffled optical coordinates
         """
         """
         optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
@@ -222,11 +224,20 @@ class TestSpotCoordinates(unittest.TestCase):
         print index
         print coordinates.TransfromCoordinates(optical_coordinates, (-1.3000132631489385, -2.3999740720548788), 34.9996552027, 0.62499759052)
         """
-        optical_coordinates = [(1.01, 0.92), (0.94, 1.92), (2.05, 1.09), (1.9, 2.01)]
         electron_coordinates = [ (1, 1), (1, 2), (2, 1), (2, 2)]
-        shuffle(optical_coordinates)
+        optical_coordinates = []
+        shuffled_coordinates = []
+        for ta in electron_coordinates:
+            noise_x, noise_y = gauss(0, 0.1), gauss(0, 0.1)
+            optical_tuple = tuple(map(operator.add, ta, (noise_x, noise_y)))
+            optical_coordinates.append(optical_tuple)
+            shuffled_coordinates.append(optical_tuple)
+        shuffle(shuffled_coordinates)
+        print optical_coordinates
+        print shuffled_coordinates
 
-        ordered_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates)
-        numpy.testing.assert_equal(ordered_coordinates, [(1.01, 0.92), (0.94, 1.92), (2.05, 1.09), (1.9, 2.01)])
-
-
+        # ordered_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates)
+        # numpy.testing.assert_equal(ordered_coordinates, optical_coordinates)
+        transformed_coordinates = []
+        shift_threshold = 0.1
+        print coordinates.MatchAndCalculate(shuffled_coordinates, shuffled_coordinates, electron_coordinates, shift_threshold)
