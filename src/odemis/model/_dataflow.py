@@ -633,6 +633,7 @@ class Event(EventBase):
     def __init__(self):
         self._listeners = set() # object (None -> None)
 
+    # TODO: that should be part of Pyro, called anytime a proxy is received
     def _getMostDirectObject(self, obj):
         """
         obj (object): any object

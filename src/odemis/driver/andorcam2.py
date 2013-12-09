@@ -523,6 +523,9 @@ class AndorCam2(model.DigitalCamera):
         self._late_events = collections.deque() # events which haven't been handled yet
 
         self.data = AndorCam2DataFlow(self)
+        # Convenience event for the user to connect and fire
+        self.softwareTrigger = model.Event()
+
         logging.debug("Camera component ready to use.")
 
     def _setStaticSettings(self):
@@ -1624,14 +1627,13 @@ class AndorCam2(model.DigitalCamera):
         if self.handle is not None:
             # TODO for some hardware we need to wait the temperature is above -20°C
             try:
+                # FIXME: not sure if it does anything (with Clara)
                 self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
                 # iXon Ultra: as we force it open, we need to force it close now
                 caps = self.GetCapabilities()
                 if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
                     self.atcore.SetShutterEx(1, 2, 0, 0, 0) # mode 2 = close
-
-                # FIXME: not sure if it does anything (with Clara)
-            except:
+            except Exception:
                 pass
 
             logging.debug("Shutting down the camera")
