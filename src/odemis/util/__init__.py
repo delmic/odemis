@@ -23,13 +23,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Warning: do not put anything that has dependencies on non default python modules
 
 from __future__ import division
-from functools import wraps
-from odemis import model
+
 import errno
+from functools import wraps
+import logging
 import math
+from odemis import model
 import os
 import signal
 import threading
+
 
 def find_closest(val, l):
     """
@@ -156,16 +159,21 @@ class RepeatingTimer(threading.Thread):
         self.callback = model.WeakMethod(callback)
         self.period = period
         self.daemon = True
-        self.must_stop = threading.Event()
+        self._must_stop = threading.Event()
     
     def run(self):
         # use the timeout as a timer
-        while not self.must_stop.wait(self.period):
-            try:
-                self.callback()
-            except model.WeakRefLostError:
-                # it's gone, it's over
-                return
+        try:
+            while not self._must_stop.wait(self.period):
+                try:
+                    self.callback()
+                except model.WeakRefLostError:
+                    # it's gone, it's over
+                    return
+        except Exception:
+            logging.exception("Failure while calling a repeating timer")
+        finally:
+            logging.debug("Repeating timer thread over")
         
     def cancel(self):
-        self.must_stop.set()
+        self._must_stop.set()
