@@ -29,13 +29,14 @@ import operator
 import scipy.signal
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
+import transform
 from odemis import model
 from odemis import dataio
 from numpy import unravel_index
 from numpy import argsort
 from numpy import histogram
 from scipy.spatial import cKDTree
-from operator import itemgetter
+from itertools import compress
 
 
 def FindCenterCoordinates(subimages):
@@ -265,6 +266,7 @@ def TransfromCoordinates(x_coordinates, translation, rotation, scale):
     transformed_coordinates = []
     for ta in x_coordinates:
         # scaling-rotation-translation
+        """
         tuple_scale = (scale, scale)
         scaled = tuple(map(operator.mul, ta, tuple_scale))
 
@@ -275,5 +277,95 @@ def TransfromCoordinates(x_coordinates, translation, rotation, scale):
         rotated = (x_rotated, y_rotated)
         translated = tuple(map(operator.add, rotated, translation))
         transformed_coordinates.append(translated)
+        """
+        # tsr
+        translated = tuple(map(operator.add, ta, translation))
+        tuple_scale = (scale, scale)
+        scaled = tuple(map(operator.mul, translated, tuple_scale))
+        x, y = scaled
+        rad_rotation = rotation * (math.pi / 180)  # rotation in radians, clockwise
+        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
+        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        rotated = (x_rotated, y_rotated)
+        transformed_coordinates.append(rotated)
 
     return transformed_coordinates
+
+def MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates, shift_threshold):
+    """
+    Applies transformation to the optical coordinates in order to match electron coordinates and returns 
+    the transformed coordinates. This function must be used recursively until the transformed coordinates
+    reach the required accuracy.
+    transformed_coordinates (List of tuples): List of transformed coordinates
+    optical_coordinates (List of tuples): List of optical coordinates
+    electron_coordinates (List of tuples): List of electron coordinates
+    shift_threshold (float): When to still perform the shift (in percentage)
+    returns estimated_coordinates (List of tuples): Estimated optical coordinates
+            index1 (List of integers): Indexes of nearest points in optical with respect to electron
+            index2 (List of integers): Indexes of nearest points in electron with respect to optical
+            e_wrong_points (List of integers): Coordinates in electron_coordinates with no proper match
+            o_wrong_points(List of integers): Coordinates in optical_coordinates with no proper match
+    """
+    index1 = KNNsearch(transformed_coordinates, electron_coordinates)
+    # Sort optical coordinates based on the KNNsearch output index
+    knn_points1 = [y for (x, y) in sorted(zip(index1, optical_coordinates))]
+
+    index2 = KNNsearch(electron_coordinates, transformed_coordinates)
+    # Sort electron coordinates based on the KNNsearch output index
+    knn_points2 = [y for (x, y) in sorted(zip(index2, electron_coordinates))]
+
+    # Sort index1 based on index2 and the opposite
+    o_index = [y for (x, y) in sorted(zip(index2, index1))]
+    e_index = [y for (x, y) in sorted(zip(index1, index2))]
+    
+    transformed_range = range(transformed_coordinates.__len__())
+    electron_range = range(electron_coordinates.__len__())
+
+    # Coordinates that have no proper match
+    o_wrong_points = map(operator.ne, o_index, transformed_range)
+    e_wrong_points = map(operator.ne, e_index, electron_range)
+    print o_wrong_points, e_wrong_points
+
+    # Calculate the transform parameters for the correct electron_coordinates
+    #TODO: Throw exception if inv_e_wrong_points or inv_o_wrong_points has only False elements!!!
+    inv_e_wrong_points = [not i for i in e_wrong_points]
+    (x_move1, y_move1), scale1, rotation1 = transform.CalculateTransform(list(compress(electron_coordinates, inv_e_wrong_points))
+                                 , list(compress(knn_points1, inv_e_wrong_points)))
+    x_move1, y_move1 = -x_move1, -y_move1
+
+    # Calculate the transform parameters for the correct optical_coordinates
+    inv_o_wrong_points = [not i for i in o_wrong_points]
+    (x_move2, y_move2), scale2, rotation2 = transform.CalculateTransform(list(compress(knn_points2, inv_o_wrong_points))
+                                 , list(compress(optical_coordinates, inv_o_wrong_points)))
+    x_move2, y_move2 = -x_move2, -y_move2
+
+    # Average between the two parameters
+    #TODO: use numpy.mean()
+    avg_x_move = (x_move1 + x_move2) / 2
+    avg_y_move = (y_move1 + y_move2) / 2
+    avg_scale = (scale1 + scale2) / 2
+    avg_rotation = (rotation1 + rotation2) / 2
+
+    # Correct for shift if more than shift_threshold (percentage) of points are wrong
+    threshold = shift_threshold * electron_coordinates.__len__()
+
+    if sum(o_wrong_points)>threshold and sum(e_wrong_points)>threshold:
+        electron_o_index2 = list(compress(electron_coordinates, [y for (x, y) in sorted(zip(o_wrong_points, index2))]))
+        transformed_o_points = list(compress(transformed_coordinates, o_wrong_points))
+        o_wrong_diff = []
+        for ta, tb in zip(electron_o_index2, transformed_o_points):
+            o_wrong_diff.append(map(operator.sub, ta, tb))
+        transformed_e_index1 = list(compress(transformed_coordinates, [y for (x, y) in sorted(zip(e_wrong_points, index1))]))
+        electron_e_points = list(compress(electron_coordinates, e_wrong_points))
+        e_wrong_diff = []
+        for ta, tb in zip(transformed_e_index1, electron_e_points):
+            e_wrong_diff.append(map(operator.sub, ta, tb))
+        mean_wrong_diff = numpy.mean(e_wrong_diff,0) - numpy.mean(o_wrong_diff,0)
+        inp_x_move = avg_x_move - (0.5 * mean_wrong_diff[0]) / avg_scale
+        inp_y_move = avg_y_move - (0.5 * mean_wrong_diff[1]) / avg_scale
+
+    # inp_rotation = avg_rotation / (180 / math.pi)
+    estimated_coordinates = TransfromCoordinates(optical_coordinates, (inp_x_move, inp_y_move), avg_rotation, avg_scale)
+
+    return estimated_coordinates
+
