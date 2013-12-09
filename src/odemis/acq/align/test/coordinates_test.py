@@ -209,9 +209,9 @@ class TestSpotCoordinates(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-    def test_match_coordinates(self):
+    def test_match_coordinates_simple(self):
         """
-        Test MatchCoordinates
+        Test MatchCoordinates using shuffled electron coordinates
         """
         """
         optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
