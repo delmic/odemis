@@ -518,9 +518,9 @@ class AndorCam2(model.DigitalCamera):
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
         # for synchronized acquisition
-        self._cbuffer = None
         self._got_event = threading.Event()
         self._late_events = collections.deque() # events which haven't been handled yet
+        self._ready_for_acq_start = False
 
         self.data = AndorCam2DataFlow(self)
         # Convenience event for the user to connect and fire
@@ -1764,7 +1764,10 @@ class AndorCam2DataFlow(model.DataFlow):
         if self._sync_event == event:
             return
 
-        comp = self.component()
+        try:
+            comp = self.component()
+        except ReferenceError:
+            return
 
         if self._sync_event:
             self._sync_event.unsubscribe(comp)
