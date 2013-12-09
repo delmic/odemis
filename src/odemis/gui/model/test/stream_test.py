@@ -185,10 +185,8 @@ class SPARCTestCase(unittest.TestCase):
         # Long acquisition (small rep to avoid being too long)
         # The acquisition method is different for time > 0.1 s, but we had bugs
         # with dwell time > 4s, so let's directly test both.
-#        self.ccd.exposureTime.value = 5 # s
-#        ars.repetition.value = (2, 3)
         self.ccd.exposureTime.value = 5 # s
-        ars.repetition.value = (2, 1)
+        ars.repetition.value = (2, 3)
         exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
 

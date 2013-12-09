@@ -29,6 +29,7 @@ Detector, Emitter and Dataflow associations.
 from __future__ import division
 
 import Pyro4
+from abc import ABCMeta, abstractmethod
 import collections
 import logging
 import math
@@ -1755,6 +1756,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
        so good for short dwell times.
     TODO: in software synchronisation, we can easily do our own fuzzing.
     """
+    __metaclass__ = ABCMeta
     def __init__(self, name, sem_stream, ccd_stream):
         MultipleDetectorStream.__init__(self, name, [sem_stream, ccd_stream])
 
@@ -1782,56 +1784,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._acq_left = 0
         self._sem_data = None
         self._ccd_data = None
-        self._acqPixelStart = model.Event() # for synchronizing the camera
-        daemon = self._getPyroDaemon()
-        daemon.register(self._acqPixelStart)
-
         self._acq_canceller = None # callable for cancelling the acquisition
 
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
-
-    def __del__(self):
-        daemon = self._getPyroDaemon()
-        daemon.unregister(self._acqPixelStart)
-        
-        # TODO: when to stops the Pyro daemon? How to know it's the end of the 
-        # program?
-#        if self._daemon:
-#            self._daemon.shutdown()
-        
-        
-    # Shared between instances to avoid having too many daemons
-    _ipc_name = None
-    _daemon = None
-    _daemon_thread = None
-    @classmethod
-    def _getPyroDaemon(cls):
-        """
-        Ensure a pyro daemon is available, and provide it.
-        Used to send objects to remote containers.
-        return (daemon): the Pyro daemon
-        """
-        if cls._daemon:
-            return cls._daemon
-        # Otherwise, create it (copied from model._core) 
-        name = "SEM-CCD Acquisition"
-        cls._ipc_name = model.BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
-        if os.path.exists(cls._ipc_name):
-            try:
-                os.remove(cls._ipc_name)
-                logging.warning("The file '%s' was deleted to create container '%s'.",
-                                cls._ipc_name, name)
-            except OSError:
-                logging.error("Impossible to delete file '%s', needed to create container '%s'.",
-                              cls._ipc_name, name)
-
-        cls._daemon = Pyro4.Daemon(unixsocket=cls._ipc_name)
-        cls._daemon_thread = threading.Thread(name=name,
-                                               target=cls._daemon.requestLoop)
-        cls._daemon_thread.daemon = True
-        cls._daemon_thread.start()
-        return cls._daemon
 
     def estimateAcquisitionTime(self):
         # that's the same as the CCD stream (and SEM stream, once the hardware
@@ -1878,6 +1834,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         else:
             logging.debug("Cancelling acquisition which was already finished")
 
+    @abstractmethod
     def _onSEMCCDData(self, sem_data, ccd_data):
         """
         called at the end of an entire acquisition
@@ -1885,7 +1842,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         ccd_data (list of DataArray): the CCD data (ordered, with X changing
           fast, then Y slow)
         """
-        raise NotImplementedError("This method must be overridden")
+        pass
 
     def _ssCancelAcquisition(self):
         if self._acq_thread and not self._acq_complete.is_set():
@@ -1963,7 +1920,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             ccd_time = self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
             spot_pos = self._getSpotPositions()
-            logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape, ccd_time, dwell_time)
+            logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], ccd_time, dwell_time)
             rep = self._ccd_stream.repetition.value
             roi = self._ccd_stream.roi.value
             self._sem_data = []
@@ -1977,7 +1934,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # We need to use synchronisation event because without it, either we
             # use .get() but it's not possible to cancel the acquisition, or we
             # subscribe/unsubscribe for each image, but the overhead is high.
-            self._ccd_df.synchronizedOn(self._acqPixelStart)
+            trigger = self._ccd.softwareTrigger
+            self._ccd_df.synchronizedOn(trigger)
             self._ccd_df.subscribe(self._ssOnCCDImage)
 
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
@@ -1988,7 +1946,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 self._semd_df.subscribe(self._ssOnSEMImage)
                 time.sleep(0) # give more chances spot has been already processed
                 start = time.time()
-                self._acqPixelStart.notify()
+                trigger.notify()
 
                 if not self._acq_ccd_complete.wait(ccd_time * 2 + 1):
                     raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
@@ -2005,7 +1963,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 # we get next acquisition we can expect the spot has moved. The
                 # advantage would be to avoid setting the ebeam back to resting
                 # position, and reduce overhead of stopping/starting.
-                logging.debug("unsubscribing SEM after end of spot")
+                logging.debug("unsubscribing SEM after end of spot %s", i)
                 self._semd_df.unsubscribe(self._ssOnSEMImage)
 
                 if self._acq_must_stop.is_set():
