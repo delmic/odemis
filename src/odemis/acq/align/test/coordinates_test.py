@@ -29,6 +29,7 @@ from numpy import reshape
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.align import coordinates
+from random import shuffle
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -120,17 +121,11 @@ class TestSpotCoordinates(unittest.TestCase):
         grid_data[0].shape = Y, X
 
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10))
-        print subimage_coordinates.__len__()
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
         optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
 
-        for i, (a, b) in enumerate(optical_coordinates):
-            grid_data[0][b, a] = 1797693134862315700000
-        # a = numpy.array([tuple(i) for i in optical_coordinates], dtype=(float, 2))
-        # numpy.savetxt("optical_coordinates.csv", a, delimiter=",")
-        hdf5.export("centers_grid.h5", grid_data, thumbnail=None)
-        print optical_coordinates
+        self.assertEqual(subimages.__len__(), 100)
 
     def test_devide_and_find_center_grid_noise(self):
         """
@@ -218,6 +213,7 @@ class TestSpotCoordinates(unittest.TestCase):
         """
         Test MatchCoordinates
         """
+        """
         optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
         electron_coordinates = [(0, 1), (0, 2), (1, 0), (1, 4)]
 
@@ -225,5 +221,12 @@ class TestSpotCoordinates(unittest.TestCase):
 
         print index
         print coordinates.TransfromCoordinates(optical_coordinates, (-1.3000132631489385, -2.3999740720548788), 34.9996552027, 0.62499759052)
-        # print coordinates.TransfromCoordinates(optical_coordinates, (0, 0), 90, 1)
+        """
+        optical_coordinates = [(1.01, 0.92), (0.94, 1.92), (2.05, 1.09), (1.9, 2.01)]
+        electron_coordinates = [ (1, 1), (1, 2), (2, 1), (2, 2)]
+        shuffle(optical_coordinates)
+
+        ordered_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates)
+        numpy.testing.assert_equal(ordered_coordinates, [(1.01, 0.92), (0.94, 1.92), (2.05, 1.09), (1.9, 2.01)])
+
 
