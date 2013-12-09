@@ -116,9 +116,43 @@ import wx
 import wx.lib.wxcairo as wxcairo
 
 from ..util.conversion import wxcol_to_frgb, change_brightness
-# from odemis.gui.comp.overlay import ViewOverlay
 import odemis.gui.img.data as imgdata
 
+#pylint: disable=E1002
+
+class Canvas(wx.Panel):
+
+    def __init__(self, parent):
+        super(Canvas, self).__init__(parent, style=wx.NO_FULL_REPAINT_ON_RESIZE)
+
+        # Graphical overlays that display relative to the canvas
+        self.world_overlays = []
+        # Graphical opverlays that display in an absolute position
+        self.view_overlays = []
+
+        self.SetBackgroundColour(wx.BLACK)
+
+class BitmapCanvas(Canvas):
+
+    def __init__(self, parent):
+        super(BitmapCanvas, self).__init__(parent)
+
+        # Buffer device context
+        self._dc_buffer = wx.MemoryDC()
+        # Center of the buffer in world coordinates
+        self.buffer_center_world_pos = (0, 0)
+        # wx.Bitmap that will always contain the image to be displayed
+        self._bmp_buffer = None
+        # very small first, so that for sure it'll be resized with OnSize
+        self._bmp_buffer_size = (1, 1)
+        self.ResizeBuffer(self._bmp_buffer_size)
+
+        # wx.Images. Should always have at least 1 element, to allow the direct
+        # addition of a 2nd image.
+        self.images = [None]
+        # Merge ratio for combining the images
+        self.merge_ratio = 0.3
+        self.scale = 1.0 # px/wu
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
@@ -134,16 +168,16 @@ import odemis.gui.img.data as imgdata
 # Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
 #
 
-class DraggableCanvas(wx.Panel):
+class DraggableCanvas(BitmapCanvas):
     """ A draggable, buffered window class.
 
     To use it, instantiate it and then put what you want to display in the
     lists:
 
     * Images: for the two images to display (use .setImage())
-    * WorldOverlays: for additional objects to display (must have a Draw(dc)
+    * world_overlays: for additional objects to display (must have a Draw(dc)
       method)
-    * ViewOverlays: for additional objects that stay at an absolute position
+    * view_overlays: for additional objects that stay at an absolute position
 
     The idea = three layers of decreasing area size:
     * The whole world, which can have infinite dimensions, but needs a redraw
@@ -156,31 +190,16 @@ class DraggableCanvas(wx.Panel):
 
     """
     def __init__(self, parent):
-        wx.Panel.__init__(self, parent, style=wx.NO_FULL_REPAINT_ON_RESIZE)
-        # on top of the pictures, relative position
-        self.WorldOverlays = []
-        # on top, stays at an absolute position
-        self.ViewOverlays = []
-        # should always have at least 1 element, to allow the direct addition of
-        # a 2nd image.
-        self.Images = [None]
-        self.merge_ratio = 0.3
-        self.scale = 1.0 # px/wu
+        super(DraggableCanvas, self).__init__(parent)
 
-        # Center of the buffer in world coordinates
-        self.buffer_center_world_pos = (0, 0)
         # the position the view is asking to the next buffer recomputation
         # in buffer-coordinates: = 1px at scale = 1
         self.requested_world_pos = self.buffer_center_world_pos
 
-        # buffer = the whole image to be displayed
-        self._dc_buffer = wx.MemoryDC()
 
-        # wx.Bitmap that will always contain the image to be displayed
-        self._bmp_buffer = None
-        # very small first, so that for sure it'll be resized with OnSize
-        self._bmp_buffer_size = (1, 1)
-        self.ResizeBuffer(self._bmp_buffer_size)
+
+
+
         # When resizing, margin to put around the current size
         # TODO: Maybe make the margin related to the canvas size?
         self.margin = 512
@@ -192,7 +211,7 @@ class DraggableCanvas(wx.Panel):
             # FIXME: to check, the documentation says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
-        self.SetBackgroundColour(wx.BLACK)
+
         self.backgroundBrush = wx.CROSS_HATCH # wx.SOLID for a plain background
 
         # view = the area displayed
@@ -430,27 +449,27 @@ class DraggableCanvas(wx.Panel):
         Note: call ShouldUpdateDrawing() to actually get the image redrawn
             afterwards
         """
-        assert(0 <= index <= len(self.Images))
+        assert(0 <= index <= len(self.images))
 
         if im is None: # Delete the image
             # always keep at least a length of 1
             if index == 0:
                 # just replace by None
-                self.Images[index] = None
+                self.images[index] = None
             else:
-                del self.Images[index]
+                del self.images[index]
         else:
             im._dc_center = pos
             im._dc_scale = scale
             im._dc_keepalpha = keepalpha
             if not im.HasAlpha():
                 im.InitAlpha()
-            if index == len(self.Images):
+            if index == len(self.images):
                 # increase the size
-                self.Images.append(im)
+                self.images.append(im)
             else:
                 # replace
-                self.Images[index] = im
+                self.images[index] = im
 
     def OnPaint(self, event):
         """ Quick update of the window content with the buffer + the static
@@ -537,7 +556,7 @@ class DraggableCanvas(wx.Panel):
 
         # find bounding box of all the content
         bbox = [None, None, None, None] # ltrb in wu
-        for im in self.Images:
+        for im in self.images:
             if im is None:
                 continue
             w, h = im.Width * im._dc_scale, im.Height * im._dc_scale
@@ -658,13 +677,13 @@ class DraggableCanvas(wx.Panel):
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
-        self._DrawMergedImages(self._dc_buffer, self.Images, self.merge_ratio)
+        self._DrawMergedImages(self._dc_buffer, self.images, self.merge_ratio)
 
         self._dc_buffer.SetDeviceOriginPoint((0, 0))
 
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
-        for o in self.WorldOverlays:
+        for o in self.world_overlays:
             o.Draw(self._dc_buffer, self.buffer_center_world_pos, self.scale)
 
 
@@ -674,7 +693,7 @@ class DraggableCanvas(wx.Panel):
         """
         # center the coordinates
         dc.SetDeviceOrigin(self.ClientSize[0] // 2, self.ClientSize[1] // 2)
-        for o in self.ViewOverlays:
+        for o in self.view_overlays:
             o.Draw(dc)
 
     # TODO: see if with Numpy it's faster (~less memory copy),

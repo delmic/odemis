@@ -56,7 +56,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Refresh()
 
         psol = overlay.PolarOverlay(cnvs)
-        cnvs.ViewOverlays.append(psol)
+        cnvs.view_overlays.append(psol)
         test.gui_loop()
 
         test.sleep(1000)
@@ -75,7 +75,7 @@ class OverlayTestCase(test.GuiTestCase):
         view = mmodel.focussedView.value
         cnvs.setView(view, mmodel)
         psol = overlay.PointsOverlay(cnvs)
-        cnvs.WorldOverlays.append(psol)
+        cnvs.world_overlays.append(psol)
         cnvs.current_mode = gmodel.TOOL_POINT
         psol.enable(True)
 
@@ -105,7 +105,7 @@ class OverlayTestCase(test.GuiTestCase):
         # psol.set_values(33, (0.0, 0.0), (30, 30))
         psol.set_values(30, (0.0, 0.0), (17, 19), omodel.TupleVA())
 
-        cnvs.WorldOverlays.append(psol)
+        cnvs.world_overlays.append(psol)
         test.gui_loop()
 
     @unittest.skip("simple")
@@ -118,7 +118,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         vsol = overlay.ViewSelectOverlay(cnvs, "test selection")
-        cnvs.ViewOverlays.append(vsol)
+        cnvs.view_overlays.append(vsol)
         cnvs.active_overlay = vsol
         cnvs.current_mode = gmodel.TOOL_ROI
 
@@ -133,7 +133,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         rsol = overlay.RepetitionSelectOverlay(cnvs, "Region of acquisition")
-        cnvs.WorldOverlays.append(rsol)
+        cnvs.world_overlays.append(rsol)
         cnvs.active_overlay = rsol
         cnvs.current_mode = gmodel.TOOL_ROA
 
@@ -162,7 +162,7 @@ class OverlayTestCase(test.GuiTestCase):
         lva = omodel.ListVA()
 
         dol = overlay.DichotomyOverlay(cnvs, lva)
-        cnvs.ViewOverlays.append(dol)
+        cnvs.view_overlays.append(dol)
 
         dol.sequence_va.subscribe(do_stuff, init=True)
         dol.enable()
@@ -177,7 +177,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = overlay.SpotModeOverlay(cnvs)
-        cnvs.ViewOverlays.append(sol)
+        cnvs.view_overlays.append(sol)
 
         test.gui_loop()
 

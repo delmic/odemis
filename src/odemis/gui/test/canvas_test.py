@@ -107,12 +107,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # crosshair
         show_crosshair = self.view.show_crosshair #pylint: disable=E1103
         show_crosshair.value = True
-        self.assertGreaterEqual(len(self.canvas.ViewOverlays), 1)
-        lvo = len(self.canvas.ViewOverlays)
+        self.assertGreaterEqual(len(self.canvas.view_overlays), 1)
+        lvo = len(self.canvas.view_overlays)
         show_crosshair.value = True
-        self.assertEqual(len(self.canvas.ViewOverlays), lvo)
+        self.assertEqual(len(self.canvas.view_overlays), lvo)
         show_crosshair.value = False
-        self.assertEqual(len(self.canvas.ViewOverlays), lvo - 1)
+        self.assertEqual(len(self.canvas.view_overlays), lvo - 1)
 
     # @unittest.skip("simple")
     def test_BasicDisplay(self):

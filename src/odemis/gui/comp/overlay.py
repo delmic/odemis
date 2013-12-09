@@ -106,6 +106,30 @@ class Overlay(object):
     def view_height(self):
         return self.base.ClientSize.y
 
+    def on_left_down(self, evt):
+        evt.Skip()
+
+    def on_left_up(self, evt):
+        evt.Skip()
+
+    def on_right_up(self, evt):
+        evt.Skip()
+
+    def on_right_up(self, evt):
+        evt.Skip()
+
+    def on_motion_up(self, evt):
+        evt.Skip()
+
+    def on_enter_up(self, evt):
+        evt.Skip()
+
+    def on_leave_up(self, evt):
+        evt.Skip()
+
+    def on_size_up(self, evt):
+        evt.Skip()
+
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port.
     The Draw method has to be fast, because it's called after every

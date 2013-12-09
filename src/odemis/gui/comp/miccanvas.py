@@ -134,13 +134,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # play/pause icon
         self.icon_overlay = comp_overlay.StreamIconOverlay(self)
-        self.ViewOverlays.append(self.icon_overlay)
+        self.view_overlays.append(self.icon_overlay)
 
         self.zoom_overlay = comp_overlay.ViewSelectOverlay(self, "Zoom")
-        self.ViewOverlays.append(self.zoom_overlay)
+        self.view_overlays.append(self.zoom_overlay)
 
         self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
-        self.WorldOverlays.append(self.update_overlay)
+        self.world_overlays.append(self.update_overlay)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -161,21 +161,21 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if self.microscope_view.get_focus_count():
             self.focus_overlay = comp_overlay.FocusOverlay(self)
-            self.ViewOverlays.append(self.focus_overlay)
+            self.view_overlays.append(self.focus_overlay)
 
         if tab_data.tool:
             # If required, create a DichotomyOverlay
             if guimodel.TOOL_DICHO in tab_data.tool.choices:
                 self.dicho_overlay = comp_overlay.DichotomyOverlay(self,
                                                      tab_data.dicho_seq)
-                self.ViewOverlays.append(self.dicho_overlay)
+                self.view_overlays.append(self.dicho_overlay)
 
             # If required, create a PointSelectOverlay
             if guimodel.TOOL_POINT in tab_data.tool.choices:
                 self.point_overlay = comp_overlay.PointSelectOverlay(self)
-                self.WorldOverlays.append(self.point_overlay)
+                self.world_overlays.append(self.point_overlay)
                 self.points_overlay = comp_overlay.PointsOverlay(self)
-                self.WorldOverlays.append(self.points_overlay)
+                self.world_overlays.append(self.points_overlay)
 
         self.microscope_view.mpp.subscribe(self._onMPP)
 
@@ -283,12 +283,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._crosshair_ol is None:
                 self._crosshair_ol = comp_overlay.CrossHairOverlay(self)
 
-            if self._crosshair_ol not in self.ViewOverlays:
-                self.ViewOverlays.append(self._crosshair_ol)
+            if self._crosshair_ol not in self.view_overlays:
+                self.view_overlays.append(self._crosshair_ol)
                 self.Refresh(eraseBackground=False)
         else:
             try:
-                self.ViewOverlays.remove(self._crosshair_ol)
+                self.view_overlays.remove(self._crosshair_ol)
                 self.Refresh(eraseBackground=False)
             except ValueError:
                 pass # it was already not displayed
@@ -298,12 +298,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._spotmode_ol is None:
                 self._spotmode_ol = comp_overlay.SpotModeOverlay(self)
 
-            if self._spotmode_ol not in self.ViewOverlays:
-                self.ViewOverlays.append(self._spotmode_ol)
+            if self._spotmode_ol not in self.view_overlays:
+                self.view_overlays.append(self._spotmode_ol)
                 self.Refresh(eraseBackground=False)
         else:
             try:
-                self.ViewOverlays.remove(self._spotmode_ol)
+                self.view_overlays.remove(self._spotmode_ol)
                 self.Refresh(eraseBackground=False)
             except ValueError:
                 pass # it was already not displayed
@@ -319,12 +319,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         Called when GUI debug mode changes => display FPS overlay
         """
         if activated:
-            if self._fps_ol not in self.ViewOverlays:
-                self.ViewOverlays.append(self._fps_ol)
+            if self._fps_ol not in self.view_overlays:
+                self.view_overlays.append(self._fps_ol)
                 self.Refresh(eraseBackground=False)
         else:
             try:
-                self.ViewOverlays.remove(self._fps_ol)
+                self.view_overlays.remove(self._fps_ol)
                 self.Refresh(eraseBackground=False)
             except ValueError:
                 pass # it was already not displayed
@@ -369,7 +369,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         images = self._orderStreamsToImages(streams)
 
         # remove all the images (so they can be garbage collected)
-        self.Images = [None]
+        self.images = [None]
 
         # add the images in order
         for i, iim in enumerate(images):
@@ -866,7 +866,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
         self.roi_overlay = comp_overlay.RepetitionSelectOverlay(
                                                 self, "Region of acquisition")
-        self.WorldOverlays.append(self.roi_overlay)
+        self.world_overlays.append(self.roi_overlay)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -1149,7 +1149,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
         # remove all the images (so they can be garbage collected)
-        self.Images = [None]
+        self.images = [None]
 
         streams = self.microscope_view.getStreams()
 
@@ -1193,7 +1193,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if isinstance(s, stream.StaticStream):
                 # StaticStream == goal image => add at the end
-                self.SetImage(len(self.Images), iim.image, pos, scale, keepalpha=True)
+                self.SetImage(len(self.images), iim.image, pos, scale, keepalpha=True)
             else:
                 # add at the beginning
                 self.SetImage(0, iim.image, pos, scale)
@@ -1396,7 +1396,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         ## Overlays
 
         self.polar_overlay = comp_overlay.PolarOverlay(self)
-        self.ViewOverlays.append(self.polar_overlay)
+        self.view_overlays.append(self.polar_overlay)
 
         ## Event binding
 
@@ -1479,7 +1479,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         images = self._getStreamsImages(streams)
 
         # remove all the images (so they can be garbage collected)
-        self.Images = [None]
+        self.images = [None]
 
         # add the images in order
         for i, iim in enumerate(images):
