@@ -438,7 +438,8 @@ class VirtualTestSynchronized(object):
         """
         start = time.time()
         # use large binning, to reduce the resolution
-        self.ccd.binning.value = (4, self.ccd.binning.range[1][1])
+        self.ccd.binning.value = (min(self.ccd.binning.range[1][0], 4),
+                                  self.ccd.binning.range[1][1])
 
         exp = 50e-3 #s
         # in practice, it takes up to 500ms to take an image of 50 ms exposure
@@ -459,7 +460,10 @@ class VirtualTestSynchronized(object):
         self.sem_left = 1 # unsubscribe just after one
         self.ccd_left = numbert # unsubscribe after receiving
 
-        self.ccd.data.synchronizedOn(self.scanner.newPosition)
+        try:
+            self.ccd.data.synchronizedOn(self.scanner.newPosition)
+        except IOError:
+            self.skipTest("Camera doesn't support synchronisation")
         self.ccd.data.subscribe(self.receive_ccd_image)
 
         self.sed.data.subscribe(self.receive_sem_data)
