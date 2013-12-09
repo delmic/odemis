@@ -1235,11 +1235,10 @@ class SEMComedi(model.HwComponent):
         # the thread to stop with this lock acquired.
         with self._acquisition_mng_lock:
             self._wait_acquisition_stopped() # only wait if acquisition thread is stopping
-            if not self._acquisition_thread or not self._acquisition_thread.isAlive():
-                # Set up thread
-                self._acquisition_thread = threading.Thread(target=self._acquisition_run,
-                                                    name="SEM acquisition thread")
-                self._acquisition_thread.start()
+            # Set up thread
+            self._acquisition_thread = threading.Thread(target=self._acquisition_run,
+                                             name="SEM acquisition thread")
+            self._acquisition_thread.start()
 
     def stop_acquire(self, detector):
         """
@@ -1270,7 +1269,7 @@ class SEMComedi(model.HwComponent):
 
     def _wait_acquisition_stopped(self):
         """
-        Waits until the acquisition thread is fully finished _iif_ it was requested
+        Waits until the acquisition thread is fully finished _iff_ it was requested
         to stop.
         """
         # "if" is to not wait if it's already finished
