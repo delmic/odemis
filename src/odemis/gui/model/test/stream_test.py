@@ -30,7 +30,10 @@ import threading
 import time
 import unittest
 
+logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
+_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
@@ -130,8 +133,6 @@ class StreamTestCase(unittest.TestCase):
 
         # TODO: Check that changing both repetition dims, they are both respected
 
-    # TODO: use simulator backend for testing acquisition from stream
-
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -176,7 +177,7 @@ class SPARCTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMARMDStream("test ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         self.ccd.binning.value = (4, 4) # hopefully always supported
@@ -184,41 +185,132 @@ class SPARCTestCase(unittest.TestCase):
         # Long acquisition (small rep to avoid being too long)
         # The acquisition method is different for time > 0.1 s, but we had bugs
         # with dwell time > 4s, so let's directly test both.
+#        self.ccd.exposureTime.value = 5 # s
+#        ars.repetition.value = (2, 3)
         self.ccd.exposureTime.value = 5 # s
-        ars.repetition.value = (2, 3)
+        ars.repetition.value = (2, 1)
+        exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
 
         sas.image.subscribe(self.receive_image)
         # Start acquisition
         self.acq_over.clear()
         timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
         sas.is_active.value = True
         is_over = self.acq_over.wait(timeout)
         if not is_over:
             # just to make help the rest of the tests to pass
             sas.is_active.value = False
-        self.assertTrue(is_over)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(is_over, "Failed to complete within %g s" % timeout)
         self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
         self.assertEqual(len(ars.raw), num_ar)
+        md = ars.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+        self.assertIn(model.MD_AR_POLE, md)
 
         # Short acquisition (< 0.1s)
         self.ccd.exposureTime.value = 0.03 # s
         ars.repetition.value = (30, 20)
+        exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
 
         # Start acquisition
         self.acq_over.clear()
         timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
         sas.is_active.value = True
         is_over = self.acq_over.wait(timeout)
         if not is_over:
             # just to make help the rest of the tests to pass
             sas.is_active.value = False
-        self.assertTrue(is_over)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(is_over, "Failed to complete within %g s" % timeout)
         self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
         self.assertEqual(len(ars.raw), num_ar)
+        md = ars.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+        self.assertIn(model.MD_AR_POLE, md)
 
         sas.image.unsubscribe(self.receive_image)
+
+    def test_acq_spec(self):
+        """
+        Test short & long acquisition for Spectrometer
+        """
+        self.acq_over = threading.Event()
+        self.image = None
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        self.spec.exposureTime.value = 0.3 # s
+        specs.repetition.value = (5, 6)
+        exp_shape = specs.repetition.value[::-1]
+
+        sps.image.subscribe(self.receive_image)
+        # Start acquisition
+        self.acq_over.clear()
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        sps.is_active.value = True
+        is_over = self.acq_over.wait(timeout)
+        if not is_over:
+            # just to make help the rest of the tests to pass
+            sps.is_active.value = False
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(is_over, "Failed to complete within %g s" % timeout)
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(len(specs.raw), 1)
+        sshape = specs.raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
+        sem_md = sems.raw[0].metadata
+        spec_md = specs.raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+
+        # Short acquisition (< 0.1s)
+        self.spec.exposureTime.value = 0.01 # s
+        specs.repetition.value = (25, 60)
+        exp_shape = specs.repetition.value[::-1]
+
+        # Start acquisition
+        self.acq_over.clear()
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        sps.is_active.value = True
+        is_over = self.acq_over.wait(timeout)
+        if not is_over:
+            # just to make help the rest of the tests to pass
+            sps.is_active.value = False
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(is_over, "Failed to complete within %g s" % timeout)
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(len(specs.raw), 1)
+        sshape = specs.raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
+        sem_md = sems.raw[0].metadata
+        spec_md = specs.raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+
+        sps.image.unsubscribe(self.receive_image)
 
     def receive_image(self, im):
         self.image = im

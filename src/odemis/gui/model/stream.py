@@ -1856,6 +1856,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 logging.error("Acquisition thread cannot be stopped")
         self._acq_complete.clear()
         
+        # TODO: If it fails, try again, with the other acquisition style, maybe we are luckier
+
         # Pick the right acquisition method
         if self._ccd.exposureTime.value <= 0.1:
             # short dwell time => use driver synchronisation
@@ -1891,6 +1893,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             logging.debug(msg, self._semd.name, self._ccd.name)
             self._acq_must_stop.set()
         # Do it in any case, to be sure
+        logging.debug("unsubscribing SEM on acquisition cancel")
         self._semd_df.unsubscribe(self._ssOnSEMImage)
         self._ccd_df.unsubscribe(self._ssOnCCDImage)
         self._ccd_df.synchronizedOn(None)
@@ -1960,6 +1963,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             ccd_time = self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
             spot_pos = self._getSpotPositions()
+            logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape, ccd_time, dwell_time)
             rep = self._ccd_stream.repetition.value
             roi = self._ccd_stream.roi.value
             self._sem_data = []
@@ -1982,10 +1986,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
+                time.sleep(0) # give more chances spot has been already processed
+                start = time.time()
                 self._acqPixelStart.notify()
 
                 if not self._acq_ccd_complete.wait(ccd_time * 2 + 1):
                     raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
+                dur = time.time() - start
+                if dur < ccd_time:
+                    logging.warning("CCD acquisition took less that %g s: %g s",
+                                    ccd_time, dur)
 
                 # Normally, the SEM acquisition has already completed
                 if not self._acq_sem_complete.wait(dwell_time * 1.5 + 1):
@@ -1995,6 +2005,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 # we get next acquisition we can expect the spot has moved. The
                 # advantage would be to avoid setting the ebeam back to resting
                 # position, and reduce overhead of stopping/starting.
+                logging.debug("unsubscribing SEM after end of spot")
                 self._semd_df.unsubscribe(self._ssOnSEMImage)
 
                 if self._acq_must_stop.is_set():
@@ -2028,6 +2039,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             del self._sem_data # regain a bit of memory
 
             # make sure it's all stopped
+            logging.debug("unsubscribing SEM on acquisition end")
             self._semd_df.unsubscribe(self._ssOnSEMImage)
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
@@ -2038,6 +2050,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self.is_active.value = False
 
     def _ssOnSEMImage(self, df, data):
+        logging.debug("SEM data received")
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
         if not self._acq_sem_complete.is_set():
             # only use the first data per pixel
@@ -2045,6 +2058,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._acq_sem_complete.set()
 
     def _ssOnCCDImage(self, df, data):
+        logging.debug("CCD data received")
         self._ccd_data = data
         self._acq_ccd_complete.set()
 
@@ -2147,7 +2161,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # Take into account settle time
         if len(rep) == 2 and rep[1] > 1:
             rep[1] += 1
-        tot_time = self._emitter.dwellTime.value * numpy.prod(rep)
+        tot_time = (self._emitter.dwellTime.value + 0.01) * numpy.prod(rep)
 
         return tot_time
 
