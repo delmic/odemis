@@ -1387,10 +1387,15 @@ class StaticARStream(StaticStream):
                 # TODO: could use the size of the canvas that will display
                 # the image to save some computation time.
 
+                # TODO: handle having a background image (i.e., same acquisition
+                # but with e-beam blanked)
+                # Remove the background value
+                data0 = img.ARBackgroundSubtract(data)
+
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                size = min(min(data.shape[-2:]) * 2, 1134)
-                polar = img.AngleResolved2Polar(data, size, hole=False)
+                size = min(min(data0.shape[-2:]) * 2, 1134)
+                polar = img.AngleResolved2Polar(data0, size, hole=False)
                 self._polar[pos] = polar
             except Exception:
                 logging.exception("Failed to convert to azymuthal projection")
