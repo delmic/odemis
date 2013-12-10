@@ -41,7 +41,7 @@ class StaticTestAndorCam3(VirtualStaticTestCam, unittest.TestCase):
     camera_kwargs = KWARGS
 
 # Inheritance order is important for setUp, tearDown
-@skip("simple")
+#@skip("simple")
 class TestAndorCam3(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam3 class.
