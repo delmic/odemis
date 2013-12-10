@@ -21,13 +21,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent.futures._base import CancelledError
 import logging
+import numpy
 from odemis import model
+from odemis.gui import acqmng
 from odemis.gui.acqmng import startAcquisition, computeThumbnail
 from odemis.util import driver
 import os
 import subprocess
 import time
 import unittest
+from unittest.case import skip
 
 import odemis.gui.model as guimodel
 import odemis.gui.model.stream as stream
@@ -40,7 +43,7 @@ os.chdir(path)
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
@@ -50,6 +53,7 @@ class TestNoBackend(unittest.TestCase):
     # TODO
     pass
 
+#@skip("simple")
 class SECOMTestCase(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
 
@@ -70,7 +74,6 @@ class SECOMTestCase(unittest.TestCase):
         if ret != 0:
             logging.error("Failed starting backend with '%s'", cmd)
         time.sleep(1) # time to start
-
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -177,6 +180,7 @@ class SECOMTestCase(unittest.TestCase):
         self.left = left
         self.updates += 1
 
+#@skip("simple")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -204,7 +208,7 @@ class SPARCTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if not cls.backend_was_running:
+        if cls.backend_was_running:
             return
         # end the backend
         cmd = ODEMISD_CMD + ["--kill"]
@@ -220,7 +224,55 @@ class SPARCTestCase(unittest.TestCase):
         """
         try acquisition with fairly complex SEM/CCD stream
         """
-        pass
+        gm = self.main_model
+        # Create the streams and streamTree
+        semsur = stream.SEMStream("test sem", gm.sed, gm.sed.data, gm.ebeam)
+        # the shared SEM stream has a special name
+        sems = stream.SEMStream("SEM CL", gm.sed, gm.sed.data, gm.ebeam)
+        ars = stream.ARStream("test ar", gm.ccd, gm.ccd.data, gm.ebeam)
+        st = stream.StreamTree(streams=[semsur, sems, ars])
 
+        # SEM survey settings are via the current hardware settings
+        gm.ebeam.dwellTime.value = gm.ebeam.dwellTime.range[0]
+
+        # SEM/AR settings are via the AR stream
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        gm.ccd.binning.value = (4, 4) # hopefully always supported
+        gm.ccd.exposureTime.value = 1 # s
+        ars.repetition.value = (2, 3)
+        num_ar = numpy.prod(ars.repetition.value)
+
+        est_time = acqmng.estimateTime(st.getStreams())
+
+        # prepare callbacks
+        self.past = None
+        self.left = None
+        self.updates = 0
+        self.done = False
+
+        # Run acquisition
+        f = acqmng.startAcquisition(st.getStreams())
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result()
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertEqual(len(data), num_ar + 2)
+
+        thumb = acqmng.computeThumbnail(st, f)
+        self.assertIsInstance(thumb, model.DataArray)
+
+        self.assertGreaterEqual(self.updates, 1) # at least one update at end
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+    def on_done(self, future):
+        self.done = True
+
+    def on_progress_update(self, future, past, left):
+        self.past = past
+        self.left = left
+        self.updates += 1
 if __name__ == "__main__":
     unittest.main()

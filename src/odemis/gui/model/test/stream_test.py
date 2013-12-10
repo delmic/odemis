@@ -24,11 +24,13 @@ import logging
 import numpy
 from odemis import model
 from odemis.gui.model import stream
+from odemis.util import driver
 import os
 import subprocess
 import threading
 import time
 import unittest
+
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -137,8 +139,15 @@ class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
     """
+    backend_was_running = False
+
     @classmethod
     def setUpClass(cls):
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
         cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
@@ -161,12 +170,18 @@ class SPARCTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
         # end the backend
         cmd = ODEMISD_CMD + ["--kill"]
         subprocess.call(cmd)
         model._components._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
     
+    def setUp(self):
+        if self.backend_was_running:
+            raise unittest.SkipTest("Running backend found")
+
     def test_acq_ar(self):
         """
         Test short & long acquisition for AR
