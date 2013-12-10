@@ -25,14 +25,15 @@ from __future__ import division
 
 from collections import OrderedDict
 import collections
-from concurrent.futures._base import CancelledError
+from concurrent import futures
+from concurrent.futures._base import CancelledError, FINISHED, CANCELLED, \
+    CANCELLED_AND_NOTIFIED, RUNNING
 import logging
 import numpy
 from odemis import model
 from odemis.gui.model.stream import FluoStream, ARStream, SpectrumStream, \
     SEMSpectrumMDStream, OPTICAL_STREAMS, EM_STREAMS, SEMARMDStream
 from odemis.gui.util import img
-from odemis.model import ProgressiveFuture
 import sys
 import threading
 import time
@@ -59,7 +60,7 @@ def startAcquisition(streams):
       (list of model.DataArray): the raw acquisition data
     """
     # create a future
-    future = ProgressiveFuture()
+    future = model.ProgressiveFuture()
 
     # create a task
     task = AcquisitionTask(_mergeStreams(streams), future)
@@ -160,23 +161,6 @@ def _mergeStreams(streams):
 
     return merged
 
-def _executeTask(future, fn, *args, **kwargs):
-    """
-    Executes a task represented by a future
-    """
-    if not future.set_running_or_notify_cancel():
-        return
-
-    try:
-        result = fn(*args, **kwargs)
-    except CancelledError:
-        # cancelled via the future (while running) => it's all already handled
-        pass
-    except BaseException:
-        e = sys.exc_info()[1]
-        future.set_exception(e)
-    else:
-        future.set_result(result)
 
 def _weight_stream(stream):
     """
@@ -212,21 +196,19 @@ class AcquisitionTask(object):
     # TODO: needs a better handling of the stream dependencies. Also, features
     # like drift-compensation might need a special handling.
     def __init__(self, streams, future):
-        self._streams = streams
         self._future = future
+
+        # order the streams for optimal acquisition
+        self._streams = sorted(streams, key=_weight_stream, reverse=True)
 
         # get the estimated time for each streams
         self._streamTimes = {} # Stream -> float (estimated time)
         for s in streams:
             self._streamTimes[s] = s.estimateAcquisitionTime()
 
-        # order the streams for optimal acquisition
-        self._streams = sorted(self._streamTimes.keys(), key=_weight_stream,
-                               reverse=True)
-
-
-        self._condition = threading.Condition()
+        self._streams_left = set(self._streams) # just for progress update
         self._current_stream = None
+        self._current_future = None
         self._cancelled = False
 
     def run(self):
@@ -249,27 +231,35 @@ class AcquisitionTask(object):
         # when setting its state to running.
         self._future.set_end_time(time.time() + expected_time)
 
+        # TODO: either stream has .acquire() that returns a (Progressive) Future
+        # or wrap the .image.subscribe into a Future.
+        # If future, just wait (and our progressive future automatically updates)
+        # If ProgressiveFuture, update final time based on info received.
         for s in self._streams:
+            # Get the future of the acquisition, depending on the Stream type
+            if hasattr(s, "acquire"):
+                f = s.acquire()
+            else: # fall-back to old style stream
+                f = _wrapSimpleStreamIntoFuture(s)
+            self._current_future = f
             self._current_stream = s
-            with self._condition:
-                # start stream
-                s.image.subscribe(self._image_listener)
-                # TODO: better have s.updated.value = True?, or a dataflow for raw data?
-                s.is_active.value = True
-                # TODO: give some callback to the stream, so that it can give
-                # better estimate on the acquisition times during acquisition.
-                # TODO: way for the stream to report error? Maybe change is_active to False?
+            self._streams_left.discard(s)
 
-                # wait until one image acquired or cancelled
-                self._condition.wait()
-                if self._cancelled:
-                    # normally the return value/exception will never reach the
-                    # user of the future: the future will raise a CancelledError
-                    # itself.
-                    raise CancelledError()
+            # in case acquisition was cancelled, before the future was set
+            if self._cancelled:
+                f.cancel()
+                raise CancelledError()
 
-            # add the raw images
-            data = s.raw
+            # If it's a ProgressiveFuture, listen to the time update
+            try:
+                f.add_update_callback(self._on_progress_update)
+            except AttributeError:
+                pass # not a ProgressiveFuture, fine
+
+            # Wait for the acquisition to be finished.
+            # Will pass down exceptions, included in case it's cancelled
+            data = f.result()
+
             # add the stream name to the image if nothing yet
             for d in data:
                 if not model.MD_DESCRIPTION in d.metadata:
@@ -280,9 +270,24 @@ class AcquisitionTask(object):
             expected_time -= self._streamTimes[s]
             self._future.set_end_time(time.time() + expected_time)
 
-
         # return all the raw data
         return raw_images
+
+    def _on_progress_update(self, f, past, left):
+        """
+        Called when the current future has made a progress (and so it should
+        provide a better time estimation).
+        """
+        if self._current_future != f:
+            logging.warning("Progress update from not the current future: %s", f)
+            return
+
+        now = time.time()
+        time_left = left
+        for s in self._streams_left:
+            time_left += self._streamTimes[s]
+
+        self._future.set_end_time(now + time_left)
 
     def _future_time_upd(self, period):
         """
@@ -296,33 +301,125 @@ class AcquisitionTask(object):
             self._future._invoke_upd_callbacks()
             time.sleep(period)
 
-    def _image_listener(self, image):
-        """
-        called when a new image comes from a stream
-        """
-        with self._condition:
-            # stop acquisition
-            self._current_stream.image.unsubscribe(self._image_listener)
-            self._current_stream.is_active.value = False
-
-            # let the thread know that it's all done
-            self._condition.notify_all()
-
     def cancel(self):
         """
         cancel the acquisition
         """
-        with self._condition:
-            if self._current_stream:
-                # unsubscribe to the current stream
-                self._current_stream.image.unsubscribe(self._image_listener)
-                self._current_stream.is_active.value = False
+        # put the cancel flag
+        self._cancelled = True
 
-            # put the cancel flag
-            self._cancelled = True
-            # let the thread know it's done
+        if self._current_future is not None:
+            self._current_future.cancel()
+
+
+def _executeTask(future, fn, *args, **kwargs):
+    """
+    Executes a task represented by a future.
+    Usually, called as main task of a (separate thread).
+    Based on the standard futures code _WorkItem.run()
+    future (Future): future that is used to represent the task
+    fn (callable): function to call for running the future
+    *args, **kwargs: passed to the fn
+    returns None: when the task is over (or cancelled)
+    """
+    if not future.set_running_or_notify_cancel():
+        return
+
+    try:
+        result = fn(*args, **kwargs)
+    except CancelledError:
+        # cancelled via the future (while running) => it's all already handled
+        pass
+    except BaseException:
+        e = sys.exc_info()[1]
+        future.set_exception(e)
+    else:
+        future.set_result(result)
+
+def _wrapSimpleStreamIntoFuture(stream):
+    """
+    Starts one stream acquisition and return a Future
+    Works with streams having only .is_active and .image .
+    returns (Future that returns list of DataArray): the acquisition task 
+    """
+    # Create a Future, not started yet
+    future = SimpleStreamFuture(stream)
+    # run executeTask in a thread that will actually run/wait the acquisition
+    thread = threading.Thread(target=_executeTask,
+                              name="Simple stream Future runner",
+                              args=(future, future._run))
+    thread.start()
+    return future
+
+class SimpleStreamFuture(futures.Future):
+    """
+    Dedicated Future for a stream without .acquire
+    Same as a normal future, excepted it can also cancel the execution
+    while it's running.
+    """
+    def __init__(self, stream):
+        """
+        stream (Stream): Stream with at least .is_active and .image
+        """
+        futures.Future.__init__(self)
+        self._stream = stream
+        self._acq_over = threading.Event()
+
+    def cancel(self):
+        """Cancel the future if possible.
+
+        Returns True if the future was cancelled, False otherwise. A future
+        cannot be cancelled if it has already completed.
+        """
+        # Based on standard code, but with tweak in case it's running
+        with self._condition:
+            if self._state == FINISHED:
+                return False
+
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                return True
+
+            if self._state == RUNNING:
+                # disable the stream
+                self._stream.image.unsubscribe(self._image_listener)
+                self._stream.is_active.value = False
+                self._acq_over.set()
+
+            self._state = CANCELLED
             self._condition.notify_all()
 
+        self._invoke_callbacks()
+        return True
+
+    def _run(self):
+        """
+        To be called to start the acquisition in the stream, and blocks until
+        the task is finished
+        returns (list of DataArray): acquisition data
+        raises CancelledError if the acquisition was cancelled
+        """
+        # start stream
+        self._stream.image.subscribe(self._image_listener)
+        self._stream.is_active.value = True
+
+        # TODO: timeout exception if too long (> 10 x estimated time)
+        # wait until one image acquired or cancelled
+        self._acq_over.wait()
+        if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+            raise CancelledError()
+
+        return self._stream.raw # the acquisition data
+
+    def _image_listener(self, image):
+        """
+        called when a new image is generated, indicating end of acquisition
+        """
+        # stop acquisition
+        self._stream.image.unsubscribe(self._image_listener)
+        self._stream.is_active.value = False
+
+        # let the _run() waiter know that it's all done
+        self._acq_over.set()
 
 
 # TODO: presets shouldn't work on SettingEntries (GUI-only objects), but on
