@@ -232,7 +232,7 @@ class TestPolarConversion(unittest.TestCase):
         data = self.data
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        clean_data = img.AR_BackgroundSubtract(data[0])
+        clean_data = img.ARBackgroundSubtract(data[0])
         result = img.AngleResolved2Polar(clean_data, 201)
 
         desired_output = hdf5.read_data("substracted_background_image.h5")
@@ -249,7 +249,7 @@ class TestPolarConversion(unittest.TestCase):
         data[0] = data[0].astype(numpy.uint16)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        clean_data = img.AR_BackgroundSubtract(data[0])
+        clean_data = img.ARBackgroundSubtract(data[0])
         result = img.AngleResolved2Polar(clean_data, 201)
 
         desired_output = hdf5.read_data("substracted_background_image.h5")
@@ -269,7 +269,7 @@ class TestPolarConversion(unittest.TestCase):
         data[0] = data[0].astype(numpy.int8)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        clean_data = img.AR_BackgroundSubtract(data[0])
+        clean_data = img.ARBackgroundSubtract(data[0])
         result = img.AngleResolved2Polar(clean_data, 201)
 
         desired_output = img.AngleResolved2Polar(data[0].astype(float), 201)
@@ -284,7 +284,7 @@ class TestPolarConversion(unittest.TestCase):
         data[0] = data[0].astype(numpy.float)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
-        clean_data = img.AR_BackgroundSubtract(data[0])
+        clean_data = img.ARBackgroundSubtract(data[0])
         result = img.AngleResolved2Polar(clean_data, 201)
 
         desired_output = hdf5.read_data("substracted_background_image.h5")

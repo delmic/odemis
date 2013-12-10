@@ -428,7 +428,6 @@ def AngleResolved2Polar(data, output_size, hole=True):
     returns (model.DataArray): converted image in polar view
     """
     assert(len(data.shape) == 2)  # => 2D with greyscale
-    image = data
 
     # Get the metadata
     try:
@@ -438,14 +437,7 @@ def AngleResolved2Polar(data, output_size, hole=True):
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
     # Crop the input image to half circle
-    cropped_image = CropHalfCircle(image, pixel_size, (mirror_x, mirror_y), hole=hole)
-
-    # TODO: Need to be able to generate acept even number sizes too
-    # Round to the nearest odd number
-    h_output_size = int(output_size / 2)
-    if output_size % 2 == 0:
-        logging.warn("Even number as output size. It will be rounded to %d.",
-                     2 * h_output_size + 1)
+    cropped_image = _CropHalfCircle(data, pixel_size, (mirror_x, mirror_y), hole)
 
     theta_data = numpy.empty(shape=cropped_image.shape)
     phi_data = numpy.empty(shape=cropped_image.shape)
@@ -459,13 +451,14 @@ def AngleResolved2Polar(data, output_size, hole=True):
 
     for i in xrange(image_x):
         ypix = (i - mirror_y) + (2 * AR_PARABOLA_F) / pixel_size[1]
-        theta, phi, omega = FindAngle(xpix, ypix, pixel_size)
+        theta, phi, omega = _FindAngle(xpix, ypix, pixel_size)
 
         theta_data[i, :] = theta
         phi_data[i, :] = phi
         omega_data[i, :] = cropped_image[i] / omega
 
     # Convert into polar coordinates
+    h_output_size = output_size / 2
     theta = theta_data * (h_output_size / math.pi * 2)
     phi = phi_data
     theta_data = numpy.cos(phi) * theta
@@ -480,15 +473,15 @@ def AngleResolved2Polar(data, output_size, hole=True):
     # interpolation by 3 ?!
     triang = tri.delaunay.Triangulation(theta_data.flat, phi_data.flat)
     interp = triang.linear_interpolator(omega_data.flat, default_value=0)
-    qz = interp[-h_output_size:h_output_size:complex(0, 2 * h_output_size + 1), # Y
-                -h_output_size:h_output_size:complex(0, 2 * h_output_size + 1)] # X
+    qz = interp[-h_output_size:h_output_size:complex(0, output_size), # Y
+                - h_output_size:h_output_size:complex(0, output_size)] # X
     qz = qz.swapaxes(0, 1)[:, ::-1] # rotate by 90°
-    result = model.DataArray(qz, image.metadata)
+    result = model.DataArray(qz, data.metadata)
 
     return result
 
 
-def FindAngle(xpix, ypix, pixel_size):
+def _FindAngle(xpix, ypix, pixel_size):
     """
     For given pixels, finds the angle of the corresponding ray 
     xpix (numpy.array): x coordinates of the pixels
@@ -514,51 +507,43 @@ def FindAngle(xpix, ypix, pixel_size):
 #    omega = (pixel_size[0] * pixel_size[1]) * ((1 / (2 * AR_PARABOLA_F)) * r2 - xfocus) / (sqrtxfocus2plusr2 * xfocus2plusr2)
     omega = (pixel_size[0] * pixel_size[1]) * ((1 / (4 * AR_PARABOLA_F)) * r2 + AR_PARABOLA_F) / (sqrtxfocus2plusr2 * xfocus2plusr2)
 
+    # Note: the latest version of this function at AMOLF provides a 4th value:
+    # irp, the mirror reflectivity for different emission angles.
+    # However, it only has a small effect on final output and depends on the
+    # wavelength and polarisation of the light, which we do not know.
+
     return theta, phi, omega
 
-
-def CropHalfCircle(data, eff_pixel_size, pole_pos, hole=True):
+def ARBackgroundSubtract(data):
     """
-    Crops the image to half circle shape based on AR_FOCUS_DISTANCE, AR_XMAX,
-      AR_PARABOLA_F, and AR_HOLE_DIAMETER
-    data (model.DataArray): The DataArray with the image
-    eff_pixel_size (float): pixel_size * binning / magnification # m
-    pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
-    hole (boolean): Crop the area around the pole if True
-    returns (model.DataArray): Cropped image
+    Substracts the "baseline" (i.e. the average intensity of the background) from the data.
+    This function can be called before AngleResolved2Polar in order to take a better data output.
+    data (model.DataArray): The DataArray with the data. Must be 2D. 
+     Can have metadata MD_BASELINE to indicate the average 0 value. If not, 
+     it must have metadata MD_PIXEL_SIZE and MD_AR_POLE
+    returns (model.DataArray): Filtered data
     """
-    X, Y = data.shape
-
-    # Create mirror mask and apply to the image
-    circle_mask = CreateMirrorMask(data, hole)
-    image = numpy.where(circle_mask, data, 0)
-
-    return image
-
-def AR_BackgroundSubtract(data):
-    """
-    Substracts the "baseline" (i.e. the average intensity of the background) from the image.
-    This function can be called before AngleResolved2Polar in order to take a better image output.
-    data (model.DataArray): The DataArray with the image
-    returns (model.DataArray): Filtered image
-    """
-    image = data
     baseline = 0
     try:
-        # Try to obtain the baseline from the metadata
+        # If available, use the baseline from the metadata, as it's much faster
         baseline = data.metadata[model.MD_BASELINE]
-    except:
+    except KeyError:
         # If baseline is not provided we calculate it, taking the average intensity of the
         # background (i.e. the pixels that are outside the half circle)
-        circle_mask = CreateMirrorMask(data, False)
-        masked_image = ma.array(image, mask=circle_mask)
+        try:
+            pxs = data.metadata[model.MD_PIXEL_SIZE]
+            pole_pos = data.metadata[model.MD_AR_POLE]
+        except KeyError:
+            raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
+        circle_mask = _CreateMirrorMask(data, pxs, pole_pos, hole=False)
+        masked_image = ma.array(data, mask=circle_mask)
 
         # Calculate the average value of the outside pixels
         baseline = masked_image.mean()
 
     # Clip values that will result to negative numbers
     # after the substraction
-    ret_data = numpy.where(image < baseline, baseline, image)
+    ret_data = numpy.where(data < baseline, baseline, data)
 
     # Substract background
     ret_data -= baseline
@@ -566,29 +551,40 @@ def AR_BackgroundSubtract(data):
     result = model.DataArray(ret_data, data.metadata)
     return result
 
-def CreateMirrorMask(data, hole):
+def _CropHalfCircle(data, pixel_size, pole_pos, hole=True):
     """
-    Creates half circle mask (i.e. True inside half circle, False outside it) based on
-    the MD_AR_POLE, MD_PIXEL_SIZE metadata and AR_PARABOLA_F and AR_FOCUS_DISTANCE values.
+    Crops the image to half circle shape based on AR_FOCUS_DISTANCE, AR_XMAX,
+      AR_PARABOLA_F, and AR_HOLE_DIAMETER
     data (model.DataArray): The DataArray with the image
+    pixel_size (float, float): effective pixel sie = sensor_pixel_size * binning / magnification
+    pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
+    hole (boolean): Crop the area around the pole if True
+    returns (model.DataArray): Cropped image
+    """
+    # Create mirror mask and apply to the image
+    circle_mask = _CreateMirrorMask(data, pixel_size, pole_pos, hole)
+    image = numpy.where(circle_mask, data, 0)
+    return image
+
+def _CreateMirrorMask(data, pixel_size, pole_pos, hole=True):
+    """
+    Creates half circle mask (i.e. True inside half circle, False outside it) based
+     AR_PARABOLA_F and AR_FOCUS_DISTANCE values.
+    data (model.DataArray): The DataArray with the image
+    pixel_size (float, float): effective pixel sie = sensor_pixel_size * binning / magnification
+    pole_pos (float, float): x/y coordinates of the pole (MD_AR_POLE)
     hole (boolean): Crop the area around the pole if True
     returns (boolean ndarray): Mask
     """
-    # Get image metadata
-    try:
-        eff_pixel_size = data.metadata[model.MD_PIXEL_SIZE]
-        pole_x, pole_y = data.metadata[model.MD_AR_POLE]
-    except KeyError:
-        raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
-
     X, Y = data.shape
+    pole_x, pole_y = pole_pos
 
     # Calculate the coordinates of the cutoff of half circle
     center_x = pole_x
-    center_y = pole_y - ((2 * AR_PARABOLA_F - AR_FOCUS_DISTANCE) / eff_pixel_size[1])
+    center_y = pole_y - ((2 * AR_PARABOLA_F - AR_FOCUS_DISTANCE) / pixel_size[1])
 
     # Compute the radius
-    r = (2 * math.sqrt(AR_XMAX * AR_PARABOLA_F)) / eff_pixel_size[1]
+    r = (2 * math.sqrt(AR_XMAX * AR_PARABOLA_F)) / pixel_size[1]
     y, x = numpy.ogrid[-center_y:X - center_y, -center_x:Y - center_x]
     circle_mask = x * x + y * y <= r * r
 
@@ -597,7 +593,7 @@ def CreateMirrorMask(data, hole):
 
     # Crop the pole making hole of AR_HOLE_DIAMETER
     if hole:
-        r = (AR_HOLE_DIAMETER / 2) / eff_pixel_size[1]
+        r = (AR_HOLE_DIAMETER / 2) / pixel_size[1]
         y, x = numpy.ogrid[-pole_y:X - pole_y, -pole_x:Y - pole_x]
         circle_mask_hole = x * x + y * y <= r * r
         circle_mask = numpy.where(circle_mask_hole, 0, circle_mask)
