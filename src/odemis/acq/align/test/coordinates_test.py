@@ -34,11 +34,11 @@ from random import shuffle
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-class TestSpotCoordinates(unittest.TestCase):
+@unittest.skip("skip")
+class TestFindCenterCoordinates(unittest.TestCase):
     """
-    Test SpotCoordinates functions
+    Test FindCenterCoordinates
     """
-    @unittest.skip("skip")
     def test_find_center(self):
         """
         Test FindCenterCoordinates
@@ -58,7 +58,14 @@ class TestSpotCoordinates(unittest.TestCase):
                                 (4.1433, 6.7063), (6.4313, 7.2690), (4.9355, 5.1400), (5.0209, 4.9929)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
-    @unittest.skip("skip")
+@unittest.skip("skip")
+class TestDivideInNeighborhoods(unittest.TestCase):
+    """
+    Test DivideInNeighborhoods
+    """
+    def setUp(self):
+        random.seed(0)
+
     def test_devide_neighborhoods_spot(self):
         """
         Test DivideInNeighborhoods for white spot in black image
@@ -69,7 +76,6 @@ class TestSpotCoordinates(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image, (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
-    @unittest.skip("skip")
     def test_devide_neighborhoods_grid(self):
         """
         Test DivideInNeighborhoods for 3x3 grid of white spots in black image
@@ -86,7 +92,6 @@ class TestSpotCoordinates(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_image, (3, 3))
         self.assertEqual(subimages.__len__(), 9)
 
-    @unittest.skip("skip")
     def test_devide_neighborhoods_real_sample(self):
         """
         Test DivideInNeighborhoods for one spot real image
@@ -98,7 +103,6 @@ class TestSpotCoordinates(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
-    @unittest.skip("skip")
     def test_devide_and_find_center_spot(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
@@ -113,7 +117,6 @@ class TestSpotCoordinates(unittest.TestCase):
         expected_coordinates = [(23, 18)]
         numpy.testing.assert_almost_equal(optical_coordinates, expected_coordinates, 0)
 
-    @unittest.skip("skip")
     def test_devide_and_find_center_grid(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates
@@ -129,7 +132,6 @@ class TestSpotCoordinates(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 100)
 
-    @unittest.skip("skip")
     def test_devide_and_find_center_grid_noise(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input
@@ -150,7 +152,6 @@ class TestSpotCoordinates(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 100)
 
-    @unittest.skip("skip")
     def test_devide_and_find_center_grid_missing_point(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
@@ -171,7 +172,6 @@ class TestSpotCoordinates(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-    @unittest.skip("skip")
     def test_devide_and_find_center_grid_cosmic_ray(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for grid that misses one point
@@ -193,7 +193,6 @@ class TestSpotCoordinates(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-    @unittest.skip("skip")
     def test_devide_and_find_center_grid_noise_missing_point_cosmic_ray(self):
         """
         Test DivideInNeighborhoods combined with FindCenterCoordinates for noisy input that
@@ -215,74 +214,157 @@ class TestSpotCoordinates(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-    @unittest.skip("skip")
-    def test_match_coordinates_simple(self):
-        """
-        Test MatchCoordinates using noisy and shuffled optical coordinates
-        """
-        """
-        optical_coordinates = [(4.8241, 3.2631), (5.7418, 4.5738), (5.2170, 1.0348), (8.8879, 6.2774)]
-        electron_coordinates = [(0, 1), (0, 2), (1, 0), (1, 4)]
-        """
-        """
-        electron_coordinates = [ (1, 1), (1, 2), (2, 1), (2, 2)]
-        optical_coordinates = []
-        shuffled_coordinates = []
-        for ta in electron_coordinates:
-            noise_x, noise_y = gauss(0, 0.05), gauss(0, 0.05)
-            optical_tuple = tuple(map(operator.add, ta, (noise_x, noise_y)))
-            optical_coordinates.append(optical_tuple)
-            shuffled_coordinates.append(optical_tuple)
-        shuffle(shuffled_coordinates)
-        print optical_coordinates
-        print shuffled_coordinates
+# @unittest.skip("skip")
+class TestMatchCoordinates(unittest.TestCase):
+    """
+    Test MatchCoordinates
+    """
+    def setUp(self):
+        random.seed(0)
+        self.electron_coordinates_1x1 = [(1, 1)]
+        self.electron_coordinates_3x3 = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
+        self.electron_coordinates_10x10 = []
+        for i in xrange(10):
+            for j in xrange(10):
+                self.electron_coordinates_10x10.append((i + 1, j + 1))
 
-        estimated_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates)
-        numpy.testing.assert_allclose(estimated_coordinates, shuffled_coordinates, rtol=1e-01)
-        """
-        # transformed_coordinates = []
-        # shift_threshold = 0.1
-        # print coordinates._MatchAndCalculate(shuffled_coordinates, shuffled_coordinates, electron_coordinates)
-
+        self.translation_x, self.translation_y = 1.3000132631489385, 2.3999740720548788
+        self.scale = 4
+        self.rotation = -0.4517
 
     def test_match_coordinates_precomputed_output(self):
         """
         Test MatchCoordinates for precomputed output
         """
         optical_coordinates = [(9.1243, 6.7570), (10.7472, 16.8185), (4.7271, 12.6429), (13.9714, 6.0185), (5.6263, 17.5885), (14.8142, 10.9271), (10.0384, 11.8815), (15.5146, 16.0694), (4.4803, 7.5966)]
-        electron_coordinates = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
+        electron_coordinates = self.electron_coordinates_3x3
 
         estimated_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates)
         numpy.testing.assert_equal(estimated_coordinates, [(3, 3), (1, 3), (2, 2), (1, 1), (3, 1), (1, 2), (2, 1), (2, 3), (3, 2)])
         
-    @unittest.skip("skip")
     def test_match_coordinates_single_element(self):
         """
         Test MatchCoordinates for single element lists, warning should be thrown
         """
         optical_coordinates = [(9.1243, 6.7570)]
-        electron_coordinates = [(1, 1)]
+        electron_coordinates = self.electron_coordinates_1x1
 
         estimated_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates)
         numpy.testing.assert_equal(estimated_coordinates, [])
 
-
-    def test_match_coordinates_precomputed_transformation(self):
+    def test_match_coordinates_precomputed_transformation_3x3(self):
         """
         Test MatchCoordinates for applied transformation
         """
-        electron_coordinates = [(1, 1), (1, 2), (1, 3), (2, 1), (2, 2), (2, 3), (3, 1), (3, 2), (3, 3)]
+        electron_coordinates = self.electron_coordinates_3x3
+        translation_x, translation_y = self.translation_x, self.translation_y
+        scale = self.scale
+        rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (1.0305, 2.2383), -0.4517, 0.2125)
-        print transformed_coordinates
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
 
         estimated_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates)
         numpy.testing.assert_equal(estimated_coordinates, electron_coordinates)
         (translation_x, translation_y), scaling, rotation = transform.CalculateTransform(transformed_coordinates, electron_coordinates)
-        numpy.testing.assert_almost_equal((translation_x, translation_y, scaling, rotation), (1.0305, 2.2383, 0.2125, -0.4517))
-        # numpy.testing.assert_equal(estimated_coordinates, [])
+        numpy.testing.assert_almost_equal((translation_x, translation_y, scaling, rotation), (translation_x, translation_y, scale, rotation))
+
+    def test_match_coordinates_shuffled_3x3(self):
+        """
+        Test MatchCoordinates for shuffled optical coordinates, comparing the order of the shuffled optical list and the estimated coordinates
+        generated by MatchCoordinates
+        """
+        electron_coordinates = self.electron_coordinates_3x3
+        translation_x, translation_y = self.translation_x, self.translation_y
+        scale = self.scale
+        rotation = self.rotation
+
+        optical_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffle(shuffled_coordinates)
+        optical_order = coordinates._KNNsearch(shuffled_coordinates, optical_coordinates)
+
+        estimated_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates)
+        electron_order = coordinates._KNNsearch(electron_coordinates, estimated_coordinates)
+        numpy.testing.assert_equal(electron_order, optical_order)
+
+    def test_match_coordinates_precomputed_output_missing_point(self):
+        """
+        Test MatchCoordinates if NaN is returned in the corresponding position in case of missing point
+        """
+        electron_coordinates = self.electron_coordinates_3x3
+        translation_x, translation_y = self.translation_x, self.translation_y
+        scale = self.scale
+        rotation = self.rotation
+
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        rand = random.randint(0, transformed_coordinates.__len__()-1)
+        del transformed_coordinates[rand]
+        estimated_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates)
+
+        if estimated_coordinates != []:
+            numpy.testing.assert_equal(estimated_coordinates[rand], float('nan'))
+
+    def test_match_coordinates_precomputed_transformation_10x10(self):
+        """
+        Test MatchCoordinates for applied transformation
+        """
+        electron_coordinates = self.electron_coordinates_10x10
+        translation_x, translation_y = self.translation_x, self.translation_y
+        scale = self.scale
+        rotation = self.rotation
+
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+
+        estimated_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates)
+        numpy.testing.assert_equal(estimated_coordinates, electron_coordinates)
+        (translation_x, translation_y), scaling, rotation = transform.CalculateTransform(transformed_coordinates, electron_coordinates)
+        numpy.testing.assert_almost_equal((translation_x, translation_y, scaling, rotation), (translation_x, translation_y, scale, rotation))
+
+    def test_match_coordinates_shuffled_10x10(self):
+        """
+        Test MatchCoordinates for shuffled optical coordinates, comparing the order of the shuffled optical list and the estimated coordinates
+        generated by MatchCoordinates
+        """
+        electron_coordinates = self.electron_coordinates_10x10
+        translation_x, translation_y = self.translation_x, self.translation_y
+        scale = self.scale
+        rotation = self.rotation
+
+        optical_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffle(shuffled_coordinates)
+        optical_order = coordinates._KNNsearch(shuffled_coordinates, optical_coordinates)
+
+        estimated_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates)
+        electron_order = coordinates._KNNsearch(electron_coordinates, estimated_coordinates)
+        numpy.testing.assert_equal(electron_order, optical_order)
+
+# unittest.skip("skip")
+class TestOverallComponent(unittest.TestCase):
+    """
+    Test the interaction of all the functions together
+    """
+    def setUp(self):
+        self.electron_coordinates_10x10 = []
+        for i in xrange(10):
+            for j in xrange(10):
+                self.electron_coordinates_10x10.append((i + 1, j + 1))
+
+    def test_overall_precomputed_output(self):
+        """
+        Test MatchCoordinates for precomputed output
+        """
+        electron_coordinates = self.electron_coordinates_10x10
+        grid_data = hdf5.read_data("grid_10x10.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10))
+
+        spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        estimated_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates)
+
+        print optical_coordinates
         print estimated_coordinates
-
-
-
 
