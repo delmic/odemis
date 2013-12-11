@@ -214,7 +214,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestMatchCoordinates(unittest.TestCase):
     """
     Test MatchCoordinates
@@ -339,7 +339,7 @@ class TestMatchCoordinates(unittest.TestCase):
         electron_order = coordinates._KNNsearch(electron_coordinates, estimated_coordinates)
         numpy.testing.assert_equal(electron_order, optical_order)
 
-# unittest.skip("skip")
+# @unittest.skip("skip")
 class TestOverallComponent(unittest.TestCase):
     """
     Test the interaction of all the functions together
