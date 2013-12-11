@@ -193,7 +193,7 @@ class BufferedCanvas(wx.Panel):
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
         # Initialize the buffer's size
-        # self.on_size(None)
+        self.on_size(None)
 
 
     # Event processing
@@ -270,7 +270,8 @@ class BufferedCanvas(wx.Panel):
             logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(new_size)
             # self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
-            self.request_drawing_update()
+            # self.request_drawing_update()
+            self.upate_drawing()
         else:
             logging.debug("Buffer size didn't change, refreshing...")
             self.Refresh(eraseBackground=False)
@@ -1499,21 +1500,22 @@ class PlotCanvas(BufferedCanvas):
     def draw(self):
         """ This method updates the graph image """
 
-        # Reset all cached values
-        for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
-            f.flush()
+        if self._data:
+            # Reset all cached values
+            for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
+                f.flush()
 
-        dc = wx.MemoryDC()
-        dc.SelectObject(self._bmp_buffer)
-        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+            dc = wx.MemoryDC()
+            dc.SelectObject(self._bmp_buffer)
+            dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
 
-        dc.Clear() # make sure you clear the bitmap!
+            dc.Clear() # make sure you clear the bitmap!
 
-        ctx = wxcairo.ContextFromDC(dc)
-        # width, height = self.ClientSize
-        self._plot_data(ctx)
+            ctx = wxcairo.ContextFromDC(dc)
+            # width, height = self.ClientSize
+            self._plot_data(ctx)
 
-        del dc # need to get rid of the MemoryDC before Update() is called.
+            del dc # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)
         self.Update()
 
