@@ -36,9 +36,9 @@ from scipy.spatial import cKDTree
 from itertools import compress
 
 
-MAX_STEPS_NUMBER = 300  #How many steps to perform in coordinates matching
+MAX_STEPS_NUMBER = 300  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
-MAX_ALLOWED_DIFF = 0.1  # Maximum allowed difference is electron coordinates
+MAX_ALLOWED_DIFF = 0.15  # Maximum allowed difference is electron coordinates
 DIFF_NUMBER = 0.95  # Number of values that should be within the allowed difference
 
 def FindCenterCoordinates(subimages):
@@ -273,6 +273,7 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
 
     if quality == 0:
         logging.warning("Cannot find overlay")
+        return []
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
     ordered_coordinates = [electron_coordinates[i] for i in index1]
@@ -376,13 +377,13 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     inv_e_wrong_points = [not i for i in e_wrong_points]
     (x_move1, y_move1), scale1, rotation1 = transform.CalculateTransform(list(compress(electron_coordinates, inv_e_wrong_points))
                                  , list(compress(knn_points1, inv_e_wrong_points)))
-    x_move1, y_move1 = -x_move1, -y_move1
+    x_move1, y_move1 = x_move1, y_move1
 
     # Calculate the transform parameters for the correct optical_coordinates
     inv_o_wrong_points = [not i for i in o_wrong_points]
     (x_move2, y_move2), scale2, rotation2 = transform.CalculateTransform(list(compress(knn_points2, inv_o_wrong_points))
                                  , list(compress(optical_coordinates, inv_o_wrong_points)))
-    x_move2, y_move2 = -x_move2, -y_move2
+    x_move2, y_move2 = x_move2, y_move2
 
     # Average between the two parameters
     #TODO: use numpy.mean()
