@@ -60,4 +60,4 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
     scaling = 1 / math.sqrt((r_array[1][0] ** 2) + (r_array[0][0] ** 2))
     rotation = (180 / math.pi) * math.atan2(-r_array[1][0], r_array[0][0])
 
-    return (translation_x, translation_y), (1 / scaling), rotation
+    return (translation_x, translation_y), scaling, rotation
