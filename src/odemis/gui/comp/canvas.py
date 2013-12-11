@@ -27,6 +27,15 @@ Canvas Rendering Pipeline
 
 ** Attributes of interest:
 
+* Prefixes:
+    0,0 at top left
+    v_<name>: in view coordintates = pixels
+    b_<name>: in buffer coordinates = pixels
+    w_<name>: in world coordinates
+
+    Carthesian coordinates
+    p_<name>: in physical coordinates
+
 * buffer_center_world_pos: The center of the buffer in world coordinates.
 When the user moves or drags the view, the buffer is recentered around a new
 set of world coordinates.
@@ -42,15 +51,15 @@ changed.
 
 ** Method calls:
 
-* ShouldUpdateDrawing
-    This method triggers the OnDrawTimer handler, but only if time delay
+* request_drawing_update
+    This method triggers the on_draw_timer handler, but only if time delay
     criteria are met, so drawing doesn't happen too often or too infrequently.
 
-    * OnDrawTimer
+    * on_draw_timer
 
         Simply calls the next function.
 
-        * UpdateDrawing
+        * upate_drawing
 
             Update buffer_center_world_pos to requested_world_pos.
 
@@ -84,7 +93,7 @@ changed.
             Refresh/Update
 
 
-DrawTimer is set by ShouldUpdateDrawing
+DrawTimer is set by request_drawing_update
 
 Data and graphical orientations
 -------------------------------
@@ -104,6 +113,8 @@ Physical:
 
 """
 from __future__ import division
+from abc import ABCMeta, abstractmethod
+
 import ctypes
 import inspect
 import logging
@@ -120,22 +131,23 @@ import odemis.gui.img.data as imgdata
 
 #pylint: disable=E1002
 
-class Canvas(wx.Panel):
+class BufferedCanvas(wx.Panel):
+    __metaclass__ = ABCMeta
 
-    def __init__(self, parent):
-        super(Canvas, self).__init__(parent, style=wx.NO_FULL_REPAINT_ON_RESIZE)
+    def __init__(self, *args, **kwargs):
+        # Set default style
+        kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
+        super(BufferedCanvas, self).__init__( *args, **kwargs)
 
         # Graphical overlays that display relative to the canvas
         self.world_overlays = []
         # Graphical opverlays that display in an absolute position
         self.view_overlays = []
+        # The overlay which will receive mouse and keyboard events
+        self.active_overlay = None
 
+        # Set default background colour
         self.SetBackgroundColour(wx.BLACK)
-
-class BitmapCanvas(Canvas):
-
-    def __init__(self, parent):
-        super(BitmapCanvas, self).__init__(parent)
 
         # Buffer device context
         self._dc_buffer = wx.MemoryDC()
@@ -143,16 +155,184 @@ class BitmapCanvas(Canvas):
         self.buffer_center_world_pos = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
         self._bmp_buffer = None
-        # very small first, so that for sure it'll be resized with OnSize
+        # very small first, so that for sure it'll be resized with on_size
         self._bmp_buffer_size = (1, 1)
-        self.ResizeBuffer(self._bmp_buffer_size)
 
-        # wx.Images. Should always have at least 1 element, to allow the direct
-        # addition of a 2nd image.
-        self.images = [None]
-        # Merge ratio for combining the images
-        self.merge_ratio = 0.3
-        self.scale = 1.0 # px/wu
+        self.backgroundBrush = wx.CROSS_HATCH # wx.SOLID for a plain background
+        if os.name == "nt":
+            # Avoids flickering on windows, but prevents black background on
+            # Linux...
+            # TODO: to check, the documentation says the opposite
+            self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
+
+        # This attribute is used to store the current mouse cursor type
+        self.previous_cursor = None
+
+        # Event Biding
+
+        # Mouse events
+        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
+        self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
+        self.Bind(wx.EVT_RIGHT_DOWN, self.on_right_down)
+        self.Bind(wx.EVT_RIGHT_UP, self.on_right_up)
+        self.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click)
+        self.Bind(wx.EVT_MOTION, self.on_motion)
+        self.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
+
+        # Keyboard events
+        self.Bind(wx.EVT_CHAR, self.on_char)
+
+        # Window events
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_SIZE, self.on_size)
+
+        # END Event Biding
+
+        # timer to give a delay before redrawing so we wait to see if there are
+        # several events waiting
+        self.draw_timer = wx.PyTimer(self.on_draw_timer)
+
+        # Initialize the buffer's size
+        # self.on_size(None)
+
+
+    # Event processing
+
+    def _on_down(self, cursor=None):
+        """ General method for any mouse buttons being pressed
+        .. Note:: A bug prevents the cursor from changing in Ubuntu after the
+            mouse is captured.
+        """
+        if cursor:
+            self.previous_cursor = self.GetCursor()
+            self.SetCursor(cursor)
+
+        if not self.HasCapture():
+            self.CaptureMouse()
+
+        self.SetFocus()
+
+    def _on_up(self):
+        """ General method for any mouse button release
+        .. Note:: A bug prevents the cursor from changing in Ubuntu after the
+            mouse is captured.
+        """
+        if self.HasCapture():
+            self.ReleaseMouse()
+            self.SetCursor(self.previous_cursor or wx.NullCursor)
+
+    def on_left_down(self, evt, cursor=None):
+        """ Standard left mouse button down processor """
+        self._on_down(cursor)
+
+    def on_left_up(self, evt):
+        """ Standard left mouse button release processor """
+        self._on_up()
+
+    def on_right_down(self, evt, cursor=None):
+        """ Standard right mouse button release processor """
+        self._on_down(cursor)
+
+    def on_right_up(self, evt):
+        """ Standard right mouse button release processor """
+        self._on_up()
+
+    def on_dbl_click(self, evt):
+        """ Standard left mouse button double click processor """
+        pass
+
+    def on_motion(self, evt):
+        """ Standard mouse motion processor """
+        pass
+
+    def on_wheel(self, evt):
+        """ Standard mouse wheel processor """
+        pass
+
+    def on_char(self, evt):
+        """ Standard key stroke processor """
+        pass
+
+    def on_paint(self, evt):
+        """ Standard on paint handler """
+        pass
+
+    def on_size(self, evt):
+        """ Standard size change handler
+
+        Ensures that the buffer still fits in the view and recenter the view.
+        """
+        # Make sure the buffer is always at least the same size as the Window or
+        # bigger
+        new_size = self.get_minimum_buffer_size()
+
+        if (new_size != self._bmp_buffer_size):
+            logging.debug("Buffer size changed, redrawing...")
+            self.resize_buffer(new_size)
+            # self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
+            self.request_drawing_update()
+        else:
+            logging.debug("Buffer size didn't change, refreshing...")
+            self.Refresh(eraseBackground=False)
+
+    def on_draw_timer(self):
+        """ Update the drawing when the on draw timer fires """
+        # thread_name = threading.current_thread().name
+        # logging.debug("Drawing timer in thread %s", thread_name)
+        self.upate_drawing()
+
+    # END Event processing
+
+
+    # Buffer and drawing methods
+
+    def get_minimum_buffer_size(self):
+        """ Return the minimum size needed by the buffer """
+        return self.ClientSize.x, self.ClientSize.y
+
+    def resize_buffer(self, size):
+        """ Resizes the bitmap buffer to the given size
+
+        :param size: (2-tuple int) The new size
+        """
+        # Make new offscreen bitmap: this bitmap will always have the
+        # current drawing in it
+        self._bmp_buffer = wx.EmptyBitmap(*size)
+        self._bmp_buffer_size = size
+
+        # Select the bitmap into the device context
+        self._dc_buffer.SelectObject(self._bmp_buffer)
+        # On Linux necessary after every 'SelectObject'
+        self._dc_buffer.SetBackground(wx.BLACK_BRUSH)
+
+    def request_drawing_update(self, delay=0.1):
+        """ Schedule an update of the buffer if the timer is not already running
+
+        :param delay: (float) maximum number of seconds to wait before the
+            buffer will be updated.
+
+        .. warning:: always call this method from the main GUI thread!
+            If you're unsure about the current thread, use:
+            `wx.CallAfter(canvas.request_drawing_update)`
+        """
+        if not self.draw_timer.IsRunning():
+            self.draw_timer.Start(delay * 1000.0, oneShot=True)
+
+    def upate_drawing(self):
+        """ Redraw everything in the buffer and display it """
+        self.draw()
+        # eraseBackground doesn't seem to matter, but just in case...
+        self.Refresh(eraseBackground=False)
+        # not really necessary as refresh causes an onPaint event soon, but
+        # makes it slightly sooner, so smoother
+        self.Update()
+
+    @abstractmethod
+    def draw(self):
+        """ Create an image within the buffer device context (`_dc_buffer`) """
+        pass
+
+    # END Buffer and drawing methods
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
@@ -168,7 +348,7 @@ class BitmapCanvas(Canvas):
 # Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
 #
 
-class DraggableCanvas(BitmapCanvas):
+class DraggableCanvas(BufferedCanvas):
     """ A draggable, buffered window class.
 
     To use it, instantiate it and then put what you want to display in the
@@ -192,36 +372,31 @@ class DraggableCanvas(BitmapCanvas):
     def __init__(self, parent):
         super(DraggableCanvas, self).__init__(parent)
 
+        self.resize_buffer(self._bmp_buffer_size)
+
+        # wx.Images. Should always have at least 1 element, to allow the direct
+        # addition of a 2nd image.
+        self.images = [None]
+        # Merge ratio for combining the images
+        self.merge_ratio = 0.3
+        self.scale = 1.0 # px/wu
+
+        # When resizing, margin to put around the current size
+        # TODO: Maybe make the margin related to the canvas size?
+        self.default_margin = 512
+        self.margins = (self.default_margin, self.default_margin)
+
         # the position the view is asking to the next buffer recomputation
         # in buffer-coordinates: = 1px at scale = 1
         self.requested_world_pos = self.buffer_center_world_pos
 
+        self._ldragging = False
 
-
-
-
-        # When resizing, margin to put around the current size
-        # TODO: Maybe make the margin related to the canvas size?
-        self.margin = 512
-        self.margins = (self.margin, self.margin)
-
-        if os.name == "nt":
-            # Avoids flickering on windows, but prevents black background on
-            # Linux...
-            # FIXME: to check, the documentation says the opposite
-            self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-
-
-        self.backgroundBrush = wx.CROSS_HATCH # wx.SOLID for a plain background
-
-        # view = the area displayed
-
-        # px, px: Current shift to world_pos_buffer in the actual view
-        self.drag_shift = (0, 0)
+        # The amount of pixels shifted in the current drag event
+        self.drag_shift = (0, 0) # px, px
         self.bg_offset = self.drag_shift
-        self.dragging = False
-        # px, px: initial position of mouse when started dragging
-        self.drag_init_pos = (0, 0)
+        #  initial position of mouse when started dragging
+        self.drag_init_pos = (0, 0) # px, px
 
         self._rdragging = False
         # (int, int) px
@@ -229,82 +404,38 @@ class DraggableCanvas(BitmapCanvas):
         # (flt, flt) last absolute value, for sending the change
         self._rdrag_prev_value = None
 
-        # This attribute is used to store the current mouse cursor type
-        self.previous_cursor = None
+    # Properties
 
-        # timer to give a delay before redrawing so we wait to see if there are
-        # several events waiting
-        self.DrawTimer = wx.PyTimer(self.OnDrawTimer)
+    @property
+    def left_dragging(self):
+        return self._ldragging
 
-        # Event binding
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+    @property
+    def right_dragging(self):
+        return self._rdragging
 
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_MOTION, self.OnMouseMotion)
-        self.Bind(wx.EVT_LEFT_DCLICK, self.OnDblClick)
-        self.Bind(wx.EVT_RIGHT_DOWN, self.OnRightDown)
-        self.Bind(wx.EVT_RIGHT_UP, self.OnRightUp)
+    @property
+    def dragging(self):
+        return self._ldragging or self._rdragging
 
-        self.Bind(wx.EVT_CHAR, self.OnChar)
+    # END Properties
 
-    # Event handlers
 
-    def OnChar(self, event):
-        key = event.GetKeyCode()
+    # Event processing
 
-        change = 100 # about a 10th of the screen
-        if event.ShiftDown():
-            change //= 8 # softer
-
-        if key == wx.WXK_LEFT:
-            self.ShiftView((change, 0))
-        elif key == wx.WXK_RIGHT:
-            self.ShiftView((-change, 0))
-        elif key == wx.WXK_DOWN:
-            self.ShiftView((0, -change))
-        elif key == wx.WXK_UP:
-            self.ShiftView((0, change))
-
-    def OnRightDown(self, event):
-        if self.dragging:
-            return
-
-        # TODO: Show 'focussing' text in viewport
-        self._rdragging = True
-        self._rdrag_init_pos = event.GetPositionTuple()
-        self._rdrag_prev_value = [0, 0]
-
-        if not self.HasCapture():
-            self.CaptureMouse()
-
-        # Get the focus back when receiving a click
-        self.SetFocus()
-
-    def OnRightUp(self, event):
-        if self._rdragging:
-            self._rdragging = False
-            self.SetCursor(wx.STANDARD_CURSOR)
-            if self.HasCapture():
-                self.ReleaseMouse()
-
-    def ShiftView(self, shift):
-        """ Moves the position of the view by a delta
-        shift (2-tuple int): delta in buffer coordinates (pixels)
-        """
-        self.ReCenterBuffer(
-            (self.buffer_center_world_pos[0] - (shift[0] / self.scale),
-             self.buffer_center_world_pos[1] - (shift[1] / self.scale))
-        )
-
-    def OnLeftDown(self, event):
+    def on_left_down(self, evt): #pylint: disable=W0221
+        """ Start a dragging procedure """
+        # Ignore the click if we're aleady dragging
         if self._rdragging:
             return
 
-        self.dragging = True
+        cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+        super(DraggableCanvas, self).on_left_down(evt, cursor)
 
-        pos = event.GetPositionTuple()
+        # Fixme: only go to drag mode if the mouse moves before a mouse up?
+        self._ldragging = True
+
+        pos = evt.GetPositionTuple()
         # There might be several draggings before the buffer is updated
         # So take into account the current drag_shift to compensate
         self.drag_init_pos = (pos[0] - self.drag_shift[0],
@@ -312,23 +443,15 @@ class DraggableCanvas(BitmapCanvas):
 
         logging.debug("Drag started at %s", self.drag_init_pos)
 
-        self.previous_cursor = self.GetCursor()
-        self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW))
-
-        if not self.HasCapture():
-            self.CaptureMouse()
-
-        # Get the focus back when receiving a click
-        self.SetFocus()
-
-    def OnLeftUp(self, event):
-        if not self.dragging:
+    def on_left_up(self, evt):
+        """ End the dragging procedure """
+        # Ignore the release if we didn't register a left down
+        if not self._ldragging:
             return
 
-        self.dragging = False
-        self.SetCursor(self.previous_cursor or wx.STANDARD_CURSOR)
-        if self.HasCapture():
-            self.ReleaseMouse()
+        super(DraggableCanvas, self).on_left_up(evt)
+
+        self._ldragging = False
 
         # Update the position of the buffer to where the view is centered
         # self.drag_shift is the delta we want to apply
@@ -338,13 +461,35 @@ class DraggableCanvas(BitmapCanvas):
         )
         self.ReCenterBuffer(new_pos)
 
-    def OnDblClick(self, event):
-        pos = event.GetPositionTuple()
-        center = (self.ClientSize[0] // 2, self.ClientSize[1] // 2)
-        shift = (center[0] - pos[0],
-                 center[1] - pos[1])
+    def on_right_down(self, evt): #pylint: disable=W0221
+        # Ignore the click if we're aleady dragging
+        if self._ldragging:
+            return
 
-        # shift the view instantly
+        super(DraggableCanvas, self).on_right_down(evt)
+
+        # TODO: Show 'focussing' text in viewport (do this elsewhere)
+        self._rdragging = True
+        self._rdrag_init_pos = evt.GetPositionTuple()
+        self._rdrag_prev_value = [0, 0]
+
+        logging.debug("Drag started at %s", self._rdrag_init_pos)
+
+    def on_right_up(self, evt):
+        # Ignore the release if we didn't register a right down
+        if not self._rdragging:
+            return
+
+        super(DraggableCanvas, self).on_right_up(evt)
+        self._rdragging = False
+
+    def on_dbl_click(self, event):
+        """ Recenter the view around the point that was double clicked """
+        v_pos = event.GetPositionTuple()
+        v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
+        shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
+
+        # shift the view immediately
         self.drag_shift = (self.drag_shift[0] + shift[0],
                            self.drag_shift[1] + shift[1])
         self.Refresh()
@@ -352,35 +497,30 @@ class DraggableCanvas(BitmapCanvas):
         # recompute the view
         new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
                    self.buffer_center_world_pos[1] - shift[1] / self.scale)
-        logging.debug("double click at %s", new_pos)
         self.ReCenterBuffer(new_pos)
 
-    def OnMouseMotion(self, event):
-        if self.dragging:
-            pos = event.GetPositionTuple()
+        logging.debug("Double click at %s", new_pos)
 
-            drag_shift = (pos[0] - self.drag_init_pos[0],
-                          pos[1] - self.drag_init_pos[1])
+    def on_motion(self, event):
+        if self._ldragging:
+            v_pos = event.GetPositionTuple()
+            drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
 
             # Limit the amount of pixels that the canvas can be dragged
             self.drag_shift = (
-                min(
-                    max(drag_shift[0], -self.margins[0]),
-                    self.margins[0]
-                ),
-                min(
-                    max(drag_shift[1], -self.margin),
-                    self.margins[1])
+                min(max(drag_shift[0], -self.margins[0]), self.margins[0] ),
+                min(max(drag_shift[1], -self.margins[1]), self.margins[1])
             )
 
             self.bg_offset = (self.drag_shift[0] % 40,
                               self.drag_shift[1] % 40)
 
-            self.UpdateDrawing()
-
+            self.upate_drawing()
             self.Refresh()
 
         elif self._rdragging:
+            # TODO: Move this to miccanvas
             # Linear when small, non-linear when big.
             # use 3 points: starting point, previous point, current point
             #  * if dis < 32 px => min : dis (small linear zone)
@@ -419,6 +559,80 @@ class DraggableCanvas(BitmapCanvas):
                     self.onExtraAxisMove(i, change)
                     self._rdrag_prev_value[i] = value
 
+    def on_char(self, evt):
+        key = evt.GetKeyCode()
+
+        change = 100 # about a 10th of the screen
+        if evt.ShiftDown():
+            change //= 8 # softer
+
+        if key == wx.WXK_LEFT:
+            self.ShiftView((change, 0))
+        elif key == wx.WXK_RIGHT:
+            self.ShiftView((-change, 0))
+        elif key == wx.WXK_DOWN:
+            self.ShiftView((0, -change))
+        elif key == wx.WXK_UP:
+            self.ShiftView((0, change))
+
+    def on_paint(self, event):
+        """ Quick update of the window content with the buffer + the static
+        overlays
+
+        Note: The Device Context (dc) will automatically be drawn when it goes
+        out of scope at the end of this method.
+        """
+        dc_view = wx.PaintDC(self)
+
+        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
+                        (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
+
+        src_pos = (self.margins[0] - self.drag_shift[0],
+                   self.margins[1] - self.drag_shift[1])
+
+        # Blit the appropriate area from the buffer to the view port
+        dc_view.BlitPointSize(
+                    (0, 0),             # destination point
+                    self.ClientSize,    # size of area to copy
+                    self._dc_buffer,    # source
+                    src_pos             # source point
+        )
+
+        # Remember that the device context of the view port is passed!
+        self.DrawStaticOverlays(dc_view)
+
+
+    # END Event processing
+
+
+    # Buffer and drawing methods
+
+    def get_minimum_buffer_size(self):
+        """ Return the minimum size needed by the buffer """
+        return (max(self._bmp_buffer_size[0],
+                    self.ClientSize.x + self.default_margin * 2),
+                max(self._bmp_buffer_size[1],
+                    self.ClientSize.y + self.default_margin * 2))
+
+    # END Buffer and drawing methods
+
+
+    def ShiftView(self, shift):
+        """ Moves the position of the view by a delta
+        shift (2-tuple int): delta in buffer coordinates (pixels)
+        """
+        self.ReCenterBuffer(
+            (self.buffer_center_world_pos[0] - (shift[0] / self.scale),
+             self.buffer_center_world_pos[1] - (shift[1] / self.scale))
+        )
+
+
+
+
+
+
+
+
     # END Event handlers
 
     def onExtraAxisMove(self, axis, shift):
@@ -446,7 +660,7 @@ class DraggableCanvas(BitmapCanvas):
             units)
         scale (float): scaling of the image
         keepalpha (boolean): whether the alpha channel must be used to draw
-        Note: call ShouldUpdateDrawing() to actually get the image redrawn
+        Note: call request_drawing_update() to actually get the image redrawn
             afterwards
         """
         assert(0 <= index <= len(self.images))
@@ -471,63 +685,8 @@ class DraggableCanvas(BitmapCanvas):
                 # replace
                 self.images[index] = im
 
-    def OnPaint(self, event):
-        """ Quick update of the window content with the buffer + the static
-        overlays
 
-        Note: The Device Context (dc) will automatically be drawn when it goes
-        out of scope at the end of this method.
-        """
-        dc_view = wx.PaintDC(self)
 
-        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize[0]) // 2,
-                        (self._bmp_buffer_size[1] - self.ClientSize[1]) // 2)
-
-        src_pos = (self.margins[0] - self.drag_shift[0],
-                   self.margins[1] - self.drag_shift[1])
-
-        # Blit the appropriate area from the buffer to the view port
-        dc_view.BlitPointSize(
-                    (0, 0),             # destination point
-                    self.ClientSize,    # size of area to copy
-                    self._dc_buffer,    # source
-                    src_pos             # source point
-        )
-
-        # Remember that the device context of the view port is passed!
-        self.DrawStaticOverlays(dc_view)
-
-    def OnSize(self, event):
-        """ Ensures that the buffer still fits in the view and recenter the view
-        """
-        # Make sure the buffer is always at least the same size as the Window or
-        # bigger
-        new_size = (
-            max(self._bmp_buffer_size[0], self.ClientSize[0] + self.margin * 2),
-            max(self._bmp_buffer_size[1], self.ClientSize[1] + self.margin * 2)
-        )
-
-        if (new_size != self._bmp_buffer_size):
-            self.ResizeBuffer(new_size)
-            # self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
-            self.ShouldUpdateDrawing()
-        else:
-            self.Refresh(eraseBackground=False)
-
-    def ResizeBuffer(self, size):
-        """ Updates the size of the buffer to the given size
-
-        :param size: (2-tuple int) The new size
-        """
-        # Make new offscreen bitmap: this bitmap will always have the
-        # current drawing in it
-        self._bmp_buffer = wx.EmptyBitmap(*size)
-        self._bmp_buffer_size = size
-
-        # Select the bitmap into the device context
-        self._dc_buffer.SelectObject(self._bmp_buffer)
-        # On Linux necessary after every 'SelectObject'
-        self._dc_buffer.SetBackground(wx.BLACK_BRUSH)
 
     def ReCenterBuffer(self, world_pos):
         """ Update the position of the buffer on the world
@@ -543,7 +702,7 @@ class DraggableCanvas(BitmapCanvas):
             self.requested_world_pos = world_pos
             # FIXME: could maybe be more clever and only request redraw for the
             # outside region
-            self.ShouldUpdateDrawing()
+            self.request_drawing_update()
 
 
     def fitViewToContent(self, recenter=False):
@@ -592,46 +751,29 @@ class DraggableCanvas(BitmapCanvas):
 
         if recenter:
             c = (bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.
-            self.requested_world_pos = c # as ReCenterBuffer but without ShouldUpdateDrawing
+            self.requested_world_pos = c # as ReCenterBuffer but without request_drawing_update
 
-        wx.CallAfter(self.ShouldUpdateDrawing)
+        wx.CallAfter(self.request_drawing_update)
 
     def Repaint(self):
         """ Repaint the canvas
 
         This convenience method was added, because requesting a repaint from an
-        overlay using `UpdateDrawing`, could cause the view to 'jump' while
+        overlay using `upate_drawing`, could cause the view to 'jump' while
         dragging.
         """
-        self.Draw()
+        self.draw()
         self.Refresh(eraseBackground=False)
         self.Update()
 
-    def ShouldUpdateDrawing(self, delay=0.1):
-        """ Schedule the update of the buffer
-
-        delay (seconds): maximum time to wait before it will be updated
-
-        Warning: always call from the main GUI thread. So if you're not sure
-         in which thread you are, do:
-         wx.CallAfter(canvas.ShouldUpdateDrawing)
-        """
-        if not self.DrawTimer.IsRunning():
-            self.DrawTimer.Start(delay * 1000.0, oneShot=True)
-
-    def OnDrawTimer(self):
-        # thrd_name = threading.current_thread().name
-        # logging.debug("Drawing timer in thread %s", thrd_name)
-        self.UpdateDrawing()
-
-    def UpdateDrawing(self):
+    def upate_drawing(self):
         """ Redraws everything (that is viewed in the buffer)
         """
         prev_world_pos = self.buffer_center_world_pos
 
         self.buffer_center_world_pos = self.requested_world_pos
 
-        self.Draw()
+        self.draw()
 
         # Calculate the amount the view has shifted in pixels
         shift_view = (
@@ -641,7 +783,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # Adjust the dragging attributes according to the change in
         # buffer center
-        if self.dragging:
+        if self._ldragging:
             self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
                                   self.drag_init_pos[1] - shift_view[1])
             self.drag_shift = (self.drag_shift[0] + shift_view[0],
@@ -660,7 +802,7 @@ class DraggableCanvas(BitmapCanvas):
         # makes it slightly sooner, so smoother
         self.Update()
 
-    def Draw(self):
+    def draw(self):
         """ Redraw the buffer with the images and overlays
 
         Overlays must have a `Draw(dc_buffer, shift, scale)` method.
@@ -917,7 +1059,7 @@ class DraggableCanvas(BitmapCanvas):
         ctx = wxcairo.ContextFromDC(dc_buffer)
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
-        if not self.dragging:
+        if not self._ldragging:
             surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
 
         pattern = cairo.SurfacePattern(surface)
@@ -1200,7 +1342,7 @@ PLOT_CLOSE_BOTTOM = 2
 PLOT_MODE_LINE = 1
 PLOT_MODE_BAR = 2
 
-class PlotCanvas(wx.Panel):
+class PlotCanvas(BufferedCanvas):
     """ This is a general canvas for plotting numerical data in various ways
 
     All values used by this class will be mapped to pixel values as needed.
@@ -1208,52 +1350,29 @@ class PlotCanvas(wx.Panel):
 
     def __init__(self, *args, **kwargs):
 
-        kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
 
         super(PlotCanvas, self).__init__(*args, **kwargs)
 
-        # Bitmap used as a buffer for the plot
-        self._bmp_buffer = None
         # The data to be plotted, a list of numerical value pairs
         self._data = []
 
-        # Interesting values taken from the data
-        self.min_x = None
-        self.max_x = None
+        # Interesting values taken from the data.
+        self.min_x_val = None
+        self.max_x_val = None
         self.width_x = None
 
-        self.min_y = None
-        self.max_y = None
+        self.min_y_val = None
+        self.max_y_val = None
         self.width_y = None
 
         ## Rendering settings
-
         self.line_width = 1.5 #px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = change_brightness(self.line_colour, -0.3)
 
         # Determines if the graph should be closed, and if so, how.
-        self.closed = PLOT_CLOSE_NOT
+        self.plot_closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
-
-        ## Event binding
-
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        # OnSize called to make sure the buffer is initialized.
-        # This might result in OnSize getting called twice on some
-        # platforms at initialization, but little harm done.
-        self.OnSize(None)
-
-    # Event handlers
-
-    def OnSize(self, event=None):
-        self._bmp_buffer = wx.EmptyBitmap(*self.ClientSize)
-        self.UpdateImage()
-
-    def OnPaint(self, event=None):
-        pass
 
      # Getters and Setters
 
@@ -1284,24 +1403,24 @@ class PlotCanvas(wx.Panel):
         of the canvas.
         """
 
-        self.min_x = min_x
-        self.max_x = max_x
-        self.min_y = min_y
-        self.max_y = max_y
+        self.min_x_val = min_x
+        self.max_x_val = max_x
+        self.min_y_val = min_y
+        self.max_y_val = max_y
 
         logging.debug(
             "Limits set to %s, %s and %s, %s",
-            self.min_x,
-            self.max_x,
-            self.min_y,
-            self.max_y,
+            self.min_x_val,
+            self.max_x_val,
+            self.min_y_val,
+            self.max_y_val,
         )
 
-        self.width_x = self.max_x - self.min_x
-        self.width_y = self.max_y - self.min_y
+        self.width_x = self.max_x_val - self.min_x_val
+        self.width_y = self.max_y_val - self.min_y_val
 
         logging.debug("Widths set to %s and %s", self.width_x, self.width_y)
-        self.UpdateImage()
+        self.draw()
 
     def reset_dimensions(self):
         """ Determine the dimensions according to the present data """
@@ -1312,7 +1431,7 @@ class PlotCanvas(wx.Panel):
             min(vert),
             max(vert)
         )
-        self.UpdateImage()
+        self.draw()
 
     # Value calculation methods
 
@@ -1340,21 +1459,21 @@ class PlotCanvas(wx.Panel):
     # @memoize
     def _val_x_to_pos_x(self, val_x):
         """ Translate an x value to an x position in pixels """
-        x = min(max(self.min_x, val_x), self.max_x)
-        perc_x = float(x - self.min_x) / self.width_x
+        x = min(max(self.min_x_val, val_x), self.max_x_val)
+        perc_x = float(x - self.min_x_val) / self.width_x
         return int(round(perc_x * self.ClientSize.x))
 
     def _val_y_to_pos_y(self, val_y):
         """ Translate an y value to an y position in pixels """
-        y = min(max(self.min_y, val_y), self.max_y)
-        perc_y = float(self.max_y - y) / self.width_y
+        y = min(max(self.min_y_val, val_y), self.max_y_val)
+        perc_y = float(self.max_y_val - y) / self.width_y
         return int(round(perc_y * self.ClientSize.y))
 
     #@memoize
     def _pos_x_to_val_x(self, pos_x):
         perc_x = pos_x / float(self.ClientSize.x)
-        val_x = (perc_x * self.width_x) + self.min_x
-        val_x = max(min(val_x, self.max_x), self.min_x)
+        val_x = (perc_x * self.width_x) + self.min_x_val
+        val_x = max(min(val_x, self.max_x_val), self.min_x_val)
         return val_x
 
     #@memoize
@@ -1369,15 +1488,15 @@ class PlotCanvas(wx.Panel):
         self.fill_colour = self.line_colour
 
     def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
-        self.closed = closed
+        self.plot_closed = closed
 
     def set_plot_mode(self, mode):
         self.plot_mode = mode
-        self.UpdateImage()
+        self.draw()
 
     # Image generation
 
-    def UpdateImage(self):
+    def draw(self):
         """ This method updates the graph image """
 
         # Reset all cached values
@@ -1411,7 +1530,7 @@ class PlotCanvas(wx.Panel):
         value_to_position = self.value_to_position
         line_to = ctx.line_to
 
-        x, y = value_to_position((self.min_x, self.min_y))
+        x, y = value_to_position((self.min_x_val, self.min_y_val))
 
         ctx.move_to(x, y)
 
@@ -1425,8 +1544,8 @@ class PlotCanvas(wx.Panel):
         # line_path = ctx.copy_path()
 
         # Close the path in the desired way, so we can fill it
-        if self.closed == PLOT_CLOSE_BOTTOM:
-            x, y = self.value_to_position((self.max_x, 0))
+        if self.plot_closed == PLOT_CLOSE_BOTTOM:
+            x, y = self.value_to_position((self.max_x_val, 0))
             ctx.line_to(x, y)
             x, y = self.value_to_position((0, 0))
             ctx.line_to(x, y)
@@ -1456,8 +1575,8 @@ class PlotCanvas(wx.Panel):
             # logging.debug("drawing to %s", (x, y))
             line_to(x, y)
 
-        if self.closed == PLOT_CLOSE_BOTTOM:
-            x, y = self.value_to_position((self.max_x, 0))
+        if self.plot_closed == PLOT_CLOSE_BOTTOM:
+            x, y = self.value_to_position((self.max_x_val, 0))
             ctx.line_to(x, y)
             x, y = self.value_to_position((0, 0))
             ctx.line_to(x, y)

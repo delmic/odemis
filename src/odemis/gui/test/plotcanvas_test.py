@@ -142,24 +142,24 @@ class PlotCanvasTestCase(test.GuiTestCase):
             (4.5, 0.5),
         ]
 
-        test.gui_loop()
-        cnvs.set_data(data)
+        # test.gui_loop()
+        # cnvs.set_data(data)
 
-        test.gui_loop()
+        # test.gui_loop()
 
-        cnvs.set_dimensions(0, 5, 0, 5)
+        # cnvs.set_dimensions(0, 5, 0, 5)
 
-        test.gui_loop()
+        # test.gui_loop()
 
         cnvs.set_closed(canvas.PLOT_CLOSE_BOTTOM)
-        cnvs.reset_dimensions()
+        # cnvs.reset_dimensions()
 
         test.gui_loop()
 
 
         cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
 
-        for plot in PLOTS:
+        for plot in PLOTS[-1:]:
             cnvs.set_1d_data(plot[0], plot[1])
 
             test.gui_loop()

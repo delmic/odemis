@@ -106,6 +106,7 @@ class Overlay(object):
     def view_height(self):
         return self.base.ClientSize.y
 
+    # Default Event handlers
     def on_left_down(self, evt):
         evt.Skip()
 
@@ -118,16 +119,25 @@ class Overlay(object):
     def on_right_down(self, evt):
         evt.Skip()
 
-    def on_motion_up(self, evt):
+    def on_motion(self, evt):
         evt.Skip()
 
-    def on_enter_up(self, evt):
+    def on_dbl_click(self, evt):
         evt.Skip()
 
-    def on_leave_up(self, evt):
+    def on_char(self, evt):
         evt.Skip()
 
-    def on_size_up(self, evt):
+    def on_enter(self, evt):
+        evt.Skip()
+
+    def on_leave(self, evt):
+        evt.Skip()
+
+    def on_size(self, evt):
+        evt.Skip()
+
+    def on_paint(self, evt):
         evt.Skip()
 
 class ViewOverlay(Overlay):
@@ -135,7 +145,6 @@ class ViewOverlay(Overlay):
     The Draw method has to be fast, because it's called after every
     refresh of the canvas. The center of the window is at 0,0 (and
     dragging doesn't affects that). """
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def Draw(self, dc):
@@ -145,7 +154,6 @@ class ViewOverlay(Overlay):
 class WorldOverlay(Overlay):
     """ This class displays an overlay on the buffer.
     It's updated only every time the entire buffer is redrawn."""
-    __metaclass__ = ABCMeta
 
     @abstractmethod
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -1382,7 +1390,7 @@ class PointSelectOverlay(WorldOverlay):
                 old_pixel_pos = self._pixel_pos
                 self.view_to_pixel()
                 if self._pixel_pos != old_pixel_pos:
-                    self.base.UpdateDrawing()
+                    self.base.upate_drawing()
         else:
             # The canvas was dragged
             self.was_dragged = True
@@ -1399,7 +1407,7 @@ class PointSelectOverlay(WorldOverlay):
         if self._pixel_pos and self.enabled and not self.was_dragged:
             if self._selected_pixel.value != self._pixel_pos:
                 self._selected_pixel.value = self._pixel_pos
-                self.base.UpdateDrawing()
+                self.base.upate_drawing()
                 logging.debug("Pixel %s selected",
                               str(self._selected_pixel.value))
 
@@ -1420,7 +1428,7 @@ class PointSelectOverlay(WorldOverlay):
         self._current_vpos = None
         self._pixel_pos = None
         # Update the drawing so any drawn selection will be cleared
-        self.base.UpdateDrawing()
+        self.base.upate_drawing()
 
         evt.Skip()
 
@@ -1539,7 +1547,7 @@ class PointSelectOverlay(WorldOverlay):
         return btop_left + util.tuple_multiply(self._pixel_size, scale)
 
     def _selection_made(self, selected_pixel):
-        self.base.UpdateDrawing()
+        self.base.upate_drawing()
 
     # @profile
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -1731,7 +1739,7 @@ class PointsOverlay(WorldOverlay):
     def on_mouse_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
 
-        if not self.base.dragging and self.choices and self.enabled:
+        if not self.base.left_dragging and self.choices and self.enabled:
             vx, vy = evt.GetPositionTuple()
             self.cursor_buffer_pos = self.base.view_to_buffer_pos((vx, vy))
 
