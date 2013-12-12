@@ -71,6 +71,8 @@ class ProgressiveFuture(futures.Future):
         self._start_time = start or (time.time() + 0.1)
         self._end_time = end or (self._start_time + 0.1)
 
+        # Callable that takes the future and returns True if the
+        # cancellation was successful.
         # As long as it's None, the future cannot be cancelled while running
         self.task_canceller = None
 
@@ -164,9 +166,8 @@ class ProgressiveFuture(futures.Future):
                 return True
 
             if self._state == RUNNING:
-                if self.task_canceller:
-                    self.task_canceller()
-                else:
+                canceller = self.task_canceller
+                if not (canceller and canceller(self)):
                     return False
 
             self._state = CANCELLED

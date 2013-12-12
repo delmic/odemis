@@ -282,6 +282,9 @@ class AcquisitionTask(object):
             logging.warning("Progress update from not the current future: %s", f)
             return
 
+        logging.debug("Updating time with %g s + %s",
+                      left,
+                      ", ".join(["%g s" % self._streamTimes[s] for s in self._streams_left]))
         now = time.time()
         time_left = left
         for s in self._streams_left:
@@ -301,7 +304,7 @@ class AcquisitionTask(object):
             self._future._invoke_upd_callbacks()
             time.sleep(period)
 
-    def cancel(self):
+    def cancel(self, future):
         """
         cancel the acquisition
         """
@@ -310,6 +313,9 @@ class AcquisitionTask(object):
 
         if self._current_future is not None:
             self._current_future.cancel()
+
+        # TODO: fix race condition when last future already finished
+        return True
 
 
 def _executeTask(future, fn, *args, **kwargs):
