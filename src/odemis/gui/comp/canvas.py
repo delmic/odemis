@@ -44,7 +44,7 @@ set of world coordinates.
 of the view window, with an added margin all around it.
 
 * requested_world_pos: The requested new center of the buffer in world
-coordinates, which is set from ReCenterBuffer, a method called whenever
+coordinates, which is set from recenter_buffer, a method called whenever
 a drag action is complete or when the view is otherwise
 changed.
 
@@ -59,7 +59,7 @@ changed.
 
         Simply calls the next function.
 
-        * upate_drawing
+        * update_drawing
 
             Update buffer_center_world_pos to requested_world_pos.
 
@@ -68,7 +68,7 @@ changed.
                 Move the origin to the _dc_buffer from the top left to its
                 center.
 
-                * _DrawMergedImages
+                * _draw_merged_images
 
                     Draw the background using
 
@@ -76,15 +76,15 @@ changed.
 
                     Draw each image in the stack using...
 
-                    * _DrawImage
+                    * _draw_image
 
                         Rescales the image using...
 
-                        * _RescaleImageOptimized
+                        * _rescale_image
 
                         Set image opacity using...
 
-                        * memsetObject
+                        * memset_object
 
                         Draw the image to the _dc_buffer
 
@@ -148,6 +148,7 @@ class BufferedCanvas(wx.Panel):
 
         # Set default background colour
         self.SetBackgroundColour(wx.BLACK)
+        self.bg_offset = (0, 0)
 
         # Buffer device context
         self._dc_buffer = wx.MemoryDC()
@@ -193,7 +194,7 @@ class BufferedCanvas(wx.Panel):
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
         # Initialize the buffer's size
-        self.on_size(None)
+        # self.on_size(None)
 
 
     # Event processing
@@ -265,22 +266,21 @@ class BufferedCanvas(wx.Panel):
         # Make sure the buffer is always at least the same size as the Window or
         # bigger
         new_size = self.get_minimum_buffer_size()
-
         if (new_size != self._bmp_buffer_size):
-            logging.debug("Buffer size changed, redrawing...")
+            # logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(new_size)
-            # self.ReCenterBuffer((new_size[0]/2, new_size[1]/2))
+            # self.recenter_buffer((new_size[0]/2, new_size[1]/2))
             # self.request_drawing_update()
-            self.upate_drawing()
+            self.update_drawing()
         else:
-            logging.debug("Buffer size didn't change, refreshing...")
+            # logging.debug("Buffer size didn't change, refreshing...")
             self.Refresh(eraseBackground=False)
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """
         # thread_name = threading.current_thread().name
         # logging.debug("Drawing timer in thread %s", thread_name)
-        self.upate_drawing()
+        self.update_drawing()
 
     # END Event processing
 
@@ -319,7 +319,7 @@ class BufferedCanvas(wx.Panel):
         if not self.draw_timer.IsRunning():
             self.draw_timer.Start(delay * 1000.0, oneShot=True)
 
-    def upate_drawing(self):
+    def update_drawing(self):
         """ Redraw everything in the buffer and display it """
         self.draw()
         # eraseBackground doesn't seem to matter, but just in case...
@@ -333,47 +333,163 @@ class BufferedCanvas(wx.Panel):
         """ Create an image within the buffer device context (`_dc_buffer`) """
         pass
 
+    def _draw_background(self, dc_buffer):
+        """ Draw checkered background """
+        # Only support wx.SOLID, and anything else is checkered
+        if self.backgroundBrush == wx.SOLID:
+            return
+
+        ctx = wxcairo.ContextFromDC(dc_buffer)
+        surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
+
+        # if not self._ldragging:
+        #     surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
+
+        pattern = cairo.SurfacePattern(surface)
+        pattern.set_extend(cairo.EXTEND_REPEAT)
+        ctx.set_source(pattern)
+
+        ctx.rectangle(
+            0,
+            0,
+            self._bmp_buffer_size[0],
+            self._bmp_buffer_size[1]
+        )
+
+        ctx.fill()
+
     # END Buffer and drawing methods
 
-# A class for smooth, flicker-less display of anything on a window, with drag
-# and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
-# wx.floatcanvas and wx.scrolledwindow...
-#
-# The main differences are:
-#  * when dragging the window the surrounding margin, expanding beyond the
-#    visible area of the panel, is already computed, so that doesn't not have to
-#    be done during the dragging.
-#  * You can draw at any coordinate, and it's displayed if the center of the
-#    the canvas is close enough from the area.
-#  * Built-in optimised zoom/transparency for 2 images
-# Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
-#
+    def _draw_view_overlays(self, dc):
+        """ Draws all the view overlays on the DC dc (wx.DC)"""
+        # center the coordinates
+        dc.SetDeviceOrigin(self.ClientSize.x // 2, self.ClientSize.y // 2)
+        # TODO: Add filtering for *enabled overlays
+        for o in self.view_overlays:
+            o.Draw(dc)
 
-class DraggableCanvas(BufferedCanvas):
-    """ A draggable, buffered window class.
 
-    To use it, instantiate it and then put what you want to display in the
-    lists:
+    # Position conversion
 
-    * Images: for the two images to display (use .setImage())
-    * world_overlays: for additional objects to display (must have a Draw(dc)
-      method)
-    * view_overlays: for additional objects that stay at an absolute position
+    @classmethod
+    def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=None):
+        """ Converts a position from world coordinates to buffer coordinates
 
-    The idea = three layers of decreasing area size:
-    * The whole world, which can have infinite dimensions, but needs a redraw
-    * The buffer, which contains a precomputed image of the world big enough
-      that (normally) a drag cannot bring it outside of the viewport
-    * The viewport, which is what the user sees
+        :param w_pos: (2-tuple float) the coordinates in the world
+        :param w_buff_center: the center of the buffer in world coordinates
+        :param scale: how much zoomed is the buffer compared to the world.
+            I.e.: with scale 2, 100px of the world are displayed using 50 buffer
+            px. (The world is zoomed out with a scale > 1)
+        :param offset (int, int): The offset can be used to move the buffer
+            origin back to its original position. See `buffer_to_world_pos` for
+            more details.
+        :return: (int, int)
+        """
+        b_pos = ((w_pos[0] - w_buff_center[0]) * scale,
+                    (w_pos[1] - w_buff_center[1]) * scale)
+        if offset:
+            return (b_pos[0] + offset[0], b_pos[1] + offset[1])
+        else:
+            return b_pos
 
-    Unit: at scale = 1, 1px = 1 unit. So an image with scale = 1 will be
-      displayed actual size.
+    @classmethod
+    def buffer_to_world_pos(cls, b_pos, w_buffer_center, scale, offset=None):
+        """ Converts a position from buffer coordinates to world coordinates
 
-    """
-    def __init__(self, parent):
-        super(DraggableCanvas, self).__init__(parent)
+        :param b_pos: (int, int) the buffer coordinates
+        :param w_buffer_center: the center of the buffer in world coordinates
+        :param scale: how much zoomed is the buffer compared to the world.
+            I.e.: with scale 2, 100px of the buffer contain 50 world pixels.
+            (The world is zoomed in with a scale > 1
+        :param offset (int, int): The offset can be used to align the origin of
+            the buffer with that of the world. E.g. to align 0,0 (top left) of
+            the buffer with the origin of the world (which is at the center),
+            one would set the offset to half the width and height of the buffer
+            itself.
+        :return: (float, float)
 
-        self.resize_buffer(self._bmp_buffer_size)
+        """
+        if offset:
+            b_pos = (b_pos[0] - offset[0], b_pos[1] - offset[1])
+
+        return (w_buffer_center[0] + (b_pos[0] / scale),
+                w_buffer_center[1] + (b_pos[1] / scale))
+
+    # View <-> Buffer
+    @classmethod
+    def view_to_buffer_pos(cls, v_pos, margins):
+        """ Convert view port coordinates to buffer coordinates
+
+        The top left of the view is considered to have coordinates (0, 0), with
+        to the right and bottom of that the positive x and y directions.
+
+        A view position is tranformed by adding the margin width and height.
+
+        :param v_pos: (int, int) the coordinates in the view
+        :param margins: (int, int) the horizontal and vertical buffer margins
+        :return: (wx.Point) or (int, int) the calculated buffer position
+        """
+        b_pos = (v_pos[0] + margins[0], v_pos[1] + margins[1])
+
+        if isinstance(v_pos, wx.Point):
+            return wx.Point(*b_pos)
+        else:
+            return b_pos
+
+    @classmethod
+    def buffer_to_view_pos(cls, b_pos, margins):
+        """ Convert a buffer position into a view position
+
+        Note:
+            If the buffer position does not fall within the view, negative
+            values might be returned or values that otherwise fall outside of
+            the view.
+
+        :param v_pos: (int, int) the coordinates in the buffer
+        :param margins: (int, int) the horizontal and vertical buffer margins
+        :return: (wx.Point) or (int, int) the calculated view position
+        """
+        v_pos = (b_pos[0] - margins[0], b_pos[1] - margins[1])
+
+        if isinstance(b_pos, wx.Point):
+            return wx.Point(*v_pos)
+        else:
+            return v_pos
+
+    # View <-> World
+    @classmethod
+    def view_to_world_pos(cls, v_pos, w_buff_cent, margins, scale, offset=None):
+        """ Convert a position in view coordinates into world coordinates
+
+        See `view_to_buffer_pos` and `buffer_to_world_pos` for more details
+
+        """
+        return cls.buffer_to_world_pos(
+                    cls.view_to_buffer_pos(v_pos, margins),
+                    w_buff_cent,
+                    scale,
+                    offset
+        )
+
+    @classmethod
+    def world_to_view_pos(cls, w_pos, w_buff_cent, margins, scale, offset=None):
+        """ Convert a position in world coordinates into view coordinates
+
+        See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
+
+        """
+
+        return cls.buffer_to_view_pos(
+                cls.world_to_buffer_pos(w_pos, w_buff_cent, scale, offset),
+                margins
+        )
+
+    # END Position conversion
+
+class BitmapCanvas(BufferedCanvas):
+
+    def __init__(self, *args, **kwargs):
+        super(BitmapCanvas, self).__init__(*args, **kwargs)
 
         # wx.Images. Should always have at least 1 element, to allow the direct
         # addition of a 2nd image.
@@ -382,282 +498,15 @@ class DraggableCanvas(BufferedCanvas):
         self.merge_ratio = 0.3
         self.scale = 1.0 # px/wu
 
-        # When resizing, margin to put around the current size
-        # TODO: Maybe make the margin related to the canvas size?
-        self.default_margin = 512
-        self.margins = (self.default_margin, self.default_margin)
+        self.margins = (0, 0)
 
-        # the position the view is asking to the next buffer recomputation
-        # in buffer-coordinates: = 1px at scale = 1
-        self.requested_world_pos = self.buffer_center_world_pos
-
-        self._ldragging = False
-
-        # The amount of pixels shifted in the current drag event
-        self.drag_shift = (0, 0) # px, px
-        self.bg_offset = self.drag_shift
-        #  initial position of mouse when started dragging
-        self.drag_init_pos = (0, 0) # px, px
-
-        self._rdragging = False
-        # (int, int) px
-        self._rdrag_init_pos = None
-        # (flt, flt) last absolute value, for sending the change
-        self._rdrag_prev_value = None
-
-    # Properties
-
-    @property
-    def left_dragging(self):
-        return self._ldragging
-
-    @property
-    def right_dragging(self):
-        return self._rdragging
-
-    @property
-    def dragging(self):
-        return self._ldragging or self._rdragging
-
-    # END Properties
-
-
-    # Event processing
-
-    def on_left_down(self, evt): #pylint: disable=W0221
-        """ Start a dragging procedure """
-        # Ignore the click if we're aleady dragging
-        if self._rdragging:
-            return
-
-        cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
-        super(DraggableCanvas, self).on_left_down(evt, cursor)
-
-        # Fixme: only go to drag mode if the mouse moves before a mouse up?
-        self._ldragging = True
-
-        pos = evt.GetPositionTuple()
-        # There might be several draggings before the buffer is updated
-        # So take into account the current drag_shift to compensate
-        self.drag_init_pos = (pos[0] - self.drag_shift[0],
-                              pos[1] - self.drag_shift[1])
-
-        logging.debug("Drag started at %s", self.drag_init_pos)
-
-    def on_left_up(self, evt):
-        """ End the dragging procedure """
-        # Ignore the release if we didn't register a left down
-        if not self._ldragging:
-            return
-
-        super(DraggableCanvas, self).on_left_up(evt)
-
-        self._ldragging = False
-
-        # Update the position of the buffer to where the view is centered
-        # self.drag_shift is the delta we want to apply
-        new_pos = (
-            self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
-            self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
-        )
-        self.ReCenterBuffer(new_pos)
-
-    def on_right_down(self, evt): #pylint: disable=W0221
-        # Ignore the click if we're aleady dragging
-        if self._ldragging:
-            return
-
-        super(DraggableCanvas, self).on_right_down(evt)
-
-        # TODO: Show 'focussing' text in viewport (do this elsewhere)
-        self._rdragging = True
-        self._rdrag_init_pos = evt.GetPositionTuple()
-        self._rdrag_prev_value = [0, 0]
-
-        logging.debug("Drag started at %s", self._rdrag_init_pos)
-
-    def on_right_up(self, evt):
-        # Ignore the release if we didn't register a right down
-        if not self._rdragging:
-            return
-
-        super(DraggableCanvas, self).on_right_up(evt)
-        self._rdragging = False
-
-    def on_dbl_click(self, event):
-        """ Recenter the view around the point that was double clicked """
-        v_pos = event.GetPositionTuple()
-        v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
-        shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
-
-        # shift the view immediately
-        self.drag_shift = (self.drag_shift[0] + shift[0],
-                           self.drag_shift[1] + shift[1])
-        self.Refresh()
-
-        # recompute the view
-        new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
-                   self.buffer_center_world_pos[1] - shift[1] / self.scale)
-        self.ReCenterBuffer(new_pos)
-
-        logging.debug("Double click at %s", new_pos)
-
-    def on_motion(self, event):
-        if self._ldragging:
-            v_pos = event.GetPositionTuple()
-            drag_shift = (v_pos[0] - self.drag_init_pos[0],
-                          v_pos[1] - self.drag_init_pos[1])
-
-            # Limit the amount of pixels that the canvas can be dragged
-            self.drag_shift = (
-                min(max(drag_shift[0], -self.margins[0]), self.margins[0] ),
-                min(max(drag_shift[1], -self.margins[1]), self.margins[1])
-            )
-
-            self.bg_offset = (self.drag_shift[0] % 40,
-                              self.drag_shift[1] % 40)
-
-            self.upate_drawing()
-            self.Refresh()
-
-        elif self._rdragging:
-            # TODO: Move this to miccanvas
-            # Linear when small, non-linear when big.
-            # use 3 points: starting point, previous point, current point
-            #  * if dis < 32 px => min : dis (small linear zone)
-            #  * else: dis + 1/32 * sign* (dis-32)**2 => (square zone)
-            # send diff between value and previous value sent => it should
-            # always be at the same position for the cursor at the same place
-            #
-            # NOTE: The focus overlay is loosely dependant on the values
-            # generated here, because it uses them to guesstimate the maximum
-            # value produced while focussing.
-
-            linear_zone = 32.0
-            pos = event.GetPositionTuple()
-            for i in [0, 1]: # x, y
-                shift = pos[i] - self._rdrag_init_pos[i]
-
-                if i:
-                    # Flip the sign for vertical movement, as indicated in the
-                    # onExtraAxisMove docstring: up/right is positive
-                    shift = -shift
-                    # logging.debug("pos %s, shift %s", pos[i], shift)
-
-                if abs(shift) <= linear_zone:
-                    value = shift
-                else:
-                    ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
-                    value = shift + ssquare / linear_zone
-
-                change = value - self._rdrag_prev_value[i]
-
-                # if i:
-                #     logging.debug("shift %s, value %s, change %s",
-                #         shift, value, change)
-
-                if change:
-                    self.onExtraAxisMove(i, change)
-                    self._rdrag_prev_value[i] = value
-
-    def on_char(self, evt):
-        key = evt.GetKeyCode()
-
-        change = 100 # about a 10th of the screen
-        if evt.ShiftDown():
-            change //= 8 # softer
-
-        if key == wx.WXK_LEFT:
-            self.ShiftView((change, 0))
-        elif key == wx.WXK_RIGHT:
-            self.ShiftView((-change, 0))
-        elif key == wx.WXK_DOWN:
-            self.ShiftView((0, -change))
-        elif key == wx.WXK_UP:
-            self.ShiftView((0, change))
-
-    def on_paint(self, event):
-        """ Quick update of the window content with the buffer + the static
-        overlays
-
-        Note: The Device Context (dc) will automatically be drawn when it goes
-        out of scope at the end of this method.
-        """
-        dc_view = wx.PaintDC(self)
-
-        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                        (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
-
-        src_pos = (self.margins[0] - self.drag_shift[0],
-                   self.margins[1] - self.drag_shift[1])
-
-        # Blit the appropriate area from the buffer to the view port
-        dc_view.BlitPointSize(
-                    (0, 0),             # destination point
-                    self.ClientSize,    # size of area to copy
-                    self._dc_buffer,    # source
-                    src_pos             # source point
-        )
-
-        # Remember that the device context of the view port is passed!
-        self.DrawStaticOverlays(dc_view)
-
-
-    # END Event processing
-
-
-    # Buffer and drawing methods
-
-    def get_minimum_buffer_size(self):
-        """ Return the minimum size needed by the buffer """
-        return (max(self._bmp_buffer_size[0],
-                    self.ClientSize.x + self.default_margin * 2),
-                max(self._bmp_buffer_size[1],
-                    self.ClientSize.y + self.default_margin * 2))
-
-    # END Buffer and drawing methods
-
-
-    def ShiftView(self, shift):
-        """ Moves the position of the view by a delta
-        shift (2-tuple int): delta in buffer coordinates (pixels)
-        """
-        self.ReCenterBuffer(
-            (self.buffer_center_world_pos[0] - (shift[0] / self.scale),
-             self.buffer_center_world_pos[1] - (shift[1] / self.scale))
-        )
-
-
-
-
-
-
-
-
-    # END Event handlers
-
-    def onExtraAxisMove(self, axis, shift):
-        """
-        called when the extra dimensions are modified (right drag)
-
-        axis (int>0): the axis modified
-            0 => X (horizontal)
-            1 => Y (vertical)
-        shift (int): relative amount of pixel moved
-            >0: toward up/right
-        """
-        # We have nothing to do
-        # Inheriting classes can do more
-        pass
-
-    # Change picture one/two
-    def SetImage(self, index, im, pos=None, scale=None, keepalpha=False):
+    def set_image(self, index, im, w_pos=(0.0, 0.0), scale=1.0, keepalpha=False):
         """ Set (or update)  image
 
         index (0<=int): index number of the image, can be up to 1 more than the
             current number of images
         im (wx.Image): the image, or None to remove the current image
-        pos (2-tuple of float): position of the center of the image (in world
+        w_pos (2-tuple of float): position of the center of the image (in world
             units)
         scale (float): scaling of the image
         keepalpha (boolean): whether the alpha channel must be used to draw
@@ -674,7 +523,7 @@ class DraggableCanvas(BufferedCanvas):
             else:
                 del self.images[index]
         else:
-            im._dc_center = pos
+            im._dc_center = w_pos
             im._dc_scale = scale
             im._dc_keepalpha = keepalpha
             if not im.HasAlpha():
@@ -685,123 +534,6 @@ class DraggableCanvas(BufferedCanvas):
             else:
                 # replace
                 self.images[index] = im
-
-
-
-
-    def ReCenterBuffer(self, world_pos):
-        """ Update the position of the buffer on the world
-
-        :param world_pos: (2-tuple float) The world coordinates to center the
-            buffer on.
-
-        Warning: always call from the main GUI thread. So if you're not sure
-        in which thread you are, do: wx.CallAfter(canvas.ReCenterBuffer, pos)
-        """
-
-        if self.requested_world_pos != world_pos:
-            self.requested_world_pos = world_pos
-            # FIXME: could maybe be more clever and only request redraw for the
-            # outside region
-            self.request_drawing_update()
-
-
-    def fitViewToContent(self, recenter=False):
-        """
-        Adapts the MPP and center to fit to the current content
-        recenter (boolean): If True, also recenter the view.
-        """
-        # TODO: take into account the dragging. For now we skip it (should be
-        # unlikely to happen anyway)
-
-        # find bounding box of all the content
-        bbox = [None, None, None, None] # ltrb in wu
-        for im in self.images:
-            if im is None:
-                continue
-            w, h = im.Width * im._dc_scale, im.Height * im._dc_scale
-            c = im._dc_center
-            bbox_im = [c[0] - w / 2., c[1] - h / 2., c[0] + w / 2., c[1] + h / 2.]
-            if bbox[0] is None:
-                bbox = bbox_im
-            else:
-                bbox = (min(bbox[0], bbox_im[0]), min(bbox[1], bbox_im[1]),
-                        max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
-
-        if bbox[0] is None:
-            return # no image => nothing to do
-
-        # if no recenter, increase bbox so that its center is the current center
-        if not recenter:
-            c = self.buffer_center_world_pos
-            hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
-            hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
-            bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
-
-        # compute mpp so that the bbox fits exactly the visible part
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1] # wu
-        if w == 0 or h == 0:
-            logging.warning("Weird image size of %fx%f wu", w, h)
-            return # no image
-        cw = max(1, self.ClientSize[0]) # px
-        ch = max(1, self.ClientSize[1]) # px
-        self.scale = min(ch / h, cw / w) # pick the dimension which is shortest
-
-        # TODO: avoid aliasing when possible by picking a round number for the
-        # zoom level (for the "main" image) if it's ±10% of the target size
-
-        if recenter:
-            c = (bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.
-            self.requested_world_pos = c # as ReCenterBuffer but without request_drawing_update
-
-        wx.CallAfter(self.request_drawing_update)
-
-    def Repaint(self):
-        """ Repaint the canvas
-
-        This convenience method was added, because requesting a repaint from an
-        overlay using `upate_drawing`, could cause the view to 'jump' while
-        dragging.
-        """
-        self.draw()
-        self.Refresh(eraseBackground=False)
-        self.Update()
-
-    def upate_drawing(self):
-        """ Redraws everything (that is viewed in the buffer)
-        """
-        prev_world_pos = self.buffer_center_world_pos
-
-        self.buffer_center_world_pos = self.requested_world_pos
-
-        self.draw()
-
-        # Calculate the amount the view has shifted in pixels
-        shift_view = (
-            (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
-            (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
-        )
-
-        # Adjust the dragging attributes according to the change in
-        # buffer center
-        if self._ldragging:
-            self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
-                                  self.drag_init_pos[1] - shift_view[1])
-            self.drag_shift = (self.drag_shift[0] + shift_view[0],
-                               self.drag_shift[1] + shift_view[1])
-            # self.bg_offset = (self.drag_shift[0] % 40,
-            #               self.drag_shift[1] % 40)
-        else:
-            # in theory, it's the same, but just to be sure we reset to 0,0
-            # exactly
-            self.drag_shift = (0, 0)
-
-        # eraseBackground doesn't seem to matter, but just in case...
-        self.Refresh(eraseBackground=False)
-
-        # not really necessary as refresh causes an onPaint event soon, but
-        # makes it slightly sooner, so smoother
-        self.Update()
 
     def draw(self):
         """ Redraw the buffer with the images and overlays
@@ -815,12 +547,13 @@ class DraggableCanvas(BufferedCanvas):
         # with values > 2048
         # centred on self.buffer_center_world_pos
         origin_pos = tuple(d // 2 for d in self._bmp_buffer_size)
+
         self._dc_buffer.SetDeviceOriginPoint(origin_pos)
 
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
-        self._DrawMergedImages(self._dc_buffer, self.images, self.merge_ratio)
+        self._draw_merged_images(self._dc_buffer, self.images, self.merge_ratio)
 
         self._dc_buffer.SetDeviceOriginPoint((0, 0))
 
@@ -829,20 +562,119 @@ class DraggableCanvas(BufferedCanvas):
         for o in self.world_overlays:
             o.Draw(self._dc_buffer, self.buffer_center_world_pos, self.scale)
 
+    def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
+        """ Draw the two images on the buffer DC, centred around their
+        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
 
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
 
-    def DrawStaticOverlays(self, dc):
-        """ Draws all the static overlays on the DC dc (wx.DC)
+        Both _dc_center's should be close in order to have the parts with only
+        one picture drawn without transparency
+
+        :param dc_buffer: (wx.DC) The buffer device context which will be drawn
+            to
+        :param images: (list of wx.Image): The images to be drawn or a list with
+            a sinle 'None' element.
+        :parma mergeratio: (float [0..1]): How to merge the images (between 1st
+            and all others)
+        :parma scale: (float > 0): the scaling of the images in addition to
+            their own scale.
+
+        :return: (int) Frames per second
+
+        Note: this is a very rough implementation. It's not fully optimized and
+        uses only a basic averaging algorithm.
+
         """
-        # center the coordinates
-        dc.SetDeviceOrigin(self.ClientSize[0] // 2, self.ClientSize[1] // 2)
-        for o in self.view_overlays:
-            o.Draw(dc)
+
+        self._draw_background(dc_buffer)
+
+        if not images or images == [None]:
+            return 0
+
+        t_start = time.time()
+
+        # The idea:
+        # * display all the images but the last as average (fluo => expected all big)
+        #   N images -> mergeratio = 1-(0/N), 1-(1/N),... 1-((N-1)/N)
+        # * display the last image (SEM => expected smaller), with the given
+        #   mergeratio (or 1 if it's the only one)
+
+        first_ims = [im for im in images[:-1] if im is not None]
+        nb_firsts = len(first_ims)
+
+        print id(self), self.__class__.__name__, first_ims
+
+
+        for i, im in enumerate(first_ims):
+            r = 1.0 - i / float(nb_firsts) # display as if they are averages
+            self._draw_image(
+                dc_buffer,
+                im,
+                im._dc_center,
+                r,
+                scale=im._dc_scale,
+                keepalpha=im._dc_keepalpha
+            )
+
+        for im in images[-1:]: # the last image (or nothing)
+            if im is None:
+                continue
+            if nb_firsts == 0:
+                mergeratio = 1.0 # no transparency if it's alone
+            self._draw_image(
+                dc_buffer,
+                im,
+                im._dc_center,
+                mergeratio,
+                scale=im._dc_scale,
+                keepalpha=im._dc_keepalpha
+            )
+
+        t_now = time.time()
+        return 1.0 / float(t_now - t_start)
+
+    def _draw_image(self, dc_buffer, im, center,
+                    opacity=1.0, scale=1.0, keepalpha=False):
+        """ Draws one image with the given scale and opacity on the dc_buffer.
+
+        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+
+        :param dc_buffer: (wx.DC) Device context to draw on
+        :param im: (wx.Image) Image to draw
+        :param center: (2-tuple float)
+        :param opacity: (float) [0..1] => [transparent..opaque]
+        :param scale: (float)
+        :param keepalpha: (boolean) if True, will use a slow method to apply
+               opacity that keeps the alpha channel information.
+        """
+
+        if opacity <= 0.0:
+            return
+
+        imscaled, tl = self._rescale_image(dc_buffer, im, scale, center)
+
+        if not imscaled:
+            return
+
+        if opacity < 1.0:
+            if keepalpha:
+                # slow, as it does a multiplication for each pixel
+                imscaled = imscaled.AdjustChannels(1.0, 1.0, 1.0, opacity)
+            else:
+                # TODO: Check if we could speed up by caching the alphabuffer
+                abuf = imscaled.GetAlphaBuffer()
+                self.memset_object(abuf, int(255 * opacity))
+
+        # TODO: the conversion from Image to Bitmap should be done only once,
+        # after all the images are merged
+        # tl = int(round(tl[0])), int(round(tl[1]))
+        dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
     # TODO: see if with Numpy it's faster (~less memory copy),
     # cf http://wiki.wxpython.org/WorkingWithImages
     # Could also see gdk_pixbuf_composite()
-    def _RescaleImageOptimized(self, dc_buffer, im, scale, center):
+    def _rescale_image(self, dc_buffer, im, scale, center):
         """Rescale an image considering it will be displayed on the buffer
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
@@ -857,7 +689,7 @@ class DraggableCanvas(BufferedCanvas):
         """
 
         # The buffer area the image would occupy (top, left, width, height)
-        buff_rect = self._GetImageRectOnBuffer(dc_buffer, im, scale, center)
+        buff_rect = self._get_image_buffer_rect(dc_buffer, im, scale, center)
 
         # Combine the zoom and image scales.
         total_scale = scale * self.scale
@@ -944,7 +776,7 @@ class DraggableCanvas(BufferedCanvas):
 
         return (ret, tl)
 
-    def _GetImageRectOnBuffer(self, dc_buffer, im, scale, center):
+    def _get_image_buffer_rect(self, dc_buffer, im, scale, center):
         """ Computes the rectangle containing the image in buffer coordinates.
 
         *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
@@ -961,7 +793,7 @@ class DraggableCanvas(BufferedCanvas):
 
         tl_unscaled = (center[0] - (actual_size[0] / 2),
                        center[1] - (actual_size[1] / 2))
-        tl = self.world_to_buffer_pos(tl_unscaled)
+        tl = self.world_to_buffer(tl_unscaled)
 
         # scale according to zoom
         final_size = (actual_size[0] * self.scale,
@@ -969,149 +801,514 @@ class DraggableCanvas(BufferedCanvas):
 
         return tl + final_size
 
+
     @staticmethod
-    def memsetObject(bufferObject, value):
+    def memset_object(buffer_object, value):
         """Note: dangerous"""
         data = ctypes.POINTER(ctypes.c_char)()
         size = ctypes.c_int()
         ctypes.pythonapi.PyObject_AsCharBuffer(
-            ctypes.py_object(bufferObject),
+            ctypes.py_object(buffer_object),
             ctypes.pointer(data), ctypes.pointer(size)
         )
         ctypes.memset(data, value, size.value)
 
 
-    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
-        """ Draw the two images on the buffer DC, centred around their
-        _dc_center, with their own scale and an opacity of "mergeratio" for im1.
+    # Position conversion
 
-        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
-
-        Both _dc_center's should be close in order to have the parts with only
-        one picture drawn without transparency
-
-        :param dc_buffer: (wx.DC) The buffer device context which will be drawn
-            to
-        :param images: (list of wx.Image): The images to be drawn or a list with
-            a sinle 'None' element.
-        :parma mergeratio: (float [0..1]): How to merge the images (between 1st
-            and all others)
-        :parma scale: (float > 0): the scaling of the images in addition to
-            their own scale.
-
-        :return: (int) Frames per second
-
-        Note: this is a very rough implementation. It's not fully optimized and
-        uses only a basic averaging algorithm.
-
-        """
-
-        self._draw_background(dc_buffer)
-
-        if not images or images == [None]:
-            return 0
-
-        t_start = time.time()
-
-        # The idea:
-        # * display all the images but the last as average (fluo => expected all big)
-        #   N images -> mergeratio = 1-(0/N), 1-(1/N),... 1-((N-1)/N)
-        # * display the last image (SEM => expected smaller), with the given
-        #   mergeratio (or 1 if it's the only one)
-
-        first_ims = [im for im in images[:-1] if im is not None]
-        nb_firsts = len(first_ims)
-
-        for i, im in enumerate(first_ims):
-            r = 1.0 - i / float(nb_firsts) # display as if they are averages
-            self._DrawImage(
-                dc_buffer,
-                im,
-                im._dc_center,
-                r,
-                scale=im._dc_scale,
-                keepalpha=im._dc_keepalpha
-            )
-
-        for im in images[-1:]: # the last image (or nothing)
-            if im is None:
-                continue
-            if nb_firsts == 0:
-                mergeratio = 1.0 # no transparency if it's alone
-            self._DrawImage(
-                dc_buffer,
-                im,
-                im._dc_center,
-                mergeratio,
-                scale=im._dc_scale,
-                keepalpha=im._dc_keepalpha
-            )
-
-        t_now = time.time()
-        return 1.0 / float(t_now - t_start)
-
-
-    def _draw_background(self, dc_buffer):
-        """ Draw checkered background """
-        # Only support wx.SOLID, and anything else is checkered
-        if self.backgroundBrush == wx.SOLID:
-            return
-
-        ctx = wxcairo.ContextFromDC(dc_buffer)
-        surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
-
-        if not self._ldragging:
-            surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
-
-        pattern = cairo.SurfacePattern(surface)
-        pattern.set_extend(cairo.EXTEND_REPEAT)
-        ctx.set_source(pattern)
-
-        ctx.rectangle(
-            0,
-            0,
-            self._bmp_buffer_size[0],
-            self._bmp_buffer_size[1]
+    def world_to_buffer(self, pos, offset=None): #pylint: disable=W0221
+        return super(BitmapCanvas, self).world_to_buffer_pos(
+            pos,
+            self.buffer_center_world_pos,
+            self.scale,
+            offset
         )
 
-        ctx.fill()
+    def buffer_to_world(self, pos, offset=None): #pylint: disable=W0221
+        return super(BitmapCanvas, self).buffer_to_world_pos(
+            pos,
+            self.buffer_center_world_pos,
+            self.scale,
+            offset
+        )
+
+    def view_to_world(self, pos, offset=None): #pylint: disable=W0221
+        return super(BitmapCanvas, self).view_to_world_pos(
+            pos,
+            self.buffer_center_world_pos,
+            self.margins,
+            self.scale,
+            offset)
+
+    def world_to_view(self, pos, offset=None):  #pylint: disable=W0221
+        return super(BitmapCanvas, self).world_to_view_pos(
+            pos,
+            self.buffer_center_world_pos,
+            self.margins,
+            self.scale,
+            offset)
+
+    def view_to_buffer(self, pos):  #pylint: disable=W0221
+        return super(BitmapCanvas, self).view_to_buffer_pos(
+            pos,
+            self.margins)
+
+    def buffer_to_view(self, pos):  #pylint: disable=W0221
+        return super(BitmapCanvas, self).buffer_to_view_pos(
+            pos,
+            self.margins)
+
+    # END Position conversion
+
+# A class for smooth, flicker-less display of anything on a window, with drag
+# and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,
+# wx.floatcanvas and wx.scrolledwindow...
+#
+# The main differences are:
+#  * when dragging the window the surrounding margin, expanding beyond the
+#    visible area of the panel, is already computed, so that doesn't not have to
+#    be done during the dragging.
+#  * You can draw at any coordinate, and it's displayed if the center of the
+#    the canvas is close enough from the area.
+#  * Built-in optimised zoom/transparency for 2 images
+# Maybe could be replaced by a GLCanvas + magic, or a Cairo Canvas
+#
+
+class DraggableCanvas(BitmapCanvas):
+    """ A draggable, buffered window class.
+
+    To use it, instantiate it and then put what you want to display in the
+    lists:
+
+    * Images: for the two images to display (use .setImage())
+    * world_overlays: for additional objects to display (must have a Draw(dc)
+      method)
+    * view_overlays: for additional objects that stay at an absolute position
+
+    The idea = three layers of decreasing area size:
+    * The whole world, which can have infinite dimensions, but needs a redraw
+    * The buffer, which contains a precomputed image of the world big enough
+      that (normally) a drag cannot bring it outside of the viewport
+    * The viewport, which is what the user sees
+
+    Unit: at scale = 1, 1px = 1 unit. So an image with scale = 1 will be
+      displayed actual size.
+
+    """
+    def __init__(self, *args, **kwargs):
+        super(DraggableCanvas, self).__init__(*args, **kwargs)
+
+        self.resize_buffer(self._bmp_buffer_size)
+
+        # When resizing, margin to put around the current size
+        # TODO: Maybe make the margin related to the canvas size?
+        self.default_margin = 512
+        self.margins = (self.default_margin, self.default_margin)
+
+        # the position the view is asking to the next buffer recomputation
+        # in buffer-coordinates: = 1px at scale = 1
+        self.requested_world_pos = self.buffer_center_world_pos
+
+        self._ldragging = False
+
+        # The amount of pixels shifted in the current drag event
+        self.drag_shift = (0, 0) # px, px
+        #  initial position of mouse when started dragging
+        self.drag_init_pos = (0, 0) # px, px
+
+        self._rdragging = False
+        # (int, int) px
+        self._rdrag_init_pos = None
+        # (flt, flt) last absolute value, for sending the change
+        self._rdrag_prev_value = None
+
+    # Properties
+
+    @property
+    def left_dragging(self):
+        return self._ldragging
+
+    @property
+    def right_dragging(self):
+        return self._rdragging
+
+    @property
+    def dragging(self):
+        return self._ldragging or self._rdragging
+
+    # END Properties
 
 
-    def _DrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0, keepalpha=False):
-        """ Draws one image with the given scale and opacity on the dc_buffer.
+    # Event processing
 
-        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+    def on_left_down(self, evt): #pylint: disable=W0221
+        """ Start a dragging procedure """
+        # Ignore the click if we're aleady dragging
+        if self._rdragging:
+            return
 
-        :param dc_buffer: (wx.DC) Device context to draw on
-        :param im: (wx.Image) Image to draw
-        :param center: (2-tuple float)
-        :param opacity: (float) [0..1] => [transparent..opaque]
-        :param scale: (float)
-        :param keepalpha: (boolean) if True, will use a slow method to apply
-               opacity that keeps the alpha channel information.
+        cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+        super(DraggableCanvas, self).on_left_down(evt, cursor)
+
+        # Fixme: only go to drag mode if the mouse moves before a mouse up?
+        self._ldragging = True
+
+        pos = evt.GetPositionTuple()
+        # There might be several draggings before the buffer is updated
+        # So take into account the current drag_shift to compensate
+        self.drag_init_pos = (pos[0] - self.drag_shift[0],
+                              pos[1] - self.drag_shift[1])
+
+        logging.debug("Drag started at %s", self.drag_init_pos)
+
+    def on_left_up(self, evt):
+        """ End the dragging procedure """
+        # Ignore the release if we didn't register a left down
+        if not self._ldragging:
+            return
+
+        super(DraggableCanvas, self).on_left_up(evt)
+
+        self._ldragging = False
+
+        # Update the position of the buffer to where the view is centered
+        # self.drag_shift is the delta we want to apply
+        new_pos = (
+            self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
+            self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
+        )
+        self.recenter_buffer(new_pos)
+
+    def on_right_down(self, evt): #pylint: disable=W0221
+        # Ignore the click if we're aleady dragging
+        if self._ldragging:
+            return
+
+        super(DraggableCanvas, self).on_right_down(evt)
+
+        # TODO: Show 'focussing' text in viewport (do this elsewhere)
+        self._rdragging = True
+        self._rdrag_init_pos = evt.GetPositionTuple()
+        self._rdrag_prev_value = [0, 0]
+
+        logging.debug("Drag started at %s", self._rdrag_init_pos)
+
+    def on_right_up(self, evt):
+        # Ignore the release if we didn't register a right down
+        if not self._rdragging:
+            return
+
+        super(DraggableCanvas, self).on_right_up(evt)
+        self._rdragging = False
+
+    def on_dbl_click(self, event):
+        """ Recenter the view around the point that was double clicked """
+        v_pos = event.GetPositionTuple()
+        v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
+        shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
+
+        # shift the view immediately
+        self.drag_shift = (self.drag_shift[0] + shift[0],
+                           self.drag_shift[1] + shift[1])
+        self.Refresh()
+
+        # recompute the view
+        new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
+                   self.buffer_center_world_pos[1] - shift[1] / self.scale)
+        self.recenter_buffer(new_pos)
+
+        logging.debug("Double click at %s", new_pos)
+
+    def on_motion(self, event):
+        if self._ldragging:
+            v_pos = event.GetPositionTuple()
+            drag_shift = (v_pos[0] - self.drag_init_pos[0],
+                          v_pos[1] - self.drag_init_pos[1])
+
+            # Limit the amount of pixels that the canvas can be dragged
+            self.drag_shift = (
+                min(max(drag_shift[0], -self.margins[0]), self.margins[0] ),
+                min(max(drag_shift[1], -self.margins[1]), self.margins[1])
+            )
+
+            self.bg_offset = (self.drag_shift[0] % 40,
+                              self.drag_shift[1] % 40)
+
+            self.update_drawing()
+            self.Refresh()
+
+        elif self._rdragging:
+            # TODO: Move this to miccanvas
+
+            # Linear when small, non-linear when big.
+            # use 3 points: starting point, previous point, current point
+            #  * if dis < 32 px => min : dis (small linear zone)
+            #  * else: dis + 1/32 * sign* (dis-32)**2 => (square zone)
+            # send diff between value and previous value sent => it should
+            # always be at the same position for the cursor at the same place
+            #
+            # NOTE: The focus overlay is loosely dependant on the values
+            # generated here, because it uses them to guesstimate the maximum
+            # value produced while focussing.
+
+            linear_zone = 32.0
+            pos = event.GetPositionTuple()
+            for i in [0, 1]: # x, y
+                shift = pos[i] - self._rdrag_init_pos[i]
+
+                if i:
+                    # Flip the sign for vertical movement, as indicated in the
+                    # onExtraAxisMove docstring: up/right is positive
+                    shift = -shift
+                    # logging.debug("pos %s, shift %s", pos[i], shift)
+
+                if abs(shift) <= linear_zone:
+                    value = shift
+                else:
+                    ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
+                    value = shift + ssquare / linear_zone
+
+                change = value - self._rdrag_prev_value[i]
+
+                # if i:
+                #     logging.debug("shift %s, value %s, change %s",
+                #         shift, value, change)
+
+                if change:
+                    self.onExtraAxisMove(i, change)
+                    self._rdrag_prev_value[i] = value
+
+    def on_char(self, evt):
+        key = evt.GetKeyCode()
+
+        change = 100 # about a 10th of the screen
+
+        if evt.ShiftDown():
+            change //= 8 # softer
+
+        if key == wx.WXK_LEFT:
+            self.shift_view((change, 0))
+        elif key == wx.WXK_RIGHT:
+            self.shift_view((-change, 0))
+        elif key == wx.WXK_DOWN:
+            self.shift_view((0, -change))
+        elif key == wx.WXK_UP:
+            self.shift_view((0, change))
+
+    def on_paint(self, evt):
+        """ Quick update of the window content with the buffer + the static
+        overlays
+
+        Note: The Device Context (dc) will automatically be drawn when it goes
+        out of scope at the end of this method.
+        """
+        dc_view = wx.PaintDC(self)
+
+        self.margins = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
+                        (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
+
+        src_pos = (self.margins[0] - self.drag_shift[0],
+                   self.margins[1] - self.drag_shift[1])
+
+        # Blit the appropriate area from the buffer to the view port
+        dc_view.BlitPointSize(
+                    (0, 0),             # destination point
+                    self.ClientSize,    # size of area to copy
+                    self._dc_buffer,    # source
+                    src_pos             # source point
+        )
+
+        # Remember that the device context of the view port is passed!
+        self._draw_view_overlays(dc_view)
+
+
+    # END Event processing
+
+
+    # Buffer and drawing methods
+
+    def get_minimum_buffer_size(self):
+        """ Return the minimum size needed by the buffer """
+        return (max(self._bmp_buffer_size[0],
+                    self.ClientSize.x + self.default_margin * 2),
+                max(self._bmp_buffer_size[1],
+                    self.ClientSize.y + self.default_margin * 2))
+
+    def recenter_buffer(self, world_pos):
+        """ Update the position of the buffer on the world
+
+        :param world_pos: (2-tuple float) The world coordinates to center the
+            buffer on.
+
+        Warning: always call from the main GUI thread. So if you're not sure
+        in which thread you are, do: wx.CallAfter(canvas.recenter_buffer, pos)
         """
 
-        if opacity <= 0.0:
-            return
+        if self.requested_world_pos != world_pos:
+            self.requested_world_pos = world_pos
+            # FIXME: could maybe be more clever and only request redraw for the
+            # outside region
+            self.request_drawing_update()
 
-        imscaled, tl = self._RescaleImageOptimized(dc_buffer, im, scale, center)
+    # END Buffer and drawing methods
 
-        if not imscaled:
-            return
 
-        if opacity < 1.0:
-            if keepalpha:
-                # slow, as it does a multiplication for each pixel
-                imscaled = imscaled.AdjustChannels(1.0, 1.0, 1.0, opacity)
+    # View manipulation
+
+    def shift_view(self, shift):
+        """ Moves the position of the view by a delta
+
+        :param shift: (int, int) delta in buffer coordinates (pixels)
+        """
+        self.recenter_buffer(
+            (self.buffer_center_world_pos[0] - (shift[0] / self.scale),
+             self.buffer_center_world_pos[1] - (shift[1] / self.scale))
+        )
+
+    # END View manipulation
+
+
+
+
+
+
+
+
+    # END Event handlers
+
+    def onExtraAxisMove(self, axis, shift):
+        """
+        called when the extra dimensions are modified (right drag)
+
+        axis (int>0): the axis modified
+            0 => X (horizontal)
+            1 => Y (vertical)
+        shift (int): relative amount of pixel moved
+            >0: toward up/right
+        """
+        # We have nothing to do
+        # Inheriting classes can do more
+        pass
+
+
+
+
+
+
+
+
+    def fitViewToContent(self, recenter=False):
+        """
+        Adapts the MPP and center to fit to the current content
+        recenter (boolean): If True, also recenter the view.
+        """
+        # TODO: take into account the dragging. For now we skip it (should be
+        # unlikely to happen anyway)
+
+        # find bounding box of all the content
+        bbox = [None, None, None, None] # ltrb in wu
+        for im in self.images:
+            if im is None:
+                continue
+            w, h = im.Width * im._dc_scale, im.Height * im._dc_scale
+            c = im._dc_center
+            bbox_im = [c[0] - w / 2., c[1] - h / 2., c[0] + w / 2., c[1] + h / 2.]
+            if bbox[0] is None:
+                bbox = bbox_im
             else:
-                # TODO: Check if we could speed up by caching the alphabuffer
-                abuf = imscaled.GetAlphaBuffer()
-                self.memsetObject(abuf, int(255 * opacity))
+                bbox = (min(bbox[0], bbox_im[0]), min(bbox[1], bbox_im[1]),
+                        max(bbox[2], bbox_im[2]), max(bbox[3], bbox_im[3]))
 
-        # TODO: the conversion from Image to Bitmap should be done only once,
-        # after all the images are merged
-        # tl = int(round(tl[0])), int(round(tl[1]))
-        dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
+        if bbox[0] is None:
+            return # no image => nothing to do
+
+        # if no recenter, increase bbox so that its center is the current center
+        if not recenter:
+            c = self.buffer_center_world_pos
+            hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
+            hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
+            bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
+
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1] # wu
+        if w == 0 or h == 0:
+            logging.warning("Weird image size of %fx%f wu", w, h)
+            return # no image
+        cw = max(1, self.ClientSize[0]) # px
+        ch = max(1, self.ClientSize[1]) # px
+        self.scale = min(ch / h, cw / w) # pick the dimension which is shortest
+
+        # TODO: avoid aliasing when possible by picking a round number for the
+        # zoom level (for the "main" image) if it's ±10% of the target size
+
+        if recenter:
+            c = (bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.
+            self.requested_world_pos = c # as recenter_buffer but without request_drawing_update
+
+        wx.CallAfter(self.request_drawing_update)
+
+    def Repaint(self):
+        """ Repaint the canvas
+
+        This convenience method was added, because requesting a repaint from an
+        overlay using `update_drawing`, could cause the view to 'jump' while
+        dragging.
+        """
+        self.draw()
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
+    def update_drawing(self):
+        """ Redraws everything (that is viewed in the buffer)
+        """
+        prev_world_pos = self.buffer_center_world_pos
+
+        self.buffer_center_world_pos = self.requested_world_pos
+
+        self.draw()
+
+        # Calculate the amount the view has shifted in pixels
+        shift_view = (
+            (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
+            (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
+        )
+
+        # Adjust the dragging attributes according to the change in
+        # buffer center
+        if self._ldragging:
+            self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
+                                  self.drag_init_pos[1] - shift_view[1])
+            self.drag_shift = (self.drag_shift[0] + shift_view[0],
+                               self.drag_shift[1] + shift_view[1])
+            # self.bg_offset = (self.drag_shift[0] % 40,
+            #               self.drag_shift[1] % 40)
+        else:
+            # in theory, it's the same, but just to be sure we reset to 0,0
+            # exactly
+            self.drag_shift = (0, 0)
+
+        # eraseBackground doesn't seem to matter, but just in case...
+        self.Refresh(eraseBackground=False)
+
+        # not really necessary as refresh causes an onPaint event soon, but
+        # makes it slightly sooner, so smoother
+        self.Update()
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
     def _xDrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0):
@@ -1131,7 +1328,7 @@ class DraggableCanvas(BufferedCanvas):
             return
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-        imscaled, tl = self._RescaleImageOptimized(dc_buffer, im, scale, center)
+        imscaled, tl = self._rescale_image(dc_buffer, im, scale, center)
 
         if not imscaled:
             return
@@ -1140,7 +1337,7 @@ class DraggableCanvas(BufferedCanvas):
             # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,opacity)
             # TODO: Check if we could speed up by caching the alphabuffer
             abuf = imscaled.GetAlphaBuffer()
-            self.memsetObject(abuf, int(255 * opacity))
+            self.memset_object(abuf, int(255 * opacity))
 
         # TODO: the conversion from Image to Bitmap should be done only once,
         # after all the images are merged
@@ -1166,51 +1363,8 @@ class DraggableCanvas(BufferedCanvas):
         #dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
 
 
-    def world_to_buffer_pos(self, pos, offset=None):
-        """ Converts a position from world coordinates to buffer coordinates
-        using the current values.
 
-        pos (2-tuple floats): the coordinates in the world
-        """
 
-        bp = world_to_buffer_pos(
-                    pos,
-                    self.buffer_center_world_pos,
-                    self.scale,
-                    offset
-        )
-
-        return bp
-
-    def buffer_to_world_pos(self, pos, offset=None):
-        return buffer_to_world_pos(
-                    pos,
-                    self.buffer_center_world_pos,
-                    self.scale,
-                    offset
-        )
-
-    def view_to_world_pos(self, pos, offset=None):
-        return view_to_world_pos(
-                    pos,
-                    self.buffer_center_world_pos,
-                    self.margins,
-                    self.scale,
-                    offset)
-
-    def world_to_view_pos(self, pos, offset=None):
-        return world_to_view_pos(
-                    pos,
-                    self.buffer_center_world_pos,
-                    self.margins,
-                    self.scale,
-                    offset)
-
-    def view_to_buffer_pos(self, pos):
-        return view_to_buffer_pos(pos, self.margins)
-
-    def buffer_to_view_pos(self, pos):
-        return buffer_to_view_pos(pos, self.margins)
 
     def clip_to_viewport(self, pos):
         """ Clip the given tuple of 2 floats to the current view size """
@@ -1222,120 +1376,6 @@ class DraggableCanvas(BufferedCanvas):
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
-# World <-> Buffer
-
-def world_to_buffer_pos(world_pos, buffcenter_wpos, scale, offset=None):
-    """ Converts a position from world coordinates to buffer coordinates
-
-    :param world_pos: (2-tuple float) the coordinates in the world
-    :param buffcenter_wpos: the center of the buffer in world coordinates
-    :param scale: how much zoomed is the buffer compared to the world.
-        I.e.: with scale 2, 100px of the world are displayed using 50 buffer px.
-        (The world is zoomed out with a scale > 1)
-    :param offset (int, int): The offset can be used to move the buffer origin
-        back to its original position. See `buffer_to_world_pos` for more
-        details.
-    :return: (int, int)
-    """
-    # buff_pos = (int(round((world_pos[0] - buffcenter_wpos[0]) * scale)),
-    #             int(round((world_pos[1] - buffcenter_wpos[1]) * scale)))
-    buff_pos = ((world_pos[0] - buffcenter_wpos[0]) * scale,
-                (world_pos[1] - buffcenter_wpos[1]) * scale)
-    if offset:
-        return (buff_pos[0] + offset[0], buff_pos[1] + offset[1])
-    else:
-        return buff_pos
-
-def buffer_to_world_pos(buff_pos, buffcenter_wpos, scale, offset=None):
-    """ Converts a position from buffer coordinates to world coordinates
-
-    :param buff_pos: (int, int) the buffer coordinates
-    :param buffcenter_wpos: the center of the buffer in world coordinates
-    :param scale: how much zoomed is the buffer compared to the world.
-        I.e.: with scale 2, 100px of the buffer contain 50 world pixels.
-        (The world is zoomed in with a scale > 1
-    :param offset (int, int): The offset can be used to align the origin of the
-        buffer with that of the world. E.g. to align 0,0 (top left) of the
-        buffer with the origin of the world (which is at the center), one would
-        set the offset to half the width and height of the buffer itself.
-    :return: (float, float)
-
-    """
-
-    if offset:
-        buff_pos = (buff_pos[0] - offset[0], buff_pos[1] - offset[1])
-
-    return (buffcenter_wpos[0] + (buff_pos[0] / scale),
-            buffcenter_wpos[1] + (buff_pos[1] / scale))
-
-# View <-> Buffer
-
-def view_to_buffer_pos(view_pos, margins):
-    """ Convert view port coordinates to buffer coordinates
-
-    The top left of the view is considered to have coordinates (0, 0), with to
-    the right and bottom of that the positive x and y directions.
-
-    A view position is tranformed by adding the margin width and height.
-
-    :param view_pos: (int, int) the coordinates in the view
-    :param margins: (int, int) the horizontal and vertical buffer margins
-    :return: (wx.Point) or (int, int) the calculated buffer position
-    """
-    buffer_pos = (view_pos[0] + margins[0], view_pos[1] + margins[1])
-
-    if isinstance(view_pos, wx.Point):
-        return wx.Point(*buffer_pos)
-    else:
-        return buffer_pos
-
-def buffer_to_view_pos(buffer_pos, margins):
-    """ Convert a buffer position into a view position
-
-    Note:
-        If the buffer position does not fall within the view, negative values
-        might be returned or values that otherwise fall outside of the view.
-
-    :param view_pos: (int, int) the coordinates in the buffer
-    :param margins: (int, int) the horizontal and vertical buffer margins
-    :return: (wx.Point) or (int, int) the calculated view position
-    """
-
-    view_pos = (buffer_pos[0] - margins[0], buffer_pos[1] - margins[1])
-
-    if isinstance(buffer_pos, wx.Point):
-        return wx.Point(*view_pos)
-    else:
-        return view_pos
-
-# View <-> World
-
-def view_to_world_pos(view_pos, world_buff_cent, margins, scale, offset=None):
-    """ Convert a position in view coordinates into world coordinates
-
-    See `view_to_buffer_pos` and `buffer_to_world_pos` for more details
-
-    """
-
-    return buffer_to_world_pos(
-                view_to_buffer_pos(view_pos, margins),
-                world_buff_cent,
-                scale,
-                offset
-    )
-
-def world_to_view_pos(world_pos, world_buff_cent, margins, scale, offset=None):
-    """ Convert a position in world coordinates into view coordinates
-
-    See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
-
-    """
-
-    return buffer_to_view_pos(
-            world_to_buffer_pos(world_pos, world_buff_cent, scale, offset),
-            margins
-    )
-
 # PlotCanvas configuration flags
 PLOT_CLOSE_NOT = 0
 PLOT_CLOSE_STRAIGHT = 1
@@ -1345,12 +1385,9 @@ PLOT_MODE_BAR = 2
 
 class PlotCanvas(BufferedCanvas):
     """ This is a general canvas for plotting numerical data in various ways
-
-    All values used by this class will be mapped to pixel values as needed.
     """
 
     def __init__(self, *args, **kwargs):
-
 
         super(PlotCanvas, self).__init__(*args, **kwargs)
 
@@ -1488,7 +1525,7 @@ class PlotCanvas(BufferedCanvas):
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = self.line_colour
 
-    def set_closed(self, closed=PLOT_CLOSE_STRAIGHT):
+    def set_closure(self, closed=PLOT_CLOSE_STRAIGHT):
         self.plot_closed = closed
 
     def set_plot_mode(self, mode):
@@ -1516,6 +1553,7 @@ class PlotCanvas(BufferedCanvas):
             self._plot_data(ctx)
 
             del dc # need to get rid of the MemoryDC before Update() is called.
+
         self.Refresh(eraseBackground=False)
         self.Update()
 
@@ -1543,7 +1581,7 @@ class PlotCanvas(BufferedCanvas):
             line_to(x, y)
 
         # Store the line path for later use
-        # line_path = ctx.copy_path()
+        line_path = ctx.copy_path()
 
         # Close the path in the desired way, so we can fill it
         if self.plot_closed == PLOT_CLOSE_BOTTOM:
@@ -1560,10 +1598,10 @@ class PlotCanvas(BufferedCanvas):
         ctx.fill()
 
         # # Reload the stored line path
-        # ctx.append_path(line_path)
-        # ctx.set_source_rgb(*self.line_colour)
-        # # Draw the line
-        # ctx.stroke()
+        ctx.append_path(line_path)
+        ctx.set_source_rgb(*self.line_colour)
+        # Draw the line
+        ctx.stroke()
 
     def _line_plot(self, ctx):
         """ Do a line plot of the current `_data` """
@@ -1587,6 +1625,4 @@ class PlotCanvas(BufferedCanvas):
 
         ctx.set_line_width(self.line_width)
         ctx.set_source_rgb(*self.fill_colour)
-        ctx.fill_preserve()
-        # ctx.set_source_rgb(*self.line_colour)
-        # ctx.stroke()
+        ctx.fill()

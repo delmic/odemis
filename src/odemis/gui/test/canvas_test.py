@@ -24,9 +24,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import odemis.gui.model as guimodel
 import odemis.gui.comp.miccanvas as miccanvas
-import odemis.gui.comp.canvas as canvas
 from odemis import model
 from odemis.gui import test
+from odemis.gui.comp.canvas import BufferedCanvas
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.model.stream import StaticStream
 from odemis.gui.util import tuple_subtract, tuple_multiply
@@ -149,7 +149,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.view.mpp.value = mpp
 
         shift = (63, 63)
-        self.canvas.ShiftView(shift)
+        self.canvas.shift_view(shift)
 
         # merge the images
         ratio = 0.5
@@ -215,7 +215,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertEqual(mpp, self.view.mpp.value)
 
         shift = (100, 100)
-        self.canvas.ShiftView(shift)
+        self.canvas.shift_view(shift)
 
         # merge the images
         ratio = 0.5
@@ -254,7 +254,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.view.mpp.value = mpp
 
         shift = (10, 10)
-        self.canvas.ShiftView(shift)
+        self.canvas.shift_view(shift)
 
         test.gui_loop()
         wx.MilliSleep(500)
@@ -316,17 +316,17 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # View to buffer
         for view_point, buffer_point, _ in view_buffer_world_values:
-            bp = canvas.view_to_buffer_pos(view_point, buffer_margin)
+            bp = BufferedCanvas.view_to_buffer_pos(view_point, buffer_margin)
             self.assertEqual(buffer_point, bp)
 
         # Buffer to view
         for view_point, buffer_point, _ in view_buffer_world_values:
-            vp = canvas.buffer_to_view_pos(buffer_point, buffer_margin)
+            vp = BufferedCanvas.buffer_to_view_pos(buffer_point, buffer_margin)
             self.assertEqual(view_point, vp)
 
         # Buffer to world
         for _, buffer_point, world_point in view_buffer_world_values:
-            wp = canvas.buffer_to_world_pos(
+            wp = BufferedCanvas.buffer_to_world_pos(
                             buffer_point,
                             buffer_world_center,
                             scale,
@@ -336,7 +336,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # World to buffer
         for _, buffer_point, world_point in view_buffer_world_values:
-            bp = canvas.world_to_buffer_pos(
+            bp = BufferedCanvas.world_to_buffer_pos(
                             world_point,
                             buffer_world_center,
                             scale,
@@ -346,7 +346,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # View to world
         for view_point, _, world_point in view_buffer_world_values:
-            wp = canvas.view_to_world_pos(
+            wp = BufferedCanvas.view_to_world_pos(
                             view_point,
                             buffer_world_center,
                             buffer_margin,
@@ -357,7 +357,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # World to View
         for view_point, _, world_point in view_buffer_world_values:
-            vp = canvas.world_to_view_pos(
+            vp = BufferedCanvas.world_to_view_pos(
                             world_point,
                             buffer_world_center,
                             buffer_margin,
@@ -370,12 +370,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # Buffer <-> world, with scale != 1
         for _, buffer_point, world_point in view_buffer_world_values:
-            wp = canvas.buffer_to_world_pos(
+            wp = BufferedCanvas.buffer_to_world_pos(
                             buffer_point,
                             buffer_world_center,
                             scale,
                             offset)
-            bp = canvas.world_to_buffer_pos(
+            bp = BufferedCanvas.world_to_buffer_pos(
                             wp,
                             buffer_world_center,
                             scale,
@@ -384,12 +384,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
             self.assertTrue(all([isinstance(v, float) for v in bp]))
             self.assertEqual(buffer_point, bp)
 
-            bp = canvas.world_to_buffer_pos(
+            bp = BufferedCanvas.world_to_buffer_pos(
                             world_point,
                             buffer_world_center,
                             scale,
                             offset)
-            wp = canvas.buffer_to_world_pos(
+            wp = BufferedCanvas.buffer_to_world_pos(
                             bp,
                             buffer_world_center,
                             scale,
@@ -416,43 +416,35 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # View to buffer
         for view_point, buffer_point, _, _ in view_buffer_world_values:
-            bp = self.canvas.view_to_buffer_pos(view_point)
+            bp = self.canvas.view_to_buffer(view_point)
             self.assertEqual(buffer_point, bp)
 
         # Buffer to view
         for view_point, buffer_point, _, _ in view_buffer_world_values:
-            vp = self.canvas.buffer_to_view_pos(buffer_point)
+            vp = self.canvas.buffer_to_view(buffer_point)
             self.assertEqual(view_point, vp)
 
         # Buffer to world
         for _, buffer_point, world_point, _ in view_buffer_world_values:
-            wp = self.canvas.buffer_to_world_pos(
-                            buffer_point,
-                            offset)
+            wp = self.canvas.buffer_to_world(buffer_point, offset)
             self.assertTrue(all([isinstance(v, float) for v in wp]))
             self.assertEqual(world_point, wp)
 
         # World to buffer
         for _, buffer_point, world_point, _ in view_buffer_world_values:
-            bp = self.canvas.world_to_buffer_pos(
-                            world_point,
-                            offset)
+            bp = self.canvas.world_to_buffer(world_point, offset)
             self.assertTrue(all([isinstance(v, float) for v in bp]))
             self.assertEqual(buffer_point, bp)
 
         # View to world
         for view_point, _, world_point, _ in view_buffer_world_values:
-            wp = self.canvas.view_to_world_pos(
-                            view_point,
-                            offset)
+            wp = self.canvas.view_to_world(view_point, offset)
             self.assertTrue(all([isinstance(v, float) for v in wp]))
             self.assertEqual(world_point, wp)
 
         # World to View
         for view_point, _, world_point, _ in view_buffer_world_values:
-            vp = self.canvas.world_to_view_pos(
-                            world_point,
-                            offset)
+            vp = self.canvas.world_to_view(world_point, offset)
             self.assertTrue(all([isinstance(v, float) for v in vp]))
             self.assertEqual(view_point, vp)
 

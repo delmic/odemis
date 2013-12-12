@@ -55,7 +55,7 @@ class BufferedWindow(wx.Control):
     screen will be automatically updated when a Paint event is received.
 
     When the drawing needs to change, you app needs to call the
-    L{BufferedWindow.upate_drawing} method. Since the drawing is stored in a bitmap, you
+    L{BufferedWindow.update_drawing} method. Since the drawing is stored in a bitmap, you
     can also save the drawing to file by calling the
     `SaveToFile(self, file_name, file_type)` method.
 
@@ -140,10 +140,10 @@ class BufferedWindow(wx.Control):
                 self.Height = 1
 
         self._Buffer = wx.EmptyBitmap(self.Width, self.Height)
-        self.upate_drawing()
+        self.update_drawing()
 
 
-    def upate_drawing(self):
+    def update_drawing(self):
         """
         This would get called if the drawing needed to change, for whatever reason.
 
@@ -194,7 +194,7 @@ class ScaleWindow(BufferedWindow):
         if mpp <= 0:
             raise ZeroDivisionError()
         self.mpp = mpp
-        self.upate_drawing()
+        self.update_drawing()
 
     def GetLineWidth(self, dc):
         """

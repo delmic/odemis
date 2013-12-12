@@ -375,7 +375,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 continue
             scale = iim.mpp / self.mpwu
             pos = self.physical_to_world_pos(iim.center)
-            self.SetImage(i, iim.image, pos, scale)
+            self.set_image(i, iim.image, pos, scale)
 
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
@@ -390,12 +390,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         #logging.debug("Will update drawing for new image")
         wx.CallAfter(self.request_drawing_update)
 
-    def upate_drawing(self):
+    def update_drawing(self):
         # override just in order to detect when it's just finished redrawn
 
         # TODO: detect that the canvas is not visible, and so should no/less
         # frequently be updated?
-        super(DblMicroscopeCanvas, self).upate_drawing()
+        super(DblMicroscopeCanvas, self).update_drawing()
 
         if self.microscope_view:
             self._updateThumbnail()
@@ -439,7 +439,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         pos = self.physical_to_world_pos((value["x"], value["y"]))
         # skip ourself, to avoid asking the stage to move to (almost) the same
         # position
-        wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
+        wx.CallAfter(super(DblMicroscopeCanvas, self).recenter_buffer, pos)
 
     def _onViewPos(self, phy_pos):
         """
@@ -449,9 +449,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         pos = self.physical_to_world_pos(phy_pos)
         # skip ourself, to avoid asking the stage to move to (almost) the same
         # position
-        wx.CallAfter(super(DblMicroscopeCanvas, self).ReCenterBuffer, pos)
+        wx.CallAfter(super(DblMicroscopeCanvas, self).recenter_buffer, pos)
 
-    def ReCenterBuffer(self, world_pos):
+    def recenter_buffer(self, world_pos):
         """
         Update the position of the buffer on the world
         pos (2-tuple float): the coordinates of the center of the buffer in
@@ -459,11 +459,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # in case we are not attached to a view yet (shouldn't happen)
         if not self.microscope_view:
-            logging.debug("ReCenterBuffer called without microscope view")
-            super(DblMicroscopeCanvas, self).ReCenterBuffer(world_pos)
+            logging.debug("recenter_buffer called without microscope view")
+            super(DblMicroscopeCanvas, self).recenter_buffer(world_pos)
         else:
             physical_pos = self.world_to_physical_pos(world_pos)
-            # This will call _onViewPos() -> ReCenterBuffer()
+            # This will call _onViewPos() -> recenter_buffer()
             self.microscope_view.view_pos.value = physical_pos
 
             self.microscope_view.moveStageToView() # will do nothing if no stage
@@ -657,9 +657,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             event.Skip() # at least useful to get the focus
 
-    def ShiftView(self, shift):
+    def shift_view(self, shift):
         if self.canDrag:
-            super(DblMicroscopeCanvas, self).ShiftView(shift)
+            super(DblMicroscopeCanvas, self).shift_view(shift)
 
     def OnDblClick(self, event):
         if self.canDrag:
@@ -707,8 +707,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return w, h
 
     # Hook to update the FPS value
-    def _DrawMergedImages(self, dc_buffer, images, mergeratio=0.5):
-        fps = super(DblMicroscopeCanvas, self)._DrawMergedImages(dc_buffer,
+    def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
+        fps = super(DblMicroscopeCanvas, self)._draw_merged_images(dc_buffer,
                                                          images,
                                                          mergeratio)
         self._fps_ol.set_label("%d fps" % fps)
@@ -1191,10 +1191,10 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if isinstance(s, stream.StaticStream):
                 # StaticStream == goal image => add at the end
-                self.SetImage(len(self.images), iim.image, pos, scale, keepalpha=True)
+                self.set_image(len(self.images), iim.image, pos, scale, keepalpha=True)
             else:
                 # add at the beginning
-                self.SetImage(0, iim.image, pos, scale)
+                self.set_image(0, iim.image, pos, scale)
 
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
@@ -1484,15 +1484,15 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
             if iim is None:
                 continue
             # image is always centered, fitting the whole canvas
-            self.SetImage(i, iim.image, (0, 0), 1)
+            self.set_image(i, iim.image, (0, 0), 1)
 
     def _onViewImageUpdate(self, t):
         self._convertStreamsToImages()
         self.fitViewToContent()
         wx.CallAfter(self.request_drawing_update)
 
-    def upate_drawing(self):
-        super(AngularResolvedCanvas, self).upate_drawing()
+    def update_drawing(self):
+        super(AngularResolvedCanvas, self).update_drawing()
 
         if self.microscope_view:
             self._updateThumbnail()

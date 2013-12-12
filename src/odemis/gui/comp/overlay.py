@@ -546,8 +546,8 @@ class SelectionMixin(object):
             logging.debug("Updating view position of selection")
             self._last_shiftscale = shiftscale
 
-            self.v_start_pos = list(self.base.buffer_to_view_pos(b_start_pos))
-            self.v_end_pos = list(self.base.buffer_to_view_pos(b_end_pos))
+            self.v_start_pos = list(self.base.buffer_to_view(b_start_pos))
+            self.v_end_pos = list(self.base.buffer_to_view(b_end_pos))
             self._calc_edges()
 
     def _calc_edges(self):
@@ -740,21 +740,21 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """
         if self.v_start_pos and self.v_end_pos:
             offset = [v // 2 for v in self.base._bmp_buffer_size]
-            w_pos = (self.base.view_to_world_pos(self.v_start_pos, offset) +
-                     self.base.view_to_world_pos(self.v_end_pos, offset))
+            w_pos = (self.base.view_to_world(self.v_start_pos, offset) +
+                     self.base.view_to_world(self.v_end_pos, offset))
             w_pos = list(normalize_rect(w_pos))
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
 
-    def _calc_view_pos(self):
+    def _calc_view(self):
         """ Update the view position to reflect the world position
         """
         if not self.w_start_pos or not self.w_end_pos:
             logging.warning("Asking to convert non-existing world positions")
             return
         offset = [v // 2 for v in self.base._bmp_buffer_size]
-        v_pos = (self.base.world_to_view_pos(self.w_start_pos, offset) +
-                 self.base.world_to_view_pos(self.w_end_pos, offset))
+        v_pos = (self.base.world_to_view(self.w_start_pos, offset) +
+                 self.base.world_to_view(self.w_end_pos, offset))
         v_pos = list(normalize_rect(v_pos))
         self.v_start_pos = v_pos[:2]
         self.v_end_pos = v_pos[2:4]
@@ -789,8 +789,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.w_start_pos and self.w_end_pos:
             offset = [v // 2 for v in self.base._bmp_buffer_size]
-            b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
-                     self.base.world_to_buffer_pos(self.w_end_pos, offset))
+            b_pos = (self.base.world_to_buffer(self.w_start_pos, offset) +
+                     self.base.world_to_buffer(self.w_end_pos, offset))
             b_pos = normalize_rect(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
@@ -880,8 +880,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
-                 self.base.world_to_buffer_pos(self.w_end_pos, offset))
+        b_pos = (self.base.world_to_buffer(self.w_start_pos, offset) +
+                 self.base.world_to_buffer(self.w_end_pos, offset))
         b_pos = normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
@@ -979,8 +979,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
-        b_pos = (self.base.world_to_buffer_pos(self.w_start_pos, offset) +
-                 self.base.world_to_buffer_pos(self.w_end_pos, offset))
+        b_pos = (self.base.world_to_buffer(self.w_start_pos, offset) +
+                 self.base.world_to_buffer(self.w_end_pos, offset))
         b_pos = normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
@@ -1390,7 +1390,7 @@ class PointSelectOverlay(WorldOverlay):
                 old_pixel_pos = self._pixel_pos
                 self.view_to_pixel()
                 if self._pixel_pos != old_pixel_pos:
-                    self.base.upate_drawing()
+                    self.base.update_drawing()
         else:
             # The canvas was dragged
             self.was_dragged = True
@@ -1407,7 +1407,7 @@ class PointSelectOverlay(WorldOverlay):
         if self._pixel_pos and self.enabled and not self.was_dragged:
             if self._selected_pixel.value != self._pixel_pos:
                 self._selected_pixel.value = self._pixel_pos
-                self.base.upate_drawing()
+                self.base.update_drawing()
                 logging.debug("Pixel %s selected",
                               str(self._selected_pixel.value))
 
@@ -1428,7 +1428,7 @@ class PointSelectOverlay(WorldOverlay):
         self._current_vpos = None
         self._pixel_pos = None
         # Update the drawing so any drawn selection will be cleared
-        self.base.upate_drawing()
+        self.base.update_drawing()
 
         evt.Skip()
 
@@ -1501,7 +1501,7 @@ class PointSelectOverlay(WorldOverlay):
             # The offset, in pixels, to the center of the world coordinates
             offset = util.tuple_idiv(self.base._bmp_buffer_size, 2)
 
-            wpos = self.base.view_to_world_pos(self._current_vpos, offset)
+            wpos = self.base.view_to_world(self._current_vpos, offset)
 
             # Calculate the physical position
             ppx, ppy = self.base.world_to_physical_pos(wpos)
@@ -1541,13 +1541,13 @@ class PointSelectOverlay(WorldOverlay):
 
         # No need for an explicit Y flip here, since `physical_to_world_pos`
         # takes care of that
-        btop_left = self.base.world_to_buffer_pos(
+        btop_left = self.base.world_to_buffer(
                             self.base.physical_to_world_pos(top_left), offset)
 
         return btop_left + util.tuple_multiply(self._pixel_size, scale)
 
     def _selection_made(self, selected_pixel):
-        self.base.upate_drawing()
+        self.base.update_drawing()
 
     # @profile
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -1574,7 +1574,7 @@ class PointSelectOverlay(WorldOverlay):
                     ctx.fill()
 
             # Label for debugging purposes
-            pos = self.base.view_to_buffer_pos((10, 16))
+            pos = self.base.view_to_buffer((10, 16))
             self.write_label(ctx, dc.GetSize(), pos, self.label)
 
     def enable(self, enable=True):
@@ -1669,7 +1669,7 @@ class PointsOverlay(WorldOverlay):
 
             # For all known world positions...
             for world_pos in self.choices.keys():
-                x, y = canvas.world_to_view_pos(
+                x, y = self.base.world_to_view_pos(
                             world_pos,
                             self.base.requested_world_pos,
                             self.base.margins,
@@ -1741,7 +1741,7 @@ class PointsOverlay(WorldOverlay):
 
         if not self.base.left_dragging and self.choices and self.enabled:
             vx, vy = evt.GetPositionTuple()
-            self.cursor_buffer_pos = self.base.view_to_buffer_pos((vx, vy))
+            self.cursor_buffer_pos = self.base.view_to_buffer((vx, vy))
 
             hover_box = None
 
@@ -1773,13 +1773,13 @@ class PointsOverlay(WorldOverlay):
         # logging.debug("Draw")
 
         if self.hover_box:
-            l, t = self.base.view_to_buffer_pos(self.hover_box[:2])
-            r, b = self.base.view_to_buffer_pos(self.hover_box[2:])
+            l, t = self.base.view_to_buffer(self.hover_box[:2])
+            r, b = self.base.view_to_buffer(self.hover_box[2:])
 
         cursor_over = None
 
         for world_pos in self.choices.keys():
-            bposx, bposy = self.base.world_to_buffer_pos(world_pos, self.offset)
+            bposx, bposy = self.base.world_to_buffer(world_pos, self.offset)
             ctx.move_to(bposx, bposy)
 
             ctx.arc(bposx, bposy, self.dot_size, 0, 2*math.pi)
