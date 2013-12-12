@@ -385,7 +385,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # for now we call a conversion layer
         self._convertStreamsToImages()
         if self.fitViewToNextImage:
-            self.fitViewToContent()
+            self.fit_view_to_content()
             self.fitViewToNextImage = False
         #logging.debug("Will update drawing for new image")
         wx.CallAfter(self.request_drawing_update)
@@ -469,7 +469,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.microscope_view.moveStageToView() # will do nothing if no stage
             # stage_pos will be updated once the move is completed
 
-    def fitViewToContent(self, recenter=None):
+    def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP and center to fit to the current content
 
         recenter (None or boolean): If True, also recenter the view. If None, it
@@ -480,7 +480,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # recenter only if there is no stage attached
             recenter = not hasattr(self.microscope_view, "stage_pos")
 
-        super(DblMicroscopeCanvas, self).fitViewToContent(recenter=recenter)
+        super(DblMicroscopeCanvas, self).fit_view_to_content(recenter=recenter)
 
         # this will indirectly call _onMPP(), but not have any additional effect
         if self.microscope_view:
@@ -554,7 +554,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.Zoom(change, block_on_zero=event.ShiftDown())
 
     @microscope_view_check
-    def onExtraAxisMove(self, axis, shift):
+    def on_extra_axis_move(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
         axis (int>0): the axis modified
@@ -1200,14 +1200,14 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
 
         # always refit to image (for the rare case it has changed size)
-        self.fitViewToContent(recenter=True)
+        self.fit_view_to_content(recenter=True)
 
 
     def on_size(self, event):
         DblMicroscopeCanvas.on_size(self, event)
 
         # refit image
-        self.fitViewToContent(recenter=True)
+        self.fit_view_to_content(recenter=True)
 
 
 # TODO: change name?
@@ -1417,7 +1417,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def on_size(self, event):  #pylint: disable=W0222
         """ Called when the canvas is resized """
-        self.fitViewToContent()
+        self.fit_view_to_content()
         super(AngularResolvedCanvas, self).on_size(event)
         event.Skip()
 
@@ -1439,11 +1439,11 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
     # TODO: should be simplified
-    def fitViewToContent(self, recenter=None):
+    def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP to fit to the current content
         recenter: never used (it's always centered)
         """
-        super(AngularResolvedCanvas, self).fitViewToContent(recenter=True)
+        super(AngularResolvedCanvas, self).fit_view_to_content(recenter=True)
 
     def _getStreamsImages(self, streams):
         """
@@ -1488,7 +1488,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def _onViewImageUpdate(self, t):
         self._convertStreamsToImages()
-        self.fitViewToContent()
+        self.fit_view_to_content()
         wx.CallAfter(self.request_drawing_update)
 
     def update_drawing(self):

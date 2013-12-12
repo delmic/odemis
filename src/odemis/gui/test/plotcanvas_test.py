@@ -116,22 +116,33 @@ class PlotCanvasTestCase(test.GuiTestCase):
     def test_bitmap_canvas(self):
         cnvs = canvas.BitmapCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")
-        cnvs.SetForegroundColour("#DDDDDD")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
         cnvs.set_image(0, data.gettest_pattern_sImage())
         cnvs.update_drawing()
 
         test.gui_loop()
-        test.sleep(1000)
+        test.sleep(500)
 
         self.remove_all()
 
         cnvs = canvas.DraggableCanvas(self.panel)
-        cnvs.SetBackgroundColour("#00599B")
-        cnvs.SetForegroundColour("#DDDDDD")
+        cnvs.SetBackgroundColour("#3C9B00")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
         cnvs.set_image(0, data.gettest_pattern_sImage())
         cnvs.update_drawing()
+
+        # cnvs.fit_view_to_content()
+        test.gui_loop()
+        test.sleep(500)
+
+        # for i in range(500):
+        #     cnvs.bg_offset = (i % 40, i % 40)
+        #     cnvs.update_drawing()
+
+        #     test.gui_loop()
+        #     test.sleep(10)
+
+
 
 
     @unittest.skip("simple")

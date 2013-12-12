@@ -281,9 +281,9 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         # fit to content without recentering should always zoom less or as much
         # as with recentering
-        self.canvas.fitViewToContent(recenter=False)
+        self.canvas.fit_view_to_content(recenter=False)
         mpp_no_recenter = self.view.mpp.value
-        self.canvas.fitViewToContent(recenter=True)
+        self.canvas.fit_view_to_content(recenter=True)
         mpp_recenter = self.view.mpp.value
         self.assertGreaterEqual(mpp_no_recenter, mpp_recenter)
 

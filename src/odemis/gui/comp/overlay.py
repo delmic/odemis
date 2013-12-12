@@ -1754,7 +1754,7 @@ class PointsOverlay(WorldOverlay):
             if self.hover_box != hover_box:
                 # logging.debug("Hitbox changed %s", hover_box)
                 self.hover_box = hover_box
-                self.base.Repaint()
+                self.base.repaint()
 
         if self.cursor_over_point and self.enabled:
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
@@ -1818,11 +1818,11 @@ class PointsOverlay(WorldOverlay):
     def enable(self, enable=True):
         """ Enable of disable the overlay """
         self.enabled = enable
-        self.base.Repaint()
+        self.base.repaint()
 
     def _point_selected(self, selected_point):
         """ Update the overlay when a point has been selected """
-        self.base.Repaint()
+        self.base.repaint()
 
 
 class PolarOverlay(ViewOverlay):

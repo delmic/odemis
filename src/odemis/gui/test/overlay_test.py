@@ -63,7 +63,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         psol.phi_deg = 90
         psol.theta_deg = 45
-        psol.base.Repaint()
+        psol.base.repaint()
         test.gui_loop()
 
     # @unittest.skip("simple")

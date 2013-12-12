@@ -163,7 +163,7 @@ class BufferedCanvas(wx.Panel):
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
             # Linux...
-            # TODO: to check, the documentation says the opposite
+            # TODO: to check, thsrc/odemis/gui/comp/canvas.pye documentation says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         # This attribute is used to store the current mouse cursor type
@@ -180,10 +180,10 @@ class BufferedCanvas(wx.Panel):
         self.Bind(wx.EVT_MOTION, self.on_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
 
-        # Keyboard events
+        # # Keyboard events
         self.Bind(wx.EVT_CHAR, self.on_char)
 
-        # Window events
+        # # Window events
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
 
@@ -256,7 +256,17 @@ class BufferedCanvas(wx.Panel):
 
     def on_paint(self, evt):
         """ Standard on paint handler """
-        pass
+        dc_view = wx.PaintDC(self)
+
+        # Blit the appropriate area from the buffer to the view port
+        dc_view.BlitPointSize(
+                    (0, 0),             # destination point
+                    self.ClientSize,    # size of area to copy
+                    self._dc_buffer,    # source
+                    (0, 0)              # source point
+        )
+
+        self._draw_view_overlays(dc_view)
 
     def on_size(self, evt):
         """ Standard size change handler
@@ -333,17 +343,17 @@ class BufferedCanvas(wx.Panel):
         """ Create an image within the buffer device context (`_dc_buffer`) """
         pass
 
-    def _draw_background(self, dc_buffer):
+    def _draw_background(self):
         """ Draw checkered background """
         # Only support wx.SOLID, and anything else is checkered
         if self.backgroundBrush == wx.SOLID:
             return
 
-        ctx = wxcairo.ContextFromDC(dc_buffer)
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
-        # if not self._ldragging:
-        #     surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
+        print self.bg_offset
+        surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
 
         pattern = cairo.SurfacePattern(surface)
         pattern.set_extend(cairo.EXTEND_REPEAT)
@@ -355,7 +365,6 @@ class BufferedCanvas(wx.Panel):
             self._bmp_buffer_size[0],
             self._bmp_buffer_size[1]
         )
-
         ctx.fill()
 
     # END Buffer and drawing methods
@@ -543,6 +552,8 @@ class BitmapCanvas(BufferedCanvas):
 
         self._dc_buffer.Clear()
 
+        self._draw_background()
+
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
         # centred on self.buffer_center_world_pos
@@ -587,8 +598,6 @@ class BitmapCanvas(BufferedCanvas):
 
         """
 
-        self._draw_background(dc_buffer)
-
         if not images or images == [None]:
             return 0
 
@@ -602,9 +611,6 @@ class BitmapCanvas(BufferedCanvas):
 
         first_ims = [im for im in images[:-1] if im is not None]
         nb_firsts = len(first_ims)
-
-        print id(self), self.__class__.__name__, first_ims
-
 
         for i, im in enumerate(first_ims):
             r = 1.0 - i / float(nb_firsts) # display as if they are averages
@@ -898,8 +904,6 @@ class DraggableCanvas(BitmapCanvas):
     def __init__(self, *args, **kwargs):
         super(DraggableCanvas, self).__init__(*args, **kwargs)
 
-        self.resize_buffer(self._bmp_buffer_size)
-
         # When resizing, margin to put around the current size
         # TODO: Maybe make the margin related to the canvas size?
         self.default_margin = 512
@@ -1058,7 +1062,7 @@ class DraggableCanvas(BitmapCanvas):
 
                 if i:
                     # Flip the sign for vertical movement, as indicated in the
-                    # onExtraAxisMove docstring: up/right is positive
+                    # on_extra_axis_move docstring: up/right is positive
                     shift = -shift
                     # logging.debug("pos %s, shift %s", pos[i], shift)
 
@@ -1075,7 +1079,7 @@ class DraggableCanvas(BitmapCanvas):
                 #         shift, value, change)
 
                 if change:
-                    self.onExtraAxisMove(i, change)
+                    self.on_extra_axis_move(i, change)
                     self._rdrag_prev_value[i] = value
 
     def on_char(self, evt):
@@ -1150,6 +1154,53 @@ class DraggableCanvas(BitmapCanvas):
             # outside region
             self.request_drawing_update()
 
+    def repaint(self):
+        """ repaint the canvas
+
+        This convenience method was added, because requesting a repaint from an
+        overlay using `update_drawing`, could cause the view to 'jump' while
+        dragging.
+
+        TODO: might be obsolete, do test
+        """
+        self.draw()
+        self.Refresh(eraseBackground=False)
+        self.Update()
+
+    def update_drawing(self):
+        """ Redraws everything (that is viewed in the buffer)
+        """
+        prev_world_pos = self.buffer_center_world_pos
+
+        self.buffer_center_world_pos = self.requested_world_pos
+
+        self.draw()
+
+        # Calculate the amount the view has shifted in pixels
+        shift_view = (
+            (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
+            (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
+        )
+
+        # Adjust the dragging attributes according to the change in
+        # buffer center
+        if self._ldragging:
+            self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
+                                  self.drag_init_pos[1] - shift_view[1])
+            self.drag_shift = (self.drag_shift[0] + shift_view[0],
+                               self.drag_shift[1] + shift_view[1])
+        else:
+            # in theory, it's the same, but just to be sure we reset to 0,0
+            # exactly
+            self.drag_shift = (0, 0)
+
+        # eraseBackground doesn't seem to matter, but just in case...
+        self.Refresh(eraseBackground=False)
+
+        # not really necessary as refresh causes an onPaint event soon, but
+        # makes it slightly sooner, so smoother
+        self.Update()
+
     # END Buffer and drawing methods
 
 
@@ -1167,16 +1218,7 @@ class DraggableCanvas(BitmapCanvas):
 
     # END View manipulation
 
-
-
-
-
-
-
-
-    # END Event handlers
-
-    def onExtraAxisMove(self, axis, shift):
+    def on_extra_axis_move(self, axis, shift):
         """
         called when the extra dimensions are modified (right drag)
 
@@ -1191,13 +1233,7 @@ class DraggableCanvas(BitmapCanvas):
         pass
 
 
-
-
-
-
-
-
-    def fitViewToContent(self, recenter=False):
+    def fit_view_to_content(self, recenter=False):
         """
         Adapts the MPP and center to fit to the current content
         recenter (boolean): If True, also recenter the view.
@@ -1247,52 +1283,7 @@ class DraggableCanvas(BitmapCanvas):
 
         wx.CallAfter(self.request_drawing_update)
 
-    def Repaint(self):
-        """ Repaint the canvas
 
-        This convenience method was added, because requesting a repaint from an
-        overlay using `update_drawing`, could cause the view to 'jump' while
-        dragging.
-        """
-        self.draw()
-        self.Refresh(eraseBackground=False)
-        self.Update()
-
-    def update_drawing(self):
-        """ Redraws everything (that is viewed in the buffer)
-        """
-        prev_world_pos = self.buffer_center_world_pos
-
-        self.buffer_center_world_pos = self.requested_world_pos
-
-        self.draw()
-
-        # Calculate the amount the view has shifted in pixels
-        shift_view = (
-            (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
-            (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
-        )
-
-        # Adjust the dragging attributes according to the change in
-        # buffer center
-        if self._ldragging:
-            self.drag_init_pos = (self.drag_init_pos[0] - shift_view[0],
-                                  self.drag_init_pos[1] - shift_view[1])
-            self.drag_shift = (self.drag_shift[0] + shift_view[0],
-                               self.drag_shift[1] + shift_view[1])
-            # self.bg_offset = (self.drag_shift[0] % 40,
-            #               self.drag_shift[1] % 40)
-        else:
-            # in theory, it's the same, but just to be sure we reset to 0,0
-            # exactly
-            self.drag_shift = (0, 0)
-
-        # eraseBackground doesn't seem to matter, but just in case...
-        self.Refresh(eraseBackground=False)
-
-        # not really necessary as refresh causes an onPaint event soon, but
-        # makes it slightly sooner, so smoother
-        self.Update()
 
 
 
