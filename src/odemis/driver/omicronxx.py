@@ -43,8 +43,7 @@ class DevxX(object):
         """
         self.port = port
         self._serial = self._openSerialPort(port)
-        self._serial.flush()
-        self._serial.flushInput()
+        self._flushInput() # can have some \x00 bytes at the beginning
         
         # As the devices do not have special USB vendor ID or product ID, it's
         # quite possible that it's not a xX device actually at the other end of 
@@ -85,6 +84,15 @@ class DevxX(object):
         )
         
         return ser
+
+    def _flushInput(self):
+        """
+        Ensure there is no more data queued to be read on the bus (=serial port)
+        """
+        self._serial.flush()
+        self._serial.flushInput()
+        while self._serial.read():
+            pass
     
     def _sendCommand(self, com):
         """
