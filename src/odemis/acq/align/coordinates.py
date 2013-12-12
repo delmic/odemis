@@ -38,7 +38,7 @@ from itertools import compress
 
 MAX_STEPS_NUMBER = 300  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
-MAX_ALLOWED_DIFF = 0.15  # Maximum allowed difference is electron coordinates
+MAX_ALLOWED_DIFF = 0.25  # Maximum allowed difference is electron coordinates
 DIFF_NUMBER = 0.95  # Number of values that should be within the allowed difference
 
 def FindCenterCoordinates(subimages):
@@ -239,7 +239,7 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
     # Informed guess
     transformed_coordinates = _TransformCoordinates(optical_coordinates, (guess_x_move, guess_y_move), guess_rotation, quess_scale)
 
-    for i in xrange(MAX_STEPS_NUMBER):
+    for step in xrange(MAX_STEPS_NUMBER):
         #Calculate nearest point
         estimated_coordinates, index1, e_wrong_points = _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates)
 
@@ -277,7 +277,7 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
     ordered_coordinates = [electron_coordinates[i] for i in index1]
-
+    
     # When the electron coordinate is not proper, remove them
     for i in xrange(e_wrong_points.__len__()):
         if e_wrong_points[i] == True:
@@ -311,19 +311,6 @@ def _TransformCoordinates(x_coordinates, translation, rotation, scale):
     """
     transformed_coordinates = []
     for ta in x_coordinates:
-        # scaling-rotation-translation
-        """
-        tuple_scale = (scale, scale)
-        scaled = tuple(map(operator.mul, ta, tuple_scale))
-
-        x, y = scaled
-        rad_rotation = rotation * (math.pi / 180)  # rotation in radians, counterclockwise
-        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
-        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
-        rotated = (x_rotated, y_rotated)
-        translated = tuple(map(operator.add, rotated, translation))
-        transformed_coordinates.append(translated)
-        """
         # translation-scaling-rotation
         translated = tuple(map(operator.add, ta, translation))
         tuple_scale = (scale, scale)
