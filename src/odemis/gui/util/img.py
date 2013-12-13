@@ -92,7 +92,7 @@ def compactHistogram(hist, length):
       accumulated together as necessary to only have "length" bins.
     """
     if hist.size < length:
-        raise ValueError("Cannot compact histogram of length %d to length %d",
+        raise ValueError("Cannot compact histogram of length %d to length %d" %
                          hist.size, length)
     elif hist.size == length:
         return hist
