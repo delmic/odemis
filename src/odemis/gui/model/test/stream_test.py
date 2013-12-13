@@ -327,6 +327,7 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
         self.assertEqual(len(sems.raw), 1)
         self.assertEqual(sems.raw[0].shape, exp_shape)
         self.assertEqual(len(ars.raw), num_ar)
@@ -350,6 +351,7 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
         self.assertEqual(len(sems.raw), 1)
         self.assertEqual(sems.raw[0].shape, exp_shape)
         self.assertEqual(len(ars.raw), num_ar)
@@ -384,6 +386,7 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
         self.assertEqual(len(sems.raw), 1)
         self.assertEqual(sems.raw[0].shape, exp_shape)
         self.assertEqual(len(specs.raw), 1)
@@ -410,6 +413,7 @@ class SPARCTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
         self.assertEqual(len(sems.raw), 1)
         self.assertEqual(sems.raw[0].shape, exp_shape)
         self.assertEqual(len(specs.raw), 1)

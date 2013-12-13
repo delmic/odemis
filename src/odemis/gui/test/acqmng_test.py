@@ -251,11 +251,14 @@ class SPARCTestCase(unittest.TestCase):
         self.done = False
 
         # Run acquisition
+        start = time.time()
         f = acqmng.startAcquisition(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
         data = f.result()
+        dur = time.time() - start
+        self.assertGreaterEqual(dur, est_time / 2) # Estimated time shouldn't be too small
         self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data), num_ar + 2)
 
