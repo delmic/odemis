@@ -543,7 +543,7 @@ class AndorCam2(model.DigitalCamera):
         # EM Gain set in "Real Gain" values
         if self.hasFeature(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
             # 3 = Real Gain mode (seems to be the best, but not always available)
-            # 2 = Linear mode (seem to be pretty much similar)
+            # 2 = Linear mode (similar, but without aging compensation)
             # 0 = Gain between 0 and 255
             for m in [3, 2, 0]:
                 try:
