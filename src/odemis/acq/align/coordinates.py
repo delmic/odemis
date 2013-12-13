@@ -230,6 +230,8 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
     electron_coordinates (List of tuples): Coordinates of spots in electron image
     returns (List of tuples): Ordered list of coordinates in electron image with respect 
                                 to the order in the electron image
+            (List of tuples): List of coordinates in optical image with NaN where the 
+                                corresponding ordered electron coordinates list contains NaN
     """
     quality = 0
     guess_x_move, guess_y_move = 0, 0
@@ -239,9 +241,10 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
     # Informed guess
     transformed_coordinates = _TransformCoordinates(optical_coordinates, (guess_x_move, guess_y_move), guess_rotation, quess_scale)
 
+    max_wrong_points = math.ceil(0.5 * math.sqrt(electron_coordinates.__len__()))
     for step in xrange(MAX_STEPS_NUMBER):
         #Calculate nearest point
-        estimated_coordinates, index1, e_wrong_points = _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates)
+        estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates)
 
         if estimated_coordinates == []:
             quality = 0
@@ -265,7 +268,7 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
         diff_number_sort = math.floor(DIFF_NUMBER * (sort_diff.__len__()))
         max_diff = sort_diff[int(diff_number_sort)]
 
-        if max_diff < MAX_ALLOWED_DIFF:
+        if max_diff < MAX_ALLOWED_DIFF and sum(e_wrong_points) <= max_wrong_points and total_shift <= MAX_ALLOWED_DIFF:
             quality = 1
             break
 
@@ -273,7 +276,7 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
 
     if quality == 0:
         logging.warning("Cannot find overlay")
-        return [], []
+        # return [], []
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
     ordered_coordinates_index = zip(index1, electron_coordinates)
@@ -343,7 +346,10 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     returns estimated_coordinates (List of tuples): Estimated optical coordinates
             index1 (List of integers): Indexes of nearest points in optical with respect to electron
             e_wrong_points (List of booleans): Electron coordinates that have no proper match
+            total_shift (float): Calculated total shift
     """
+    total_shift = 0
+
     index1 = _KNNsearch(transformed_coordinates, electron_coordinates)
     # Sort optical coordinates based on the _KNNsearch output index
     knn_points1 = [optical_coordinates[i] for i in index1]
@@ -388,10 +394,11 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     avg_rotation = (rotation1 + rotation2) / 2
 
     # Correct for shift if more than SHIFT_THRESHOLD (percentage) of points are wrong
-    threshold = 2 * SHIFT_THRESHOLD * electron_coordinates.__len__()
-
+    # threshold = 2 * SHIFT_THRESHOLD * electron_coordinates.__len__()
+    threshold = math.ceil(0.5 * math.sqrt(electron_coordinates.__len__()))
     # If the number of wrong points is above threshold perform corrections
     if sum(o_wrong_points)>threshold and sum(e_wrong_points)>threshold:
+        # Shift
         electron_o_index2 = [electron_coordinates[i] for i in list(compress(index2, o_wrong_points))]
         transformed_o_points = list(compress(transformed_coordinates, o_wrong_points))
         o_wrong_diff = []
@@ -405,8 +412,44 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
             e_wrong_diff.append(map(operator.sub, ta, tb))
 
         mean_wrong_diff = numpy.mean(e_wrong_diff,0) - numpy.mean(o_wrong_diff,0)
-        avg_x_move = avg_x_move - (0.5 * mean_wrong_diff[0]) / avg_scale
-        avg_y_move = avg_y_move - (0.5 * mean_wrong_diff[1]) / avg_scale
+        avg_x_move = avg_x_move - (0.65 * mean_wrong_diff[0]) / avg_scale
+        avg_y_move = avg_y_move - (0.65 * mean_wrong_diff[1]) / avg_scale
+        total_shift = math.hypot((0.65 * mean_wrong_diff[0]) / avg_scale, (0.65 * mean_wrong_diff[1]) / avg_scale)
+
+        # Angle
+        # Calculate angle with respect to its center, therefore move points towards center
+        electron_coordinates_vs_center = []
+        mean_electron_coordinates = numpy.mean(electron_coordinates, 0)
+        for ta in electron_coordinates:
+            # translation
+            translated = tuple(map(operator.sub, ta, mean_electron_coordinates))
+            electron_coordinates_vs_center.append(translated)
+
+        transformed_coordinates_vs_center = []
+        for tb in transformed_coordinates:
+            # translation
+            translated = tuple(map(operator.sub, tb, mean_electron_coordinates))
+            transformed_coordinates_vs_center.append(translated)
+
+        # Calculate the angle with its center for every point
+        angle_vect_electron = numpy.arctan2([float(i[0]) for i in electron_coordinates_vs_center], [float(i[1]) for i in electron_coordinates_vs_center])
+        angle_vect_transformed = numpy.arctan2([float(i[0]) for i in transformed_coordinates_vs_center], [float(i[1]) for i in transformed_coordinates_vs_center])
+
+        # Calculate the angle difference for the wrong electron_coordinates
+        angle_vect_transformed_e_index1 = [angle_vect_transformed[i] for i in list(compress(index1, e_wrong_points))]
+        angle_diff_electron_wrong = [x - y for x, y in zip(list(compress(angle_vect_electron, e_wrong_points)), angle_vect_transformed_e_index1)]
+        angle_diff_electron_wrong[angle_diff_electron_wrong > math.pi] = angle_diff_electron_wrong[angle_diff_electron_wrong > math.pi] - 2 * math.pi
+        angle_diff_electron_wrong[angle_diff_electron_wrong < -math.pi] = angle_diff_electron_wrong[angle_diff_electron_wrong < -math.pi] + 2 * math.pi
+
+        # Calculate the angle difference for the wrong transformed_coordinates
+        angle_vect_electron_o_index2 = [angle_vect_electron[i] for i in list(compress(index2, o_wrong_points))]
+        angle_diff_transformed_wrong = [x - y for x, y in zip(list(compress(angle_vect_transformed, o_wrong_points)), angle_vect_electron_o_index2)]
+        angle_diff_transformed_wrong[angle_diff_transformed_wrong > math.pi] = angle_diff_transformed_wrong[angle_diff_transformed_wrong > math.pi] - 2 * math.pi
+        angle_diff_transformed_wrong[angle_diff_transformed_wrong < -math.pi] = angle_diff_transformed_wrong[angle_diff_transformed_wrong < -math.pi] + 2 * math.pi
+
+        # Apply correction
+        angle_correction = 0.5 * (numpy.mean(angle_diff_electron_wrong, 0) - numpy.mean(angle_diff_transformed_wrong, 0))
+        avg_rotation = avg_rotation + 180 / math.pi * angle_correction
 
     # Perform transformation
     estimated_coordinates = _TransformCoordinates(optical_coordinates, (avg_x_move, avg_y_move), avg_rotation, avg_scale)
@@ -416,7 +459,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     new_e_wrong_points = map(operator.ne, new_e_index, electron_range)
     if (all(new_e_wrong_points) or new_index1.count(new_index1[0]) == len(new_index1)):
         logging.warning("Cannot perform matching")
-        return [], [], []
+        return [], [], [], []
 
-    return estimated_coordinates, new_index1, new_e_wrong_points
+    return estimated_coordinates, new_index1, new_e_wrong_points, total_shift
 
