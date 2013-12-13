@@ -165,7 +165,7 @@ def DivideInNeighborhoods(image, number_of_spots):
 
         subimage_coordinates.append((x_center, y_center))
         # TODO: change +10 and -10 to number relative to spot size
-        subimage = image[(dy.start - filter_window_size):(dy.stop + 1 + filter_window_size), (dx.start - filter_window_size):(dx.stop + 1 + filter_window_size)]
+        subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
         subimages.append(subimage)
 
     #Take care of fault spots (e.g. cosmic ray)
@@ -273,17 +273,25 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
 
     if quality == 0:
         logging.warning("Cannot find overlay")
-        # return []
+        return [], []
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
-    ordered_coordinates = [electron_coordinates[i] for i in index1]
-    
+    ordered_coordinates_index = zip(index1, electron_coordinates)
+    ordered_coordinates_index.sort()
+    ordered_coordinates = []
+    for i in xrange(ordered_coordinates_index.__len__()):
+        ordered_coordinates.append(ordered_coordinates_index[i][1])
+
+    known_optical_coordinates = optical_coordinates
     # When the electron coordinate is not proper, remove them
     for i in xrange(e_wrong_points.__len__()):
         if e_wrong_points[i] == True:
             ordered_coordinates[i] = float('nan')
+            known_optical_coordinates[i] = float('nan')
 
-    return ordered_coordinates
+    # known_ordered_coordinates = list(compress(ordered_coordinates, inv_e_wrong_points))
+    # known_optical_coordinates = list(compress(optical_coordinates, inv_e_wrong_points))
+    return ordered_coordinates, known_optical_coordinates
 
 def _KNNsearch(x_coordinates, y_coordinates):
     """
