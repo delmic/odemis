@@ -273,7 +273,7 @@ def MatchCoordinates(optical_coordinates, electron_coordinates):
 
     if quality == 0:
         logging.warning("Cannot find overlay")
-        return []
+        # return []
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
     ordered_coordinates = [electron_coordinates[i] for i in index1]
