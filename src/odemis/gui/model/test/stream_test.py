@@ -181,7 +181,7 @@ class SPARCTestCase(unittest.TestCase):
     
     def setUp(self):
         if self.backend_was_running:
-            raise unittest.SkipTest("Running backend found")
+            self.skipTest("Running backend found")
 
 #    @skip("simple")
     def test_progressive_future(self):

@@ -103,7 +103,7 @@ class SECOMTestCase(unittest.TestCase):
 
     def setUp(self):
         if self.backend_was_running:
-            raise unittest.SkipTest("Running backend found")
+            self.skipTest("Running backend found")
 
     def test_simple(self):
         # create a simple streamTree
@@ -218,7 +218,7 @@ class SPARCTestCase(unittest.TestCase):
 
     def setUp(self):
         if self.backend_was_running:
-            raise unittest.SkipTest("Running backend found")
+            self.skipTest("Running backend found")
 
     def test_sync_sem_ccd(self):
         """
