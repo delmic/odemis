@@ -170,7 +170,7 @@ class Spectrograph(model.Actuator):
 
         return model.InstantaneousFuture()
 
-    def stop(self):
+    def stop(self, axes=None):
         # nothing to do
         pass
 

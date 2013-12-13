@@ -1820,21 +1820,25 @@ class Bus(model.Actuator):
     # start a move to reference. axes: set of str
     # returns a Future, done once the axis is referenced
 
-    def stop(self):
+    def stop(self, axes=None):
         """
         stops the motion on all axes
         Warning: this might stop the motion even of axes not managed (it stops
-        all the axes of all controller managed).
+          all the axes of the related controllers).
+        axes (set of str)
         """
         if self._action_mgr:
             self._action_mgr.cancel_all()
 
+        axes = axes or self._axes
         # TODO: use the broadcast address to request a stop to all
         # controllers on the bus at the same time?
 
         # send stop to all controllers (including the ones not in action)
         controllers = set()
         for axis, (controller, channel) in self._axis_to_cc.items():
+            if not axis in axes:
+                continue
             if controller not in controllers:
                 controller.stopMotion()
                 controllers.add(controller)
