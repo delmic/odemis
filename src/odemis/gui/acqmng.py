@@ -217,24 +217,19 @@ class AcquisitionTask(object):
         """
         assert(self._current_stream is None) # Task should be used only once
         expected_time = numpy.sum(self._streamTimes.values())
+        # no need to set the start time of the future: it's automatically done
+        # when setting its state to running.
+        self._future.set_end_time(time.time() + expected_time)
 
         # This is a little trick to force the future to give updates even if
         # the estimation is the same
-        upd_period = min(10, max(0.1, expected_time/100))
+        upd_period = max(0.1, min(expected_time / 100, 10))
         timer = threading.Thread(target=self._future_time_upd,
                        name="Acquisition timer update",
                        args=(upd_period,))
         timer.start()
 
         raw_images = []
-        # no need to set the start time of the future: it's automatically done
-        # when setting its state to running.
-        self._future.set_end_time(time.time() + expected_time)
-
-        # TODO: either stream has .acquire() that returns a (Progressive) Future
-        # or wrap the .image.subscribe into a Future.
-        # If future, just wait (and our progressive future automatically updates)
-        # If ProgressiveFuture, update final time based on info received.
         for s in self._streams:
             # Get the future of the acquisition, depending on the Stream type
             if hasattr(s, "acquire"):
@@ -282,9 +277,6 @@ class AcquisitionTask(object):
             logging.warning("Progress update from not the current future: %s", f)
             return
 
-        logging.debug("Updating time with %g s + %s",
-                      left,
-                      ", ".join(["%g s" % self._streamTimes[s] for s in self._streams_left]))
         now = time.time()
         time_left = left
         for s in self._streams_left:
@@ -312,9 +304,14 @@ class AcquisitionTask(object):
         self._cancelled = True
 
         if self._current_future is not None:
-            self._current_future.cancel()
+            cancelled = self._current_future.cancel()
+        else:
+            cancelled = False
 
-        # TODO: fix race condition when last future already finished
+        # Report it's too late for cancellation (and so result will come)
+        if not cancelled and not self._streams_left:
+            return False
+
         return True
 
 

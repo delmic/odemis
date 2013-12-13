@@ -206,9 +206,8 @@ class Stream(object):
             msg = "Subscribing to dataflow of component %s"
             logging.debug(msg, self._detector.name)
             if not self.should_update.value:
-                msg = ("Trying to activate stream while it's not supposed to "
-                       "update")
-                logging.warning(msg)
+                logging.warning("Trying to activate stream while it's not "
+                                "supposed to update")
             self._dataflow.subscribe(self.onNewImage)
         else:
             msg = "Unsubscribing from dataflow of component %s"
@@ -1806,7 +1805,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
         if self._current_future != None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
-        f = model.ProgressiveFuture()
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateAcquisitionTime())
         self._current_future = f
         self._acq_state = RUNNING
 
@@ -1876,7 +1877,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
         start (float): start time
         ratio (0<=float<=1): progress ratio
         """
-        logging.debug("Updating future to %g %%", ratio * 100)
         now = time.time()
         tot_time = (now - start) / ratio
         # add some overhead for the end of the acquisition
@@ -2041,9 +2041,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
             self._onSEMCCDData(sem_one, ccd_buf)
-
-            logging.debug("raw data is now of shape %s",
-                          ", ".join([str(d.shape) for d in self.raw]))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of SEM/CCD failed")
@@ -2235,9 +2232,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 d.metadata[MD_DESCRIPTION] = ccd_stream_name
             sem_md[MD_DESCRIPTION] = self._sem_stream.name.value
             self._onSEMCCDData(self._sem_data, self._acq_ccd_buf)
-
-            logging.debug("raw data is now of shape %s",
-                          ", ".join([str(d.shape) for d in self.raw]))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Driver sync acquisition of SEM/CCD failed")
