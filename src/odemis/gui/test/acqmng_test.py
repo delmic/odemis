@@ -24,7 +24,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.gui import acqmng
-from odemis.gui.acqmng import startAcquisition, computeThumbnail
+from odemis.gui.acqmng import acquire, computeThumbnail
 from odemis.util import driver
 import os
 import subprocess
@@ -108,7 +108,7 @@ class SECOMTestCase(unittest.TestCase):
     def test_simple(self):
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
 
@@ -116,7 +116,7 @@ class SECOMTestCase(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
 
@@ -136,7 +136,7 @@ class SECOMTestCase(unittest.TestCase):
         self.left = None
         self.updates = 0
 
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
 
         data = f.result()
@@ -157,7 +157,7 @@ class SECOMTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -252,7 +252,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acqmng.startAcquisition(st.getStreams())
+        f = acqmng.acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 

@@ -48,7 +48,7 @@ import time
 # returns a special "ProgressiveFuture" which is a Future object that can be
 # stopped while already running, and reports from time to time progress on its
 # execution.
-def startAcquisition(streams):
+def acquire(streams):
     """
     Starts an acquisition task for the given streams. It will decide in which
       order the stream must be acquired.
@@ -77,7 +77,7 @@ def startAcquisition(streams):
 def estimateTime(streams):
     """
     Computes the approximate time it will take to run the acquisition for the
-     given streams (same arguments as startAcquisition())
+     given streams (same arguments as acquire())
     streams (list of Stream): the streams to acquire
     return (0 <= float): estimated time in s.
     """
@@ -94,7 +94,7 @@ def computeThumbnail(streamTree, acqTask):
     compute the thumbnail of a given (finished) acquisition according to a
     streamTree
     streamTree (StreamTree): the tree of rendering
-    acqTask (Future): a Future specifically returned by startAcquisition(),
+    acqTask (Future): a Future specifically returned by acquire(),
       representing an acquisition task
     returns model.DataArray: the thumbnail with metadata
     """

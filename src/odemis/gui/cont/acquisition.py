@@ -550,7 +550,7 @@ class SparcAcquiController(AcquisitionController):
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
 
-        self.acq_future = acqmng.startAcquisition(streams)
+        self.acq_future = acqmng.acquire(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
