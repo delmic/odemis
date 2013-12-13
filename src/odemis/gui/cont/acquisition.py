@@ -385,6 +385,7 @@ class SparcAcquiController(AcquisitionController):
         self.btn_change_file = self._main_frame.btn_sparc_change_file
         self.btn_cancel = self._main_frame.btn_sparc_cancel
         self.acq_future = None
+        self._prev_left = None
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
 
@@ -541,6 +542,7 @@ class SparcAcquiController(AcquisitionController):
 
         # the range of the progress bar was already set in
         # update_acquisition_time()
+        self._prev_left = None
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.btn_cancel.Show()
@@ -588,35 +590,32 @@ class SparcAcquiController(AcquisitionController):
                 # We cannot do much: just warn the user and pretend it was cancelled
                 logging.exception("Acquisition failed")
                 new_lbl = "Acquisition failed."
-
                 # leave the gauge, to give a hint on what went wrong.
                 self.btn_cancel.Disable()
                 return
 
+            # hide progress bar
+            self.gauge_acq.Hide()
+            self.btn_cancel.Hide()
 
-
+            # TODO: on big acquisitions, it can take 20s => put in a thread + future
             # save result to file
             try:
-                thumb = acqmng.computeThumbnail(self._tab_data_model.acquisitionView.stream_tree,
-                                                future)
+                st = self._tab_data_model.acquisitionView.stream_tree
+                thumb = acqmng.computeThumbnail(st, future)
                 filename = self.filename.value
                 exporter = dataio.get_exporter(self.conf.last_format)
                 exporter.export(filename, data, thumb)
                 logging.info("Acquisition saved as file '%s'.", filename)
-                # TODO: switch to analysis tab automatically?
             except Exception:
                 logging.exception("Saving acquisition failed")
                 new_lbl = "Saving acquisition file failed"
                 return
-            finally:
-                # hide progress bar (+ put pack estimated time)
-                self.gauge_acq.Hide()
-                self.btn_cancel.Hide()
 
             # change filename, to ensure not overwriting anything
             self.filename.value = self._get_default_filename()
 
-            # TODO display in the analysis tab
+            # display in the analysis tab
             self._show_acquisition(data, open(filename))
         finally:
             self.btn_acquire.Enable()
@@ -626,7 +625,6 @@ class SparcAcquiController(AcquisitionController):
                 self.lbl_acqestimate.SetLabel(new_lbl)
             else:
                 self.update_acquisition_time()
-
 
     @call_after
     def on_acquisition_upd(self, future, past, left):
@@ -639,12 +637,23 @@ class SparcAcquiController(AcquisitionController):
             # progress bar and text is handled by on_acquisition_done
             return
 
+        # TODO: don't update gauge if ratio reduces
         # progress bar: past / past+left
         logging.debug("updating the progress bar to %f/%f", past, past + left)
         self.gauge_acq.Range = 100 * (past + left)
         self.gauge_acq.Value = 100 * past
 
         left = math.ceil(left) # pessimistic
+        # Avoid back and forth estimation => don't increase unless really huge
+        if (self._prev_left is not None and
+            (min(-left, -5) < self._prev_left - left < 0)):
+            logging.debug("No updating progress bar as new estimation is %g s "
+                          "while the previous was only %g s",
+                          left, self._prev_left)
+            return
+
+        self._prev_left = left
+
         if left > 2:
             lbl_txt = "%s left." % units.readable_time(left)
             self.lbl_acqestimate.SetLabel(lbl_txt)
