@@ -59,8 +59,9 @@ class TestNoBackend(unittest.TestCase):
         self.assertRaises(CancelledError, future.result, 1)
         self.assertEqual(self.left, 0)
 
-    def cancel_task(self):
+    def cancel_task(self, future):
         self.cancelled = True
+        return True
 
     def on_progress_update(self, future, past, left):
         self.past = past

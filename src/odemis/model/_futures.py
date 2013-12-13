@@ -126,8 +126,6 @@ class ProgressiveFuture(futures.Future):
             self._end_time = val
         self._invoke_upd_callbacks()
 
-    # TODO: set_progress(ratio): update the _end_time depending on _start_time, now and the ratio
-
     def add_update_callback(self, fn):
         """
         Adds a callback that will receive progress updates whenever a new one is
@@ -178,15 +176,18 @@ class ProgressiveFuture(futures.Future):
         return True
 
     def set_running_or_notify_cancel(self):
-        cancelled = futures.Future.set_running_or_notify_cancel(self)
+        """
+        Returns:
+            False if the Future was cancelled, True otherwise.
+        """
+        running = futures.Future.set_running_or_notify_cancel(self)
         now = time.time()
-        with self._condition:
-            self._start_time = now
-            if cancelled:
-                self._end_time = now
+        if running:
+            with self._condition:
+                self._start_time = now
 
         self._invoke_upd_callbacks()
-        return cancelled
+        return running
 
     def set_result(self, result):
         futures.Future.set_result(self, result)
