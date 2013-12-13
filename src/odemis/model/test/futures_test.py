@@ -66,3 +66,7 @@ class TestNoBackend(unittest.TestCase):
     def on_progress_update(self, future, past, left):
         self.past = past
         self.left = left
+
+if __name__ == "__main__":
+    #import sys;sys.argv = ['', 'Test.testName']
+    unittest.main()
