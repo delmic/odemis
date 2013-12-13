@@ -25,6 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 This module contains classes to control the actions related to the acquisition
 of microscope images.
 """
+from __future__ import division
 
 from concurrent import futures
 from concurrent.futures._base import CancelledError
@@ -644,12 +645,25 @@ class SparcAcquiController(AcquisitionController):
             # progress bar and text is handled by on_acquisition_done
             return
 
-        # TODO: don't update gauge if ratio reduces
         # progress bar: past / past+left
-        logging.debug("updating the progress bar to %f/%f", past, past + left)
-        self.gauge_acq.Range = 100 * (past + left)
-        self.gauge_acq.Value = 100 * past
+        can_update = True
+        try:
+            ratio = past / (past + left)
+            # Don't update gauge if ratio reduces
+            prev_ratio = self.gauge_acq.Value / self.gauge_acq.Range
+            logging.debug("current ratio %g, old ratio %g", ratio * 100, prev_ratio * 100)
+            if (self._prev_left is not None and
+                prev_ratio - 0.1 < ratio < prev_ratio):
+                can_update = False
+        except ZeroDivisionError:
+            pass
 
+        if can_update:
+            logging.debug("updating the progress bar to %f/%f", past, past + left)
+            self.gauge_acq.Range = 100 * (past + left)
+            self.gauge_acq.Value = 100 * past
+
+        # Time left
         left = math.ceil(left) # pessimistic
         # Avoid back and forth estimation => don't increase unless really huge
         if (self._prev_left is not None and
