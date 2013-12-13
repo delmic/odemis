@@ -66,7 +66,7 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertIn(str(prop.value), pretty_str)
 
         prop = model.ListVA([2, 3], unit=u"µm")
-        pretty_str = str(prop)
+        pretty_str = unicode(prop)
         self.assertIn("ListVA", pretty_str)
         self.assertIn(str(prop.value), pretty_str)
 
