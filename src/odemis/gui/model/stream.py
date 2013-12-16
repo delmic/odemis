@@ -1805,11 +1805,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
         if self._current_future != None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
+        if self._acq_thread and self._acq_thread.isAlive():
+            logging.debug("Waiting for previous acquisition to fully finish")
+            self._acq_thread.join(10)
+            if self._acq_thread.isAlive():
+                logging.error("Previous acquisition not ending")
+
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + self.estimateAcquisitionTime())
         self._current_future = f
-        self._acq_state = RUNNING
+        self._acq_state = RUNNING # TODO: move to per acquisition
 
         # Pick the right acquisition method
         if self._ccd.exposureTime.value <= 0.1:
@@ -1820,12 +1826,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # long dwell time => use software synchronisation
             runAcquisition = self._ssRunAcquisition
             f.task_canceller = self._ssCancelAcquisition
-
-        if self._acq_thread and self._acq_thread.isAlive():
-            logging.debug("Waiting for previous acquisition to fully finish")
-            self._acq_thread.join(10)
-            if self._acq_thread.isAlive():
-                logging.error("Previous acquisition not ending")
 
         # run task in separate thread
         self._acq_thread = threading.Thread(target=self._executeTask,
@@ -1851,9 +1851,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         try:
             result = fn(*args, **kwargs)
-        except CancelledError:
-            # cancelled via the future (while running) => it's all already handled
-            pass
         except BaseException:
             e = sys.exc_info()[1]
             future.set_exception(e)

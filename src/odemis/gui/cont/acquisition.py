@@ -391,6 +391,7 @@ class SparcAcquiController(AcquisitionController):
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
 
+        # TODO: share an executor with the whole GUI.
         self._executor = futures.ThreadPoolExecutor(max_workers=2)
 
         # TODO: only if the current tab is acquisition?
@@ -428,6 +429,9 @@ class SparcAcquiController(AcquisitionController):
         self._sem_cl.roi.subscribe(self.onROI, init=True)
         # We should also listen to repetition, in case it's modified after we've
         # received the new ROI. Or maybe always compute acquisition time a bit delayed?
+
+    def __del__(self):
+        self._executor.shutdown(wait=False)
 
     def _get_default_filename(self):
         """

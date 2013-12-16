@@ -224,7 +224,7 @@ class SPARCTestCase(unittest.TestCase):
         self.done = False
         self.updates = 0
         self.ccd.exposureTime.value = 0.02 # s
-        ars.repetition.value = (5, 3)
+        ars.repetition.value = (5, 4)
         exp_shape = ars.repetition.value[::-1]
         num_ar = numpy.prod(ars.repetition.value)
 
@@ -274,7 +274,7 @@ class SPARCTestCase(unittest.TestCase):
         # short acquisition
         self.updates = 0
         self.ccd.exposureTime.value = 0.02 # s
-        ars.repetition.value = (5, 3)
+        ars.repetition.value = (5, 4)
 
         # Start acquisition
         f = sas.acquire()
