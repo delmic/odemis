@@ -280,8 +280,8 @@ class BufferedCanvas(wx.Panel):
             # logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(new_size)
             # self.recenter_buffer((new_size[0]/2, new_size[1]/2))
-            # self.request_drawing_update()
-            self.update_drawing()
+            self.request_drawing_update()
+            # self.update_drawing()
         else:
             # logging.debug("Buffer size didn't change, refreshing...")
             self.Refresh(eraseBackground=False)
@@ -352,8 +352,10 @@ class BufferedCanvas(wx.Panel):
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
-        print self.bg_offset
-        surface.set_device_offset(-self.bg_offset[0], -self.bg_offset[1])
+        # print self.bg_offset
+        o = self.drag_shift if hasattr(self, 'drag_shift') else (0, 0)
+        print "offset", o
+        surface.set_device_offset(o[0], o[1])
 
         pattern = cairo.SurfacePattern(surface)
         pattern.set_extend(cairo.EXTEND_REPEAT)
@@ -981,6 +983,7 @@ class DraggableCanvas(BitmapCanvas):
             self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
             self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
         )
+        print self.drag_shift
         self.recenter_buffer(new_pos)
 
     def on_right_down(self, evt): #pylint: disable=W0221
@@ -1035,10 +1038,19 @@ class DraggableCanvas(BitmapCanvas):
                 min(max(drag_shift[1], -self.margins[1]), self.margins[1])
             )
 
-            self.bg_offset = (self.drag_shift[0] % 40,
-                              self.drag_shift[1] % 40)
+            # self.bg_offset = (self.drag_shift[0] % 40,
+            #                   self.drag_shift[1] % 40)
 
-            self.update_drawing()
+            # self.bg_offset = (self.bg_offset[0] + self.drag_shift[0],
+            #                   self.bg_offset[1] + self.drag_shift[1])
+
+
+            # TODO: request_drawing_update seem to make more sense here, but
+            # maybe there was a good reason to use update_drawing instead?
+            # Eric will know the answer for sure!
+            # self.update_drawing()
+            self.request_drawing_update()
+
             self.Refresh()
 
         elif self._rdragging:
