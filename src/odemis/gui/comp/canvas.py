@@ -495,6 +495,16 @@ class BufferedCanvas(wx.Panel):
 
     # END Position conversion
 
+    def clip_to_viewport(self, pos):
+        """ Clip the given tuple of 2 floats to the current view size """
+        return (max(1, min(pos[0], self.ClientSize.x - 1)),
+                max(1, min(pos[1], self.ClientSize.y - 1)))
+
+    def clip_to_buffer(self, pos):
+        """ Clip the given tuple of 2 floats to the current buffer size """
+        return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
+                max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
+
 class BitmapCanvas(BufferedCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -1129,7 +1139,6 @@ class DraggableCanvas(BitmapCanvas):
         # Remember that the device context of the view port is passed!
         self._draw_view_overlays(dc_view)
 
-
     # END Event processing
 
 
@@ -1142,6 +1151,16 @@ class DraggableCanvas(BitmapCanvas):
                 max(self._bmp_buffer_size[1],
                     self.ClientSize.y + self.default_margin * 2))
 
+    def _calc_bg_offset(self, world_pos):
+        bg_offset = ((self.requested_world_pos[0] - world_pos[0]) % 40,
+                     (self.requested_world_pos[1] - world_pos[1]) % 40)
+        self.bg_offset = (
+            (self.bg_offset[0] - bg_offset[0]) % 40,
+            (self.bg_offset[1] - bg_offset[1]) % 40
+        )
+
+        print self.bg_offset
+
     def recenter_buffer(self, world_pos):
         """ Update the position of the buffer on the world
 
@@ -1153,13 +1172,7 @@ class DraggableCanvas(BitmapCanvas):
         """
 
         if self.requested_world_pos != world_pos:
-            bg_offset = ((self.requested_world_pos[0] - world_pos[0]) % 40,
-                         (self.requested_world_pos[1] - world_pos[1]) % 40)
-            self.bg_offset = (
-                (self.bg_offset[0] - bg_offset[0]) % 40,
-                (self.bg_offset[1] - bg_offset[1]) % 40
-            )
-
+            self._calc_bg_offset(world_pos)
             self.requested_world_pos = world_pos
             # FIXME: could maybe be more clever and only request redraw for the
             # outside region
@@ -1243,7 +1256,6 @@ class DraggableCanvas(BitmapCanvas):
         # Inheriting classes can do more
         pass
 
-
     def fit_view_to_content(self, recenter=False):
         """
         Adapts the MPP and center to fit to the current content
@@ -1294,89 +1306,6 @@ class DraggableCanvas(BitmapCanvas):
 
         wx.CallAfter(self.request_drawing_update)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    def _xDrawImage(self, dc_buffer, im, center, opacity=1.0, scale=1.0):
-        """ Draws one image with the given scale and opacity on the dc_buffer.
-
-        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
-
-        :param dc_buffer: (wx.DC) Device context to draw on
-        :param im: (wx.Image) Image to draw
-        :param center: (2-tuple float)
-        :param opacity: (float) [0..1] => [transparent..opaque]
-        :param scale: (float)
-        """
-
-
-        if opacity <= 0.0:
-            return
-
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-        imscaled, tl = self._rescale_image(dc_buffer, im, scale, center)
-
-        if not imscaled:
-            return
-
-        if opacity < 1.0:
-            # im2merged = im2scaled.AdjustChannels(1.0,1.0,1.0,opacity)
-            # TODO: Check if we could speed up by caching the alphabuffer
-            abuf = imscaled.GetAlphaBuffer()
-            self.memset_object(abuf, int(255 * opacity))
-
-        # TODO: the conversion from Image to Bitmap should be done only once,
-        # after all the images are merged
-
-        image_surface = wx.lib.wxcairo.ImageSurfaceFromBitmap(
-                                                wx.BitmapFromImage(imscaled))
-        # calculate proportional scaling
-        #img_height = image_surface.get_height()
-        #img_width = image_surface.get_width()
-        #width_ratio = float(width) / float(img_width)
-        #height_ratio = float(height) / float(img_height)
-        #scale_xy = min(height_ratio, width_ratio)
-        # scale image and add it
-        ctx.save()
-        #ctx.scale(scale_xy, scale_xy)
-        ctx.translate(tl[0] + (self._bmp_buffer_size[0] // 2),
-                      tl[1] + (self._bmp_buffer_size[1] // 2))
-        ctx.set_source_surface(image_surface)
-
-        ctx.paint()
-        ctx.restore()
-
-        #dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
-
-
-
-
-
-    def clip_to_viewport(self, pos):
-        """ Clip the given tuple of 2 floats to the current view size """
-        return (max(1, min(pos[0], self.ClientSize.x - 1)),
-                max(1, min(pos[1], self.ClientSize.y - 1)))
-
-    def clip_to_buffer(self, pos):
-        """ Clip the given tuple of 2 floats to the current buffer size """
-        return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
-                max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
 # PlotCanvas configuration flags
 PLOT_CLOSE_NOT = 0

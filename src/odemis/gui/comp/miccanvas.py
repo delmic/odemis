@@ -462,6 +462,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             logging.debug("recenter_buffer called without microscope view")
             super(DblMicroscopeCanvas, self).recenter_buffer(world_pos)
         else:
+            self._calc_bg_offset(world_pos)
+            self.requested_world_pos = world_pos
             physical_pos = self.world_to_physical_pos(world_pos)
             # This will call _onViewPos() -> recenter_buffer()
             self.microscope_view.view_pos.value = physical_pos
