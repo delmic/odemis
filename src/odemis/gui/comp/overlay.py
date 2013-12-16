@@ -62,7 +62,7 @@ class Overlay(object):
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(font.GetPointSize())
+        ctx.set_font_size(font.GetPointSize() + 1)
 
         margin_x = 10
 
@@ -122,6 +122,9 @@ class Overlay(object):
     def on_motion(self, evt):
         evt.Skip()
 
+    def on_wheel(self, evt):
+        evt.Skip()
+
     def on_dbl_click(self, evt):
         evt.Skip()
 
@@ -135,9 +138,6 @@ class Overlay(object):
         evt.Skip()
 
     def on_size(self, evt):
-        evt.Skip()
-
-    def on_paint(self, evt):
         evt.Skip()
 
 class ViewOverlay(Overlay):
@@ -746,7 +746,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
 
-    def _calc_view(self):
+    def _calc_view_pos(self):
         """ Update the view position to reflect the world position
         """
         if not self.w_start_pos or not self.w_end_pos:
@@ -1132,12 +1132,6 @@ class DichotomyOverlay(ViewOverlay):
         # maximum number of sub-quadrants (6->2**6 smaller than the whole area)
         self.max_len = 6
 
-        # Bind event handlers
-        self.base.Bind(wx.EVT_SIZE, self.on_size)
-        self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_button)
-        self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
-
         self.sequence_va.subscribe(self.on_change, init=True)
 
         # Disabling the overlay will allow the event handlers to ignore events
@@ -1164,7 +1158,7 @@ class DichotomyOverlay(ViewOverlay):
         logging.debug("Reset")
         self.sequence_va.value = []
 
-    def on_mouse_leave(self, evt):
+    def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
 
         # When the mouse cursor leaves the overlay, the current top quadrant
@@ -1180,14 +1174,14 @@ class DichotomyOverlay(ViewOverlay):
         self.enabled = enable
         self.base.Refresh()
 
-    def on_mouse_motion(self, evt):
+    def on_motion(self, evt):
         """ Mouse motion event handler """
 
         if self.enabled:
             self._updateHover(evt.GetPosition())
         evt.Skip()
 
-    def on_mouse_button(self, evt):
+    def on_left_up(self, evt):
         """ Mouse button handler """
         evt.Skip() # FIXME
         if not self.enabled:
@@ -1344,12 +1338,6 @@ class PointSelectOverlay(WorldOverlay):
 
     def __init__(self, base):
         super(PointSelectOverlay, self).__init__(base)
-
-        # Event binding
-        self.base.Bind(wx.EVT_MOTION, self.on_motion)
-        self.base.Bind(wx.EVT_ENTER_WINDOW, self.on_mouse_enter)
-        self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
 
         # The current position of the mouse cursor in view coordinates
         self._current_vpos = None
@@ -1625,11 +1613,6 @@ class PointsOverlay(WorldOverlay):
 
         self.enabled = False
 
-        self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
-        self.base.Bind(wx.EVT_SIZE, self.on_size)
-        self.base.Bind(wx.EVT_LEAVE_WINDOW, self.on_mouse_leave)
-
         self.on_size()
 
     def _on_mpp(self, mpp):
@@ -1657,9 +1640,9 @@ class PointsOverlay(WorldOverlay):
     def _calc_hitboxes(self):
         """ Calculate the square hitboxes in view coordinates"""
 
-        logging.debug("Calculating hit boxes")
-
         if self.dot_size:
+            logging.debug("Calculating hit boxes")
+
             self.hitboxes = {}
 
             left = -self.dot_size
@@ -1671,10 +1654,13 @@ class PointsOverlay(WorldOverlay):
             for world_pos in self.choices.keys():
                 x, y = self.base.world_to_view_pos(
                             world_pos,
-                            self.base.requested_world_pos,
+                            self.base.buffer_center_world_pos,
                             self.base.margins,
                             self.base.scale,
                             self.offset)
+                # x, y = self.base.world_to_view(
+                #             world_pos,
+                #             self.offset)
                 # If x and y are in view...
                 if left <= x <= right and top <= y <= bottom:
                     # ... add the hitbox => world pos combo to the dictionary
@@ -1696,9 +1682,9 @@ class PointsOverlay(WorldOverlay):
         self.choices = {}
 
         # Translate physical to buffer coordinates
-        for point in (c for c in self.point.choices if None not in c):
-            world_pos = self.base.physical_to_world_pos(point)
-            self.choices[world_pos] = point
+        for p_point in (c for c in self.point.choices if None not in c):
+            world_pos = self.base.physical_to_world_pos(p_point)
+            self.choices[world_pos] = p_point
 
 
     def _calc_min_distance(self):
@@ -1718,25 +1704,22 @@ class PointsOverlay(WorldOverlay):
 
         self.min_dist /= 2 # Divide by 2, because we use it as a radius
 
-    def on_mouse_leave(self, evt):
-        self.cursor_buffer_pos = None
-        evt.Skip()
-
-    def on_size(self, evt=None):
-        self.offset = [v // 2 for v in self.base._bmp_buffer_size]
-        wx.CallAfter(self._calc_hitboxes)
-
-    def on_mouse_up(self, evt):
+    def on_left_up(self, evt):
         """ Set the seleceted point if the mouse cursor is hovering over one """
         # We call the handler ourselves, so *no* evt.Skip()!!
         if self.hover_box and self.cursor_over_point and self.enabled:
             self.point.value = self.choices[self.cursor_over_point]
             logging.debug("Point %s selected", self.point.value)
-        self._calc_hitboxes()
+
+    def on_leave(self, evt):
+        self.cursor_buffer_pos = None
         evt.Skip()
 
+    def on_size(self, evt=None):
+        self.offset = [v // 2 for v in self.base._bmp_buffer_size]
+        self._calc_hitboxes()
 
-    def on_mouse_motion(self, evt):
+    def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
 
         if not self.base.left_dragging and self.choices and self.enabled:
@@ -1760,8 +1743,6 @@ class PointsOverlay(WorldOverlay):
             self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
         else:
             self.base.SetCursor(wx.STANDARD_CURSOR)
-
-        evt.Skip()
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
@@ -1802,16 +1783,16 @@ class PointsOverlay(WorldOverlay):
             ctx.set_source_rgb(*self.point_colour)
             ctx.fill()
 
-        # if self.hitboxes:
-        #     # ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
-        #     ctx.set_line_width(1)
-        #     ctx.set_source_rgb(1.0, 1.0, 1.0)
+        if self.hitboxes:
+            # ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
+            ctx.set_line_width(1)
+            ctx.set_source_rgb(1.0, 1.0, 1.0)
 
-        #     ox, oy = self.base.margins
-        #     s = 2 * self.dot_size
-        #     for (l, t, r, b) in self.hitboxes.keys():
-        #         ctx.rectangle(l + ox, t + oy, s, s)
-        #         ctx.stroke()
+            ox, oy = self.base.margins
+            s = 2 * self.dot_size
+            for (l, t, r, b) in self.hitboxes.keys():
+                ctx.rectangle(l + ox, t + oy, s, s)
+                ctx.stroke()
 
         self.cursor_over_point = cursor_over
 
@@ -1853,11 +1834,6 @@ class PolarOverlay(ViewOverlay):
         self.theta = None
         self.theta_radius = None
         self.intersection = None
-
-        self.base.Bind(wx.EVT_SIZE, self.on_size)
-        self.base.Bind(wx.EVT_MOTION, self.on_mouse_motion)
-        self.base.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
-        self.base.Bind(wx.EVT_LEFT_UP, self.on_mouse_up)
 
         self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOR)
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOR, 0.5)
@@ -1909,16 +1885,7 @@ class PolarOverlay(ViewOverlay):
     def theta_deg(self, theta_deg):
         self.theta_rad = math.radians(theta_deg)
 
-
     # END Property Getters/Setters
-
-    def on_mouse_motion(self, evt):
-        # Only change the values when the user is dragging
-        if self.dragging:
-            self._calculate_values(evt.GetPositionTuple())
-            self.base.Refresh()
-
-        evt.Skip()
 
     def _calculate_values(self, view_pos=None):
         # Calculate angle related values when a view position is provided
@@ -1968,23 +1935,22 @@ class PolarOverlay(ViewOverlay):
 
             if (0 < self.intersection[0] < self.base.ClientSize.x and
                 0 < self.intersection[1] < self.base.ClientSize.y):
-                    # Determine actual value here
-                    self.intensity = None #"Bingo!"
+                # Determine actual value here
+                self.intensity = None #"Bingo!"
 
-    def on_mouse_down(self, evt):
-        if not self.base.HasCapture():
-            self.dragging = True
-            self.base.CaptureMouse()
-        evt.Skip()
+    def on_left_down(self, evt):
+        self.dragging = True
 
-    def on_mouse_up(self, evt):
-        if self.base.HasCapture():
-            self.on_mouse_motion(evt)
-            self.dragging = False
-            self.base.ReleaseMouse()
+    def on_left_up(self, evt):
+        self.on_motion(evt)
+        self.dragging = False
+        self.base.Refresh()
 
+    def on_motion(self, evt):
+        # Only change the values when the user is dragging
+        if self.dragging:
+            self._calculate_values(evt.GetPositionTuple())
             self.base.Refresh()
-        evt.Skip()
 
     def on_size(self, evt=None):
         # Calculate the characteristic values
@@ -2008,8 +1974,6 @@ class PolarOverlay(ViewOverlay):
 
         self._calculate_values()
 
-        self.base.Refresh()
-
     def text(self, ctx, string, pos, phi, flip=False):
         ctx.save()
         # build up an appropriate font
@@ -2019,7 +1983,7 @@ class PolarOverlay(ViewOverlay):
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(font.GetPointSize())
+        ctx.set_font_size(font.GetPointSize() + 2)
 
         _, _, fheight, _, _ = ctx.font_extents()
         tw = ctx.text_extents(string)[2]
@@ -2045,13 +2009,28 @@ class PolarOverlay(ViewOverlay):
 
         # If the angles are set, draw the angle indicators
         if None not in (self.phi, self.theta_radius):
-            # Set formatting
+            # Draw dark unerline azimuthal circle
+            ctx.set_line_width(2.5)
+            ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
+
+            ctx.arc(self.center_x, self.center_y,
+                    self.theta_radius, 0, self.tau)
+            ctx.stroke()
+
+            # Draw dark unerline Phi line
+
+            ctx.move_to(self.center_x, self.center_y)
+            ctx.line_to(*self.phi_line_pos)
+            ctx.stroke()
+
+            # Light selection lines formatting
             ctx.set_line_width(2)
             ctx.set_dash([3,])
             if self.dragging:
                 ctx.set_source_rgba(*self.colour_drag)
             else:
                 ctx.set_source_rgb(*self.colour)
+
             # Draw Phi line
             ctx.move_to(self.center_x, self.center_y)
             ctx.line_to(*self.phi_line_pos)
@@ -2065,6 +2044,7 @@ class PolarOverlay(ViewOverlay):
         # Draw frame that covers everything outside the center circle
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
         ctx.set_source_rgb(0.2, 0.2, 0.2)
+
         ctx.rectangle(0, 0, self.base.ClientSize.x, self.base.ClientSize.y)
         ctx.arc(self.center_x, self.center_y, self.inner_radius, 0, self.tau)
         # mouse_inside = not ctx.in_fill(float(self.vx or 0), float(self.vy or 0))
@@ -2084,11 +2064,14 @@ class PolarOverlay(ViewOverlay):
         ctx.stroke()
 
         if None not in (self.phi, self.theta_radius):
-            ctx.set_source_rgb(*self.colour)
 
             # Phi label
             phi_str = u"φ %0.1f°" % math.degrees(self.phi)
+            ctx.set_source_rgb(0.0, 0.0, 0.0)
             self.text(ctx, phi_str, (self.px, self.py), self.phi_line_rad,
+                      flip=self.phi > math.pi)
+            ctx.set_source_rgb(*self.colour)
+            self.text(ctx, phi_str, (self.px + 1, self.py - 1), self.phi_line_rad,
                       flip=self.phi > math.pi)
 
             # Theta label
@@ -2101,7 +2084,7 @@ class PolarOverlay(ViewOverlay):
                         colour=self.colour,
                         align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
 
-            if self.intensity is not None: # and not self.dragging:
+            if self.intensity is not None:
                 ctx.set_source_rgb(*self.colour_highlight)
                 ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
                 ctx.fill()

@@ -74,7 +74,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     Public attributes:
     .canZoom (Boolean): If True (default), allows the user to zoom. When False,
       the zoom can still be changed programmatically with view.mpp.
-    .canDrag (Boolean): If True (default), allows the user to drag
+    .can_drag (Boolean): If True (default), allows the user to drag
     .noDragNoFocus (Boolean): False by default. If True, prevent Drag and Focus
       change to happen. Useful to avoid the user to move a paused view.
     .fitViewToNextImage (Boolean): False by default. If True, next time an image
@@ -87,11 +87,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
 
         self.canZoom = True
-        self.canDrag = True
         self.noDragNoFocus = False
         self.fitViewToNextImage = False
-
-        self.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
 
         # TODO: If it's too resource consuming, which might want to create just
         # our own thread. cf model.stream.histogram
@@ -542,18 +539,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view.mpp.value = mpp # this will call _onMPP()
 
     # Zoom/merge management
-    def on_wheel(self, event):
-        change = event.GetWheelRotation() / event.GetWheelDelta()
-        if event.ShiftDown():
+    def on_wheel(self, evt):
+        change = evt.GetWheelRotation() / evt.GetWheelDelta()
+        if evt.ShiftDown():
             change *= 0.2 # softer
 
-        if event.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
+        if evt.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
             ratio = self.microscope_view.merge_ratio.value + (change * 0.1)
             # clamp
             ratio = sorted(self.microscope_view.merge_ratio.range + (ratio,))[1]
             self.microscope_view.merge_ratio.value = ratio
         else:
-            self.Zoom(change, block_on_zero=event.ShiftDown())
+            self.Zoom(change, block_on_zero=evt.ShiftDown())
+
+        super(DblMicroscopeCanvas, self).on_wheel(evt)
 
     @microscope_view_check
     def on_extra_axis_move(self, axis, shift):
@@ -652,22 +651,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self.focus_overlay:
                 self.focus_overlay.clear_shift()
         super(DblMicroscopeCanvas, self).on_right_up(event)
-
-    def on_left_down(self, event):
-        if self.canDrag and not self.noDragNoFocus:
-            super(DblMicroscopeCanvas, self).on_left_down(event)
-        else:
-            event.Skip() # at least useful to get the focus
-
-    def shift_view(self, shift):
-        if self.canDrag:
-            super(DblMicroscopeCanvas, self).shift_view(shift)
-
-    def OnDblClick(self, event):
-        if self.canDrag:
-            super(DblMicroscopeCanvas, self).OnDblClick(event)
-        else:
-            event.Skip()
 
     # Y is opposite of our Y in computer (going up)
     def world_to_physical_pos(self, pos):
@@ -822,7 +805,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             # TODO: Make a better, more natural between the different kinds
             # of dragging (edge vs whole selection)
             if self._ldragging:
-                if self.active_overlay._ldragging:
+                if self.active_overlay.dragging:
                     self.active_overlay.update_selection(vpos)
                 else:
                     if self.active_overlay.edit_edge:
@@ -968,7 +951,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             vpos = event.GetPositionTuple()
 
             if self._ldragging:
-                if self.active_overlay._ldragging:
+                if self.active_overlay.dragging:
                     self.active_overlay.update_selection(vpos)
                 else:
                     if self.active_overlay.edit_edge:
@@ -1132,7 +1115,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
         self.canZoom = False # TODO: just let the creator do that
-        self.canDrag = False
+        self.can_drag = False
         self._ccd_mpp = None # tuple of 2 floats of m/px
 
     def setView(self, microscope_view, tab_data):
@@ -1251,56 +1234,53 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.markline_overlay = comp_overlay.MarkingLineOverlay(self)
         self.add_overlay(self.markline_overlay)
 
-        ## Event binding
-
-        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
-        self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
-        self.Bind(wx.EVT_MOTION, self.on_motion)
-        # self.Bind(wx.EVT_SIZE, self.on_size)
-
-
     # Event handlers
 
-    def on_left_down(self, event):
+    def on_left_down(self, evt):
         self._ldragging = True
-        self.drag_init_pos = event.GetPositionTuple()
+        self.drag_init_pos = evt.GetPositionTuple()
 
         # logging.debug("Drag started at %s", self.drag_init_pos)
 
         if not self.HasCapture():
-            self._position_focus_line(event)
+            self._position_focus_line(evt)
             self.CaptureMouse()
 
         self.SetFocus()
-        event.Skip()
 
-    def on_left_up(self, event):
+        super(ZeroDimensionalPlotCanvas, self).on_left_down(evt)
+
+    def on_left_up(self, evt):
         self._ldragging = False
         self.SetCursor(wx.STANDARD_CURSOR)
         if self.HasCapture():
             self.ReleaseMouse()
-        event.Skip()
 
-    def on_motion(self, event):
+        super(ZeroDimensionalPlotCanvas, self).on_left_up(evt)
+
+    def on_motion(self, evt):
         if self._ldragging and self.markline_overlay:
-            self._position_focus_line(event)
-        event.Skip()
+            self._position_focus_line(evt)
 
-    def on_size(self, event):  #pylint: disable=W0222
+        super(ZeroDimensionalPlotCanvas, self).on_motion(evt)
+
+    def on_size(self, evt):  #pylint: disable=W0222
         """ Update the position of the focus line """
-        super(ZeroDimensionalPlotCanvas, self).on_size(event)
+
+        super(ZeroDimensionalPlotCanvas, self).on_size(evt)
+
         if None not in (self.current_x_value, self.current_y_value):
             pos = (self._val_x_to_pos_x(self.current_x_value),
                    self._val_y_to_pos_y(self.current_y_value))
             self.markline_overlay.set_position(pos)
 
-    def _position_focus_line(self, event):
+    def _position_focus_line(self, evt):
         """ Position the focus line at the position of the given mouse event """
 
         if not self._data:
             return
 
-        x, _ = event.GetPositionTuple()
+        x, _ = evt.GetPositionTuple()
         self.current_x_value = self._pos_x_to_val_x(x)
         self.current_y_value = self._val_x_to_val_y(self.current_x_value)
         pos = (x, self._val_y_to_pos_y(self.current_y_value))
@@ -1390,38 +1370,22 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = None
         self._tab_data_model = None
+        self.can_drag = False
 
-        self.backgroundBrush = wx.SOLID # background is always black
+        # self.backgroundBrush = wx.SOLID # background is always black
 
         ## Overlays
 
         self.polar_overlay = comp_overlay.PolarOverlay(self)
         self.view_overlays.append(self.polar_overlay)
-
-        ## Event binding
-
-        self.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
-        self.Bind(wx.EVT_LEFT_UP, self.on_left_up)
-        self.Bind(wx.EVT_MOTION, self.on_motion)
-        self.Bind(wx.EVT_SIZE, self.on_size)
-
+        self.active_overlay = self.polar_overlay
 
     # Event handlers
 
-    def on_left_down(self, event):
-        event.Skip()
-
-    def on_left_up(self, event):
-        event.Skip()
-
-    def on_motion(self, event):
-        event.Skip()
-
-    def on_size(self, event):  #pylint: disable=W0222
+    def on_size(self, evt):  #pylint: disable=W0222
         """ Called when the canvas is resized """
         self.fit_view_to_content()
-        super(AngularResolvedCanvas, self).on_size(event)
-        event.Skip()
+        super(AngularResolvedCanvas, self).on_size(evt)
 
     def setView(self, microscope_view, tab_data):
         """Set the microscope_view that this canvas is displaying/representing

@@ -47,41 +47,38 @@ class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_polar_overlay(self):
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        cnvs.canDrag = False
-
+        cnvs = miccanvas.AngularResolvedCanvas(self.panel)
+        cnvs.can_drag = False
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        cnvs.Refresh()
 
-        psol = overlay.PolarOverlay(cnvs)
-        cnvs.view_overlays.append(psol)
         test.gui_loop()
 
         test.sleep(1000)
 
-        psol.phi_deg = 90
-        psol.theta_deg = 45
-        psol.base.repaint()
-        test.gui_loop()
+        cnvs.polar_overlay.phi_deg = 60
+        cnvs.polar_overlay.theta_deg = 60
 
     # @unittest.skip("simple")
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
         mmodel = test.FakeMicroscopeModel()
         view = mmodel.focussedView.value
         cnvs.setView(view, mmodel)
-        psol = overlay.PointsOverlay(cnvs)
-        cnvs.world_overlays.append(psol)
+
+        pol = overlay.PointsOverlay(cnvs)
+        cnvs.world_overlays.append(pol)
+        cnvs.active_overlay = pol
         cnvs.current_mode = gmodel.TOOL_POINT
-        psol.enable(True)
+        pol.enable(True)
 
         from itertools import product
 
-        # phys_points = product(xrange(-1000, 1001, 50), xrange(-1000, 1001, 50))
+        # phys_points = product(xrange(-1000, 1001,bbbb 50), xrange(-1000, 1001, 50))
         phys_points = product(xrange(-200, 201, 50), xrange(-200, 201, 50))
         phys_points = [(a / 1.0e9, b / 1.0e9) for a, b in phys_points]
 
@@ -91,12 +88,12 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-        psol.set_points(point)
+        pol.set_points(point)
         view.mpp.value = 1.25e-9
 
         test.gui_loop()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_point_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -108,7 +105,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.world_overlays.append(psol)
         test.gui_loop()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_view_select_overlay(self):
         # Create and add a miccanvas
         cnvs = miccanvas.SecomCanvas(self.panel)
@@ -122,7 +119,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.active_overlay = vsol
         cnvs.current_mode = gmodel.TOOL_ROI
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_roa_select_overlay(self):
         # Create and add a miccanvas
         # TODO: Sparc canvas because it's now the only one which supports
@@ -154,7 +151,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol.fill = overlay.FILL_POINT
         test.gui_loop()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_dichotomy_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -163,6 +160,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         dol = overlay.DichotomyOverlay(cnvs, lva)
         cnvs.view_overlays.append(dol)
+        cnvs.active_overlay = dol
 
         dol.sequence_va.subscribe(do_stuff, init=True)
         dol.enable()
@@ -171,7 +169,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_spot_mode_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)

@@ -115,6 +115,7 @@ Physical:
 from __future__ import division
 from abc import ABCMeta, abstractmethod
 
+import collections
 import ctypes
 import inspect
 import logging
@@ -144,6 +145,7 @@ class BufferedCanvas(wx.Panel):
         # Graphical opverlays that display in an absolute position
         self.view_overlays = []
         # The overlay which will receive mouse and keyboard events
+        # TODO: Make this into a list, so multiple overlays can receive events?
         self.active_overlay = None
 
         # Set default background colour
@@ -180,6 +182,8 @@ class BufferedCanvas(wx.Panel):
         self.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click)
         self.Bind(wx.EVT_MOTION, self.on_motion)
         self.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
+        self.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
+        self.Bind(wx.EVT_ENTER_WINDOW, self.on_enter)
 
         # # Keyboard events
         self.Bind(wx.EVT_CHAR, self.on_char)
@@ -226,34 +230,46 @@ class BufferedCanvas(wx.Panel):
     def on_left_down(self, evt, cursor=None):
         """ Standard left mouse button down processor """
         self._on_down(cursor)
+        self._call_event_on_overlay('on_left_down', evt)
 
     def on_left_up(self, evt):
         """ Standard left mouse button release processor """
         self._on_up()
+        self._call_event_on_overlay('on_left_up', evt)
 
     def on_right_down(self, evt, cursor=None):
         """ Standard right mouse button release processor """
         self._on_down(cursor)
+        self._call_event_on_overlay('on_right_down', evt)
 
     def on_right_up(self, evt):
         """ Standard right mouse button release processor """
         self._on_up()
+        self._call_event_on_overlay('on_right_up', evt)
 
     def on_dbl_click(self, evt):
         """ Standard left mouse button double click processor """
-        pass
+        self._call_event_on_overlay('on_dbl_click', evt)
 
     def on_motion(self, evt):
         """ Standard mouse motion processor """
-        pass
+        self._call_event_on_overlay('on_motion', evt)
 
     def on_wheel(self, evt):
         """ Standard mouse wheel processor """
-        pass
+        self._call_event_on_overlay('on_wheel', evt)
+
+    def on_enter(self, evt):
+        """ Standard mouse enter processor """
+        self._call_event_on_overlay('on_enter', evt)
+
+    def on_leave(self, evt):
+        """ Standard mouse leave processor """
+        self._call_event_on_overlay('on_leave', evt)
 
     def on_char(self, evt):
         """ Standard key stroke processor """
-        pass
+        self._call_event_on_overlay('on_char', evt)
 
     def on_paint(self, evt):
         """ Standard on paint handler """
@@ -287,11 +303,22 @@ class BufferedCanvas(wx.Panel):
             # logging.debug("Buffer size didn't change, refreshing...")
             self.Refresh(eraseBackground=False)
 
+        self._call_event_on_overlay('on_size', evt)
+
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """
         # thread_name = threading.current_thread().name
         # logging.debug("Drawing timer in thread %s", thread_name)
         self.update_drawing()
+
+    def _call_event_on_overlay(self, name, evt):
+        """Call an event handler with name 'name' on the activ overlay """
+        if self.active_overlay:
+            if isinstance(self.active_overlay, collections.Iterable):
+                for ol in self.active_overlay:
+                    getattr(ol, name)(evt)
+            else:
+                getattr(self.active_overlay, name)(evt)
 
     # END Event processing
 
@@ -487,7 +514,6 @@ class BufferedCanvas(wx.Panel):
         See `buffer_to_view_pos` and `world_to_buffer_pos` for more details
 
         """
-
         return cls.buffer_to_view_pos(
                 cls.world_to_buffer_pos(w_pos, w_buff_cent, scale, offset),
                 margins
@@ -518,9 +544,6 @@ class BitmapCanvas(BufferedCanvas):
         self.scale = 1.0 # px/wu
 
         self.margins = (0, 0)
-
-    # def on_left_up(self, evt):
-    #     super(BitmapCanvas, self).on_left_up(evt)
 
     def set_image(self, index, im, w_pos=(0.0, 0.0), scale=1.0, keepalpha=False):
         """ Set (or update)  image
@@ -926,6 +949,7 @@ class DraggableCanvas(BitmapCanvas):
         # in buffer-coordinates: = 1px at scale = 1
         self.requested_world_pos = self.buffer_center_world_pos
 
+        self.can_drag = True    # Use this attribute to disable dragging
         self._ldragging = False
 
         # The amount of pixels shifted in the current drag event
@@ -964,63 +988,62 @@ class DraggableCanvas(BitmapCanvas):
         if self._rdragging:
             return
 
-        cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+        cursor = None
+
+        if self.can_drag:
+            cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+
+            # Fixme: only go to drag mode if the mouse moves before a mouse up?
+            self._ldragging = True
+
+            pos = evt.GetPositionTuple()
+            # There might be several draggings before the buffer is updated
+            # So take into account the current drag_shift to compensate
+            self.drag_init_pos = (pos[0] - self.drag_shift[0],
+                                  pos[1] - self.drag_shift[1])
+
+            logging.debug("Drag started at %s", self.drag_init_pos)
+
         super(DraggableCanvas, self).on_left_down(evt, cursor)
-
-        # Fixme: only go to drag mode if the mouse moves before a mouse up?
-        self._ldragging = True
-
-        pos = evt.GetPositionTuple()
-        # There might be several draggings before the buffer is updated
-        # So take into account the current drag_shift to compensate
-        self.drag_init_pos = (pos[0] - self.drag_shift[0],
-                              pos[1] - self.drag_shift[1])
-
-        logging.debug("Drag started at %s", self.drag_init_pos)
 
     def on_left_up(self, evt):
         """ End the dragging procedure """
         # Ignore the release if we didn't register a left down
-        if not self._ldragging:
-            return
+        if self.can_drag and self._ldragging:
+            self._ldragging = False
+
+            # Update the position of the buffer to where the view is centered
+            # self.drag_shift is the delta we want to apply
+            new_pos = (
+                self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
+                self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
+            )
+            self.recenter_buffer(new_pos)
 
         super(DraggableCanvas, self).on_left_up(evt)
 
-        self._ldragging = False
-
-        # Update the position of the buffer to where the view is centered
-        # self.drag_shift is the delta we want to apply
-        new_pos = (
-            self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
-            self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
-        )
-        self.recenter_buffer(new_pos)
-
     def on_right_down(self, evt): #pylint: disable=W0221
         # Ignore the click if we're aleady dragging
-        if self._ldragging:
-            return
-
-        super(DraggableCanvas, self).on_right_down(evt)
-
-        # TODO: Show 'focussing' text in viewport (do this elsewhere)
-        self._rdragging = True
-        self._rdrag_init_pos = evt.GetPositionTuple()
-        self._rdrag_prev_value = [0, 0]
+        if self.can_drag and self._ldragging:
+            # TODO: Show 'focussing' text in viewport (do this elsewhere)
+            self._rdragging = True
+            self._rdrag_init_pos = evt.GetPositionTuple()
+            self._rdrag_prev_value = [0, 0]
 
         logging.debug("Drag started at %s", self._rdrag_init_pos)
 
+        super(DraggableCanvas, self).on_right_down(evt)
+
     def on_right_up(self, evt):
         # Ignore the release if we didn't register a right down
-        if not self._rdragging:
-            return
+        if self.can_drag and self._rdragging:
+            self._rdragging = False
 
         super(DraggableCanvas, self).on_right_up(evt)
-        self._rdragging = False
 
-    def on_dbl_click(self, event):
+    def on_dbl_click(self, evt):
         """ Recenter the view around the point that was double clicked """
-        v_pos = event.GetPositionTuple()
+        v_pos = evt.GetPositionTuple()
         v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
         shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
 
@@ -1036,9 +1059,11 @@ class DraggableCanvas(BitmapCanvas):
 
         logging.debug("Double click at %s", new_pos)
 
-    def on_motion(self, event):
+        super(DraggableCanvas, self).on_dbl_click(evt)
+
+    def on_motion(self, evt):
         if self._ldragging:
-            v_pos = event.GetPositionTuple()
+            v_pos = evt.GetPositionTuple()
             drag_shift = (v_pos[0] - self.drag_init_pos[0],
                           v_pos[1] - self.drag_init_pos[1])
 
@@ -1070,7 +1095,7 @@ class DraggableCanvas(BitmapCanvas):
             # value produced while focussing.
 
             linear_zone = 32.0
-            pos = event.GetPositionTuple()
+            pos = evt.GetPositionTuple()
             for i in [0, 1]: # x, y
                 shift = pos[i] - self._rdrag_init_pos[i]
 
@@ -1096,6 +1121,9 @@ class DraggableCanvas(BitmapCanvas):
                     self.on_extra_axis_move(i, change)
                     self._rdrag_prev_value[i] = value
 
+        super(DraggableCanvas, self).on_motion(evt)
+
+
     def on_char(self, evt):
         key = evt.GetKeyCode()
 
@@ -1112,6 +1140,8 @@ class DraggableCanvas(BitmapCanvas):
             self.shift_view((0, -change))
         elif key == wx.WXK_UP:
             self.shift_view((0, change))
+
+        super(DraggableCanvas, self).on_char(evt)
 
     def on_paint(self, evt):
         """ Quick update of the window content with the buffer + the static
@@ -1158,8 +1188,6 @@ class DraggableCanvas(BitmapCanvas):
             (self.bg_offset[0] - bg_offset[0]) % 40,
             (self.bg_offset[1] - bg_offset[1]) % 40
         )
-
-        print self.bg_offset
 
     def recenter_buffer(self, world_pos):
         """ Update the position of the buffer on the world
