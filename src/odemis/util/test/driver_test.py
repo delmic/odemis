@@ -20,13 +20,23 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
+import logging
 from odemis import model
+from odemis.util import driver
 from odemis.util.driver import getSerialDriver, reproduceTypedValue, \
     speedUpPyroConnect
-import logging
+import os
+import subprocess
+import time
 import unittest
 
+
 logging.getLogger().setLevel(logging.DEBUG)
+
+ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class TestDriver(unittest.TestCase):
     """
@@ -43,6 +53,7 @@ class TestDriver(unittest.TestCase):
         check various inputs and compare to expected output
         for values that should work
         """
+        lva = model.ListVA([12, -3])
         # example value / input str / expected output
         tc = [(3, "-1561", -1561),
               (-9.3, "0.123", 0.123),
@@ -57,6 +68,7 @@ class TestDriver(unittest.TestCase):
               ((1.2, 256), " 21 x 0.2 m", (21, 0.2)),
               ([-5, 0, 6], "9,, -8", [9, -8]),
               ((1.2, 0.0), "", tuple()),
+              (lva.value, "-1, 63, 12", [-1, 63, 12]), #NotifyingList becomes a list
               ((-5, 0, 6), "9.3, -8", (9, 3, -8)), # maybe this shouldn't work?
               # Note: we don't support SI prefixes
               (("cou",), "aa, c a", ("aa", " c a")), # TODO: need to see if spaces should be kept or trimmed
@@ -85,7 +97,22 @@ class TestDriver(unittest.TestCase):
                 out = reproduceTypedValue(ex_val, str_val)
 
     def test_speedUpPyroConnect(self):
+        need_stop = False
+        if driver.get_backend_status() != driver.BACKEND_RUNNING:
+            need_stop = True
+            cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
+            ret = subprocess.call(cmd)
+            if ret != 0:
+                logging.error("Failed starting backend with '%s'", cmd)
+            time.sleep(1) # time to start
+        else:
+            model._components._microscope = None # force reset of the microscope for next connection
+
         speedUpPyroConnect(model.getMicroscope())
+
+        if need_stop:
+            cmd = ODEMISD_CMD + ["--kill"]
+            subprocess.call(cmd)
 
 if __name__ == "__main__":
     #import sys;sys.argv = ['', 'Test.testName']

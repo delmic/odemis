@@ -117,14 +117,14 @@ class ActuatorTest(object):
         self.dev.stop()
         # TODO use the time of a long move to see if it took less
 
-    @skip("Simulated stage doesn't simulate the speed")
-    def test_speed(self):
-        # For moves big enough, a 1m/s move should take approximately 100 times less time
-        # than a 0.01m/s move
-        expected_ratio = 100
-        delta_ratio = 2 # no unit
-
-        # TODO
+#    @skip("Simulated stage doesn't simulate the speed")
+#    def test_speed(self):
+#        # For moves big enough, a 1m/s move should take approximately 100 times less time
+#        # than a 0.01m/s move
+#        expected_ratio = 100
+#        delta_ratio = 2 # no unit
+#
+#        # TODO
 #        # fast move
 #        dev = self.actuator_type(*self.actuator_args)
 #        stage.speed.value = {"x":1, "y":1}
