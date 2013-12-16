@@ -141,9 +141,9 @@ class CompositedSpectrometer(model.Detector):
         assert dt.resolution.range[0][1] == 1
         self.data = dt.data
         
-        # duplicate every other VA from the detector
-        # that includes required VA like .pixelSize and .exposureTime
-        for aname, value in model.getVAs(dt).items():
+        # duplicate every other VA and Event from the detector
+        # that includes required VAs like .pixelSize and .exposureTime
+        for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
             if not hasattr(self, aname):
                 setattr(self, aname, value)
             else:

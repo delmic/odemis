@@ -580,7 +580,7 @@ class SpectraPro(model.Actuator):
         self._updatePosition()
         
     
-    def stop(self):
+    def stop(self, axes=None):
         """
         stops the motion
         Warning: Only not yet-executed moves can be cancelled, this hardware

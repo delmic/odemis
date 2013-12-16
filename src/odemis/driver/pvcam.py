@@ -349,6 +349,8 @@ class PVCam(model.DigitalCamera):
         self._late_events = collections.deque() # events which haven't been handled yet
 
         self.data = PVCamDataFlow(self)
+        # Convenience event for the user to connect and fire
+        self.softwareTrigger = model.Event()
         logging.debug("Camera component ready to use.")
 
     def _setStaticSettings(self):

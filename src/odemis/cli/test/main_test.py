@@ -21,21 +21,27 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis import model
-from odemis.cli import main
-from unittest.case import skip
 import Image
 import StringIO
 import logging
+from odemis import model
+from odemis.cli import main
+from odemis.util import driver
 import os
 import re
 import subprocess
 import sys
 import time
 import unittest
+from unittest.case import skip
 
-ODEMISD_CMD = "python2 -m odemis.odemisd.main"
-SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
+logging.getLogger().setLevel(logging.DEBUG)
+
+ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
+
 class TestWithoutBackend(unittest.TestCase):
     # all the test cases which don't need a backend running
 
@@ -92,8 +98,6 @@ class TestWithoutBackend(unittest.TestCase):
         # AndorCam3 SimCam should be there for sure
         self.assertTrue("andorcam3.AndorCam3" in output)
     
-
-    
 #@skip("Simple")
 class TestWithBackend(unittest.TestCase):
     def setUp(self):
@@ -101,18 +105,20 @@ class TestWithBackend(unittest.TestCase):
         if logging.root:
             del logging.root.handlers[:]
             
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            self.skipTest("Running backend found")
+
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
-        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
-        ret = subprocess.call(cmdline.split())
-        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
+        ret = subprocess.call(cmd)
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmd)
         time.sleep(1) # time to start
-
 
     def tearDown(self):
         # end the backend
-        cmdline = ODEMISD_CMD + " --kill"
-        subprocess.call(cmdline.split())
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
         model._components._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
@@ -212,7 +218,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --set-attr FakeRedStoneStage speed x:0.5,y:0.2"
+            cmdline = "cli --set-attr OLStage speed x:0.5,y:0.2"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code
@@ -226,7 +232,7 @@ class TestWithBackend(unittest.TestCase):
             out = StringIO.StringIO()
             sys.stdout = out
             
-            cmdline = "cli --move FakeRedStoneStage x 5 --move FakeRedStoneStage y -0.2"
+            cmdline = "cli --move OLStage x 5 --move OLStage y -0.2"
             ret = main.main(cmdline.split())
         except SystemExit, exc:
             ret = exc.code

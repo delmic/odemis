@@ -20,6 +20,9 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
+from Pyro4.core import oneway
+import collections
 from ctypes import *
 import gc
 import logging
@@ -50,6 +53,12 @@ class ATError(Exception):
         
     def __str__(self):
         return self.args[1]
+
+class CancelledError(Exception):
+    """
+    raise to indicate the acquisition is cancelled and must stop
+    """
+    pass
 
 class ATDLL(CDLL):
     """
@@ -234,7 +243,8 @@ class AndorCam3(model.DigitalCamera):
                                                   setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        self._prev_settings = [None, None, None, None, None] # binning, image, exp time, readout rate, gain
+        # binning, image, exp time, readout rate, gain, synchronised
+        self._prev_settings = [None, None, None, None, None, None]
         self._binning = (1, 1) # used by resolutionFitter()
         self._resolution = resolution
         if (not self.isImplemented(u"AOIWidth") or
@@ -282,7 +292,16 @@ class AndorCam3(model.DigitalCamera):
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
-        
+        # for synchronized acquisition
+        self._got_event = threading.Event()
+        self._late_events = collections.deque() # events which haven't been handled yet
+        self._ready_for_acq_start = False
+
+        if self.isImplemented(u"SoftwareTrigger"):
+            # Convenience event for the user to connect and fire
+            # Also a way to indicate to the DataFlow it's synchronisable
+            self.softwareTrigger = model.Event()
+
         self.data = AndorCam3DataFlow(self)
     
     def getMetadata(self):
@@ -943,15 +962,16 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"SpuriousNoiseFilter"):
             self.SetBool(u"SpuriousNoiseFilter", True)
             self._metadata['Filter'] = "Spurious noise filter" # FIXME tag?
-
-        # Software is much slower than Internal (0.05 instead of 0.015 s)
-        self.SetEnumString(u"TriggerMode", u"Internal") 
         
     def _need_update_settings(self):
         """
         returns (boolean): True if _update_settings() needs to be called
         """
-        new_settings = [self._binning, self._resolution, self._exp_time]
+        synchronised = (self.data._sync_event is not None)
+        readout_rate = self.readoutRate.value
+        gain = self.gain.value
+        new_settings = [self._binning, self._resolution, self._exp_time,
+                        readout_rate, gain, synchronised]
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -960,7 +980,18 @@ class AndorCam3(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        prev_binning, prev_resolution, prev_exp, prev_rorate, prev_gain = self._prev_settings
+        [prev_binning, prev_resolution, prev_exp,
+         prev_rorate, prev_gain, prev_sync] = self._prev_settings
+
+        synchronised = (self.data._sync_event is not None)
+        if synchronised != prev_sync:
+            # Software is much slower than Internal (0.05 instead of 0.015 s)
+            # so only use when synchronised on an Event
+            if synchronised:
+                self.SetEnumString(u"TriggerMode", u"Software")
+                self._ready_for_acq_start = False
+            else:
+                self.SetEnumString(u"TriggerMode", u"Internal")
 
         readout_rate = self.readoutRate.value
         if prev_rorate != readout_rate:
@@ -999,7 +1030,7 @@ class AndorCam3(model.DigitalCamera):
             self._metadata[model.MD_BASELINE] = self.GetInt(u"BaselineLevel")
 
         self._prev_settings = [self._binning, self._resolution, self._exp_time,
-                               readout_rate, gain]
+                               readout_rate, gain, synchronised]
 
     def _allocate_buffer(self, size):
         """
@@ -1116,6 +1147,7 @@ class AndorCam3(model.DigitalCamera):
                     self.SetEnumString(u"CycleMode", u"Continuous")
 
                     self._update_settings()
+                    synchronised = (self.data._sync_event is not None)
                     size = self._resolution
                     exposure_time = self._exp_time
                     if self.isImplemented(u"ReadoutTime"):
@@ -1138,20 +1170,23 @@ class AndorCam3(model.DigitalCamera):
                     need_reinit = False
 
                 # Acquire an image
+                if synchronised:
+                    self._ready_for_acq_start = True
+                    self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
 
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
                 if self.acquire_must_stop.wait(exposure_time + readout_time):
-                    break
+                    raise CancelledError()
 
                 # then wait a bounded time to ensure the image is acquired
                 try:
                     pbuffer, buffersize = self.WaitBuffer(1)
                     # Maybe the must_stop flag has been set while we were waiting
                     if self.acquire_must_stop.is_set():
-                        break
+                        raise CancelledError()
                 except ATError as (errno, strerr):
                     # sometimes there is timeout, don't completely give up
                     # Note: seems to happen when time between two waitbuffer() is too long
@@ -1186,6 +1221,9 @@ class AndorCam3(model.DigitalCamera):
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
+        except CancelledError:
+            # received a must-stop event
+            pass
         except Exception:
             logging.exception("Acquisition failed with unexcepted error")
         finally:
@@ -1198,6 +1236,57 @@ class AndorCam3(model.DigitalCamera):
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
     
+    def _start_acquisition(self):
+        """
+        Triggers the start of the acquisition on the camera. If the DataFlow
+         is synchronized, wait for the Event to be triggered.
+        raises CancelledError if the acquisition must stop
+        """
+        # has synchronisation already happened?
+        assert self._ready_for_acq_start
+
+        # catch up late events if we missed the start
+        if self._late_events:
+            event_time = self._late_events.pop()
+            logging.warning("starting acquisition late by %g s", time.time() - event_time)
+            self.Command(u"SoftwareTrigger")
+            return
+
+        try:
+            # wait until onEvent was called (it will directly start acquisition)
+            # or must stop
+            while not self.acquire_must_stop.is_set():
+                if not self.data._sync_event: # not synchronized (anymore)?
+                    logging.debug("starting acquisition")
+                    self.Command(u"SoftwareTrigger")
+                    return
+                # doesn't need to be very frequent, just not too long to delay
+                # cancelling the acquisition, and to check for the event frequently
+                # enough
+                if self._got_event.wait(0.01):
+                    self._got_event.clear()
+                    return
+        finally:
+            self._ready_for_acq_start = False
+
+        raise CancelledError()
+    
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._ready_for_acq_start:
+            if self.acquire_thread and self.acquire_thread.isAlive():
+                logging.warning("Received synchronization event but acquisition not ready")
+                # queue the events, it's bad but less bad than skipping it
+                self._late_events.append(time.time())
+            return
+
+        logging.debug("starting sync acquisition")
+        self.Command(u"SoftwareTrigger")
+        self._got_event.set() # let the acquisition thread know it's starting
+
     def req_stop_flow(self):
         """
         Stop the acquisition of a flow of images.
@@ -1304,7 +1393,9 @@ class AndorCam3DataFlow(model.DataFlow):
         camera: andorcam instance ready to acquire images
         """
         model.DataFlow.__init__(self)
-        self.component = weakref.proxy(camera)
+        self.component = weakref.ref(camera)
+        self._sync_event = None # synchronization Event
+        self._prev_max_discard = self._max_discard
         
 #    def get(self):
 #        # TODO if camera is already acquiring, wait for the coming picture
@@ -1320,17 +1411,57 @@ class AndorCam3DataFlow(model.DataFlow):
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
         try:
-            self.component.start_flow(self.notify)
+            self.component().start_flow(self.notify)
         except ReferenceError:
             # camera has been deleted, it's all fine, we'll be GC'd soon
             pass
     
     def stop_generate(self):
         try:
-            self.component.req_stop_flow()
-#            assert(not self.component.acquisition_lock.locked())
+            self.component().req_stop_flow()
         except ReferenceError:
             # camera has been deleted, it's all fine, we'll be GC'd soon
             pass
+
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the DataFlow will start a new acquisition.
+        Behaviour is unspecified if the acquisition is already running.
+        event (model.Event or None): event to synchronize with. Use None to 
+          disable synchronization.
+        The DataFlow can be synchronize only with one Event at a time.
+        """
+        if self._sync_event == event:
+            return
+
+        try:
+            comp = self.component()
+        except ReferenceError:
+            return
+
+        # error if the hardware doesn't support synchronisation
+        if not hasattr(comp, "softwareTrigger"):
+            # Currently it's only the case on the SimCam, so we don't care much.
+            # If it's really important, we could fallback to a slower method.
+            raise IOError("Hardware doesn't support synchronisation")
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(comp)
+            self.max_discard = self._prev_max_discard
+        else:
+            # report problem if the acquisition was started without expecting synchronization
+            assert (not comp.acquire_thread or
+                    not comp.acquire_thread.isAlive() or
+                    comp.acquire_must_stop.is_set())
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._prev_max_discard = self._max_discard
+            self.max_discard = 0
+            self._sync_event.subscribe(comp)
+
             
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

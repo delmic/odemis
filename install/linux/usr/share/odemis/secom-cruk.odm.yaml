@@ -82,12 +82,22 @@ Spectra: {
     affects: [Clara]
 }
 
-# Semrock FF01-524/628-25
+## Semrock FF01-524/628-25
+#"MultiBand Fixed Filter": {
+#    class: static.LightFilter,
+#    role: filter,
+#    init: {band: [[509.e-9, 539.e-9],
+#                  [611.e-9, 644.e-9]]}, # m,m
+#    affects: [Clara]
+#}
+# Semrock FF01-446/532/646-25
 "MultiBand Fixed Filter": {
     class: static.LightFilter,
     role: filter,
-    init: {band: [[509.e-9, 539.e-9],
-                  [611.e-9, 644.e-9]]}, # m,m
+    init:{band:
+    [[431.e-9, 461.e-9],
+    [517.e-9, 547.e-9],
+    [631.e-9, 661.e-9]]}, # m,m
     affects: [Clara]
 }
 

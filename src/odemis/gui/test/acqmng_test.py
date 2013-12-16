@@ -20,72 +20,41 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent.futures._base import CancelledError
-from odemis import model
-from odemis.util.driver import get_backend_status, BACKEND_RUNNING
-import odemis.gui.model as guimodel
-from odemis.gui.acqmng import ProgressiveFuture, startAcquisition, \
-    computeThumbnail
 import logging
-import odemis.gui.model.stream as stream
+import numpy
+from odemis import model
+from odemis.gui import acqmng
+from odemis.gui.acqmng import acquire, computeThumbnail
+from odemis.util import driver
 import os
 import subprocess
 import time
 import unittest
+from unittest.case import skip
+
+import odemis.gui.model as guimodel
+import odemis.gui.model.stream as stream
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 path = os.path.dirname(os.path.realpath(__file__))
 os.chdir(path)
 
-ODEMISD_CMD = "python2 -m odemis.odemisd.main"
-SIM_CONFIG = "../../odemisd/test/optical-sim.odm.yaml"
+ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything
 
+    # TODO
+    pass
 
-    def testProgressiveFuture(self):
-        """
-        Only tests a simple ProgressiveFuture
-        """
-        future = ProgressiveFuture()
-        future.task_canceller = self.cancel_task
-        self.cancelled = False
-        self.past = None
-        self.left = None
-
-        now = time.time()
-        # try to update progress
-        future.set_end_time(now + 1)
-        future.add_update_callback(self.on_progress_update)
-        future.set_end_time(now + 2) # should say about 2 s left
-        self.assertTrue(1.9 <= self.left and self.left < 2)
-        self.assertLessEqual(self.past, 0)
-
-        # "start" the task
-        future.set_running_or_notify_cancel()
-        self.assertTrue(0 <= self.past and self.past < 0.1)
-        time.sleep(0.1)
-
-        now = time.time()
-        future.set_end_time(now + 1)
-        self.assertTrue(0.9 <= self.left and self.left < 1)
-
-
-        # try to cancel while running
-        future.cancel()
-        self.assertTrue(future.cancelled(), True)
-        self.assertRaises(CancelledError, future.result, 1)
-        self.assertEqual(self.left, 0)
-
-    def cancel_task(self):
-        self.cancelled = True
-
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
-
-class TestWithBackend(unittest.TestCase):
+#@skip("simple")
+class SECOMTestCase(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
 
     backend_was_running = False
@@ -93,21 +62,23 @@ class TestWithBackend(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
 
-        if get_backend_status() == BACKEND_RUNNING:
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
             return
 
         # run the backend as a daemon
-        # we cannot run it normally as the child would also think it's in a unittest
-        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % SIM_CONFIG
-        ret = subprocess.call(cmdline.split())
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
+        ret = subprocess.call(cmd)
         if ret != 0:
-            logging.warning("Failed to start backend, will try anyway")
+            logging.error("Failed starting backend with '%s'", cmd)
         time.sleep(1) # time to start
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
+        # TODO: we actually don't need a GUI data model to set-up streams
+        # => could be removed once acquisition is outside of .gui
         cls.main_model = guimodel.MainGUIData(cls.microscope)
         s1 = stream.FluoStream("fluo1",
                   cls.main_model.ccd, cls.main_model.ccd.data,
@@ -122,20 +93,22 @@ class TestWithBackend(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if not cls.backend_was_running:
-            # cls.microscope.terminate()
-            # end the backend
-            cmdline = ODEMISD_CMD + " --kill"
-            subprocess.call(cmdline.split())
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._components._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
-    def test_simple(self):
+    def setUp(self):
         if self.backend_was_running:
-            raise unittest.SkipTest("Running backend found")
+            self.skipTest("Running backend found")
 
+    def test_simple(self):
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
 
@@ -143,7 +116,7 @@ class TestWithBackend(unittest.TestCase):
         self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
 
@@ -154,9 +127,6 @@ class TestWithBackend(unittest.TestCase):
         """
         Check we get some progress updates
         """
-        if self.backend_was_running:
-            raise unittest.SkipTest("Running backend found")
-
         # create a little complex streamTree
         st = stream.StreamTree(streams=[
                 self.streams[0],
@@ -166,7 +136,7 @@ class TestWithBackend(unittest.TestCase):
         self.left = None
         self.updates = 0
 
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
 
         data = f.result()
@@ -177,8 +147,6 @@ class TestWithBackend(unittest.TestCase):
         """
         try a bit the cancelling possibility
         """
-        if self.backend_was_running:
-            raise unittest.SkipTest("Running backend found")
         # create a little complex streamTree
         st = stream.StreamTree(streams=[
                 self.streams[2],
@@ -189,7 +157,7 @@ class TestWithBackend(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        f = startAcquisition(st.getStreams())
+        f = acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -203,6 +171,7 @@ class TestWithBackend(unittest.TestCase):
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
 
+
     def on_done(self, future):
         self.done = True
 
@@ -211,5 +180,102 @@ class TestWithBackend(unittest.TestCase):
         self.left = left
         self.updates += 1
 
+#@skip("simple")
+class SPARCTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARC
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1) # time to start
+
+        # Find CCD & SEM components
+        cls.microscope = model.getMicroscope()
+        cls.main_model = guimodel.MainGUIData(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._components._microscope = None # force reset of the microscope for next connection
+        time.sleep(1) # time to stop
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def test_sync_sem_ccd(self):
+        """
+        try acquisition with fairly complex SEM/CCD stream
+        """
+        gm = self.main_model
+        # Create the streams and streamTree
+        semsur = stream.SEMStream("test sem", gm.sed, gm.sed.data, gm.ebeam)
+        # the shared SEM stream has a special name
+        sems = stream.SEMStream("SEM CL", gm.sed, gm.sed.data, gm.ebeam)
+        ars = stream.ARStream("test ar", gm.ccd, gm.ccd.data, gm.ebeam)
+        st = stream.StreamTree(streams=[semsur, sems, ars])
+
+        # SEM survey settings are via the current hardware settings
+        gm.ebeam.dwellTime.value = gm.ebeam.dwellTime.range[0]
+
+        # SEM/AR settings are via the AR stream
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        gm.ccd.binning.value = (4, 4) # hopefully always supported
+        gm.ccd.exposureTime.value = 1 # s
+        ars.repetition.value = (2, 3)
+        num_ar = numpy.prod(ars.repetition.value)
+
+        est_time = acqmng.estimateTime(st.getStreams())
+
+        # prepare callbacks
+        self.past = None
+        self.left = None
+        self.updates = 0
+        self.done = False
+
+        # Run acquisition
+        start = time.time()
+        f = acqmng.acquire(st.getStreams())
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result()
+        dur = time.time() - start
+        self.assertGreaterEqual(dur, est_time / 2) # Estimated time shouldn't be too small
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertEqual(len(data), num_ar + 2)
+
+        thumb = acqmng.computeThumbnail(st, f)
+        self.assertIsInstance(thumb, model.DataArray)
+
+        self.assertGreaterEqual(self.updates, 1) # at least one update at end
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+    def on_done(self, future):
+        self.done = True
+
+    def on_progress_update(self, future, past, left):
+        self.past = past
+        self.left = left
+        self.updates += 1
 if __name__ == "__main__":
     unittest.main()

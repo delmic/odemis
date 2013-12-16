@@ -86,3 +86,7 @@ class TestDriver(unittest.TestCase):
 
     def test_speedUpPyroConnect(self):
         speedUpPyroConnect(model.getMicroscope())
+
+if __name__ == "__main__":
+    #import sys;sys.argv = ['', 'Test.testName']
+    unittest.main()

@@ -318,7 +318,10 @@ class DataFlow(DataFlowBase):
         is_received.wait()
         return data_shared[0]
 
-    @oneway
+    # subscribe and unsubscribe look like they could use @oneway (which would
+    # speed up a bit calls to them), but as Pyro doesn't ensure the order, it's
+    # not possible because it could lead to wrong behaviour in case of quick
+    # subscribe/unsubscribe.
     def subscribe(self, listener):
         with self._lock:
             count_before = self._count_listeners()
@@ -334,7 +337,6 @@ class DataFlow(DataFlowBase):
             if count_before == 0:
                 self.start_generate()
 
-    @oneway
     def unsubscribe(self, listener):
         with self._lock:
             count_before = self._count_listeners()
@@ -631,6 +633,7 @@ class Event(EventBase):
     def __init__(self):
         self._listeners = set() # object (None -> None)
 
+    # TODO: that should be part of Pyro, called anytime a proxy is received
     def _getMostDirectObject(self, obj):
         """
         obj (object): any object

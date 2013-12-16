@@ -933,7 +933,7 @@ class StageRedStone(model.Actuator):
         self._action_mgr.append_action(action)
         return action
 
-    def stop(self):
+    def stop(self, axes=None):
         """
         stops the motion on all axes
         Warning: this might stop the motion even of axes not managed (it stops

@@ -518,11 +518,14 @@ class AndorCam2(model.DigitalCamera):
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
         # for synchronized acquisition
-        self._cbuffer = None
         self._got_event = threading.Event()
         self._late_events = collections.deque() # events which haven't been handled yet
+        self._ready_for_acq_start = False
 
         self.data = AndorCam2DataFlow(self)
+        # Convenience event for the user to connect and fire
+        self.softwareTrigger = model.Event()
+
         logging.debug("Camera component ready to use.")
 
     def _setStaticSettings(self):
@@ -539,8 +542,27 @@ class AndorCam2(model.DigitalCamera):
 
         # EM Gain set in "Real Gain" values
         if self.hasFeature(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
-            self.atcore.SetEMGainMode(3) # 3 = Real Gain mode
-            logging.debug("Initial EMCCD range is %s", self.GetEMGainRange())
+            # 3 = Real Gain mode (seems to be the best, but not always available)
+            # 2 = Linear mode (similar, but without aging compensation)
+            # 0 = Gain between 0 and 255
+            for m in [3, 2, 0]:
+                try:
+                    self.atcore.SetEMGainMode(m)
+                except AndorV2Error as (errno, strerr):
+                    if errno == 20991: # DRV_NOT_SUPPORTED
+                        logging.info("Failed to set EMCCD gain mode to %d", m)
+                    else:
+                        raise
+                else:
+                    break
+            else:
+                logging.warning("Failed to change EMCCD gain mode")
+            logging.debug("Initial EMCCD gain is %d, between %s, in mode %d", self.GetEMCCDGain(), self.GetEMGainRange(), m)
+            # iXon Ultra reports:
+            # Initial EMCCD gain is 0, between (1, 221), in mode 0
+            # Initial EMCCD gain is 0, between (1, 3551), in mode 1
+            # Initial EMCCD gain is 0, between (2, 300), in mode 2
+            # mode 3 no supported
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
@@ -751,8 +773,17 @@ class AndorCam2(model.DigitalCamera):
         returns (int, int): min, max EMCCD gain  
         """
         low, high = c_int(), c_int()
-        self.GetEMGainRange(byref(low), byref(high))
+        self.atcore.GetEMGainRange(byref(low), byref(high))
         return low.value, high.value
+
+    def GetEMCCDGain(self):
+        """
+        Can only be called on cameras which have the GETFUNCTION_EMCCDGAIN feature
+        returns (int): current EMCCD gain  
+        """
+        gain = c_int()
+        self.atcore.GetEMCCDGain(byref(gain))
+        return gain.value
 
     def GetAcquisitionTimings(self):
         """
@@ -1624,14 +1655,13 @@ class AndorCam2(model.DigitalCamera):
         if self.handle is not None:
             # TODO for some hardware we need to wait the temperature is above -20°C
             try:
+                # FIXME: not sure if it does anything (with Clara)
                 self.atcore.SetCoolerMode(1) # Temperature is maintained on ShutDown
                 # iXon Ultra: as we force it open, we need to force it close now
                 caps = self.GetCapabilities()
                 if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
                     self.atcore.SetShutterEx(1, 2, 0, 0, 0) # mode 2 = close
-
-                # FIXME: not sure if it does anything (with Clara)
-            except:
+            except Exception:
                 pass
 
             logging.debug("Shutting down the camera")
@@ -1762,7 +1792,10 @@ class AndorCam2DataFlow(model.DataFlow):
         if self._sync_event == event:
             return
 
-        comp = self.component()
+        try:
+            comp = self.component()
+        except ReferenceError:
+            return
 
         if self._sync_event:
             self._sync_event.unsubscribe(comp)

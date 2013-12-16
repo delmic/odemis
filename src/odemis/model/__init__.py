@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # to hide the lower layer
 from Pyro4.core import oneway, isasync
 
+from ._futures import *
 from ._vattributes import *
 from ._components import *
 from ._dataflow import *

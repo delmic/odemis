@@ -44,7 +44,10 @@ echo "Running tests on $(date)" > "$TESTLOG"
 failures=0
 for f in $testfiles; do
     echo "Running $f..."
-    echo "Running $f:" >> "$TESTLOG" 
+    if ! grep -q "__main__" $f; then
+        echo "WARNING: test $f seems to not be runnable"
+    fi
+    echo "Running $f:" >> "$TESTLOG"
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
         python $f >> "$TESTLOG" 2>&1

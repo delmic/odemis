@@ -20,11 +20,29 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Test module for model.Stream classes
 
+import logging
+import numpy
 from odemis import model
 from odemis.gui.model import stream
+from odemis.util import driver
+import os
+import subprocess
+import threading
+import time
 import unittest
+from unittest.case import skip
 
 
+logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+logging.getLogger().setLevel(logging.DEBUG)
+_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
+
+ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../../install/linux/usr/share/odemis/"
+SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
+SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
 class FakeEBeam(model.Emitter):
     """
@@ -102,7 +120,6 @@ class StreamTestCase(unittest.TestCase):
 
         # 1x1 repetition leads to a square ROI
         ss.repetition.value = (1, 1)
-        ss.repetition.value = (1, 1) # needs to be set twice to change both dim
         new_roi = ss.roi.value
         roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
         self.assertAlmostEqual(roi_size[0], roi_size[1])
@@ -117,7 +134,298 @@ class StreamTestCase(unittest.TestCase):
 
         # changing pixel size to a huge number leads to a 1x1 repetition
 
-    # TODO: use simulator backend for testing acquisition from stream
+        # TODO: Check that changing both repetition dims, they are both respected
+
+class SPARCTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARC
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1) # time to start
+
+        # Find CCD & SEM components
+        cls.microscope = model.getMicroscope()
+        for comp in model.getComponents():
+            if comp.role == "ccd":
+                cls.ccd = comp
+            elif comp.role == "spectrometer":
+                cls.spec = comp
+            elif comp.role == "e-beam":
+                cls.ebeam = comp
+            elif comp.role == "se-detector":
+                cls.sed = comp
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._components._microscope = None # force reset of the microscope for next connection
+        time.sleep(1) # time to stop
+    
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+#    @skip("simple")
+    def test_progressive_future(self):
+        """
+        Test .acquire interface (should return a progressive future with updates)
+        """
+        self.image = None
+        self.done = False
+        self.updates = 0
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4) # hopefully always supported
+
+        # Long acquisition
+        self.ccd.exposureTime.value = 0.2 # s
+        ars.repetition.value = (2, 3)
+        exp_shape = ars.repetition.value[::-1]
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        f = sas.acquire()
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), num_ar + 1)
+        self.assertEqual(data[0].shape, exp_shape)
+        self.assertGreaterEqual(self.updates, 4) # at least a couple of updates
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+        # short acquisition
+        self.done = False
+        self.updates = 0
+        self.ccd.exposureTime.value = 0.02 # s
+        ars.repetition.value = (5, 3)
+        exp_shape = ars.repetition.value[::-1]
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        f = sas.acquire()
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), num_ar + 1)
+        self.assertEqual(data[0].shape, exp_shape)
+        self.assertGreaterEqual(self.updates, 5) # at least a few updates
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+#    @skip("simple")
+    def test_sync_future_cancel(self):
+        self.image = None
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4) # hopefully always supported
+
+        # Long acquisition
+        self.updates = 0
+        self.ccd.exposureTime.value = 0.2 # s
+        ars.repetition.value = (2, 3)
+
+        # Start acquisition
+        f = sas.acquire()
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        time.sleep(self.ccd.exposureTime.value) # wait a bit
+        f.cancel()
+
+        self.assertGreaterEqual(self.updates, 1) # at least at the end
+        self.assertEqual(self.left, 0)
+        self.assertTrue(f.cancelled())
+
+        # short acquisition
+        self.updates = 0
+        self.ccd.exposureTime.value = 0.02 # s
+        ars.repetition.value = (5, 3)
+
+        # Start acquisition
+        f = sas.acquire()
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        time.sleep(self.ccd.exposureTime.value) # wait a bit
+        f.cancel()
+
+        self.assertGreaterEqual(self.updates, 1) # at least at the end
+        self.assertEqual(self.left, 0)
+        self.assertTrue(f.cancelled())
+
+    def on_done(self, future):
+        self.done = True
+
+    def on_progress_update(self, future, past, left):
+        self.past = past
+        self.left = left
+        self.updates += 1
+
+#    @skip("simple")
+    def test_acq_ar(self):
+        """
+        Test short & long acquisition for AR
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4) # hopefully always supported
+
+        # Long acquisition (small rep to avoid being too long)
+        # The acquisition method is different for time > 0.1 s, but we had bugs
+        # with dwell time > 4s, so let's directly test both.
+        self.ccd.exposureTime.value = 5 # s
+        ars.repetition.value = (2, 3)
+        exp_shape = ars.repetition.value[::-1]
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
+        f = sas.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(len(ars.raw), num_ar)
+        md = ars.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+        self.assertIn(model.MD_AR_POLE, md)
+
+        # Short acquisition (< 0.1s)
+        self.ccd.exposureTime.value = 0.03 # s
+        ars.repetition.value = (30, 20)
+        exp_shape = ars.repetition.value[::-1]
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        start = time.time()
+        f = sas.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(ars.raw))
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(len(ars.raw), num_ar)
+        md = ars.raw[0].metadata
+        self.assertIn(model.MD_POS, md)
+        self.assertIn(model.MD_AR_POLE, md)
+
+#    @skip("simple")
+    def test_acq_spec(self):
+        """
+        Test short & long acquisition for Spectrometer
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumStream("test spec", self.spec, self.spec.data, self.ebeam)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", sems, specs)
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        self.spec.exposureTime.value = 0.3 # s
+        specs.repetition.value = (5, 6)
+        exp_shape = specs.repetition.value[::-1]
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(len(specs.raw), 1)
+        sshape = specs.raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
+        sem_md = sems.raw[0].metadata
+        spec_md = specs.raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+
+        # Short acquisition (< 0.1s)
+        self.spec.exposureTime.value = 0.01 # s
+        specs.repetition.value = (25, 60)
+        exp_shape = specs.repetition.value[::-1]
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sems.raw) + len(specs.raw))
+        self.assertEqual(len(sems.raw), 1)
+        self.assertEqual(sems.raw[0].shape, exp_shape)
+        self.assertEqual(len(specs.raw), 1)
+        sshape = specs.raw[0].shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
+        sem_md = sems.raw[0].metadata
+        spec_md = specs.raw[0].metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+
+
 
 if __name__ == "__main__":
     unittest.main()

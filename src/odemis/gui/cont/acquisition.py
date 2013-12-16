@@ -25,8 +25,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 This module contains classes to control the actions related to the acquisition
 of microscope images.
 """
+from __future__ import division
 
+from concurrent import futures
 from concurrent.futures._base import CancelledError
+import logging
+import math
 from odemis import model, dataio
 from odemis.gui import acqmng, conf
 from odemis.gui.acqmng import preset_as_is
@@ -36,9 +40,6 @@ from odemis.gui.util import img, get_picture_folder, call_after, units, \
     limit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
-from wx.lib.pubsub import pub
-import logging
-import math
 import os
 import re
 import subprocess
@@ -46,6 +47,7 @@ import sys
 import threading
 import time
 import wx
+from wx.lib.pubsub import pub
 
 
 class AcquisitionController(object):
@@ -385,8 +387,11 @@ class SparcAcquiController(AcquisitionController):
         self.btn_change_file = self._main_frame.btn_sparc_change_file
         self.btn_cancel = self._main_frame.btn_sparc_cancel
         self.acq_future = None
+        self._prev_left = None
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
+
+        self._executor = futures.ThreadPoolExecutor(max_workers=2)
 
         # TODO: only if the current tab is acquisition?
         # Link snapshot menu to snapshot action
@@ -512,6 +517,26 @@ class SparcAcquiController(AcquisitionController):
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_sparc_acquire.Enable()
 
+    def _reset_acquisition_gui(self, text=None, keep_filename=False):
+        """
+        Set back every GUI elements to be ready for the next acquisition
+        text (None or str): a (error) message to display instead of the
+          estimated acquisition time
+        keep_filename (bool): if True, will not update the filename
+        """
+        self.btn_cancel.Hide()
+        self.btn_acquire.Enable()
+        self._main_frame.Layout()
+        self._resume_settings()
+
+        if not keep_filename:
+            # change filename, to ensure not overwriting anything
+            self.filename.value = self._get_default_filename()
+
+        if text is not None:
+            self.lbl_acqestimate.SetLabel(text)
+        else:
+            self.update_acquisition_time()          
 
     def _show_acquisition(self, data, acqfile):
         """
@@ -522,7 +547,6 @@ class SparcAcquiController(AcquisitionController):
         # get the analysis tab
         mtc = get_main_tab_controller()
         analysis_tab = mtc['analysis']
-
         analysis_tab.display_new_data(acqfile.name, data)
 
         # show the new tab
@@ -541,6 +565,7 @@ class SparcAcquiController(AcquisitionController):
 
         # the range of the progress bar was already set in
         # update_acquisition_time()
+        self._prev_left = None
         self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.btn_cancel.Show()
@@ -550,7 +575,7 @@ class SparcAcquiController(AcquisitionController):
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
 
-        self.acq_future = acqmng.startAcquisition(streams)
+        self.acq_future = acqmng.acquire(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
@@ -566,67 +591,48 @@ class SparcAcquiController(AcquisitionController):
         self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
+    def _export_to_file(self, acq_future):
+        """
+        return (list of DataArray, filename): data exported and filename
+        """
+        st = self._tab_data_model.acquisitionView.stream_tree
+        thumb = acqmng.computeThumbnail(st, acq_future)
+        data = acq_future.result()
+        filename = self.filename.value
+        exporter = dataio.get_exporter(self.conf.last_format)
+        exporter.export(filename, data, thumb)
+        logging.info("Acquisition saved as file '%s'.", filename)
+        return data, filename
+
     @call_after
     def on_acquisition_done(self, future):
         """
         Callback called when the acquisition is finished (either successfully or
         cancelled)
         """
-        new_lbl = None # If a string, will use it instead of the acquisition time
+        self.btn_cancel.Disable()
         try:
-            try:
-                data = future.result(1) # timeout is just for safety
-                # make sure the progress bar is at 100%
-                self.gauge_acq.Value = self.gauge_acq.Range
-            except CancelledError:
-                # hide progress bar (+ put pack estimated time)
-                self.gauge_acq.Hide()
-                self.btn_cancel.Hide()
-                # don't change filename => we can reuse it
-                return
-            except Exception:
-                # We cannot do much: just warn the user and pretend it was cancelled
-                logging.exception("Acquisition failed")
-                new_lbl = "Acquisition failed."
+            future.result()
+        except CancelledError:
+            # hide progress bar (+ put pack estimated time)
+            self.gauge_acq.Hide()
+            # don't change filename => we can reuse it
+            self._reset_acquisition_gui(keep_filename=True)
+            return
+        except Exception:
+            # leave the gauge, to give a hint on what went wrong.
+            logging.exception("Acquisition failed")
+            self._reset_acquisition_gui("Acquisition failed.")
+            return
 
-                # leave the gauge, to give a hint on what went wrong.
-                self.btn_cancel.Disable()
-                return
+        # make sure the progress bar is at 100%
+        self.gauge_acq.Value = self.gauge_acq.Range
 
-
-
-            # save result to file
-            try:
-                thumb = acqmng.computeThumbnail(self._tab_data_model.acquisitionView.stream_tree,
-                                                future)
-                filename = self.filename.value
-                exporter = dataio.get_exporter(self.conf.last_format)
-                exporter.export(filename, data, thumb)
-                logging.info("Acquisition saved as file '%s'.", filename)
-                # TODO: switch to analysis tab automatically?
-            except Exception:
-                logging.exception("Saving acquisition failed")
-                new_lbl = "Saving acquisition file failed"
-                return
-            finally:
-                # hide progress bar (+ put pack estimated time)
-                self.gauge_acq.Hide()
-                self.btn_cancel.Hide()
-
-            # change filename, to ensure not overwriting anything
-            self.filename.value = self._get_default_filename()
-
-            # TODO display in the analysis tab
-            self._show_acquisition(data, open(filename))
-        finally:
-            self.btn_acquire.Enable()
-            self._main_frame.Layout()
-            self._resume_settings()
-            if new_lbl is not None:
-                self.lbl_acqestimate.SetLabel(new_lbl)
-            else:
-                self.update_acquisition_time()
-
+        # save result to file
+        self.lbl_acqestimate.SetLabel("Saving file...")
+        # TODO: on big acquisitions, it can take 20s => put in a thread + future
+        sf = self._executor.submit(self._export_to_file, future)
+        sf.add_done_callback(self.on_file_export_done)
 
     @call_after
     def on_acquisition_upd(self, future, past, left):
@@ -640,11 +646,35 @@ class SparcAcquiController(AcquisitionController):
             return
 
         # progress bar: past / past+left
-        logging.debug("updating the progress bar to %f/%f", past, past + left)
-        self.gauge_acq.Range = 100 * (past + left)
-        self.gauge_acq.Value = 100 * past
+        can_update = True
+        try:
+            ratio = past / (past + left)
+            # Don't update gauge if ratio reduces
+            prev_ratio = self.gauge_acq.Value / self.gauge_acq.Range
+            logging.debug("current ratio %g, old ratio %g", ratio * 100, prev_ratio * 100)
+            if (self._prev_left is not None and
+                prev_ratio - 0.1 < ratio < prev_ratio):
+                can_update = False
+        except ZeroDivisionError:
+            pass
 
+        if can_update:
+            logging.debug("updating the progress bar to %f/%f", past, past + left)
+            self.gauge_acq.Range = 100 * (past + left)
+            self.gauge_acq.Value = 100 * past
+
+        # Time left
         left = math.ceil(left) # pessimistic
+        # Avoid back and forth estimation => don't increase unless really huge
+        if (self._prev_left is not None and
+            (min(-left, -5) < self._prev_left - left < 0)):
+            logging.debug("No updating progress bar as new estimation is %g s "
+                          "while the previous was only %g s",
+                          left, self._prev_left)
+            return
+
+        self._prev_left = left
+
         if left > 2:
             lbl_txt = "%s left." % units.readable_time(left)
             self.lbl_acqestimate.SetLabel(lbl_txt)
@@ -652,4 +682,22 @@ class SparcAcquiController(AcquisitionController):
             # don't be too precise
             self.lbl_acqestimate.SetLabel("a few seconds left.")
 
+    @call_after
+    def on_file_export_done(self, future):
+        """
+        Callback called when the acquisition is finished (either successfully or
+        cancelled)
+        """
+        # hide progress bar
+        self.gauge_acq.Hide()
 
+        try:
+            data, filename = future.result()
+        except Exception:
+            logging.exception("Saving acquisition failed")
+            self._reset_acquisition_gui("Saving acquisition file failed")
+            return
+
+        # display in the analysis tab
+        self._show_acquisition(data, open(filename))
+        self._reset_acquisition_gui()
