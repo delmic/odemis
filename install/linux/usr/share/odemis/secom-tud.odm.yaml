@@ -162,7 +162,7 @@ PIGCS: {
         axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
                "x": [4, 1, False], "y": [5, 1, False]},
         vmin: {"x": 2.4, "y": 2.}, # V : lowest voltage which moves the actuators
-        #speed_base: {"x": 30., "y": 30.}, # m/s : speed at 3.5V
+        #speed_base: {"x": 0.03, "y": 0.03}, # m/s : speed at 3.5V
         #dist_to_steps: {"a": 100000, "b": 100000}, # step/m
     },
 }
