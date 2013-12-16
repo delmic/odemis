@@ -98,6 +98,7 @@ class ViewController(object):
         visible_views = []
 
         for vp, vkwargs in viewports.items():
+            # FIXME: do we still need this "if"? what happens if no stream_classes are provided?!
             # TODO: automatically set some clever values for missing arguments?
             # If stream classes are defined we assume a MicroscopeView is needed
             if 'stream_classes' in vkwargs:
@@ -108,6 +109,8 @@ class ViewController(object):
                     visible_views.append(view)
 
                 vp.setView(view, self._data_model)
+            else:
+                logging.debug("Generating viewport without view")
 
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views

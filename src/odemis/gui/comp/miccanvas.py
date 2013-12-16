@@ -89,7 +89,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.canZoom = True
         self.canDrag = True
         self.noDragNoFocus = False
-        self.fitViewToNextImage = False
+        self.fitViewToNextImage = True
 
         self.Bind(wx.EVT_MOUSEWHEEL, self.OnWheel)
 
@@ -386,7 +386,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO use the real streamtree functions
         # for now we call a conversion layer
         self._convertStreamsToImages()
-        if self.fitViewToNextImage:
+        if self.fitViewToNextImage and filter(bool, self.Images):
             self.fitViewToContent()
             self.fitViewToNextImage = False
         #logging.debug("Will update drawing for new image")
@@ -396,7 +396,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # override just in order to detect when it's just finished redrawn
 
         # TODO: detect that the canvas is not visible, and so should no/less
-        # frequently be updated?
+        # frequently be updated? The difficulty is that it must be redrawn as
+        # soon as it's shown again.
         super(DblMicroscopeCanvas, self).UpdateDrawing()
 
         if self.microscope_view:
@@ -502,7 +503,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Update the mpp, so that the same width is displayed
         if self._previous_size and self.microscope_view:
-            logging.debug("from %s to %s", self._previous_size, new_size)
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             self.microscope_view.mpp.value = hfw / new_size[0]
 
@@ -1168,7 +1168,6 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
             else:
                 mpp = 13e-6 # sensible fallback
 
-
         # order and display the images
         for s in streams:
             if not s:
@@ -1203,7 +1202,6 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
         # always refit to image (for the rare case it has changed size)
         self.fitViewToContent(recenter=True)
-
 
     def OnSize(self, event):
         DblMicroscopeCanvas.OnSize(self, event)
