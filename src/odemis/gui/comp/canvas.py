@@ -163,7 +163,8 @@ class BufferedCanvas(wx.Panel):
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
             # Linux...
-            # TODO: to check, thsrc/odemis/gui/comp/canvas.pye documentation says the opposite
+            # TODO: to check, thsrc/odemis/gui/comp/canvas.pye documentation
+            # says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         # This attribute is used to store the current mouse cursor type
@@ -352,10 +353,7 @@ class BufferedCanvas(wx.Panel):
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
-        # print self.bg_offset
-        o = self.drag_shift if hasattr(self, 'drag_shift') else (0, 0)
-        print "offset", o
-        surface.set_device_offset(o[0], o[1])
+        surface.set_device_offset(self.bg_offset[0], self.bg_offset[1])
 
         pattern = cairo.SurfacePattern(surface)
         pattern.set_extend(cairo.EXTEND_REPEAT)
@@ -510,6 +508,9 @@ class BitmapCanvas(BufferedCanvas):
         self.scale = 1.0 # px/wu
 
         self.margins = (0, 0)
+
+    # def on_left_up(self, evt):
+    #     super(BitmapCanvas, self).on_left_up(evt)
 
     def set_image(self, index, im, w_pos=(0.0, 0.0), scale=1.0, keepalpha=False):
         """ Set (or update)  image
@@ -983,7 +984,6 @@ class DraggableCanvas(BitmapCanvas):
             self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
             self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
         )
-        print self.drag_shift
         self.recenter_buffer(new_pos)
 
     def on_right_down(self, evt): #pylint: disable=W0221
@@ -1038,19 +1038,11 @@ class DraggableCanvas(BitmapCanvas):
                 min(max(drag_shift[1], -self.margins[1]), self.margins[1])
             )
 
-            # self.bg_offset = (self.drag_shift[0] % 40,
-            #                   self.drag_shift[1] % 40)
-
-            # self.bg_offset = (self.bg_offset[0] + self.drag_shift[0],
-            #                   self.bg_offset[1] + self.drag_shift[1])
-
-
             # TODO: request_drawing_update seem to make more sense here, but
             # maybe there was a good reason to use update_drawing instead?
             # Eric will know the answer for sure!
             # self.update_drawing()
             self.request_drawing_update()
-
             self.Refresh()
 
         elif self._rdragging:
@@ -1161,6 +1153,13 @@ class DraggableCanvas(BitmapCanvas):
         """
 
         if self.requested_world_pos != world_pos:
+            bg_offset = ((self.requested_world_pos[0] - world_pos[0]) % 40,
+                         (self.requested_world_pos[1] - world_pos[1]) % 40)
+            self.bg_offset = (
+                (self.bg_offset[0] - bg_offset[0]) % 40,
+                (self.bg_offset[1] - bg_offset[1]) % 40
+            )
+
             self.requested_world_pos = world_pos
             # FIXME: could maybe be more clever and only request redraw for the
             # outside region
