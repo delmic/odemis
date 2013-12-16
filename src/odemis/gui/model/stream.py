@@ -935,7 +935,7 @@ class RepetitionStream(Stream):
         # software).
 
         # We ensure in the setters that all the data is always consistent:
-        # roi set: roi + pxs → repetition + roi
+        # roi set: roi + pxs → repetition + roi + pxs
         # pxs set: roi + pxs → repetition + roi (small changes)
         # repetition set: repetition + roi + pxs → repetition + pxs + roi (small changes)
 
@@ -961,6 +961,23 @@ class RepetitionStream(Stream):
         # exposure time of each pixel is the exposure time of the detector,
         # the dwell time of the emitter will be adapted before acquisition.
 
+        # Update the pixel size whenever SEM magnification changes
+        # This allows to keep the ROI at the same place in the SEM FoV.
+        # Note: this is to be done only if the user needs to manually update the
+        # magnification.
+        self._prev_mag = emitter.magnification.value
+        emitter.magnification.subscribe(self._onMagnification)
+
+    def _onMagnification(self, mag):
+        """
+        Called when the SEM magnification is updated
+        """
+        # Update the pixel size so that the ROI stays that the same place in the
+        # SEM FoV and with the same repetition.
+        # The bigger is the magnification, the smaller should be the pixel size
+        ratio = self._prev_mag / mag
+        self.pixelSize._value *= ratio
+        self.pixelSize.notify(self.pixelSize._value)
 
     def _updateROIAndPixelSize(self, roi, pxs):
         """

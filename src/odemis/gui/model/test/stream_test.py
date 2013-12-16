@@ -53,6 +53,7 @@ class FakeEBeam(model.Emitter):
         self._shape = (2048, 2048)
         self.resolution = model.ResolutionVA((256, 256), [(1, 1), self._shape])
         self.pixelSize = model.VigilantAttribute((1e-9, 1e-9), unit="m", readonly=True)
+        self.magnification = model.FloatVA(1000.)
 
 class StreamTestCase(unittest.TestCase):
     def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
@@ -132,10 +133,33 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(tuple(ss.repetition.value), ebeam.shape)
 
 
-        # changing pixel size to a huge number leads to a 1x1 repetition
+        # TODO: changing pixel size to a huge number leads to a 1x1 repetition
 
-        # TODO: Check that changing both repetition dims, they are both respected
+        # When changing both repetition dims, they are both respected
+        ss.pixelSize.value = ss.pixelSize.range[0]
+        ss.roi.value = (0.3, 0.65, 0.5, 0.6)
+        ss.repetition.value = (3, 5)
+        new_rep = (5, 6)
+        ss.repetition.value = new_rep
+        self.assertAlmostEqual(new_rep, ss.repetition.value)
 
+        # Changing the SEM magnification updates the pixel size (iff the
+        # magnification cannot be automatically linked to the actual SEM
+        # magnification).
+        old_rep = ss.repetition.value
+        old_roi = ss.roi.value
+        old_pxs = ss.pixelSize.value
+        old_mag = ebeam.magnification.value
+        ebeam.magnification.value = old_mag * 2
+        new_pxs = ss.pixelSize.value
+        new_mag = ebeam.magnification.value
+        mag_ratio = new_mag / old_mag
+        pxs_ratio = new_pxs / old_pxs
+        self.assertAlmostEqual(mag_ratio, 1 / pxs_ratio)
+        self.assertEqual(old_rep, ss.repetition.value)
+        self.assertEqual(old_roi, ss.roi.value)
+
+#@skip("test")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
