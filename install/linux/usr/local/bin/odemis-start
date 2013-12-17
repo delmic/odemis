@@ -1,8 +1,12 @@
 #!/bin/bash
 # Start the gui and back-end in any case
 # might ask to type password become root
+# Accepts one argument: the microscope model file, which overrides the MODEL
+# default value.
 
 . /etc/odemis.conf
+
+MODEL="${1:-"$MODEL"}" # uses first argument if available, otherwise $MODEL
 
 export PYTHONPATH
 

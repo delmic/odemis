@@ -2,5 +2,6 @@
 # Start the gui and back-end in any case, and stop everything after
 # might ask to type password become root
 
-odemis-start
 odemis-stop
+odemis-start "$@"
+
