@@ -612,7 +612,7 @@ class MicroscopeView(View):
         self._streams_lock = threading.Lock()
 
         # Last initialisation is done on the first image received
-        self.getMPPFromNextImage = True
+        self.getMPPFromNextImage = False # cf fitViewToContent (better)
 
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
@@ -746,13 +746,13 @@ class MicroscopeView(View):
         Called when one stream has its image updated
         im (InstrumentalImage)
         """
+        # just let everyone that the composited image has changed
+        self.lastUpdate.value = time.time()
+
         # if it's the first image ever, set mpp to the mpp of the image
         if self.getMPPFromNextImage and im.mpp:
             self.mpp.value = im.mpp
             self.getMPPFromNextImage = False
-
-        # just let everyone that the composited image has changed
-        self.lastUpdate.value = time.time()
 
     def _onMergeRatio(self, ratio):
         """

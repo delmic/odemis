@@ -791,7 +791,6 @@ class AnalysisTab(Tab):
                    self.main_frame.vp_inspection_tr,
                    self.main_frame.vp_inspection_bl,
                    self.main_frame.vp_inspection_br]:
-            vp.microscope_view.getMPPFromNextImage = False
             vp.canvas.fitViewToNextImage = True
 
         # AR data is special => all merged in one big stream
@@ -1024,7 +1023,8 @@ class LensAlignTab(Tab):
         # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canvas.canZoom = False
         # prevent the first image to reset our computation
-        self._sem_view.getMPPFromNextImage = False
+        main_frame.vp_align_sem.canvas.fitViewToNextImage = False
+#        self._sem_view.getMPPFromNextImage = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
@@ -1046,9 +1046,6 @@ class LensAlignTab(Tab):
         ccd_spe.flatten() # removes the expander header
         # Fit CCD image to screen
         self._ccd_view = ccd_view
-        ccd_view.getMPPFromNextImage = False
-        # No need to check for resize events as it's handled by the canvas
-        main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowedModes = set([guimod.TOOL_NONE])
 
@@ -1350,8 +1347,8 @@ class MirrorAlignTab(Tab):
             self._ccd_stream = ccd_stream
 
 
-            # TODO: need to know the mirror center according to the goal image
-            # (metadata using pypng?)
+            # The mirror center (with the lens set) is defined as pole position
+            # in the microscope configuration file.
             goal_im = pkg_resources.resource_stream(
                             "odemis.gui.img",
                             "calibration/ma_goal_image_5_13_no_lens.png")

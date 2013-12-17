@@ -330,9 +330,6 @@ def _executeTask(future, fn, *args, **kwargs):
 
     try:
         result = fn(*args, **kwargs)
-    except CancelledError:
-        # cancelled via the future (while running) => it's all already handled
-        pass
     except BaseException:
         e = sys.exc_info()[1]
         future.set_exception(e)
