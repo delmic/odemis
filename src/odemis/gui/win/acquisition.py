@@ -43,6 +43,7 @@ class AcquisitionDialog(xrcfr_acq):
     Acquisition Dialog created in XRCed
     """
 
+    # TODO: share more code with cont.acquisition
     def __init__(self, parent, tab_data):
         xrcfr_acq.__init__(self, parent)
 
@@ -360,6 +361,7 @@ class AcquisitionDialog(xrcfr_acq):
             return
 
         # save result to file
+        self.lbl_acqestimate.SetLabel("Saving file...")
         try:
             thumb = acqmng.computeThumbnail(
                             self._tab_data_model.focussedView.value.stream_tree,
