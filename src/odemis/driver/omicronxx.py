@@ -51,7 +51,7 @@ class DevxX(object):
         try:
             self.GetFirmware()
         except Exception:
-            raise IOError("No xX device dectected on port '%s'" % port)
+            raise IOError("No xX device detected on port '%s'" % port)
         
         # Fill in some info
         wl, power = self.GetSpecInfo()
@@ -154,7 +154,7 @@ class DevxX(object):
 
     def GetSpecInfo(self):
         """
-        Return (float, float): wavelength (m), theoritical maximum power (W)
+        Return (float, float): wavelength (m), theoretical maximum power (W)
         """
         ans = self._sendCommand("GSI")
         # Expects something like:
