@@ -88,7 +88,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-        pol.set_points(point)
+        pol.set_point(point)
         view.mpp.value = 1.25e-9
 
         test.gui_loop()

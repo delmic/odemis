@@ -1589,19 +1589,21 @@ class PointsOverlay(WorldOverlay):
     def __init__(self, base):
         super(PointsOverlay, self).__init__(base)
 
+        # A VA tracking the selected point
+        self.point = None
         # The possible choices for point as a world pos => point mapping
         self.choices = {}
-        self.point = None
 
         self.min_dist = None
+
+        # Appearance
 
         self.point_colour = conversion.hex_to_frgb(
                                         gui.FOREGROUND_COLOUR_HIGHLIGHT)
         self.select_colour = conversion.hex_to_frgba(
                                         gui.FOREGROUND_COLOUR_EDIT, 0.5)
-
         # The float radius of the dots to draw
-        self.dot_size = None
+        self.dot_size = MIN_DOT_SIZE
         # The position of the mouse in buffer coordinates
         self.cursor_buffer_pos = None
         # None or the point over which the mouse is hovering
@@ -1615,27 +1617,71 @@ class PointsOverlay(WorldOverlay):
 
         self.on_size()
 
+    def set_point(self, point_va):
+        """ Set the available points and connect to the given point VA """
+
+        # Connect the provided VA to the overlay
+        self.point = point_va
+        self.point.subscribe(self._on_point_selected)
+        self._calc_choices()
+        self._calc_min_distance()
+        self._calc_hitboxes()
+        self.base.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+
+
+    def _on_point_selected(self, selected_point):
+        """ Update the overlay when a point has been selected """
+        self.base.repaint()
+
     def _on_mpp(self, mpp):
         """ Calculate the values dependant on the mpp attribute
 
         I.e. when the zoom level of the canvas changes.
         """
-        # Calculate the scale ourselves, because somethimes the base.scale
-        # wouldn't be updated in time for our calculation
-        if self.min_dist:
-            scale = self.base.mpwu / mpp
-            self.dot_size = min(MAX_DOT_SIZE, scale * self.min_dist)
-            self._calc_hitboxes()
+        self.dot_size = max(min(MAX_DOT_SIZE, self.base.scale * self.min_dist),
+                            MIN_DOT_SIZE)
+        print self.min_dist
+        self._calc_hitboxes()
 
-    def set_points(self, point_va):
-        """ Set the available points and connect to the given point VA """
+    def on_left_up(self, evt):
+        """ Set the seleceted point if the mouse cursor is hovering over one """
+        # We call the handler ourselves, so *no* evt.Skip()!!
+        if self.hover_box and self.cursor_over_point and self.enabled:
+            self.point.value = self.choices[self.cursor_over_point]
+            logging.debug("Point %s selected", self.point.value)
 
-        # Connect the provided VA to the overlay
-        self.point = point_va
-        self.point.subscribe(self._point_selected)
-        self._calc_min_distance()
-        self._calc_choices()
-        self.base.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+    def on_motion(self, evt):
+        """ Detect when the cursor hovers over a dot """
+
+        if not self.base.left_dragging and self.choices and self.enabled:
+            vx, vy = evt.GetPositionTuple()
+            self.cursor_buffer_pos = self.base.view_to_buffer((vx, vy))
+
+            hover_box = None
+
+            for l, t, r, b in self.hitboxes.keys():
+                if l <= vx <= r and t <= vy <= b:
+                    hover_box = (l, t, r, b)
+                    # logging.debug("Hitbox found")
+                    break
+
+            if self.hover_box != hover_box:
+                # logging.debug("Hitbox changed %s", hover_box)
+                self.hover_box = hover_box
+                self.base.repaint()
+
+        if self.cursor_over_point and self.enabled:
+            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        else:
+            self.base.SetCursor(wx.STANDARD_CURSOR)
+
+    def on_leave(self, evt):
+        self.cursor_buffer_pos = None
+        evt.Skip()
+
+    def on_size(self, evt=None):
+        self.offset = [v // 2 for v in self.base._bmp_buffer_size]
+        self._calc_hitboxes()
 
     def _calc_hitboxes(self):
         """ Calculate the square hitboxes in view coordinates"""
@@ -1696,53 +1742,17 @@ class PointsOverlay(WorldOverlay):
         def distance(p1, p2):
             return math.sqrt((p2[0] - p1[0])**2 + (p2[1] - p1[1])**2)
 
+        min_dist = 0
+
         for point in (c for c in self.point.choices if None not in c):
-            self.min_dist = min(
+            min_dist = min(
                     distance(point, d)
                     for d in self.point.choices if None not in d and d != point
             )
 
-        self.min_dist /= 2 # Divide by 2, because we use it as a radius
+        self.min_dist = min_dist / 2.0 # get radius
 
-    def on_left_up(self, evt):
-        """ Set the seleceted point if the mouse cursor is hovering over one """
-        # We call the handler ourselves, so *no* evt.Skip()!!
-        if self.hover_box and self.cursor_over_point and self.enabled:
-            self.point.value = self.choices[self.cursor_over_point]
-            logging.debug("Point %s selected", self.point.value)
 
-    def on_leave(self, evt):
-        self.cursor_buffer_pos = None
-        evt.Skip()
-
-    def on_size(self, evt=None):
-        self.offset = [v // 2 for v in self.base._bmp_buffer_size]
-        self._calc_hitboxes()
-
-    def on_motion(self, evt):
-        """ Detect when the cursor hovers over a dot """
-
-        if not self.base.left_dragging and self.choices and self.enabled:
-            vx, vy = evt.GetPositionTuple()
-            self.cursor_buffer_pos = self.base.view_to_buffer((vx, vy))
-
-            hover_box = None
-
-            for l, t, r, b in self.hitboxes.keys():
-                if l <= vx <= r and t <= vy <= b:
-                    hover_box = (l, t, r, b)
-                    # logging.debug("Hitbox found")
-                    break
-
-            if self.hover_box != hover_box:
-                # logging.debug("Hitbox changed %s", hover_box)
-                self.hover_box = hover_box
-                self.base.repaint()
-
-        if self.cursor_over_point and self.enabled:
-            self.base.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
-        else:
-            self.base.SetCursor(wx.STANDARD_CURSOR)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
@@ -1801,9 +1811,7 @@ class PointsOverlay(WorldOverlay):
         self.enabled = enable
         self.base.repaint()
 
-    def _point_selected(self, selected_point):
-        """ Update the overlay when a point has been selected """
-        self.base.repaint()
+
 
 
 class PolarOverlay(ViewOverlay):
