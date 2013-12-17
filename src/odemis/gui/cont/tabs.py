@@ -462,9 +462,10 @@ class SparcAcquisitionTab(Tab):
 
         if self._hover_stream:
             stream = self._hover_stream
-        elif self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus():
+        elif (self.spec_rep and
+              (self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus())):
             stream = self._spec_stream
-        elif self.angu_rep.ctrl.HasFocus():
+        elif self.angu_rep and self.angu_rep.ctrl.HasFocus():
             stream = self._ar_stream
         else:
             stream = None
