@@ -24,13 +24,15 @@ Created on 8 Feb 2012
 """
 
 from __future__ import division
+
+import logging
 from odemis import gui
+from odemis.gui.comp import miccanvas
+from odemis.gui.comp.canvas import CAN_MOVE, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
-import logging
-from odemis.gui.comp import miccanvas
 import wx
 
 
@@ -346,6 +348,7 @@ class SecomViewport(MicroscopeViewport):
 
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
+        self._orig_abilities = self.canvas.abilities & set([CAN_MOVE, CAN_FOCUS])
         self._microscope_view.stream_tree.should_update.subscribe(
                                                         self.hide_pause,
                                                         init=True
@@ -354,8 +357,12 @@ class SecomViewport(MicroscopeViewport):
     def hide_pause(self, is_playing):
         #pylint: disable=E1101
         self.canvas.icon_overlay.hide_pause(is_playing)
-        if self._microscope_view.has_stage():
-            self.canvas.noDragNoFocus = not is_playing
+        if hasattr(self._microscope_view, "stage_pos"):
+            # disable/enable move and focus change
+            if is_playing:
+                self.canvas.abilities |= self._orig_abilities
+            else:
+                self.canvas.abilities -= set([CAN_MOVE, CAN_FOCUS])
 
     def _checkMergeSliderDisplay(self):
         # Overridden to avoid displaying merge slide if only SEM or only Optical

@@ -132,7 +132,16 @@ import odemis.gui.img.data as imgdata
 
 #pylint: disable=E1002
 
+# For the abilities
+CAN_MOVE = 1 # allows moving the view position
+CAN_FOCUS = 2 # allows changing the focus
+CAN_ZOOM = 3 # allows changing the scale
+
 class BufferedCanvas(wx.Panel):
+    """
+    Public attributes:
+    .abilities (set of CAN_*): features/restrictions allowed to be performed
+    """
     __metaclass__ = ABCMeta
 
     def __init__(self, *args, **kwargs):
@@ -140,9 +149,12 @@ class BufferedCanvas(wx.Panel):
         kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
         super(BufferedCanvas, self).__init__( *args, **kwargs)
 
+        # Set of features/restrictions dynamically changeable
+        self.abilities = set() # filled by CAN_*
+
         # Graphical overlays that display relative to the canvas
         self.world_overlays = []
-        # Graphical opverlays that display in an absolute position
+        # Graphical overlays that display in an absolute position
         self.view_overlays = []
         # The overlay which will receive mouse and keyboard events
         # TODO: Make this into a list, so multiple overlays can receive events?
@@ -940,6 +952,8 @@ class DraggableCanvas(BitmapCanvas):
     def __init__(self, *args, **kwargs):
         super(DraggableCanvas, self).__init__(*args, **kwargs)
 
+        self.abilities |= set([CAN_MOVE, CAN_FOCUS])
+
         # When resizing, margin to put around the current size
         # TODO: Maybe make the margin related to the canvas size?
         self.default_margin = 512
@@ -949,7 +963,6 @@ class DraggableCanvas(BitmapCanvas):
         # in buffer-coordinates: = 1px at scale = 1
         self.requested_world_pos = self.buffer_center_world_pos
 
-        self.can_drag = True    # Use this attribute to disable dragging
         self._ldragging = False
 
         # The amount of pixels shifted in the current drag event
@@ -960,7 +973,7 @@ class DraggableCanvas(BitmapCanvas):
         self._rdragging = False
         # (int, int) px
         self._rdrag_init_pos = None
-        # (flt, flt) last absolute value, for sending the change
+        # [flt, flt] last absolute value, for sending the change
         self._rdrag_prev_value = None
 
     # Properties
@@ -985,12 +998,7 @@ class DraggableCanvas(BitmapCanvas):
     def on_left_down(self, evt): #pylint: disable=W0221
         """ Start a dragging procedure """
         # Ignore the click if we're aleady dragging
-        if self._rdragging:
-            return
-
-        cursor = None
-
-        if self.can_drag:
+        if CAN_MOVE in self.abilities and not self._rdragging:
             cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
 
             # Fixme: only go to drag mode if the mouse moves before a mouse up?
@@ -1003,13 +1011,15 @@ class DraggableCanvas(BitmapCanvas):
                                   pos[1] - self.drag_shift[1])
 
             logging.debug("Drag started at %s", self.drag_init_pos)
+        else:
+            cursor = None
 
         super(DraggableCanvas, self).on_left_down(evt, cursor)
 
     def on_left_up(self, evt):
         """ End the dragging procedure """
         # Ignore the release if we didn't register a left down
-        if self.can_drag and self._ldragging:
+        if self._ldragging:
             self._ldragging = False
 
             # Update the position of the buffer to where the view is centered
@@ -1024,40 +1034,40 @@ class DraggableCanvas(BitmapCanvas):
 
     def on_right_down(self, evt): #pylint: disable=W0221
         # Ignore the click if we're aleady dragging
-        if self.can_drag and self._ldragging:
-            # TODO: Show 'focussing' text in viewport (do this elsewhere)
+        if CAN_FOCUS in self.abilities and not self._ldragging:
             self._rdragging = True
             self._rdrag_init_pos = evt.GetPositionTuple()
             self._rdrag_prev_value = [0, 0]
 
-        logging.debug("Drag started at %s", self._rdrag_init_pos)
+            logging.debug("Drag started at %s", self._rdrag_init_pos)
 
         super(DraggableCanvas, self).on_right_down(evt)
 
     def on_right_up(self, evt):
         # Ignore the release if we didn't register a right down
-        if self.can_drag and self._rdragging:
+        if self._rdragging:
             self._rdragging = False
 
         super(DraggableCanvas, self).on_right_up(evt)
 
     def on_dbl_click(self, evt):
         """ Recenter the view around the point that was double clicked """
-        v_pos = evt.GetPositionTuple()
-        v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
-        shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
+        if CAN_MOVE in self.abilities:
+            v_pos = evt.GetPositionTuple()
+            v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
+            shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
 
-        # shift the view immediately
-        self.drag_shift = (self.drag_shift[0] + shift[0],
-                           self.drag_shift[1] + shift[1])
-        self.Refresh()
+            # shift the view immediately
+            self.drag_shift = (self.drag_shift[0] + shift[0],
+                               self.drag_shift[1] + shift[1])
+            self.Refresh()
 
-        # recompute the view
-        new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
-                   self.buffer_center_world_pos[1] - shift[1] / self.scale)
-        self.recenter_buffer(new_pos)
+            # recompute the view
+            new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
+                       self.buffer_center_world_pos[1] - shift[1] / self.scale)
+            self.recenter_buffer(new_pos)
 
-        logging.debug("Double click at %s", new_pos)
+            logging.debug("Double click at %s", new_pos)
 
         super(DraggableCanvas, self).on_dbl_click(evt)
 
@@ -1127,19 +1137,19 @@ class DraggableCanvas(BitmapCanvas):
     def on_char(self, evt):
         key = evt.GetKeyCode()
 
-        change = 100 # about a 10th of the screen
+        if CAN_MOVE in self.abilities:
+            change = 100 # about a 10th of the screen
+            if evt.ShiftDown():
+                change //= 8 # softer
 
-        if evt.ShiftDown():
-            change //= 8 # softer
-
-        if key == wx.WXK_LEFT:
-            self.shift_view((change, 0))
-        elif key == wx.WXK_RIGHT:
-            self.shift_view((-change, 0))
-        elif key == wx.WXK_DOWN:
-            self.shift_view((0, -change))
-        elif key == wx.WXK_UP:
-            self.shift_view((0, change))
+            if key == wx.WXK_LEFT:
+                self.shift_view((change, 0))
+            elif key == wx.WXK_RIGHT:
+                self.shift_view((-change, 0))
+            elif key == wx.WXK_DOWN:
+                self.shift_view((0, -change))
+            elif key == wx.WXK_UP:
+                self.shift_view((0, change))
 
         super(DraggableCanvas, self).on_char(evt)
 
@@ -1371,7 +1381,7 @@ class PlotCanvas(BufferedCanvas):
         self.plot_closed = PLOT_CLOSE_NOT
         self.plot_mode = PLOT_MODE_LINE
 
-     # Getters and Setters
+    # Getters and Setters
 
     def set_1d_data(self, horz, vert):
         """ Construct the data by zipping the two provided 1D iterables """

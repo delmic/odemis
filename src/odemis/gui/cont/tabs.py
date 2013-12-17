@@ -31,6 +31,7 @@ import logging
 import math
 from odemis import dataio, model
 from odemis.gui.comp import overlay
+from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
@@ -1021,7 +1022,7 @@ class LensAlignTab(Tab):
         self._sem_view.addStream(sem_stream)
         # Adapt the zoom level of the SEM to fit exactly the SEM field of view.
         # No need to check for resize events, because the view has a fixed size.
-        main_frame.vp_align_sem.canvas.canZoom = False
+        main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
         # prevent the first image to reset our computation
         main_frame.vp_align_sem.canvas.fitViewToNextImage = False
 #        self._sem_view.getMPPFromNextImage = False

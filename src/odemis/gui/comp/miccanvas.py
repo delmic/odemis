@@ -26,6 +26,7 @@ from __future__ import division
 from decorator import decorator
 import logging
 from odemis import util, model
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
 from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
@@ -72,11 +73,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     It also provides various typical overlays (ie, drawings) for microscope views.
 
     Public attributes:
-    .canZoom (Boolean): If True (default), allows the user to zoom. When False,
-      the zoom can still be changed programmatically with view.mpp.
-    .can_drag (Boolean): If True (default), allows the user to drag
-    .noDragNoFocus (Boolean): False by default. If True, prevent Drag and Focus
-      change to happen. Useful to avoid the user to move a paused view.
+    .abilities (set of CAN_*): features/restrictions allowed to be performed
     .fitViewToNextImage (Boolean): False by default. If True, next time an image
       is received, it will ensure the whole content fits the view (and reset
       this flag).
@@ -86,8 +83,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view = None
         self._tab_data_model = None
 
-        self.canZoom = True
-        self.noDragNoFocus = False
+        self.abilities |= set([CAN_ZOOM, CAN_FOCUS])
         self.fitViewToNextImage = True
 
         # TODO: If it's too resource consuming, which might want to create just
@@ -515,9 +511,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
           downscaling to software upscaling, it will stop at no software scaling
         ex:  # 1 => *2 ; -1 => /2; 2 => *4...
         """
-        if not self.canZoom:
-            return
-
         scale = 2.0 ** inc
         prev_mpp = self.microscope_view.mpp.value
         # Clip within the range
@@ -550,9 +543,28 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             ratio = sorted(self.microscope_view.merge_ratio.range + (ratio,))[1]
             self.microscope_view.merge_ratio.value = ratio
         else:
-            self.Zoom(change, block_on_zero=evt.ShiftDown())
+            if CAN_ZOOM in self.abilities:
+                self.Zoom(change, block_on_zero=evt.ShiftDown())
 
         super(DblMicroscopeCanvas, self).on_wheel(evt)
+
+    def on_char(self, evt):
+        key = evt.GetKeyCode()
+
+        if CAN_ZOOM in self.abilities:
+            change = 1
+            if evt.ShiftDown():
+                block_on_zero = True
+                change *= 0.2 # softer
+            else:
+                block_on_zero = False
+
+            if key == ord("+"):
+                self.Zoom(change, block_on_zero)
+            elif key == ord("-"):
+                self.Zoom(-change, block_on_zero)
+
+        super(DblMicroscopeCanvas, self).on_char(evt)
 
     @microscope_view_check
     def on_extra_axis_move(self, axis, shift):
@@ -623,7 +635,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view.get_focus(1).moveRel({"z": shift})
 
     def on_right_down(self, event):
-        if not self.noDragNoFocus:
+        if CAN_FOCUS in self.abilities:
             # Note: Set the cursor before the super method is called.
             # There probably is a Ubuntu/wxPython related bug that
             # SetCursor does not work one CaptureMouse is called (which)
@@ -639,7 +651,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self.focus_overlay:
                 self.focus_overlay.clear_shift()
 
-            super(DblMicroscopeCanvas, self).on_right_down(event)
+        super(DblMicroscopeCanvas, self).on_right_down(event)
 
     def on_right_up(self, event):
         if self._rdragging:
@@ -1114,8 +1126,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
-        self.canZoom = False # TODO: just let the creator do that
-        self.can_drag = False
+        self.abilities -= set([CAN_ZOOM, CAN_MOVE])
         self._ccd_mpp = None # tuple of 2 floats of m/px
 
     def setView(self, microscope_view, tab_data):
@@ -1367,7 +1378,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = None
         self._tab_data_model = None
-        self.can_drag = False
+        self.abilities -= set([CAN_MOVE])
 
         # self.backgroundBrush = wx.SOLID # background is always black
 

@@ -50,7 +50,6 @@ class OverlayTestCase(test.GuiTestCase):
     # @unittest.skip("simple")
     def test_polar_overlay(self):
         cnvs = miccanvas.AngularResolvedCanvas(self.panel)
-        cnvs.can_drag = False
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         test.gui_loop()
