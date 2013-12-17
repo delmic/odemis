@@ -889,12 +889,12 @@ class AnalysisTab(Tab):
                 for viewport in self._view_controller.viewports:
                     if hasattr(viewport.canvas, "points_overlay"):
                         ol = viewport.canvas.points_overlay
-                        ol.set_points(strm.point)
+                        ol.set_point(strm.point)
                 strm.point.subscribe(self._on_ar_point, init=True)
 
             #     # Hackish hookup for the points overlay
             # canvas = self.main_frame.vp_inspection_br.canvas
-            # canvas.points_overlay.set_points(stream_panel.stream.point)
+            # canvas.points_overlay.set_point(stream_panel.stream.point)
 
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break

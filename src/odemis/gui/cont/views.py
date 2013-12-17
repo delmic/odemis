@@ -493,7 +493,7 @@ class ViewController(object):
         # find the viewport corresponding to the current view
         for vp in self._viewports:
             if vp.microscope_view == self._data_model.focussedView.value:
-                vp.canvas.fitViewToContent()
+                vp.canvas.fit_view_to_content()
                 break
         else:
             logging.error("Failed to find the current viewport")

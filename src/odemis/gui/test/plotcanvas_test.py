@@ -31,9 +31,10 @@ import math
 
 import wx
 
-from odemis.gui.comp.miccanvas import ZeroDimensionalPlotCanvas
-from odemis.gui.xmlh import odemis_get_test_resources
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.comp.canvas as canvas
+import odemis.gui.img.data as data
 import odemis.gui.test as test
 
 test.goto_manual()
@@ -106,16 +107,56 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
+    @unittest.skip("simple")
+    def test_buffered_canvas(self):
+        # BufferedCanvas is abstract and shoul not be instantiated
+        self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
+
+    # @unittest.skip("simple")
+    def test_bitmap_canvas(self):
+        cnvs = canvas.BitmapCanvas(self.panel)
+        cnvs.SetBackgroundColour("#00599B")
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
+        cnvs.set_image(0, data.gettest_pattern_sImage())
+        cnvs.update_drawing()
+
+        test.gui_loop()
+        test.sleep(500)
+
+        self.remove_all()
+
+        cnvs = canvas.DraggableCanvas(self.panel)
+        cnvs.SetBackgroundColour("#3C9B00")
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
+        cnvs.set_image(0, data.gettest_pattern_sImage())
+        cnvs.update_drawing()
+
+        # cnvs.fit_view_to_content()
+        test.gui_loop()
+        test.sleep(500)
+
+        # for i in range(500):
+        #     cnvs.bg_offset = (i % 40, i % 40)
+        #     cnvs.update_drawing()
+
+        #     test.gui_loop()
+        #     test.sleep(10)
+
+
+
+
+    @unittest.skip("simple")
     def test_plot_canvas(self):
+
 
 
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
-        cnvs = ZeroDimensionalPlotCanvas(self.panel)
+        cnvs = miccanvas.ZeroDimensionalPlotCanvas(self.panel)
 
         cnvs.SetBackgroundColour(wx.BLACK)
         cnvs.SetForegroundColour("#DDDDDD")
-        cnvs.set_closed(canvas.PLOT_CLOSE_STRAIGHT)
+        cnvs.set_closure(canvas.PLOT_CLOSE_STRAIGHT)
         self.add_control(cnvs, wx.EXPAND, proportion=1)
 
         cnvs.set_x_unit('m')
@@ -151,7 +192,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-        cnvs.set_closed(canvas.PLOT_CLOSE_BOTTOM)
+        cnvs.set_closure(canvas.PLOT_CLOSE_BOTTOM)
         cnvs.reset_dimensions()
 
         test.gui_loop()
@@ -159,7 +200,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
 
-        for plot in PLOTS:
+        for plot in PLOTS[-1:]:
             cnvs.set_1d_data(plot[0], plot[1])
 
             test.gui_loop()
@@ -176,6 +217,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # test.gui_loop()
         # cnvs.Update()
 
+    @unittest.skip("simple")
     def test_buffer_to_world(self):
 
         for m in MARGINS:
@@ -183,8 +225,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
             for bp in BUFF_COORDS:
                 for s in SCALES:
                     for c in BUFFER_CENTER:
-                        wp = canvas.buffer_to_world_pos(bp, c, s, offset)
-                        nbp = canvas.world_to_buffer_pos(wp, c, s, offset)
+                        wp = canvas.BufferedCanvas.buffer_to_world_pos(
+                                                        bp, c, s, offset)
+                        nbp = canvas.BufferedCanvas.world_to_buffer_pos(
+                                                        wp, c, s, offset)
 
                         err = ("{} -> {} -> {} "
                                "scale: {}, center: {}, offset: {}")

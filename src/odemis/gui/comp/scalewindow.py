@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -55,7 +55,7 @@ class BufferedWindow(wx.Control):
     screen will be automatically updated when a Paint event is received.
 
     When the drawing needs to change, you app needs to call the
-    L{BufferedWindow.UpdateDrawing} method. Since the drawing is stored in a bitmap, you
+    L{BufferedWindow.update_drawing} method. Since the drawing is stored in a bitmap, you
     can also save the drawing to file by calling the
     `SaveToFile(self, file_name, file_type)` method.
 
@@ -140,10 +140,10 @@ class BufferedWindow(wx.Control):
                 self.Height = 1
 
         self._Buffer = wx.EmptyBitmap(self.Width, self.Height)
-        self.UpdateDrawing()
+        self.update_drawing()
 
 
-    def UpdateDrawing(self):
+    def update_drawing(self):
         """
         This would get called if the drawing needed to change, for whatever reason.
 
@@ -194,7 +194,7 @@ class ScaleWindow(BufferedWindow):
         if mpp <= 0:
             raise ZeroDivisionError()
         self.mpp = mpp
-        self.UpdateDrawing()
+        self.update_drawing()
 
     def GetLineWidth(self, dc):
         """
