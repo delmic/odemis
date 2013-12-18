@@ -1942,7 +1942,7 @@ class PolarOverlay(ViewOverlay):
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(font.GetPointSize() + 2)
+        ctx.set_font_size(font.GetPointSize() + 3)
 
         _, _, fheight, _, _ = ctx.font_extents()
         tw = ctx.text_extents(string)[2]
