@@ -98,11 +98,15 @@ class OverlayTestCase(test.GuiTestCase):
     # @unittest.skip("simple")
     def test_pixel_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.current_mode = gmodel.TOOL_POINT
+        mmodel = test.FakeMicroscopeModel()
+        view = mmodel.focussedView.value
+        cnvs.setView(view, mmodel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         psol = overlay.PixelSelectOverlay(cnvs)
         # psol.set_values(33, (0.0, 0.0), (30, 30))
-        psol.set_values(30, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        psol.set_values(1.0e-6, (0.0, 0.0), (17, 19), omodel.TupleVA())
 
         cnvs.world_overlays.append(psol)
         test.gui_loop()

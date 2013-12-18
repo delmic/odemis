@@ -120,7 +120,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._fps_ol = comp_overlay.TextViewOverlay(self)
         self.focus_overlay = None
         self.roi_overlay = None
-        self.point_overlay = None
+        self.pixel_overlay = None
         self.points_overlay = None
 
         # play/pause icon
@@ -165,8 +165,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             # If required, create a PixelSelectOverlay
             if guimodel.TOOL_POINT in tab_data.tool.choices:
-                self.point_overlay = comp_overlay.PixelSelectOverlay(self)
-                self.world_overlays.append(self.point_overlay)
+                self.pixel_overlay = comp_overlay.PixelSelectOverlay(self)
+                self.world_overlays.append(self.pixel_overlay)
                 self.points_overlay = comp_overlay.PointsOverlay(self)
                 self.world_overlays.append(self.points_overlay)
 
@@ -210,8 +210,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._showSpotMode(False)
 
         # TODO: fix with the rest of the todos
-        if self.point_overlay:
-            self.point_overlay.enable(False)
+        if self.pixel_overlay:
+            self.pixel_overlay.enable(False)
             self.points_overlay.enable(False)
 
         # TODO: one mode <-> one overlay (type)
@@ -223,11 +223,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif tool == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
-            if (self.point_overlay and
+            if (self.pixel_overlay and
                     self.microscope_view.stream_tree.spectrum_streams):
                 self.current_mode = MODE_SPARC_PICK
-                self.active_overlay = self.point_overlay
-                self.point_overlay.enable(True)
+                self.active_overlay = self.pixel_overlay
+                self.pixel_overlay.enable(True)
             # Enable the Angular Resolve point select overlay when there's a
             # AR stream known anywhere in the data model (and the view has
             # streams).

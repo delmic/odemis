@@ -870,8 +870,8 @@ class AnalysisTab(Tab):
                 iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
-                    if hasattr(viewport.canvas, "point_overlay"):
-                        ol = viewport.canvas.point_overlay
+                    if hasattr(viewport.canvas, "pixel_overlay"):
+                        ol = viewport.canvas.pixel_overlay
                         ol.set_values(
                                     iimg.mpp,
                                     iimg.center,

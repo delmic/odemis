@@ -1382,7 +1382,7 @@ class PixelSelectOverlay(WorldOverlay):
 
         evt.Skip()
 
-    def on_mouse_up(self, evt):
+    def on_left_up(self, evt):
         """ Set the selected pixel, if a pixel position is known
 
         If the cnvs was dragged while the mouse button was down, we do *not*
@@ -1399,14 +1399,14 @@ class PixelSelectOverlay(WorldOverlay):
         self.was_dragged = False
         evt.Skip()
 
-    def on_mouse_enter(self, evt):
+    def on_enter(self, evt):
         """ Change the mouse cursor to a cross """
         if self.enabled:
             self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
             self._is_over = True
         evt.Skip()
 
-    def on_mouse_leave(self, evt):
+    def on_leave(self, evt):
         """ Restore the mouse cursor to its default and clear any hover """
         if self.enabled:
             self.cnvs.SetCursor(wx.STANDARD_CURSOR)
@@ -1456,13 +1456,13 @@ class PixelSelectOverlay(WorldOverlay):
             # Get the physical size of the external data
             physical_size = util.tuple_multiply(self._resolution, self._mpp)
             # Physical half width and height
-            phw, phh = util.tuple_fdiv(physical_size, 2.0)
+            p_w, p_h = util.tuple_fdiv(physical_size, 2.0)
 
             # Get the top left corner of the external data
             # Remember that in physical coordinates, up is positive!
             self._phys_top_left = util.tuple_subtract(
                                             self._physical_center,
-                                            (phw, -phh)
+                                            (p_w, -p_h)
                                         )
 
             logging.debug("Physical top left of PixelSelectOverlay: %s",
@@ -1544,7 +1544,6 @@ class PixelSelectOverlay(WorldOverlay):
             if (self._pixel_pos and
                 self._selected_pixel.value != self._pixel_pos):
                 rect = self.pixel_to_rect(self._pixel_pos, scale)
-
                 if rect:
                     ctx.set_source_rgba(*self.color)
                     ctx.rectangle(*rect)
