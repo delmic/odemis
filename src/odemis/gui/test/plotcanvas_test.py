@@ -107,7 +107,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_buffered_canvas(self):
         # BufferedCanvas is abstract and shoul not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
@@ -142,10 +142,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         #     test.gui_loop()
         #     test.sleep(10)
 
-
-
-
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_plot_canvas(self):
 
 
@@ -217,7 +214,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # test.gui_loop()
         # cnvs.Update()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_buffer_to_world(self):
 
         for m in MARGINS:

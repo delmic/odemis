@@ -106,7 +106,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         psol = overlay.PixelSelectOverlay(cnvs)
         # psol.set_values(33, (0.0, 0.0), (30, 30))
-        psol.set_values(1.0e-6, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        psol.set_values(1.78e-07, (0.0, 0.0), (17, 19), omodel.TupleVA())
 
         cnvs.world_overlays.append(psol)
         test.gui_loop()
