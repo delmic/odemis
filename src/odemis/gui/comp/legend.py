@@ -24,6 +24,7 @@
 
 
 import cairo
+import logging
 import wx
 
 import odemis.gui as gui
@@ -218,10 +219,13 @@ class AxisLegend(wx.Panel):
 
         self.ticks = None
         # The distance between tick in pixel
-        self.tick_gap = 100
+        self.tick_pixel_gap = 100
         self.OnSize(None)
 
     def OnPaint(self, event=None):
+
+        if not self.Parent.canvas.has_data():
+            return
 
         if not self.ticks:
             self.calc_ticks()
@@ -241,12 +245,14 @@ class AxisLegend(wx.Panel):
         ctx.set_line_width(2)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
-        for xpos, xval in self.ticks:
+        for i, (xpos, xval) in enumerate(self.ticks):
             label = units.readable_str(xval, "m", 2)
             _, _, width, height, _, _ = ctx.text_extents(label)
-            ctx.move_to(xpos - (width / 2), height + 8)
-            ctx.show_text(label)
 
+            lx = xpos - (width / 2)
+            lx = max(min(lx, self.ClientSize.x - width - 2), 2)
+            ctx.move_to(lx, height + 8)
+            ctx.show_text(label)
             ctx.move_to(xpos, 5)
             ctx.line_to(xpos, 0)
             ctx.stroke()
@@ -256,38 +262,39 @@ class AxisLegend(wx.Panel):
 
     def calc_ticks(self):
         """ Determine where the ticks should be placed """
+        logging.debug("Calculating ticks")
+
         self.ticks = []
-
-        # Calculate value distance for the current tick_gap
-        val1 = self.Parent.canvas._pos_x_to_val_x(0)
-        val2 = self.Parent.canvas._pos_x_to_val_x(self.tick_gap)
-
-        dist = val2 - val1
+        num_ticks = self.ClientSize.x / self.tick_pixel_gap
 
         # Calculate the best step size in powers of 10, so it will cover at
-        # lest the distance `dist`
-        step = 1e-12
+        # least the distance `val_dist`
+        val_step = 1e-12
         min_x = self.Parent.canvas.min_x
+        width_x = self.Parent.canvas.width_x
 
-        while step < dist:
-            step *= 10
+        while width_x / val_step > num_ticks:
+            val_step *= 10
 
-        # If the pixel distance of step is bigger than `tick_gap`, divide it
-        # by 2
-        pixel_step = (self.Parent.canvas._val_x_to_pos_x(min_x + step) -
-                      self.Parent.canvas._val_x_to_pos_x(min_x))
+        while width_x / (val_step / 2) < num_ticks:
+            val_step /= 2
 
-        if 2 * pixel_step > self.tick_gap:
-            step /= 2
+        print num_ticks, val_step
 
-        num_ticks = self.ClientSize.x // self.tick_gap
+        # If the pixel distance of val_step is bigger than `tick_pixel_gap`,
+        # divide it by 2
+        pixel_val_step = (self.Parent.canvas._val_x_to_pos_x(min_x + val_step) -
+                          self.Parent.canvas._val_x_to_pos_x(min_x))
 
-        first_tick = (step % min_x) + min_x
-        ticks = [first_tick + i * step for i in range(num_ticks)]
+        while pixel_val_step > self.tick_pixel_gap:
+            pixel_val_step /= 2
+
+        first_tick = (val_step % min_x) + min_x
+        ticks = [first_tick + i * val_step for i in range(num_ticks)]
 
         for tick in ticks:
             xpos = self.Parent.canvas._val_x_to_pos_x(tick)
-            if xpos <= self.ClientSize.x - step:
+            if 0 <= xpos <= self.ClientSize.x and (xpos, tick) not in self.ticks:
                 self.ticks.append((xpos, tick))
 
     def set_label(self, label, pos_x):

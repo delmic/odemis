@@ -1411,6 +1411,9 @@ class PlotCanvas(BufferedCanvas):
         self._data = data
         self.reset_dimensions()
 
+    def has_data(self):
+        return len(self._data) != 0
+
     # Attribute calculators
 
     def set_dimensions(self, min_x, max_x, min_y, max_y):

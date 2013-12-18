@@ -1288,9 +1288,14 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         if not self._data:
             return
 
-        x, _ = evt.GetPositionTuple()
-        self.current_x_value = self._pos_x_to_val_x(x)
-        self.current_y_value = self._val_x_to_val_y(self.current_x_value)
+        if evt:
+            x, _ = evt.GetPositionTuple()
+            self.current_x_value = self._pos_x_to_val_x(x)
+            self.current_y_value = self._val_x_to_val_y(self.current_x_value)
+        else:
+            if self.current_x_value is None:
+                return
+            x = self._val_x_to_pos_x(self.current_x_value)
         pos = (x, self._val_y_to_pos_y(self.current_y_value))
 
         label = "%s"  % units.readable_str(

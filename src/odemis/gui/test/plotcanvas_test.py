@@ -28,16 +28,20 @@
 
 import unittest
 import math
+import logging
+
 
 import wx
 
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.viewport as viewport
 import odemis.gui.img.data as data
 import odemis.gui.test as test
 
 test.goto_manual()
+logging.getLogger().setLevel(logging.DEBUG)
 # test.goto_inspect()
 
 
@@ -107,12 +111,12 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_buffered_canvas(self):
         # BufferedCanvas is abstract and shoul not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_bitmap_canvas(self):
         cnvs = canvas.BitmapCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")
@@ -143,6 +147,18 @@ class PlotCanvasTestCase(test.GuiTestCase):
         #     test.sleep(10)
 
     # @unittest.skip("simple")
+    def test_plot_viewport(self):
+        vwp = viewport.PlotViewport(self.panel)
+        self.add_control(vwp, wx.EXPAND, proportion=1)
+
+        vwp.canvas.set_1d_data(PLOTS[2][0], PLOTS[2][1]) #pylint: disable=E1101
+        # vwp.legend_panel.Refresh()
+
+        test.gui_loop()
+
+        # test.goto_inspect()
+
+    @unittest.skip("simple")
     def test_plot_canvas(self):
 
 
@@ -214,7 +230,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # test.gui_loop()
         # cnvs.Update()
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_buffer_to_world(self):
 
         for m in MARGINS:
