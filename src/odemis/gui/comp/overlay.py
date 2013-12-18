@@ -1602,6 +1602,7 @@ class PointsOverlay(WorldOverlay):
                                         gui.FOREGROUND_COLOUR_HIGHLIGHT)
         self.select_colour = conversion.hex_to_frgba(
                                         gui.FOREGROUND_COLOUR_EDIT, 0.5)
+        self.dot_colour = (0, 0, 0, 0.1)
         # The float radius of the dots to draw
         self.dot_size = MIN_DOT_RADIUS
         # None or the point over which the mouse is hovering
@@ -1612,16 +1613,14 @@ class PointsOverlay(WorldOverlay):
 
         self.enabled = False
 
-        self.on_size()
-
     def set_point(self, point_va):
         """ Set the available points and connect to the given point VA """
-
         # Connect the provided VA to the overlay
         self.point = point_va
         self.point.subscribe(self._on_point_selected)
         self._calc_choices()
         self.cnvs.microscope_view.mpp.subscribe(self._on_mpp, init=True)
+        self.offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
 
     def _on_point_selected(self, selected_point):
         """ Update the overlay when a point has been selected """
@@ -1629,21 +1628,26 @@ class PointsOverlay(WorldOverlay):
 
     def _on_mpp(self, mpp):
         """ Calculate the values dependant on the mpp attribute
-
-        I.e. when the zoom level of the canvas changes.
+        (i.e. when the zoom level of the canvas changes)
         """
         self.dot_size = max(min(MAX_DOT_RADIUS, self.min_dist / mpp),
                             MIN_DOT_RADIUS)
 
     def on_left_up(self, evt):
         """ Set the seleceted point if the mouse cursor is hovering over one """
+        # Clear the hover when the canvas was dragged
         if self.cnvs.was_dragged:
             self.cursor_over_point = None
             self.b_hover_box = None
         elif self.cursor_over_point and self.enabled:
             self.point.value = self.choices[self.cursor_over_point]
             logging.debug("Point %s selected", self.point.value)
-        self.cnvs.repaint()
+            self.cnvs.repaint()
+
+    def on_wheel(self, evt):
+        """ Clear the hover when the canvas is zooming """
+        self.cursor_over_point = None
+        self.b_hover_box = None
 
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
@@ -1667,7 +1671,6 @@ class PointsOverlay(WorldOverlay):
                     break
 
             if self.b_hover_box != b_hover_box:
-                # logging.debug("Hitbox changed %s", hover_box)
                 self.b_hover_box = b_hover_box
                 self.cnvs.repaint()
 
@@ -1709,17 +1712,15 @@ class PointsOverlay(WorldOverlay):
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
-        if not self.choices or not self.enabled or not self.dot_size:
+        if not self.choices or not self.enabled:
             return
 
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        # logging.debug("Draw")
-
         if self.b_hover_box:
             b_l, b_t, b_r, b_b = self.b_hover_box
 
-        cursor_over = None
+        w_cursor_over = None
 
         for w_pos in self.choices.keys():
             b_x, b_y = self.cnvs.world_to_buffer(w_pos, self.offset)
@@ -1727,14 +1728,15 @@ class PointsOverlay(WorldOverlay):
             ctx.move_to(b_x, b_y)
             ctx.arc(b_x, b_y, self.dot_size, 0, 2*math.pi)
 
+            # If the mouse is hovering over a dot (and we are not dragging)
             if (self.b_hover_box and (b_l <= b_x <= b_r and b_t <= b_y <= b_b)
                 and not self.cnvs.was_dragged):
-                cursor_over = w_pos
+                w_cursor_over = w_pos
                 ctx.set_source_rgba(*self.select_colour)
             elif self.point.value == self.choices[w_pos]:
                 ctx.set_source_rgba(*self.select_colour)
             else:
-                ctx.set_source_rgba(1, 1, 1, 0.1)
+                ctx.set_source_rgba(*self.dot_colour)
 
             ctx.fill()
 
@@ -1757,7 +1759,7 @@ class PointsOverlay(WorldOverlay):
 
             # ctx.stroke()
 
-        self.cursor_over_point = cursor_over
+        self.cursor_over_point = w_cursor_over
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """
