@@ -407,8 +407,8 @@ class SparcAcquisitionTab(Tab):
             acq_view.removeStream(spec_stream)
             acq_view.removeStream(ar_stream)
         else:
-            # TODO: if only one detector => hide completely the buttons
-            pass # non-available settings are already hidden
+            # only one detector => hide completely the buttons
+            main_frame.sparc_button_panel.Hide()
 
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
