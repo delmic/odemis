@@ -79,7 +79,5 @@ if __name__ == '__main__':
 
     known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff)
 
-    (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-    final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, calc_scaling)
-
-
+    (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_estimated_coordinates, known_optical_coordinates)
+    final_electron = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, calc_scaling)
