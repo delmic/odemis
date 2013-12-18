@@ -1026,7 +1026,6 @@ class LensAlignTab(Tab):
         main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
         # prevent the first image to reset our computation
         main_frame.vp_align_sem.canvas.fitViewToNextImage = False
-#        self._sem_view.getMPPFromNextImage = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
