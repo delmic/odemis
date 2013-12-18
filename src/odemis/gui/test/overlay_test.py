@@ -69,9 +69,11 @@ class OverlayTestCase(test.GuiTestCase):
         view = mmodel.focussedView.value
         cnvs.setView(view, mmodel)
 
+        # Manually add the overlay
         pol = overlay.PointsOverlay(cnvs)
         cnvs.world_overlays.append(pol)
         cnvs.active_overlay = pol
+
         cnvs.current_mode = gmodel.TOOL_POINT
         pol.enable(True)
 
@@ -79,17 +81,18 @@ class OverlayTestCase(test.GuiTestCase):
 
         # phys_points = product(xrange(-1000, 1001,bbbb 50), xrange(-1000, 1001, 50))
         phys_points = product(xrange(-200, 201, 50), xrange(-200, 201, 50))
-        phys_points = [(a / 1.0e9, b / 1.0e9) for a, b in phys_points]
+        phys_points = [(a / 1.0e5, b / 1.0e5) for a, b in phys_points]
 
         point = omodel.VAEnumerated(
                     phys_points[0],
                     choices=frozenset(phys_points))
 
-        test.gui_loop()
-
         pol.set_point(point)
-        view.mpp.value = 1.25e-9
 
+        test.gui_loop()
+        # test.sleep(1000)
+
+        view.mpp.value = view.mpp.value
         test.gui_loop()
 
     # @unittest.skip("simple")

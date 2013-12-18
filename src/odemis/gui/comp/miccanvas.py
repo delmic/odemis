@@ -154,6 +154,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_overlay = comp_overlay.FocusOverlay(self)
             self.view_overlays.append(self.focus_overlay)
 
+        self.microscope_view.mpp.subscribe(self._onMPP, init=True)
+
         if tab_data.tool:
             # If required, create a DichotomyOverlay
             if guimodel.TOOL_DICHO in tab_data.tool.choices:
@@ -167,8 +169,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.world_overlays.append(self.point_overlay)
                 self.points_overlay = comp_overlay.PointsOverlay(self)
                 self.world_overlays.append(self.points_overlay)
-
-        self.microscope_view.mpp.subscribe(self._onMPP)
 
         if hasattr(self.microscope_view, "stage_pos"):
             # TODO: should this be moved to MicroscopeView, to update view_pos

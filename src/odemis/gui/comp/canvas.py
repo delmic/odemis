@@ -976,6 +976,11 @@ class DraggableCanvas(BitmapCanvas):
         # [flt, flt] last absolute value, for sending the change
         self._rdrag_prev_value = None
 
+        # Track if the canvas was dragged. It should be reset to False at the
+        # end of button up handlers, giving overlay the change to check if a
+        # drag occured.
+        self.was_dragged = False
+
     # Properties
 
     @property
@@ -1021,7 +1026,6 @@ class DraggableCanvas(BitmapCanvas):
         # Ignore the release if we didn't register a left down
         if self._ldragging:
             self._ldragging = False
-
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
             new_pos = (
@@ -1029,8 +1033,12 @@ class DraggableCanvas(BitmapCanvas):
                 self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
             )
             self.recenter_buffer(new_pos)
+            # Update the drawing, since buffer_center_world_pos need to be
+            # updates
+            self.update_drawing()
 
         super(DraggableCanvas, self).on_left_up(evt)
+        self.was_dragged = False
 
     def on_right_down(self, evt): #pylint: disable=W0221
         # Ignore the click if we're aleady dragging
@@ -1049,6 +1057,7 @@ class DraggableCanvas(BitmapCanvas):
             self._rdragging = False
 
         super(DraggableCanvas, self).on_right_up(evt)
+        self.was_dragged = False
 
     def on_dbl_click(self, evt):
         """ Recenter the view around the point that was double clicked """
@@ -1130,6 +1139,8 @@ class DraggableCanvas(BitmapCanvas):
                 if change:
                     self.on_extra_axis_move(i, change)
                     self._rdrag_prev_value[i] = value
+
+        self.was_dragged = self.dragging
 
         super(DraggableCanvas, self).on_motion(evt)
 
