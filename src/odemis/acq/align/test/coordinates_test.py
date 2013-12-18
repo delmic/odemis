@@ -33,10 +33,14 @@ from odemis.acq.align import coordinates
 from odemis.acq.align import transform
 from random import shuffle
 from numpy import genfromtxt
+from operator import itemgetter
+from scipy import ndimage
+from scipy import misc
+from scipy import imag
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestFindCenterCoordinates(unittest.TestCase):
     """
     Test FindCenterCoordinates
@@ -60,7 +64,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
                                 (4.1433, 6.7063), (6.4313, 7.2690), (4.9355, 5.1400), (5.0209, 4.9929)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestDivideInNeighborhoods(unittest.TestCase):
     """
     Test DivideInNeighborhoods
@@ -223,7 +227,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestMatchCoordinates(unittest.TestCase):
     """
     Test MatchCoordinates
@@ -483,7 +487,7 @@ class TestOverallComponent(unittest.TestCase):
         self.scale = uniform(4, 4.2)
         self.rotation = uniform(-2, 2)
 
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_overall_simple_shuffled_distorted(self):
         """
         Test DivideInNeighborhoods, FindCenterCoordinates, MatchCoordinates, CalculateTransform for 10x10 shuffled and distorted grid of white spots 
@@ -535,9 +539,16 @@ class TestOverallComponent(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (9, 9))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
         optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
-        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, 15.6015625, 25)
+
+        # TODO: Make function for scale calculation
+        sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
+        optical_scale = sorted_coordinates[0][0] - sorted_coordinates[1][0]
+        scale = 249.625 / optical_scale
+
+        # known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, 15.6015625, 25)
+        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
 
         (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
         final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, calc_scaling)
         numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (4218.0607845864843, 3100.907806071255, 0.0653803040366, 1.47833441039), 1)
-
+        
