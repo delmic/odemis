@@ -186,18 +186,9 @@ class AcquisitionConfig(Config):
 
         # Define the default settings
         self.default.add_section("acquisition")
-
-        self.default.set("acquisition",
-                         "last_path",
-                         ACQUI_PATH)
-
-        self.default.set("acquisition",
-                         "last_format",
-                         tiff.FORMAT)
-
-        self.default.set("acquisition",
-                         "last_extension",
-                         tiff.EXTENSIONS[0])
+        self.default.set("acquisition", "last_path", ACQUI_PATH)
+        self.default.set("acquisition", "last_format", tiff.FORMAT)
+        self.default.set("acquisition", "last_extension", tiff.EXTENSIONS[0])
 
     @property
     def last_path(self):
