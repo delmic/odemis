@@ -96,11 +96,11 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
     # @unittest.skip("simple")
-    def test_point_select_overlay(self):
+    def test_pixel_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        psol = overlay.PointSelectOverlay(cnvs)
+        psol = overlay.PixelSelectOverlay(cnvs)
         # psol.set_values(33, (0.0, 0.0), (30, 30))
         psol.set_values(30, (0.0, 0.0), (17, 19), omodel.TupleVA())
 
@@ -187,6 +187,6 @@ if __name__ == "__main__":
     #unittest.main()
 
     suit = unittest.TestSuite()
-    suit.addTest( OverlayTestCase("test_points_select_overlay") )
+    suit.addTest( OverlayTestCase("test_pixel_select_overlay") )
     runner = unittest.TextTestRunner()
     runner.run(suit)

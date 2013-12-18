@@ -23,15 +23,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 from abc import ABCMeta, abstractmethod
-from odemis.gui.util import limit_invocation, call_after
 from odemis.gui.util.units import readable_str
 from odemis.util import normalize_rect
-from functools import partial
 import cairo
 import logging
 import math
 import odemis.gui as gui
-import odemis.gui.comp.canvas as canvas
 import odemis.gui.img.data as img
 import odemis.gui.util as util
 import odemis.gui.util.units as units
@@ -53,7 +50,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, size, vpos, label, flip=True,
+    def write_label(self, ctx, size, v_pos, label, flip=True,
                     align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=(1.0, 1.0, 1.0)):
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -67,7 +64,7 @@ class Overlay(object):
         margin_x = 10
 
         _, _, width, height, _, _ = ctx.text_extents(label)
-        x, y = vpos
+        x, y = v_pos
 
         if align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
             x = x - width
@@ -1330,14 +1327,14 @@ class DichotomyOverlay(ViewOverlay):
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
 
-class PointSelectOverlay(WorldOverlay):
+class PixelSelectOverlay(WorldOverlay):
     """ This overlay allows for the selection of a pixel in a dataset that is
     not directly visible in the view, but of which we know the Meters per pixel,
     the center and resolution.
     """
 
     def __init__(self, cnvs):
-        super(PointSelectOverlay, self).__init__(cnvs)
+        super(PixelSelectOverlay, self).__init__(cnvs)
 
         # The current position of the mouse cursor in view coordinates
         self._current_vpos = None
@@ -1427,7 +1424,7 @@ class PointSelectOverlay(WorldOverlay):
         coordinates
         """
         if not (len(physical_center) == len(physical_center) == 2):
-            raise ValueError("Illegal values for PointSelectOverlay")
+            raise ValueError("Illegal values for PixelSelectOverlay")
 
         msg = "Setting mpp to %s, physical center to %s and resolution to %s"
         logging.debug(msg, mpp, physical_center, resolution)
@@ -1468,7 +1465,7 @@ class PointSelectOverlay(WorldOverlay):
                                             (phw, -phh)
                                         )
 
-            logging.debug("Physical top left of PointSelectOverlay: %s",
+            logging.debug("Physical top left of PixelSelectOverlay: %s",
                           self._physical_center)
 
             # Calculate the cnvs size, in meters, of each pixel.
@@ -1568,7 +1565,7 @@ class PointSelectOverlay(WorldOverlay):
     def enable(self, enable=True):
         """ Enable of disable the overlay """
         if enable and not self.values_are_set():
-            raise ValueError("Not all PointSelectOverlay values are set!")
+            raise ValueError("Not all PixelSelectOverlay values are set!")
         self.enabled = enable
         self.cnvs.Refresh()
 

@@ -163,9 +163,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                                                      tab_data.dicho_seq)
                 self.view_overlays.append(self.dicho_overlay)
 
-            # If required, create a PointSelectOverlay
+            # If required, create a PixelSelectOverlay
             if guimodel.TOOL_POINT in tab_data.tool.choices:
-                self.point_overlay = comp_overlay.PointSelectOverlay(self)
+                self.point_overlay = comp_overlay.PixelSelectOverlay(self)
                 self.world_overlays.append(self.point_overlay)
                 self.points_overlay = comp_overlay.PointsOverlay(self)
                 self.world_overlays.append(self.points_overlay)

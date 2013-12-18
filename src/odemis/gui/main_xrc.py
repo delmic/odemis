@@ -114,6 +114,7 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
         self.vp_sparc_acq_view = xrc.XRCCTRL(self, "vp_sparc_acq_view")
+        self.sparc_button_panel = xrc.XRCCTRL(self, "sparc_button_panel")
         self.acq_btn_spectrometer = xrc.XRCCTRL(self, "acq_btn_spectrometer")
         self.acq_btn_angular = xrc.XRCCTRL(self, "acq_btn_angular")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
@@ -1929,7 +1930,7 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
-                    <object class="wxPanel" name="main_buttons">
+                    <object class="wxPanel" name="sparc_button_panel">
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
@@ -1988,6 +1989,9 @@ def __init_resources():
                       </object>
                       <size>400,-1</size>
                       <bg>#4D4D4D</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>

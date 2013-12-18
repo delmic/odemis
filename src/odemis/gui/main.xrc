@@ -1725,7 +1725,7 @@
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
-                    <object class="wxPanel" name="main_buttons">
+                    <object class="wxPanel" name="sparc_button_panel">
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
@@ -1784,6 +1784,9 @@
                       </object>
                       <size>400,-1</size>
                       <bg>#4D4D4D</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
