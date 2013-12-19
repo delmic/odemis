@@ -586,13 +586,15 @@ class MicroscopeView(View):
           Focuses 0 and 1 are modified when changing focus respectively along
           the X and Y axis.
         :param stream_classes (None, or tuple of classes): all subclasses that the
-          streams in this view can show (restriction is not technical, only for
-          the user)
+          streams in this view is allowed to show.
         """
 
         super(MicroscopeView, self).__init__(name)
 
-        self.stream_classes = stream_classes or (Stream,)
+        if stream_classes is None:
+            self.stream_classes = (Stream,)
+        else:
+            self.stream_classes = stream_classes
         self._stage = stage
         self._focus = [focus0, focus1]
 

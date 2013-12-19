@@ -637,6 +637,8 @@ class AnalysisTab(Tab):
             self.main_frame.vp_angular
         ]
 
+        # The view controller also has special code for the sparc to create the
+        # right type of view.
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
@@ -644,16 +646,18 @@ class AnalysisTab(Tab):
                                 )
 
         # FIXME: Way too hacky approach to get the right viewport shown,
-        # so we need to rethink and re-do it. (Will involve creating more
-        # view types then the MicroscopeView)
+        # so we need to rethink and re-do it. Might involve letting the
+        # view controller be more clever and able to create viewports and
+        # position them in the sizer.
         # Also see the button definition below.
         if main_data.role == "sparc":
-            for view in tab_data.views.value:
-                if view.name.value == "Angle resolved":
-                    tab_data.visible_views.value[2] = view
-                    # Call 'cache' to make the current line up the default
-                    self._view_controller.cache()
-                    break
+            vp_bottom_left = self.main_frame.vp_angular
+            ar_view = vp_bottom_left.microscope_view
+            tab_data.visible_views.value[2] = ar_view # switch views
+            # Call 'cache' to make the current line up the default
+            self._view_controller.cache()
+        else:
+            vp_bottom_left = self.main_frame.vp_inspection_bl
 
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
@@ -666,13 +670,6 @@ class AnalysisTab(Tab):
                                         self.tab_data_model
                                     )
 
-        # Whacky hacky
-        bottom_left = self.main_frame.vp_inspection_bl
-        if main_data.role == "sparc":
-            # self._view_controller.swap_viewports(2, 5)
-            # self._view_controller.fixate()
-            bottom_left = self.main_frame.vp_angular
-
         buttons = OrderedDict([
             (self.main_frame.btn_sparc_view_all,
                     (None, self.main_frame.lbl_sparc_view_all)),
@@ -683,7 +680,7 @@ class AnalysisTab(Tab):
                     (self.main_frame.vp_inspection_tr,
                      self.main_frame.lbl_sparc_view_tr)),
             (self.main_frame.btn_sparc_view_bl,
-                    (bottom_left,
+                    (vp_bottom_left,
                      self.main_frame.lbl_sparc_view_bl)),
             (self.main_frame.btn_sparc_view_br,
                     (self.main_frame.vp_inspection_br,
@@ -710,7 +707,7 @@ class AnalysisTab(Tab):
         self.tb.enable_button(tools.TOOL_POINT, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
-        self.tab_data_model.tool.subscribe(self._onTool, init=True)
+        self.tab_data_model.tool.subscribe(self._onTool)
 
     @property
     def stream_controller(self):

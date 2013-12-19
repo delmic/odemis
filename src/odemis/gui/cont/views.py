@@ -116,6 +116,12 @@ class ViewController(object):
 
         To be executed only once, at initialisation.
         """
+        # TODO: just get the sizer that will contain the viewports, and
+        # create the viewports according to the stream classes.
+        # It could be possible to even delete viewports and create new ones
+        # when .views changes.
+        # When .visible_views changes, but the viewports in the right order
+        # in the sizer.  
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
         assert not self._data_model.views.value # should still be empty
@@ -135,9 +141,9 @@ class ViewController(object):
                       "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
                       }),
                     (self._viewports[2],
-                     {"name": "Dummy",  # This one should be swapped out
-                      "stream_classes": [],
-                      }),
+                     {"name": "Dummy", # will be immediatly swapped for AR
+                      "stream_classes": (), # Nothing
+                     }),
                     (self._viewports[3],
                      {"name": "SEM CL",
                       "stream_classes":
@@ -147,11 +153,11 @@ class ViewController(object):
                     # Sparc configuration
                     (self._viewports[4],
                      {"name": "Spectrum plot",
-                      "stream_classes": SPECTRUM_STREAMS
+                      "stream_classes": SPECTRUM_STREAMS,
                      }),
                     (self._viewports[5],
                      {"name": "Angle resolved",
-                      "stream_classes": AR_STREAMS
+                      "stream_classes": AR_STREAMS,
                      }),
                 ])
             else:
@@ -179,10 +185,7 @@ class ViewController(object):
                      {"name": "Spectrum plot",
                       "stream_classes": SPECTRUM_STREAMS
                      }),
-                    (self._viewports[5],
-                     {"name": "Angle resolved",
-                      "stream_classes": AR_STREAMS
-                     }),
+                    # TODO: currently, no way to display AR_STREAMS
                 ])
 
         # If SEM only: all SEM
@@ -321,7 +324,7 @@ class ViewController(object):
         invisible.
         """
 
-        # Small shothand local variable
+        # Small shorthand local variable
         vp = self._viewports
 
         visible_vp = vp[visible_idx]
@@ -356,7 +359,7 @@ class ViewController(object):
             flag=visible_item.GetFlag(),
             border=visible_item.GetBorder())
 
-        # Move viewport 1 to the end of the conaining sizer
+        # Move viewport 1 to the end of the containing sizer
         visible_sizer.Detach(visible_vp)
         hidden_sizer.Insert(
             hidden_pos,
