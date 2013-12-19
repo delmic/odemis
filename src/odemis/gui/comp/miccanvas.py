@@ -1309,7 +1309,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self.Parent.legend_panel.Refresh()
 
         #self.markline_overlay.set_label(label)
-        self.markline_overlay.set_position(pos)
+        self.markline_overlay.set_position(pos, str(self.current_y_value))
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):

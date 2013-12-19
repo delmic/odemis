@@ -298,7 +298,6 @@ class AxisLegend(wx.Panel):
         ticks = [first_tick + i * val_step for i in range(2 * num_ticks)]
 
         for tick in ticks:
-            print tick
             xpos = self.Parent.canvas._val_x_to_pos_x(tick)
             if (0 <= xpos <= (self.ClientSize.x - self.tick_pixel_gap / 2)
                 and (xpos, tick) not in self.ticks):

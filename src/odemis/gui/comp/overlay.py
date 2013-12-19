@@ -50,7 +50,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, size, v_pos, label, flip=True,
+    def write_label(self, ctx, size, v_pos, label, fontsize=0, flip=True,
                     align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=(1.0, 1.0, 1.0)):
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -59,7 +59,7 @@ class Overlay(object):
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(font.GetPointSize() + 1)
+        ctx.set_font_size(font.GetPointSize() + fontsize)
 
         margin_x = 10
 
@@ -1063,9 +1063,10 @@ class MarkingLineOverlay(ViewOverlay):
 
         self.line_width = 2
 
-    def set_position(self, pos):
+    def set_position(self, pos, label=None):
         self.vposx = max(1, min(pos[0], self.view_width - self.line_width))
         self.vposy = max(1, min(pos[1], self.view_height - 1))
+        self.label = label
 
     def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
@@ -2035,6 +2036,7 @@ class PolarOverlay(ViewOverlay):
                         self.cnvs.ClientSize,
                         (self.tx, self.ty),
                         theta_str,
+                        fontsize=1,
                         colour=self.colour,
                         align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
 
