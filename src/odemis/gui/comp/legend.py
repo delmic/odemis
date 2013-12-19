@@ -25,6 +25,7 @@
 
 import cairo
 import logging
+import math
 import wx
 
 import odemis.gui as gui
@@ -247,7 +248,7 @@ class AxisLegend(wx.Panel):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
         for i, (xpos, xval) in enumerate(self.ticks):
-            label = units.readable_str(xval, "m", 2)
+            label = units.readable_str(xval, "m", 3)
             _, _, width, height, _, _ = ctx.text_extents(label)
 
             lx = xpos - (width / 2)
@@ -266,9 +267,11 @@ class AxisLegend(wx.Panel):
 
         self.ticks = []
 
-        # The numbner of ticks we will aim for
+        # The number of ticks we will aim for
         num_ticks = self.ClientSize.x / self.tick_pixel_gap
 
+        logging.debug("Aiming for %s ticks with a client of width %s",
+                      num_ticks, self.ClientSize.x)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         val_step = 1e-12
@@ -280,26 +283,25 @@ class AxisLegend(wx.Panel):
         while range_x / val_step > num_ticks:
             val_step *= 10
 
+        logging.debug("Value step is %s after first iteration with range %s",
+                      val_step, range_x)
+
         # Divide the value step by two,
-        while range_x / (val_step / 2) < num_ticks:
+        while range_x / val_step < num_ticks:
             val_step /= 2
+        logging.debug("Value step is %s after second iteration with range %s",
+                      val_step, range_x)
 
-        print num_ticks, val_step
+        first_tick = (int(min_x / val_step) + 1) * val_step
+        logging.debug("Setting first tick at value %s", first_tick)
 
-        # If the pixel distance of val_step is bigger than `tick_pixel_gap`,
-        # divide it by 2
-        pixel_val_step = (self.Parent.canvas._val_x_to_pos_x(min_x + val_step) -
-                          self.Parent.canvas._val_x_to_pos_x(min_x))
-
-        while pixel_val_step > self.tick_pixel_gap:
-            pixel_val_step /= 2
-
-        first_tick = (val_step % min_x) + min_x
-        ticks = [first_tick + i * val_step for i in range(num_ticks)]
+        ticks = [first_tick + i * val_step for i in range(2 * num_ticks)]
 
         for tick in ticks:
+            print tick
             xpos = self.Parent.canvas._val_x_to_pos_x(tick)
-            if 0 <= xpos <= self.ClientSize.x and (xpos, tick) not in self.ticks:
+            if (0 <= xpos <= (self.ClientSize.x - self.tick_pixel_gap / 2)
+                and (xpos, tick) not in self.ticks):
                 self.ticks.append((xpos, tick))
 
     def set_label(self, label, pos_x):

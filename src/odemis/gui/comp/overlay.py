@@ -1552,7 +1552,7 @@ class PixelSelectOverlay(WorldOverlay):
                     ctx.rectangle(*rect)
                     ctx.fill()
 
-            if self._selected_pixel.value != None:
+            if self._selected_pixel.value not in (None, (None, None)):
                 rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
                 if rect:

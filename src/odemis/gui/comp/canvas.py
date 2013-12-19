@@ -1477,27 +1477,35 @@ class PlotCanvas(BufferedCanvas):
     # Reproduce: draw the smallest graph in the test case and drage back and
     # forth between 0 and 1
 
-    # @memoize
     def _val_x_to_pos_x(self, val_x):
         """ Translate an x value to an x position in pixels """
+        # Clip val_x
         x = min(max(self.min_x_val, val_x), self.max_x_val)
         perc_x = float(x - self.min_x_val) / self.range_x
-        return int(round(perc_x * self.ClientSize.x))
+        return perc_x * self.ClientSize.x
 
     def _val_y_to_pos_y(self, val_y):
         """ Translate an y value to an y position in pixels """
         y = min(max(self.min_y_val, val_y), self.max_y_val)
         perc_y = float(self.max_y_val - y) / self.range_y
-        return int(round(perc_y * self.ClientSize.y))
+        return perc_y * self.ClientSize.y
 
-    #@memoize
-    def _pos_x_to_val_x(self, pos_x):
+    def _pos_x_to_val_x(self, pos_x, match=False):
+        """ Map the given pixel position to a an x value from the data
+
+        If match is True, the closest match from _data will be returned,
+        otherwise interpolation will occur.
+        """
         perc_x = pos_x / float(self.ClientSize.x)
         val_x = (perc_x * self.range_x) + self.min_x_val
-        val_x = max(min(val_x, self.max_x_val), self.min_x_val)
+
+        if match:
+            return min([(abs(val_x - x), val_x) for x, _ in self._data])[1]
+        else:
+            # Clip
+            val_x = max(min(val_x, self.max_x_val), self.min_x_val)
         return val_x
 
-    #@memoize
     def _val_x_to_val_y(self, val_x):
         """ Map the give x pixel value to a y value """
         res = [y for x, y in self._data if x <= val_x][-1]

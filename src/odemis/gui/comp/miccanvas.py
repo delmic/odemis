@@ -1290,7 +1290,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         if evt:
             x, _ = evt.GetPositionTuple()
-            self.current_x_value = self._pos_x_to_val_x(x)
+            self.current_x_value = self._pos_x_to_val_x(x, match=True)
             self.current_y_value = self._val_x_to_val_y(self.current_x_value)
         else:
             if self.current_x_value is None:

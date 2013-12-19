@@ -156,7 +156,16 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-        # test.goto_inspect()
+        #pylint: disable=E1101
+        # for val_x in PLOTS[2][0]:
+        #     pos_x = vwp.canvas._val_x_to_pos_x(val_x)
+        #     new_val_x = vwp.canvas._pos_x_to_val_x(pos_x)
+        #     print val_x, pos_x, new_val_x
+
+        # vx = 250
+        # px = vwp.canvas._val_x_to_pos_x(vx)
+        # print px
+        # print vwp.canvas._pos_x_to_val_x(px, True)
 
     @unittest.skip("simple")
     def test_plot_canvas(self):
