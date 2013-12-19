@@ -63,7 +63,7 @@ def ScanGrid(repetitions, used_dwell_time, used_escan, used_ccd, used_detector):
         escan.dwellTime.value = escan.dwellTime.range[0]
 
     # CCD setup
-    ccd.exposureTime.value = 2 * repetitions[0] * repetitions[1] * escan.dwellTime.value  # s
+    ccd.exposureTime.value = repetitions[0] * repetitions[1] * escan.dwellTime.value  # s
     binning = (1, 1)
     ccd.binning.value = binning
     ccd.resolution.value = (ccd.shape[0] // binning[0],
