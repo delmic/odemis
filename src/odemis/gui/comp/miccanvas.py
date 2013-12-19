@@ -1290,6 +1290,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         if evt:
             x, _ = evt.GetPositionTuple()
+            # Clip x
+            x = max(min(self.ClientSize.x, x), 1)
             self.current_x_value = self._pos_x_to_val_x(x, match=True)
             self.current_y_value = self._val_x_to_val_y(self.current_x_value)
         else:
@@ -1309,7 +1311,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self.Parent.legend_panel.Refresh()
 
         #self.markline_overlay.set_label(label)
-        self.markline_overlay.set_position(pos, str(self.current_y_value))
+        self.markline_overlay.set_position(pos, str(self.current_y_value or ""))
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):

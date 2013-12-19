@@ -1508,8 +1508,8 @@ class PlotCanvas(BufferedCanvas):
 
     def _val_x_to_val_y(self, val_x):
         """ Map the give x pixel value to a y value """
-        res = [y for x, y in self._data if x <= val_x][-1]
-        return res
+        res = [y for x, y in self._data if x <= val_x]
+        return res[-1] if res else None
 
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
