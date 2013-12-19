@@ -654,10 +654,11 @@ class AnalysisTab(Tab):
             vp_bottom_left = self.main_frame.vp_angular
             ar_view = vp_bottom_left.microscope_view
             tab_data.visible_views.value[2] = ar_view # switch views
-            # Call 'cache' to make the current line up the default
-            self._view_controller.cache()
         else:
             vp_bottom_left = self.main_frame.vp_inspection_bl
+
+        # save the views to be able to reset them later
+        self._def_views = list(tab_data.visible_views.value)
 
         self._stream_controller = streamcont.StreamController(
                                         self.tab_data_model,
@@ -742,11 +743,10 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return
 
-        # Reset any mode tool when a new image is being opened
+        # Reset tool, layout and visible views
         self.tab_data_model.tool.value = guimod.TOOL_NONE
-
-        # Reset the view
-        self._view_controller.reset()
+        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
+        self.tab_data_model.visible_views.value = self._def_views
 
         # Detect the format to use
         fn = dialog.GetPath()
@@ -888,11 +888,6 @@ class AnalysisTab(Tab):
                     if hasattr(viewport.canvas, "points_overlay"):
                         ol = viewport.canvas.points_overlay
                         ol.set_point(strm.point)
-                strm.point.subscribe(self._on_ar_point, init=True)
-
-            #     # Hackish hookup for the points overlay
-            # canvas = self.main_frame.vp_inspection_br.canvas
-            # canvas.points_overlay.set_point(stream_panel.stream.point)
 
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break
@@ -910,7 +905,7 @@ class AnalysisTab(Tab):
         # but it cannot be avoided. Subscribing to the tool VA will only
         # tell us what the new tool is and not what the previous, if any, was.
         if tool != guimod.TOOL_POINT:
-            self._view_controller.reset()
+            self.tab_data_model.visible_views.value = self._def_views
 
     def _on_spec_pixel(self, selected_pixel):
         """ Event handler for when a spectrum pixel is selected """
@@ -935,10 +930,6 @@ class AnalysisTab(Tab):
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
-
-    def _on_ar_point(self, selected_pixel):
-        """ Event handler for when a angle resolve point is selected """
-        pass
 
     def _split_channels(self, data):
         """

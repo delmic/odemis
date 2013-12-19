@@ -62,18 +62,10 @@ class ViewController(object):
         # First view is focused
         tab_data.focussedView.value = tab_data.visible_views.value[0]
 
-        # Store the initial values, so we can reset
-        self.cache()
-
         # subscribe to layout and view changes
         tab_data.visible_views.subscribe(self._on_visible_views)
         tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
         tab_data.focussedView.subscribe(self._onView, init=True)
-
-    def cache(self):
-        self._def_views = list(self._data_model.visible_views.value)
-        self._def_layout = self._data_model.viewLayout.value
-        self._def_focus = self._data_model.focussedView.value
 
     @property
     def viewports(self):
@@ -281,38 +273,22 @@ class ViewController(object):
         """
         return self._viewports.index(self._viewport_by_view(view))
 
-    def reset(self):
-        """ Reset the view layout to the default one
-
-        This means that the viewport order, the viewport layout and the focus
-        will all be reset to as they were when the controller was created.
+    def _set_visible_views(self, views):
+        """ set the view order to the one provided in the parameter
+        views (list of View)
         """
-
-        self._data_model.visible_views.value = list(self._def_views)
-
-        self._reset(self._data_model.visible_views.value)
-
-        # Reset the focus
-        self._data_model.focussedView.value = self._def_focus
-        # Reset the layout
-        self._data_model.viewLayout.value = self._def_layout
-
-    def _reset(self, views):
-        """ Reset the view order to the one provided in the parameter
-        """
-
         msg = "Resetting views to %s"
         msgdata = [str(v) for v in views] if not views is None else "default"
         logging.debug(msg, msgdata)
 
-        # containing_window = self._viewports[0].Parent
-
+        # TODO: don't use swap_viewports (which depends on the previous
+        # viewport properties), and only use the sizer and the *view info.
         # Reset the order of the viewports
-        for i, def_view in enumerate(views or self._def_views):
+        for i, v in enumerate(views):
             # If a viewport has moved compared to the original order...
-            if self._viewports[i].microscope_view != def_view:
+            if self._viewports[i].microscope_view != v:
                 # ...put it back in its original place
-                j = self._viewport_index_by_view(def_view)
+                j = self._viewport_index_by_view(v)
                 self.swap_viewports(i, j)
 
     def swap_viewports(self, visible_idx, hidden_idx):
@@ -385,14 +361,18 @@ class ViewController(object):
         """ This method is called when the visible views in the data model
         change.
         """
-
         logging.debug("Visible view change detected")
         # Test if all provided views are known
         for view in visible_views:
             if view not in self._data_model.views.value:
                 raise ValueError("Unknown view %s!" % view)
 
-        self._reset(visible_views)
+        self._set_visible_views(visible_views)
+
+        # Ensure the focussed view is always one that is visible
+        if self._data_model.focussedView.value not in visible_views:
+            self._data_model.focussedView.value = visible_views[0]
+
 
     def _onView(self, view):
         """ Called when another focussed view changes.
