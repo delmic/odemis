@@ -57,10 +57,12 @@ def ScanGrid(repetitions, used_dwell_time, used_escan, used_ccd, used_detector):
     escan.scale.value = scale
     escan.resolution.value = repetitions
     escan.translation.value = (0, 0)
-    if (used_dwell_time>escan.dwellTime.range[0]):
-        escan.dwellTime.value = used_dwell_time
-    else:
+    if (used_dwell_time < escan.dwellTime.range[0]):
         escan.dwellTime.value = escan.dwellTime.range[0]
+    elif (used_dwell_time > escan.dwellTime.range[1]):
+        escan.dwellTime.value = escan.dwellTime.range[1]
+    else:
+        escan.dwellTime.value = used_dwell_time
 
     # CCD setup
     ccd.exposureTime.value = repetitions[0] * repetitions[1] * escan.dwellTime.value  # s
