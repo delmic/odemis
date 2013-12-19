@@ -172,8 +172,8 @@ def DivideInNeighborhoods(data, number_of_spots):
         subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
         subimages.append(subimage)
 
-    # Take care of fault spots
-    clean_subimages, clean_subimage_coordinates = FilterFaultSpots(image, subimages, subimage_coordinates)
+    # Take care of outliers
+    clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
     subimage_size = subimage.shape[0]
 
     return clean_subimages, clean_subimage_coordinates, subimage_size
@@ -197,13 +197,13 @@ def ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size):
 
     return optical_coordinates
 
-def FilterFaultSpots(image, subimages, subimage_coordinates):
+def FilterOutliers(image, subimages, subimage_coordinates):
     """
-    It removes subimages that contain cosmic rays.
+    It removes subimages that contain outliers (e.g. cosmic rays).
     image (model.DataArray): 2D array containing the intensity of each pixel
     subimages (List of model.DataArray): List of 2D arrays containing pixel intensity
     returns (List of model.DataArray): List of subimages without the ones containing
-                                       cosmic ray
+                                       outliers
             (List of tuples): The coordinates of the center of each subimage with respect 
                             to the overall image
     """
@@ -212,7 +212,7 @@ def FilterFaultSpots(image, subimages, subimage_coordinates):
     clean_subimage_coordinates = []
     for i in xrange(number_of_subimages):
         hist, bin_edges = histogram(subimages[i], bins=10)
-        # Remove subimage if its istogram implies a cosmic ray
+        # Remove subimage if its histogram implies a cosmic ray
         if ~((hist[3:7] == numpy.zeros(4)).all()):
             clean_subimages.append(subimages[i])
             clean_subimage_coordinates.append(subimage_coordinates[i])
@@ -272,13 +272,11 @@ def MatchCoordinates(input_coordinates, electron_coordinates, quessing_scale, ma
         electron_e_inv_points = [estimated_coordinates[i] for i in list(compress(index1, inv_e_wrong_points))]
         electron_e_points = list(compress(electron_coordinates, inv_e_wrong_points))
 
-        grid_diff = []
-        for ta, tb in zip(electron_e_inv_points, electron_e_points):
-            grid_diff.append(tuple(map(operator.sub, ta, tb)))
-
+        # Calculate distance between the expected and found electron coordinates
         coord_diff = []
-        for ta in grid_diff:
-            coord_diff.append(math.hypot(ta[0], ta[1]))
+        for ta, tb in zip(electron_e_inv_points, electron_e_points):
+            tab = tuple(map(operator.sub, ta, tb))
+            coord_diff.append(math.hypot(tab[0], tab[1]))
 
         sort_diff = sorted(coord_diff)
         diff_number_sort = math.floor(DIFF_NUMBER * (sort_diff.__len__()))
