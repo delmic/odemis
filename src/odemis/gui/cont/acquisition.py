@@ -34,7 +34,6 @@ import math
 from odemis import model, dataio
 from odemis.gui import acqmng, conf
 from odemis.gui.acqmng import preset_as_is
-from odemis.gui.cont import get_main_tab_controller
 from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, units, \
     limit_invocation
@@ -43,7 +42,6 @@ from odemis.gui.win.acquisition import AcquisitionDialog, \
 import os
 import re
 import subprocess
-import sys
 import threading
 import time
 import wx
@@ -63,141 +61,94 @@ class AcquisitionController(object):
         """
         # TODO: get tab_controller from arguments or setting and stream controller
         self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
         self._main_frame = main_frame
         self._anim_thread = None # for snapshot animation
 
-        # nice default paths
-        # Snapshots: always the "Pictures" user folder
-        self._snapshot_folder = get_picture_folder()
 
         # For snapshot animation find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during
         # acquisition)
         self._outputs = self.get_display_outputs()
 
-    # TODO: function never used => delete?
-    def onTakeScreenShot(self):
-        """ Takes a screenshot of the screen at give pos & size (rect). """
-        logging.debug('Starting screenshot')
-        rect = self._main_frame.GetRect()
-        # http://aspn.activestate.com/ASPN/Mail/Message/wxpython-users/3575899
-        # created by Andrea Gavana
-
-        # adjust widths for Linux (figured out by John Torres
-        # http://article.gmane.org/gmane.comp.python.wxpython/67327)
-        if sys.platform == 'linux2':
-            client_x, client_y = self._main_frame.ClientToScreen((0, 0))
-            border_width = client_x - rect.x
-            title_bar_height = client_y - rect.y
-            rect.width += (border_width * 2)
-            rect.height += title_bar_height + border_width
-
-        #Create a DC for the whole screen area
-        dcScreen = wx.ScreenDC()
-
-        #Create a Bitmap that will hold the screenshot image later on
-        #Note that the Bitmap must have a size big enough to hold the screenshot
-        #-1 means using the current default colour depth
-        bmp = wx.EmptyBitmap(rect.width, rect.height)
-
-        #Create a memory DC that will be used for actually taking the screenshot
-        memDC = wx.MemoryDC()
-
-        #Tell the memory DC to use our Bitmap
-        #all drawing action on the memory DC will go to the Bitmap now
-        memDC.SelectObject(bmp)
-
-        #Blit (in this case copy) the actual screen on the memory DC
-        #and thus the Bitmap
-        memDC.Blit(0, #Copy to this X coordinate
-                    0, #Copy to this Y coordinate
-                    rect.width, #Copy this width
-                    rect.height, #Copy this height
-                    dcScreen, #From where do we copy?
-                    rect.x, #What's the X offset in the original DC?
-                    rect.y  #What's the Y offset in the original DC?
-                    )
-
-        #Select the Bitmap out of the memory DC by selecting a new
-        #uninitialized Bitmap
-        memDC.SelectObject(wx.NullBitmap)
-
-        return bmp.ConvertToImage()
-
     def start_snapshot_viewport(self, event):
         """Wrapper to run snapshot_viewport in a separate thread."""
-        thread = threading.Thread(target=self.snapshot_viewport)
+        # Find out the current tab
+        tab = self._main_data_model.tab.value
+        thread = threading.Thread(target=self.snapshot_viewport, args=(tab,))
         thread.start()
 
-    def snapshot_viewport(self):
+    def snapshot_viewport(self, tab):
         """ Save a snapshot of the raw image from the focused view to the
         filesystem.
+        tab (Tab): the current tab to save the snapshot from
         The name of the file follows the scheme date-time.tiff (e.g.,
         20120808-154812.tiff) and is located in the user's picture directory.
         """
-        # TODO: allow user to chose the file format in preferences
-        import odemis.dataio.tiff as exporter
-        #import odemis.dataio.hdf5 as exporter
+        try:
+            tab_data_model = tab.tab_data_model
 
-        # filename
-        dirname = self._snapshot_folder
-        basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-        extention = exporter.EXTENSIONS[0] # includes the .
-        filename = os.path.join(dirname, basename + extention)
-        if os.path.exists(filename):
-            msg = "File '%s' for snapshot already exists, cancelling snapshot"
-            logging.warning(msg,
-                            filename)
-            return
+            # TODO: allow user to chose the file format in preferences
+            config = conf.get_acqui_conf()
+            exporter = dataio.get_exporter(config.last_format)
+            extention = config.last_extension
 
-        # get currently focused view
-        view = self._tab_data_model.focussedView.value
-        if not view:
-            logging.warning("Failed to take snapshot, no view is selected")
-            return
+            # filename
+            # always the "Pictures" user folder
+            dirname = get_picture_folder() # TODO: use last path?
+            basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+            filename = os.path.join(dirname, basename + extention)
+            if os.path.exists(filename):
+                msg = "File '%s' for snapshot already exists, cancelling snapshot"
+                logging.warning(msg, filename)
+                return
 
-        streams = view.getStreams()
-        if len(streams) == 0:
-            msg = "Failed to take snapshot, no stream visible in view %s"
-            logging.warning(msg, view.name.value)
-            return
+            # get currently focused view
+            view = tab_data_model.focussedView.value
+            if not view:
+                try:
+                    view = tab_data_model.views.value[0]
+                except IndexError:
+                    logging.warning("Failed to take snapshot, no view available")
+                    return
 
-        self.start_snapshot_animation()
+            streams = tab_data_model.streams.value
+            if not streams:
+                msg = "Failed to take snapshot, no stream visible in view %s"
+                logging.warning(msg, view.name.value)
+                return
 
-        # let's try to get a thumbnail
-        if view.thumbnail.value is None:
-            thumbnail = None
-        else:
-            # need to convert from wx.Image to ndimage
-            thumbnail = img.wxImage2NDImage(view.thumbnail.value,
-                                            keep_alpha=False)
-            # add some basic info to the image
-            mpp = view.mpp.value
-            metadata = {model.MD_POS: view.view_pos.value,
-                        model.MD_PIXEL_SIZE: (mpp, mpp),
-                        model.MD_DESCRIPTION: "Composited image preview"}
-            thumbnail = model.DataArray(thumbnail, metadata=metadata)
+            self.start_snapshot_animation()
 
-        # for each stream seen in the viewport
-        raw_images = []
-        for s in streams:
-            data = s.raw # list of raw images for this stream (with metadata)
-            if len(data) == 0:
-                msg = ("Failed to get the last raw image of stream %s, will "
-                       "acquire a new one")
-                logging.warning(msg, s.name.value)
-                # FIXME: ask the stream to get activated and return an image
-                # it's the only one which know precisely how to configure
-                # detector and emitters
-                data = [s._dataflow.get()]
-            # add the stream name to the image
-            for d in data:
-                d.metadata[model.MD_DESCRIPTION] = s.name.value
-            raw_images.extend(data)
+            # let's try to get a thumbnail
+            if view.thumbnail.value is None:
+                thumbnail = None
+            else:
+                # need to convert from wx.Image to ndimage
+                thumbnail = img.wxImage2NDImage(view.thumbnail.value,
+                                                keep_alpha=False)
+                # add some basic info to the image
+                mpp = view.mpp.value
+                metadata = {model.MD_POS: view.view_pos.value,
+                            model.MD_PIXEL_SIZE: (mpp, mpp),
+                            model.MD_DESCRIPTION: "Composited image preview"}
+                thumbnail = model.DataArray(thumbnail, metadata=metadata)
 
-        # record everything to a file
-        exporter.export(filename, raw_images, thumbnail)
-        logging.info("Snapshot saved as file '%s'.", filename)
+            # for each stream seen in the viewport
+            raw_images = []
+            for s in streams:
+                data = s.raw # list of raw images for this stream (with metadata)
+                # add the stream name to the image
+                for d in data:
+                    if model.MD_DESCRIPTION not in d.metadata:
+                        d.metadata[model.MD_DESCRIPTION] = s.name.value
+                raw_images.extend(data)
+
+            # record everything to a file
+            exporter.export(filename, raw_images, thumbnail)
+            logging.info("Snapshot saved as file '%s'.", filename)
+        except Exception:
+            logging.exception("Failed to save snapshot")
 
     def start_snapshot_animation(self):
         """
@@ -324,16 +275,16 @@ class SecomAcquiController(AcquisitionController):
         self.open_acquisition_dialog()
 
     def open_acquisition_dialog(self):
-        mtc = get_main_tab_controller()
+        secom_live_tab = self._tab_data_model.main.getTabByName("secom_live")
 
         # save the original settings
-        main_settings_controller = mtc['secom_live'].settings_controller
+        main_settings_controller = secom_live_tab.settings_controller
         orig_settings = preset_as_is(main_settings_controller.entries)
         main_settings_controller.pause()
         # TODO: also pause the MicroscopeViews
 
         # pause all the live acquisitions
-        main_stream_controller = mtc['secom_live'].stream_controller
+        main_stream_controller = secom_live_tab.stream_controller
         paused_streams = main_stream_controller.pauseStreams()
 
         # create the dialog
@@ -549,12 +500,11 @@ class SparcAcquiController(AcquisitionController):
         acqfile (File): file object to which the data was saved
         """
         # get the analysis tab
-        mtc = get_main_tab_controller()
-        analysis_tab = mtc['analysis']
+        analysis_tab = self._tab_data_model.main.getTabByName("analysis")
         analysis_tab.display_new_data(acqfile.name, data)
 
         # show the new tab
-        mtc.switch("analysis")
+        self._main_frame.tab.value = analysis_tab
 
     def on_acquisition(self, evt):
         """

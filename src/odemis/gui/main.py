@@ -22,20 +22,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import Pyro4.errors
 import logging
-import numpy
 from odemis import model
 from odemis.gui import main_xrc, log
 import odemis.gui.conf
-from odemis.gui.cont import set_main_tab_controller, get_main_tab_controller
 from odemis.gui.model.dye import DyeDatabase
-from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.model.stream import StaticSEMStream, StaticSpectrumStream
 from odemis.gui.util import call_after
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
 import os.path
-import pkg_resources
-import scipy.io
 import subprocess
 import sys
 import threading
@@ -65,6 +59,7 @@ class OdemisGUIApp(wx.App):
 
         self.main_data = None
         self.main_frame = None
+        self._tab_controller = None
 
         try:
             driver.speedUpPyroConnect(model.getMicroscope())
@@ -246,7 +241,7 @@ class OdemisGUIApp(wx.App):
                             tab_defs,
                             self.main_frame,
                             self.main_data)
-            set_main_tab_controller(tc)
+            self._tab_controller = tc
 
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
@@ -357,8 +352,7 @@ see http://www.fluorophores.org/disclaimer/.
                 pass
 
             # let all the tabs know we are stopping
-            mtc = get_main_tab_controller()
-            mtc.terminate()
+            self._tab_controller.terminate()
 
             if self.http_proc:
                 self.http_proc.terminate()  #pylint: disable=E1101

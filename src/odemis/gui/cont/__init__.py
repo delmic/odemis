@@ -26,18 +26,4 @@ This package contains Controller classes which 'control' groups of widgets and
 other GUI components as logical units.
 
 """
-
-_main_tab_controller = None
-
-
-def set_main_tab_controller(mtc):
-    global _main_tab_controller
-    _main_tab_controller = mtc
-
-def get_main_tab_controller():
-    global _main_tab_controller
-
-    if not _main_tab_controller:
-        raise ValueError("Main tab controller not set!")
-
-    return _main_tab_controller
+pass

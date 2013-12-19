@@ -407,8 +407,8 @@ class SparcAcquisitionTab(Tab):
             acq_view.removeStream(spec_stream)
             acq_view.removeStream(ar_stream)
         else:
-            # TODO: if only one detector => hide completely the buttons
-            pass # non-available settings are already hidden
+            # only one detector => hide completely the buttons
+            main_frame.sparc_button_panel.Hide()
 
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
@@ -1026,7 +1026,6 @@ class LensAlignTab(Tab):
         main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
         # prevent the first image to reset our computation
         main_frame.vp_align_sem.canvas.fitViewToNextImage = False
-#        self._sem_view.getMPPFromNextImage = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
@@ -1362,13 +1361,10 @@ class MirrorAlignTab(Tab):
             goal_stream = streammod.StaticStream("Goal", goal_iim)
 
             # create a view on the microscope model
-            # TODO: A dirty 'trick' to get this to work was adding an empty
-            # 'stream_classes' list. Why didn't this viewport have stream
-            # classes to begin with?
             vpv = collections.OrderedDict([
                 (main_frame.vp_sparc_align,
                  {"name": "Optical",
-                  "stream_classes": None,
+                  "stream_classes": None, # everything is good
                   # no stage, or would need a fake stage to control X/Y of the
                   # mirror
                   # no focus, or could control yaw/pitch?
@@ -1444,16 +1440,26 @@ class TabBarController(object):
             TODO: support "*" for matching anything?
         """
         self.main_frame = main_frame
+        self._tab = main_data.tab # VA that we take care of
 
         # create all the tabs that fit the microscope role
-        self.tab_list = self._filter_tabs(tab_rules, main_frame, main_data)
-        if not self.tab_list:
+        tab_list = self._filter_tabs(tab_rules, main_frame, main_data)
+        if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
             raise LookupError(msg)
-        self.switch(0)
 
-        for tab in self.tab_list:
+        for tab in tab_list:
             tab.button.Bind(wx.EVT_BUTTON, self.OnClick)
+
+        # Enumerated VA is picky and wants to have choices/value fitting
+        # To bootstrap, we set the new value without check
+        self._tab._value = tab_list[0]
+        # Choices is a dict tab -> name of the tab
+        choices = dict([(t, t.name) for t in tab_list])
+        self._tab.choices = choices
+        self._tab.subscribe(self._on_tab)
+        # force the switch to the first tab
+        self._tab.notify(self._tab.value)
 
         # IMPORTANT NOTE:
         #
@@ -1494,56 +1500,35 @@ class TabBarController(object):
 
         return tabs
 
-    def __getitem__(self, name):
-        return self._get_tab(name)
-
-    def __setitem__(self, name, tab):
-        self.tab_list.append(tab)
-
-    def __delitem__(self, name):
-        for tab in self.tab_list:
-            if tab.name == name:
-                tab.remove(tab)
-                break
-
-    def __len__(self):
-        return len(self.tab_list)
-
-    def _get_tab(self, tab_name_or_index):
-        for i, tab in enumerate(self.tab_list):
-            if i == tab_name_or_index or tab.name == tab_name_or_index:
-                return tab
-
-        raise LookupError("Tab '{}' not found".format(tab_name_or_index))
-
-    def switch(self, tab_name_or_index):
+    def _on_tab(self, tab):
         try:
             self.main_frame.Freeze()
-            for tab in self.tab_list:
-                tab.Hide()
+            # TODO: only call Hide() on the previously selected tab
+            for t in self._tab.choices:
+                t.Hide()
         finally:
             self.main_frame.Thaw()
         # It seems there is a bug in wxWidgets which makes the first .Show() not
         # work when the frame is frozen. So always call it after Thaw(). Doesn't
         # seem to cause too much flickering.
-        self._get_tab(tab_name_or_index).Show()
+        tab.Show()
         self.main_frame.Layout()
-
+        
     def terminate(self):
         """
         Terminate each tab (i.e.,indicate they are not used anymore)
         """
-        for tab in self.tab_list:
-            tab.terminate()
+        for t in self._tab.choices:
+            t.terminate()
 
     def OnClick(self, evt):
         # ie, mouse click or space pressed
         logging.debug("Tab button click")
 
         evt_btn = evt.GetEventObject()
-        for tab in self.tab_list:
-            if evt_btn == tab.button:
-                self.switch(tab.name)
+        for t in self._tab.choices:
+            if evt_btn == t.button:
+                self._tab.value = t
                 break
         else:
             logging.warning("Couldn't find the tab associated to the button %s",

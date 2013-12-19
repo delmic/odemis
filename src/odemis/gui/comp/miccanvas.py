@@ -1383,9 +1383,9 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = None
         self._tab_data_model = None
-        self.abilities -= set([CAN_MOVE])
+        self.abilities -= set([CAN_MOVE, CAN_FOCUS])
 
-        # self.backgroundBrush = wx.SOLID # background is always black
+        self.backgroundBrush = wx.SOLID # background is always black
 
         ## Overlays
 
@@ -1417,7 +1417,6 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
-    # TODO: should be simplified
     def fit_view_to_content(self, recenter=None):
         """ Adapts the MPP to fit to the current content
         recenter: never used (it's always centered)

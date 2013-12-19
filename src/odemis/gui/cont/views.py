@@ -98,19 +98,14 @@ class ViewController(object):
         visible_views = []
 
         for vp, vkwargs in viewports.items():
-            # FIXME: do we still need this "if"? what happens if no stream_classes are provided?!
             # TODO: automatically set some clever values for missing arguments?
-            # If stream classes are defined we assume a MicroscopeView is needed
-            if 'stream_classes' in vkwargs:
-                view = model.MicroscopeView(**vkwargs)
+            view = model.MicroscopeView(**vkwargs)
 
-                views.append(view)
-                if vp.Shown:
-                    visible_views.append(view)
+            views.append(view)
+            if vp.Shown:
+                visible_views.append(view)
 
-                vp.setView(view, self._data_model)
-            else:
-                logging.debug("Generating viewport without view")
+            vp.setView(view, self._data_model)
 
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views
@@ -159,7 +154,6 @@ class ViewController(object):
                       "stream_classes": AR_STREAMS
                      }),
                 ])
-                self._createViewsFixed(vpv)
             else:
                 logging.info("Creating generic static viewport layout")
                 vpv = collections.OrderedDict([
@@ -190,7 +184,6 @@ class ViewController(object):
                       "stream_classes": AR_STREAMS
                      }),
                 ])
-                self._createViewsFixed(vpv)
 
         # If SEM only: all SEM
         # Works also for the Sparc, as there is no other emitter, and we don't
@@ -198,54 +191,28 @@ class ViewController(object):
         elif self._main_data_model.ebeam and not self._main_data_model.light:
             logging.info("Creating SEM only viewport layout")
             i = 1
-
-            views = []
-            visible_views = []
-
+            vpv = collections.OrderedDict()
             for viewport in self._viewports:
-                view = model.MicroscopeView(
-                            "SEM %d" % i,
-                            self._main_data_model.stage,
-                            focus0=None, # TODO: SEM focus or focus1?
-                            stream_classes=EM_STREAMS
-                         )
-                self._data_model.views.value.append(view)
-                viewport.setView(view, self._data_model)
+                vpv[viewport] = {"name": "SEM %d" % i,
+                                 "stage": self._main_data_model.stage,
+                                 "focus0": None, # TODO: SEM focus or focus1?
+                                 "stream_classes": EM_STREAMS,
+                                 }
                 i += 1
-
-                views.append(view)
-                if viewport.Shown:
-                    visible_views.append(view)
-
-            self._data_model.views.value = views
-            self._data_model.visible_views.value = visible_views
 
         # If Optical only: all Optical
         # TODO: first one is brightfield only?
         elif not self._main_data_model.ebeam and self._main_data_model.light:
             logging.info("Creating Optical only viewport layout")
             i = 1
-
-            views = []
-            visible_views = []
-
+            vpv = collections.OrderedDict()
             for viewport in self._viewports:
-                view = model.MicroscopeView(
-                            "Optical %d" % i,
-                            self._main_data_model.stage,
-                            focus0=self._main_data_model.focus,
-                            stream_classes=OPTICAL_STREAMS
-                         )
-                self._data_model.views.value.append(view)
-                viewport.setView(view, self._data_model)
+                vpv[viewport] = {"name": "Optical %d" % i,
+                                 "stage": self._main_data_model.stage,
+                                 "focus0": self._main_data_model.focus,
+                                 "stream_classes": OPTICAL_STREAMS,
+                                 }
                 i += 1
-
-                views.append(view)
-                if viewport.Shown:
-                    visible_views.append(view)
-
-            self._data_model.views.value = views
-            self._data_model.visible_views.value = visible_views
 
         # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
         elif (self._main_data_model.ebeam and
@@ -270,31 +237,30 @@ class ViewController(object):
               "stage": self._main_data_model.stage,
               "focus0": None, # TODO: SEM focus
               "focus1": self._main_data_model.focus,
-            "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+              "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
               }),
             (self._viewports[3],
              {"name": "Combined 2",
               "stage": self._main_data_model.stage,
               "focus0": None, # TODO: SEM focus
               "focus1": self._main_data_model.focus,
-            "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+              "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
               }),
-                                           ])
-            self._createViewsFixed(vpv)
+            ])
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
             i = 1
+            vpv = collections.OrderedDict()
             for viewport in self._viewports:
-                view = model.MicroscopeView(
-                            "View %d" % i,
-                            self._main_data_model.stage,
-                            focus0=self._main_data_model.focus
-                         )
-                self._data_model.views.value.append(view)
-                viewport.setView(view, self._data_model)
+                vpv[viewport] = {"name": "View %d" % i,
+                                 "stage": self._main_data_model.stage,
+                                 "focus0": self._main_data_model.focus,
+                                 "stream_classes": None, # everything
+                                 }
                 i += 1
 
+        self._createViewsFixed(vpv)
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
     def _viewport_by_view(self, view):

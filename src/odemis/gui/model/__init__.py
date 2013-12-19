@@ -178,7 +178,12 @@ class MainGUIData(object):
         # Set to True to request debug info to be displayed
         self.debug = model.BooleanVA(False)
 
-        # TODO: current tab + available tabs VAs, to switch tabs, as with views
+        # Current tab (+ all available tabs in choices as a dict tab -> name)
+        # Fully set and managed later by the TabBarController.
+        # Not very beautiful because Tab is not part of the model.
+        # MicroscopyGUIData would be better in theory, but is less convenient
+        # do directly access additional GUI information.
+        self.tab = model.VAEnumerated(None, choices={None: ""})
 
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
@@ -268,6 +273,21 @@ class MainGUIData(object):
                 logging.exception("Failed to stop %s actuator", act.name)
 
         logging.info("Stopped motion on every axes")
+
+    def getTabByName(self, name):
+        """
+        Look in .tab.choices for a tab with the given name
+        name (str): name to look for
+        returns (Tab): tab whose name fits the provided name
+        raise:
+            LookupError: if no tab exists with such a name
+        """
+        for t, n in self.tab.choices.items():
+            if n == name:
+                return t
+        else:
+            raise LookupError("Failed to find tab %s in the %d tabs" %
+                              name, len(self.tab.choices))
 
 
 class MicroscopyGUIData(object):
