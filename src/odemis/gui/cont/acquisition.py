@@ -72,6 +72,8 @@ class SnapshotController(object):
             self._main_frame.menu_item_qacquire.GetId(),
             self.start_snapshot_viewport)
 
+        # TODO: disable the menu if no focused view/no stream
+
     def start_snapshot_viewport(self, event):
         """Wrapper to run snapshot_viewport in a separate thread."""
         # Find out the current tab
@@ -113,10 +115,11 @@ class SnapshotController(object):
                     logging.warning("Failed to take snapshot, no view available")
                     return
 
+            # Take all the streams available
             streams = tab_data_model.streams.value
             if not streams:
-                msg = "Failed to take snapshot, no stream visible in view %s"
-                logging.warning(msg, view.name.value)
+                logging.warning("Failed to take snapshot, no stream in tab %s",
+                                tab.name)
                 return
 
             self.start_snapshot_animation()

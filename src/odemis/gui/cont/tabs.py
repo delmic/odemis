@@ -381,13 +381,13 @@ class SparcAcquisitionTab(Tab):
         semcl_stream.roi.subscribe(self.onROI, init=True)
 
         # create a view on the tab model
-        # Needs SEM CL stream (could be avoided if we had a .roa on the
-        # tab model)
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
                                     [self.main_frame.vp_sparc_acq_view]
                                 )
+        # Add the SEM stream to the focussed/only view
+        self.tab_data_model.streams.value.append(sem_stream)
         mic_view = self.tab_data_model.focussedView.value
         mic_view.addStream(sem_stream)  #pylint: disable=E1103
 
@@ -1018,6 +1018,7 @@ class LensAlignTab(Tab):
         # the only stream entry when SEM view is focused)
         sem_stream = streammod.SEMStream("SEM", main_data.sed,
                                          main_data.sed.data, main_data.ebeam)
+        self.tab_data_model.streams.value.append(sem_stream)
         self._sem_stream = sem_stream
         self._sem_view = main_frame.vp_align_sem.microscope_view
         self._sem_view.addStream(sem_stream)
@@ -1037,6 +1038,7 @@ class LensAlignTab(Tab):
                                      main_data.ccd.data,
                                      main_data.light,
                                      position=self._stage_ab.position)
+        self.tab_data_model.streams.value.append(ccd_stream)
         self._ccd_stream = ccd_stream
         ccd_view = main_frame.vp_align_ccd.microscope_view
         ccd_view.addStream(ccd_stream)
