@@ -236,8 +236,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, quessing_scale, ma
     max_allowed_diff (float): Maximum allowed difference in electron coordinates
     returns (List of tuples): Ordered list of coordinates in electron image with respect 
                                 to the order in the electron image
-            (List of tuples): List of coordinates in optical image with NaN where the 
-                                corresponding ordered electron coordinates list contains NaN
+            (List of tuples): List of coordinates in optical image corresponding to the 
+                                ordered electron list
     """
     # Remove large outliers
     if input_coordinates.__len__() > 1:
