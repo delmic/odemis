@@ -1320,7 +1320,7 @@ class DraggableCanvas(BitmapCanvas):
                 continue
             w, h = im.Width * im._dc_scale, im.Height * im._dc_scale
             c = im._dc_center
-            bbox_im = [c[0] - w / 2., c[1] - h / 2., c[0] + w / 2., c[1] + h / 2.]
+            bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
             if bbox[0] is None:
                 bbox = bbox_im
             else:
@@ -1350,7 +1350,7 @@ class DraggableCanvas(BitmapCanvas):
         # zoom level (for the "main" image) if it's ±10% of the target size
 
         if recenter:
-            c = (bbox[0] + bbox[2]) / 2., (bbox[1] + bbox[3]) / 2.
+            c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
             self.requested_world_pos = c # as recenter_buffer but without request_drawing_update
 
         wx.CallAfter(self.request_drawing_update)

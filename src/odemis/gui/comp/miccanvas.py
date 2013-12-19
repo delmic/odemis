@@ -1371,6 +1371,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 class AngularResolvedCanvas(canvas.DraggableCanvas):
     """ Angular resolved canvas
     """
+    # TODO: it actually could be just a BitmapCanvas, but it needs
+    # a (simple) fit_view_to_content()
 
     def __init__(self, *args, **kwargs):
 
@@ -1457,7 +1459,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
             if iim is None:
                 continue
             # image is always centered, fitting the whole canvas
-            self.set_image(i, iim.image, (0, 0), 1)
+            self.set_image(i, iim.image, (0, 0), iim.mpp)
 
     def _onViewImageUpdate(self, t):
         self._convertStreamsToImages()
