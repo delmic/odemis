@@ -98,13 +98,22 @@ class OverlayTestCase(test.GuiTestCase):
     # @unittest.skip("simple")
     def test_pixel_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.current_mode = gmodel.TOOL_POINT
+        mmodel = test.FakeMicroscopeModel()
+        view = mmodel.focussedView.value
+        cnvs.setView(view, mmodel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.current_mode = gmodel.TOOL_POINT
+
 
         psol = overlay.PixelSelectOverlay(cnvs)
-        # psol.set_values(33, (0.0, 0.0), (30, 30))
-        psol.set_values(30, (0.0, 0.0), (17, 19), omodel.TupleVA())
-
+        psol.enabled = True
         cnvs.world_overlays.append(psol)
+        cnvs.active_overlay = psol
+
+        # psol.set_values(33, (0.0, 0.0), (30, 30))
+        psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        view.mpp.value = 1e-06
         test.gui_loop()
 
     # @unittest.skip("simple")
@@ -119,7 +128,7 @@ class OverlayTestCase(test.GuiTestCase):
         vsol = overlay.ViewSelectOverlay(cnvs, "test selection")
         cnvs.view_overlays.append(vsol)
         cnvs.active_overlay = vsol
-        cnvs.current_mode = gmodel.TOOL_ROI
+        cnvs.current_mode = miccanvas.MODE_SECOM_ZOOM
 
     # @unittest.skip("simple")
     def test_roa_select_overlay(self):
@@ -187,6 +196,6 @@ if __name__ == "__main__":
     #unittest.main()
 
     suit = unittest.TestSuite()
-    suit.addTest( OverlayTestCase("test_pixel_select_overlay") )
+    suit.addTest( OverlayTestCase("test_roa_select_overlay") )
     runner = unittest.TextTestRunner()
     runner.run(suit)

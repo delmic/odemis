@@ -24,6 +24,8 @@
 
 
 import cairo
+import logging
+import math
 import wx
 
 import odemis.gui as gui
@@ -205,11 +207,11 @@ class AxisLegend(wx.Panel):
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
 
-        # Explicitly set the
+        # Explicitly set the min size
         self.SetMinSize((-1, 40))
 
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_SIZE, self.on_size)
 
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
@@ -217,11 +219,15 @@ class AxisLegend(wx.Panel):
         self.label_pos = None
 
         self.ticks = None
-        # The distance between tick in pixel
-        self.tick_gap = 100
-        self.OnSize(None)
+        # The guiding distance between ticks in pixels
+        self.tick_pixel_gap = 100
 
-    def OnPaint(self, event=None):
+        self.on_size(None)
+
+    def on_paint(self, event=None):
+
+        if not self.Parent.canvas.has_data():
+            return
 
         if not self.ticks:
             self.calc_ticks()
@@ -241,12 +247,14 @@ class AxisLegend(wx.Panel):
         ctx.set_line_width(2)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
-        for xpos, xval in self.ticks:
-            label = units.readable_str(xval, "m", 2)
+        for i, (xpos, xval) in enumerate(self.ticks):
+            label = units.readable_str(xval, "m", 3)
             _, _, width, height, _, _ = ctx.text_extents(label)
-            ctx.move_to(xpos - (width / 2), height + 8)
-            ctx.show_text(label)
 
+            lx = xpos - (width / 2)
+            lx = max(min(lx, self.ClientSize.x - width - 2), 2)
+            ctx.move_to(lx, height + 8)
+            ctx.show_text(label)
             ctx.move_to(xpos, 5)
             ctx.line_to(xpos, 0)
             ctx.stroke()
@@ -256,38 +264,43 @@ class AxisLegend(wx.Panel):
 
     def calc_ticks(self):
         """ Determine where the ticks should be placed """
+
         self.ticks = []
 
-        # Calculate value distance for the current tick_gap
-        val1 = self.Parent.canvas._pos_x_to_val_x(0)
-        val2 = self.Parent.canvas._pos_x_to_val_x(self.tick_gap)
+        # The number of ticks we will aim for
+        num_ticks = self.ClientSize.x / self.tick_pixel_gap
 
-        dist = val2 - val1
-
+        logging.debug("Aiming for %s ticks with a client of width %s",
+                      num_ticks, self.ClientSize.x)
         # Calculate the best step size in powers of 10, so it will cover at
-        # lest the distance `dist`
-        step = 1e-12
-        min_x = self.Parent.canvas.min_x
+        # least the distance `val_dist`
+        val_step = 1e-12
+        min_x = self.Parent.canvas.min_x_val
+        range_x = self.Parent.canvas.range_x
 
-        while step < dist:
-            step *= 10
+        # Increase the value step tenfold while it fits more tan num_ticks times
+        # in the range
+        while range_x / val_step > num_ticks:
+            val_step *= 10
 
-        # If the pixel distance of step is bigger than `tick_gap`, divide it
-        # by 2
-        pixel_step = (self.Parent.canvas._val_x_to_pos_x(min_x + step) -
-                      self.Parent.canvas._val_x_to_pos_x(min_x))
+        logging.debug("Value step is %s after first iteration with range %s",
+                      val_step, range_x)
 
-        if 2 * pixel_step > self.tick_gap:
-            step /= 2
+        # Divide the value step by two,
+        while range_x / val_step < num_ticks:
+            val_step /= 2
+        logging.debug("Value step is %s after second iteration with range %s",
+                      val_step, range_x)
 
-        num_ticks = self.ClientSize.x // self.tick_gap
+        first_tick = (int(min_x / val_step) + 1) * val_step
+        logging.debug("Setting first tick at value %s", first_tick)
 
-        first_tick = (step % min_x) + min_x
-        ticks = [first_tick + i * step for i in range(num_ticks)]
+        ticks = [first_tick + i * val_step for i in range(2 * num_ticks)]
 
         for tick in ticks:
             xpos = self.Parent.canvas._val_x_to_pos_x(tick)
-            if xpos <= self.ClientSize.x - step:
+            if (0 <= xpos <= (self.ClientSize.x - self.tick_pixel_gap / 2)
+                and (xpos, tick) not in self.ticks):
                 self.ticks.append((xpos, tick))
 
     def set_label(self, label, pos_x):
@@ -321,6 +334,6 @@ class AxisLegend(wx.Panel):
         ctx.show_text(label)
 
 
-    def OnSize(self, event):
+    def on_size(self, event):
         self.ticks = None
         self.Refresh(eraseBackground=False)

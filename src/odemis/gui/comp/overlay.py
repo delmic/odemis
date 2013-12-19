@@ -50,7 +50,7 @@ class Overlay(object):
     def set_label(self, label):
         self.label = unicode(label)
 
-    def write_label(self, ctx, size, v_pos, label, flip=True,
+    def write_label(self, ctx, size, v_pos, label, fontsize=0, flip=True,
                     align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=(1.0, 1.0, 1.0)):
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
@@ -59,7 +59,7 @@ class Overlay(object):
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(font.GetPointSize() + 1)
+        ctx.set_font_size(font.GetPointSize() + fontsize)
 
         margin_x = 10
 
@@ -580,19 +580,19 @@ class SelectionMixin(object):
             # If position inside inner box
             elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
                   self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
-                logging.debug("Selection hover")
+                # logging.debug("Selection hover")
                 return gui.HOVER_SELECTION
             elif vpos[0] < self.edges["i_l"]:
-                logging.debug("Left edge hover")
+                # logging.debug("Left edge hover")
                 return gui.HOVER_LEFT_EDGE
             elif vpos[0] > self.edges["i_r"]:
-                logging.debug("Right edge hover")
+                # logging.debug("Right edge hover")
                 return gui.HOVER_RIGHT_EDGE
             elif vpos[1] < self.edges["i_t"]:
-                logging.debug("Top edge hover")
+                # logging.debug("Top edge hover")
                 return gui.HOVER_TOP_EDGE
             elif vpos[1] > self.edges["i_b"]:
-                logging.debug("Bottom edge hover")
+                # logging.debug("Bottom edge hover")
                 return gui.HOVER_BOTTOM_EDGE
 
         return False
@@ -1063,9 +1063,10 @@ class MarkingLineOverlay(ViewOverlay):
 
         self.line_width = 2
 
-    def set_position(self, pos):
+    def set_position(self, pos, label=None):
         self.vposx = max(1, min(pos[0], self.view_width - self.line_width))
         self.vposy = max(1, min(pos[1], self.view_height - 1))
+        self.label = label
 
     def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
@@ -1382,7 +1383,7 @@ class PixelSelectOverlay(WorldOverlay):
 
         evt.Skip()
 
-    def on_mouse_up(self, evt):
+    def on_left_up(self, evt):
         """ Set the selected pixel, if a pixel position is known
 
         If the cnvs was dragged while the mouse button was down, we do *not*
@@ -1399,14 +1400,14 @@ class PixelSelectOverlay(WorldOverlay):
         self.was_dragged = False
         evt.Skip()
 
-    def on_mouse_enter(self, evt):
+    def on_enter(self, evt):
         """ Change the mouse cursor to a cross """
         if self.enabled:
             self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
             self._is_over = True
         evt.Skip()
 
-    def on_mouse_leave(self, evt):
+    def on_leave(self, evt):
         """ Restore the mouse cursor to its default and clear any hover """
         if self.enabled:
             self.cnvs.SetCursor(wx.STANDARD_CURSOR)
@@ -1456,13 +1457,13 @@ class PixelSelectOverlay(WorldOverlay):
             # Get the physical size of the external data
             physical_size = util.tuple_multiply(self._resolution, self._mpp)
             # Physical half width and height
-            phw, phh = util.tuple_fdiv(physical_size, 2.0)
+            p_w, p_h = util.tuple_fdiv(physical_size, 2.0)
 
             # Get the top left corner of the external data
             # Remember that in physical coordinates, up is positive!
             self._phys_top_left = util.tuple_subtract(
                                             self._physical_center,
-                                            (phw, -phh)
+                                            (p_w, -p_h)
                                         )
 
             logging.debug("Physical top left of PixelSelectOverlay: %s",
@@ -1516,7 +1517,7 @@ class PixelSelectOverlay(WorldOverlay):
         # First we calculate the position of the top left in buffer pixels
         # Note the Y flip again, since were going from pixel to physical
         # coordinates
-        top_left = util.tuple_add(
+        p_top_left = util.tuple_add(
                         self._phys_top_left,
                         util.tuple_multiply((pixel[0], -pixel[1]), self._mpp)
                    )
@@ -1526,10 +1527,13 @@ class PixelSelectOverlay(WorldOverlay):
 
         # No need for an explicit Y flip here, since `physical_to_world_pos`
         # takes care of that
-        btop_left = self.cnvs.world_to_buffer(
-                            self.cnvs.physical_to_world_pos(top_left), offset)
+        b_top_left = self.cnvs.world_to_buffer(
+                            self.cnvs.physical_to_world_pos(p_top_left), offset)
 
-        return btop_left + util.tuple_multiply(self._pixel_size, scale)
+        b_width = util.tuple_multiply(self._pixel_size, scale)
+        b_width = (b_width[0] + 0.5, b_width[1] + 0.5)
+
+        return b_top_left + b_width
 
     def _selection_made(self, selected_pixel):
         self.cnvs.update_drawing()
@@ -1544,13 +1548,12 @@ class PixelSelectOverlay(WorldOverlay):
             if (self._pixel_pos and
                 self._selected_pixel.value != self._pixel_pos):
                 rect = self.pixel_to_rect(self._pixel_pos, scale)
-
                 if rect:
                     ctx.set_source_rgba(*self.color)
                     ctx.rectangle(*rect)
                     ctx.fill()
 
-            if self._selected_pixel.value != (None, None):
+            if self._selected_pixel.value not in (None, (None, None)):
                 rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
                 if rect:
@@ -1568,12 +1571,6 @@ class PixelSelectOverlay(WorldOverlay):
             raise ValueError("Not all PixelSelectOverlay values are set!")
         self.enabled = enable
         self.cnvs.Refresh()
-
-
-class AngleOverlay(ViewOverlay):
-    """ Overlay with radials for Angular Resolve viewport """
-    def Draw(self, dc):
-        pass
 
 
 MAX_DOT_RADIUS = 25.5
@@ -2039,6 +2036,7 @@ class PolarOverlay(ViewOverlay):
                         self.cnvs.ClientSize,
                         (self.tx, self.ty),
                         theta_str,
+                        fontsize=1,
                         colour=self.colour,
                         align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
 

@@ -1377,11 +1377,11 @@ class PlotCanvas(BufferedCanvas):
         # Interesting values taken from the data.
         self.min_x_val = None
         self.max_x_val = None
-        self.width_x = None
+        self.range_x = None
 
         self.min_y_val = None
         self.max_y_val = None
-        self.width_y = None
+        self.range_y = None
 
         ## Rendering settings
         self.line_width = 1.5 #px
@@ -1389,7 +1389,7 @@ class PlotCanvas(BufferedCanvas):
         self.fill_colour = change_brightness(self.line_colour, -0.3)
 
         # Determines if the graph should be closed, and if so, how.
-        self.plot_closed = PLOT_CLOSE_NOT
+        self.plot_closed = PLOT_CLOSE_BOTTOM
         self.plot_mode = PLOT_MODE_LINE
 
     # Getters and Setters
@@ -1410,6 +1410,9 @@ class PlotCanvas(BufferedCanvas):
 
         self._data = data
         self.reset_dimensions()
+
+    def has_data(self):
+        return len(self._data) != 0
 
     # Attribute calculators
 
@@ -1434,10 +1437,10 @@ class PlotCanvas(BufferedCanvas):
             self.max_y_val,
         )
 
-        self.width_x = self.max_x_val - self.min_x_val
-        self.width_y = self.max_y_val - self.min_y_val
+        self.range_x = self.max_x_val - self.min_x_val
+        self.range_y = self.max_y_val - self.min_y_val
 
-        logging.debug("Widths set to %s and %s", self.width_x, self.width_y)
+        logging.debug("Widths set to %s and %s", self.range_x, self.range_y)
         self.draw()
 
     def reset_dimensions(self):
@@ -1474,27 +1477,35 @@ class PlotCanvas(BufferedCanvas):
     # Reproduce: draw the smallest graph in the test case and drage back and
     # forth between 0 and 1
 
-    # @memoize
     def _val_x_to_pos_x(self, val_x):
         """ Translate an x value to an x position in pixels """
+        # Clip val_x
         x = min(max(self.min_x_val, val_x), self.max_x_val)
-        perc_x = float(x - self.min_x_val) / self.width_x
-        return int(round(perc_x * self.ClientSize.x))
+        perc_x = float(x - self.min_x_val) / self.range_x
+        return perc_x * self.ClientSize.x
 
     def _val_y_to_pos_y(self, val_y):
         """ Translate an y value to an y position in pixels """
         y = min(max(self.min_y_val, val_y), self.max_y_val)
-        perc_y = float(self.max_y_val - y) / self.width_y
-        return int(round(perc_y * self.ClientSize.y))
+        perc_y = float(self.max_y_val - y) / self.range_y
+        return perc_y * self.ClientSize.y
 
-    #@memoize
-    def _pos_x_to_val_x(self, pos_x):
+    def _pos_x_to_val_x(self, pos_x, match=False):
+        """ Map the given pixel position to a an x value from the data
+
+        If match is True, the closest match from _data will be returned,
+        otherwise interpolation will occur.
+        """
         perc_x = pos_x / float(self.ClientSize.x)
-        val_x = (perc_x * self.width_x) + self.min_x_val
-        val_x = max(min(val_x, self.max_x_val), self.min_x_val)
+        val_x = (perc_x * self.range_x) + self.min_x_val
+
+        if match:
+            return min([(abs(val_x - x), val_x) for x, _ in self._data])[1]
+        else:
+            # Clip
+            val_x = max(min(val_x, self.max_x_val), self.min_x_val)
         return val_x
 
-    #@memoize
     def _val_x_to_val_y(self, val_x):
         """ Map the give x pixel value to a y value """
         res = [y for x, y in self._data if x <= val_x][-1]

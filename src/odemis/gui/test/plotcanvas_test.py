@@ -28,16 +28,20 @@
 
 import unittest
 import math
+import logging
+
 
 import wx
 
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.comp.viewport as viewport
 import odemis.gui.img.data as data
 import odemis.gui.test as test
 
 test.goto_manual()
+logging.getLogger().setLevel(logging.DEBUG)
 # test.goto_inspect()
 
 
@@ -112,7 +116,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # BufferedCanvas is abstract and shoul not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_bitmap_canvas(self):
         cnvs = canvas.BitmapCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")
@@ -142,8 +146,26 @@ class PlotCanvasTestCase(test.GuiTestCase):
         #     test.gui_loop()
         #     test.sleep(10)
 
+    # @unittest.skip("simple")
+    def test_plot_viewport(self):
+        vwp = viewport.PlotViewport(self.panel)
+        self.add_control(vwp, wx.EXPAND, proportion=1)
 
+        vwp.canvas.set_1d_data(PLOTS[2][0], PLOTS[2][1]) #pylint: disable=E1101
+        # vwp.legend_panel.Refresh()
 
+        test.gui_loop()
+
+        #pylint: disable=E1101
+        # for val_x in PLOTS[2][0]:
+        #     pos_x = vwp.canvas._val_x_to_pos_x(val_x)
+        #     new_val_x = vwp.canvas._pos_x_to_val_x(pos_x)
+        #     print val_x, pos_x, new_val_x
+
+        # vx = 250
+        # px = vwp.canvas._val_x_to_pos_x(vx)
+        # print px
+        # print vwp.canvas._pos_x_to_val_x(px, True)
 
     @unittest.skip("simple")
     def test_plot_canvas(self):

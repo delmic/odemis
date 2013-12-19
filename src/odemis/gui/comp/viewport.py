@@ -34,6 +34,7 @@ from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after, units
 import wx
+import collections
 
 
 class ViewPort(wx.Panel):
@@ -66,27 +67,51 @@ class ViewPort(wx.Panel):
         self.canvas = self.canvas_class(self)
 
         # Put all together (canvas + legend)
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
-        mainSizer.Add(self.canvas, 1,
-                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
-
-        ##### Legend
 
         self.legend_panel = None
 
-        if self.legend_class:
-            # It's made of multiple controls positioned via sizers
-            # TODO: allow the user to pick which information is displayed in the
-            # legend
-            self.legend_panel = self.legend_class(self)  #pylint: disable=E1102
+        mainSizer = wx.BoxSizer(wx.VERTICAL)
 
-            # Focus the view when a child element is clicked
-            self.legend_panel.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+        if self.legend_class is not None:
+            if isinstance(self.legend_class, collections.Iterable):
+                self.legend_panel = [self.legend_class[0](self),
+                                 self.legend_class[1](self)]
+                grid_sizer = wx.GridBagSizer()
 
-            mainSizer.Add(self.legend_panel, 0,
-                    border=2, flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+                grid_sizer.Add(self.canvas, pos=(0, 1), flag=wx.EXPAND)
+
+                grid_sizer.Add(self.legend_panel[0], pos=(1, 1), flag=wx.EXPAND)
+                grid_sizer.Add(self.legend_panel[1], pos=(0, 0), flag=wx.EXPAND)
+
+                grid_sizer.AddGrowableRow(0, 1)
+                grid_sizer.AddGrowableCol(1, 1)
+                # grid_sizer.RemoveGrowableCol(0)
+
+
+                # Focus the view when a child element is clicked
+                for lp in self.legend_panel:
+                    lp.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+
+                mainSizer.Add(grid_sizer, 1,
+                        border=0, flag=wx.EXPAND)
+            else:
+                mainSizer.Add(self.canvas, 1,
+                    border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
+                # It's made of multiple controls positioned via sizers
+                # TODO: allow the user to pick which information is displayed
+                # in the legend
+                # pylint: disable=E1102, E1103
+                self.legend_panel = self.legend_class(self)
+                self.legend_panel.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+
+                mainSizer.Add(self.legend_panel, 0,
+                        border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
+        else:
+            mainSizer.Add(self.canvas, 1,
+                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
 
         self.SetSizerAndFit(mainSizer)
+        mainSizer.Fit(self)
         self.SetAutoLayout(True)
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
@@ -401,7 +426,7 @@ class PlotViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
-    legend_class = AxisLegend
+    legend_class = AxisLegend #, AxisLegend)
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
@@ -414,10 +439,6 @@ class PlotViewport(ViewPort):
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
-
-    def OnChildFocus(self, evt):
-        self._tab_data_model.focussedView.value = self._microscope_view
-        evt.Skip()
 
     @property
     def microscope_view(self):

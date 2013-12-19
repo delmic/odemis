@@ -120,7 +120,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._fps_ol = comp_overlay.TextViewOverlay(self)
         self.focus_overlay = None
         self.roi_overlay = None
-        self.point_overlay = None
+        self.pixel_overlay = None
         self.points_overlay = None
 
         # play/pause icon
@@ -165,8 +165,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             # If required, create a PixelSelectOverlay
             if guimodel.TOOL_POINT in tab_data.tool.choices:
-                self.point_overlay = comp_overlay.PixelSelectOverlay(self)
-                self.world_overlays.append(self.point_overlay)
+                self.pixel_overlay = comp_overlay.PixelSelectOverlay(self)
+                self.world_overlays.append(self.pixel_overlay)
                 self.points_overlay = comp_overlay.PointsOverlay(self)
                 self.world_overlays.append(self.points_overlay)
 
@@ -210,8 +210,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._showSpotMode(False)
 
         # TODO: fix with the rest of the todos
-        if self.point_overlay:
-            self.point_overlay.enable(False)
+        if self.pixel_overlay:
+            self.pixel_overlay.enable(False)
             self.points_overlay.enable(False)
 
         # TODO: one mode <-> one overlay (type)
@@ -223,11 +223,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif tool == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
-            if (self.point_overlay and
+            if (self.pixel_overlay and
                     self.microscope_view.stream_tree.spectrum_streams):
                 self.current_mode = MODE_SPARC_PICK
-                self.active_overlay = self.point_overlay
-                self.point_overlay.enable(True)
+                self.active_overlay = self.pixel_overlay
+                self.pixel_overlay.enable(True)
             # Enable the Angular Resolve point select overlay when there's a
             # AR stream known anywhere in the data model (and the view has
             # streams).
@@ -1288,9 +1288,14 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         if not self._data:
             return
 
-        x, _ = evt.GetPositionTuple()
-        self.current_x_value = self._pos_x_to_val_x(x)
-        self.current_y_value = self._val_x_to_val_y(self.current_x_value)
+        if evt:
+            x, _ = evt.GetPositionTuple()
+            self.current_x_value = self._pos_x_to_val_x(x, match=True)
+            self.current_y_value = self._val_x_to_val_y(self.current_x_value)
+        else:
+            if self.current_x_value is None:
+                return
+            x = self._val_x_to_pos_x(self.current_x_value)
         pos = (x, self._val_y_to_pos_y(self.current_y_value))
 
         label = "%s"  % units.readable_str(
@@ -1304,7 +1309,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
             self.Parent.legend_panel.Refresh()
 
         #self.markline_overlay.set_label(label)
-        self.markline_overlay.set_position(pos)
+        self.markline_overlay.set_position(pos, str(self.current_y_value))
         self.Refresh()
 
     def setView(self, microscope_view, tab_data):
