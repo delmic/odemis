@@ -450,6 +450,41 @@ class ViewController(object):
         else:
             logging.error("Failed to find the current viewport")
 
+    def focusViewWithStream(self, stream):
+        """
+        Ensures that the focussed view is one that displays the given stream.
+        If the focussed view fits, it will be picked preferably.
+        Note: if the stream is not in any view, nothing will happen.
+        stream (Stream): the stream to look for
+        """
+        fv = self._data_model.focussedView.value
+        
+        # first try to pick a view which has the stream visible
+        pviews = []
+        for v in self._data_model.visible_views.value:
+            if stream in v.getStreams():
+                pviews.append(v)
+
+        if fv in pviews:
+            return # nothing to do
+        if pviews:
+            self._data_model.focussedView.value = pviews[0]
+            return
+
+        # Try to pick a view which is compatible with the stream
+        pviews = []
+        for v in self._data_model.visible_views.value:
+            if isinstance(stream, v.stream_classes):
+                pviews.append(v)
+
+        if fv in pviews:
+            return # nothing to do
+        if pviews:
+            self._data_model.focussedView.value = pviews[0]
+
+        logging.debug("Failed to find any view compatible with stream %s",
+                      stream.name.value)
+
 class ViewSelector(object):
     """ This class controls the view selector buttons and labels associated with
     them.

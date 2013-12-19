@@ -277,12 +277,12 @@ class SecomStreamsTab(Tab):
 
         if enabled:
             # check whether we need to create a (first) bright-field stream
-            has_bf = any(
-                        isinstance(s, streammod.BrightfieldStream)
-                        for s in self.tab_data_model.streams.value)
+            has_bf = any(isinstance(s, streammod.BrightfieldStream)
+                            for s in self.tab_data_model.streams.value)
             if not has_bf:
                 sp = self._stream_controller.addBrightfield(add_to_all_views=True)
                 sp.show_remove_btn(False)
+                self._view_controller.focusViewWithStream(sp.stream)
 
             self._stream_controller.resumeStreams(self._opt_stream_to_restart)
         else:
@@ -298,12 +298,12 @@ class SecomStreamsTab(Tab):
 
         if enabled:
             # check whether we need to create a (first) SEM stream
-            has_sem = any(
-                        isinstance(s, streammod.EM_STREAMS)
-                        for s in self.tab_data_model.streams.value)
+            has_sem = any(isinstance(s, streammod.EM_STREAMS)
+                            for s in self.tab_data_model.streams.value)
             if not has_sem:
                 sp = self._stream_controller.addSEMSED(add_to_all_views=True)
                 sp.show_remove_btn(False)
+                self._view_controller.focusViewWithStream(sp.stream)
 
             self._stream_controller.resumeStreams(self._sem_stream_to_restart)
         else:
