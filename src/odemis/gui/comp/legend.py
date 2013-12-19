@@ -270,7 +270,7 @@ class AxisLegend(wx.Panel):
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         val_step = 1e-12
-        min_x = self.Parent.canvas.min_x
+        min_x = self.Parent.canvas.min_x_val
         width_x = self.Parent.canvas.width_x
 
         while width_x / val_step > num_ticks:
