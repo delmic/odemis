@@ -220,7 +220,7 @@ class AxisLegend(wx.Panel):
 
         self.ticks = None
         # The guiding distance between ticks in pixels
-        self.tick_pixel_gap = 100
+        self.tick_pixel_gap = 137
 
         self.on_size(None)
 
@@ -299,7 +299,7 @@ class AxisLegend(wx.Panel):
 
         for tick in ticks:
             xpos = self.Parent.canvas._val_x_to_pos_x(tick)
-            if (0 <= xpos <= (self.ClientSize.x - self.tick_pixel_gap / 2)
+            if (0 <= xpos <= self.ClientSize.x - self.tick_pixel_gap / 2
                 and (xpos, tick) not in self.ticks):
                 self.ticks.append((xpos, tick))
 
