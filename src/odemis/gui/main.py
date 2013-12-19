@@ -25,6 +25,7 @@ import logging
 from odemis import model
 from odemis.gui import main_xrc, log
 import odemis.gui.conf
+from odemis.gui.cont import acquisition
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_after
 from odemis.gui.xmlh import odemis_get_resources
@@ -242,6 +243,11 @@ class OdemisGUIApp(wx.App):
                             self.main_frame,
                             self.main_data)
             self._tab_controller = tc
+
+            # To handle "Save snapshot" menu
+            self._snapshot_controller = acquisition.SnapshotController(
+                                                        self.main_data,
+                                                        self.main_frame)
 
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)

@@ -48,28 +48,29 @@ import wx
 from wx.lib.pubsub import pub
 
 
-class AcquisitionController(object):
-    """ controller to handle snapshot and high-res image acquisition in a
-    "global" context. In particular, it needs to be aware of which viewport
-    is currently focused, and block any change of settings during acquisition.
-    It relies on the acquisition manager to actually do the acquisition.
+class SnapshotController(object):
+    """ controller to handle snapshot acquisition in a
+    "global" context. In particular, it needs to be aware of which tab/view
+    is currently focused.
     """
-    def __init__(self, tab_data, main_frame):
+    def __init__(self, main_data, main_frame):
         """
-        tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        main_data (MainGUIData): the representation of the microscope GUI
+        main_frame: (wx.Frame): the whole GUI frame
         """
-        # TODO: get tab_controller from arguments or setting and stream controller
-        self._tab_data_model = tab_data
-        self._main_data_model = tab_data.main
+        self._main_data_model = main_data
         self._main_frame = main_frame
         self._anim_thread = None # for snapshot animation
-
 
         # For snapshot animation find the names of the active (=connected) screens
         # it's slow, so do it only at init (=expect not to change screen during
         # acquisition)
         self._outputs = self.get_display_outputs()
+
+        # Link snapshot menu to snapshot action
+        wx.EVT_MENU(self._main_frame,
+            self._main_frame.menu_item_qacquire.GetId(),
+            self.start_snapshot_viewport)
 
     def start_snapshot_viewport(self, event):
         """Wrapper to run snapshot_viewport in a separate thread."""
@@ -236,11 +237,12 @@ class AcquisitionController(object):
         logging.debug("Calling: %s", " ".join(args))
         subprocess.check_call(args)
 
+
 # TODO: Once the Secom acquisition is merged back into the main stream tab,
 # the difference between controller should be small enough to merge a lots of
 # things together
-class SecomAcquiController(AcquisitionController):
-    """ controller to handle snapshot and high-res image acquisition in a
+class SecomAcquiController(object):
+    """ controller to handle high-res image acquisition in a
     "global" context. In particular, it needs to be aware of which viewport
     is currently focused, and block any change of settings during acquisition.
     """
@@ -250,15 +252,8 @@ class SecomAcquiController(AcquisitionController):
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         """
-        AcquisitionController.__init__(self, tab_data, main_frame)
-
-        # Event binding
-
-        # TODO: only if the current tab is live view?
-        # Link snapshot menu to snapshot action
-        wx.EVT_MENU(self._main_frame,
-            self._main_frame.menu_item_qacquire.GetId(),
-            self.start_snapshot_viewport)
+        self._tab_data_model = tab_data
+        self._main_frame = main_frame
 
         # Listen to "acquire image" button
         self._main_frame.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
@@ -305,8 +300,10 @@ class SecomAcquiController(AcquisitionController):
             self._main_frame.btn_secom_acquire.Enable()
 
 
-class SparcAcquiController(AcquisitionController):
-    """ Acquisition controller for the Sparc platform
+class SparcAcquiController(object):
+    """
+    Takes care of the acquisition button and process on the Sparc acquisition 
+    tab.
     """
 
     def __init__(self, main_frame, tab_data, settings_controller):
@@ -315,7 +312,8 @@ class SparcAcquiController(AcquisitionController):
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         settings_controller (SettingsController)
         """
-        AcquisitionController.__init__(self, tab_data, main_frame)
+        self._tab_data_model = tab_data
+        self._main_frame = main_frame
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -345,15 +343,6 @@ class SparcAcquiController(AcquisitionController):
         # TODO: share an executor with the whole GUI.
         self._executor = futures.ThreadPoolExecutor(max_workers=2)
 
-        # TODO: only if the current tab is acquisition?
-        # Link snapshot menu to snapshot action
-        # Note: On the Sparc, there is only one view, the SEM (complete ROI). So
-        # a snapshot will always take this, which is actually the most expectable
-        # from the user's point of view.
-        wx.EVT_MENU(self._main_frame,
-            self._main_frame.menu_item_qacquire.GetId(),
-            self.start_snapshot_viewport)
-
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
         self.btn_change_file.Bind(wx.EVT_BUTTON, self.on_change_file)
@@ -364,7 +353,6 @@ class SparcAcquiController(AcquisitionController):
 
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
-
 
         # look for the SEM CL stream
         self._sem_cl = None # SEM CL stream
