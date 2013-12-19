@@ -580,19 +580,19 @@ class SelectionMixin(object):
             # If position inside inner box
             elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
                   self.edges["i_t"] < vpos[1] < self.edges["i_b"]):
-                logging.debug("Selection hover")
+                # logging.debug("Selection hover")
                 return gui.HOVER_SELECTION
             elif vpos[0] < self.edges["i_l"]:
-                logging.debug("Left edge hover")
+                # logging.debug("Left edge hover")
                 return gui.HOVER_LEFT_EDGE
             elif vpos[0] > self.edges["i_r"]:
-                logging.debug("Right edge hover")
+                # logging.debug("Right edge hover")
                 return gui.HOVER_RIGHT_EDGE
             elif vpos[1] < self.edges["i_t"]:
-                logging.debug("Top edge hover")
+                # logging.debug("Top edge hover")
                 return gui.HOVER_TOP_EDGE
             elif vpos[1] > self.edges["i_b"]:
-                logging.debug("Bottom edge hover")
+                # logging.debug("Bottom edge hover")
                 return gui.HOVER_BOTTOM_EDGE
 
         return False
@@ -1516,7 +1516,7 @@ class PixelSelectOverlay(WorldOverlay):
         # First we calculate the position of the top left in buffer pixels
         # Note the Y flip again, since were going from pixel to physical
         # coordinates
-        top_left = util.tuple_add(
+        p_top_left = util.tuple_add(
                         self._phys_top_left,
                         util.tuple_multiply((pixel[0], -pixel[1]), self._mpp)
                    )
@@ -1526,10 +1526,13 @@ class PixelSelectOverlay(WorldOverlay):
 
         # No need for an explicit Y flip here, since `physical_to_world_pos`
         # takes care of that
-        btop_left = self.cnvs.world_to_buffer(
-                            self.cnvs.physical_to_world_pos(top_left), offset)
+        b_top_left = self.cnvs.world_to_buffer(
+                            self.cnvs.physical_to_world_pos(p_top_left), offset)
 
-        return btop_left + util.tuple_multiply(self._pixel_size, scale)
+        b_width = util.tuple_multiply(self._pixel_size, scale)
+        b_width = (b_width[0] + 0.5, b_width[1] + 0.5)
+
+        return b_top_left + b_width
 
     def _selection_made(self, selected_pixel):
         self.cnvs.update_drawing()
@@ -1549,7 +1552,7 @@ class PixelSelectOverlay(WorldOverlay):
                     ctx.rectangle(*rect)
                     ctx.fill()
 
-            if self._selected_pixel.value != (None, None):
+            if self._selected_pixel.value != None:
                 rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
                 if rect:
@@ -1567,12 +1570,6 @@ class PixelSelectOverlay(WorldOverlay):
             raise ValueError("Not all PixelSelectOverlay values are set!")
         self.enabled = enable
         self.cnvs.Refresh()
-
-
-class AngleOverlay(ViewOverlay):
-    """ Overlay with radials for Angular Resolve viewport """
-    def Draw(self, dc):
-        pass
 
 
 MAX_DOT_RADIUS = 25.5

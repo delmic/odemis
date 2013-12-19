@@ -1415,7 +1415,7 @@ class StaticARStream(StaticStream):
             except Exception:
                 logging.exception("Failed to convert to azymuthal projection")
                 return data # display it raw as fallback
-        
+
         return polar
 
     @limit_invocation(0.1) # Max 10 Hz
@@ -1760,7 +1760,7 @@ class MultipleDetectorStream(Stream):
         for s in self._streams:
             r.extend(s.raw)
         return r
-    
+
 class SEMCCDMDStream(MultipleDetectorStream):
     """
     Abstract class for multiple detector Stream made of SEM + CCD.
@@ -1768,8 +1768,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
     image).
     It provides to subclasses two ways to acquire the data:
      * software synchronised = the acquisition code takes care of moving the
-       SEM spot and starts a new CCD acquisition at each spot. A bit more 
-       overhead but very reliable, so use for long dwell times. 
+       SEM spot and starts a new CCD acquisition at each spot. A bit more
+       overhead but very reliable, so use for long dwell times.
      * driver synchronised = the SEM is programmed to scan the whole grid and
        automatically synchronises the CCD. As the dwell time is constant, it
        must be bigger than the worst time for CCD acquisition. Less overhead,
@@ -1816,7 +1816,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # that's the same as the CCD stream (and SEM stream, once the hardware
         # settings are correct)
         return self._ccd_stream.estimateAcquisitionTime()
-    
+
     def acquire(self):
         # TODO: if already acquiring, queue the Future for later acquisition
         if self._current_future != None and not self._current_future.done():
@@ -1968,12 +1968,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
     def _ssRunAcquisition(self, future):
         """
-        Acquires SEM/CCD images via software synchronisation. 
+        Acquires SEM/CCD images via software synchronisation.
         Warning: can be quite memory consuming if the grid is big
         returns (list of DataArray): all the data acquired
         raises:
           CancelledError() if cancelled
-          Exceptions if error 
+          Exceptions if error
         """
         # TODO: handle better very large grid acquisition (than memory oops)
         try:
@@ -2204,7 +2204,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         return (list of DataArray): all the data acquired
         raises:
           CancelledError() if cancelled
-          Exceptions if error 
+          Exceptions if error
         """
         try:
             # reset everything (ready for one acquisition)
@@ -2338,7 +2338,7 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
         data_list (list of M DataArray of shape (1, N)): all the data received
         repetition (list of 2 int): X,Y shape of the high dimensions of the cube
          so that X * Y = M
-        return (DataArray)  
+        return (DataArray)
         """
         assert len(data_list) > 0
 
@@ -2363,7 +2363,7 @@ class SEMARMDStream(SEMCCDMDStream):
     It handles acquisition, but not rendering (so .image always returns an empty
     image).
     """
-    
+
     def _onSEMCCDData(self, sem_data, ccd_data):
         """
         cf SEMCCDMDStream._onSEMCCDData()

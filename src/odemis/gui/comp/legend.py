@@ -206,11 +206,11 @@ class AxisLegend(wx.Panel):
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
 
-        # Explicitly set the
+        # Explicitly set the min size
         self.SetMinSize((-1, 40))
 
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
+        self.Bind(wx.EVT_SIZE, self.on_size)
 
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
@@ -218,11 +218,12 @@ class AxisLegend(wx.Panel):
         self.label_pos = None
 
         self.ticks = None
-        # The distance between tick in pixel
+        # The guiding distance between ticks in pixels
         self.tick_pixel_gap = 100
-        self.OnSize(None)
 
-    def OnPaint(self, event=None):
+        self.on_size(None)
+
+    def on_paint(self, event=None):
 
         if not self.Parent.canvas.has_data():
             return
@@ -262,21 +263,25 @@ class AxisLegend(wx.Panel):
 
     def calc_ticks(self):
         """ Determine where the ticks should be placed """
-        logging.debug("Calculating ticks")
 
         self.ticks = []
+
+        # The numbner of ticks we will aim for
         num_ticks = self.ClientSize.x / self.tick_pixel_gap
 
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         val_step = 1e-12
         min_x = self.Parent.canvas.min_x_val
-        width_x = self.Parent.canvas.width_x
+        range_x = self.Parent.canvas.range_x
 
-        while width_x / val_step > num_ticks:
+        # Increase the value step tenfold while it fits more tan num_ticks times
+        # in the range
+        while range_x / val_step > num_ticks:
             val_step *= 10
 
-        while width_x / (val_step / 2) < num_ticks:
+        # Divide the value step by two,
+        while range_x / (val_step / 2) < num_ticks:
             val_step /= 2
 
         print num_ticks, val_step
@@ -328,6 +333,6 @@ class AxisLegend(wx.Panel):
         ctx.show_text(label)
 
 
-    def OnSize(self, event):
+    def on_size(self, event):
         self.ticks = None
         self.Refresh(eraseBackground=False)
