@@ -1526,7 +1526,16 @@ class PlotCanvas(BufferedCanvas):
     # Image generation
 
     def draw(self):
-        """ This method updates the graph image """
+        """ This method updates the graph image
+
+        TODO: It seems this method gets called twice in a row -> investigate!
+        """
+
+        # It is possible that the buffer has not been initialized yet, because
+        # this method can be called before the Size event handler sets it.
+        if not self._bmp_buffer:
+            logging.warn("No buffer created yet, ignoring draw request")
+            return
 
         if self._data:
             # Reset all cached values
