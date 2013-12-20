@@ -25,8 +25,10 @@ from __future__ import division
 import logging
 from odemis import model
 from align import coordinates, transform, images
+from odemis import dataio
+import os
 
-MAX_TRIALS_NUMBER = 3  # Maximum number of scan grid repetitions
+MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 
 def DoFineOverlay(repetitions, used_dwell_time, max_allowed_diff, used_escan, used_ccd, used_detector):
     """
@@ -69,6 +71,13 @@ def DoFineOverlay(repetitions, used_dwell_time, max_allowed_diff, used_escan, us
         # Grid scan
         optical_image, electron_coordinates, electron_scale = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
 
+        ############## TO BE REMOVED ON TESTING##############
+        grid_data = dataio.hdf5.read_data("real_optical.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+        optical_image = grid_data[0]
+        #####################################################
+
         # Isolate spots
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, repetitions)
 
@@ -92,9 +101,25 @@ def DoFineOverlay(repetitions, used_dwell_time, max_allowed_diff, used_escan, us
         if known_estimated_coordinates != []:
             break
         elif trial == MAX_TRIALS_NUMBER:
-            logging.warning("Failed to find overlay")
-            return None, None, None
+            logging.warning("Failed to find overlay.")
+
+            # Make failure report
+            dataio.hdf5.export("OverlayReport/OpticalGrid.h5", model.DataArray(optical_image), thumbnail=None)
+            if not os.path.exists("OverlayReport"):
+                os.makedirs("OverlayReport")
+
+            report = open("OverlayReport/report.txt", 'w')
+            report.write("\n****Overlay Failure Report****\n\n"
+                         + "\nGrid size:\n" + str(repetitions)
+                         + "\n\nMaximum dwell time used:\n" + str(dwell_time)
+                         + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
+                         + "\n\nThe optical image of the grid can be seen in OpticalGrid.h5\n\n")
+            report.close()
+
+            logging.warning("Please check the failure report in OverlayReport folder.")
+            return (None, None), None, None
         else:
+            logging.warning("Increased dwell time by factor of 10...")
             dwell_time *= 10
             trial += 1
 
