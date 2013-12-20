@@ -1198,10 +1198,9 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         self.fit_view_to_content(recenter=True)
 
     def on_size(self, event):
-        DblMicroscopeCanvas.on_size(self, event)
         # refit image
         self.fit_view_to_content(recenter=True)
-
+        DblMicroscopeCanvas.on_size(self, event)
 
 # TODO: change name?
 class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
@@ -1215,8 +1214,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         # is called, because they are used in the on_size event handler.
         self.current_y_value = None
         self.current_x_value = None
-        # FIXME: This attribute should be renamed to simply `view`, but that
-        # would also  require renaming the `microscope_view` attributes of the
+        # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
+        # would also require renaming the `microscope_view` attributes of the
         # other Canvas classes.
         self.microscope_view = None
         self._tab_data_model = None

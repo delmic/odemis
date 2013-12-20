@@ -210,8 +210,9 @@ class BufferedCanvas(wx.Panel):
         # several events waiting
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
-        # Initialize the buffer's size
+        # Initialize the buffer
         self.resize_buffer(self._bmp_buffer_size)
+        # Doesn't seem to work on some canvas due to accessing ClientSize (too early?)
 #        self.resize_buffer(self.get_minimum_buffer_size())
 
     # Event processing
@@ -1541,38 +1542,13 @@ class PlotCanvas(BufferedCanvas):
 #            return
 
         if self._data:
-            # TODO: doesn't seem needed, no member has ever a flush function
-            # Reset all cached values
-#            for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
-#                f.flush()
-
             dc = self._dc_buffer
-#            dc = wx.MemoryDC()
-#            dc.SelectObject(self._bmp_buffer)
             dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
-
-            dc.Clear() # make sure you clear the bitmap!
+            dc.Clear()
 
             ctx = wxcairo.ContextFromDC(dc)
-            # width, height = self.ClientSize
             self._plot_data(ctx)
 
-#            del dc # need to get rid of the MemoryDC before Update() is called.
-
-#    def on_paint(self, event=None):
-#        dc_view = wx.PaintDC(self)
-#
-#        # Blit the (top-left area of the) buffer to the view port
-#        dc_view.BlitPointSize(
-#                    (0, 0),             # destination point
-#                    self.ClientSize,    # size of area to copy
-#                    self._dc_buffer,    # source
-#                    (0, 0)              # source point
-#        )
-#
-#        for o in self.view_overlays:
-#            o.Draw(dc_view)
-#
     def _draw_view_overlays(self, dc):
         """ Draws all the view overlays on the DC dc (wx.DC)"""
         # coordinates are at the center
@@ -1591,6 +1567,9 @@ class PlotCanvas(BufferedCanvas):
         """ Do a bar plot of the current `_data` """
         value_to_position = self.value_to_position
         line_to = ctx.line_to
+
+        # TODO: if ._data was always an ndarray, we could optimize value_to_position
+        # to be computed by numpy as one be array much more quickly.
 
         x, y = value_to_position((self.min_x_val, self.min_y_val))
 
