@@ -1229,10 +1229,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self._ldragging = False
 
         ## Overlays
-
-        # List of all overlays used by this canvas
-        self.overlays = []
-
         self.SetBackgroundColour(self.Parent.BackgroundColour)
         self.SetForegroundColour(self.Parent.ForegroundColour)
 
@@ -1351,19 +1347,14 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         img = wx.ImageFromBitmap(bitmap)
         self.microscope_view.thumbnail.value = img
 
-
-    def on_paint(self, event=None):
-        wx.BufferedPaintDC(self, self._bmp_buffer)
-        dc = wx.PaintDC(self)
-
-        for o in self.overlays:
-            o.Draw(dc)
+    def update_drawing(self):
+        super(ZeroDimensionalPlotCanvas, self).update_drawing()
 
         if self.microscope_view:
             self._updateThumbnail()
 
     def add_overlay(self, ol):
-        self.overlays.append(ol)
+        self.view_overlays.append(ol)
 
     def get_y_value(self):
         """ Return the current y value """

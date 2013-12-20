@@ -211,8 +211,8 @@ class BufferedCanvas(wx.Panel):
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
         # Initialize the buffer's size
-        # self.on_size(None)
-
+        self.resize_buffer(self._bmp_buffer_size)
+#        self.resize_buffer(self.get_minimum_buffer_size())
 
     # Event processing
 
@@ -304,13 +304,16 @@ class BufferedCanvas(wx.Panel):
         """
         # Make sure the buffer is always at least the same size as the Window or
         # bigger
-        new_size = self.get_minimum_buffer_size()
+        min_size = self.get_minimum_buffer_size()
+        # DEBUG => forces resize buffer at every resize
+#        new_size = (max(self._bmp_buffer_size[0], min_size[0]),
+#                    max(self._bmp_buffer_size[1], min_size[1]))
+        new_size = min_size
         if (new_size != self._bmp_buffer_size):
-            # logging.debug("Buffer size changed, redrawing...")
+            logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(new_size)
-            # self.recenter_buffer((new_size[0]/2, new_size[1]/2))
-            self.request_drawing_update()
-            # self.update_drawing()
+            #self.request_drawing_update()
+            self.update_drawing()
         else:
             # logging.debug("Buffer size didn't change, refreshing...")
             self.Refresh(eraseBackground=False)
@@ -346,15 +349,18 @@ class BufferedCanvas(wx.Panel):
 
         :param size: (2-tuple int) The new size
         """
+        logging.debug("Resizing buffer size to %s", size)
         # Make new offscreen bitmap: this bitmap will always have the
         # current drawing in it
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size
 
+        # TODO: needed?
+        self._dc_buffer.SelectObject(wx.NullBitmap) # select the previous out
         # Select the bitmap into the device context
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
-        self._dc_buffer.SetBackground(wx.BLACK_BRUSH)
+        self._dc_buffer.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
 
     def request_drawing_update(self, delay=0.1):
         """ Schedule an update of the buffer if the timer is not already running
@@ -1197,10 +1203,8 @@ class DraggableCanvas(BitmapCanvas):
 
     def get_minimum_buffer_size(self):
         """ Return the minimum size needed by the buffer """
-        return (max(self._bmp_buffer_size[0],
-                    self.ClientSize.x + self.default_margin * 2),
-                max(self._bmp_buffer_size[1],
-                    self.ClientSize.y + self.default_margin * 2))
+        return (self.ClientSize.x + self.default_margin * 2,
+                self.ClientSize.y + self.default_margin * 2)
 
     def _calc_bg_offset(self, world_pos):
         bg_offset = ((self.requested_world_pos[0] - world_pos[0]) % 40,
@@ -1234,8 +1238,8 @@ class DraggableCanvas(BitmapCanvas):
         overlay using `update_drawing`, could cause the view to 'jump' while
         dragging.
 
-        TODO: might be obsolete, do test
         """
+#        TODO: might be obsolete, do test
         self.draw()
         self.Refresh(eraseBackground=False)
         self.Update()
@@ -1441,7 +1445,7 @@ class PlotCanvas(BufferedCanvas):
         self.range_y = self.max_y_val - self.min_y_val
 
         logging.debug("Widths set to %s and %s", self.range_x, self.range_y)
-        self.draw()
+        self.request_drawing_update()
 
     def reset_dimensions(self):
         """ Determine the dimensions according to the present data """
@@ -1452,7 +1456,7 @@ class PlotCanvas(BufferedCanvas):
             min(vert),
             max(vert)
         )
-        self.draw()
+        self.request_drawing_update()
 
     # Value calculation methods
 
@@ -1521,29 +1525,30 @@ class PlotCanvas(BufferedCanvas):
 
     def set_plot_mode(self, mode):
         self.plot_mode = mode
-        self.draw()
+        self.request_drawing_update()
 
     # Image generation
 
     def draw(self):
         """ This method updates the graph image
 
-        TODO: It seems this method gets called twice in a row -> investigate!
         """
-
+        #TODO: It seems this method gets called twice in a row -> investigate!
         # It is possible that the buffer has not been initialized yet, because
         # this method can be called before the Size event handler sets it.
-        if not self._bmp_buffer:
-            logging.warn("No buffer created yet, ignoring draw request")
-            return
+#        if not self._bmp_buffer:
+#            logging.warn("No buffer created yet, ignoring draw request")
+#            return
 
         if self._data:
+            # TODO: doesn't seem needed, no member has ever a flush function
             # Reset all cached values
-            for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
-                f.flush()
+#            for _, f in inspect.getmembers(self, lambda m: hasattr(m, "flush")):
+#                f.flush()
 
-            dc = wx.MemoryDC()
-            dc.SelectObject(self._bmp_buffer)
+            dc = self._dc_buffer
+#            dc = wx.MemoryDC()
+#            dc.SelectObject(self._bmp_buffer)
             dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
 
             dc.Clear() # make sure you clear the bitmap!
@@ -1552,10 +1557,27 @@ class PlotCanvas(BufferedCanvas):
             # width, height = self.ClientSize
             self._plot_data(ctx)
 
-            del dc # need to get rid of the MemoryDC before Update() is called.
+#            del dc # need to get rid of the MemoryDC before Update() is called.
 
-        self.Refresh(eraseBackground=False)
-        self.Update()
+#    def on_paint(self, event=None):
+#        dc_view = wx.PaintDC(self)
+#
+#        # Blit the (top-left area of the) buffer to the view port
+#        dc_view.BlitPointSize(
+#                    (0, 0),             # destination point
+#                    self.ClientSize,    # size of area to copy
+#                    self._dc_buffer,    # source
+#                    (0, 0)              # source point
+#        )
+#
+#        for o in self.view_overlays:
+#            o.Draw(dc_view)
+#
+    def _draw_view_overlays(self, dc):
+        """ Draws all the view overlays on the DC dc (wx.DC)"""
+        # coordinates are at the center
+        for o in self.view_overlays:
+            o.Draw(dc)
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """
