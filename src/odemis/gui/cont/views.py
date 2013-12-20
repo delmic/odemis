@@ -281,15 +281,20 @@ class ViewController(object):
         msgdata = [str(v) for v in views] if not views is None else "default"
         logging.debug(msg, msgdata)
 
-        # TODO: don't use swap_viewports (which depends on the previous
-        # viewport properties), and only use the sizer and the *view info.
-        # Reset the order of the viewports
-        for i, v in enumerate(views):
-            # If a viewport has moved compared to the original order...
-            if self._viewports[i].microscope_view != v:
-                # ...put it back in its original place
-                j = self._viewport_index_by_view(v)
-                self.swap_viewports(i, j)
+        containing_window = self._viewports[0].Parent
+        containing_window.Freeze()
+        try:
+            # TODO: don't use swap_viewports (which depends on the previous
+            # viewport properties), and only use the sizer and the *view info.
+            # Reset the order of the viewports
+            for i, v in enumerate(views):
+                # If a viewport has moved compared to the original order...
+                if self._viewports[i].microscope_view != v:
+                    # ...put it back in its original place
+                    j = self._viewport_index_by_view(v)
+                    self.swap_viewports(i, j)
+        finally:
+            containing_window.Thaw()
 
     def swap_viewports(self, visible_idx, hidden_idx):
         """ Swap the positions of viewports denoted by indices visible_idx and
@@ -389,8 +394,6 @@ class ViewController(object):
                 if viewport.microscope_view == view:
                     viewport.SetFocus(True)
                     if layout == model.VIEW_LAYOUT_ONE:
-                        # TODO: maybe in that case, it's not necessary to
-                        # display the focus frame around?
                         viewport.Show()
                 else:
                     viewport.SetFocus(False)
