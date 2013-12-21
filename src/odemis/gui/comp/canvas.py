@@ -181,6 +181,11 @@ class BufferedCanvas(wx.Panel):
             # says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
+        # Initialize the buffer
+        self.resize_buffer(self._bmp_buffer_size)
+        # Doesn't seem to work on some canvas due to accessing ClientSize (too early?)
+#        self.resize_buffer(self.get_minimum_buffer_size())
+
         # This attribute is used to store the current mouse cursor type
         self.previous_cursor = None
 
@@ -210,10 +215,6 @@ class BufferedCanvas(wx.Panel):
         # several events waiting
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
-        # Initialize the buffer
-        self.resize_buffer(self._bmp_buffer_size)
-        # Doesn't seem to work on some canvas due to accessing ClientSize (too early?)
-#        self.resize_buffer(self.get_minimum_buffer_size())
 
     # Event processing
 
