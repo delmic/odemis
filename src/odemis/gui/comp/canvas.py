@@ -303,16 +303,12 @@ class BufferedCanvas(wx.Panel):
 
         Ensures that the buffer still fits in the view and recenter the view.
         """
-        # Make sure the buffer is always at least the same size as the Window or
-        # bigger
+        # Essure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
-        # DEBUG => forces resize buffer at every resize
-#        new_size = (max(self._bmp_buffer_size[0], min_size[0]),
-#                    max(self._bmp_buffer_size[1], min_size[1]))
-        new_size = min_size
-        if (new_size != self._bmp_buffer_size):
+        if (min_size[0] > self._bmp_buffer_size[0] or
+            min_size[1] > self._bmp_buffer_size[1]):
             logging.debug("Buffer size changed, redrawing...")
-            self.resize_buffer(new_size)
+            self.resize_buffer(min_size)
             #self.request_drawing_update()
             self.update_drawing()
         else:
@@ -356,8 +352,6 @@ class BufferedCanvas(wx.Panel):
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size
 
-        # TODO: needed?
-        self._dc_buffer.SelectObject(wx.NullBitmap) # select the previous out
         # Select the bitmap into the device context
         self._dc_buffer.SelectObject(self._bmp_buffer)
         # On Linux necessary after every 'SelectObject'
@@ -1529,6 +1523,20 @@ class PlotCanvas(BufferedCanvas):
         self.request_drawing_update()
 
     # Image generation
+
+    def on_size(self, evt):
+        """ size change handler
+
+        Same as the standard handler, but we need to always redraw.
+        """
+        # Ensure the buffer is always at least as big as the window
+        min_size = self.get_minimum_buffer_size()
+        if (min_size[0] > self._bmp_buffer_size[0] or
+            min_size[1] > self._bmp_buffer_size[1]):
+            self.resize_buffer(min_size)
+
+        self._call_event_on_overlay('on_size', evt)
+        self.update_drawing()
 
     def draw(self):
         """ This method updates the graph image
