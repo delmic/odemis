@@ -27,6 +27,7 @@ import os
 import threading
 import sys
 import time
+import numpy
 from odemis import model
 from align import coordinates, transform, images
 from odemis import dataio
@@ -43,10 +44,23 @@ class Overlay():
         self._overlay_thread = None  # thread
         self._overlay_state = RUNNING
         self._current_future = None
+        self._escan = None
+        self._detector = None
+        self._ccd = None
+        self._repetitions = None
+        self._dwell_time = None
+        self._max_allowed_diff = None
+
+        ############## TO BE REMOVED ON TESTING##############
+        grid_data = dataio.hdf5.read_data("real_optical.h5")
+        C, T, Z, Y, X = grid_data[0].shape
+        grid_data[0].shape = Y, X
+        self._optical_image = grid_data[0]
+        #####################################################
 
         self._overlay_lock = threading.Lock()
 
-    def _DoFindOverlay(self, repetitions, used_dwell_time, max_allowed_diff, used_escan, used_ccd, used_detector, future):
+    def _DoFindOverlay(self, future):
         """
         Scans a spots grid using the e-beam and captures the CCD image, isolates the 
         spots in the CCD image and finds the coordinates of their centers, matches the 
@@ -55,12 +69,6 @@ class Overlay():
         DivideInNeighborhoods->FindCenterCoordinates-> ReconstructImage->MatchCoordinates->
         CalculateTransform). In case matching the coordinates is infeasible, it automatically 
         repeats grid scan -and thus all steps until matching- with different parameters.
-        repetitions (tuple of ints): The number of CL spots are used
-        used_dwell_time (float): Time to scan each spot #s
-        max_allowed_diff (float): Maximum allowed difference in electron coordinates #m
-        used_escan (model.Emitter): The e-beam scanner
-        used_ccd (model.DigitalCamera): The CCD
-        used_detector (model.Detector): The electron detector
         future (model.ProgressiveFuture): Progressive future provided by the wrapper
         returns translation (Tuple of 2 floats), 
                 scaling (Float), 
@@ -71,23 +79,9 @@ class Overlay():
         if self._overlay_state == CANCELLED:
                 raise CancelledError()
 
-        dwell_time = used_dwell_time
-        escan = None
-        detector = None
-        ccd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                escan = c
-            elif c.role == "se-detector":
-                detector = c
-            elif c.role == "ccd":
-                ccd = c
-        if not all([escan, detector, ccd]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+        dwell_time = self._dwell_time
 
-        logging.debug("Starting Overlay")
+        logging.debug("Starting Overlay...")
 
         trial = 1
         # Repeat until we can find overlay (matching coordinates is feasible)
@@ -95,23 +89,22 @@ class Overlay():
             # Grid scan
             if self._overlay_state == CANCELLED:
                 raise CancelledError()
-            optical_image, electron_coordinates, electron_scale = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
+            optical_image, electron_coordinates, electron_scale = images.ScanGrid(self._repetitions, dwell_time, self._escan, self._ccd, self._detector)
 
             ############## TO BE REMOVED ON TESTING##############
-            # grid_data = dataio.hdf5.read_data("real_optical.h5")
-            # C, T, Z, Y, X = grid_data[0].shape
-            # grid_data[0].shape = Y, X
-            # optical_image = grid_data[0]
+            optical_image = self._optical_image
             #####################################################
 
             # Isolate spots
             if self._overlay_state == CANCELLED:
                 raise CancelledError()
-            subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, repetitions)
+            logging.debug("Isolating spots...")
+            subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, self._repetitions)
 
             # Find the centers of the spots
             if self._overlay_state == CANCELLED:
                 raise CancelledError()
+            logging.debug("Finding spot centers...")
             spot_coordinates = coordinates.FindCenterCoordinates(subimages)
 
             # Reconstruct the optical coordinates
@@ -125,11 +118,12 @@ class Overlay():
             scale = electron_scale[0] / optical_scale
 
             # max_allowed_diff in pixels
-            max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
+            max_allowed_diff_px = self._max_allowed_diff / self._escan.pixelSize.value[0]
 
             # Match the electron to optical coordinates
             if self._overlay_state == CANCELLED:
                 raise CancelledError()
+            logging.debug("Matching coordinates...")
             known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
 
             if known_estimated_coordinates != []:
@@ -143,17 +137,17 @@ class Overlay():
 
                 report = open("OverlayReport/report.txt", 'w')
                 report.write("\n****Overlay Failure Report****\n\n"
-                             + "\nGrid size:\n" + str(repetitions)
+                             + "\nGrid size:\n" + str(self._repetitions)
                              + "\n\nMaximum dwell time used:\n" + str(dwell_time)
                              + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
                              + "\n\nThe optical image of the grid can be seen in OpticalGrid.h5\n\n")
                 report.close()
 
                 logging.warning("Failed to find overlay. Please check the failure report in OverlayReport folder.")
-                with self._acq_lock:
-                    if self._acq_state == CANCELLED:
+                with self._overlay_lock:
+                    if self._overlay_state == CANCELLED:
                         raise CancelledError()
-                    self._acq_state = FINISHED
+                    self._overlay_state = FINISHED
                 raise KeyError('Overlay failure')
             else:
                 logging.warning("Increased dwell time by factor of 10...")
@@ -163,16 +157,16 @@ class Overlay():
         # Calculate transformation parameters
         if self._overlay_state == CANCELLED:
             raise CancelledError()
+        logging.debug("Calculating transformation...")
         (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_estimated_coordinates, known_optical_coordinates)
 
-        with self._acq_lock:
-            if self._acq_state == CANCELLED:
+        with self._overlay_lock:
+            if self._overlay_state == CANCELLED:
                 raise CancelledError()
-            self._acq_state = FINISHED
+            self._overlay_state = FINISHED
 
-        logging.debug("Overlay done")
+        logging.debug("Overlay done.")
 
-        print (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation
         return (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation
 
     def FindOverlay(self, repetitions, used_dwell_time, max_allowed_diff, used_escan, used_ccd, used_detector):
@@ -187,6 +181,14 @@ class Overlay():
         used_detector (model.Detector): The electron detector
         returns (model.ProgressiveFuture):    Progress of DoFindOverlay
         """
+        # Get scanner, detector and ccd
+        self._escan = used_escan
+        self._detector = used_detector
+        self._ccd = used_ccd
+        self._repetitions = repetitions
+        self._dwell_time = used_dwell_time
+        self._max_allowed_diff = max_allowed_diff
+
         # One overlay at a time
         if self._current_future != None and not self._current_future.done():
             raise IOError("Cannot do multiple overlays simultaneously")
@@ -209,7 +211,7 @@ class Overlay():
         # Run in separate thread
         self._overlay_thread = threading.Thread(target=self._executeTask,
                       name="SEM/CCD overlay",
-                      args=(f, doFindOverlay, repetitions, used_dwell_time, max_allowed_diff, used_escan, used_ccd, used_detector, f))
+                      args=(f, doFindOverlay, f))
 
         self._overlay_thread.start()
         return f
@@ -237,17 +239,16 @@ class Overlay():
         else:
             future.set_result(result)
 
-    # TODO: add future as parameter after rebasing
-    def _CancelFindOverlay(self):
+    def _CancelFindOverlay(self, future):
         """
         Canceller of _DoFindOverlay task.
         """
-        logging.debug("Cancelling overlay")
+        logging.debug("Cancelling overlay...")
 
         with self._overlay_lock:
             if self._overlay_state == FINISHED:
                 return False
             self._overlay_state = CANCELLED
-            logging.debug("Overlay cancelled")
+            logging.debug("Overlay cancelled.")
 
         return True
