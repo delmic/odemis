@@ -74,6 +74,8 @@ class ViewPort(wx.Panel):
 
         if self.legend_class is not None:
             if isinstance(self.legend_class, collections.Iterable):
+                # FIXME: don't use a list, it will confuse everything.
+                # => Just use legend_bottom, legend_left
                 self.legend = [self.legend_class[0](self),
                                self.legend_class[1](self)]
                 grid_sizer = wx.GridBagSizer()
@@ -314,12 +316,13 @@ class MicroscopeViewport(ViewPort):
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
         if ("merge" in self._microscope_view.stream_tree.kwargs and
-            len(self._microscope_view.getStreams()) >= 2):
+            len(self._microscope_view.stream_tree) >= 2):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
 
         # TODO: update icons depending on type of streams
+        # cf self.legend.set_stream_type()
 
     @call_after
     def _onImageUpdate(self, timestamp):

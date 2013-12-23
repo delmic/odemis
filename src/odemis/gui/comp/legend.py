@@ -26,15 +26,17 @@
 import cairo
 import logging
 import math
+from odemis.gui import model
+from odemis.gui.comp.scalewindow import ScaleWindow
+from odemis.gui.comp.slider import Slider
+from odemis.gui.img.data import getico_blending_optBitmap, \
+    getico_blending_semBitmap, getico_blending_goalBitmap
+from odemis.gui.model import stream
+from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
 import wx
 
 import odemis.gui as gui
 import odemis.gui.util.units as units
-from odemis.gui.comp.scalewindow import ScaleWindow
-from odemis.gui.comp.slider import Slider
-from odemis.gui.img.data import getico_blending_optBitmap, \
-    getico_blending_semBitmap
-from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
 
 
 class InfoLegend(wx.Panel):
@@ -192,6 +194,38 @@ class InfoLegend(wx.Panel):
     def set_mag_label(self, label):
         self.LegendMag.SetLabel(label)
         self.Layout()
+
+    # TODO: use
+    # Stream class / bitmap for the merge slider
+    stream_to_icon = [
+          (stream.OPTICAL_STREAMS, getico_blending_optBitmap()),
+          (stream.EM_STREAMS, getico_blending_semBitmap()),
+          # TODO: Spectrum icon
+          (stream.SPECTRUM_STREAMS, getico_blending_semBitmap()),
+          # TODO: Goal stream class?!
+          (stream.StaticStream, getico_blending_goalBitmap()),
+          ]
+    def set_stream_type(self, side, cls):
+        """
+        Set the stream type, to put the right icon on the merge slider
+        side (wx.LEFT or wx.RIGHT): whether this set the left or right stream
+        cls (class inheriting from Stream): the class of the stream 
+        """
+        for cs, i in self.stream_to_icon:
+            if issubclass(cls, cs):
+                icon = i
+                break
+        else:
+            # Don't fail too bad
+            icon = getico_blending_optBitmap()
+            if self.mergeSlider.IsShown():
+                logging.warning("Failed to find icon for stream of class %s",
+                                cls)
+        if wx.LEFT:
+            self.bmpSliderLeft.SetBitmap(icon)
+        else:
+            self.bmpSliderRight.SetBitmap(icon)
+
 
 class AxisLegend(wx.Panel):
     """ This legend can be used to show ticks and values to indicate the scale
