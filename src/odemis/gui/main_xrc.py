@@ -651,10 +651,14 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                          <label>adsf asd adf ad 
+fad ad fad a </label>
+                          <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxALIGN_CENTRE_HORIZONTAL</flag>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="lens_align_btn_to_center">
@@ -667,12 +671,12 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
+                        <flag>wxTOP|wxALIGN_CENTRE</flag>
                         <border>16</border>
                       </object>
                       <orient>wxVERTICAL</orient>
                     </object>
-                    <flag>wxALL|wxEXPAND</flag>
+                    <flag>wxALL|wxEXPAND|wxALIGN_CENTRE_HORIZONTAL</flag>
                     <border>10</border>
                   </object>
                 </object>
