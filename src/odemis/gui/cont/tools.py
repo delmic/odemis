@@ -101,8 +101,8 @@ class ToolBar(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
 
-        # Create orientation dependand objects
-        if kwargs['style'] & wx.VERTICAL == wx.VERTICAL:
+        # Create orientation dependent objects
+        if kwargs['style'] & wx.VERTICAL:
             self.orientation = wx.VERTICAL
             main_sizer = wx.BoxSizer(wx.VERTICAL)
             first_bmp = wx.StaticBitmap(self, -1,

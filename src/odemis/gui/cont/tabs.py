@@ -1053,11 +1053,14 @@ class LensAlignTab(Tab):
 
         # Hack warning: Move the scale window from the hidden viewport legend
         # next to the toolbar.
+        # FIXME: doesn't work (anymore) => too small?
         tb_sizer = tb.GetSizer()
         main_frame.vp_align_sem.legend_panel.scaleDisplay.Reparent(tb)
         tb_sizer.Add(
             main_frame.vp_align_sem.legend_panel.scaleDisplay,
-            flag=wx.EXPAND)
+            proportion=1,
+            flag=wx.EXPAND | wx.ALIGN_LEFT)
+        tb.Layout()
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
