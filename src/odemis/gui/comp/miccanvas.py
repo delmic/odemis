@@ -1223,8 +1223,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         # is called, because they are used in the on_size event handler.
         self.val_y = model.VigilantAttribute(None)
         self.val_x = model.VigilantAttribute(None)
-        # Human readible representation of the y val
-        self.str_x = model.VigilantAttribute(None)
         # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
         # would also require renaming the `microscope_view` attributes of the
         # other Canvas classes.
@@ -1232,9 +1230,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self._tab_data_model = None
 
         super(ZeroDimensionalPlotCanvas, self).__init__(*args, **kwargs)
-
-        self.unit_x = None
-        self.unit_y = None
 
         self.drag_init_pos = None
 
@@ -1274,11 +1269,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.val_x.value = self._pos_x_to_val_x(v_posx, match=True)
         self.val_y.value = self._val_x_to_val_y(self.val_x.value)
-
-        self.str_x.value = "%s"  % units.readable_str(
-                                   self.val_x.value,
-                                   self.unit_x,
-                                   3)
 
         pos = (v_posx, self._val_y_to_pos_y(self.val_y.value))
         self.markline_overlay.set_position(pos)
@@ -1334,12 +1324,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     def get_y_value(self):
         """ Return the current y value """
         return self.val_y.value
-
-    def set_x_unit(self, unit):
-        self.unit_x = unit
-
-    def set_y_unit(self, unit):
-        self.unit_y = unit
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
     """ Angular resolved canvas

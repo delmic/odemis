@@ -436,13 +436,24 @@ class PlotViewport(ViewPort):
         # before we get an explicit chance to unsubscribe event handlers
         self.spectrum_stream = None
 
-        self.canvas.set_x_unit("m") #pylint: disable=E1101
+        self.unit_x = "m" # updated when the data is read
+        self.unit_y = None
 
         self.canvas.active_overlay.v_posx.subscribe(self.legend.position_label)
-        self.canvas.str_x.subscribe(self.legend.set_label)
+        self.canvas.val_x.subscribe(self._on_value_x)
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
+
+    def _on_value_x(self, val):
+        """
+        Called when the selected horizontal value is modified
+        """
+        if val is None:
+            self.legend.set_label("")
+        else:
+            val_str = units.readable_str(val, self.unit_x, 3)
+            self.legend.set_label(val_str)
 
     @property
     def microscope_view(self):
@@ -473,6 +484,7 @@ class PlotViewport(ViewPort):
     def _on_spec_pixel(self, pixel):
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
+        self.unit_x = self.spectrum_stream.spectrumBandwidth.unit
         self.canvas.set_1d_data(domain, data)  #pylint: disable=E1101
 
 
