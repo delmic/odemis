@@ -44,7 +44,7 @@ class AcquisitionDialog(xrcfr_acq):
     """
 
     # TODO: share more code with cont.acquisition
-    def __init__(self, parent, tab_data):
+    def __init__(self, parent, orig_tab_data):
         xrcfr_acq.__init__(self, parent)
 
         self.conf = get_acqui_conf()
@@ -60,10 +60,13 @@ class AcquisitionDialog(xrcfr_acq):
         # a ProgressiveFuture if the acquisition is going on
         self.acq_future = None
 
+        # duplicate the interface, but with only one view
+        self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
+
         # Create a new settings controller for the acquisition dialog
         self.settings_controller = SecomSettingsController(self,
-                                                           tab_data,
-                                                           True)
+                                                       self._tab_data_model,
+                                                       highlight_change=True)
         # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
@@ -75,17 +78,11 @@ class AcquisitionDialog(xrcfr_acq):
         # Presets which have been confirmed on the hardware
         self._presets_confirmed = set() # (string)
 
-        # duplicate the interface, but with only one view
-        self._tab_data_model = self.duplicate_tab_data_model(tab_data)
-
-        orig_view = tab_data.focussedView.value
+        orig_view = orig_tab_data.focussedView.value
         view = self._tab_data_model.focussedView.value
 
         self.stream_controller = StreamController(self._tab_data_model,
                                                   self.pnl_secom_streams)
-        # Keep track of the added streams, so we can easily remove them when
-        # the dialog is destroyed
-        self.added_streams = []
         # The streams currently displayed are the one
         self.add_all_streams(orig_view.getStreams())
 
@@ -109,6 +106,10 @@ class AcquisitionDialog(xrcfr_acq):
         self.on_preset(None) # will force setting the current preset
 
         pub.subscribe(self.on_setting_change, 'setting.changed')
+        # TODO: we should actually listen to the stream tree, but it's not
+        # currently possible.
+        # Currently just use view.last_update which should be "similar"
+        view.lastUpdate.subscribe(self.on_streams_changed)
 
 
     def duplicate_tab_data_model(self, orig):
@@ -140,20 +141,20 @@ class AcquisitionDialog(xrcfr_acq):
         # it's ok to not duplicate the streamTree literally
         view = self._tab_data_model.focussedView.value
 
+        # Add stream to view first, so that the "visible" button is correct
+        for s in visible_streams:
+            view.addStream(s)
+
         # go through all the streams available in the interface model
         for s in self._tab_data_model.streams.value:
-            if s in visible_streams:
-                self.added_streams.append(s)
-                # Do addstream first, so that the "visible" button is correct
-                view.addStream(s)
-            # add to the stream bar in any case
             sp = self.stream_controller.addStreamForAcquisition(s)
 
     def remove_all_streams(self):
         """ Remove the streams we added to the view on creation """
+        # Ensure we don't update the view after the window is destroyed
         view = self._tab_data_model.focussedView.value
 
-        for s in self.added_streams:
+        for s in view.getStreams():
             view.removeStream(s)
 
     def find_current_preset(self):
@@ -176,6 +177,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         raise KeyError()
 
+    @call_after
     def update_setting_display(self):
         # if gauge was left over from an error => now hide it
         if self.gauge_acq.IsShown():
@@ -187,6 +189,12 @@ class AcquisitionDialog(xrcfr_acq):
         # update highlight
         for se, value in self._orig_settings.items():
             se.highlight(se.va.value != value)
+
+    def on_streams_changed(self, val):
+        """
+        When the list of streams to acquire has changed
+        """
+        self.update_setting_display()
 
     def on_setting_change(self, setting_ctrl):
         self.update_setting_display()
@@ -302,6 +310,10 @@ class AcquisitionDialog(xrcfr_acq):
         """
         self.btn_secom_acquire.Disable()
 
+        # disable estimation time updates during acquisition
+        view = self._tab_data_model.focussedView.value
+        view.lastUpdate.unsubscribe(self.on_streams_changed)
+
         # the range of the progress bar was already set in
         # update_acquisition_time()
         self.gauge_acq.Value = 0
@@ -337,6 +349,10 @@ class AcquisitionDialog(xrcfr_acq):
         """
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+
+        # reenable estimation time updates
+        view = self._tab_data_model.focussedView.value
+        view.lastUpdate.subscribe(self.on_streams_changed)
 
         try:
             data = future.result(1) # timeout is just for safety

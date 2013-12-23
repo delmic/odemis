@@ -376,6 +376,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
+    # FIXME: it shouldn't need to ignore deads, as the subscription should go
+    # away as soon as it's destroyed. However, after SECOM acquisition, something
+    # seems to keep reference to the SecomCanvas, which prevents it from being
+    # fully destroyed.
+    @ignore_dead
     def _onViewImageUpdate(self, t):
         # TODO use the real streamtree functions
         # for now we call a conversion layer
