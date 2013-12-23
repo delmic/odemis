@@ -35,73 +35,65 @@ class TestOverlay(unittest.TestCase):
     """
     Test Overlay functions
     """
-    @unittest.skip("skip")
-    def test_do_find_overlay(self):
-        """
-        Test DoFindOverlay
-        """
-        escan = None
-        detector = None
-        ccd = None
+    def setUp(self):
+        self._escan = None
+        self._detector = None
+        self._ccd = None
         # find components by their role
         for c in model.getComponents():
             if c.role == "e-beam":
-                escan = c
+                self._escan = c
             elif c.role == "se-detector":
-                detector = c
+                self._detector = c
             elif c.role == "ccd":
-                ccd = c
-        if not all([escan, detector, ccd]):
+                self._ccd = c
+        if not all([self._escan, self._detector, self._ccd]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 
-        (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = find_overlay.Overlay._DoFindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
+        self._overlay = find_overlay.Overlay()
+
+    # @unittest.skip("skip")
+    def test_find_overlay(self):
+        """
+        Test FindOverlay
+        """
+        escan = self._escan
+        detector = self._detector
+        ccd = self._ccd
+        overlay = self._overlay
+
+        f = overlay.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
+
+        ((calc_translation_x, calc_translation_y), calc_scaling, calc_rotation) = f.result()
         numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (-280.91827079065121, -195.55748765461769, 13.9363892133, -1.47833441067), 1)
 
-    @unittest.skip("skip")
+    # @unittest.skip("skip")
     def test_do_find_overlay_failure(self):
         """
-        Test DoFindOverlay failure due to low maximum allowed difference
+        Test FindOverlay failure due to low maximum allowed difference
         """
-        escan = None
-        detector = None
-        ccd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                escan = c
-            elif c.role == "se-detector":
-                detector = c
-            elif c.role == "ccd":
-                ccd = c
-        if not all([escan, detector, ccd]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+        escan = self._escan
+        detector = self._detector
+        ccd = self._ccd
+        overlay = self._overlay
 
-        self.assertRaises(KeyError, find_overlay.Overlay._DoFindOverlay, (9, 9), 1e-06, 1e-08, escan, ccd, detector)
+        f = overlay.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
 
+        self.assertRaises(KeyError, f.result)
+
+    # @unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation
         """
-        escan = None
-        detector = None
-        ccd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                escan = c
-            elif c.role == "se-detector":
-                detector = c
-            elif c.role == "ccd":
-                ccd = c
-        if not all([escan, detector, ccd]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+        escan = self._escan
+        detector = self._detector
+        ccd = self._ccd
+        overlay = self._overlay
 
-        overlay = find_overlay.Overlay()
         f = overlay.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
-        time.sleep(1)
+        time.sleep(0.06)  # Cancel almost after the half grid is scanned
 
         f.cancel()
         self.assertTrue(f.cancelled())
