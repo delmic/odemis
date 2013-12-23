@@ -25,7 +25,11 @@ setting column of the user interface.
 
 """
 
+import collections
+import logging
+import numbers
 from odemis import model
+import odemis.gui
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -36,18 +40,16 @@ from odemis.gui.util.units import readable_str
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
-from wx.lib.pubsub import pub
-import collections
-import logging
-import odemis.gui
-import odemis.gui.comp.text as text
-import odemis.gui.util.units as utun
 import re
 import time
 import wx
+from wx.lib.pubsub import pub
+
+import odemis.gui.comp.text as text
+import odemis.gui.util.units as utun
+
 
 ####### Utility functions #######
-
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
@@ -276,9 +278,15 @@ class SettingsPanel(object):
             if (minv, maxv) == (None, None):
                 minv, maxv = va.range
             else: # merge
-                minv, maxv = [max(minv, va.range[0]), min(maxv, va.range[1])]
+                # TODO: handle iterables
+                minv, maxv = max(minv, va.range[0]), min(maxv, va.range[1])
         except (AttributeError, NotApplicableError):
             pass
+        # Ensure the range encompasses the current value
+        if minv is not None and maxv is not None:
+            val = va.value
+            if isinstance(val, numbers.Real):
+                minv, maxv = min(minv, val), max(maxv, val)
 
         choices = conf.get("choices", None)
         try:
@@ -370,8 +378,8 @@ class SettingsPanel(object):
             if isinstance(choices, dict):
                 # it's then already value -> string (user-friendly display)
                 choices_fmt = choices.items()
-            elif format and len(choices) > 1 \
-               and all([isinstance(c, (int, long, float)) for c in choices]):
+            elif (format and len(choices) > 1 and
+                  all([isinstance(c, numbers.Real) for c in choices])):
                 # choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
