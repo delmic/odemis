@@ -174,6 +174,12 @@ class SecomStreamsTab(Tab):
                                               main_frame, tab_data)
 
 
+        # Toolbar
+        self.tb = self.main_frame.secom_toolbar
+        # TODO: Add the buttons when the functionality is there
+        #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
+        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+
         # Order matters!
         # First we create the views, then the streams
         self._view_controller = viewcont.ViewController(
@@ -182,7 +188,8 @@ class SecomStreamsTab(Tab):
                                     [self.main_frame.vp_secom_tl,
                                      self.main_frame.vp_secom_tr,
                                      self.main_frame.vp_secom_bl,
-                                     self.main_frame.vp_secom_br]
+                                     self.main_frame.vp_secom_br],
+                                    self.tb
                                 )
 
         self._settings_controller = settings.SecomSettingsController(
@@ -242,13 +249,6 @@ class SecomStreamsTab(Tab):
             self._sem_stream_to_restart = set()
             main_data.emState.subscribe(self.onEMState)
 
-        # Toolbar
-        tb = self.main_frame.secom_toolbar
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
-
     @property
     def settings_controller(self):
         return self._settings_controller
@@ -256,9 +256,6 @@ class SecomStreamsTab(Tab):
     @property
     def stream_controller(self):
         return self._stream_controller
-
-    def onZoomFit(self, event):
-        self._view_controller.fitCurrentViewToContent()
 
     # TODO: also pause the streams when leaving the tab
 
@@ -328,6 +325,13 @@ class SparcAcquisitionTab(Tab):
         super(SparcAcquisitionTab, self).__init__(name, button, panel,
                                                   main_frame, tab_data)
 
+        # Toolbar
+        self.tb = self.main_frame.sparc_acq_toolbar
+        self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
+        # TODO: Add the buttons when the functionality is there
+        #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+
         self._spec_stream = None
         self._ar_stream = None
 
@@ -384,7 +388,8 @@ class SparcAcquisitionTab(Tab):
         self._view_controller = viewcont.ViewController(
                                     self.tab_data_model,
                                     self.main_frame,
-                                    [self.main_frame.vp_sparc_acq_view]
+                                    [self.main_frame.vp_sparc_acq_view],
+                                    self.tb
                                 )
         # Add the SEM stream to the focussed/only view
         self.tab_data_model.streams.value.append(sem_stream)
@@ -443,14 +448,6 @@ class SparcAcquisitionTab(Tab):
             self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
             self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
-
-        # Toolbar
-        tb = self.main_frame.sparc_acq_toolbar
-        tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
 
     # Special event handlers for repetition indication in the ROI selection
 
@@ -518,9 +515,6 @@ class SparcAcquisitionTab(Tab):
     @property
     def settings_controller(self):
         return self._settings_controller
-
-    def onZoomFit(self, event):
-        self._view_controller.fitCurrentViewToContent()
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -628,6 +622,13 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
+        # Toolbar
+        self.tb = self.main_frame.ana_toolbar
+        # TODO: Add the buttons when the functionality is there
+        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        self.tb.enable_button(tools.TOOL_POINT, False)
+
         viewports = [
             self.main_frame.vp_inspection_tl,
             self.main_frame.vp_inspection_tr,
@@ -643,6 +644,7 @@ class AnalysisTab(Tab):
                                     self.tab_data_model,
                                     self.main_frame,
                                     viewports,
+                                    self.tb
                                 )
 
         # FIXME: Way too hacky approach to get the right viewport shown,
@@ -700,22 +702,14 @@ class AnalysisTab(Tab):
                             self.on_file_open_button
         )
 
-        # Toolbar
-        self.tb = self.main_frame.ana_toolbar
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        self.tb.enable_button(tools.TOOL_POINT, False)
-        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.onZoomFit)
+
+
 
         self.tab_data_model.tool.subscribe(self._onTool)
 
     @property
     def stream_controller(self):
         return self._stream_controller
-
-    def onZoomFit(self, event):
-        self._view_controller.fitCurrentViewToContent()
 
     def on_file_open_button(self, evt):
         """ Open an image file using a file dialog box

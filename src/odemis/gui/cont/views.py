@@ -22,21 +22,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+
+import collections
+import logging
 from odemis.gui import model
+from odemis.gui.cont import tools
 from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS, \
     SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
-import collections
-import logging
 import wx
 
 import odemis.gui.util.widgets as util
+
 
 class ViewController(object):
     """ Manages the microscope view updates, change of viewport focus, etc.
     """
 
-    def __init__(self, tab_data, main_frame, viewports):
+    def __init__(self, tab_data, main_frame, viewports, toolbar=None):
         """
         tab_data (MicroscopyGUIData) -- the representation of the microscope GUI
         main_frame: (wx.Frame) -- the frame which contains the 4 viewports
@@ -46,10 +49,12 @@ class ViewController(object):
           kwargs are passed to the MicroscopeView creation. If there are more
           than 4 viewports, only the first 4 will be made visible and any others
           will be hidden.
+        toolbar (ToolBar or None): toolbar to manage the TOOL_ZOOM_FIT tool. 
         """
         self._data_model = tab_data
         self._main_data_model = tab_data.main
         self.main_frame = main_frame
+        self._toolbar = toolbar
 
         if isinstance(viewports, collections.OrderedDict):
             self._viewports = viewports.keys()
@@ -58,6 +63,10 @@ class ViewController(object):
             # create the (default) views
             self._viewports = viewports
             self._createViewsAuto()
+
+        # Add fit view to content to toolbar
+        if toolbar:
+            toolbar.add_tool(tools.TOOL_ZOOM_FIT, self._onFitViewToContent)
 
         # First view is focused
         tab_data.focussedView.value = tab_data.visible_views.value[0]
@@ -265,7 +274,7 @@ class ViewController(object):
         for vp in self._viewports:
             if vp.microscope_view == view:
                 return vp
-        raise ValueError("No ViewPort found for view %s" % view)
+        raise IndexError("No ViewPort found for view %s" % view)
 
     def _viewport_index_by_view(self, view):
         """ Return the index number of the ViewPort associated with the given
@@ -395,6 +404,10 @@ class ViewController(object):
                     viewport.SetFocus(True)
                     if layout == model.VIEW_LAYOUT_ONE:
                         viewport.Show()
+                    # Enable/disable ZOOM_FIT tool according to view ability
+                    if self._toolbar:
+                        can_fit = hasattr(viewport.canvas, "fit_view_to_content")
+                        self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
                 else:
                     viewport.SetFocus(False)
                     if layout == model.VIEW_LAYOUT_ONE:
@@ -441,17 +454,18 @@ class ViewController(object):
         finally:
             containing_window.Thaw()
 
-    def fitCurrentViewToContent(self):
+    def _onFitViewToContent(self, evt):
         """
         Adapts the scale (MPP) of the current view to the content
         """
         # find the viewport corresponding to the current view
-        for vp in self._viewports:
-            if vp.microscope_view == self._data_model.focussedView.value:
-                vp.canvas.fit_view_to_content()
-                break
-        else:
+        try:
+            vp = self._viewport_by_view(self._data_model.focussedView.value)
+            vp.canvas.fit_view_to_content()
+        except IndexError:
             logging.error("Failed to find the current viewport")
+        except AttributeError:
+            logging.error("Requested to fit content for a view not able to")
 
     def focusViewWithStream(self, stream):
         """

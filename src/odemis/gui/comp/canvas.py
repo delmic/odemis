@@ -1305,9 +1305,12 @@ class DraggableCanvas(BitmapCanvas):
         # Inheriting classes can do more
         pass
 
-    def fit_view_to_content(self, recenter=False):
+    # TODO: just return best scale and center? And let the caller do what it wants?
+    # It would allow to decide how to redraw depending if it's on size event
+    # or more high level.
+    def fit_to_content(self, recenter=False):
         """
-        Adapts the MPP and center to fit to the current content
+        Adapts the scale and (optionally) center to fit to the current content
         recenter (boolean): If True, also recenter the view.
         """
         # TODO: take into account the dragging. For now we skip it (should be

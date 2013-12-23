@@ -63,6 +63,9 @@ def microscope_view_check(f, self, *args, **kwargs):
     if self.microscope_view:
         return f(self, *args, **kwargs)
 
+# Note: a Canvas with a fit_view_to_content method indicates that the view
+# can be adapted. (Some other components of the GUI will use this information)
+
 class DblMicroscopeCanvas(canvas.DraggableCanvas):
     """ A draggable, flicker-free window class adapted to show pictures of two
     microscope simultaneously.
@@ -476,7 +479,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # recenter only if there is no stage attached
             recenter = not hasattr(self.microscope_view, "stage_pos")
 
-        super(DblMicroscopeCanvas, self).fit_view_to_content(recenter=recenter)
+        super(DblMicroscopeCanvas, self).fit_to_content(recenter=recenter)
 
         # this will indirectly call _onMPP(), but not have any additional effect
         if self.microscope_view:
@@ -1123,6 +1126,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
     Special restricted version that displays the first stream always fitting
     the entire canvas.
     """
+    # TODO: could probably be done with a simple BitmapCanvas + fit_to_content?
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
@@ -1369,7 +1373,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
     """ Angular resolved canvas
     """
     # TODO: it actually could be just a BitmapCanvas, but it needs
-    # a (simple) fit_view_to_content()
+    # a (simple) fit_to_content()
 
     def __init__(self, *args, **kwargs):
 
@@ -1391,7 +1395,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def on_size(self, evt):  #pylint: disable=W0222
         """ Called when the canvas is resized """
-        self.fit_view_to_content()
+        self.fit_to_content(recenter=True)
         super(AngularResolvedCanvas, self).on_size(evt)
 
     def setView(self, microscope_view, tab_data):
@@ -1401,8 +1405,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         :param microscope_view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
         """
-        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
-        # details
+        # This is a kind of kludge, see viewport.MicroscopeViewport for details
         assert(self.microscope_view is None)
 
         self.microscope_view = microscope_view
@@ -1410,12 +1413,6 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
-
-    def fit_view_to_content(self, recenter=None):
-        """ Adapts the MPP to fit to the current content
-        recenter: never used (it's always centered)
-        """
-        super(AngularResolvedCanvas, self).fit_view_to_content(recenter=True)
 
     def _getStreamsImages(self, streams):
         """
@@ -1460,7 +1457,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     def _onViewImageUpdate(self, t):
         self._convertStreamsToImages()
-        self.fit_view_to_content()
+        self.fit_to_content(recenter=True)
         wx.CallAfter(self.request_drawing_update)
 
     def update_drawing(self):
