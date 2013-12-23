@@ -40,7 +40,7 @@ from scipy import imag
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestFindCenterCoordinates(unittest.TestCase):
     """
     Test FindCenterCoordinates
@@ -64,7 +64,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
                                 (4.1433, 6.7063), (6.4313, 7.2690), (4.9355, 5.1400), (5.0209, 4.9929)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestDivideInNeighborhoods(unittest.TestCase):
     """
     Test DivideInNeighborhoods
@@ -227,7 +227,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         self.assertEqual(subimages.__len__(), 99)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestMatchCoordinates(unittest.TestCase):
     """
     Test MatchCoordinates
