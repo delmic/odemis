@@ -316,7 +316,8 @@ class BufferedCanvas(wx.Panel):
             # logging.debug("Buffer size didn't change, refreshing...")
             self.Refresh(eraseBackground=False)
 
-        self._call_event_on_overlay('on_size', evt)
+        # any displayed overlay might need to redraw itself
+        self._call_event_all_overlays('on_size', evt)
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """
@@ -325,13 +326,21 @@ class BufferedCanvas(wx.Panel):
         self.update_drawing()
 
     def _call_event_on_overlay(self, name, evt):
-        """Call an event handler with name 'name' on the activ overlay """
+        """Call an event handler with name 'name' on the active overlay """
         if self.active_overlay:
             if isinstance(self.active_overlay, collections.Iterable):
                 for ol in self.active_overlay:
                     getattr(ol, name)(evt)
             else:
                 getattr(self.active_overlay, name)(evt)
+
+    def _call_event_all_overlays(self, name, evt):
+        """Call an event handler with name 'name' on all the overlays """
+
+        for ol in self.view_overlays:
+            getattr(ol, name)(evt)
+        for ol in self.world_overlays:
+            getattr(ol, name)(evt)
 
     # END Event processing
 
