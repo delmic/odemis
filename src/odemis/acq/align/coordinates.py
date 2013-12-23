@@ -243,7 +243,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, quessing_scale, ma
     if input_coordinates.__len__() > 1:
         optical_coordinates = _FindOutliers(input_coordinates)
     else:
-        logging.warning("Cannot find overlay")
+        logging.warning("Cannot find overlay.")
         return [], []
 
     quality = 0
@@ -289,7 +289,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, quessing_scale, ma
         transformed_coordinates = estimated_coordinates
 
     if quality == 0:
-        logging.warning("Cannot find overlay")
+        logging.warning("Cannot find overlay.")
         return [], []
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
@@ -378,7 +378,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     e_wrong_points = map(operator.ne, e_index, electron_range)
 
     if (all(o_wrong_points) or all(e_wrong_points)):
-        logging.warning("Cannot perform matching")
+        logging.warning("Cannot perform matching.")
         return [], [], [], []
 
     # Calculate the transform parameters for the correct electron_coordinates
@@ -466,7 +466,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     new_e_index = [new_index2[i] for i in new_index1]
     new_e_wrong_points = map(operator.ne, new_e_index, electron_range)
     if (all(new_e_wrong_points) or new_index1.count(new_index1[0]) == len(new_index1)):
-        logging.warning("Cannot perform matching!")
+        logging.warning("Cannot perform matching.")
         return [], [], [], []
 
     return estimated_coordinates, new_index1, new_e_wrong_points, total_shift
