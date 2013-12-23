@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import operator
+import logging
 
 from odemis import model
 from odemis.dataio import hdf5
@@ -72,13 +73,15 @@ def ScanGrid(repetitions, used_dwell_time, used_escan, used_ccd, used_detector):
                             ccd.shape[1] // binning[1])
 
     detector.data.subscribe(_discard_data)
+    # subscribe also for ccd instead of .get()
 
     # Wait for "exposureTime"
     try:
         # do nothing
-        print "Please wait..."
-    finally:
+        logging.debug("Scanning spot grid...")
         optical_image = ccd.data.get()
+        logging.debug("Got CCD image...")
+    finally:
         detector.data.unsubscribe(_discard_data)
 
     # Compute electron coordinates based on scale and repetitions
