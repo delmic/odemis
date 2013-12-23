@@ -497,18 +497,21 @@ def preset_hq(entries):
                 pass
 
         elif entry.name == "dwellTime":
-            # SNR improves logarithmically with the dwell time => x10
-            value = entry.va.value * 10
+            # SNR improves logarithmically with the dwell time => x4
+            value = entry.va.value * 4
 
             # make sure it still fits
             if isinstance(entry.va.range, collections.Iterable):
                 value = sorted(list(entry.va.range) + [value])[1] # clip
 
         elif entry.name == "scale": # for scanners only
-            # => smallest = 1,1
-            value = tuple(1 for v in entry.va.value)
-
-            # TODO: ensure it still fits
+            # Double the current resolution (in each dimensions)
+            # (best == smallest == 1,1)
+            value = tuple(v / 2 for v in entry.va.value)
+            
+            # make sure it still fits
+            if isinstance(entry.va.range, collections.Iterable):
+                value = tuple(max(v, m) for v, m in zip(value, entry.va.range[0]))
 
         elif entry.name == "binning":
             # if binning => smallest
