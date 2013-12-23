@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 from abc import ABCMeta, abstractmethod
+from odemis import model
 from odemis.gui.util.units import readable_str
 from odemis.util import normalize_rect
 import cairo
@@ -136,6 +137,52 @@ class Overlay(object):
 
     def on_size(self, evt):
         evt.Skip()
+
+class DragMixin(object):
+    """ This mixin class can be used to add dragging functionality
+
+    Note: Overlay should never capture a mouse, that's the canvas' job
+    """
+
+    def __init__(self):
+        self._ldragging = False
+        self._rdragging = False
+
+        self.start_pos = None
+        self.end_post = None
+
+    def on_left_down(self, evt):
+        self._ldragging = True
+        self.start_pos = evt.GetPositionTuple()
+
+    def on_left_up(self, evt):
+        self._ldragging = False
+        self.end_post = evt.GetPositionTuple()
+
+    def on_right_down(self, evt):
+        self._rdragging = True
+        self.start_pos = evt.GetPositionTuple()
+
+    def on_righgt_up(self, evt):
+        self._rdragging = False
+        self.end_post = evt.GetPositionTuple()
+
+    def reset_drag(self):
+        self.start_pos = None
+        self.end_post = None
+
+    @property
+    def left_dragging(self):
+        return self._ldragging
+
+    @property
+    def right_dragging(self):
+        return self._rdragging
+
+    @property
+    def dragging(self):
+        return self._ldragging or self._rdragging
+
 
 class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port.
@@ -1045,10 +1092,12 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             # if FILL_NONE => nothing to do
 
 
-class MarkingLineOverlay(ViewOverlay):
+class MarkingLineOverlay(ViewOverlay, DragMixin):
     """ Draw a vertical line at the given view position.
     This class can easily be extended to include a horizontal or horz/vert
     display mode.
+
+    TODO: Added a way to have the lines track the mouse's x, y or a and y
     """
     def __init__(self, cnvs,
                  label="",
@@ -1057,39 +1106,65 @@ class MarkingLineOverlay(ViewOverlay):
                  center=(0, 0)):
 
         super(MarkingLineOverlay, self).__init__(cnvs, label)
+        DragMixin.__init__(self)
+
         self.color = conversion.hex_to_frgba(color)
-        self.vposx = None
-        self.vposy = None
+
+        self.v_posx = model.VigilantAttribute(None)
+        self.v_posy = model.VigilantAttribute(None)
 
         self.line_width = 2
 
+    def on_left_down(self, evt):
+        super(MarkingLineOverlay, self).on_left_down(evt)
+        DragMixin.on_left_down(self, evt)
+        self._set_to_mouse_x(evt)
+
+    def on_left_up(self, evt):
+        super(MarkingLineOverlay, self).on_left_up(evt)
+        DragMixin.on_left_up(self, evt)
+        self._set_to_mouse_x(evt)
+
+    def on_motion(self, evt):
+        super(MarkingLineOverlay, self).on_motion(evt)
+        if self.left_dragging:
+            self._set_to_mouse_x(evt)
+
+    def _set_to_mouse_x(self, evt):
+        """ Position the focus line at the position of the given mouse event """
+        x, _ = evt.GetPositionTuple()
+        # Clip x
+        self.v_posx.value = max(min(self.cnvs.ClientSize.x, x), 1)
+
     def set_position(self, pos, label=None):
-        self.vposx = max(1, min(pos[0], self.view_width - self.line_width))
-        self.vposy = max(1, min(pos[1], self.view_height - 1))
+        self.v_posx.value = max(1,
+                                min(pos[0], self.view_width - self.line_width)
+                            )
+        self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
         self.label = label
 
     def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
-        if self.vposy:
+        if self.v_posy.value:
             r, g, b, a = conversion.change_brightness(self.color, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
-            ctx.arc(self.vposx, self.vposy, 5.5, 0, 2*math.pi)
+            ctx.arc(self.v_posx.value, self.v_posy.value, 5.5, 0, 2*math.pi)
             ctx.fill()
 
-        if self.vposx:
+        if self.v_posx.value is not None:
             # draws the dotted line
             ctx.set_line_width(self.line_width)
             ctx.set_dash([3,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.color)
-            ctx.move_to(self.vposx, 0)
-            ctx.line_to(self.vposx, self.cnvs.ClientSize[1])
+            ctx.move_to(self.v_posx.value, 0)
+            ctx.line_to(self.v_posx.value, self.cnvs.ClientSize[1])
             ctx.stroke()
 
             if self.label:
-                vpos = (self.vposx + 5, self.vposy + 3)
+                vpos = (self.v_posx.value + 5, self.v_posy.value + 3)
                 self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
 
 

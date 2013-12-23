@@ -95,14 +95,14 @@ class InfoLegend(wx.Panel):
 
 
         # TODO more...
-        # self.LegendWl = wx.StaticText(self.legend_panel)
+        # self.LegendWl = wx.StaticText(self.legend)
         # self.LegendWl.SetToolTipString("Wavelength")
-        # self.LegendET = wx.StaticText(self.legend_panel)
+        # self.LegendET = wx.StaticText(self.legend)
         # self.LegendET.SetToolTipString("Exposure Time")
 
-        # self.LegendDwell = wx.StaticText(self.legend_panel)
-        # self.LegendSpot = wx.StaticText(self.legend_panel)
-        # self.LegendHV = wx.StaticText(self.legend_panel)
+        # self.LegendDwell = wx.StaticText(self.legend)
+        # self.LegendSpot = wx.StaticText(self.legend)
+        # self.LegendHV = wx.StaticText(self.legend)
 
 
         ## Child window layout
@@ -259,8 +259,8 @@ class AxisLegend(wx.Panel):
             ctx.line_to(xpos, 0)
             ctx.stroke()
 
-        if self.label and self.label_pos:
-            self.write_label(ctx, self.label, self.label_pos)
+        if None not in (self.label, self.label_pos):
+            self.write_label(ctx)
 
     def calc_ticks(self):
         """ Determine where the ticks should be placed """
@@ -303,11 +303,13 @@ class AxisLegend(wx.Panel):
                 and (xpos, tick) not in self.ticks):
                 self.ticks.append((xpos, tick))
 
-    def set_label(self, label, pos_x):
+    def set_label(self, label):
         self.label = unicode(label)
+
+    def position_label(self, pos_x):
         self.label_pos = pos_x
 
-    def write_label(self, ctx, label, pos_x):
+    def write_label(self, ctx):
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
         ctx.select_font_face(
                 font.GetFaceName(),
@@ -318,8 +320,8 @@ class AxisLegend(wx.Panel):
 
         margin_x = 5
 
-        _, _, width, _, _, _ = ctx.text_extents(label)
-        x, y = pos_x, 34
+        _, _, width, _, _, _ = ctx.text_extents(self.label)
+        x, y = self.label_pos, 34
         x = x - width / 2
 
         if x + width + margin_x > self.ClientSize.x:
@@ -331,7 +333,7 @@ class AxisLegend(wx.Panel):
         #t = font.GetPixelSize()
         ctx.set_source_rgba(*hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT))
         ctx.move_to(x, y)
-        ctx.show_text(label)
+        ctx.show_text(self.label)
 
 
     def on_size(self, event):

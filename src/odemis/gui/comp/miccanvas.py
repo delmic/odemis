@@ -1221,8 +1221,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         # These attributes need to be assigned before the super constructor
         # is called, because they are used in the on_size event handler.
-        self.current_y_value = None
-        self.current_x_value = None
+        self.val_y = model.VigilantAttribute(None)
+        self.val_x = model.VigilantAttribute(None)
+        # Human readible representation of the y val
+        self.str_x = model.VigilantAttribute(None)
         # FIXME: This attribute should be renamed to simply `view`, or `view_model`, but that
         # would also require renaming the `microscope_view` attributes of the
         # other Canvas classes.
@@ -1234,7 +1236,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.unit_x = None
         self.unit_y = None
 
-        self._ldragging = False
+        self.drag_init_pos = None
 
         ## Overlays
         self.SetBackgroundColour(self.Parent.BackgroundColour)
@@ -1245,81 +1247,46 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.markline_overlay = comp_overlay.MarkingLineOverlay(self)
         self.add_overlay(self.markline_overlay)
+        self.active_overlay = self.markline_overlay
+
+    def set_data(self, data):
+        """ Subscribe to the x position of the overlay when data is loaded """
+        super(ZeroDimensionalPlotCanvas, self).set_data(data)
+        if data is None:
+            self.markline_overlay.v_posx.unsubscribe(self._calc_y_value)
+        else:
+            self.markline_overlay.v_posx.subscribe(self._calc_y_value)
 
     # Event handlers
 
-    def on_left_down(self, evt):
-        self._ldragging = True
-        self.drag_init_pos = evt.GetPositionTuple()
-
-        # logging.debug("Drag started at %s", self.drag_init_pos)
-
-        if not self.HasCapture():
-            self._position_focus_line(evt)
-            self.CaptureMouse()
-
-        self.SetFocus()
-
-        super(ZeroDimensionalPlotCanvas, self).on_left_down(evt)
-
-    def on_left_up(self, evt):
-        self._ldragging = False
-        self.SetCursor(wx.STANDARD_CURSOR)
-        if self.HasCapture():
-            self.ReleaseMouse()
-
-        super(ZeroDimensionalPlotCanvas, self).on_left_up(evt)
-
-    def on_motion(self, evt):
-        if self._ldragging and self.markline_overlay:
-            self._position_focus_line(evt)
-
-        super(ZeroDimensionalPlotCanvas, self).on_motion(evt)
-
     def on_size(self, evt):  #pylint: disable=W0222
         """ Update the position of the focus line """
-
         super(ZeroDimensionalPlotCanvas, self).on_size(evt)
-
-        if None not in (self.current_x_value, self.current_y_value):
-            pos = (self._val_x_to_pos_x(self.current_x_value),
-                   self._val_y_to_pos_y(self.current_y_value))
+        if None not in (self.val_x.value, self.val_y.value):
+            pos = (self._val_x_to_pos_x(self.val_x.value),
+                   self._val_y_to_pos_y(self.val_y.value))
             self.markline_overlay.set_position(pos)
 
-    def _position_focus_line(self, evt):
-        """ Position the focus line at the position of the given mouse event """
-
+    def _calc_y_value(self, v_posx):
+        """ Calculate the x and y *values* belonging to the x pixel position """
         if not self._data:
             return
 
-        if evt:
-            x, _ = evt.GetPositionTuple()
-            # Clip x
-            x = max(min(self.ClientSize.x, x), 1)
-            self.current_x_value = self._pos_x_to_val_x(x, match=True)
-            self.current_y_value = self._val_x_to_val_y(self.current_x_value)
-        else:
-            if self.current_x_value is None:
-                return
-            x = self._val_x_to_pos_x(self.current_x_value)
-        pos = (x, self._val_y_to_pos_y(self.current_y_value))
+        self.val_x.value = self._pos_x_to_val_x(v_posx, match=True)
+        self.val_y.value = self._val_x_to_val_y(self.val_x.value)
 
-        label = "%s"  % units.readable_str(
-                                    self.current_x_value,
-                                    self.unit_x,
-                                    3)
+        self.str_x.value = "%s"  % units.readable_str(
+                                   self.val_x.value,
+                                   self.unit_x,
+                                   3)
 
-        # TODO: find a more elegant way to link the legend.
-        if hasattr(self.Parent, 'legend_panel'):
-            self.Parent.legend_panel.set_label(label, x)
-            self.Parent.legend_panel.Refresh()
+        pos = (v_posx, self._val_y_to_pos_y(self.val_y.value))
+        self.markline_overlay.set_position(pos)
 
-        #self.markline_overlay.set_label(label)
-        self.markline_overlay.set_position(pos, str(self.current_y_value or ""))
-        self.Refresh()
+        self.Parent.Refresh()
 
     def setView(self, microscope_view, tab_data):
-        """Set the microscope_view that this canvas is displaying/representing
+        """ Set the microscope_view that this canvas is displaying/representing
         Can be called only once, at initialisation.
 
         :param microscope_view:(model.MicroscopeView)
@@ -1366,7 +1333,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def get_y_value(self):
         """ Return the current y value """
-        return self.current_y_value
+        return self.val_y.value
 
     def set_x_unit(self, unit):
         self.unit_x = unit

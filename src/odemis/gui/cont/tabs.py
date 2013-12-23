@@ -1055,9 +1055,9 @@ class LensAlignTab(Tab):
         # next to the toolbar.
         # FIXME: doesn't work (anymore) => too small?
         tb_sizer = tb.GetSizer()
-        main_frame.vp_align_sem.legend_panel.scaleDisplay.Reparent(tb)
+        main_frame.vp_align_sem.legend.scaleDisplay.Reparent(tb)
         tb_sizer.Add(
-            main_frame.vp_align_sem.legend_panel.scaleDisplay,
+            main_frame.vp_align_sem.legend.scaleDisplay,
             proportion=1,
             flag=wx.EXPAND | wx.ALIGN_LEFT)
         tb.Layout()
@@ -1500,7 +1500,7 @@ class TabBarController(object):
         # seem to cause too much flickering.
         tab.Show()
         self.main_frame.Layout()
-        
+
     def terminate(self):
         """
         Terminate each tab (i.e.,indicate they are not used anymore)

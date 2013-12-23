@@ -1558,9 +1558,9 @@ class PlotCanvas(BufferedCanvas):
         #TODO: It seems this method gets called twice in a row -> investigate!
         # It is possible that the buffer has not been initialized yet, because
         # this method can be called before the Size event handler sets it.
-#        if not self._bmp_buffer:
-#            logging.warn("No buffer created yet, ignoring draw request")
-#            return
+        # if not self._bmp_buffer:
+        #     logging.warn("No buffer created yet, ignoring draw request")
+        #     return
 
         if self._data:
             dc = self._dc_buffer
