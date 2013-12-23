@@ -68,20 +68,20 @@ class ViewPort(wx.Panel):
 
         # Put all together (canvas + legend)
 
-        self.legend_panel = None
+        self.legend = None
 
         mainSizer = wx.BoxSizer(wx.VERTICAL)
 
         if self.legend_class is not None:
             if isinstance(self.legend_class, collections.Iterable):
-                self.legend_panel = [self.legend_class[0](self),
-                                 self.legend_class[1](self)]
+                self.legend = [self.legend_class[0](self),
+                               self.legend_class[1](self)]
                 grid_sizer = wx.GridBagSizer()
 
                 grid_sizer.Add(self.canvas, pos=(0, 1), flag=wx.EXPAND)
 
-                grid_sizer.Add(self.legend_panel[0], pos=(1, 1), flag=wx.EXPAND)
-                grid_sizer.Add(self.legend_panel[1], pos=(0, 0), flag=wx.EXPAND)
+                grid_sizer.Add(self.legend[0], pos=(1, 1), flag=wx.EXPAND)
+                grid_sizer.Add(self.legend[1], pos=(0, 0), flag=wx.EXPAND)
 
                 grid_sizer.AddGrowableRow(0, 1)
                 grid_sizer.AddGrowableCol(1, 1)
@@ -89,7 +89,7 @@ class ViewPort(wx.Panel):
 
 
                 # Focus the view when a child element is clicked
-                for lp in self.legend_panel:
+                for lp in self.legend:
                     lp.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
                 mainSizer.Add(grid_sizer, 1,
@@ -101,10 +101,10 @@ class ViewPort(wx.Panel):
                 # TODO: allow the user to pick which information is displayed
                 # in the legend
                 # pylint: disable=E1102, E1103
-                self.legend_panel = self.legend_class(self)
-                self.legend_panel.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+                self.legend = self.legend_class(self)
+                self.legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-                mainSizer.Add(self.legend_panel, 0,
+                mainSizer.Add(self.legend, 0,
                         border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
         else:
             mainSizer.Add(self.canvas, 1,
@@ -138,7 +138,7 @@ class ViewPort(wx.Panel):
 
     def ShowLegend(self, show):
         """ Show or hide the merge slider """
-        self.legend_panel.Show(show)
+        self.legend.Show(show)  #pylint: disable=E1103
 
     def HasFocus(self, *args, **kwargs):
         return self._has_focus == True
@@ -191,8 +191,8 @@ class MicroscopeViewport(ViewPort):
         ViewPort.__init__(self, *args, **kwargs)
 
         # Bind on EVT_SLIDER to update even while the user is moving
-        self.legend_panel.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        self.legend_panel.Bind(wx.EVT_SLIDER, self.OnSlider)
+        self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
 
 
     def setView(self, microscope_view, tab_data):
@@ -234,9 +234,9 @@ class MicroscopeViewport(ViewPort):
 
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
-        self.legend_panel.bmpSliderLeft.Show(show)
-        self.legend_panel.mergeSlider.Show(show)
-        self.legend_panel.bmpSliderRight.Show(show)
+        self.legend.bmpSliderLeft.Show(show)
+        self.legend.mergeSlider.Show(show)
+        self.legend.bmpSliderRight.Show(show)
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
@@ -245,7 +245,7 @@ class MicroscopeViewport(ViewPort):
         hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
         label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
-        self.legend_panel.set_hfw_label(label)
+        self.legend.set_hfw_label(label)
 
     def UpdateMagnification(self):
         # TODO: shall we use the real density of the screen?
@@ -287,7 +287,7 @@ class MicroscopeViewport(ViewPort):
             else:
                 label += u"÷" + units.readable_str(units.round_significant(1.0 / mag, 3))
 
-        self.legend_panel.set_mag_label(label)
+        self.legend.set_mag_label(label)
 
     ################################################
     ## VA handling
@@ -297,11 +297,11 @@ class MicroscopeViewport(ViewPort):
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
-        self.legend_panel.mergeSlider.SetValue(round(val * 100))
+        self.legend.mergeSlider.SetValue(round(val * 100))
 
     @call_after
     def _onMPP(self, mpp):
-        self.legend_panel.scaleDisplay.SetMPP(mpp)
+        self.legend.scaleDisplay.SetMPP(mpp)
         self.UpdateHFWLabel()
         self.UpdateMagnification()
         # the MicroscopeView will send an event that the view has to be redrawn
@@ -339,7 +339,7 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        val = self.legend_panel.mergeSlider.GetValue() / 100
+        val = self.legend.mergeSlider.GetValue() / 100
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
@@ -353,12 +353,12 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        if(evt.GetEventObject() == self.legend_panel.bmpSliderLeft):
-            self.legend_panel.mergeSlider.set_to_min_val()
+        if(evt.GetEventObject() == self.legend.bmpSliderLeft):
+            self.legend.mergeSlider.set_to_min_val()
         else:
-            self.legend_panel.mergeSlider.set_to_max_val()
+            self.legend.mergeSlider.set_to_max_val()
 
-        val = self.legend_panel.mergeSlider.GetValue() / 100
+        val = self.legend.mergeSlider.GetValue() / 100
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
@@ -418,7 +418,8 @@ class SparcAlignViewport(MicroscopeViewport):
         super(SparcAlignViewport, self).__init__(*args, **kwargs)
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
-        self.legend_panel.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
+        # pylint: disable=E1103
+        self.legend.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
 
 
 class PlotViewport(ViewPort):
@@ -436,6 +437,9 @@ class PlotViewport(ViewPort):
         self.spectrum_stream = None
 
         self.canvas.set_x_unit("m") #pylint: disable=E1101
+
+        self.canvas.active_overlay.v_posx.subscribe(self.legend.position_label)
+        self.canvas.str_x.subscribe(self.legend.set_label)
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent

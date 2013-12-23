@@ -1060,9 +1060,9 @@ class LensAlignTab(Tab):
         # Hack warning: Move the scale window from the hidden viewport legend
         # next to the toolbar.
         tb_sizer = tb.GetSizer()
-        main_frame.vp_align_sem.legend_panel.scaleDisplay.Reparent(tb)
+        main_frame.vp_align_sem.legend.scaleDisplay.Reparent(tb)
         tb_sizer.Add(
-            main_frame.vp_align_sem.legend_panel.scaleDisplay,
+            main_frame.vp_align_sem.legend.scaleDisplay,
             flag=wx.EXPAND)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
@@ -1503,7 +1503,7 @@ class TabBarController(object):
         # seem to cause too much flickering.
         tab.Show()
         self.main_frame.Layout()
-        
+
     def terminate(self):
         """
         Terminate each tab (i.e.,indicate they are not used anymore)

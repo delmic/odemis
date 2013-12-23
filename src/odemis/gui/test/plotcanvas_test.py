@@ -152,7 +152,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         self.add_control(vwp, wx.EXPAND, proportion=1)
 
         vwp.canvas.set_1d_data(PLOTS[2][0], PLOTS[2][1]) #pylint: disable=E1101
-        # vwp.legend_panel.Refresh()
+        # vwp.legend.Refresh()
 
         test.gui_loop()
 
