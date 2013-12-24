@@ -575,7 +575,7 @@ class SparcAcquiController(object):
 
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
-        # TODO: on big acquisitions, it can take 20s => put in a thread + future
+        # on big acquisitions, it can take ~20s
         sf = self._executor.submit(self._export_to_file, future)
         sf.add_done_callback(self.on_file_export_done)
 
