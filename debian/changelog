@@ -1,3 +1,9 @@
+odemis (1.4-1ubuntu2) precise; urgency=low
+
+  * Rebuild for documentation build fix (couldn't find the version number)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 24 Dec 2013 18:25:14 +0100
+
 odemis (1.4-1ubuntu1) precise; urgency=low
 
   * New version: 1.4
