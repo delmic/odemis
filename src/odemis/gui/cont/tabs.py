@@ -417,8 +417,8 @@ class SparcAcquisitionTab(Tab):
 
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
-                                            self.main_frame,
                                             self.tab_data_model,
+                                            self.main_frame,
                                             self.settings_controller
                                        )
 

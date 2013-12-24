@@ -309,13 +309,14 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, main_frame, tab_data, settings_controller):
+    def __init__(self, tab_data, main_frame, settings_controller):
         """
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         settings_controller (SettingsController)
         """
         self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
         self._main_frame = main_frame
 
         # For file selection
@@ -491,11 +492,11 @@ class SparcAcquiController(object):
         acqfile (File): file object to which the data was saved
         """
         # get the analysis tab
-        analysis_tab = self._tab_data_model.main.getTabByName("analysis")
+        analysis_tab = self._main_data_model.getTabByName("analysis")
         analysis_tab.display_new_data(acqfile.name, data)
 
         # show the new tab
-        self._main_frame.tab.value = analysis_tab
+        self._main_data_model.tab.value = analysis_tab
 
     def on_acquisition(self, evt):
         """
