@@ -1,3 +1,9 @@
+odemis (1.4-1ubuntu4) precise; urgency=low
+
+  * Rebuild, hoping to really fix the latex build dep
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Sun, 29 Dec 2013 23:42:54 +0100
+
 odemis (1.4-1ubuntu3) precise; urgency=low
 
   * Rebuild with build dependencies for pdflatex (to build the PDF documentation)
