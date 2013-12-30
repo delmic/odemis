@@ -178,7 +178,7 @@ def DivideInNeighborhoods(data, number_of_spots):
 
     return clean_subimages, clean_subimage_coordinates, subimage_size
 
-def ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size):
+def ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size):
     """
     Given the coordinates of each subimage as also the coordinates of the spot into it, 
     generates the coordinates of the spots with respect to the overall image.
