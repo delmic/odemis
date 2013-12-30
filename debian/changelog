@@ -1,3 +1,9 @@
+odemis (1.4-1ubuntu5) precise; urgency=low
+
+  * Another rebuild for latex...
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 30 Dec 2013 08:15:14 +0100
+
 odemis (1.4-1ubuntu4) precise; urgency=low
 
   * Rebuild, hoping to really fix the latex build dep
