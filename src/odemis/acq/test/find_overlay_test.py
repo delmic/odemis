@@ -65,9 +65,9 @@ class TestOverlay(unittest.TestCase):
 
         f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
 
-        ((calc_translation_x, calc_translation_y), calc_scaling, calc_rotation) = f.result()
-        numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation),
-                                          (-280.91827079065121, -195.55748765461769, 13.9363892133, -1.47833441067),
+        ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation) = f.result()
+        numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation),
+                                          (-280.91827079065121, -195.55748765461769, 13.9363892133, 13.9363892133, -1.47833441067),
                                           decimal=1)
 
     # @unittest.skip("skip")
