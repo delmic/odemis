@@ -40,7 +40,7 @@ from scipy import imag
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestFindCenterCoordinates(unittest.TestCase):
     """
     Test FindCenterCoordinates
@@ -64,7 +64,7 @@ class TestFindCenterCoordinates(unittest.TestCase):
                                 (4.1433, 6.7063), (6.4313, 7.2690), (4.9355, 5.1400), (5.0209, 4.9929)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestDivideInNeighborhoods(unittest.TestCase):
     """
     Test DivideInNeighborhoods
@@ -121,7 +121,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
 
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
         expected_coordinates = [(23, 20)]
         numpy.testing.assert_almost_equal(optical_coordinates, expected_coordinates, 0)
 
@@ -137,7 +137,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
         self.assertEqual(subimages.__len__(), 100)
 
@@ -158,7 +158,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
         self.assertEqual(subimages.__len__(), 100)
 
@@ -179,7 +179,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
         self.assertEqual(subimages.__len__(), 99)
 
@@ -201,7 +201,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
         self.assertEqual(subimages.__len__(), 99)
 
@@ -223,11 +223,11 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
         self.assertEqual(subimages.__len__(), 99)
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestMatchCoordinates(unittest.TestCase):
     """
     Test MatchCoordinates
@@ -250,6 +250,7 @@ class TestMatchCoordinates(unittest.TestCase):
         self.translation_x, self.translation_y = uniform(-20, 20), uniform(-20, 20)
         # self.scale = 4
         self.scale = uniform(4, 4.2)
+        self.scale_x, self.scale_y = self.scale, self.scale
         # self.rotation = -0.4517
         self.rotation = uniform(-2, 2)
 
@@ -282,15 +283,15 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing normal 3x3..."
         electron_coordinates = self.electron_coordinates_3x3
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_shuffled_3x3(self):
         """
@@ -300,16 +301,16 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing shuffled 3x3..."
         electron_coordinates = self.electron_coordinates_3x3
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         shuffle(shuffled_coordinates)
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_shuffled__distorted_3x3(self):
         """
@@ -319,10 +320,10 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing distorted 3x3..."
         electron_coordinates = self.electron_coordinates_3x3
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         shuffle(shuffled_coordinates)
         distorted_coordinates = []
         # Add noise to the coordinates
@@ -332,8 +333,8 @@ class TestMatchCoordinates(unittest.TestCase):
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(distorted_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(shuffled_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(shuffled_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_precomputed_output_missing_point_3x3(self):
         """
@@ -342,10 +343,10 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing missing 3x3..."
         electron_coordinates = self.electron_coordinates_3x3
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         rand = random.randint(0, transformed_coordinates.__len__()-1)
         del transformed_coordinates[rand]
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates, 0.25, 0.25)
@@ -360,15 +361,15 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing normal 10x10..."
         electron_coordinates = self.electron_coordinates_10x10
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_shuffled_10x10(self):
         """
@@ -378,16 +379,16 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing shuffled 10x10..."
         electron_coordinates = self.electron_coordinates_10x10
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         shuffle(shuffled_coordinates)
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_shuffled__distorted_10x10(self):
         """
@@ -397,10 +398,10 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing distorted 10x10..."
         electron_coordinates = self.electron_coordinates_10x10
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         shuffle(shuffled_coordinates)
         distorted_coordinates = []
         # Add noise to the coordinates
@@ -410,8 +411,8 @@ class TestMatchCoordinates(unittest.TestCase):
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(distorted_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(shuffled_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(shuffled_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_precomputed_transformation_40x40(self):
         """
@@ -420,15 +421,15 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing normal 40x40..."
         electron_coordinates = self.electron_coordinates_40x40
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 0)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 0)
 
     def test_match_coordinates_shuffled_40x40(self):
         """
@@ -438,16 +439,16 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing shuffled 40x40..."
         electron_coordinates = self.electron_coordinates_10x10
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        shuffled_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         shuffle(shuffled_coordinates)
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(shuffled_coordinates, electron_coordinates, 0.25, 0.25)
         if known_estimated_coordinates != []:
-            (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (translation_x, translation_y, scale, rotation), 1)
+            (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+            numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (translation_x, translation_y, scale_x, scale_y, rotation), 1)
 
     def test_match_coordinates_precomputed_output_missing_point_40x40(self):
         """
@@ -456,10 +457,10 @@ class TestMatchCoordinates(unittest.TestCase):
         print "testing missing 40x40..."
         electron_coordinates = self.electron_coordinates_40x40
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         rand = random.randint(0, transformed_coordinates.__len__()-1)
         del transformed_coordinates[rand]
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(transformed_coordinates, electron_coordinates, 0.25, 0.25)
@@ -485,6 +486,7 @@ class TestOverallComponent(unittest.TestCase):
 
         self.translation_x, self.translation_y = uniform(-5, 5), uniform(-5, 5)
         self.scale = uniform(4, 4.2)
+        self.scale_x, self.scale_y = self.scale, self.scale
         self.rotation = uniform(-2, 2)
 
     # @unittest.skip("skip")
@@ -499,10 +501,10 @@ class TestOverallComponent(unittest.TestCase):
             electron_coordinates.append(mul_10_tuple)
 
         translation_x, translation_y = self.translation_x, self.translation_y
-        scale = self.scale
+        scale_x, scale_y = self.scale_x, self.scale_y
         rotation = self.rotation
 
-        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, scale)
+        transformed_coordinates = coordinates._TransformCoordinates(electron_coordinates, (translation_x, translation_y), rotation, (scale_x, scale_y))
         distorted_coordinates = []
 
         # Add noise to the coordinates
@@ -518,12 +520,12 @@ class TestOverallComponent(unittest.TestCase):
 
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_optical_image, (10, 10))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, 0.25, 0.25)
-        (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-        overlay_coordinates = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, calc_scaling)
+        (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+        overlay_coordinates = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
 
-        numpy.testing.assert_almost_equal((calc_translation_y, calc_translation_x, -calc_rotation, calc_scaling), (translation_x, translation_y, rotation, scale), 1)
+        numpy.testing.assert_almost_equal((calc_translation_y, calc_translation_x, -calc_rotation, calc_scaling_x, calc_scaling_y), (translation_x, translation_y, rotation, scale_x, scale_y), 1)
 
     # @unittest.skip("skip")
     def test_overall_real_example(self):
@@ -538,7 +540,7 @@ class TestOverallComponent(unittest.TestCase):
 
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (9, 9))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
@@ -547,7 +549,7 @@ class TestOverallComponent(unittest.TestCase):
 
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
 
-        (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
-        final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, calc_scaling)
-        numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling, calc_rotation), (4218.0607845864843, 3100.907806071255, 0.0653803040366, 1.47833441039), 1)
+        (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
+        final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
+        numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (4218.0607845864843, 3100.907806071255, 0.0653803040366, 0.0653803040366, 1.47833441039), 1)
         
