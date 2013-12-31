@@ -31,7 +31,7 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
     optical_coordinates (List of tuples): Coordinates of spots in optical image
     electron_coordinates (List of tuples): Coordinates of spots in electron image
     returns translation (Tuple of 2 floats), 
-            scaling (Float), 
+            scaling (Tuple of 2 floats), 
             rotation (Float): Transformation parameters
     """
     # Create numpy arrays out of the coordinate lists
@@ -57,7 +57,8 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
 
     translation_x = -r_array[2][0]
     translation_y = -r_array[3][0]
-    scaling = 1 / math.sqrt((r_array[1][0] ** 2) + (r_array[0][0] ** 2))
+    scaling_x = 1 / math.sqrt((r_array[1][0] ** 2) + (r_array[0][0] ** 2))
+    scaling_y = 1 / math.sqrt((r_array[1][0] ** 2) + (r_array[0][0] ** 2))
     rotation = (180 / math.pi) * math.atan2(-r_array[1][0], r_array[0][0])
 
-    return (translation_x, translation_y), scaling, rotation
+    return (translation_x, translation_y), (scaling_x, scaling_y), rotation
