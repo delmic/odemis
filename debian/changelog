@@ -1,3 +1,9 @@
+odemis (1.4-1ubuntu6) precise; urgency=low
+
+  * More build trial for latex, with inkscape
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 31 Dec 2013 18:07:43 +0100
+
 odemis (1.4-1ubuntu5) precise; urgency=low
 
   * Another rebuild for latex...
