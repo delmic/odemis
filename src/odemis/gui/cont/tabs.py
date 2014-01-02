@@ -1052,9 +1052,9 @@ class LensAlignTab(Tab):
                                                  self._on_btn_to_center)
 
         # Hack warning: Move the scale window from the hidden viewport legend
-        # next to the toolbar.
-        # FIXME: doesn't work (anymore) => too small?
+        # to the toolbar.
         tb_sizer = tb.GetSizer()
+        tb.SetForegroundColour("#BBBBBB")
         main_frame.vp_align_sem.legend.scaleDisplay.Reparent(tb)
         tb_sizer.Add(
             main_frame.vp_align_sem.legend.scaleDisplay,

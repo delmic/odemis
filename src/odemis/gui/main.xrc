@@ -648,6 +648,8 @@
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
