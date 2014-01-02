@@ -1193,7 +1193,9 @@ class LensAlignTab(Tab):
                   fov_size[1] * ((t + b) / 2 - 0.5))
 
         # same formula as InclinedStage._convertPosToChild()
-        ang = math.radians(45) # TODO: check it's correct on the real hardware (-135 seemed to go opposite direction)
+        # TODO: check it's correct on the real hardware (-135 seemed to go
+        # opposite direction)
+        ang = math.radians(45)
         ac, bc = [xc * math.cos(ang) - yc * math.sin(ang),
                   xc * math.sin(ang) + yc * math.cos(ang)]
 
@@ -1206,21 +1208,22 @@ class LensAlignTab(Tab):
 
         return ac, bc
 
-    def _onSEMpxs(self, pxs):
+    def _onSEMpxs(self, pixel_size):
         """
         Called when the SEM pixel size changes, which means the FoV changes
-        pxs (tuple of 2 floats): in meter
+        pixel_size (tuple of 2 floats): in meter
         """
         # in dicho search, it means A, B are actually different values
         self._update_to_center()
 
         eshape = self.tab_data_model.main.ebeam.shape
-        fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1]) # m
+        fov_size = (eshape[0] * pixel_size[0], eshape[1] * pixel_size[1]) # m
         semv_size = self.main_frame.vp_align_sem.Size # px
 
         # compute MPP to fit exactly the whole FoV
         mpp = (fov_size[0] / semv_size[0], fov_size[1] / semv_size[1])
         best_mpp = max(mpp) # to fit everything if not same ratio
+        best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
 
 

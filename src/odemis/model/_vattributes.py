@@ -114,10 +114,10 @@ class VigilantAttribute(VigilantAttributeBase):
         setter (callable value -> value): function that will be called whenever the value has to
             be changed and returns the new actual value (which might be different
             from what was given).
-        max_discard (int): mount of updates that can be discarded in a row if
-                            a new one is already available. 0 to keep (notify)
-                            all the messages (dangerous if callback is slower
-                            than the generator).
+        max_discard (int): amount of updates that can be discarded in a row if
+                           a new one is already available. 0 to keep (notify)
+                           all the messages (dangerous if callback is slower
+                           than the generator).
         """
         VigilantAttributeBase.__init__(self, initval, *args, **kwargs)
 
@@ -716,6 +716,18 @@ class Continuous(object):
                 raise IndexError("Current value '%s' is outside of the range %s→%s." %
                             (self.value, str(new_range[0]), str(new_range[1])))
         self._range = tuple(new_range)
+
+    @property
+    def max(self):
+        return max(self._range)
+
+    @property
+    def min(self):
+        return min(self._range)
+
+    def clip(self, val):
+        """ Clip the given value to fit within the range """
+        return max(min(val, self.max), self.min)
 
     # To be called only by the owner of the object
     @range.setter

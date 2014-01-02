@@ -209,7 +209,7 @@ class InfoLegend(wx.Panel):
         """
         Set the stream type, to put the right icon on the merge slider
         side (wx.LEFT or wx.RIGHT): whether this set the left or right stream
-        cls (class inheriting from Stream): the class of the stream 
+        cls (class inheriting from Stream): the class of the stream
         """
         for cs, i in self.stream_to_icon:
             if issubclass(cls, cs):
@@ -256,6 +256,8 @@ class AxisLegend(wx.Panel):
         # The guiding distance between ticks in pixels
         self.tick_pixel_gap = 137
 
+        self.unit = "k"
+
         self.on_size(None)
 
     def on_paint(self, event=None):
@@ -282,7 +284,7 @@ class AxisLegend(wx.Panel):
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
         for i, (xpos, xval) in enumerate(self.ticks):
-            label = units.readable_str(xval, "m", 3)
+            label = units.readable_str(xval, self.unit, 3)
             _, _, width, height, _, _ = ctx.text_extents(label)
 
             lx = xpos - (width / 2)

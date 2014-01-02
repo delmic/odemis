@@ -401,7 +401,6 @@ class FocusOverlay(ViewOverlay):
 
             x, y = self.cnvs.ClientSize
             x -= self.margin + (self.line_width // 2)
-            print x
             middle = y / 2
 
             shift = self.shifts[1] * 1e6 # typically within µm
