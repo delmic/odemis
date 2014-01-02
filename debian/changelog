@@ -1,3 +1,11 @@
+odemis (1.4.1-1ubuntu1) precise; urgency=low
+
+  * New version: 1.4.1
+    - Documentation build fixes
+    - Bash completion packaging fixes
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 02 Jan 2014 14:04:30 +0100
+
 odemis (1.4-1ubuntu8) precise; urgency=low
 
   * Clean up build/ directory which is messing if left from previous builds
