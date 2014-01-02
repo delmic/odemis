@@ -53,7 +53,7 @@ class TestOverlay(unittest.TestCase):
 
         # self._overlay = find_overlay.Overlay()
 
-    # @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_find_overlay(self):
         """
         Test FindOverlay
@@ -70,7 +70,7 @@ class TestOverlay(unittest.TestCase):
                                           (-280.91827079065121, -195.55748765461769, 13.9363892133, 13.9363892133, -1.47833441067),
                                           decimal=1)
 
-    # @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
@@ -84,7 +84,7 @@ class TestOverlay(unittest.TestCase):
 
         self.assertRaises(ValueError, f.result)
 
-    # @unittest.skip("skip")
+    #@unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation
