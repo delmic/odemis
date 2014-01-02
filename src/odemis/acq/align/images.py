@@ -31,25 +31,11 @@ import numpy
 from odemis import model
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+from odemis.util import TimeoutError
 
 _scan_lock = threading.Lock()
 _ccd_done = threading.Event()
-global _optical_image
-        
-def _discard_data(df, data):
-    """
-    Does nothing, just discard the SEM data received (for spot mode)
-    """
-    pass
 
-def _ssOnCCDImage(df, data):
-    """
-    Receives the CCD data
-    """
-    global _optical_image
-    _optical_image = data
-    _ccd_done.set()
-    logging.debug("Got CCD image!")
 
 def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
     """
@@ -66,7 +52,7 @@ def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateScanTime(dwell_time, repetitions))
-    f._state = RUNNING
+    f._scan_state = RUNNING
 
     # Task to run
     doScanGrid = _DoScanGrid
@@ -80,6 +66,23 @@ def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
     scan_thread.start()
     return f
 
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
+
+def _ssOnCCDImage(df, data):
+    """
+    Receives the CCD data
+    """
+    #data.unsubscribe(_ssOnCCDImage)
+    df._optical_image = data
+    df.unsubscribe(_ssOnCCDImage)
+    _optical_image = data
+    _ccd_done.set()
+    logging.debug("Got CCD image!")
+    
 def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
     """
     Uses the e-beam to scan the rectangular grid consisted of the given number 
@@ -104,10 +107,14 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
     escan.resolution.value = repetitions
     escan.translation.value = (0, 0)
 
-    # TODO: use the smallest dwell time _always_
-    dt_rng = escan.dwellTime.range
-    escan.dwellTime.value = dt_rng[0]
-    # escan.dwellTime.value = max(dt_rng[0], min(dt, dt_rng[1]))
+    # use the smallest dwell time: avoids CCD/SEM synchronization problems
+    sem_dt = escan.dwellTime.range[0]
+    escan.dwellTime.value = sem_dt
+    # For safety, ensure the exposure time is at least twice the time for a whole scan
+    if dwell_time < 2 * sem_dt:
+        dwell_time = 2 * sem_dt
+        logging.info("Increasing dwell time to %g s to avoid synchronization problems",
+                      dwell_time)
 
     # CCD setup
     binning = (1, 1)
@@ -115,13 +122,12 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
     ccd.resolution.value = (ccd.shape[0] // binning[0],
                             ccd.shape[1] // binning[1])
     et = numpy.prod(repetitions) * dwell_time
-    # For safety, ensure the exposure time is at least twice the time for a whole scan
     ccd.exposureTime.value = et  # s
     readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
     tot_time = et + readout + 0.05
 
     try:
-        if future._state == CANCELLED:
+        if future._scan_state == CANCELLED:
             raise CancelledError()
         detector.data.subscribe(_discard_data)
         ccd.data.subscribe(_ssOnCCDImage)
@@ -129,15 +135,16 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
         logging.debug("Scanning spot grid...")
 
         # Wait for CCD to capture the image
-        _ccd_done.wait(2 * tot_time + 1)  # TODO timeout
+        if not _ccd_done.wait(2 * tot_time + 1):
+            raise TimeoutError("Acquisition of CCD timed out")
 
         with _scan_lock:
-            if future._state == CANCELLED:
+            if future._scan_state == CANCELLED:
                 detector.data.unsubscribe(_discard_data)
                 ccd.data.unsubscribe(_ssOnCCDImage)
                 raise CancelledError()
             logging.debug("Scan done.")
-            future._state = FINISHED
+            future._scan_state = FINISHED
 
     finally:
         detector.data.unsubscribe(_discard_data)
@@ -150,7 +157,7 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
             # Compute electron coordinates based on scale and repetitions
             electron_coordinates.append((i * scale[0], j * scale[1]))
 
-    return _optical_image, electron_coordinates, scale
+    return ccd.data._optical_image, electron_coordinates, scale
 
 # Copy from acqmng
 # @staticmethod
@@ -179,10 +186,10 @@ def _CancelScanGrid(future):
     logging.debug("Cancelling scan...")
     
     with _scan_lock:
-        if future._state == FINISHED:
+        if future._scan_state == FINISHED:
             logging.debug("Scan already finished.")
             return False
-        future._state = CANCELLED
+        future._scan_state = CANCELLED
         _ccd_done.set()
         logging.debug("Scan cancelled.")
 
