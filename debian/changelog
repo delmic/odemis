@@ -1,3 +1,9 @@
+odemis (1.4-1ubuntu7) precise; urgency=low
+
+  * Actually call inkscape from the debian/rules so that the PDF figures are generated
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 02 Jan 2014 10:45:48 +0100
+
 odemis (1.4-1ubuntu6) precise; urgency=low
 
   * More build trial for latex, with inkscape
