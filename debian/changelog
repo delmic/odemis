@@ -1,3 +1,16 @@
+odemis (1.4-1ubuntu8) precise; urgency=low
+
+  * Clean up build/ directory which is messing if left from previous builds
+  * Change directory location for doc from develop to more convential develop-html
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 02 Jan 2014 11:59:52 +0100
+
+odemis (1.4-1ubuntu7) precise; urgency=low
+
+  * Actually call inkscape from the debian/rules so that the PDF figures are generated
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 02 Jan 2014 10:45:48 +0100
+
 odemis (1.4-1ubuntu6) precise; urgency=low
 
   * More build trial for latex, with inkscape

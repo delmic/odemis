@@ -1,2 +1,2 @@
 install/linux/etc/sudoers.d/odemis etc/sudoers.d/
-install/linux/etc/bash_completion.d/odemis-cli etc/bash_completion.d/odemis-cli
+install/linux/etc/bash_completion.d/odemis-cli etc/bash_completion.d/
