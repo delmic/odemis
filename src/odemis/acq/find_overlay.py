@@ -37,7 +37,6 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
-global _future_scan  # ProgressiveFuture to control images.ScanGrid
 
 ############## TO BE REMOVED ON TESTING##############
 grid_data = hdf5.read_data("real_optical.h5")
@@ -69,7 +68,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             CancelledError() if cancelled
             ValueError
     """
-    global _future_scan
     initial_dwell_time = dwell_time
 
     logging.debug("Starting Overlay...")
@@ -77,18 +75,18 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     # Repeat until we can find overlay (matching coordinates is feasible)
     for trial in range(MAX_TRIALS_NUMBER):
         # Grid scan
-        if future._state == CANCELLED:
+        if future._find_overlay_state == CANCELLED:
             raise CancelledError()
 
         # _img = images.Images()
-        _future_scan = images.ScanGrid(repetitions, initial_dwell_time, escan, ccd, detector)
+        future._future_scan = images.ScanGrid(repetitions, initial_dwell_time, escan, ccd, detector)
 
         # Wait for ScanGrid to finish
         try:
-            optical_image, electron_coordinates, electron_scale = _future_scan.result()
+            optical_image, electron_coordinates, electron_scale = future._future_scan.result()
         finally:
             with _overlay_lock:
-                if future._state == CANCELLED:
+                if future._find_overlay_state == CANCELLED:
                     raise CancelledError()
 
         ############## TO BE REMOVED ON TESTING##############
@@ -96,19 +94,19 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         #####################################################
 
         # Isolate spots
-        if future._state == CANCELLED:
+        if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Isolating spots...")
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, repetitions)
 
         # Find the centers of the spots
-        if future._state == CANCELLED:
+        if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Finding spot centers...")
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
 
         # Reconstruct the optical coordinates
-        if future._state == CANCELLED:
+        if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
@@ -122,7 +120,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
 
         # Match the electron to optical coordinates
-        if future._state == CANCELLED:
+        if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Matching coordinates...")
         known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
@@ -137,25 +135,24 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         # Make failure report
         _MakeReport(optical_image, repetitions, initial_dwell_time, electron_coordinates)
         with _overlay_lock:
-            if future._state == CANCELLED:
+            if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
-            future._state = FINISHED
+            future._find_overlay_state = FINISHED
         raise ValueError('Overlay failure')
 
     # Calculate transformation parameters
-    if future._state == CANCELLED:
+    if future._find_overlay_state == CANCELLED:
         raise CancelledError()
     logging.debug("Calculating transformation...")
     ret = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
 
     with _overlay_lock:
-        if future._state == CANCELLED:
+        if future._find_overlay_state == CANCELLED:
             raise CancelledError()
-        future._state = FINISHED
+        future._find_overlay_state = FINISHED
 
     logging.debug("Overlay done.")
     
-    del _future_scan
     return ret
 
 def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -177,7 +174,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateOverlayTime(dwell_time, repetitions))
-    f._state = RUNNING
+    f._find_overlay_state = RUNNING
 
     # Task to run
     doFindOverlay = _DoFindOverlay
@@ -215,15 +212,13 @@ def _CancelFindOverlay(future):
     """
     Canceller of _DoFindOverlay task.
     """
-    global _future_scan
     logging.debug("Cancelling overlay...")
 
     with _overlay_lock:
-        if future._state == FINISHED:
+        if future._find_overlay_state == FINISHED:
             return False
-        future._state = CANCELLED
-        _future_scan.cancel()
-        del _future_scan
+        future._find_overlay_state = CANCELLED
+        future._future_scan.cancel()
         logging.debug("Overlay cancelled.")
 
     return True
