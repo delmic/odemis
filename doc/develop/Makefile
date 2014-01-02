@@ -15,7 +15,6 @@ ALLSPHINXOPTS   = -d $(BUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
 # SVG to PDF conversion
-SVG2PDF         = inkscape
 #SOURCEDIR       = source
 #IMAGEDIRS can be a list of directories that contain SVG files and are relative to the SOURCEDIR
 IMAGEDIR       = .
@@ -24,7 +23,7 @@ IMAGEDIR       = .
 
 # Pattern rule for converting SVG to PDF
 %.pdf : %.svg
-	$(SVG2PDF) -f $< -A $@
+	inkscape -z -f $< -A $@
 
 # Build a list of SVG files to convert to PDFs
 PDFs := $(patsubst %.svg,%.pdf,$(wildcard $(IMAGEDIR)/*.svg))
