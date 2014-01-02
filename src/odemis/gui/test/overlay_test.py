@@ -196,6 +196,6 @@ if __name__ == "__main__":
     #unittest.main()
 
     suit = unittest.TestSuite()
-    suit.addTest( OverlayTestCase("test_roa_select_overlay") )
+    suit.addTest( OverlayTestCase("test_polar_overlay") )
     runner = unittest.TextTestRunner()
     runner.run(suit)

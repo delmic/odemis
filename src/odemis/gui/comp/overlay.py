@@ -1861,13 +1861,13 @@ class PolarOverlay(ViewOverlay):
         self.px, self.py = None, None
         self.tx, self.ty = None, None
 
-        # Angle in radians. Top is 0 degrees
-        self.phi = None
-        self.phi_line_rad = None
-        self.phi_line_pos = None
-        self.theta = None
-        self.theta_radius = None
-        self.intersection = None
+        self.phi = None             # Phi angle in radians
+        self.phi_line_rad = None    # Phi drawing angle in radians
+        self.phi_line_pos = None    # End point in pixels of the Phi line
+        self.theta = None           # Theta angle in radians
+        self.theta_radius = None    # Radius of the theta circle in pixels
+        self.intersection = None    # The intersection of the cirle and line in
+                                    # pixels
 
         self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOR)
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOR, 0.5)
@@ -1921,6 +1921,16 @@ class PolarOverlay(ViewOverlay):
 
     # END Property Getters/Setters
 
+    def _calculate_angles(self, view_pos):
+        """Calculate the angles from the given view position"""
+        vx, vy = view_pos
+        # X and y distance from the center
+        dx, dy = vx - self.center_x, self.center_y - vy
+
+        # Calculate the phi angle in radians
+        # Atan2 gives the angle between the positive x axis and the point dx,dy
+        self.phi = math.atan2(dx, dy) % self.tau
+
     def _calculate_values(self, view_pos=None):
         # Calculate angle related values when a view position is provided
         if view_pos:
@@ -1932,7 +1942,11 @@ class PolarOverlay(ViewOverlay):
             # Get the radius and the angle for Theta
             self.theta_radius = min(math.sqrt(dx * dx + dy * dy),
                                     self.inner_radius)
-
+        # else:
+        #     # Get the radius and the angle for Theta
+        #     self.theta_radius = (self.theta / math.pi / 2) * self.inner_radius
+        #                         min(math.sqrt(dx * dx + dy * dy),
+        #                             self.inner_radius)
 
         # Calculate pixel values when the angles are set
         if None not in (self.phi, self.theta_radius):
