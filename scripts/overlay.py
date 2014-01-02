@@ -85,7 +85,10 @@ def main(args):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
     
-        optical_image, electron_coordinates, electron_scale = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
+        future_scan = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
+
+        # Wait for ScanGrid to finish
+        optical_image, electron_coordinates, electron_scale = future_scan.result()
 
         ############## TO BE REMOVED ON TESTING##############
         grid_data = hdf5.read_data("real_optical.h5")
@@ -94,26 +97,33 @@ def main(args):
         optical_image = grid_data[0]
         #####################################################
     
+        logging.debug("Isolating spots...")
         subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, repetitions)
+        logging.debug("Finding spot centers...")
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructImage(subimage_coordinates, spot_coordinates, subimage_size)
-    
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
-        optical_scale = sorted_coordinates[0][0] - sorted_coordinates[1][0]
+        tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
+        optical_scale = math.hypot(tab[0], tab[1])
         scale = electron_scale[0] / optical_scale
-    
+
         # max_allowed_diff in pixels
         max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
 
-        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
+        logging.debug("Matching coordinates...")
+        known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
     
-        (calc_translation_x, calc_translation_y), calc_scaling, calc_rotation = transform.CalculateTransform(known_estimated_coordinates, known_optical_coordinates)
-        final_electron = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, calc_scaling)
+        logging.debug("Calculating transformation...")
+        (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
+        final_electron = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
 
+        logging.debug("Overlay done.")
+        
         # Calculate distance between the expected and found electron coordinates
         coord_diff = []
-        for ta, tb in zip(final_electron, known_estimated_coordinates):
+        for ta, tb in zip(final_electron, known_electron_coordinates):
             tab = tuple(map(operator.sub, ta, tb))
             coord_diff.append(math.hypot(tab[0], tab[1]))
 
