@@ -55,13 +55,13 @@ def main(args):
     parser = argparse.ArgumentParser(description=
                      "Automated AR acquisition at multiple spot locations")
 
-    parser.add_argument("--repetitions_x", "-rx", dest="repetitions_x", required=True,
+    parser.add_argument("--repetitions_x", "-x", dest="repetitions_x", required=True,
                         help="repetitions defines the number of CL spots in the grid (x dimension)")
-    parser.add_argument("--repetitions_y", "-ry", dest="repetitions_y", required=True,
+    parser.add_argument("--repetitions_y", "-y", dest="repetitions_y", required=True,
                         help="repetitions defines the number of CL spots in the grid (y dimension)")
-    parser.add_argument("--dwell_time", "-dt", dest="dwell_time", required=True,
+    parser.add_argument("--dwell_time", "-t", dest="dwell_time", required=True,
                         help="dwell_time indicates the time to scan each spot (unit: s)")
-    parser.add_argument("--max_allowed_diff", "-md", dest="max_allowed_diff", required=True,
+    parser.add_argument("--max_allowed_diff", "-d", dest="max_allowed_diff", required=True,
                         help="max_allowed_diff indicates the maximum allowed difference in electron coordinates (unit: m)")
 
     options = parser.parse_args(args[1:])
