@@ -702,32 +702,54 @@ class Continuous(object):
         return self._get_range()
 
     def _set_range(self, new_range):
+        """ Set the range after performing some basic contraint checks
         """
-        Override to do more checking on the range.
-        """
+
+        # Range should always have 2 elements
         if len(new_range) != 2:
             raise TypeError("Range '%s' is not a 2-tuple." % str(new_range))
-        if new_range[0] > new_range[1]:
-            raise TypeError("Range min (%s) should be smaller than max (%s)."
-                                   % (str(new_range[0]), str(new_range[1])))
+
+        start, end = new_range
+        if not isinstance(start, collections.Iterable):
+            start = (start,)
+            end = (end,)
+
+        if any([mn > mx for mn, mx in zip(start, end)]):
+            raise TypeError("Range min %s should be smaller than max %s."
+                                   % (str(start), str(end)))
+        #pylint: disable=E1101
         if hasattr(self, "value"):
-            #pylint: disable=E1101
-            if not new_range[0] <= self.value <= new_range[1]:
-                raise IndexError("Current value '%s' is outside of the range %s→%s." %
-                            (self.value, str(new_range[0]), str(new_range[1])))
+            if not isinstance(self.value, collections.Iterable):
+                value = (self.value,)
+            if (any([v < mn for v, mn in zip(value, start)]) or
+                any([v > mx for v, mx in zip(value, end)])):
+                msg = "Current value '%s' is outside of the range %s→%s."
+                raise IndexError(msg % (value, start, end))
+
         self._range = tuple(new_range)
 
     @property
-    def max(self):
-        return max(self._range)
+    def min(self):
+        return self._range[0]
 
     @property
-    def min(self):
-        return min(self._range)
+    def max(self):
+        return self._range[1]
 
     def clip(self, val):
-        """ Clip the given value to fit within the range """
-        return max(min(val, self.max), self.min)
+        """ Clip the given value to fit within the range.
+
+        If the range contains vectors of length n, each element of val will be
+        clipped separately by position for positions 0..n-1
+        """
+
+        if isinstance(self.min, collections.Iterable):
+            clipped = []
+            for v, min_v, max_v in zip(val, self.min, self.max):
+                clipped.append(max(min(v, max_v), min_v))
+            return tuple(clipped)
+        else:
+            return max(min(val, self.max), self.min)
 
     # To be called only by the owner of the object
     @range.setter
@@ -740,14 +762,24 @@ class Continuous(object):
 
     def _check(self, value):
         """
-        Should be called _in addition_ to the ._set() of VigilantAttributeBase
-        returns nothing
         Raises:
             IndexError if the value is not within the authorised range
         """
-        if not self._range[0] <= value <= self._range[1]:
-            raise IndexError("Trying to assign value '%s' outside of the range %s→%s." %
-                        (str(value), str(self._range[0]), str(self._range[1])))
+
+        start, end = self.range
+
+        if not isinstance(value, collections.Iterable):
+            value = (value,)
+            start, end = (start,), (end,)
+
+        if not (len(value) == len(start) == len(end)):
+            msg = "Value '%s' is not a %d-tuple."
+            raise TypeError(msg % (value, len(start)))
+
+        if (any([v < mn for v, mn in zip(value, start)]) or
+            any([v > mx for v, mx in zip(value, end)])):
+            msg ="Trying to assign value '%s' outside of the range %s→%s."
+            raise IndexError(msg % (value, start, end))
 
 class Enumerated(object):
     """
@@ -907,41 +939,8 @@ class TupleContinuous(VigilantAttribute, Continuous):
           default to the same class as the first element
         """
         self._cls = cls or value[0].__class__
-        self._len = len(value)
         Continuous.__init__(self, range)
         VigilantAttribute.__init__(self, value, unit=unit, **kwargs)
-
-    def _set_range(self, new_range):
-        """
-        Override to do more checking on the range.
-        """
-        if len(new_range) != 2:
-            raise TypeError("Range '%s' is not a 2-tuple." % (new_range,))
-        if any([mn > mx for mn, mx in zip(new_range[0], new_range[1])]):
-            raise TypeError("Range min %s should be smaller than max %s."
-                                   % (str(new_range[0]), str(new_range[1])))
-        if hasattr(self, "value"):
-            if (any([v < mn for v, mn in zip(self.value, new_range[0])]) or
-                any([v > mx for v, mx in zip(self.value, new_range[1])])):
-                raise IndexError("Current value '%s' is outside of the range %s→%s." %
-                            (self.value, new_range[0], new_range[1]))
-        self._range = tuple(new_range)
-
-    def _check(self, value):
-        """
-        Raises:
-            IndexError if the value is not within the authorised range
-        """
-        if len(value) != self._len:
-            raise TypeError("Value '%s' is not a %d-tuple." % (value, self._len))
-
-        if not all([isinstance(v, self._cls) for v in value]):
-            raise TypeError("Value '%s' is not a tuple of %s." % (value, self._cls))
-
-        if (any([v < mn for v, mn in zip(value, self._range[0])]) or
-            any([v > mx for v, mx in zip(value, self._range[1])])):
-            raise IndexError("Trying to assign value '%s' outside of the range %s→%s." %
-                        (value, self._range[0], self._range[1]))
 
     def _set_value(self, value):
         # force tuple
@@ -950,6 +949,11 @@ class TupleContinuous(VigilantAttribute, Continuous):
     # need to overwrite the whole property
     value = property(VigilantAttribute._get_value, _set_value, VigilantAttribute._del_value, "The actual value")
 
+    def _check(self, value):
+        if not all([isinstance(v, self._cls) for v in value]):
+            msg = "Value '%s' is not a tuple of %s."
+            raise TypeError(msg % (value, self._cls))
+        Continuous._check(self, value)
 
 class ResolutionVA(TupleContinuous):
     # old name for TupleContinuous, when it was fixed to len == 2 and cls == int
