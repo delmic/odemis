@@ -256,13 +256,23 @@ class AxisLegend(wx.Panel):
         # The guiding distance between ticks in pixels
         self.tick_pixel_gap = 137
 
-        self.unit = "k"
+        self._unit = None
 
         self.on_size(None)
+
+    @property
+    def unit(self):
+        return self._unit
+
+    @unit.setter
+    def unit(self, val):
+        self._unit = val
+        self.clear()
 
     def on_paint(self, event=None):
 
         if not self.Parent.canvas.has_data():
+            self.clear()
             return
 
         if not self.ticks:
@@ -371,7 +381,11 @@ class AxisLegend(wx.Panel):
         ctx.move_to(x, y)
         ctx.show_text(self.label)
 
+    def clear(self):
+        self.ticks = None
+        self.label = None
+        self.label_pos = None
 
     def on_size(self, event):
-        self.ticks = None
+        self.clear()
         self.Refresh(eraseBackground=False)

@@ -442,8 +442,14 @@ class PlotViewport(ViewPort):
         self.unit_x = "m" # updated when the data is read
         self.unit_y = None
 
+        #pylint: disable=E1103, E1101
         self.canvas.active_overlay.v_posx.subscribe(self.legend.position_label)
         self.canvas.val_x.subscribe(self._on_value_x)
+
+    def clear(self):
+        #pylint: disable=E1103, E1101
+        self.canvas.clear()
+        self.legend.clear()
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
@@ -452,6 +458,7 @@ class PlotViewport(ViewPort):
         """
         Called when the selected horizontal value is modified
         """
+        #pylint: disable=E1103
         if val is None:
             self.legend.set_label("")
         else:
@@ -474,20 +481,15 @@ class PlotViewport(ViewPort):
             if len(ss) != 1:
                 raise ValueError("Unexpected number of Spectrum Streams found!")
 
-            # TODO: Remove following code once we know for sure explicit
-            # unsubscription is not needed.
-
-            # if self.spectrum_stream:
-            #     self.spectrum_stream.selected_pixel.unsubscribe(
-            #                                             self._on_spec_pixel)
-
             self.spectrum_stream = ss[0]
             self.spectrum_stream.selected_pixel.subscribe(self._on_spec_pixel)
 
     def _on_spec_pixel(self, pixel):
+        """ Pixel selection event handler """
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
         self.unit_x = self.spectrum_stream.spectrumBandwidth.unit
+        self.legend.unit = self.unit_x
         self.canvas.set_1d_data(domain, data)  #pylint: disable=E1101
 
 

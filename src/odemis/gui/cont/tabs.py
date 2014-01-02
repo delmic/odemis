@@ -539,7 +539,7 @@ class SparcAcquisitionTab(Tab):
         # loops.
         for s in self.tab_data_model.acquisitionView.getStreams():
             if isinstance(s, streammod.AR_STREAMS + streammod.SPECTRUM_STREAMS):
-#                logging.debug("setting roi of %s to %s", s.name.value, roi)
+                # logging.debug("setting roi of %s to %s", s.name.value, roi)
                 s.roi.value = roi
 
     def onSpecROI(self, roi):
@@ -873,6 +873,7 @@ class AnalysisTab(Tab):
                                         self._on_spec_pixel,
                                         init=True)
                 self.tb.enable_button(tools.TOOL_POINT, True)
+                self.main_frame.vp_inspection_plot.clear()
                 break
             # If an angle resolve stream is found...
             elif isinstance(strm, streammod.AR_STREAMS):
@@ -893,7 +894,6 @@ class AnalysisTab(Tab):
         """
         Called when the tool (mode) is changed
         """
-
         # Reset the viewports when the spot tool is not selected
         # Doing it this way, causes some unnecessary calls to the reset method
         # but it cannot be avoided. Subscribing to the tool VA will only

@@ -1252,6 +1252,12 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         else:
             self.markline_overlay.v_posx.subscribe(self._calc_y_value)
 
+    def clear(self):
+        self.set_data(None)
+        self.val_x.value = None
+        self.val_y.value = None
+        self.markline_overlay.clear()
+
     # Event handlers
 
     def on_size(self, evt):  #pylint: disable=W0222

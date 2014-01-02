@@ -49,7 +49,7 @@ class ViewController(object):
           kwargs are passed to the MicroscopeView creation. If there are more
           than 4 viewports, only the first 4 will be made visible and any others
           will be hidden.
-        toolbar (ToolBar or None): toolbar to manage the TOOL_ZOOM_FIT tool. 
+        toolbar (ToolBar or None): toolbar to manage the TOOL_ZOOM_FIT tool.
         """
         self._data_model = tab_data
         self._main_data_model = tab_data.main
@@ -122,7 +122,7 @@ class ViewController(object):
         # It could be possible to even delete viewports and create new ones
         # when .views changes.
         # When .visible_views changes, but the viewports in the right order
-        # in the sizer.  
+        # in the sizer.
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
         assert not self._data_model.views.value # should still be empty
@@ -475,7 +475,7 @@ class ViewController(object):
         stream (Stream): the stream to look for
         """
         fv = self._data_model.focussedView.value
-        
+
         # first try to pick a view which has the stream visible
         pviews = []
         for v in self._data_model.visible_views.value:

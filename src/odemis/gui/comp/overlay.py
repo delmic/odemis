@@ -1115,6 +1115,10 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
 
         self.line_width = 2
 
+    def clear(self):
+        self.v_posx.value = None
+        self.v_posy.value = None
+
     def on_left_down(self, evt):
         super(MarkingLineOverlay, self).on_left_down(evt)
         DragMixin.on_left_down(self, evt)
@@ -1146,7 +1150,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
-        if self.v_posy.value:
+        if self.v_posy.value is not None:
             r, g, b, a = conversion.change_brightness(self.color, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)

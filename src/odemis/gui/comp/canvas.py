@@ -1415,13 +1415,19 @@ class PlotCanvas(BufferedCanvas):
 
         The data should be an iterable of numerical 2-tuples.
         """
-        if not all(data[i][0] <= data[i + 1][0] for i in xrange(len(data) - 1)):
-            raise ValueError("The horizontal data should be sorted!")
-        if len(data[0]) != 2:
-            raise ValueError("The data should be 2D!")
 
-        self._data = data
-        self.reset_dimensions()
+        if data is None:
+            self._data = []
+        else:
+            # Check if sorted
+            s = all(data[i][0] <= data[i + 1][0] for i in xrange(len(data) - 1))
+            if not s:
+                raise ValueError("The horizontal data should be sorted!")
+            if len(data[0]) != 2:
+                raise ValueError("The data should be 2D!")
+
+            self._data = data
+            self.reset_dimensions()
 
     def has_data(self):
         return len(self._data) != 0
