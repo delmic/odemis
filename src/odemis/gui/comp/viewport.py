@@ -482,9 +482,9 @@ class PlotViewport(ViewPort):
                 raise ValueError("Unexpected number of Spectrum Streams found!")
 
             self.spectrum_stream = ss[0]
-            self.spectrum_stream.selected_pixel.subscribe(self._on_spec_pixel)
+            self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
 
-    def _on_spec_pixel(self, pixel):
+    def _on_pixel_select(self, pixel):
         """ Pixel selection event handler """
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()

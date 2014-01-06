@@ -869,9 +869,7 @@ class AnalysisTab(Tab):
                                     iimg.get_digital_size(),
                                     strm.selected_pixel
                         )
-                strm.selected_pixel.subscribe(
-                                        self._on_spec_pixel,
-                                        init=True)
+                strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 self.main_frame.vp_inspection_plot.clear()
                 break
@@ -883,6 +881,7 @@ class AnalysisTab(Tab):
                     if hasattr(viewport.canvas, "points_overlay"):
                         ol = viewport.canvas.points_overlay
                         ol.set_point(strm.point)
+                        strm.point.subscribe(self._on_point_select, init=True)
 
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 break
@@ -901,7 +900,14 @@ class AnalysisTab(Tab):
         if tool != guimod.TOOL_POINT:
             self.tab_data_model.visible_views.value = self._def_views
 
-    def _on_spec_pixel(self, selected_pixel):
+    def _on_point_select(self, selected_point):
+        """ Event handler for when a point is selected """
+        # If we're in 1x1 view, we're bringing the plot to the front
+        if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
+            ang_view = self.main_frame.vp_angular.microscope_view
+            self.tab_data_model.focussedView.value = ang_view
+
+    def _on_pixel_select(self, selected_pixel):
         """ Event handler for when a spectrum pixel is selected """
 
         # If the right tool is active...
@@ -920,7 +926,7 @@ class AnalysisTab(Tab):
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
 
-            # If we're in 1x1 view, we're brining the plot to the front
+            # If we're in 1x1 view, we're bringing the plot to the front
             if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
                 self.tab_data_model.focussedView.value = plot_view
 
