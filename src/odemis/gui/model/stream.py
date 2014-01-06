@@ -2543,6 +2543,18 @@ class StreamTree(object):
         """ Return a flat list of spectrum streams """
         return self.get_streams(AR_STREAMS)
 
+    def get_streams_by_name(self, name):
+        """ Return a list of streams with have names that match `name` """
+
+        leaves = set()
+        for s in self.streams:
+            if isinstance(s, Stream) and s.name.value == name:
+                leaves.add(s)
+            elif isinstance(s, StreamTree):
+                leaves |= s.get_streams_by_name(name)
+
+        return list(leaves)
+
     def get_streams(self, stream_types):
         """ Return a flat list of streams of `stream_type` within the StreamTree
         """

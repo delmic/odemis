@@ -226,8 +226,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         elif tool == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
+            st = self.microscope_view.stream_tree
+            # TODO: Filtering by the name SEM CL is not desired. There should be
+            # a more intelligent way to query the StreamTree about what's
+            # present, like how it's done for Spectrum and AR streams
             if (self.pixel_overlay and
-                    self.microscope_view.stream_tree.spectrum_streams):
+                (st.spectrum_streams or st.get_streams_by_name("SEM CL"))):
                 self.current_mode = MODE_SPARC_PICK
                 self.active_overlay = self.pixel_overlay
                 self.pixel_overlay.enable(True)
