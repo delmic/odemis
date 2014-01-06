@@ -1250,7 +1250,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         if data is None:
             self.markline_overlay.v_posx.unsubscribe(self._calc_y_value)
         else:
-            self.markline_overlay.v_posx.subscribe(self._calc_y_value)
+            self.markline_overlay.v_posx.subscribe(self._calc_y_value,
+                                                   init=True)
 
     def clear(self):
         self.set_data(None)
@@ -1270,7 +1271,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     def _calc_y_value(self, v_posx):
         """ Calculate the x and y *values* belonging to the x pixel position """
-        if not self._data:
+        if not self._data or v_posx is None:
             return
 
         self.val_x.value = self._pos_x_to_val_x(v_posx, match=True)
