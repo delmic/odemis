@@ -1244,7 +1244,9 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.closed = canvas.PLOT_CLOSE_BOTTOM
         self.plot_mode = canvas.PLOT_MODE_BAR
 
-        self.markline_overlay = comp_overlay.MarkingLineOverlay(self)
+        self.markline_overlay = comp_overlay.MarkingLineOverlay(
+                                                self,
+                                                orientation=3)
         self.add_overlay(self.markline_overlay)
         self.active_overlay = self.markline_overlay
 

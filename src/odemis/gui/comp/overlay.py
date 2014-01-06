@@ -1092,6 +1092,9 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             # if FILL_NONE => nothing to do
 
 
+HORIZONTAL = 1
+VERTICAL = 2
+
 class MarkingLineOverlay(ViewOverlay, DragMixin):
     """ Draw a vertical line at the given view position.
     This class can easily be extended to include a horizontal or horz/vert
@@ -1103,7 +1106,8 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
                  label="",
                  sel_cur=None,
                  color=gui.SELECTION_COLOR,
-                 center=(0, 0)):
+                 center=(0, 0),
+                 orientation=HORIZONTAL):
 
         super(MarkingLineOverlay, self).__init__(cnvs, label)
         DragMixin.__init__(self)
@@ -1113,6 +1117,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posx = model.VigilantAttribute(None)
         self.v_posy = model.VigilantAttribute(None)
 
+        self.orientation = orientation
         self.line_width = 2
 
     def clear(self):
@@ -1122,12 +1127,15 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def on_left_down(self, evt):
         super(MarkingLineOverlay, self).on_left_down(evt)
         DragMixin.on_left_down(self, evt)
+        self.color = self.color[:3] + (0.5,)
         self._set_to_mouse_x(evt)
 
     def on_left_up(self, evt):
         super(MarkingLineOverlay, self).on_left_up(evt)
         DragMixin.on_left_up(self, evt)
+        self.color = self.color[:3] + (1.0,)
         self._set_to_mouse_x(evt)
+        self.cnvs.Refresh()
 
     def on_motion(self, evt):
         super(MarkingLineOverlay, self).on_motion(evt)
@@ -1150,22 +1158,29 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def Draw(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
-        if self.v_posy.value is not None:
+        ctx.set_line_width(self.line_width)
+        ctx.set_dash([3,])
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_source_rgba(*self.color)
+
+        if (self.v_posx.value is not None and
+            self.orientation & HORIZONTAL == HORIZONTAL):
+            ctx.move_to(self.v_posx.value, 0)
+            ctx.line_to(self.v_posx.value, self.cnvs.ClientSize[1])
+            ctx.stroke()
+
+        if (self.v_posy.value is not None and
+            self.orientation & VERTICAL == VERTICAL):
+            ctx.move_to(0, self.v_posy.value)
+            ctx.line_to(self.cnvs.ClientSize[0], self.v_posy.value)
+            ctx.stroke()
+
+        if None not in (self.v_posy.value, self.v_posx.value):
             r, g, b, a = conversion.change_brightness(self.color, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.v_posx.value, self.v_posy.value, 5.5, 0, 2*math.pi)
             ctx.fill()
-
-        if self.v_posx.value is not None:
-            # draws the dotted line
-            ctx.set_line_width(self.line_width)
-            ctx.set_dash([3,])
-            ctx.set_line_join(cairo.LINE_JOIN_MITER)
-            ctx.set_source_rgba(*self.color)
-            ctx.move_to(self.v_posx.value, 0)
-            ctx.line_to(self.v_posx.value, self.cnvs.ClientSize[1])
-            ctx.stroke()
 
             if self.label:
                 vpos = (self.v_posx.value + 5, self.v_posy.value + 3)
