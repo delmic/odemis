@@ -910,11 +910,6 @@ class AnalysisTab(Tab):
 
             # ...and the plot view is not visible yet
             if not plot_view in self.tab_data_model.visible_views.value:
-
-                if (self.tab_data_model.viewLayout.value ==
-                    guimod.VIEW_LAYOUT_ONE):
-                    self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
-
                 # Try and display the plot in the 2nd (= top right) spot...
                 pos = 1
                 # .., but go for the bottom right one when the spec pixel was
@@ -924,6 +919,11 @@ class AnalysisTab(Tab):
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
+
+            # If we're in 1x1 view, we're brining the plot to the front
+            if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
+                self.tab_data_model.focussedView.value = plot_view
+
 
     def _split_channels(self, data):
         """
