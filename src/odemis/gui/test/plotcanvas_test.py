@@ -111,12 +111,12 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_buffered_canvas(self):
         # BufferedCanvas is abstract and shoul not be instantiated
         self.assertRaises(TypeError, canvas.BufferedCanvas, self.panel)
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_bitmap_canvas(self):
         cnvs = canvas.BitmapCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")
@@ -167,11 +167,8 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # print px
         # print vwp.canvas._pos_x_to_val_x(px, True)
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_plot_canvas(self):
-
-
-
         # Create and add a test plot canvas
         # cnvs = canvas.PlotCanvas(self.panel)
         cnvs = miccanvas.ZeroDimensionalPlotCanvas(self.panel)
@@ -180,8 +177,6 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.SetForegroundColour("#DDDDDD")
         cnvs.set_closure(canvas.PLOT_CLOSE_STRAIGHT)
         self.add_control(cnvs, wx.EXPAND, proportion=1)
-
-        cnvs.set_x_unit('m')
 
         # def toggle(event):
         #     canv = event.GetEventObject()
@@ -239,7 +234,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         # test.gui_loop()
         # cnvs.Update()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_buffer_to_world(self):
 
         for m in MARGINS:
@@ -260,4 +255,9 @@ class PlotCanvasTestCase(test.GuiTestCase):
                         self.assertAlmostEqual(bp[1], nbp[1], msg=err)
 
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
+
+    suit = unittest.TestSuite()
+    suit.addTest(PlotCanvasTestCase("test_plot_canvas") )
+    runner = unittest.TextTestRunner()
+    runner.run(suit)

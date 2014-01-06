@@ -195,9 +195,14 @@ class InfoLegend(wx.Panel):
         self.LegendMag.SetLabel(label)
         self.Layout()
 
-    # TODO: use
-    # Stream class / bitmap for the merge slider
-    stream_to_icon = [
+    def set_stream_type(self, side, cls):
+        """
+        Set the stream type, to put the right icon on the merge slider
+        side (wx.LEFT or wx.RIGHT): whether this set the left or right stream
+        cls (class inheriting from Stream): the class of the stream
+        """
+
+        stream_to_icon = [
           (stream.OPTICAL_STREAMS, getico_blending_optBitmap()),
           (stream.EM_STREAMS, getico_blending_semBitmap()),
           # TODO: Spectrum icon
@@ -205,13 +210,8 @@ class InfoLegend(wx.Panel):
           # TODO: Goal stream class?!
           (stream.StaticStream, getico_blending_goalBitmap()),
           ]
-    def set_stream_type(self, side, cls):
-        """
-        Set the stream type, to put the right icon on the merge slider
-        side (wx.LEFT or wx.RIGHT): whether this set the left or right stream
-        cls (class inheriting from Stream): the class of the stream
-        """
-        for cs, i in self.stream_to_icon:
+
+        for cs, i in stream_to_icon:
             if issubclass(cls, cs):
                 icon = i
                 break
