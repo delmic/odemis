@@ -56,7 +56,9 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.sleep(1000)
 
+        print "Setting Phi"
         cnvs.polar_overlay.phi_deg = 60
+        print "Setting Theta"
         cnvs.polar_overlay.theta_deg = 60
 
     # @unittest.skip("simple")

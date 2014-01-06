@@ -1862,7 +1862,7 @@ class PolarOverlay(ViewOverlay):
         self.tx, self.ty = None, None
 
         self.phi = None             # Phi angle in radians
-        self.phi_line_rad = None    # Phi drawing angle in radians
+        self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
         self.phi_line_pos = None    # End point in pixels of the Phi line
         self.theta = None           # Theta angle in radians
         self.theta_radius = None    # Radius of the theta circle in pixels
@@ -1888,7 +1888,7 @@ class PolarOverlay(ViewOverlay):
     @phi_rad.setter
     def phi_rad(self, phi_rad):
         self.phi = phi_rad
-        self._calculate_values()
+        self._calculate_phi()
         self.cnvs.Refresh()
 
     @property
@@ -1908,7 +1908,7 @@ class PolarOverlay(ViewOverlay):
     def theta_rad(self, theta_rad):
         self.theta = theta_rad
         self.theta_radius = (theta_rad / (math.pi / 2 )) * self.inner_radius
-        self._calculate_values()
+        self._calculate_theta()
         self.cnvs.Refresh()
 
     @property
@@ -1921,40 +1921,21 @@ class PolarOverlay(ViewOverlay):
 
     # END Property Getters/Setters
 
-    def _calculate_angles(self, view_pos):
-        """Calculate the angles from the given view position"""
-        vx, vy = view_pos
-        # X and y distance from the center
-        dx, dy = vx - self.center_x, self.center_y - vy
+    def _calculate_phi(self, view_pos=None):
+        """ Calcualte the Phi angle and the values to display the Phi line """
 
-        # Calculate the phi angle in radians
-        # Atan2 gives the angle between the positive x axis and the point dx,dy
-        self.phi = math.atan2(dx, dy) % self.tau
-
-    def _calculate_values(self, view_pos=None):
-        # Calculate angle related values when a view position is provided
         if view_pos:
             vx, vy = view_pos
-            # Angle in radians from the origin
             dx, dy = vx - self.center_x, self.center_y - vy
+
+            # Calculate the phi angle in radians
+            # Atan2 gives the angle between the positive x axis and the point
+            # dx,dy
             self.phi = math.atan2(dx, dy) % self.tau
 
-            # Get the radius and the angle for Theta
-            self.theta_radius = min(math.sqrt(dx * dx + dy * dy),
-                                    self.inner_radius)
-        # else:
-        #     # Get the radius and the angle for Theta
-        #     self.theta_radius = (self.theta / math.pi / 2) * self.inner_radius
-        #                         min(math.sqrt(dx * dx + dy * dy),
-        #                             self.inner_radius)
-
-        # Calculate pixel values when the angles are set
-        if None not in (self.phi, self.theta_radius):
-            # We store a separate Phi radian angle, for drawing the line, since
-            # normally 0 is to the right, and we need it to be drawn at the top
+        if self.phi:
             self.phi_line_rad = self.phi - math.pi / 2
 
-            self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
             # Pixel to which to draw the Phi line to
             phi_x = self.center_x + self.radius * math.cos(self.phi_line_rad)
             phi_y = self.center_y + self.radius * math.sin(self.phi_line_rad)
@@ -1968,23 +1949,57 @@ class PolarOverlay(ViewOverlay):
             self.px = self.center_x + (radius) * math.cos(self.phi_line_rad)
             self.py = self.center_y + (radius) * math.sin(self.phi_line_rad)
 
-            # Calc Theta label pos
-            if self.theta_radius < self.center_y / 2:
-                self.ty = self.center_y + self.theta_radius + 4
-            else:
-                self.ty = self.center_y + self.theta_radius - 16
-            self.tx = self.center_x
+        else:
+            logging.warn("Could not calculate Phi rendering angle!")
 
+    def _calculate_theta(self, view_pos=None):
+        """ Calculate the Theta angle and the values needed to display it. """
+        if view_pos:
+            vx, vy = view_pos
+            dx, dy = vx - self.center_x, self.center_y - vy
+            # Get the radius and the angle for Theta
+            self.theta_radius = min(math.sqrt(dx * dx + dy * dy),
+                                    self.inner_radius)
+            self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
+        elif self.theta:
+            self.theta_radius = (self.theta / (math.pi / 2)) * self.inner_radius
+        else:
+            logging.warn("Could not calculate Theta radius!")
+            return
+
+        # Calc Theta label pos
+        if self.theta_radius < self.center_y / 2:
+            self.ty = self.center_y + self.theta_radius + 4
+        else:
+            self.ty = self.center_y + self.theta_radius - 16
+        self.tx = self.center_x
+
+    def _calculate_intersection(self):
+
+        if None not in (self.phi_line_rad, self.theta_radius):
             # Calculate the intersecion between Phi and Theta
             x = self.center_x + self.theta_radius * math.cos(self.phi_line_rad)
             y = self.center_y + self.theta_radius * math.sin(self.phi_line_rad)
-
             self.intersection = (x, y)
+        else:
+            self.intersection = None
 
-            if (0 < self.intersection[0] < self.cnvs.ClientSize.x and
-                0 < self.intersection[1] < self.cnvs.ClientSize.y):
-                # Determine actual value here
-                self.intensity = None #"Bingo!"
+    def _calculate_display(self, view_pos=None):
+        """ Calculate the values needed for plotting the Phi and Theta lines and
+        labels
+
+        If view_pos is not given, the current Phi and Theta angles will be used .
+        """
+
+        self._calculate_phi(view_pos)
+        self._calculate_theta(view_pos)
+        self._calculate_intersection()
+
+        if (view_pos and
+            0 < self.intersection[0] < self.cnvs.ClientSize.x and
+            0 < self.intersection[1] < self.cnvs.ClientSize.y):
+            # Determine actual value here
+            self.intensity = None #"Bingo!"
 
     def on_left_down(self, evt):
         self.dragging = True
@@ -1997,7 +2012,7 @@ class PolarOverlay(ViewOverlay):
     def on_motion(self, evt):
         # Only change the values when the user is dragging
         if self.dragging:
-            self._calculate_values(evt.GetPositionTuple())
+            self._calculate_display(evt.GetPositionTuple())
             self.cnvs.Refresh()
 
     def on_size(self, evt=None):
@@ -2020,7 +2035,7 @@ class PolarOverlay(ViewOverlay):
 
             self.ticks.append((sx, sy, lx, ly, phi))
 
-        self._calculate_values()
+        self._calculate_display()
 
     def text(self, ctx, string, pos, phi, flip=False):
         ctx.save()
@@ -2055,39 +2070,47 @@ class PolarOverlay(ViewOverlay):
     def Draw(self, dc):
         ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-        # If the angles are set, draw the angle indicators
-        if None not in (self.phi, self.theta_radius):
-            # Draw dark unerline azimuthal circle
-            ctx.set_line_width(2.5)
-            ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
+        ### Draw angle lines ###
 
+        ctx.set_line_width(2.5)
+        ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
+
+        if self.theta is not None:
+            # Draw dark unerline azimuthal circle
             ctx.arc(self.center_x, self.center_y,
                     self.theta_radius, 0, self.tau)
             ctx.stroke()
 
+        if self.phi is not None:
             # Draw dark unerline Phi line
-
             ctx.move_to(self.center_x, self.center_y)
             ctx.line_to(*self.phi_line_pos)
             ctx.stroke()
 
-            # Light selection lines formatting
-            ctx.set_line_width(2)
-            ctx.set_dash([3,])
-            if self.dragging:
-                ctx.set_source_rgba(*self.colour_drag)
-            else:
-                ctx.set_source_rgb(*self.colour)
+        # Light selection lines formatting
+        ctx.set_line_width(2)
+        ctx.set_dash([3,])
+        if self.dragging:
+            ctx.set_source_rgba(*self.colour_drag)
+        else:
+            ctx.set_source_rgb(*self.colour)
 
+        if self.phi is not None:
             # Draw Phi line
             ctx.move_to(self.center_x, self.center_y)
             ctx.line_to(*self.phi_line_pos)
             ctx.stroke()
+
+        if self.theta is not None:
             # Draw azimuthal circle
             ctx.arc(self.center_x, self.center_y,
                     self.theta_radius, 0, self.tau)
             ctx.stroke()
-            ctx.set_dash([])
+
+        ctx.set_dash([])
+
+
+        ### Draw angle markings ###
 
         # Draw frame that covers everything outside the center circle
         ctx.set_fill_rule(cairo.FILL_RULE_EVEN_ODD)
@@ -2111,17 +2134,30 @@ class PolarOverlay(ViewOverlay):
             ctx.line_to(lx, ly)
         ctx.stroke()
 
-        if None not in (self.phi, self.theta_radius):
+        # Draw labels
+        ctx.set_source_rgb(0.8, 0.8, 0.8)
+        for sx, sy, lx, ly, phi in self.ticks:
+            # ctx.move_to(self.center_x, self.center_y)
+            # ctx.rotate(phi)
+            # ctx.move_to(lx, ly)
 
+            deg = str(int(round(180 * phi / math.pi) + 90)) + u"°"
+            self.text(ctx, deg, (sx, sy), phi + (math.pi / 2))
+
+
+        ### Draw angle and intensity labels ###
+
+        if self.phi is not None:
             # Phi label
             phi_str = u"φ %0.1f°" % math.degrees(self.phi)
             ctx.set_source_rgb(0.0, 0.0, 0.0)
             self.text(ctx, phi_str, (self.px, self.py), self.phi_line_rad,
                       flip=self.phi > math.pi)
             ctx.set_source_rgb(*self.colour)
-            self.text(ctx, phi_str, (self.px + 1, self.py - 1), self.phi_line_rad,
-                      flip=self.phi > math.pi)
+            self.text(ctx, phi_str, (self.px + 1, self.py - 1),
+                      self.phi_line_rad, flip=self.phi > math.pi)
 
+        if self.theta is not None:
             # Theta label
             theta_str = u"θ %0.1f°" % math.degrees(self.theta)
             self.write_label(
@@ -2133,33 +2169,23 @@ class PolarOverlay(ViewOverlay):
                         colour=self.colour,
                         align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
 
-            if self.intensity is not None:
-                ctx.set_source_rgb(*self.colour_highlight)
-                ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
-                ctx.fill()
+        if self.intensity is not None:
+            ctx.set_source_rgb(*self.colour_highlight)
+            ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
+            ctx.fill()
 
-                x, y = self.intersection
-                y -= 18
-                if y < 40:
-                    y += 40
+            x, y = self.intersection
+            y -= 18
+            if y < 40:
+                y += 40
 
-                self.write_label(
-                        ctx,
-                        self.cnvs.ClientSize,
-                        (x, y),
-                        self.intensity,
-                        flip=True,
-                        align=wx.ALIGN_CENTER,
-                        colour=self.colour_highlight)
+            self.write_label(
+                    ctx,
+                    self.cnvs.ClientSize,
+                    (x, y),
+                    self.intensity,
+                    flip=True,
+                    align=wx.ALIGN_CENTER,
+                    colour=self.colour_highlight)
 
-            ctx.stroke()
 
-        # Draw labels
-        ctx.set_source_rgb(0.8, 0.8, 0.8)
-        for sx, sy, lx, ly, phi in self.ticks:
-            # ctx.move_to(self.center_x, self.center_y)
-            # ctx.rotate(phi)
-            # ctx.move_to(lx, ly)
-
-            deg = str(int(round(180 * phi / math.pi) + 90)) + u"°"
-            self.text(ctx, deg, (sx, sy), phi + (math.pi / 2))
