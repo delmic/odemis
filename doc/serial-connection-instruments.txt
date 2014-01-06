@@ -1,4 +1,4 @@
-Writting a driver for a serial connection based instrument
+Writing a driver for a serial connection based instrument
 
 Many instruments which need only low-bandwidth connection use serial connection
 to communicate with the host computer. Here are a few notes to help starting the
@@ -22,7 +22,7 @@ sudo modprobe -q ftdi-sio product=0x1008 vendor=0x1a72
 
 In case several instruments are connected to the computer, it can be difficult
 to identify automatically which physical cable is under which name (and this
-might change after a disconnection or a reboot). So it's recommanded to try to
+might change after a disconnection or a reboot). So it's recommended to try to
 add a symlink to identify it easily. The most easy way to force a name to a
 connection is to either link them by vendor/product IDs, or by physical USB
 port. Here is a udev rule to automatically get a symlink as /dev/ttyPIE when the
