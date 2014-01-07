@@ -358,11 +358,15 @@ class ViewController(object):
             flag=hidden_item.GetFlag(),
             border=hidden_item.GetBorder())
 
-        # Flip the visibility
-        visible_vp.Hide()
-        logging.debug("Hiding %s", visible_vp)
-        hidden_vp.Show()
-        logging.debug("Showing %s", hidden_vp)
+        # Only make the 'hidden_vp' visible when we're in 2x2 view or if it's
+        # the focussed view in a 1x1 view.
+        if (self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
+            self._data_model.focussedView.value == visible_vp.microscope_view):
+            # Flip the visibility
+            visible_vp.Hide()
+            logging.debug("Hiding %s", visible_vp)
+            hidden_vp.Show()
+            logging.debug("Showing %s", hidden_vp)
 
         # Swap the viewports in the viewport list
         vp[visible_idx], vp[hidden_idx] = vp[hidden_idx], vp[visible_idx]

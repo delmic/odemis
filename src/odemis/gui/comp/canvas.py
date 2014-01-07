@@ -1395,6 +1395,9 @@ class PlotCanvas(BufferedCanvas):
         self.max_y_val = None
         self.range_y = None
 
+        self.unit_x = None
+        self.unit_y = None
+
         ## Rendering settings
         self.line_width = 1.5 #px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
@@ -1406,11 +1409,11 @@ class PlotCanvas(BufferedCanvas):
 
     # Getters and Setters
 
-    def set_1d_data(self, horz, vert):
+    def set_1d_data(self, horz, vert, unit_x=None, unit_y=None):
         """ Construct the data by zipping the two provided 1D iterables """
-        self.set_data(zip(horz, vert))
+        self.set_data(zip(horz, vert), unit_x, unit_y)
 
-    def set_data(self, data):
+    def set_data(self, data, unit_x=None, unit_y=None):
         """ Set the data to be plotted
 
         The data should be an iterable of numerical 2-tuples.
@@ -1418,6 +1421,8 @@ class PlotCanvas(BufferedCanvas):
 
         if data is None:
             self._data = []
+            self.unit_x = None
+            self.unit_y = None
         else:
             # Check if sorted
             s = all(data[i][0] <= data[i + 1][0] for i in xrange(len(data) - 1))
@@ -1427,6 +1432,9 @@ class PlotCanvas(BufferedCanvas):
                 raise ValueError("The data should be 2D!")
 
             self._data = data
+            self.unit_x = unit_x
+            self.unit_y = unit_y
+
             self.reset_dimensions()
 
     def has_data(self):
@@ -1484,7 +1492,6 @@ class PlotCanvas(BufferedCanvas):
         :return: (int, int)
         """
         x, y = value_tuple
-
         return (self._val_x_to_pos_x(x), self._val_y_to_pos_y(y))
 
     # Cached calculation methods. These should be flushed when the relevant
@@ -1514,7 +1521,7 @@ class PlotCanvas(BufferedCanvas):
         If match is True, the closest match from _data will be returned,
         otherwise interpolation will occur.
         """
-        perc_x = pos_x / float(self.ClientSize.x)
+        perc_x = (pos_x + 1) / float(self.ClientSize.x)
         val_x = (perc_x * self.range_x) + self.min_x_val
 
         if match:
@@ -1595,18 +1602,22 @@ class PlotCanvas(BufferedCanvas):
         value_to_position = self.value_to_position
         line_to = ctx.line_to
 
-        # TODO: if ._data was always an ndarray, we could optimize value_to_position
-        # to be computed by numpy as one be array much more quickly.
+        # TODO: if ._data was always an ndarray, we could optimize
+        # value_to_position to be computed by numpy as one be array much more
+        # quickly.
 
-        x, y = value_to_position((self.min_x_val, self.min_y_val))
+        prev_x, prev_y = value_to_position((self.min_x_val, self.min_y_val))
 
-        ctx.move_to(x, y)
+        ctx.move_to(prev_x, prev_y)
 
-        for i, p in enumerate(self._data[:-1]):
+        for i, p in enumerate(self._data):
             x, y = value_to_position(p)
-            line_to(x, y)
-            x, _ = value_to_position(self._data[i + 1])
-            line_to(x, y)
+            half_diff_x = abs(x - prev_x) / 2.0
+            line_to(x - half_diff_x, y)
+            line_to(x + half_diff_x, y)
+            prev_x = x
+            # x,  = value_to_position(self._data[i + 1])
+            # line_to(x, y)
 
         # Store the line path for later use
         line_path = ctx.copy_path()
@@ -1626,10 +1637,10 @@ class PlotCanvas(BufferedCanvas):
         ctx.fill()
 
         # # Reload the stored line path
-        ctx.append_path(line_path)
-        ctx.set_source_rgb(*self.line_colour)
-        # Draw the line
-        ctx.stroke()
+        # ctx.append_path(line_path)
+        # ctx.set_source_rgb(*self.line_colour)
+        # # Draw the line
+        # ctx.stroke()
 
     def _line_plot(self, ctx):
         """ Do a line plot of the current `_data` """

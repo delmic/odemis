@@ -78,12 +78,20 @@ class ViewPort(wx.Panel):
                 # => Just use legend_bottom, legend_left
                 self.legend = [self.legend_class[0](self),
                                self.legend_class[1](self)]
+
+                self.legend[1].orientation = self.legend[1].VERTICAL
+                self.legend[1].MinSize = (40, -1)
+
                 grid_sizer = wx.GridBagSizer()
 
                 grid_sizer.Add(self.canvas, pos=(0, 1), flag=wx.EXPAND)
 
                 grid_sizer.Add(self.legend[0], pos=(1, 1), flag=wx.EXPAND)
                 grid_sizer.Add(self.legend[1], pos=(0, 0), flag=wx.EXPAND)
+
+                filler = wx.Panel(self)
+                filler.SetBackgroundColour("#1A1A1A")
+                grid_sizer.Add(filler, pos=(1, 0), flag=wx.EXPAND)
 
                 grid_sizer.AddGrowableRow(0, 1)
                 grid_sizer.AddGrowableCol(1, 1)
@@ -95,7 +103,7 @@ class ViewPort(wx.Panel):
                     lp.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
                 mainSizer.Add(grid_sizer, 1,
-                        border=0, flag=wx.EXPAND)
+                        border=2, flag=wx.EXPAND | wx.ALL)
             else:
                 mainSizer.Add(self.canvas, 1,
                     border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
@@ -430,7 +438,7 @@ class PlotViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
-    legend_class = AxisLegend #, AxisLegend)
+    legend_class = (AxisLegend, AxisLegend)
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
@@ -439,31 +447,14 @@ class PlotViewport(ViewPort):
         # before we get an explicit chance to unsubscribe event handlers
         self.spectrum_stream = None
 
-        self.unit_x = "m" # updated when the data is read
-        self.unit_y = None
-
-        #pylint: disable=E1103, E1101
-        self.canvas.active_overlay.v_posx.subscribe(self.legend.position_label)
-        self.canvas.val_x.subscribe(self._on_value_x)
-
     def clear(self):
         #pylint: disable=E1103, E1101
         self.canvas.clear()
-        self.legend.clear()
+        for l in self.legend:
+            l.clear()
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent
-
-    def _on_value_x(self, val):
-        """
-        Called when the selected horizontal value is modified
-        """
-        #pylint: disable=E1103
-        if val is None:
-            self.legend.set_label("")
-        else:
-            val_str = units.readable_str(val, self.unit_x, 3)
-            self.legend.set_label(val_str)
 
     @property
     def microscope_view(self):
@@ -488,10 +479,11 @@ class PlotViewport(ViewPort):
         """ Pixel selection event handler """
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
-        self.unit_x = self.spectrum_stream.spectrumBandwidth.unit
-        self.legend.unit = self.unit_x
-        self.canvas.set_1d_data(domain, data)  #pylint: disable=E1101
-
+        unit_x = self.spectrum_stream.spectrumBandwidth.unit
+        self.legend[0].unit = unit_x
+        self.canvas.set_1d_data(domain, data, unit_x)  #pylint: disable=E1101
+        for l in self.legend:
+            l.clear()
 
     def setView(self, microscope_view, tab_data):
         """
