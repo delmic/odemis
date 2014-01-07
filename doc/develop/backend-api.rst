@@ -226,7 +226,7 @@ DigitialCamera is a subtype of Detector which detects light with an array.
 Actuator
 ========
 
-Actuator represent hardware components which can move. For example a stage. In case of linear move the axis value is expressed in meters, and in case of rotation it is expressed in radians. The most important concept this component brings is that a move can take a long time, so a move request is asynchronous, controlled via a :py:class:`concurrent.futures.Future`.
+Actuator represents hardware components which can move. For example a stage. In case of linear move the axis value is expressed in meters, and in case of rotation it is expressed in radians. The most important concept this component brings is that a move can take a long time, so a move request is asynchronous, controlled via a :py:class:`concurrent.futures.Future`.
 
 Note that .moveRel() and .moveAbs() are asynchronous. If several moves are requested before one is finished, the driver must  ensure that the final position is equal to calling the moves while being synchronised (within an error margin). However the path that is taken to reach the final position is implementation dependent. So calling ``.moveAbs({“x”: 1})`` and immediately followed by ``.moveRel({“x”: -0.5})`` will eventually be equivalent to just one call to ``.moveAbs({“x”: 0.5})``, but whether the stage passed by position *x=1* is unknown (to the client).
 
@@ -234,10 +234,6 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
 
     :param inverted: the axes which the driver should control inverted (i.e., a positive relative move become negative, an absolute move goes at the symmetric position from the center, or any other interpretation that fit better the hardware)
     :type inverted: set of str
-
-    .. TODO: support actuators that move to only specific positions (eg, a switch, the grating selection of a spectrograph). Instead of a .ranges, it would need a .choices (with either a set or a dict value → user-friendly string description).
-
-    .. TODO: need a way to indicate whether absolute positioning is possible. And if so, whether “homing” (calibration) procedure is needed to be run. add .initAbs() function to do the home procedure? Cannot be done automatically in most cases as it might move at a bad moment otherwise. So the interface needs to ask the user first before doing it. Could be a RO VA .canAbs (dict string (axis name) → value) with 3 values possible: False, NEED_INIT, True.
 
     .. py:attribute:: role
     
@@ -249,30 +245,24 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
 
     .. py:attribute:: axes
     
-        *(RO, set of str)* name of each axis available. The name is dependent on the role, for a stage they are typically 'x', 'y', 'z', 'rz' (rotation around Z axis).
-
-    .. TODO: it could be cleaner to have .axes a dict str → Axis object. The Axis object would have .position (RO), .unit (static), .speed, .range (static) and .rangeRel (static) or .choices (static), .canAbs (RO). .subscribe() and .unsubscribe() would manage subscription to the change of any of the properties.
-
-    .. py:attribute:: ranges
-    
-        *(RO, dict str → 2-tuple of numbers)* (min, max) position for each axis.
-
-    .. TODO: .rangesRel: min, max value of moveRel: max is same as .ranges[1]-.ranges[0], min is the minimum distance which will actually move the motor (less, nothing happens).
+        *(RO, dict str → Axis)* name of each axis available, and the :py:class:`Axis` information.
+        The name is dependent on the role, for a stage they are typically 'x', 'y', 'z', 'rz' (rotation around Z axis).
 
     .. py:attribute:: speed
     
-        *(VA, dict str → float)* speed of each axis in m/s. It has a .range = (min, max) which is common for all the axes.
-        
-        .. TODO: range should be a dict.
-    
+        *(VA, dict str → float)* speed of each axis in m/s. 
+        The value allowed is axis dependent and is indicated via the :py:attr:`Axis.speed` as a range.  
+        	
     .. py:attribute:: position
     
         *(RO VA, dict str → float)* The current position of each axis in the actuator.
-        If only relative moves is possible, the driver has to maintain an “ideal” current position (by summing all the moves requested), with the initial value at 0 (or anything most likely). It is up
+        If only relative moves is possible, the driver has to maintain an “ideal”
+        current position (by summing all the moves requested), with the initial
+        value at 0 (or anything most likely). It is up
         to the implementation to define how often it is updated, but should be
         updated at least after completion of every moves.
-
-        .. TODO: use it to provide .ranges (dict of str -> 2-tuple of numbers): (min, max) value of the axis for moving. It could also have .choices for the axes which have specific positions. A .unit should also be used to indicate the unit. Problem: it's annoying to have it represent all the axes. It might be better to have one VA per axis (but to support it over the current remote model, each VA must be a direct attribute of the component, so maybe position_axisname could be used).
+        The value allowed is axis dependent and is available via the 
+        :py:attr:`Axis.choices` or :py:attr:`Axis.range` .
     
     .. py:attribute:: referenced
     
@@ -320,6 +310,46 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
         :param axes: Axes which must be stopped, otherwise all the axes are stopped.
         :type axes: set of str
 
+Axis
+====
+
+Axis represents one axis of an :py:class:`Actuator`.
+It is a simple static object that holds information on the axis,
+but all the dynamic information and actions are performed via the :py:class:`Actuator`.
+
+There are mostly two types of Axes, either *continuous*, with the :py:attr:`Axis.range`
+attribute (e.g., translation actuator) or *enumerated*, with the :py:attr:`Axis.choices`
+attribute (e.g., switch).
+ 
+.. py:class:: Axis()
+
+    .. py:attribute:: unit
+    
+        *(RO, str)* the unit of the axis position (and indirectly the speed).
+        None indicates unknown or not applicable.
+        "" indicates a ratio.
+
+    .. py:attribute:: choices
+    
+        *(RO, set or dict)* Allowed positions. If it's a dict, the value
+         is indicating what the position corresponds to.
+
+    .. py:attribute:: range
+    
+        *(RO, tuple of 2 numbers)* min/max position (in the unit)
+
+    .. TODO: .rangeRel: min, max value of moveRel: max is same as .ranges[1]-.ranges[0], min is the minimum distance which will actually move the motor (less, nothing happens).
+
+    .. py:attribute:: speed
+    
+        *(RO, tuple of 2 numbers)* min/max speed of the axis (in unit/s).
+        
+    .. py:attribute:: canAbs
+    
+    	*(RO, bool)* indicates whether the hardware supports absolute positioning.
+    	If it is not supported by hardware, the :py:meth:`Actuator.moveAbs` will 
+    	approximate the move by a relative one. 
+    	
 
 Convention about measurement units
 ==================================
