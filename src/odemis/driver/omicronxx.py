@@ -70,7 +70,7 @@ class DevxX(object):
     @staticmethod
     def _openSerialPort(port):
         """
-        Opens the given serial port the right way for the Spectra LLE.
+        Opens the given serial port the right way for the Omicron xX devices.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         return (serial): the opened serial port
         """
