@@ -184,7 +184,7 @@ class BufferedCanvas(wx.Panel):
         # Initialize the buffer
         self.resize_buffer(self._bmp_buffer_size)
         # Doesn't seem to work on some canvas due to accessing ClientSize (too early?)
-#        self.resize_buffer(self.get_minimum_buffer_size())
+        # self.resize_buffer(self.get_minimum_buffer_size())
 
         # This attribute is used to store the current mouse cursor type
         self.previous_cursor = None
@@ -1372,8 +1372,10 @@ class DraggableCanvas(BitmapCanvas):
 PLOT_CLOSE_NOT = 0
 PLOT_CLOSE_STRAIGHT = 1
 PLOT_CLOSE_BOTTOM = 2
-PLOT_MODE_LINE = 1
-PLOT_MODE_BAR = 2
+
+PLOT_MODE_POINT = 1
+PLOT_MODE_LINE = 2
+PLOT_MODE_BAR = 3
 
 class PlotCanvas(BufferedCanvas):
     """ This is a general canvas for plotting numerical data in various ways
@@ -1384,46 +1386,51 @@ class PlotCanvas(BufferedCanvas):
         super(PlotCanvas, self).__init__(*args, **kwargs)
 
         # The data to be plotted, a list of numerical value pairs
-        self._data = []
+        self._data = None
 
         # Interesting values taken from the data.
-        self.min_x_val = None
-        self.max_x_val = None
-        self.range_x = None
+        self.min_x = None
+        self.max_x = None
+        self.min_y = None
+        self.max_y = None
 
-        self.min_y_val = None
-        self.max_y_val = None
+        # The rane of the x and y data
+        self.range_x = None
         self.range_y = None
+
+        self.data_width = None
+        self.data_height = None
 
         self.unit_x = None
         self.unit_y = None
 
         ## Rendering settings
-        self.line_width = 1.5 #px
+        self.line_width = 2.0 # px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
-        self.fill_colour = change_brightness(self.line_colour, -0.3)
+        self.fill_colour = self.line_colour
 
-        # Determines if the graph should be closed, and if so, how.
+        # Default plot settings
         self.plot_closed = PLOT_CLOSE_BOTTOM
         self.plot_mode = PLOT_MODE_LINE
 
     # Getters and Setters
 
-    def set_1d_data(self, horz, vert, unit_x=None, unit_y=None):
+    def set_1d_data(self, horz, vert,
+                    unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Construct the data by zipping the two provided 1D iterables """
-        self.set_data(zip(horz, vert), unit_x, unit_y)
+        if len(horz) != len(vert):
+            msg = "X and Y list are of unequal length. X: %s, Y: %s, Xs: %s..."
+            raise ValueError(msg % (len(horz), len(vert), str(horz)[:30]))
+        self.set_data(zip(horz, vert), unit_x, unit_y, range_x, range_y)
 
-    def set_data(self, data, unit_x=None, unit_y=None):
+    def set_data(self, data,
+                 unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Set the data to be plotted
 
         The data should be an iterable of numerical 2-tuples.
         """
 
-        if data is None:
-            self._data = []
-            self.unit_x = None
-            self.unit_y = None
-        else:
+        if data:
             # Check if sorted
             s = all(data[i][0] <= data[i + 1][0] for i in xrange(len(data) - 1))
             if not s:
@@ -1434,68 +1441,84 @@ class PlotCanvas(BufferedCanvas):
             self._data = data
             self.unit_x = unit_x
             self.unit_y = unit_y
+            self.range_x = range_x
+            self.range_y = range_y
 
-            self.reset_dimensions()
+            self._calc_data_characteristics()
+
+    def clear(self):
+        self._data = None
+        self.unit_y = None
+        self.unit_x = None
+        self.range_x = None
+        self.range_y = None
+        self.data_width = None
+        self.data_height = None
+        self.outline = None
 
     def has_data(self):
-        return len(self._data) != 0
+        return self._data is not None and len(self._data) > 2
 
     # Attribute calculators
 
-    def set_dimensions(self, min_x, max_x, min_y, max_y):
-        """ Set the outer dimensions of the plotting area.
+    def _calc_data_characteristics(self):
+        """ Get the minimum and maximum
 
         This method can be used to override the values derived from the data
         set, so that the extreme values will not make the graph touch the edge
         of the canvas.
         """
-
-        self.min_x_val = min_x
-        self.max_x_val = max_x
-        self.min_y_val = min_y
-        self.max_y_val = max_y
-
-        logging.debug(
-            "Limits set to %s, %s and %s, %s",
-            self.min_x_val,
-            self.max_x_val,
-            self.min_y_val,
-            self.max_y_val,
-        )
-
-        self.range_x = self.max_x_val - self.min_x_val
-        self.range_y = self.max_y_val - self.min_y_val
-
-        logging.debug("Widths set to %s and %s", self.range_x, self.range_y)
-        self.request_drawing_update()
-
-    def reset_dimensions(self):
-        """ Determine the dimensions according to the present data """
         horz, vert = zip(*self._data)
-        self.set_dimensions(
-            min(horz),
-            max(horz),
-            min(vert),
-            max(vert)
-        )
+
+        if len(horz) != len(set(horz)):
+            dub = [x for x in horz if horz.count(x) > 1]
+            self.clear()
+            raise ValueError("X values need to be unique! (%s)" % dub)
+
+        self.min_x = min(horz)
+        self.max_x = max(horz)
+        self.min_y = min(vert)
+        self.max_y = max(vert)
+
+        # If a range is not given, we calculate it from the data
+        if not self.range_x:
+            self.range_x = (self.min_x, self.max_x)
+            self.data_width = self.max_x - self.min_x
+        else:
+            # Make sure the values are valid and calculate the width of the data
+            if self.range_x[0] <= self.min_x <= self.max_x <= self.range_x[1]:
+                self.data_width = self.range_x[1] - self.range_x[0]
+            else:
+                msg = "X values out of range! min: %s, max: %s, range: %s"
+                raise ValueError(msg % (self.min_x, self.max_x, self.range_x))
+
+        # If a range is not given, we calculate it from the data
+        if not self.range_y:
+            self.range_y = (self.min_y, self.max_y)
+            self.data_height = self.max_y - self.min_y
+        else:
+            # Make sure the values are valid and calculate the width of the data
+            if self.range_y[0] <= self.min_y <= self.max_y <= self.range_y[1]:
+                self.data_height = self.range_y[1] - self.range_y[0]
+            else:
+                msg = "Y values out of range! min: %s, max: %s, range: %s"
+                raise ValueError(msg % (self.min_y, self.max_y, self.range_y))
+
         self.request_drawing_update()
 
     # Value calculation methods
 
     def value_to_position(self, value_tuple):
-        """ Translate a value tuple to a pixel position tuple
+        """
+        Translate a value tuple to a pixel position tuple
 
         If a value (x or y) is out of range, it will be clippped.
 
         :param value_tuple: (float, float) The value coordinates to translate
-
         :return: (int, int)
         """
         x, y = value_tuple
         return (self._val_x_to_pos_x(x), self._val_y_to_pos_y(y))
-
-    # Cached calculation methods. These should be flushed when the relevant
-    # data changes (e.g. when the canvas changes size).
 
     # FIXME: When the memoize on the method is activated,
     # _pos_x_to_val_x starts returning weird value.
@@ -1503,38 +1526,57 @@ class PlotCanvas(BufferedCanvas):
     # forth between 0 and 1
 
     def _val_x_to_pos_x(self, val_x):
-        """ Translate an x value to an x position in pixels """
+        """
+        Translate an x value to an x position in pixels
+
+        The minimum x value is considered to be pixel 0 and the maximum is the
+        canvas width. The parameter will be clipped if it's out of range.
+
+        :param val_x: (float) The value to map
+        :return: (float)
+        """
         # Clip val_x
-        x = min(max(self.min_x_val, val_x), self.max_x_val)
-        perc_x = float(x - self.min_x_val) / self.range_x
+        x = min(max(self.range_x[0], val_x), self.range_x[1])
+        perc_x = float(x - self.range_x[0]) / self.data_width
         return perc_x * self.ClientSize.x
 
     def _val_y_to_pos_y(self, val_y):
-        """ Translate an y value to an y position in pixels """
-        y = min(max(self.min_y_val, val_y), self.max_y_val)
-        perc_y = float(self.max_y_val - y) / self.range_y
+        """
+        Translate an y value to an y position in pixels
+
+        The minimum y value is considered to be pixel 0 and the maximum is the
+        canvas width. The parameter will be clipped if it's out of range.
+
+        :param val_y: (float) The value to map
+        :return: (float)
+        """
+
+        y = min(max(self.range_y[0], val_y), self.range_y[1])
+        perc_y = float(self.range_y[1] - y) / self.data_height
         return perc_y * self.ClientSize.y
 
-    def _pos_x_to_val_x(self, pos_x, match=False):
-        """ Map the given pixel position to a an x value from the data
+    def _pos_x_to_val_x(self, pos_x, snap=False):
+        """ Map the given pixel position to an x value from the data
 
-        If match is True, the closest match from _data will be returned,
+        If snap is True, the closest snap from `self._data` will be returned,
         otherwise interpolation will occur.
         """
-        perc_x = (pos_x + 1) / float(self.ClientSize.x)
-        val_x = (perc_x * self.range_x) + self.min_x_val
 
-        if match:
-            return min([(abs(val_x - x), val_x) for x, _ in self._data])[1]
+        perc_x = pos_x / float(self.ClientSize.x)
+        val_x = (perc_x * self.data_width) + self.range_x[0]
+
+        if snap and False:
+            # Return the value closest to val_x
+            return min([(abs(val_x - x), x) for x, _ in self._data])[1]
         else:
-            # Clip
-            val_x = max(min(val_x, self.max_x_val), self.min_x_val)
+            # Clip the value
+            val_x = max(min(val_x, self.range_x[1]), self.range_x[0])
+
         return val_x
 
-    def _val_x_to_val_y(self, val_x):
+    def _val_x_to_val_y(self, val_x, snap=False):
         """ Map the give x pixel value to a y value """
-        res = [y for x, y in self._data if x <= val_x]
-        return res[-1] if res else None
+        return min([(abs(val_x - x), y) for x, y in self._data])[1]
 
     def SetForegroundColour(self, *args, **kwargs):
         super(PlotCanvas, self).SetForegroundColour(*args, **kwargs)
@@ -1565,8 +1607,8 @@ class PlotCanvas(BufferedCanvas):
         self.update_drawing()
 
     def draw(self):
-        """ This method updates the graph image
-
+        """
+        This method updates the graph image
         """
         #TODO: It seems this method gets called twice in a row -> investigate!
         # It is possible that the buffer has not been initialized yet, because
@@ -1575,11 +1617,11 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        if self._data:
-            dc = self._dc_buffer
-            dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
-            dc.Clear()
+        dc = self._dc_buffer
+        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
+        dc.Clear()
 
+        if self._data:
             ctx = wxcairo.ContextFromDC(dc)
             self._plot_data(ctx)
 
@@ -1596,51 +1638,52 @@ class PlotCanvas(BufferedCanvas):
                 self._line_plot(ctx)
             elif self.plot_mode == PLOT_MODE_BAR:
                 self._bar_plot(ctx)
+            elif self.plot_mode == PLOT_MODE_POINT:
+                self._point_plot(ctx)
 
     def _bar_plot(self, ctx):
         """ Do a bar plot of the current `_data` """
+
+        if not self._data or len(self._data) < 2:
+            return
+
         value_to_position = self.value_to_position
+        vx_to_px = self._val_x_to_pos_x
+        vy_to_py = self._val_y_to_pos_y
+
         line_to = ctx.line_to
-
-        # TODO: if ._data was always an ndarray, we could optimize
-        # value_to_position to be computed by numpy as one be array much more
-        # quickly.
-
-        prev_x, prev_y = value_to_position((self.min_x_val, self.min_y_val))
-
-        ctx.move_to(prev_x, prev_y)
-
-        for i, p in enumerate(self._data):
-            x, y = value_to_position(p)
-            half_diff_x = abs(x - prev_x) / 2.0
-            line_to(x - half_diff_x, y)
-            line_to(x + half_diff_x, y)
-            prev_x = x
-            # x,  = value_to_position(self._data[i + 1])
-            # line_to(x, y)
-
-        # Store the line path for later use
-        line_path = ctx.copy_path()
-
-        # Close the path in the desired way, so we can fill it
-        if self.plot_closed == PLOT_CLOSE_BOTTOM:
-            x, y = self.value_to_position((self.max_x_val, 0))
-            ctx.line_to(x, y)
-            x, y = self.value_to_position((0, 0))
-            ctx.line_to(x, y)
-        else:
-            ctx.close_path()
-
-        ctx.set_line_width(self.line_width)
         ctx.set_source_rgb(*self.fill_colour)
-        # Fill the current path. (Filling also clears the path when done)
-        ctx.fill()
 
-        # # Reload the stored line path
-        # ctx.append_path(line_path)
-        # ctx.set_source_rgb(*self.line_colour)
-        # # Draw the line
-        # ctx.stroke()
+        diff = (self._data[1][0] - self._data[0][0]) / 2.0
+        px = vx_to_px(self._data[0][0] - diff)
+        py = vy_to_py(0)
+
+        ctx.move_to(px, py)
+        # print "-", px, py
+
+        for i, (vx, vy) in enumerate(self._data[:-1]):
+            py = vy_to_py(vy)
+            # print "-", px, py
+            line_to(px, py)
+            px = vx_to_px((self._data[i + 1][0] + vx) / 2.0)
+            # print "-", px, py
+            line_to(px, py)
+
+        py = vy_to_py(self._data[-1][1])
+        # print "-", px, py
+        line_to(px, py)
+
+        diff = (self._data[-1][0] - self._data[-2][0]) / 2.0
+        px = vx_to_px(self._data[-1][0] + diff)
+        # print "-", px, py
+        line_to(px, py)
+
+        py = vy_to_py(0)
+        # print "-", px, py
+        line_to(px, py)
+
+        ctx.close_path()
+        ctx.fill()
 
     def _line_plot(self, ctx):
         """ Do a line plot of the current `_data` """
@@ -1655,7 +1698,7 @@ class PlotCanvas(BufferedCanvas):
             line_to(x, y)
 
         if self.plot_closed == PLOT_CLOSE_BOTTOM:
-            x, y = self.value_to_position((self.max_x_val, 0))
+            x, y = self.value_to_position((self.max_x, 0))
             ctx.line_to(x, y)
             x, y = self.value_to_position((0, 0))
             ctx.line_to(x, y)
@@ -1665,3 +1708,20 @@ class PlotCanvas(BufferedCanvas):
         ctx.set_line_width(self.line_width)
         ctx.set_source_rgb(*self.fill_colour)
         ctx.fill()
+
+
+    def _point_plot(self, ctx):
+        """ Do a line plot of the current `_data` """
+        value_to_position = self.value_to_position
+        move_to = ctx.move_to
+        line_to = ctx.line_to
+        bottom_y = self.ClientSize.y
+
+        for p in self._data:
+            x, y = value_to_position(p)
+            move_to(x, bottom_y)
+            line_to(x, y)
+
+        ctx.set_line_width(self.line_width)
+        ctx.set_source_rgb(*self.fill_colour)
+        ctx.stroke()

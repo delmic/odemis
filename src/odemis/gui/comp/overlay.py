@@ -1186,9 +1186,10 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
                             colour=self.color)
 
             if self.y_label:
+                yo = max(0, 20 - self.v_posx.value / 5)
                 y_pos = max(
                             min(self.v_posy.value - 6,
-                                self.cnvs.ClientSize.y - 20),
+                                self.cnvs.ClientSize.y - yo),
                             14)
 
                 self.write_label(ctx,

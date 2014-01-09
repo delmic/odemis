@@ -452,6 +452,7 @@ class PlotViewport(ViewPort):
         self.canvas.clear()
         for l in self.legend:
             l.clear()
+        self.Refresh()
 
     def OnSize(self, evt):
         evt.Skip() # processed also by the parent

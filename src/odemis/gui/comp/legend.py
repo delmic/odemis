@@ -254,7 +254,7 @@ class AxisLegend(wx.Panel):
 
         self.ticks = None
         # The guiding distance between ticks in pixels
-        self.tick_pixel_gap = 137
+        self.tick_pixel_gap = 120
         self.orientation = orientation or self.HORIZONTAL
 
         self._unit = None
@@ -323,15 +323,14 @@ class AxisLegend(wx.Panel):
         # Get orientation dependant values
         if self.orientation == self.HORIZONTAL:
             size = self.ClientSize.x
-            min_val = self.Parent.canvas.min_x_val
-            val_range = self.Parent.canvas.range_x
+            min_val = self.Parent.canvas.min_x
+            val_size = self.Parent.canvas.data_width
             val_to_pos = self.Parent.canvas._val_x_to_pos_x
         else:
             size = self.ClientSize.y
-            min_val = self.Parent.canvas.min_y_val
-            val_range = self.Parent.canvas.range_y
+            min_val = self.Parent.canvas.min_y
+            val_size = self.Parent.canvas.data_height
             val_to_pos = self.Parent.canvas._val_y_to_pos_y
-
 
         num_ticks = size / self.tick_pixel_gap
         logging.debug("Aiming for %s ticks with a client of width %s",
@@ -342,17 +341,17 @@ class AxisLegend(wx.Panel):
 
         # Increase the value step tenfold while it fits more tan num_ticks times
         # in the range
-        while val_range / val_step > num_ticks:
+        while val_size / val_step > num_ticks:
             val_step *= 10
 
         logging.debug("Value step is %s after first iteration with range %s",
-                      val_step, val_range)
+                      val_step, val_size)
 
         # Divide the value step by two,
-        while val_range / val_step < num_ticks:
+        while val_size / val_step < num_ticks:
             val_step /= 2
         logging.debug("Value step is %s after second iteration with range %s",
-                      val_step, val_range)
+                      val_step, val_size)
 
         first_tick = (int(min_val / val_step) + 1) * val_step
         logging.debug("Setting first tick at value %s", first_tick)

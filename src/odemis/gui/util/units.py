@@ -10,15 +10,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -109,7 +109,7 @@ def to_string_pretty(x, sig=None):
 
     if sig is not None:
         x = round_significant(x, sig)
-        
+
     # so close from an int that it's very likely one?
     if abs(x - round(x)) < 1e-5 and abs(x) >= 1:
         x = int(round(x)) # avoid the .0
@@ -134,6 +134,10 @@ def readable_str(value, unit=None, sig=None):
     """
     # TODO: convert % to ‰ when small value?
     # check against our black list of units which don't support SI prefix
+
+    if value is None:
+        return ""
+
     if unit in (None, "", "px", "C", u"°C", "rad", "%"):
         # don't put SI scaling prefix
         if unit in (None, ""):
