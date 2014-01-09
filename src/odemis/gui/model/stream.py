@@ -772,9 +772,10 @@ class FluoStream(CameraStream):
         self.excitation.subscribe(self.onExcitation)
 
         # The wavelength band on the out path (set when emission changes)
-        self._current_out_wl = sorted(em_filter.band.value)[0]
-        em_range = [min([s[0] for s in em_filter.band.value]),
-                    max([s[1] for s in em_filter.band.value])]
+        bands = em_filter.axes["band"].choices
+        cur_pos = em_filter.position.value["band"]
+        self._current_out_wl = bands[cur_pos]
+        em_range = self._find_emission_range(bands.values())
         self.emission = model.FloatContinuous(numpy.mean(self._current_out_wl),
                                               range=em_range, unit="m")
         self.emission.subscribe(self.onEmission)
@@ -785,7 +786,6 @@ class FluoStream(CameraStream):
         self.tint.subscribe(self.onTint)
 
     def onActive(self, active):
-        # TODO update Emission or Excitation only if the stream is active
         if active:
             self._setup_excitation()
             self._setup_emission()
@@ -811,38 +811,87 @@ class FluoStream(CameraStream):
 
         self._updateImage()
 
+    def _find_emission_range(self, bands):
+        """
+        return (float, float): min/max wavelength
+        """
+        lows, highs = [], []
+        # if multi-band: get the range of all
+        for b in bands:
+            if isinstance(b[0], collections.Iterable):
+                rng = self._find_emission_range(b)
+            else:
+                rng = b
+            lows.append(rng[0])
+            highs.append(rng[1])
+
+        return min(lows), max(highs)
+
+    def _find_best_emission_band(self, wl):
+        """
+        wl (float): wavelength (in m)
+        return (int): the position corresponding to the best band
+        """
+        # The most fitting band: narrowest band centered around the wavelength
+        bands = self._em_filter.axes["band"].choices
+        def quantify_fit(wl, band):
+            """ Quantifies how well the given wavelength matches the given
+            band: the better the match, the higher the return value will be.
+            wl (float): Wavelength to quantify
+            band ((list of) 2-tuple floats): The band(s)
+            return (0<float): the more, the merrier
+            """
+            # if multi-band: get the best of all
+            if isinstance(band[0], collections.Iterable):
+                return max(quantify_fit(wl, b) for b in band)
+
+            if band[0] < wl < band[1]:
+                distance = abs(wl - numpy.mean(band)) # distance to center
+                width = band[1] - band[0]
+                # ensure it cannot get infinite score for being in the center
+                return 1 / (max(distance, 1e-9) * max(width, 1e-9))
+            elif band[0] - 20e-9 < wl < band[1] + 20e-9:
+                # almost? => 100x less good
+                distance = abs(wl - numpy.mean(band)) # distance to center
+                width = band[1] - band[0]
+                return 0.01 / (max(distance, 1e-9) * max(width, 1e-9))
+            else:
+                # No match
+                return 0
+
+        # position with quantify_fit function as key
+        best = max(bands.keys(), key=lambda x: quantify_fit(wl, bands[x]))
+        if quantify_fit(wl, bands[best]) == 0:
+            return None
+        return best
+
     def _setup_emission(self):
         """
         Set-up the hardware for the right emission light (light path between
         the sample and the CCD), and check whether the emission value matches
         the emission filter bands.
         """
-        wave_length = self.emission.value
+        wl = self.emission.value
 
-        # TODO: we need a way to know if the HwComponent can change
-        # automatically or only manually. For now we suppose it's manual.
-
-        # Changed manually: we can only check that it's correct
-        fitting = False # True for good, 1 for non-optimal
-        for l, h in self._em_filter.band.value:
-            if l < wave_length < h:
-                fitting = True
-                self._current_out_wl = (l, h)
-                break
-            elif l - 20e-9 < wave_length < h + 20e-9:
-                # There is probably some light from the fluorophore passing
-                fitting = 1
-                self._current_out_wl = (l, h)
-
+        p = self._find_best_emission_band(wl)
         self._removeWarnings(Stream.WARNING_EMISSION_IMPOSSIBLE,
                              Stream.WARNING_EMISSION_NOT_OPT)
-        if not fitting:
+        if p is not None:
+            self._em_filter.moveAbs({"band": p})
+            
+            # Detect if the selected band is outside of wl
+            band = self._em_filter.axes["band"].choices[p]
+            for l, h in band:
+                if l < wl < h:
+                    break
+            else:
+                self._addWarning(Stream.WARNING_EMISSION_NOT_OPT)
+                # TODO: add the actual band in the warning message?
+        else:
             logging.warning("Emission wavelength %s doesn't fit the filter",
-                            units.readable_str(wave_length, "m"))
+                            units.readable_str(wl, "m"))
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
-        elif fitting == 1:
-            self._addWarning(Stream.WARNING_EMISSION_NOT_OPT)
-            # TODO: add the actual band in the warning message?
+            
         return
 
     def _setup_excitation(self):

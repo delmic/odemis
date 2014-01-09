@@ -707,9 +707,6 @@ class SettingsPanel(object):
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
-        # TODO: how to differentiate axes that can do moveAbs() from the ones
-        # which can only do moveRel()? => need to implement .canAbs VA
-
         # Format label
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
@@ -718,33 +715,95 @@ class SettingsPanel(object):
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
-
-        # For now, it's very simple: always assume it can do absolute positioning
-        # with a range, and always create a float slider out of it.
-
+        
+        ad = comp.axes[name]
         pos = comp.position.value[name]
-        unit = comp.position.unit
-        minv, maxv = comp.ranges[name]
+        unit = ad.unit
 
-        new_ctrl = UnitFloatSlider(self.panel,
-                         value=pos,
-                         min_val=minv,
-                         max_val=maxv,
-                         unit=unit,
-                         t_size=(50, -1),
-                         accuracy=conf.get('accuracy', 3))
+        # If axis has .range (continuous) => slider
+        # If axis has .choices (enumerated) => combo box
+        if hasattr(ad, "range"):
+            minv, maxv = ad.range
+    
+            new_ctrl = UnitFloatSlider(self.panel,
+                             value=pos,
+                             min_val=minv,
+                             max_val=maxv,
+                             unit=unit,
+                             t_size=(50, -1),
+                             accuracy=conf.get('accuracy', 3))
+    
+            # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
+            # but to EVT_SCROLL_CHANGED, which happens when the user has made his
+            # mind. This avoid too many unnecessary actuator moves and disabling the
+            # widget too early.
+            ac = AxisConnector(name, comp, new_ctrl, events=wx.EVT_SCROLL_CHANGED)
+        else:
+            # format the choices
+            choices = ad.choices
+            if isinstance(choices, dict):
+                # it's then already value -> string (user-friendly display)
+                choices_fmt = choices.items()
+            elif (unit and len(choices) > 1 and
+                  all([isinstance(c, numbers.Real) for c in choices])):
+                fmt, prefix = utun.si_scale_list(choices)
+                choices_fmt = zip(choices, [u"%g" % c for c in fmt])
+                unit = prefix + unit
+            else:
+                choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
-        # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
-        # but to EVT_SCROLL_CHANGED, which happens when the user has made his
-        # mind. This avoid too many unnecessary actuator moves and disabling the
-        # widget too early.
-        ac = AxisConnector(name, comp, new_ctrl, events=wx.EVT_SCROLL_CHANGED)
-        new_ctrl.Bind(wx.EVT_SCROLL_CHANGED, self.on_setting_changed)
+            choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
+
+            new_ctrl = ComboBox(
+                        self.panel,
+                        wx.ID_ANY,
+                        value='', pos=(0, 0), size=(100, 16),
+                        # FIXME: should be readonly, but it fails with GetInsertionPoint
+                        style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER) # | wx.CB_READONLY
+
+            def _eat_event(evt):
+                """ Quick and dirty empty function used to 'eat'
+                mouse wheel events
+                """
+                pass
+            new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+
+            # Set choices
+            if unit is None:
+                unit = ""
+            for choice, formatted in choices_fmt:
+                new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
+
+            # A small wrapper function makes sure that the value can
+            # be set by passing the actual value (As opposed to the text label)
+            def cb_set(value, ctrl=new_ctrl, unit=unit):
+                for i in range(ctrl.Count):
+                    if ctrl.GetClientData(i) == value:
+                        logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
+                        return ctrl.SetValue(ctrl.Items[i])
+                else:
+                    logging.warning("No existing label found for value %s", value)
+                    return ctrl.GetValue()
+
+            # equivalent wrapper function to retrieve the actual value
+            def cb_get(ctrl=new_ctrl, name=name):
+                value = ctrl.GetValue()
+                # Try to use the predefined value if it's available
+                for i in range(ctrl.Count):
+                    if ctrl.Items[i] == value:
+                        logging.debug("Getting CB value %s", ctrl.GetClientData(i))
+                        return ctrl.GetClientData(i)
+                else:
+                    logging.error("Failed to find value %s for axis %s", value, name)
+
+            ac = AxisConnector(name, comp, new_ctrl,
+                                pos_2_ctrl=cb_set,
+                                ctrl_2_pos=cb_get,
+                                events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
-
         # AxisConnector follows VigilantAttributeConnector interface, so can be
         # used (duck typing).
         ne = SettingEntry(name, None, comp, lbl_ctrl, new_ctrl, ac)
@@ -1017,14 +1076,9 @@ class SparcSettingsController(SettingsBarController):
                         "wavelength",
                         main_data.spectrograph,
                         CONFIG["spectrograph"]["wavelength"])
-                # FIXME: grating is a VA, but actually should be an actuator
-                # changing the value can be very slow, and blocking all the GUI!
-                if (hasattr(main_data.spectrograph, "grating") and
-                    isinstance(main_data.spectrograph.grating,
-                               VigilantAttributeBase)):
-                    self._spectrum_panel.add_value(
+                if "grating" in main_data.spectrograph.axes:
+                    self._spectrum_panel.add_axis(
                         "grating",
-                        main_data.spectrograph.grating,
                         main_data.spectrograph,
                         CONFIG["spectrograph"]["grating"])
 
