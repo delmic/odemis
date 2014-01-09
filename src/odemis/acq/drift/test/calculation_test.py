@@ -31,6 +31,7 @@ from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.drift import calculation
 from numpy import fft
+from numpy import random 
 
 class TestDriftCalculation(unittest.TestCase):
     """
@@ -42,6 +43,8 @@ class TestDriftCalculation(unittest.TestCase):
     	self.data = hdf5.read_data("example_input.h5")
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
+        self.small_data = self.data[0][350:400, 325:375]
+        hdf5.export("small_data.h5", model.DataArray(self.small_data), thumbnail=None)
 
 		# Input drifted by known value
         self.data_drifted = hdf5.read_data("example_drifted.h5")
@@ -50,9 +53,8 @@ class TestDriftCalculation(unittest.TestCase):
 
 		# Input drifted by random value
         z = 1j  # imaginary unit
-        numpy.random.seed(0)
-        self.deltar = random.uniform(-100, 100)
-        self.deltac = random.uniform(-100, 100)
+        self.deltar = numpy.random.uniform(-100, 100)
+        self.deltac = numpy.random.uniform(-100, 100)
         nr, nc = self.data[0].shape
         array_nr = numpy.arange(-numpy.fix(nr / 2), numpy.ceil(nr / 2))
         array_nc = numpy.arange(-numpy.fix(nc / 2), numpy.ceil(nc / 2))
@@ -62,7 +64,35 @@ class TestDriftCalculation(unittest.TestCase):
         self.data_random_drifted = fft.ifft2(fft.fft2(self.data[0]) * numpy.power(math.e,
 						z * 2 * math.pi * (self.deltar * Nr / nr + self.deltac * Nc / nc)))
 
-    # @unittest.skip("skip")
+        # Noisy inputs
+        noise = random.normal(0, 3000, self.data[0].size)
+        noise_array = noise.reshape(self.data[0].shape[0], self.data[0].shape[1])
+
+        self.data_noisy = self.data[0] + noise_array
+        self.data_drifted_noisy = self.data_drifted[0] + noise_array
+        self.data_random_drifted_noisy = self.data_random_drifted + noise_array
+
+		# Small input drifted by random value
+        self.small_deltar = numpy.random.uniform(-10, 10)
+        self.small_deltac = numpy.random.uniform(-10, 10)
+        nr, nc = self.small_data.shape
+        array_nr = numpy.arange(-numpy.fix(nr / 2), numpy.ceil(nr / 2))
+        array_nc = numpy.arange(-numpy.fix(nc / 2), numpy.ceil(nc / 2))
+        Nr = fft.ifftshift(array_nr)
+        Nc = fft.ifftshift(array_nc)
+        [Nc, Nr] = numpy.meshgrid(Nc, Nr)
+        self.small_data_random_drifted = fft.ifft2(fft.fft2(self.small_data) * numpy.power(math.e,
+						z * 2 * math.pi * (self.small_deltar * Nr / nr + self.small_deltac * Nc / nc)))
+
+        # Small noisy inputs
+        small_noise = random.normal(0, 3000, self.small_data.size)
+        small_noise_array = small_noise.reshape(self.small_data.shape[0], self.small_data.shape[1])
+
+        self.small_data_noisy = self.small_data + small_noise_array
+        self.small_data_random_drifted_noisy = self.small_data_random_drifted + small_noise_array
+
+
+    @unittest.skip("skip")
     def test_identical_inputs(self):
         """
         Tests for input of identical images.
@@ -70,7 +100,7 @@ class TestDriftCalculation(unittest.TestCase):
         drift = calculation.CalculateDrift(self.data[0], self.data[0], 1)
         numpy.testing.assert_almost_equal(drift, (0,0), 1)
     
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_known_drift(self):
         """
         Tests for image drifted by known drift value.
@@ -78,7 +108,7 @@ class TestDriftCalculation(unittest.TestCase):
         drift = calculation.CalculateDrift(self.data[0], self.data_drifted[0], 1)
         numpy.testing.assert_almost_equal(drift, (5,-3), 1)
         
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_random_drift(self):
         """
         Tests for image drifted by random drift value.
@@ -86,7 +116,7 @@ class TestDriftCalculation(unittest.TestCase):
         drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 10)
         numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 1)
 
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_different_precisions(self):
 		"""
 		Tests for image drifted by random drift value using different precisions.
@@ -102,3 +132,82 @@ class TestDriftCalculation(unittest.TestCase):
 		
 		drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted, 1000)
 		numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 3)
+	
+    def test_identical_inputs_noisy(self):
+        """
+        Tests for input of identical images after noise is added.
+        """
+        hdf5.export("data_noisy.h5", model.DataArray(self.data_noisy), thumbnail=None)
+        drift = calculation.CalculateDrift(self.data[0], self.data_noisy, 1)
+        numpy.testing.assert_almost_equal(drift, (0, 0), 1)
+
+    @unittest.skip("skip")
+    def test_known_drift_noisy(self):
+        """
+        Tests for image drifted by known drift value after noise is added.
+        """
+        hdf5.export("data_drifted_noisy.h5", model.DataArray(self.data_drifted_noisy), thumbnail=None)
+        drift = calculation.CalculateDrift(self.data[0], self.data_drifted_noisy, 1)
+        numpy.testing.assert_almost_equal(drift, (5, -3), 1)
+
+    @unittest.skip("skip")
+    def test_random_drift_noisy(self):
+        """
+        Tests for image drifted by random drift value after noise is added.
+        """
+        hdf5.export("data_random_drifted_noisy.h5", model.DataArray(abs(self.data_random_drifted_noisy)), thumbnail=None)
+        drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 10)
+        numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 1)
+
+    @unittest.skip("skip")
+    def test_different_precisions_noisy(self):
+		"""
+		Tests for image drifted by random drift value using different precisions after noise is added.
+		"""
+		hdf5.export("data_random_drifted_noisy_2.h5", model.DataArray(abs(self.data_random_drifted_noisy)), thumbnail=None)
+		drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 1)
+		numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 0)
+
+		drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 10)
+		numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 1)
+
+		drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 100)
+		numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 2)
+
+		drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 1000)
+		numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 2)
+
+	# @unittest.skip("skip")
+    def test_small_identical_inputs(self):
+        """
+        Tests for input of identical images.
+        """
+        drift = calculation.CalculateDrift(self.small_data, self.small_data, 1)
+        numpy.testing.assert_almost_equal(drift, (0, 0), 0)
+
+    # @unittest.skip("skip")
+    def test_small_random_drift(self):
+        """
+        Tests for image drifted by random drift value.
+        """
+        drift = calculation.CalculateDrift(self.small_data, self.small_data_random_drifted, 10)
+        numpy.testing.assert_almost_equal(drift, (self.small_deltar, self.small_deltac), 0)
+
+	# @unittest.skip("skip")
+    def test_small_identical_inputs_noisy(self):
+        """
+        Tests for input of identical images after noise is added.
+        """
+        hdf5.export("small_data_noisy.h5", model.DataArray(self.small_data_noisy), thumbnail=None)
+        drift = calculation.CalculateDrift(self.small_data, self.small_data_noisy, 1)
+        numpy.testing.assert_almost_equal(drift, (0, 0), 0)
+
+    # @unittest.skip("skip")
+    def test_small_random_drift_noisy(self):
+        """
+        Tests for image drifted by random drift value after noise is added.
+        """
+        hdf5.export("small_data_random_drifted_noisy.h5", model.DataArray(abs(self.small_data_random_drifted_noisy)), thumbnail=None)
+        drift = calculation.CalculateDrift(self.small_data, self.small_data_random_drifted_noisy, 10)
+        numpy.testing.assert_almost_equal(drift, (self.small_deltar, self.small_deltac), 0)
+
