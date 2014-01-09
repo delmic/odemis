@@ -50,6 +50,8 @@ import odemis.gui.util.img as img
 import odemis.gui.util.units as units
 import odemis.model as model
 
+# DRIFT CORRECTION
+from odemis.acq.drift import calculation
 
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
@@ -1777,7 +1779,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
     TODO: in software synchronisation, we can easily do our own fuzzing.
     """
     __metaclass__ = ABCMeta
-    def __init__(self, name, sem_stream, ccd_stream, correction_range):
+    def __init__(self, name, sem_stream, ccd_stream, correction_range, selected_region):
         MultipleDetectorStream.__init__(self, name, [sem_stream, ccd_stream])
 
         self._sem_stream = sem_stream
@@ -1785,6 +1787,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         # DRIFT CORRECTION
         self._correction_range = correction_range
+        self._selected_region = selected_region
 
         assert sem_stream._emitter == ccd_stream._emitter
         self._emitter = sem_stream._emitter
@@ -1809,6 +1812,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._acq_start = 0 # time of acquisition beginning
         self._sem_data = None
         self._ccd_data = None
+        
+        # DRIFT CORRECTION
+        self._sr_data = None
 
         self._current_future = None
 
@@ -1938,6 +1944,37 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._emitter.dwellTime.value = sorted(rng + (exp + readout,))[1] # clip
 
         return exp + readout
+       
+    def _onSelectedRegion(self):
+		"""
+		Update the scanning area of the SEM according to the selected region
+		for drift correction.
+		"""
+		roi = self._selected_region
+		
+		# only change hw settings if stream is active (and not spot mode)
+		# Note: we could also (un)subscribe whenever these changes, but it's
+		# simple like this.
+		if not self.is_active.value or self.spot.value:
+			return
+
+		# FIXME: this is fighting against the resolution setting of the SEM
+		# => only apply if is_active (and not spot mode...)
+		# We should remove res setting from the GUI when this ROI is used.
+		center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+		width = (roi[2] - roi[0], roi[3] - roi[1])
+
+		shape = self._emitter.shape
+		# translation is distance from center (situated at 0.5, 0.5), can be floats
+		trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+		# resolution is the maximum resolution at the scale in proportion of the width
+		scale = self._emitter.scale.value
+		res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
+			   max(1, int(round(shape[1] * width[1] / scale[1]))))
+
+		# always in this order
+		self._emitter.resolution.value = res
+		self._emitter.translation.value = trans
 
     def _getSpotPositions(self):
         """
@@ -1991,6 +2028,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             rep = self._ccd_stream.repetition.value
             roi = self._ccd_stream.roi.value
             self._sem_data = []
+            self._sr_data = []
             self._ccd_data = None
             ccd_buf = []
             self._ccd_stream.raw = []
@@ -2007,10 +2045,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             tot_num = numpy.prod(rep)
             n = 0
+            drift = (0,0)
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
+                # DRIFT CORRECTION
+                self._emitter.scale.value = (1, 1) # min, to avoid limits on translation
+                self._emitter.resolution.value = (1, 1)
+                
                 # set ebeam to position (which is ensured only once acquiring)
-                self._emitter.translation.value = spot_pos[i[::-1]]
+                # DRIFT CORRECTION
+                # tweak translation according to calculated drift
+                self._emitter.translation.value = (spot_pos[i[::-1]][0] - drift[0], spot_pos[i[::-1]][1] - drift[1])
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
@@ -2049,10 +2094,25 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                 n += 1
                 self._updateProgress(future, start_time, n / tot_num)
-
+                
                 # DRIFT CORRECTION
-                if (n%correction_range) == 0:
-                	
+                if (n % correction_range) == 0:
+				 	# DRIFT CORRECTION
+				 	#Move e-beam to the selected region
+				 	self._onSelectedRegion()
+				 	
+				 	self._acq_sem_complete.clear()
+				 	self._semd_df.subscribe(self._ssOnSelectedRegion)
+				 	if not self._acq_sem_complete.wait(dwell_time * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
+						raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
+				 	
+				 	self._semd_df.unsubscribe(self._ssOnSelectedRegion)
+
+					if self._acq_state == CANCELLED:
+						raise CancelledError()
+					
+					# Calculate the drift between the last two frames
+					drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data)-2], self._sr_data[len(self._sr_data)-1],10)
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
@@ -2093,6 +2153,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # only use the first data per pixel
             self._sem_data.append(data)
             self._acq_sem_complete.set()
+            
+	def _ssOnSelectedRegion(self, df, data):
+		logging.debug("Selected Region data received")
+		# Do not stop the acquisition, as it ensures the e-beam is at the right place
+		if not self._acq_sem_complete.is_set():
+			# only use the first data per pixel
+			self._sr_data.append(data)
+			self._acq_sem_complete.set()
 
     def _ssOnCCDImage(self, df, data):
         logging.debug("CCD data received")
