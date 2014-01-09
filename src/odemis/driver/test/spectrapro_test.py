@@ -58,7 +58,7 @@ class TestStatic(unittest.TestCase):
         """
         sp = CLASS(**KWARGS)
 
-        self.assertGreater(len(sp.grating.choices), 0)
+        self.assertGreater(len(sp.axes["grating"].choices), 0)
 
         self.assertTrue(sp.selfTest(), "self test failed.")
         sp.terminate()
@@ -69,7 +69,7 @@ class TestStatic(unittest.TestCase):
         """
         sp = spectrapro.FakeSpectraPro(**KWARGS)
 
-        self.assertGreater(len(sp.grating.choices), 0)
+        self.assertGreater(len(sp.axes["grating"].choices), 0)
         sp.moveAbs({"wavelength":300e-9})
 
         self.assertTrue(sp.selfTest(), "self test failed.")
@@ -114,19 +114,19 @@ class TestSP(unittest.TestCase):
 
         # absolute (easy)
         with self.assertRaises(ValueError):
-            pos = {"wavelength": self.sp.ranges["wavelength"][1] + 1e-9}
+            pos = {"wavelength": self.sp.axes["wavelength"].range[1] + 1e-9}
             f = self.sp.moveAbs(pos)
             f.result()
 
         # big relative (easy)
         with self.assertRaises(ValueError):
-            pos = {"wavelength":-(self.sp.ranges["wavelength"][1] + 1e-9)}
+            pos = {"wavelength":-(self.sp.axes["wavelength"].range[1] + 1e-9)}
             f = self.sp.moveRel(pos)
             f.result() # wait for the move to finish
 
         # small relative (harder)
         # move very close from the edge
-        pos = {"wavelength": self.sp.ranges["wavelength"][1] - 1e-9}
+        pos = {"wavelength": self.sp.axes["wavelength"].range[1] - 1e-9}
         f = self.sp.moveAbs(pos) # don't even wait for it to be done
         with self.assertRaises(ValueError):
             pos = {"wavelength": 5e-9} # a bit after the edge
@@ -135,8 +135,8 @@ class TestSP(unittest.TestCase):
 
 
     def test_grating(self):
-        cg = self.sp.grating.value
-        choices = self.sp.grating.choices
+        cg = self.sp.position.value["grating"]
+        choices = self.sp.axes["grating"].choices
         self.assertGreater(len(choices), 0, "should have at least one grating")
         if len(choices) == 1:
             self.skipTest("only one grating choice, cannot test changing it")
@@ -148,9 +148,9 @@ class TestSP(unittest.TestCase):
                 break
 
         # if not exception, it's already pretty good
-        self.sp.grating.value = newg
-        self.assertEqual(self.sp.grating.value, newg)
-        self.sp.grating.value = cg
+        f = self.sp.moveAbs({"grating": newg})
+        f.result()
+        self.assertEqual(self.sp.position.value["grating"], newg)
 
     def test_sync(self):
         # For moves big enough, sync should always take more time than async

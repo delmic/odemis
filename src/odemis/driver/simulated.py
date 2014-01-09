@@ -113,23 +113,24 @@ class Stage(model.Actuator):
         assert len(axes) > 0
         if ranges is None:
             ranges = {}
-            for a in axes:
-                ranges[a] = [-0.1, 0.1]
-                
-        model.Actuator.__init__(self, name, role, axes=axes, ranges=ranges, **kwargs)
-        
-        # start at the centre
+
+        axes_def = {}
         self._position = {}
+        init_speed = {}
         for a in axes:
-            self._position[a] = (self.ranges[a][0] + self.ranges[a][1]) / 2
+            rng = ranges.get(a, [-0.1, 0.1])
+            axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
+            # start at the centre
+            self._position[a] = (rng[0] + rng[1]) / 2
+            init_speed[a] = 10.0 # we are super fast!
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
         
-        init_speed = {}
-        for a in axes:
-            init_speed[a] = 10.0 # we are super fast! 
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
     
     def _updatePosition(self):
@@ -149,10 +150,10 @@ class Stage(model.Actuator):
             if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
-            if (self._position[axis] < self._ranges[axis][0] or
-                self._position[axis] > self._ranges[axis][1]):
+            if (self._position[axis] < self.axes[axis].range[0] or
+                self._position[axis] > self.axes[axis].range[1]):
                 logging.warning("moving axis %s to %f, outside of range %r", 
-                                axis, self._position[axis], self._ranges[axis])
+                                axis, self._position[axis], self.axes[axis].range)
             else: 
                 logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])

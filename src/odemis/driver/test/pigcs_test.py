@@ -174,7 +174,7 @@ class TestActuator(unittest.TestCase):
         delta = 0.0001 # s
 
         stage = CLASS(**self.kwargs)
-        speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move = {'x':100e-6}
         start = time.time()
@@ -209,13 +209,14 @@ class TestActuator(unittest.TestCase):
         # than a 0.001m/s move
         stage = CLASS(**self.kwargs)
         # FIXME: 2.5 instead of 10.0 because C-867 doesn't report correct range
-        expected_ratio = min(stage.speed.range[1] / stage.speed.range[0], 2.5) # 10.0
+        speed_rng = stage.axes["x"].speed
+        expected_ratio = min(speed_rng[1] / speed_rng[0], 2.5) # 10.0
         delta_ratio = 2.0 # no unit
 
         prev_pos = stage.position.value['x']
         # fast move
         # 0.001 m/s is max speed of E-861 in practice
-        speed = max(stage.speed.range[0] * expected_ratio, 0.001) # try as slow as reasonable
+        speed = max(speed_rng[0] * expected_ratio, 0.001) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move = {'x': speed}
         start = time.time()
@@ -263,7 +264,7 @@ class TestActuator(unittest.TestCase):
         """
         stage = CLASS(**self.kwargs)
 
-        speed = max(stage.speed.range[0], 0.001) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 0.001) # try as slow as reasonable
         stage.speed.value = {"x": speed}
 
         move = {'x':1 * speed} # => will last one second
@@ -320,7 +321,7 @@ class TestActuator(unittest.TestCase):
         stage = CLASS(**self.kwargs)
         if isinstance(stage, pigcs.SMOController):
             logging.warning("Speed is very imprecise on device, test failure might not indicate software bug")
-        speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed} # => 1s per move
         move_back = {'x':-speed}
@@ -343,7 +344,7 @@ class TestActuator(unittest.TestCase):
 #    @skip("faster")
     def test_cancel(self):
         stage = CLASS(**self.kwargs)
-        speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed} # => 1s per move
         move_back = {'x':-speed}
@@ -375,7 +376,7 @@ class TestActuator(unittest.TestCase):
 #    @skip("faster")
     def test_not_cancel(self):
         stage = CLASS(**self.kwargs)
-        speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         small_move_forth = {'x': speed / 10}  # => 0.1s per move
         # test cancel after done => not cancelled
@@ -413,7 +414,7 @@ class TestActuator(unittest.TestCase):
             self.skipTest("Couldn't find two controllers")
 
         stage = CLASS(**self.kwargs_two)
-        speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed, "y": speed}
         radius = 1000e-6 # m
         # each step has to be big enough so that each move is above imprecision
@@ -435,7 +436,7 @@ class TestActuator(unittest.TestCase):
 #    @skip("faster")
     def test_future_callback(self):
         stage = CLASS(**self.kwargs)
-        speed = max(stage.speed.range[0], 1e-3) # try as slow as reasonable
+        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
         stage.speed.value = {"x": speed}
         move_forth = {'x': speed / 10}  # => 0.1s per move
         move_back = {'x':-speed / 10}

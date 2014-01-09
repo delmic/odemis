@@ -135,33 +135,11 @@ class SpectraPro(model.Actuator):
         else:
             self._turret = self.GetTurret()
     
-        # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
-        # TODO: what's the min? 200nm seems the actual min working, although wavelength is set to 0 by default !?
-        # provides a ._axes and ._range
-        model.Actuator.__init__(self, name, role, axes=["wavelength"], 
-                                ranges={"wavelength": (0, 2400e-9)}, **kwargs)
-    
-        # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
-        self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
-    
-        # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
-        
-        # One absolute axis: wavelength
-        # TODO: second dimension: enumerated int: grating/groove density (l/m or g/m) 
-        # TODO: how to let know that the grating is done moving? Or should it be an axis with 3 positions? range is a dict instead of a 2-tuple  
-        
-        pos = {"wavelength": self.GetWavelength()}
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
-        
         # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
-        max_speed = 1000e-9/10 # about 1000 nm takes 10s => max speed in m/s
+        max_speed = 1000e-9 / 10 # about 1000 nm takes 10s => max speed in m/s
         self.speed = model.MultiSpeedVA(max_speed, range=[max_speed, max_speed], unit="m/s",
                                         readonly=True)
 
-        grating = self.GetGrating()
         gchoices = self.GetGratingChoices()
         # remove the choices which are not valid for the current turret
         for c in gchoices:
@@ -170,11 +148,30 @@ class SpectraPro(model.Actuator):
                 del gchoices[c]
 
         # TODO: report the grating with its wavelength range (possible to compute from groove density + blaze wl?)
-        # range also depends on the max grating angle (40°, CCD pixel size, CCD horizontal size, focal length,+ efficienty curve?) 
+        # range also depends on the max grating angle (40°, CCD pixel size, CCD horizontal size, focal length,+ efficienty curve?)
         # cf http://www.roperscientific.de/gratingcalcmaster.html
-        self.grating = model.IntEnumerated(grating, choices=gchoices, unit="", 
-                                           setter=self._setGrating)
-        
+
+        # TODO: a more precise way to find the maximum wavelength (looking at the available gratings?)
+        # TODO: what's the min? 200nm seems the actual min working, although wavelength is set to 0 by default !?
+        axes = {"wavelength": model.Axis(unit="m", range=(0, 2400e-9),
+                                         speed=(max_speed, max_speed)),
+                "grating": model.Axis(choices=gchoices)
+                }
+        # provides a ._axes
+        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+
+        # set HW and SW version
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
+        self._hwVersion = "%s (s/n: %s)" % (model_name, (self.GetSerialNumber() or "Unknown"))
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
+
+        pos = {"wavelength": self.GetWavelength(),
+               "grating": self.GetGrating()}
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
+
         # store focal length and inclusion angle for the polynomial computation
         try:
             self._focal_length = FOCAL_LENGTH_OFFICIAL[model_name]
@@ -378,7 +375,7 @@ class SpectraPro(model.Actuator):
            LookupError if the grating is not installed
            ValueError: if the groove density cannot be found out
         """
-        gstring = self.grating.choices[gid]
+        gstring = self.axes["grating"].choices[gid]
         m = self.RE_GDENSITY.search(gstring)
         if not m:
             raise ValueError("Failed to find groove density in '%s'" % gstring)
@@ -484,32 +481,14 @@ class SpectraPro(model.Actuator):
         Note: it should not be called while holding _ser_access
         """
         with self._ser_access:
-            pos = {"wavelength": self.GetWavelength()}
+            pos = {"wavelength": self.GetWavelength(),
+                   "grating": self.GetGrating()
+                  }
         
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
         
-    def _setGrating(self, g):
-        """
-        Setter for the grating VA.
-        g (1<=int<=3): the new grating
-        returns the actual new grating
-        Warning: synchronous until the grating is finished (up to 20s)
-        """
-        try:
-            self.stop() # stop all wavelength changes (not meaningful anymore)
-            with self._ser_access:
-                self.SetGrating(g)
-        except:
-            # let's see what is the actual grating
-            g = self.GetGrating()
-        
-        # after changing the grating, the wavelength might be different
-        self._updatePosition()
-        return g
-    
-    
     @isasync
     def moveRel(self, shift):
         """
@@ -521,8 +500,12 @@ class SpectraPro(model.Actuator):
         for axis, value in shift.items():
             if not axis in self._axes:
                 raise LookupError("Axis '%s' doesn't exist" % axis)
-                
-            minp, maxp = self._ranges[axis] 
+
+            try:
+                maxp = self.axes[axis].range[1]
+            except AttributeError:
+                raise ValueError("Axis %s cannot be moved relative" % axis)
+
             if abs(value) > maxp:
                 raise ValueError("Move by %f of axis '%s' bigger than %f" %
                                  (value, axis, maxp))
@@ -546,15 +529,26 @@ class SpectraPro(model.Actuator):
         for axis, value in pos.items():
             if not axis in self._axes:
                 raise LookupError("Axis '%s' doesn't exist" % axis)
-                
-            minp, maxp = self._ranges[axis] 
-            if value < minp or maxp < value:
-                raise ValueError("Position %f of axis '%s' not within range %f→%f" %
-                                 (value, axis, minp, maxp))
-    
-        for axis in pos:
-            if axis == "wavelength":
-                return self._executor.submit(self._doSetWavelengthAbs, pos[axis])
+
+            axis_def = self.axes[axis]
+            if hasattr(axis_def, "range"):
+                minp, maxp = axis_def.range
+                if not minp <= value <= maxp:
+                    raise ValueError("Position %f of axis '%s' not within range %f→%f" %
+                                     (value, axis, minp, maxp))
+            else:
+                if not value in axis_def.choices:
+                    raise ValueError("Position %f of axis '%s' not within choices %s" %
+                                     (value, axis, axis_def.choices))
+
+        # If grating needs to be changed, change it first, then the wavelength
+        if "grating" in pos:
+            g = pos["grating"]
+            wl = pos.get("wavelength")
+            return self._executor.submit(self._doSetGrating, g, wl)
+        elif "wavelength" in pos:
+            wl = pos["wavelength"]
+            return self._executor.submit(self._doSetWavelengthAbs, wl)
     
     
     def _doSetWavelengthRel(self, shift):
@@ -564,8 +558,8 @@ class SpectraPro(model.Actuator):
         with self._ser_access:
             pos = self.GetWavelength() + shift
             # it's only now that we can check the absolute position is wrong
-            minp, maxp = self._ranges["wavelength"]
-            if pos < minp or maxp < pos:
+            minp, maxp = self.axes["wavelength"].range
+            if not minp <= pos <= maxp:
                 raise ValueError("Position %f of axis '%s' not within range %f→%f" %
                                  (pos, "wavelength", minp, maxp))
             self.SetWavelength(pos)
@@ -579,6 +573,26 @@ class SpectraPro(model.Actuator):
             self.SetWavelength(pos)
         self._updatePosition()
         
+    def _doSetGrating(self, g, wl=None):
+        """
+        Setter for the grating VA.
+        g (1<=int<=3): the new grating
+        wl (None or float): wavelength to set afterwards. If None, will put the
+          same wavelength as before the change of grating. 
+        returns the actual new grating
+        Warning: synchronous until the grating is finished (up to 20s)
+        """
+        try:
+            with self._ser_access:
+                if wl is None:
+                    wl = self.position.value["wavelength"]
+                self.SetGrating(g)
+                self.SetWavelength(wl)
+        except Exception:
+            logging.exception("Failed to change grating to %d", g)
+            raise
+
+        self._updatePosition()
     
     def stop(self, axes=None):
         """
@@ -629,7 +643,7 @@ class SpectraPro(model.Actuator):
         
         # When no calibration available, fallback to theoretical computation
         # based on http://www.roperscientific.de/gratingcalcmaster.html
-        gl = self._getGrooveDensity(self.grating.value) # g/m
+        gl = self._getGrooveDensity(self.position.value["grating"]) # g/m
         # fL = focal length (mm)
         # wE = inclusion angle (°) = the angle between the incident and the reflected beam for the center wavelength of the grating
         # gL = grating lines (l/mm)

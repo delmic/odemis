@@ -19,20 +19,21 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from concurrent import futures
-from odemis import model
-from odemis.model import isasync
-from odemis.util import driver
 import collections
+from concurrent import futures
 import glob
 import logging
 import math
+from odemis import model
 import odemis
+from odemis.model import isasync
+from odemis.util import driver
 import os
 import serial
 import sys
 import threading
 import time
+
 
 # Status:
 # byte 1
@@ -823,13 +824,13 @@ class StageRedStone(model.Actuator):
          Note that even if it's made of several controllers, each controller is 
          _not_ seen as a child from the odemis model point of view.
         """
-        model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
 
         ser = PIRedStone.openSerialPort(port)
 #        ser = FakePIRedStone.openSerialPort(port) # use FakePIRedStone for testing
 
         # Not to be mistaken with axes which is a simple public view
-        self._axis_to_child = {} # axis name => (PIRedStone, channel)
+        self._axis_to_child = {} # axis name -> (PIRedStone, channel)
+        axes_def = {} # axis name -> Axis
         # TODO also a rangesRel : min and max of a step
         position = {}
         speed = {}
@@ -844,10 +845,14 @@ class StageRedStone(model.Actuator):
             position[axis] = controller.getPosition(channel)
             # TODO request also the ranges from the arguments?
             # For now we put very large one
-            self._ranges[axis] = [-1, 1] # m
+            ad = model.Axis(canAbs=False, unit="m", range=(-1, 1),
+                            speed=(10e-6, 0.5))
             # Just to make sure it doesn't go too fast
             speed[axis] = 0.1 # m/s
+            axes_def[axis] = ad
 
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+        
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(position, unit="m", readonly=True)
 
@@ -921,9 +926,9 @@ class StageRedStone(model.Actuator):
         for axis, distance in shift.items():
             if axis not in self.axes:
                 raise Exception("Axis unknown: " + str(axis))
-            if abs(distance) > self.ranges[axis][1]:
+            if abs(distance) > self.axes[axis].range[1]:
                 raise Exception("Trying to move axis %s by %f m> %f m." %
-                                (axis, distance, self.ranges[axis][1]))
+                                (axis, distance, self.axes[axis].range[1]))
             controller, channel = self._axis_to_child[axis]
             if not controller in action_axes:
                 action_axes[controller] = []
@@ -932,6 +937,17 @@ class StageRedStone(model.Actuator):
         action = ActionFuture(MOVE_REL, action_axes, self.ser_access)
         self._action_mgr.append_action(action)
         return action
+
+    # TODO implement moveAbs fallback if not canAbs
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the stage to the defined position in m for each axis given. This is an
+        asynchronous method.
+        pos dict(string-> float): name of the axis and new position in m
+        returns (Future): object to control the move request
+        """
+        raise NotImplementedError("Driver needs to be updated")
 
     def stop(self, axes=None):
         """

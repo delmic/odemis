@@ -1657,12 +1657,8 @@ class Bus(model.Actuator):
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
         vpms (dict string -> (0 < float)): axis name -> value
         """
-        # this set ._axes and ._ranges
-        model.Actuator.__init__(self, name, role, axes=axes.keys(), **kwargs)
-
         ser = self.openSerialPort(port, baudrate, _addresses)
         self.accesser = BusAccesser(ser)
-
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
@@ -1678,55 +1674,57 @@ class Bus(model.Actuator):
             elif channel in controllers[add]:
                 raise ValueError("Cannot associate multiple axes to controller %d:%d" % (add, channel))
             ac_to_axis[(add, channel)] = axis
-            kwargs = controllers[add]
-            kwargs["axes"].update({channel: isCL})
+            kwc = controllers[add]
+            kwc["axes"].update({channel: isCL})
             # FIXME: for now we rely on the fact 1 axis = 1 controller for the calibration values
             if axis in dist_to_steps:
-                kwargs["dist_to_steps"] = dist_to_steps[axis]
+                kwc["dist_to_steps"] = dist_to_steps[axis]
             if axis in min_dist:
-                kwargs["min_dist"] = min_dist[axis]
+                kwc["min_dist"] = min_dist[axis]
             if axis in vmin:
-                kwargs["vmin"] = vmin[axis]
+                kwc["vmin"] = vmin[axis]
             if axis in speed_base:
-                kwargs["speed_base"] = speed_base[axis]
+                kwc["speed_base"] = speed_base[axis]
 
         # Init each controller
         self._axis_to_cc = {} # axis name => (Controller, channel)
+        axes_def = {} # axis name => axis definition
         # TODO also a rangesRel : min and max of a step
         position = {}
         speed = {}
         referenced = {}
-        max_speed = 0 # m/s
-        min_speed = 1e16 # m/s
-        for address, kwargs in controllers.items():
+        for address, kwc in controllers.items():
             try:
-                controller = Controller(self.accesser, address, **kwargs)
+                controller = Controller(self.accesser, address, **kwc)
             except IOError:
                 logging.exception("Failed to find a controller with address %d on %s", address, port)
                 raise
             except LookupError:
                 logging.exception("Failed to initialise controller %d on %s", address, port)
                 raise
-            channels = kwargs["axes"]
-            for c in channels:
+            channels = kwc["axes"]
+            for c, isCL in channels.items():
                 axis = ac_to_axis[(address, c)]
                 self._axis_to_cc[axis] = (controller, c)
 
                 position[axis] = controller.getPosition(c)
                 # TODO if closed-loop, the ranges should be updated after homing
                 try:
-                    self._ranges[axis] = controller.pos_rng[c]
+                    rng = controller.pos_rng[c]
                 except (IndexError, AttributeError):
                     # Unknown? Give room
-                    self._ranges[axis] = (-1, 1) # m
+                    rng = (-1, 1) # m
                 # Just to make sure it doesn't go too fast
                 speed[axis] = 0.001 # m/s
-                max_speed = max(max_speed, controller.max_speed)
-                min_speed = min(min_speed, controller.min_speed)
-
-                if hasattr(controller, "isReferenced"):
+                speed_rng = (controller.min_speed, controller.max_speed)
+                ad = model.Axis(unit="m", range=rng, speed=speed_rng,
+                                canAbs=isCL)
+                axes_def[axis] = ad
+                if ad.canAbs:
                     referenced[axis] = controller.isReferenced(c)
 
+        # this set ._axes
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # TODO: allow to override the unit (per axis)
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
@@ -1738,7 +1736,7 @@ class Bus(model.Actuator):
         self.referenced = model.VigilantAttribute(referenced, readonly=True)
 
         # min speed = don't be crazy slow. max speed from hardware spec
-        self.speed = model.MultiSpeedVA(speed, range=[min_speed, max_speed],
+        self.speed = model.MultiSpeedVA(speed, range=[0, 10.],
                                         unit="m/s", setter=self._setSpeed)
         self._setSpeed(speed)
 
@@ -1802,9 +1800,9 @@ class Bus(model.Actuator):
         for axis, distance in shift.items():
             if axis not in self.axes:
                 raise ValueError("Axis unknown: " + str(axis))
-            if abs(distance) > self.ranges[axis][1]:
+            if abs(distance) > self.axes[axis].range[1]:
                 raise ValueError("Trying to move axis %s by %f m> %f m." %
-                                (axis, distance, self.ranges[axis][1]))
+                                (axis, distance, self.axes[axis].range[1]))
             controller, channel = self._axis_to_cc[axis]
             if not controller in action_axes:
                 action_axes[controller] = []
@@ -1814,7 +1812,34 @@ class Bus(model.Actuator):
         self._action_mgr.append_action(action)
         return action
 
-    # TODO implement moveAbs
+    # TODO implement moveAbs fallback if not canAbs
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the stage to the defined position in m for each axis given. This is an
+        asynchronous method.
+        pos dict(string-> float): name of the axis and new position in m
+        returns (Future): object to control the move request
+        """
+        pos = self._applyInversionAbs(pos)
+        # converts the request into one action (= a dict controller -> channels + distance)
+        action_axes = {}
+        for axis, p in pos.items():
+            if axis not in self.axes:
+                raise ValueError("Axis unknown: " + str(axis))
+            rng = self.axes[axis].range
+            if not rng[0] <= p <= rng[1]:
+                raise ValueError("Trying to move axis %s by %f m, outside of %s." %
+                                (axis, p, rng))
+            controller, channel = self._axis_to_cc[axis]
+            if not controller in action_axes:
+                action_axes[controller] = []
+            action_axes[controller].append((channel, p))
+
+        action = ActionFuture(MOVE_ABS, action_axes)
+        self._action_mgr.append_action(action)
+        return action
+
 
     # TODO reference(self, axes)
     # start a move to reference. axes: set of str

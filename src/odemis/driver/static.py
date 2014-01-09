@@ -61,7 +61,7 @@ class OpticalLens(model.HwComponent):
             self.polePosition = model.ResolutionVA(pole_pos,
                                                    range=[(0, 0), (1e6, 1e6)])
 
-class LightFilter(model.HwComponent):
+class LightFilter(model.Actuator):
     """
     A very simple class which just represent a light filter (blocks a wavelength 
     band).
@@ -76,11 +76,7 @@ class LightFilter(model.HwComponent):
           wavelength of the light which goes _through_. If it's a list, it implies
           that the filter is multi-band.
         """
-        model.HwComponent.__init__(self, name, role, **kwargs)
-
-        self._swVersion = "N/A (Odemis %s)" % odemis.__version__
-        self._hwVersion = name
-
+        # One enumerated axis: band
         # Create a 2-tuple or a set of 2-tuples
         if not isinstance(band, collections.Iterable) or len(band) == 0:
             raise ValueError("band must be a (list of a) list of 2 floats")
@@ -90,25 +86,31 @@ class LightFilter(model.HwComponent):
             for sb in band:
                 if len(sb) != 2:
                     raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
-                if sb[0] > sb[1]:
-                    raise ValueError("Min of band must be first in list")
+            band = tuple(band)
         else:
             # 2-tuple
             if len(band) != 2:
                 raise ValueError("Expected only 2 floats in band, found %d" % len(band))
-            if band[0] > band[1]:
-                raise ValueError("Min of band must be first in list")
-            band = [tuple(band)]
+            band = (tuple(band),)
 
-        # Check that the values are in m: they are typically within nm (< µm!)
-        max_val = 1e-6
+        # Check the values are min/max and in m: typically within nm (< µm!)
+        max_val = 1e-6 # m
         for low, high in band:
+            if low > high:
+                raise ValueError("Min of band must be first in list")
             if low > max_val or high > max_val:
                 raise ValueError("Band contains very high values for light "
                      "wavelength, ensure the value is in meters: %r." % band)
 
-        # not readonly to allow the user to change manually the filter
-        self.band = model.ListVA(band, unit="m")
+        # TODO: have the position as the band value?
+        band_axis = model.Axis(choices={0: band})
+
+        model.Actuator.__init__(self, name, role, axes={"band": band_axis}, **kwargs)
+        self._swVersion = "N/A (Odemis %s)" % odemis.__version__
+        self._hwVersion = name
+
+#        # not readonly to allow the user to change manually the filter
+#        self.band = model.ListVA(band, unit="m")
 
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
         self._metadata = {model.MD_FILTER_NAME: name,
@@ -116,6 +118,15 @@ class LightFilter(model.HwComponent):
 
     def getMetadata(self):
         return self._metadata
+
+    def moveRel(self, shift):
+        return self.moveAbs(shift) # shift must be 0 => same as moveAbs
+
+    def moveAbs(self, pos):
+        if pos != {"band": 0}:
+            raise ValueError("Unsupported position %s" % pos)
+        return model.InstantaneousFuture()
+
 
 
 class Spectrograph(model.Actuator):
@@ -143,8 +154,9 @@ class Spectrograph(model.Actuator):
 
         self._wlp = wlp
         pos = {"wavelength": self._wlp[0]}
-        model.Actuator.__init__(self, name, role, axes=["wavelength"],
-                                ranges={"wavelength": (0, 2400e-9)}, **kwargs)
+        wla = model.Axis(range=(0, 2400e-9), unit="m")
+        model.Actuator.__init__(self, name, role, axes={"wavelength": wla},
+                                **kwargs)
         self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
 
 

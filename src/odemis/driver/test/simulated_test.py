@@ -71,9 +71,10 @@ class ActuatorTest(object):
 
     def test_simple(self):
         self.assertGreaterEqual(len(self.dev.axes), 1, "Actuator has no axis")
-        self.assertIsInstance(self.dev.ranges, dict, "range is not a dict")
         self.assertIsInstance(self.dev.speed, model.VigilantAttribute, "range is not a VigilantAttribute")
         self.assertIsInstance(self.dev.speed.value, dict, "speed value is not a dict")
+        for n, a in self.dev.axes.items():
+            self.assertEqual(len(a.range), 2, "range is not a 2-tuple")
 
     def test_moveAbs(self):
         # It's optional
@@ -83,7 +84,8 @@ class ActuatorTest(object):
         move = {}
         # move to the centre
         for axis in self.dev.axes:
-            move[axis] = (self.dev.ranges[axis][0] + self.dev.ranges[axis][1]) / 2
+            rng = self.dev.axes[axis].range
+            move[axis] = (rng[0] + rng[1]) / 2
         f = self.dev.moveAbs(move)
         f.result() # wait
         self.assertDictEqual(move, self.dev.position.value,
@@ -94,7 +96,7 @@ class ActuatorTest(object):
         move = {}
         # move by 1%
         for axis in self.dev.axes:
-            move[axis] = self.dev.ranges[axis][1] * 0.01
+            move[axis] = self.dev.axes[axis].range[1] * 0.01
 
         expected_pos = {}
         for axis in self.dev.axes:
@@ -112,7 +114,7 @@ class ActuatorTest(object):
 
         move = {}
         for axis in self.dev.axes:
-            move[axis] = self.dev.ranges[axis][1] * 0.01
+            move[axis] = self.dev.axes[axis].range[1] * 0.01
         f = self.dev.moveRel(move)
         self.dev.stop()
         # TODO use the time of a long move to see if it took less

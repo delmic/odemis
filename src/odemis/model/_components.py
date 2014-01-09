@@ -546,6 +546,50 @@ class DigitalCamera(Detector):
         dat = dat[tuple(slc)]
         return dat
 
+class Axis(object):
+    """
+    One axis manipulated by an actuator.
+    Only used to report information on the axis.
+    """
+    def __init__(self, canAbs=True, choices=None, unit=None,
+                 range=None, speed=None):
+        """
+        canAbs (bool): whether the axis can move in absolute coordinates
+        unit (None or str): the unit of the axis position (and speed). None
+          indicates unknown or not applicable. "" indicates a ratio.
+        choices (set or dict): Allowed positions. If it's a dict, the value
+         is indicating what the position corresponds to.
+         Not compatible with range.
+        range (2-tuple): min/max position. Not compatible with choices.
+        speed (2-tuple): min/max speed.
+        """
+        self.canAbs = canAbs
+
+        assert isinstance(unit, (type(None), basestring))
+        self.unit = unit # always defined, just sometimes is None
+
+        if choices is None and range is None:
+            raise ValueError("At least choices or range must be defined")
+
+        if choices is not None:
+            assert range is None
+            assert isinstance(choices, (frozenset, set, dict))
+            if not isinstance(choices, dict):
+                # freeze it for safety
+                choices = frozenset(choices)
+
+            self.choices = choices
+
+        if range is not None:
+            assert choices is None
+            assert len(range) == 2
+            self.range = tuple(range) # unit
+
+        if speed is not None:
+            assert len(speed) == 2
+            self.speed = tuple(speed) # speed _range_ in unit/s
+
+
 class Actuator(HwComponent):
     """
     A component which represents an actuator (motorised part).
@@ -553,54 +597,58 @@ class Actuator(HwComponent):
     """
     __metaclass__ = ABCMeta
 
-    def __init__(self, name, role, axes=None, inverted=None, ranges=None, **kwargs):
+    def __init__(self, name, role, axes=None, inverted=None, **kwargs):
         """
-        axes (set of string): set of the names of the axes
+        axes (dict of str -> Axis): names of the axes and their static information.
         inverted (set of string): sub-set of axes with the name of all axes which
             are to be inverted (move in opposite direction)
-        ranges (dict string -> 2-tuple of float): name of the axis to min, max position
         """
         HwComponent.__init__(self, name, role, **kwargs)
-        axes = axes or []
-        self._axes = frozenset(axes)
+
+        axes = axes or {}
+        self._axes = axes
+
         inverted = inverted or []
         self._inverted = frozenset(inverted)
-        if not self._inverted <= self._axes:
-            non_existing = self._inverted - self._axes
+        axes_names = set(axes.keys())
+        if not self._inverted <= axes_names:
+            non_existing = self._inverted - axes_names
             raise ValueError("Actuator %s has non-existing inverted axes: %s." %
                              (name, ", ".join(non_existing)))
-
-        self._ranges = ranges or {}
+        for an, a in axes.items():
+            if hasattr(a, "choices") and an in inverted:
+                raise ValueError("Axis %s of actuator %s cannot be inverted." %
+                                 (an, name))
 
         # it should also have a .position VA
 
     @roattribute
     def axes(self):
-        """ set of string: name of each axis available."""
+        """ dict str->Axis: name of each axis available -> their definition."""
         return self._axes
-
-    @roattribute
-    def ranges(self):
-        """
-        dict string -> 2-tuple (number, number): min, max value of the axis
-        for moving
-        """
-        return self._ranges
 
     @abstractmethod
     @isasync
     def moveRel(self, shift):
         """
-        Move the stage the defined values in m for each axis given. This is an
+        Move the stage by the defined values in m for each axis given. This is an
         asynchronous method.
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): object to control the move request
         """
         pass
 
-    # TODO this doesn't work over the network, because the proxy will always
-    # say that the method exists.
-    # moveAbs(self, pos): should be implemented if and only if supported
+    @abstractmethod
+    @isasync
+    def moveAbs(self, pos):
+        """
+        Move the stage to the defined position in m for each axis given. This is an
+        asynchronous method.
+        pos dict(string-> float): name of the axis and new position in m
+        returns (Future): object to control the move request
+        """
+        pass
+
 
     # helper methods
     def _applyInversionRel(self, shift):
@@ -624,7 +672,7 @@ class Actuator(HwComponent):
         ret = dict(pos)
         for a in self._inverted:
             if a in ret:
-                ret[a] = self._ranges[a][0] + self._ranges[a][1] - ret[a]
+                ret[a] = self._axes[a].range[0] + self._axes[a].range[1] - ret[a]
         return ret
 
 class Emitter(HwComponent):
@@ -662,35 +710,30 @@ class CombinedActuator(Actuator):
         if set(children.keys()) != set(axes_map.keys()):
             raise ValueError("CombinedActuator needs the same keys in children and axes_map")
 
-        # this set ._axes and ._ranges (_children is an empty set)
-        Actuator.__init__(self, name, role, axes=children.keys(), **kwargs)
 
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         self._position = {}
         self._speed = {}
+        axes = {}
         for axis, child in children.items():
-            self._children.add(child)
+            #self._children.add(child)
             child.parent = self
             self._axis_to_child[axis] = (child, axes_map[axis])
 
             # Ducktyping (useful to support also testing with MockComponent)
-            # At least, it has .ranges and .axes (and they are set and dict)
+            # At least, it has .axes
             if not isinstance(child, ComponentBase):
                 raise ValueError("Child %s is not a component." % str(child))
-            if (not hasattr(child, "ranges") or not isinstance(child.ranges, dict) or
-                not hasattr(child, "axes") or not isinstance(child.axes, collections.Set)):
+            if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % str(child))
-            self._ranges[axis] = child.ranges[axes_map[axis]]
+            axes[axis] = child.axes[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
             self._speed[axis] = child.speed.value[axes_map[axis]]
 
-
-        # check if can do absolute positioning: all the axes have moveAbs()
-        canAbs = True
-        for child, axis in self._axis_to_child.values():
-            canAbs &= hasattr(child, "moveAbs") # TODO: need to use capabilities, to work with proxies
-        if canAbs:
-            self.moveAbs = self._moveAbs
+        # TODO: test/finish conversion to Axis
+        # this set ._axes and ._children
+        Actuator.__init__(self, name, role, axes=axes,
+                          children=children, **kwargs)
 
         # keep a reference to the subscribers so that they are not
         # automatically garbage collected
@@ -705,11 +748,11 @@ class CombinedActuator(Actuator):
                 children_axes[child] = set([axis])
 
         # position & speed: special VAs combining multiple VAs
-        self.position = _vattributes.VigilantAttribute(self._position, unit="m", readonly=True)
-        for c, axes in children_axes.items():
-            def update_position_per_child(value, axes=axes, c=c):
+        self.position = _vattributes.VigilantAttribute(self._position, readonly=True)
+        for c, ax in children_axes.items():
+            def update_position_per_child(value, ax=ax, c=c):
                 logging.debug("updating position of child %s", c.name)
-                for a in axes:
+                for a in ax:
                     try:
                         self._position[a] = value[axes_map[a]]
                     except KeyError:
@@ -719,12 +762,11 @@ class CombinedActuator(Actuator):
             c.position.subscribe(update_position_per_child)
             self._subfun.append(update_position_per_child)
 
-        # TODO should have a range per axis
-        self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], "m/s",
-                                               setter=self._setSpeed)
-        for c, axes in children_axes.items():
-            def update_speed_per_child(value, axes=axes):
-                for a in axes:
+        # TODO: change the speed range to a dict of speed ranges
+        self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
+        for c, ax in children_axes.items():
+            def update_speed_per_child(value, ax=ax):
+                for a in ax:
                     try:
                         self._speed[a] = value[axes_map[a]]
                     except KeyError:
@@ -802,9 +844,8 @@ class CombinedActuator(Actuator):
             #TODO return future composed of multiple futures
             return futures[0]
 
-    # duplicated as moveAbs() iff all the axes have moveAbs()
     @isasync
-    def _moveAbs(self, pos):
+    def moveAbs(self, pos):
         u"""
         Move the stage to the defined position in m for each axis given.
         pos dict(string-> float): name of the axis and position in m
@@ -876,10 +917,9 @@ class MockComponent(HwComponent):
         # Special handling of actuators, for CombinedActuator
         # Can not be generic for every roattribute, as we don't know what to put as value
         if issubclass(_realcls, Actuator):
-            self.axes = set(["x"])
-            self.ranges = {"x": [-1, 1]}
+            self.axes = {"x": Axis(range=[-1, 1])}
             # make them roattributes for proxy
-            self._odemis_roattributes = ["axes", "ranges"]
+            self._odemis_roattributes = ["axes"]
 
         if _vas is not None:
             for va in _vas:

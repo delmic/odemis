@@ -21,11 +21,12 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.core import isasync
-from odemis import model
-from odemis.model._components import DigitalCamera, Actuator
 import logging
 import numpy
+from odemis import model
+from odemis.model._components import DigitalCamera, Actuator, Axis
 import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -116,9 +117,11 @@ class TestActuator(unittest.TestCase):
         """
         Check all the invert related functions 
         """
-        act = FakeActuator("test", "actuator", axes=["x", "y", "z"],
-                       inverted=["x", "y"],
-                       ranges={"x": (-5, 4), "y": (-0.01, 0), "z": (-2, 2)})
+        axes = {"x": Axis(range=(-5, 4), canAbs=False),
+                "y": Axis(range=(-0.01, 0), canAbs=False),
+                "z": Axis(range=(-2, 2), canAbs=False),
+                }
+        act = FakeActuator("test", "actuator", axes=axes, inverted=["x", "y"])
 
         # relative
         rel_mov = {"x":-1, "y": 0.001, "z": 1.1}
@@ -135,7 +138,7 @@ class TestActuator(unittest.TestCase):
         logging.info("From user=%s, internal=%s", abs_mov, abs_mov_in)
         self.assertEqual(set(abs_mov.keys()), set(abs_mov_in.keys()))
         for axis, val in abs_mov_in.items():
-            rng = act.ranges[axis]
+            rng = act.axes[axis].range
             self.assertTrue(rng[0] <= val <= rng[1])
         abs_mov_back = act._applyInversionAbs(abs_mov_in)
         self.assertEqual(set(abs_mov.keys()), set(abs_mov_back.keys()))
@@ -147,7 +150,9 @@ class FakeActuator(Actuator):
     @isasync
     def moveRel(self, shift):
         pass
-
+    @isasync
+    def moveAbs(self, pos):
+        pass
 
 
 if __name__ == "__main__":
