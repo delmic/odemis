@@ -1777,11 +1777,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
     TODO: in software synchronisation, we can easily do our own fuzzing.
     """
     __metaclass__ = ABCMeta
-    def __init__(self, name, sem_stream, ccd_stream):
+    def __init__(self, name, sem_stream, ccd_stream, correction_range):
         MultipleDetectorStream.__init__(self, name, [sem_stream, ccd_stream])
 
         self._sem_stream = sem_stream
         self._ccd_stream = ccd_stream
+
+        # DRIFT CORRECTION
+        self._correction_range = correction_range
 
         assert sem_stream._emitter == ccd_stream._emitter
         self._emitter = sem_stream._emitter
@@ -1979,6 +1982,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         try:
             ccd_time = self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
+
+            # DRIFT CORRECTION
+            correction_range = self._correction_range
+
             spot_pos = self._getSpotPositions()
             logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], ccd_time, dwell_time)
             rep = self._ccd_stream.repetition.value
@@ -2042,6 +2049,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                 n += 1
                 self._updateProgress(future, start_time, n / tot_num)
+
+                # DRIFT CORRECTION
+                if (n%correction_range) == 0:
+                	
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
