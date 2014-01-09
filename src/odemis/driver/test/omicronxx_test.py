@@ -33,7 +33,7 @@ if os.name == "nt":
 else:
     PORTS = "/dev/ttyOXX*" #"/dev/tty*"
 
-class TestActuator(unittest.TestCase):
+class TestMultixX(unittest.TestCase):
     def setUp(self):
         self.dev = CLASS("test", "light", PORTS)
 
