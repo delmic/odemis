@@ -1250,9 +1250,14 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.add_overlay(self.markline_overlay)
         self.active_overlay = self.markline_overlay
 
-    def set_data(self, data):
+    def set_data(self, data,
+                 unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
-        super(ZeroDimensionalPlotCanvas, self).set_data(data)
+        super(ZeroDimensionalPlotCanvas, self).set_data(data,
+                                                        unit_x,
+                                                        unit_y,
+                                                        range_x,
+                                                        range_y)
         if data is None:
             self.markline_overlay.v_posx.unsubscribe(self._calc_y_value)
         else:
@@ -1260,7 +1265,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
                                                    init=True)
 
     def clear(self):
-        self.set_data(None)
+        super(ZeroDimensionalPlotCanvas, self).clear()
         self.val_x.value = None
         self.val_y.value = None
         self.markline_overlay.clear()
@@ -1280,11 +1285,19 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         if not self._data or v_posx is None:
             return
 
-        self.val_x.value = self._pos_x_to_val_x(v_posx, match=True)
-        self.val_y.value = self._val_x_to_val_y(self.val_x.value)
+        self.val_x.value = self._pos_x_to_val_x(v_posx, snap=True)
+        self.val_y.value = self._val_x_to_val_y(self.val_x.value, snap=True)
 
         pos = (v_posx, self._val_y_to_pos_y(self.val_y.value))
         self.markline_overlay.set_position(pos)
+
+        self.markline_overlay.x_label = units.readable_str(self.val_x.value,
+                                                           self.unit_x,
+                                                           3)
+
+        self.markline_overlay.y_label = units.readable_str(self.val_y.value,
+                                                           self.unit_y,
+                                                           3)
 
         self.Parent.Refresh()
 

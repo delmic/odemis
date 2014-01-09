@@ -232,8 +232,11 @@ class AxisLegend(wx.Panel):
     of a canvas plot.
     """
 
+    HORIZONTAL = 0
+    VERTICAL = 1
+
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
-                 style=wx.NO_BORDER):
+                 style=wx.NO_BORDER, orientation=None):
 
         style = style | wx.NO_BORDER
         super(AxisLegend, self).__init__(parent, wid, pos, size, style)
@@ -249,12 +252,10 @@ class AxisLegend(wx.Panel):
 
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
-        self.label = None
-        self.label_pos = None
-
         self.ticks = None
         # The guiding distance between ticks in pixels
-        self.tick_pixel_gap = 137
+        self.tick_pixel_gap = 120
+        self.orientation = orientation or self.HORIZONTAL
 
         self._unit = None
 
@@ -293,98 +294,84 @@ class AxisLegend(wx.Panel):
         ctx.set_line_width(2)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
-        for i, (xpos, xval) in enumerate(self.ticks):
-            label = units.readable_str(xval, self.unit, 3)
+        for i, (pos, val) in enumerate(self.ticks):
+            label = units.readable_str(val, self.unit, 3)
             _, _, width, height, _, _ = ctx.text_extents(label)
 
-            lx = xpos - (width / 2)
-            lx = max(min(lx, self.ClientSize.x - width - 2), 2)
-            ctx.move_to(lx, height + 8)
-            ctx.show_text(label)
-            ctx.move_to(xpos, 5)
-            ctx.line_to(xpos, 0)
-            ctx.stroke()
+            if self.orientation == self.HORIZONTAL:
+                lpos = pos - (width / 2)
+                lpos = max(min(lpos, self.ClientSize.x - width - 2), 2)
+                ctx.move_to(lpos, height + 8)
+                ctx.show_text(label)
+                ctx.move_to(pos, 5)
+                ctx.line_to(pos, 0)
+            else:
+                lpos = pos + (height / 2)
+                lpos = max(min(lpos, self.ClientSize.y - height - 2), 2)
+                ctx.move_to(self.ClientSize.x - width - 9, lpos)
+                ctx.show_text(label)
+                ctx.move_to(self.ClientSize.x - 5, pos)
+                ctx.line_to(self.ClientSize.x, pos)
 
-        if None not in (self.label, self.label_pos):
-            self.write_label(ctx)
+            ctx.stroke()
 
     def calc_ticks(self):
         """ Determine where the ticks should be placed """
 
         self.ticks = []
 
-        # The number of ticks we will aim for
-        num_ticks = self.ClientSize.x / self.tick_pixel_gap
+        # Get orientation dependant values
+        if self.orientation == self.HORIZONTAL:
+            size = self.ClientSize.x
+            min_val = self.Parent.canvas.min_x
+            val_size = self.Parent.canvas.data_width
+            val_to_pos = self.Parent.canvas._val_x_to_pos_x
+        else:
+            size = self.ClientSize.y
+            min_val = self.Parent.canvas.min_y
+            val_size = self.Parent.canvas.data_height
+            val_to_pos = self.Parent.canvas._val_y_to_pos_y
 
+        num_ticks = size / self.tick_pixel_gap
         logging.debug("Aiming for %s ticks with a client of width %s",
                       num_ticks, self.ClientSize.x)
         # Calculate the best step size in powers of 10, so it will cover at
         # least the distance `val_dist`
         val_step = 1e-12
-        min_x = self.Parent.canvas.min_x_val
-        range_x = self.Parent.canvas.range_x
 
         # Increase the value step tenfold while it fits more tan num_ticks times
         # in the range
-        while range_x / val_step > num_ticks:
+        while val_size / val_step > num_ticks:
             val_step *= 10
 
         logging.debug("Value step is %s after first iteration with range %s",
-                      val_step, range_x)
+                      val_step, val_size)
 
         # Divide the value step by two,
-        while range_x / val_step < num_ticks:
+        while val_size / val_step < num_ticks:
             val_step /= 2
         logging.debug("Value step is %s after second iteration with range %s",
-                      val_step, range_x)
+                      val_step, val_size)
 
-        first_tick = (int(min_x / val_step) + 1) * val_step
+        first_tick = (int(min_val / val_step) + 1) * val_step
         logging.debug("Setting first tick at value %s", first_tick)
 
         ticks = [first_tick + i * val_step for i in range(2 * num_ticks)]
 
         for tick in ticks:
-            xpos = self.Parent.canvas._val_x_to_pos_x(tick)
-            if (0 <= xpos <= self.ClientSize.x - self.tick_pixel_gap / 2
-                and (xpos, tick) not in self.ticks):
-                self.ticks.append((xpos, tick))
+            pos = val_to_pos(tick)
+            if (pos, tick) not in self.ticks:
+                if self.orientation == self.HORIZONTAL:
+                    if (0 <= pos <= size - self.tick_pixel_gap / 2):
+                        self.ticks.append((pos, tick))
+                else:
+                    if (10 <= pos <= size):
+                        self.ticks.append((pos, tick))
 
-    def set_label(self, label):
-        self.label = unicode(label)
 
-    def position_label(self, pos_x):
-        self.label_pos = pos_x
-
-    def write_label(self, ctx):
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        ctx.select_font_face(
-                font.GetFaceName(),
-                cairo.FONT_SLANT_NORMAL,
-                cairo.FONT_WEIGHT_NORMAL
-        )
-        ctx.set_font_size(font.GetPointSize())
-
-        margin_x = 5
-
-        _, _, width, _, _, _ = ctx.text_extents(self.label)
-        x, y = self.label_pos, 34
-        x = x - width / 2
-
-        if x + width + margin_x > self.ClientSize.x:
-            x = self.ClientSize[0] - width - margin_x
-
-        if x < margin_x:
-            x = margin_x
-
-        #t = font.GetPixelSize()
-        ctx.set_source_rgba(*hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT))
-        ctx.move_to(x, y)
-        ctx.show_text(self.label)
 
     def clear(self):
         self.ticks = None
-        self.label = None
-        self.label_pos = None
 
     def on_size(self, event):
         self.clear()

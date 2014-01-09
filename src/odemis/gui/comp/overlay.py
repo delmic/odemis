@@ -92,7 +92,7 @@ class Overlay(object):
         ctx.move_to(x + 1, y + 1)
         ctx.show_text(label)
 
-        ctx.set_source_rgb(*colour)
+        ctx.set_source_rgb(*colour[:3])
         ctx.move_to(x, y)
         ctx.show_text(label)
 
@@ -1117,6 +1117,9 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posx = model.VigilantAttribute(None)
         self.v_posy = model.VigilantAttribute(None)
 
+        self.x_label = None
+        self.y_label = None
+
         self.orientation = orientation
         self.line_width = 2
 
@@ -1149,9 +1152,8 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posx.value = max(min(self.cnvs.ClientSize.x, x), 1)
 
     def set_position(self, pos, label=None):
-        self.v_posx.value = max(1,
-                                min(pos[0], self.view_width - self.line_width)
-                            )
+        self.v_posx.value = max(min(self.cnvs.ClientSize.x, pos[0]), 1)
+
         self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
         self.label = label
 
@@ -1176,6 +1178,26 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             ctx.stroke()
 
         if None not in (self.v_posy.value, self.v_posx.value):
+            if self.x_label:
+                self.write_label(ctx,
+                            dc_buffer.GetSize(),
+                            (self.v_posx.value + 4, self.cnvs.ClientSize.y - 6),
+                            self.x_label,
+                            colour=self.color)
+
+            if self.y_label:
+                yo = max(0, 20 - self.v_posx.value / 5)
+                y_pos = max(
+                            min(self.v_posy.value - 6,
+                                self.cnvs.ClientSize.y - yo),
+                            14)
+
+                self.write_label(ctx,
+                    dc_buffer.GetSize(),
+                    (2, y_pos),
+                    self.y_label,
+                    colour=self.color)
+
             r, g, b, a = conversion.change_brightness(self.color, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)

@@ -899,6 +899,7 @@ class AnalysisTab(Tab):
         # tell us what the new tool is and not what the previous, if any, was.
         if tool != guimod.TOOL_POINT:
             self.tab_data_model.visible_views.value = self._def_views
+            # self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
     def _on_point_select(self, selected_point):
         """ Event handler for when a point is selected """
