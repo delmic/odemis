@@ -150,7 +150,18 @@ def list_components(pretty=True):
     print_component_tree(microscope, pretty=pretty)
     return 0
 
+def print_axes(name, value, pretty):
+    if pretty:
+        print "\t%s (RO Attribute)" % (name,)
+        for an, ad in value.items():
+            print "\t\t%s:\t%s" % (an, ad)
+    else:
+        print "%s\ttype:roattr\tvalue:%s" % (name,
+                                             ", ".join(k for k in value.keys()))
 def print_roattribute(name, value, pretty):
+    if name == "axes":
+        return print_axes(name, value, pretty)
+    
     if pretty:
         print "\t%s (RO Attribute)\tvalue: %s" % (name, value)
     else:
@@ -379,19 +390,24 @@ def move(comp_name, axis_name, str_distance):
         if axis_name not in component.axes:
             logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
             return 129
+        ad = component.axes[axis_name]
     except (TypeError, AttributeError):
         logging.error("Component %s is not an actuator", comp_name)
         return 127
 
-    try:
-        distance = float(str_distance) * 1e-6 # µm -> m
-    except ValueError:
-        logging.error("Distance '%s' cannot be converted to a number", str_distance)
-        return 127
+    if ad.unit == "m":
+        try:
+            distance = float(str_distance) * 1e-6 # µm -> m
+        except ValueError:
+            logging.error("Distance '%s' cannot be converted to a number", str_distance)
+            return 127
 
-    if abs(distance) > MAX_DISTANCE:
-        logging.error("Distance of %f m is too big (> %f m)", abs(distance), MAX_DISTANCE)
-        return 129
+        if abs(distance) > MAX_DISTANCE:
+            logging.error("Distance of %f m is too big (> %f m)", abs(distance), MAX_DISTANCE)
+            return 129
+    else:
+        cur_pos = component.position.value[axis_name]
+        distance = reproduceTypedValue(cur_pos, str_distance)
 
     try:
         m = component.moveRel({axis_name: distance})
@@ -421,23 +437,27 @@ def move_abs(comp_name, axis_name, str_position):
         if axis_name not in component.axes:
             logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
             return 129
+        ad = component.axes[axis_name]
     except (TypeError, AttributeError):
         logging.error("Component %s is not an actuator", comp_name)
         return 127
 
     # TODO: check whether the component supports absolute positioning
+    if ad.unit == "m":
+        try:
+            position = float(str_position) * 1e-6 # µm -> m
+        except ValueError:
+            logging.error("Distance '%s' cannot be converted to a number", str_position)
+            return 127
 
-    try:
-        position = float(str_position) * 1e-6 # µm -> m
-    except ValueError:
-        logging.error("Distance '%s' cannot be converted to a number", str_position)
-        return 127
-
-    # compare to the current position, to see if the new position sounds reasonable
-    cur_pos = component.position.value[axis_name]
-    if abs(cur_pos - position) > MAX_DISTANCE:
-        logging.error("Distance of move of %g m is too big (> %g m)", abs(cur_pos - position), MAX_DISTANCE)
-        return 129
+        # compare to the current position, to see if the new position sounds reasonable
+        cur_pos = component.position.value[axis_name]
+        if abs(cur_pos - position) > MAX_DISTANCE:
+            logging.error("Distance of move of %g m is too big (> %g m)", abs(cur_pos - position), MAX_DISTANCE)
+            return 129
+    else:
+        cur_pos = component.position.value[axis_name]
+        position = reproduceTypedValue(cur_pos, str_position)
 
     try:
         m = component.moveAbs({axis_name: position})

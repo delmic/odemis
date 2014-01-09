@@ -589,6 +589,25 @@ class Axis(object):
             assert len(speed) == 2
             self.speed = tuple(speed) # speed _range_ in unit/s
 
+    def __str__(self):
+        if hasattr(self, "choices"):
+            if isinstance(self.choices, dict):
+                pos_str = "%s" % self.choices
+            else:
+                pos_str = "{%s}" % ", ".join(str(c) for c in self.choices)
+        else:
+            pos_str = "%s -> %s" % (self.range[0], self.range[1])
+
+        if self.unit is not None:
+            pos_str += " " + self.unit
+        
+        if not self.canAbs:
+            abs_str = " (relative only)"
+        else:
+            abs_str = ""
+
+        return "%s in %s%s" % (self.__class__.__name__, pos_str, abs_str)
+
 
 class Actuator(HwComponent):
     """
