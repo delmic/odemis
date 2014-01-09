@@ -143,7 +143,6 @@ def CalculateDrift(previous_img, current_img, precision):
         if nd2 == 1:
             col_shift = 0
 
-    print row_shift, col_shift
     return row_shift, col_shift
 
 
