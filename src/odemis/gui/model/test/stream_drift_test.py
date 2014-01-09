@@ -44,6 +44,7 @@ CONFIG_PATH = os.path.dirname(__file__) + "/../../../../../install/linux/usr/sha
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
+@skip("test")
 class FakeEBeam(model.Emitter):
     """
     Imitates an e-beam, sufficiently for the Streams 
@@ -55,6 +56,7 @@ class FakeEBeam(model.Emitter):
         self.pixelSize = model.VigilantAttribute((1e-9, 1e-9), unit="m", readonly=True)
         self.magnification = model.FloatVA(1000.)
 
+@skip("test")
 class StreamTestCase(unittest.TestCase):
     def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
         """
@@ -159,7 +161,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_rep, ss.repetition.value)
         self.assertEqual(old_roi, ss.roi.value)
 
-#@skip("test")
+@skip("test")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -449,7 +451,109 @@ class SPARCTestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
 
+# @skip("test")
+class DriftTestCase(unittest.TestCase):
+    backend_was_running = False
 
+    @classmethod
+    def setUpClass(cls):
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SPARC_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1)  # time to start
+
+        # Find CCD & SEM components
+        cls.microscope = model.getMicroscope()
+        for comp in model.getComponents():
+            if comp.role == "ccd":
+                cls.ccd = comp
+            elif comp.role == "spectrometer":
+                cls.spec = comp
+            elif comp.role == "e-beam":
+                cls.ebeam = comp
+            elif comp.role == "se-detector":
+                cls.sed = comp
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._components._microscope = None  # force reset of the microscope for next connection
+        time.sleep(1)  # time to stop
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+#    @skip("simple")
+    def test_progressive_future(self):
+        """
+        Test .acquire interface (should return a progressive future with updates)
+        """
+        self.image = None
+        self.done = False
+        self.updates = 0
+
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
+
+        # Long acquisition
+        self.ccd.exposureTime.value = 0.2  # s
+        ars.repetition.value = (2, 3)
+        exp_shape = ars.repetition.value[::-1]
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        f = sas.acquire()
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), num_ar + 1)
+        self.assertEqual(data[0].shape, exp_shape)
+        self.assertGreaterEqual(self.updates, 4)  # at least a couple of updates
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
+
+        # short acquisition
+        self.done = False
+        self.updates = 0
+        self.ccd.exposureTime.value = 0.02  # s
+        ars.repetition.value = (5, 4)
+        exp_shape = ars.repetition.value[::-1]
+        num_ar = numpy.prod(ars.repetition.value)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        f = sas.acquire()
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result(timeout)
+        self.assertEqual(len(data), num_ar + 1)
+        self.assertEqual(data[0].shape, exp_shape)
+        self.assertGreaterEqual(self.updates, 5)  # at least a few updates
+        self.assertEqual(self.left, 0)
+        self.assertTrue(self.done)
+        self.assertTrue(not f.cancelled())
 
 if __name__ == "__main__":
     unittest.main()
