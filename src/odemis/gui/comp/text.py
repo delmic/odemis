@@ -34,8 +34,7 @@ import sys
 import wx
 import wx.lib.mixins.listctrl as listmix
 
-from odemis.gui.util import units
-from odemis.gui.util import call_after
+from odemis.util import units
 
 
 # Locale is needed for correct string sorting

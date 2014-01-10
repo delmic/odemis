@@ -21,7 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import unittest
-from odemis.gui.util import units
+from odemis.util import units
 
 class TestUnits(unittest.TestCase):
 

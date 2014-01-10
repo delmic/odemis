@@ -20,7 +20,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # test the functions of the gui.util.__init__ module
-from odemis.gui.util import limit_invocation, formats_to_wildcards
+from __future__ import division
+from odemis.gui.util import wxlimit_invocation, formats_to_wildcards
 import logging
 import time
 import unittest
@@ -41,7 +42,7 @@ class TestLimitInvocation(unittest.TestCase):
         time.sleep(2) # wait for the last potential calls to happen
         self.assertLessEqual(self.count, 3, "method was called more than three times in 2 seconds: %d" % self.count)        
         
-    @limit_invocation(1)
+    @wxlimit_invocation(1)
     def count_max_1s(self):
         # never called more than once per second
         self.count += 1

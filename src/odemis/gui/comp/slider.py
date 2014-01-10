@@ -26,7 +26,7 @@ from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness, hex_to_
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import ABCMeta, abstractmethod
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap
-from odemis.gui.util import limit_invocation
+from odemis.gui.util import wxlimit_invocation
 import collections
 import logging
 import math
@@ -114,7 +114,7 @@ class BaseSlider(wx.PyControl):
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
-    @limit_invocation(0.07)  #pylint: disable=E1120
+    @wxlimit_invocation(0.07)  # max 15 Hz
     def _send_slider_update_event(self):
         """ Send EVT_COMMAND_SLIDER_UPDATED, which is received as EVT_SLIDER.
         Means that the value has changed (even when the user is still moving the

@@ -24,14 +24,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from decorator import decorator
 import errno
 from functools import wraps
+import inspect
 import logging
 import math
 from odemis import model
 import os
 import signal
 import threading
+import time
 
 
 def find_closest(val, l):
@@ -116,6 +119,65 @@ def normalize_rect(rect):
 class TimeoutError(Exception):
     pass
 
+
+def limit_invocation(delay_s):
+    """ This decorator limits how often a method will be executed.
+
+    The first call will always immediately be executed. The last call will be
+    delayed 'delay_s' seconds at the most. In between the first and last calls,
+    the method will be executed at 'delay_s' intervals. In other words, it's
+    a rate limiter.
+
+    :param delay_s: (float) The minimum interval between executions in seconds.
+
+    Note that the method might be called in a separate thread. In wxPython, you
+    might need to decorate it by @call_after to ensure it is called in the GUI
+    thread.
+    """
+    if delay_s > 5:
+        logging.warn("Warning! Long delay interval. Please consider using "
+                     "an interval of 5 or less seconds")
+
+    def limit(f, self, *args, **kwargs):
+        if inspect.isclass(self):
+            raise ValueError("limit_invocation decorators should only be "
+                             "assigned to instance methods!")
+
+        now = time.time()
+
+        # The next statement was not useful in the sense that we cannot
+        # add attributes to bound methods.
+        # Get the bound version of the function
+        #bf = f.__get__(self)
+
+        # Hacky way to store value per instance and per methods
+        last_call_name = '%s_lim_inv_last_call' % f.__name__
+        timer_name = '%s_lim_inv_timer' % f.__name__
+
+        # If the function was called later than 'delay_s' seconds ago...
+        if (hasattr(self, last_call_name) and
+            now - getattr(self, last_call_name) < delay_s):
+            #logging.debug('Delaying method call')
+            if now < getattr(self, last_call_name):
+                # this means a timer is already set, nothing else to do
+                return
+
+            timer = threading.Timer(delay_s,
+                          f,
+                          args=[self] + list(args),
+                          kwargs=kwargs)
+            setattr(self, timer_name, timer)
+            setattr(self, last_call_name, now + delay_s)
+            timer.start()
+        else:
+            #execute method call now
+            setattr(self, last_call_name, now)
+            return f(self, *args, **kwargs)
+
+    return decorator(limit)
+
+
+
 # TODO: only works on Unix, needs a fallback on windows (at least, don't complain)
 # from http://stackoverflow.com/questions/2281850/timeout-function-if-it-takes-too-long-to-finish
 # see http://code.activestate.com/recipes/577853-timeout-decorator-with-multiprocessing/
@@ -127,22 +189,19 @@ def timeout(seconds):
     seconds (0 < float): time in second before the timeout
     """
     assert seconds > 0
-    def decorator(func):
-        def handle_timeout(signum, frame):
-            raise TimeoutError("Function took more than %g s to execute" % seconds)
+    def handle_timeout(signum, frame):
+        raise TimeoutError("Function took more than %g s to execute" % seconds)
 
-        def wrapper(*args, **kwargs):
-            signal.signal(signal.SIGALRM, handle_timeout)
-            signal.setitimer(signal.ITIMER_REAL, seconds) # same as alarm, but accepts float
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.setitimer(signal.ITIMER_REAL, 0)
-            return result
+    def wrapper(f, *args, **kwargs):
+        signal.signal(signal.SIGALRM, handle_timeout)
+        signal.setitimer(signal.ITIMER_REAL, seconds) # same as alarm, but accepts float
+        try:
+            result = f(*args, **kwargs)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+        return result
 
-        return wraps(func)(wrapper)
-
-    return decorator
+    return decorator(wrapper)
 
 class RepeatingTimer(threading.Thread):
     """

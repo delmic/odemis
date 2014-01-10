@@ -40,7 +40,8 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion, \
-    units, call_after
+    call_after
+from odemis.util import units
 import os.path
 import pkg_resources
 import weakref

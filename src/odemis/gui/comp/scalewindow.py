@@ -22,16 +22,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from odemis.util import units
 import wx
 
-from ..util import units
 
 #----------------------------------------------------------------------
 # DC Drawing Options
 #----------------------------------------------------------------------
 # SM_NORMAL_DC Uses The Normal wx.PaintDC
 # SM_BUFFERED_DC Uses The Double Buffered Drawing Style
-
 SM_NORMAL_DC = 0
 SM_BUFFERED_DC = 1
 

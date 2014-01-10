@@ -33,7 +33,7 @@ from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
-from odemis.gui.util import call_after, limit_invocation
+from odemis.gui.util import call_after, wxlimit_invocation
 from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from wx.lib.pubsub import pub
@@ -45,7 +45,6 @@ import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 import odemis.gui.model as model
 import odemis.gui.model.dye as dye
-import wx
 import wx.lib.newevent
 
 
@@ -1306,7 +1305,7 @@ class StreamPanel(wx.PyPanel):
         # TODO: should the stream have a way to know when the raw data has changed? => just a spectrum VA, like histogram VA
         self.stream.image.subscribe(self.on_new_spec_data, init=True)
 
-    @limit_invocation(0.2)
+    @wxlimit_invocation(0.2)
     def on_new_spec_data(self, image):
         # Display the global spectrum in the visual range slider
         gspec = self.stream.getMeanSpectrum()

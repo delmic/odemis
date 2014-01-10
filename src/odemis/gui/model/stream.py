@@ -37,18 +37,18 @@ import math
 import numpy
 from numpy.polynomial import polynomial
 from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.util import limit_invocation
+from odemis.gui.util.img import NDImage2wxImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL, MD_DESCRIPTION
-from odemis.util import TimeoutError
+from odemis.util import TimeoutError, limit_invocation, polar
 import sys
 import threading
 import time
 
 import odemis.gui.util.conversion as conversion
-import odemis.gui.util.img as img
-import odemis.gui.util.units as units
 import odemis.model as model
+import odemis.util.img as img
+import odemis.util.units as units
 
 
 # to identify a ROI which must still be defined by the user
@@ -334,7 +334,7 @@ class Stream(object):
             data = self.raw[0]
             irange = self._getDisplayIRange()
             rgbim = img.DataArray2RGB(data, irange, tint)
-            im = img.NDImage2wxImage(rgbim)
+            im = NDImage2wxImage(rgbim)
             im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
             self.image.value = InstrumentalImage(im,
@@ -1450,7 +1450,7 @@ class StaticARStream(StaticStream):
         returns DataArray: the polar projection
         """
         if pos in self._polar:
-            polar = self._polar[pos]
+            polarp = self._polar[pos]
         else:
             # Compute the polar representation
             data = self._sempos[pos]
@@ -1463,18 +1463,18 @@ class StaticARStream(StaticStream):
                 # TODO: handle having a background image (i.e., same acquisition
                 # but with e-beam blanked)
                 # Remove the background value
-                data0 = img.ARBackgroundSubtract(data)
+                data0 = polar.ARBackgroundSubtract(data)
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
                 size = min(min(data0.shape[-2:]) * 2, 1134)
-                polar = img.AngleResolved2Polar(data0, size, hole=False)
-                self._polar[pos] = polar
+                polarp = polar.AngleResolved2Polar(data0, size, hole=False)
+                self._polar[pos] = polarp
             except Exception:
                 logging.exception("Failed to convert to azymuthal projection")
                 return data # display it raw as fallback
 
-        return polar
+        return polarp
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
@@ -1502,7 +1502,7 @@ class StaticARStream(StaticStream):
 
                 # Convert to RGB
                 rgbim = img.DataArray2RGB(polar, irange)
-                im = img.NDImage2wxImage(rgbim)
+                im = NDImage2wxImage(rgbim)
                 im.InitAlpha()
 
                 # TODO: Special InstrumentalImage for polar view, without MPP nor pos?
@@ -1704,7 +1704,7 @@ class StaticSpectrumStream(StaticStream):
             bim = img.DataArray2RGB(av_data, irange)
             rgbim[:, :, 2] = bim[:, :, 0]
 
-        im = img.NDImage2wxImage(rgbim)
+        im = NDImage2wxImage(rgbim)
         im.InitAlpha() # it's a different buffer so useless to do it in numpy
 
         self.image.value = InstrumentalImage(im,

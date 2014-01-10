@@ -27,7 +27,6 @@ from odemis.gui.model import stream
 from odemis.util import driver
 import os
 import subprocess
-import threading
 import time
 import unittest
 from unittest.case import skip

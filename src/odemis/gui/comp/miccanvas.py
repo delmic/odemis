@@ -29,7 +29,8 @@ from odemis import util, model
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
 from odemis.gui.model import stream
 from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
-from odemis.gui.util import limit_invocation, call_after, units, ignore_dead
+from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead
+from odemis.util import units
 from odemis.model._vattributes import VigilantAttributeBase
 import threading
 import wx
@@ -406,9 +407,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.microscope_view:
             self._updateThumbnail()
 
-    @limit_invocation(2) # max 1/2 Hz
+    @wxlimit_invocation(2) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    @ignore_dead  # This method might get called after the canvas is destroyed
     def _updateThumbnail(self):
         # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
@@ -1315,9 +1315,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    @limit_invocation(0.5) # max 1/2 Hz
+    @wxlimit_invocation(2) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    @ignore_dead  # This method might get called after the canvas is destroyed
     def _updateThumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
@@ -1448,9 +1447,8 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         if self.microscope_view:
             self._updateThumbnail()
 
-    @limit_invocation(0.5) # max 1/2 Hz
+    @wxlimit_invocation(2) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
-    @ignore_dead  # This method might get called after the canvas is destroyed
     def _updateThumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:

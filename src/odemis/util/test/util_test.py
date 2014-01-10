@@ -19,14 +19,63 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
+from __future__ import division
 from odemis import util
-import os
+from odemis.util import limit_invocation, TimeoutError
+import time
 import unittest
+from odemis.util import timeout
 
+class TestLimitInvocation(unittest.TestCase):
+    def test_not_too_often(self):
+        self.count = 0
+        now = time.time()
+        end = now + 1.1 # a bit more than 1 s
+        while time.time() < end:
+            self.count_max_1s()
+            time.sleep(0.01)
+
+        self.assertLessEqual(self.count, 2, "method was called more than twice in 1 second: %d" % self.count)
+
+        time.sleep(2) # wait for the last potential calls to happen
+        self.assertLessEqual(self.count, 3, "method was called more than three times in 2 seconds: %d" % self.count)
+
+    @limit_invocation(1)
+    def count_max_1s(self):
+        # never called more than once per second
+        self.count += 1
+
+
+class TestTimeout(unittest.TestCase):
+    @timeout(1.2)
+    def test_notimeout(self):
+        time.sleep(1)
+
+    def test_timeout(self):
+        self.assertRaises(TimeoutError, self.toolong)
+
+    @timeout(0.5)
+    def toolong(self):
+        # will always timeout
+        time.sleep(1)
+
+
+class AlmostEqualTestCase(unittest.TestCase):
+
+    def test_simple(self):
+        in_exp = {(0., 0): True,
+                  (-5, -5.): True,
+                  (1., 1. - 1e-9): True,
+                  (1., 1. - 1e-3): False,
+                  (1., 1. + 1e-3): False,
+                  (-5e-8, -5e-8 + 1e-19): True,
+                  (5e18, 5e18 + 1): True,
+                  }
+        for i, eo in in_exp.items():
+            o = util.almost_equal(*i)
+            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
 
 # Bounding box clipping test data generation
-
 def tp(trans, ps):
     """ Translate points ps using trans """
     r = []
@@ -78,22 +127,6 @@ def relative_boxes(bb):
     overlap_boxes = overlap_left + overlap_top + overlap_right + overlap_bottom
 
     return outside_boxes, touching_boxes, overlap_boxes
-
-class AlmostEqualTestCase(unittest.TestCase):
-
-    def test_simple(self):
-        in_exp = {(0., 0): True,
-                  (-5, -5.): True,
-                  (1., 1. - 1e-9): True,
-                  (1., 1. - 1e-3): False,
-                  (1., 1. + 1e-3): False,
-                  (-5e-8, -5e-8 + 1e-19): True,
-                  (5e18, 5e18 + 1): True,
-                  }
-        for i, eo in in_exp.items():
-            o = util.almost_equal(*i)
-            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
-
 
 class CanvasTestCase(unittest.TestCase):
 

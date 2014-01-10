@@ -20,24 +20,22 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+from __future__ import division
 
+from decorator import decorator
 import functools
-import logging
-import time
 import inspect
-import sys
+from itertools import izip
+import logging
 import os.path
 import subprocess
-
-from threading import Timer
-from itertools import izip
-
+import sys
+import threading
+import time
 import wx
-from decorator import decorator
 
 
 #### Decorators ########
-
 # TODO: rename to something more clear, like "call_in_wx_main"
 @decorator
 def call_after(f, self, *args, **kwargs):
@@ -53,8 +51,12 @@ def call_after(f, self, *args, **kwargs):
     #                     *args,
     #                     **kwargs)
 
-def limit_invocation(delay_s):
+# TODO: also do a call_after ?
+def wxlimit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
+    
+    Same as util.limit_invocation, but also avoid problems with wxPython dead
+    objects that can happen due to delaying a calling a method. 
 
     The first call will always immediately be executed. The last call will be
     delayed 'delay_s' seconds at the most. In between the first and last calls,
@@ -95,7 +97,7 @@ def limit_invocation(delay_s):
                 # this means a timer is already set, nothing else to do
                 return
 
-            timer = Timer(delay_s,
+            timer = threading.Timer(delay_s,
                           dead_object_wrapper(f, self, *args, **kwargs),
                           args=[self] + list(args),
                           kwargs=kwargs)

@@ -22,19 +22,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from __future__ import division
+
 from abc import ABCMeta, abstractmethod
-from odemis import model
-from odemis.gui.util.units import readable_str
-from odemis.util import normalize_rect
 import cairo
 import logging
 import math
+from odemis import model
+from odemis.util import normalize_rect
+import wx
+
 import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.gui.util as util
-import odemis.gui.util.units as units
 import odemis.gui.util.conversion as conversion
-import wx
+from odemis.util.units import readable_str
+import odemis.util.units as units
 
 
 class Overlay(object):

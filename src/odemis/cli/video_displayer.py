@@ -19,10 +19,13 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.gui.util.img import DataArray2wxImage
-from scipy import ndimage
 import logging
+from odemis.gui.util.img import NDImage2wxImage
+from scipy import ndimage
 import wx
+
+from odemis.util.img import DataArray2RGB
+
 
 class VideoDisplayer(object):
     '''
@@ -48,7 +51,8 @@ class VideoDisplayer(object):
         """
         mn, mx, mnp, mxp = ndimage.extrema(data)
         logging.info("Image data from %s to %s", mn, mx)
-        self.app.img = DataArray2wxImage(data) # auto brightness/contrast
+        rgb = DataArray2RGB(data) # auto brightness/contrast
+        self.app.img = NDImage2wxImage(rgb)
         wx.CallAfter(self.app.update_view)
     
     def waitQuit(self):

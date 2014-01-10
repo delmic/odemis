@@ -25,8 +25,6 @@
 
 import cairo
 import logging
-import math
-from odemis.gui import model
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
@@ -35,8 +33,7 @@ from odemis.gui.model import stream
 from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
 import wx
 
-import odemis.gui as gui
-import odemis.gui.util.units as units
+import odemis.util.units as units
 
 
 class InfoLegend(wx.Panel):

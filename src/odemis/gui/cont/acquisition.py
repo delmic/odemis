@@ -35,10 +35,11 @@ from odemis import model, dataio
 from odemis.gui import acqmng, conf
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.model.stream import UNDEFINED_ROI
-from odemis.gui.util import img, get_picture_folder, call_after, units, \
-    limit_invocation
+from odemis.gui.util import img, get_picture_folder, call_after, \
+    wxlimit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
+from odemis.util import units
 import os
 import re
 import subprocess
@@ -413,7 +414,7 @@ class SparcAcquiController(object):
         new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
         self.filename.value = new_name
 
-    @limit_invocation(1) # max 1/s
+    @wxlimit_invocation(1) # max 1/s
     @call_after
     def update_acquisition_time(self):
 
