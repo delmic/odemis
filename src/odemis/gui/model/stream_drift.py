@@ -2045,6 +2045,16 @@ class SEMCCDDCtream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
             n = 0
             drift = (0,0)
+
+            # First selected region acquisition
+            self._onSelectedRegion()
+            logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
+            self._acq_sem_complete.clear()
+            self._semd_df.subscribe(self._ssOnSelectedRegion)
+            if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
+                raise TimeoutError("First acquisition of selected region frame timed out")
+            self._semd_df.unsubscribe(self._ssOnSelectedRegion)
+
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
                 # DRIFT CORRECTION
@@ -2105,7 +2115,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
                     self._acq_sem_complete.clear()
                     self._semd_df.subscribe(self._ssOnSelectedRegion)
-                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.range[0] * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
+                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
                         raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
                     self._semd_df.unsubscribe(self._ssOnSelectedRegion)
 
