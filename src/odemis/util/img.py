@@ -253,7 +253,7 @@ def Average(images, rect, mpp, merge=0.5):
     """
     mix the given images into a big image so that each pixel is the average of each
      pixel (separate operation for each colour channel).
-    images (list of InstrumentalImages)
+    images (list of RGB DataArrays)
     merge (0<=float<=1): merge ratio of the first and second image (IOW: the
       first image is weighted by merge and second image by (1-merge))
     """
