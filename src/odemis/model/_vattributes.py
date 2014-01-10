@@ -26,6 +26,7 @@ import collections
 import inspect
 import logging
 import numbers
+import numpy
 import threading
 import zmq
 
@@ -170,7 +171,21 @@ class VigilantAttribute(VigilantAttributeBase):
         except WeakRefLostError:
             self._value = self.__default_setter(value)
 
-        if prev_value != self._value or value != self._value:
+        # only notify if the value has changed (or is different from requested)
+        must_notify = False
+        try:
+            if isinstance(value, numpy.ndarray):
+                # For numpy arrays, it's not possible to use !=
+                # => just check it's the same object
+                if prev_value is not self._value or value is not self._value:
+                    must_notify = True
+            else:
+                if prev_value != self._value or value != self._value:
+                    must_notify = True
+        except Exception:
+            must_notify = True
+
+        if must_notify:
             self.notify(self._value)
 
     def _del_value(self):
