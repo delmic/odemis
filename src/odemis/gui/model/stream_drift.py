@@ -52,6 +52,9 @@ import odemis.model as model
 
 # DRIFT CORRECTION
 from odemis.acq.drift import calculation
+from odemis.dataio import hdf5
+from numpy import fft
+from numpy import random
 
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
@@ -1763,20 +1766,14 @@ class MultipleDetectorStream(Stream):
             r.extend(s.raw)
         return r
 
-class SEMCCDMDStream(MultipleDetectorStream):
+class SEMCCDDCtream(MultipleDetectorStream):
     """
-    Abstract class for multiple detector Stream made of SEM + CCD.
-    It handles acquisition, but not rendering (so .image always returns an empty
-    image).
-    It provides to subclasses two ways to acquire the data:
-     * software synchronised = the acquisition code takes care of moving the
-       SEM spot and starts a new CCD acquisition at each spot. A bit more
-       overhead but very reliable, so use for long dwell times.
-     * driver synchronised = the SEM is programmed to scan the whole grid and
-       automatically synchronises the CCD. As the dwell time is constant, it
-       must be bigger than the worst time for CCD acquisition. Less overhead,
-       so good for short dwell times.
-    TODO: in software synchronisation, we can easily do our own fuzzing.
+    Abstract class for multiple detector Stream made of SEM + CCD with drift correction
+    applied. After "correction_range" number of pixels is scanned, it moves the e-beam 
+    to the "selected region" (roi), scans it and provides the generated frame, along with 
+    the previous one, to CalculateDrift. Then it sets the translation of the e-beam 
+    based on the drift value calculated by CalculateDrift and starts scanning the next 
+    "correction_range" pixels.
     """
     __metaclass__ = ABCMeta
     def __init__(self, name, sem_stream, ccd_stream, correction_range, selected_region):
@@ -1815,6 +1812,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         
         # DRIFT CORRECTION
         self._sr_data = None
+        # TO BE REMOVED
+        self.data = hdf5.read_data("small_data.h5")
+        C, T, Z, Y, X = self.data[0].shape
+        self.data[0].shape = Y, X
 
         self._current_future = None
 
@@ -1883,15 +1884,17 @@ class SEMCCDMDStream(MultipleDetectorStream):
         else:
             future.set_result(result)
 
-    @abstractmethod
     def _onSEMCCDData(self, sem_data, ccd_data):
         """
-        called at the end of an entire acquisition
-        sem_data (DataArray): the SEM data
-        ccd_data (list of DataArray): the CCD data (ordered, with X changing
-          fast, then Y slow)
+        cf SEMCCDMDStream._onSEMCCDData()
         """
-        pass
+        # Not much to do: just save everything as is
+
+        # MD_AR_POLE is set automatically, copied from the lens property.
+        # In theory it's dependant on MD_POS, but so slightly that we don't need
+        # to correct it.
+        self._ccd_stream.raw = ccd_data
+        self._sem_stream.raw = [sem_data]
 
     def _updateProgress(self, future, start, ratio):
         """
@@ -1946,35 +1949,31 @@ class SEMCCDMDStream(MultipleDetectorStream):
         return exp + readout
        
     def _onSelectedRegion(self):
-		"""
-		Update the scanning area of the SEM according to the selected region
-		for drift correction.
-		"""
-		roi = self._selected_region
-		
-		# only change hw settings if stream is active (and not spot mode)
-		# Note: we could also (un)subscribe whenever these changes, but it's
-		# simple like this.
-		if not self.is_active.value or self.spot.value:
-			return
+        """
+        Update the scanning area of the SEM according to the selected region
+        for drift correction.
+        """
+        roi = self._selected_region
 
-		# FIXME: this is fighting against the resolution setting of the SEM
-		# => only apply if is_active (and not spot mode...)
-		# We should remove res setting from the GUI when this ROI is used.
-		center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
-		width = (roi[2] - roi[0], roi[3] - roi[1])
+        # FIXME: this is fighting against the resolution setting of the SEM
+        # => only apply if is_active (and not spot mode...)
+        # We should remove res setting from the GUI when this ROI is used.
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0], roi[3] - roi[1])
 
-		shape = self._emitter.shape
-		# translation is distance from center (situated at 0.5, 0.5), can be floats
-		trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
-		# resolution is the maximum resolution at the scale in proportion of the width
-		scale = self._emitter.scale.value
-		res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
-			   max(1, int(round(shape[1] * width[1] / scale[1]))))
+        shape = self._emitter.shape
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+        # resolution is the maximum resolution at the scale in proportion of the width
+        scale = self._emitter.scale.value
+        res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
+        	   max(1, int(round(shape[1] * width[1] / scale[1]))))
 
-		# always in this order
-		self._emitter.resolution.value = res
-		self._emitter.translation.value = trans
+        # always in this order
+        print res
+        self._emitter.resolution.value = res
+        self._emitter.translation.value = trans
+        self._emitter.dwellTime.value = self._emitter.dwellTime.range[0]
 
     def _getSpotPositions(self):
         """
@@ -2049,13 +2048,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
                 # DRIFT CORRECTION
+                self._emitter.dwellTime.value = dwell_time
                 self._emitter.scale.value = (1, 1) # min, to avoid limits on translation
                 self._emitter.resolution.value = (1, 1)
                 
                 # set ebeam to position (which is ensured only once acquiring)
                 # DRIFT CORRECTION
                 # tweak translation according to calculated drift
+                logging.debug("E-beam spot before drift correction: " + str(spot_pos[i[::-1]]))
                 self._emitter.translation.value = (spot_pos[i[::-1]][0] - drift[0], spot_pos[i[::-1]][1] - drift[1])
+                logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
@@ -2097,22 +2099,24 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 
                 # DRIFT CORRECTION
                 if (n % correction_range) == 0:
-				 	# DRIFT CORRECTION
-				 	#Move e-beam to the selected region
-				 	self._onSelectedRegion()
-				 	
-				 	self._acq_sem_complete.clear()
-				 	self._semd_df.subscribe(self._ssOnSelectedRegion)
-				 	if not self._acq_sem_complete.wait(dwell_time * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
-						raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
-				 	
-				 	self._semd_df.unsubscribe(self._ssOnSelectedRegion)
+                    # DRIFT CORRECTION
+                    # Move e-beam to the selected region
+                    self._onSelectedRegion()
+                    logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
+                    self._acq_sem_complete.clear()
+                    self._semd_df.subscribe(self._ssOnSelectedRegion)
+                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.range[0] * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
+                        raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
+                    self._semd_df.unsubscribe(self._ssOnSelectedRegion)
 
-					if self._acq_state == CANCELLED:
-						raise CancelledError()
-					
-					# Calculate the drift between the last two frames
-					drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data)-2], self._sr_data[len(self._sr_data)-1],10)
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+                    
+                    # Calculate the drift between the last two frames
+                    if len(self._sr_data)>1:
+                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 100)
+                        logging.debug("Current drift: " + str(drift))
+
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
@@ -2146,6 +2150,36 @@ class SEMCCDMDStream(MultipleDetectorStream):
         finally:
             del self._sem_data # regain a bit of memory
 
+    def _ssOnSelectedRegion(self, df, data):
+        logging.debug("Selected Region data received")
+        # Do not stop the acquisition, as it ensures the e-beam is at the right place
+        if not self._acq_sem_complete.is_set():
+            # only use the first data per pixel
+            # self._sr_data.append(data)
+
+            # FAKE FRAMES, TO BE REMOVED
+            # Input drifted by random value
+            z = 1j  # imaginary unit
+            deltar = numpy.random.uniform(-5, 5)
+            deltac = numpy.random.uniform(-5, 5)
+            print deltar, deltac
+            nr, nc = self.data[0].shape
+            array_nr = numpy.arange(-numpy.fix(nr / 2), numpy.ceil(nr / 2))
+            array_nc = numpy.arange(-numpy.fix(nc / 2), numpy.ceil(nc / 2))
+            Nr = fft.ifftshift(array_nr)
+            Nc = fft.ifftshift(array_nc)
+            [Nc, Nr] = numpy.meshgrid(Nc, Nr)
+            data_random_drifted = fft.ifft2(fft.fft2(self.data[0]) * numpy.power(math.e,
+                            z * 2 * math.pi * (deltar * Nr / nr + deltac * Nc / nc)))
+            # Noise added
+            noise = random.normal(0, 1000, data_random_drifted.size)
+            noise_array = noise.reshape(data_random_drifted.shape[0], data_random_drifted.shape[1])
+
+            data_random_drifted_noisy = data_random_drifted + noise_array
+            self._sr_data.append(data_random_drifted_noisy)
+
+            self._acq_sem_complete.set()
+
     def _ssOnSEMImage(self, df, data):
         logging.debug("SEM data received")
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
@@ -2153,14 +2187,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # only use the first data per pixel
             self._sem_data.append(data)
             self._acq_sem_complete.set()
-            
-	def _ssOnSelectedRegion(self, df, data):
-		logging.debug("Selected Region data received")
-		# Do not stop the acquisition, as it ensures the e-beam is at the right place
-		if not self._acq_sem_complete.is_set():
-			# only use the first data per pixel
-			self._sr_data.append(data)
-			self._acq_sem_complete.set()
 
     def _ssOnCCDImage(self, df, data):
         logging.debug("CCD data received")
@@ -2344,6 +2370,548 @@ class SEMCCDMDStream(MultipleDetectorStream):
             return self.raw
         finally:
             del self._acq_ccd_buf # regain a bit of memory
+
+    def _dsUpdateCCDMetadata(self, das, rep, pos, pxs):
+        """
+        Updates the MD_POS metadata of the CCD data (=spot position)
+        das (list of DataArrays): X*Y data, ordered in X, then Y scan
+        rep (tuple of 2 int): dimension of X and Y
+        pos (tuple of 2 float): center
+        pxs (tuple of 2 float): physical distance between spots
+        returns nothing, just updates das
+        """
+        pos0 = (pos[0] - (pxs[0] * (rep[0] - 1) / 2),
+                pos[1] - (pxs[1] * (rep[1] - 1) / 2))
+        for idx, d in zip(numpy.ndindex(*rep[::-1]), das):
+            # rep is reversed as numpy scans last dim first
+            d.metadata[MD_POS] = (pos0[0] + idx[1] * pxs[0],
+                                  pos0[1] + idx[0] * pxs[1])
+
+    def _dsOnCCDImage(self, df, data):
+        # the data array subscribers must be fast, so the real processing
+        # takes place later
+        self._acq_ccd_buf.append(data)
+        # TODO: update the estimated time based on how long it takes per pixel
+        # in reality
+
+        self._acq_ccd_n += 1
+        ratio = self._acq_ccd_n / self._acq_ccd_tot
+        self._updateProgress(self._current_future, self._acq_start, ratio)
+        if self._acq_ccd_n >= self._acq_ccd_tot:
+            # unsubscribe to stop immediately
+            df.unsubscribe(self._dsOnCCDImage)
+            self._acq_ccd_complete.set()
+
+    def _dsOnSEMImage(self, df, data):
+        # unsubscribe to stop immediately
+        df.unsubscribe(self._dsOnSEMImage)
+        self._sem_data = data
+        self._acq_sem_complete.set()
+
+class SEMCCDMDStream(MultipleDetectorStream):
+    """
+    Abstract class for multiple detector Stream made of SEM + CCD.
+    It handles acquisition, but not rendering (so .image always returns an empty
+    image).
+    It provides to subclasses two ways to acquire the data:
+     * software synchronised = the acquisition code takes care of moving the
+       SEM spot and starts a new CCD acquisition at each spot. A bit more
+       overhead but very reliable, so use for long dwell times.
+     * driver synchronised = the SEM is programmed to scan the whole grid and
+       automatically synchronises the CCD. As the dwell time is constant, it
+       must be bigger than the worst time for CCD acquisition. Less overhead,
+       so good for short dwell times.
+    TODO: in software synchronisation, we can easily do our own fuzzing.
+    """
+    __metaclass__ = ABCMeta
+    def __init__(self, name, sem_stream, ccd_stream):
+        MultipleDetectorStream.__init__(self, name, [sem_stream, ccd_stream])
+
+        self._sem_stream = sem_stream
+        self._ccd_stream = ccd_stream
+
+        assert sem_stream._emitter == ccd_stream._emitter
+        self._emitter = sem_stream._emitter
+        # probably secondary electron detector
+        self._semd = self._sem_stream._detector
+        self._semd_df = self._sem_stream._dataflow
+        self._ccd = self._ccd_stream._detector  # CCD
+        self._ccd_df = self._ccd_stream._dataflow
+
+        # it will always be an empty image, but a different one every time a new
+        # acquisition is finished (so subscribing to it, will at least work).
+        self.image = VigilantAttribute(InstrumentalImage(None))
+
+        # For the acquisition
+        self._acq_lock = threading.Lock()
+        self._acq_state = RUNNING
+        self._acq_sem_complete = threading.Event()
+        self._acq_ccd_complete = threading.Event()
+        self._acq_thread = None  # thread
+        self._acq_ccd_tot = 0  # number of CCD acquisitions to do
+        self._acq_ccd_n = 0  # number of CCD acquisitions so far
+        self._acq_start = 0  # time of acquisition beginning
+        self._sem_data = None
+        self._ccd_data = None
+
+        self._current_future = None
+
+        self.should_update = model.BooleanVA(False)
+        self.is_active = model.BooleanVA(False)
+
+    def estimateAcquisitionTime(self):
+        # that's the same as the CCD stream (and SEM stream, once the hardware
+        # settings are correct)
+        return self._ccd_stream.estimateAcquisitionTime()
+
+    def acquire(self):
+        # TODO: if already acquiring, queue the Future for later acquisition
+        if self._current_future != None and not self._current_future.done():
+            raise IOError("Cannot do multiple acquisitions simultaneously")
+
+        if self._acq_thread and self._acq_thread.isAlive():
+            logging.debug("Waiting for previous acquisition to fully finish")
+            self._acq_thread.join(10)
+            if self._acq_thread.isAlive():
+                logging.error("Previous acquisition not ending")
+
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self.estimateAcquisitionTime())
+        self._current_future = f
+        self._acq_state = RUNNING  # TODO: move to per acquisition
+
+        # Pick the right acquisition method
+        if self._ccd.exposureTime.value <= 0.1:
+            # short dwell time => use driver synchronisation
+            runAcquisition = self._dsRunAcquisition
+            f.task_canceller = self._dsCancelAcquisition
+        else:
+            # long dwell time => use software synchronisation
+            runAcquisition = self._ssRunAcquisition
+            f.task_canceller = self._ssCancelAcquisition
+
+        # run task in separate thread
+        self._acq_thread = threading.Thread(target=self._executeTask,
+                              name="SEM/CCD acquisition",
+                              args=(f, runAcquisition, f))
+        self._acq_thread.start()
+        return f
+
+    # Copy from acqmng
+    @staticmethod
+    def _executeTask(future, fn, *args, **kwargs):
+        """
+        Executes a task represented by a future.
+        Usually, called as main task of a (separate thread).
+        Based on the standard futures code _WorkItem.run()
+        future (Future): future that is used to represent the task
+        fn (callable): function to call for running the future
+        *args, **kwargs: passed to the fn
+        returns None: when the task is over (or cancelled)
+        """
+        if not future.set_running_or_notify_cancel():
+            return
+
+        try:
+            result = fn(*args, **kwargs)
+        except BaseException:
+            e = sys.exc_info()[1]
+            future.set_exception(e)
+        else:
+            future.set_result(result)
+
+    @abstractmethod
+    def _onSEMCCDData(self, sem_data, ccd_data):
+        """
+        called at the end of an entire acquisition
+        sem_data (DataArray): the SEM data
+        ccd_data (list of DataArray): the CCD data (ordered, with X changing
+          fast, then Y slow)
+        """
+        pass
+
+    def _updateProgress(self, future, start, ratio):
+        """
+        update end time of future
+        future (ProgressiveFuture): future to update
+        start (float): start time
+        ratio (0<=float<=1): progress ratio
+        """
+        now = time.time()
+        tot_time = (now - start) / ratio
+        # add some overhead for the end of the acquisition
+        future.set_end_time(start + tot_time + 0.1)
+
+    def _ssCancelAcquisition(self, future):
+        with self._acq_lock:
+            if self._acq_state == FINISHED:
+                return False  # too late
+            self._acq_state = CANCELLED
+
+        msg = ("Cancelling acquisition of components %s and %s")
+        logging.debug(msg, self._semd.name, self._ccd.name)
+
+        # Do it in any case, to be sure
+        self._semd_df.unsubscribe(self._ssOnSEMImage)
+        self._ccd_df.unsubscribe(self._ssOnCCDImage)
+        self._ccd_df.synchronizedOn(None)
+        # set the events, so the acq thread doesn't wait for them
+        self._acq_ccd_complete.set()
+        self._acq_sem_complete.set()
+        return True
+
+    def _ssAdjustHardwareSettings(self):
+        """
+        Read the SEM and AR stream settings and adapt the SEM scanner
+        accordingly.
+        return (float): estimated time for a whole CCD image
+        """
+        # Set SEM to spot mode, without caring about actual position (set later)
+        self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
+        self._emitter.resolution.value = (1, 1)
+
+        # Dwell Time: a "little bit" more than the exposure time
+        exp = self._ccd.exposureTime.value  # s
+        ccd_size = self._ccd.resolution.value
+
+        # Dwell time as long as possible, but better be slightly shorter than
+        # CCD to be sure it is not slowing thing down.
+        readout = numpy.prod(ccd_size) / self._ccd.readoutRate.value
+        rng = self._emitter.dwellTime.range
+        self._emitter.dwellTime.value = sorted(rng + (exp + readout,))[1]  # clip
+
+        return exp + readout
+
+    def _getSpotPositions(self):
+        """
+        Compute the positions of the e-beam for each point in the ROI
+        return (numpy ndarray of floats of shape (X,Y,2)): each value is for a
+          given X/Y in the repetition grid -> 2 floats corresponding to the
+          translation.
+        """
+        repetition = tuple(self._ccd_stream.repetition.value)
+        roi = self._ccd_stream.roi.value
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        # Take into account the "border" around each pixel
+        pxs = (width[0] / repetition[0], width[1] / repetition[1])
+        lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
+               roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
+
+        shape = self._emitter.shape
+        # convert into SEM translation coordinates: distance in px from center
+        # (situated at 0.5, 0.5), can be floats
+        lim_sem = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5),
+                   shape[0] * (lim[2] - 0.5), shape[1] * (lim[3] - 0.5))
+        logging.debug("Generating points in the SEM area %s", lim_sem)
+
+        pos = numpy.empty(repetition + (2,), dtype=numpy.float)
+        posx = pos[:, :, 0].swapaxes(0, 1)  # just a view to have X as last dim
+        posx[:, :] = numpy.linspace(lim_sem[0], lim_sem[2], repetition[0])
+        # fill the X dimension
+        pos[:, :, 1] = numpy.linspace(lim_sem[1], lim_sem[3], repetition[1])
+        return pos
+
+    def _ssRunAcquisition(self, future):
+        """
+        Acquires SEM/CCD images via software synchronisation.
+        Warning: can be quite memory consuming if the grid is big
+        returns (list of DataArray): all the data acquired
+        raises:
+          CancelledError() if cancelled
+          Exceptions if error
+        """
+        # TODO: handle better very large grid acquisition (than memory oops)
+        try:
+            ccd_time = self._ssAdjustHardwareSettings()
+            dwell_time = self._emitter.dwellTime.value
+            spot_pos = self._getSpotPositions()
+            logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], ccd_time, dwell_time)
+            rep = self._ccd_stream.repetition.value
+            roi = self._ccd_stream.roi.value
+            self._sem_data = []
+            self._ccd_data = None
+            ccd_buf = []
+            self._ccd_stream.raw = []
+            self._sem_stream.raw = []
+            logging.debug("Starting CCD acquisition with components %s and %s",
+                          self._semd.name, self._ccd.name)
+
+            # We need to use synchronisation event because without it, either we
+            # use .get() but it's not possible to cancel the acquisition, or we
+            # subscribe/unsubscribe for each image, but the overhead is high.
+            trigger = self._ccd.softwareTrigger
+            self._ccd_df.synchronizedOn(trigger)
+            self._ccd_df.subscribe(self._ssOnCCDImage)
+
+            tot_num = numpy.prod(rep)
+            n = 0
+            start_time = time.time()
+            for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
+                # set ebeam to position (which is ensured only once acquiring)
+                self._emitter.translation.value = spot_pos[i[::-1]]
+                self._acq_sem_complete.clear()
+                self._acq_ccd_complete.clear()
+                self._semd_df.subscribe(self._ssOnSEMImage)
+                time.sleep(0)  # give more chances spot has been already processed
+                start = time.time()
+                trigger.notify()
+
+                if not self._acq_ccd_complete.wait(ccd_time * 2 + 1):
+                    raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                dur = time.time() - start
+                if dur < ccd_time:
+                    logging.warning("CCD acquisition took less that %g s: %g s",
+                                    ccd_time, dur)
+
+                # Normally, the SEM acquisition has already completed
+                if not self._acq_sem_complete.wait(dwell_time * 1.5 + 1):
+                    raise TimeoutError("Acquisition of SEM pixel %s timed out" % (i,))
+                # TODO: we don't really need to stop it, we could have a small
+                # dwell time, move the ebeam to the new position, and as soon as
+                # we get next acquisition we can expect the spot has moved. The
+                # advantage would be to avoid setting the ebeam back to resting
+                # position, and reduce overhead of stopping/starting.
+                self._semd_df.unsubscribe(self._ssOnSEMImage)
+
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+
+                # MD_POS default to the center of the stage, but it needs to be
+                # the position of the e-beam
+                ccd_data = self._ccd_data
+                ccd_data.metadata[MD_POS] = self._sem_data[-1].metadata[MD_POS]
+                ccd_data.metadata[MD_DESCRIPTION] = self._ccd_stream.name.value
+                ccd_buf.append(ccd_data)
+
+                n += 1
+                self._updateProgress(future, start_time, n / tot_num)
+
+            self._ccd_df.unsubscribe(self._ssOnCCDImage)
+            self._ccd_df.synchronizedOn(None)
+
+            with self._acq_lock:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                self._acq_state = FINISHED
+
+            sem_one = self._assembleSEMData(rep, roi, self._sem_data)  # shape is (Y, X)
+            # explicitly add names to make sure they are different
+            sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
+            self._onSEMCCDData(sem_one, ccd_buf)
+        except Exception as exp:
+            if not isinstance(exp, CancelledError):
+                logging.exception("Software sync acquisition of SEM/CCD failed")
+
+            # make sure it's all stopped
+            self._semd_df.unsubscribe(self._ssOnSEMImage)
+            self._ccd_df.unsubscribe(self._ssOnCCDImage)
+            self._ccd_df.synchronizedOn(None)
+
+            self._ccd_stream.raw = []
+            self._sem_stream.raw = []
+            if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
+                logging.warning("Converting exception to cancellation")
+                raise CancelledError()
+            raise
+        else:
+            return self.raw
+        finally:
+            del self._sem_data  # regain a bit of memory
+
+    def _ssOnSEMImage(self, df, data):
+        logging.debug("SEM data received")
+        # Do not stop the acquisition, as it ensures the e-beam is at the right place
+        if not self._acq_sem_complete.is_set():
+            # only use the first data per pixel
+            self._sem_data.append(data)
+            self._acq_sem_complete.set()
+
+    def _ssOnCCDImage(self, df, data):
+        logging.debug("CCD data received")
+        self._ccd_data = data
+        self._acq_ccd_complete.set()
+
+    def _assembleSEMData(self, rep, roi, data_list):
+        """
+        Take all the data received from the SEM and assemble it in a 2D image.
+        The result goes into .raw.
+
+        rep (tuple of 2 0<ints): X/Y repetition
+        roi (tupel of 3 0<floats<=1): region of interest in logical coordinates
+        data_list (list of M DataArray of shape (1, 1)): all the data received,
+        with X variating first, then Y.
+        """
+        assert len(data_list) > 0
+
+        # start with the metadata from the first point
+        md = dict(data_list[0].metadata)
+
+        # Compute center of area, from average of centered acquisitions
+        idx_center = rep[0] // 2
+        if idx_center * 2 == rep[0]:  # even number => average
+            posx = (data_list[idx_center - 1].metadata[MD_POS][0] +
+                    data_list[idx_center].metadata[MD_POS][0]) / 2
+        else:  # odd number => center
+            posx = data_list[idx_center].metadata[MD_POS][0]
+        idx_center = rep[1] // 2
+        if idx_center * 2 == rep[1]:  # even number => average
+            posy = (data_list[rep[0] * (idx_center - 1)].metadata[MD_POS][1] +
+                    data_list[rep[0] * idx_center].metadata[MD_POS][1]) / 2
+        else:  # odd number => center
+            posy = data_list[rep[0] * idx_center].metadata[MD_POS][1]
+
+        # Pixel size is the size of field of view divided by the repetition
+        sem_pxs = self._emitter.pixelSize.value
+        sem_shape = self._emitter.shape[:2]
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        fov = (width[0] * sem_shape[0] * sem_pxs[0],
+               width[1] * sem_shape[1] * sem_pxs[1])
+        pxs = (fov[0] / rep[0], fov[1] / rep[1])
+
+        md.update({MD_POS: (posx, posy),
+                   MD_PIXEL_SIZE: pxs})
+
+        # concatenate data into one big array of (number of pixels,1)
+        sem_data = numpy.concatenate(data_list)
+        # reshape to (Y, X)
+        sem_data.shape = rep[::-1]
+        sem_data = model.DataArray(sem_data, metadata=md)
+        return sem_data
+
+    def _dsCancelAcquisition(self, future):
+        with self._acq_lock:
+            if self._acq_state == FINISHED:
+                return False  # too late
+            self._acq_state = CANCELLED
+        msg = ("Cancelling acquisition of components %s and %s")
+        logging.debug(msg, self._semd.name, self._ccd.name)
+
+        self._semd_df.unsubscribe(self._dsOnSEMImage)
+        self._ccd_df.unsubscribe(self._dsOnCCDImage)
+        self._ccd_df.synchronizedOn(None)
+        # set the event, so the acq thread doesn't wait for them
+        self._acq_ccd_complete.set()
+        self._acq_sem_complete.set()
+        return True
+
+    def _dsAdjustHardwareSettings(self):
+        """
+        Read the SEM and CCD stream settings and adapt the scanner accordingly.
+        """
+        # ROI
+        rep = list(self._ccd_stream.repetition.value)
+        roi = self._ccd_stream.roi.value
+        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+
+        shape = self._emitter.shape
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
+        # scale is how big is a pixel compared to the minimum pixel size (1/shape)
+        scale = (max(1, (shape[0] * width[0]) / rep[0]),
+                 max(1, (shape[1] * width[1]) / rep[1]))
+
+        logging.debug("Setting SEM ROI to resolution = %s, translation = %s, and "
+                      "scale = %s", rep, trans, scale)
+
+        # always in this order
+        self._emitter.scale.value = scale
+        self._emitter.resolution.value = rep
+        self._emitter.translation.value = trans
+
+        # Dwell Time: a "little bit" more than the exposure time
+        exp = self._ccd.exposureTime.value  # s
+        ccd_size = self._ccd.resolution.value
+
+        # "Magical" formula to get a long enough dwell time. It has to be as
+        # long as the maximum CCD acquisition => needs a bit of margin.
+        # Works with PVCam and Andorcam2, but not fool proof at all!
+        readout = numpy.prod(ccd_size) / self._ccd.readoutRate.value + 0.01
+        # 50ms to account for the overhead and extra image acquisition
+        dt = (exp + readout) * 1.3 + 0.05
+        rng = self._emitter.dwellTime.range
+        self._emitter.dwellTime.value = sorted(rng + (dt,))[1]  # clip
+
+        # Take into account settle time
+        if len(rep) == 2 and rep[1] > 1:
+            rep[1] += 1
+        tot_time = (self._emitter.dwellTime.value + 0.01) * numpy.prod(rep)
+
+        return tot_time
+
+    def _dsRunAcquisition(self, future):
+        """
+        Wait until the acquisition is complete, to update the data and stop the
+        updates.
+        To be run as a separate thread, after the SEM data has arrived.
+        return (list of DataArray): all the data acquired
+        raises:
+          CancelledError() if cancelled
+          Exceptions if error
+        """
+        try:
+            # reset everything (ready for one acquisition)
+            tot_time = self._dsAdjustHardwareSettings()
+            rep = self._ccd_stream.repetition.value
+            self._acq_ccd_tot = numpy.prod(rep)
+            self._acq_ccd_n = 0
+            self._acq_ccd_buf = []
+            self._sem_data = None  # One DataArray
+            self._acq_ccd_complete.clear()
+            self._acq_sem_complete.clear()
+
+            self._ccd_df.synchronizedOn(self._emitter.newPosition)
+            self._ccd_df.subscribe(self._dsOnCCDImage)
+            self._acq_start = time.time()
+            self._semd_df.subscribe(self._dsOnSEMImage)
+
+            # Wait until it's all done
+            if not self._acq_ccd_complete.wait(tot_time * 1.5 + 1):
+                raise TimeoutError("Acquisition of SEM/CCD timed out")
+            if not self._acq_sem_complete.wait(self._emitter.dwellTime.value + 1):
+                raise TimeoutError("Acquisition of SEM/CCD timed out")
+            self._ccd_df.synchronizedOn(None)
+
+            with self._acq_lock:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                self._acq_state = FINISHED
+
+            # actually only useful for AR acquisition
+            sem_md = self._sem_data.metadata
+            pos = sem_md[MD_POS]
+            pxs = sem_md[MD_PIXEL_SIZE]
+            self._dsUpdateCCDMetadata(self._acq_ccd_buf, rep, pos, pxs)
+
+            # explicitly add names to make sure they are different
+            ccd_stream_name = self._ccd_stream.name.value
+            for d in self._acq_ccd_buf:
+                d.metadata[MD_DESCRIPTION] = ccd_stream_name
+            sem_md[MD_DESCRIPTION] = self._sem_stream.name.value
+            self._onSEMCCDData(self._sem_data, self._acq_ccd_buf)
+        except Exception as exp:
+            if not isinstance(exp, CancelledError):
+                logging.exception("Driver sync acquisition of SEM/CCD failed")
+
+            # make sure it's all stopped
+            self._semd_df.unsubscribe(self._dsOnSEMImage)
+            self._ccd_df.unsubscribe(self._dsOnCCDImage)
+            self._ccd_df.synchronizedOn(None)
+
+            self._ccd_stream.raw = []
+            self._sem_stream.raw = []
+            if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
+                logging.warning("Converting exception to cancellation")
+                raise CancelledError()
+            raise
+        else:
+            return self.raw
+        finally:
+            del self._acq_ccd_buf  # regain a bit of memory
 
     def _dsUpdateCCDMetadata(self, das, rep, pos, pxs):
         """
