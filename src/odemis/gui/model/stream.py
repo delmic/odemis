@@ -763,6 +763,11 @@ class FluoStream(CameraStream):
         CameraStream.__init__(self, name, detector, dataflow, emitter)
         self._em_filter = em_filter
 
+        # TODO: instead of defining the excitation and emission wavelengths,
+        # just give the user the same choice as the hardware, and the user
+        # has to pick the right value (and the GUI can start with an
+        # "informed guess").
+
         # This is what is displayed to the user
         # Default to the center of the first excitation and emission bands
         exc_range = [min([s[0] for s in emitter.spectra.value]),
@@ -776,7 +781,7 @@ class FluoStream(CameraStream):
         cur_pos = em_filter.position.value["band"]
         self._current_out_wl = bands[cur_pos]
         em_range = self._find_emission_range(bands.values())
-        self.emission = model.FloatContinuous(numpy.mean(self._current_out_wl),
+        self.emission = model.FloatContinuous(em_range[0] + 1e-9,
                                               range=em_range, unit="m")
         self.emission.subscribe(self.onEmission)
 
@@ -859,9 +864,10 @@ class FluoStream(CameraStream):
                 # No match
                 return 0
 
-        # position with quantify_fit function as key
-        best = max(bands.keys(), key=lambda x: quantify_fit(wl, bands[x]))
-        if quantify_fit(wl, bands[best]) == 0:
+        scores = dict((k, quantify_fit(wl, v)) for k, v in bands.items())
+        # key with best score
+        best, score = max(scores.items(), key=lambda x: x[1])
+        if score == 0:
             return None
         return best
 
@@ -877,16 +883,19 @@ class FluoStream(CameraStream):
         self._removeWarnings(Stream.WARNING_EMISSION_IMPOSSIBLE,
                              Stream.WARNING_EMISSION_NOT_OPT)
         if p is not None:
-            self._em_filter.moveAbs({"band": p})
-            
-            # Detect if the selected band is outside of wl
+            f = self._em_filter.moveAbs({"band": p})
             band = self._em_filter.axes["band"].choices[p]
+            self._current_out_wl = band
+
+            # Detect if the selected band is outside of wl
             for l, h in band:
                 if l < wl < h:
                     break
             else:
                 self._addWarning(Stream.WARNING_EMISSION_NOT_OPT)
                 # TODO: add the actual band in the warning message?
+
+            f.result() # wait for the move to be finished
         else:
             logging.warning("Emission wavelength %s doesn't fit the filter",
                             units.readable_str(wl, "m"))
