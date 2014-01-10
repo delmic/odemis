@@ -38,12 +38,12 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
-from odemis.gui.model.img import InstrumentalImage
 from odemis.gui.util import get_picture_folder, formats_to_wildcards, conversion, \
     call_after
 from odemis.util import units
 import os.path
 import pkg_resources
+import scipy.misc
 import weakref
 import wx
 
@@ -865,9 +865,9 @@ class AnalysisTab(Tab):
                     if hasattr(viewport.canvas, "pixel_overlay"):
                         ol = viewport.canvas.pixel_overlay
                         ol.set_values(
-                                    iimg.mpp,
-                                    iimg.center,
-                                    iimg.get_digital_size(),
+                                    iimg.metadata[model.MD_PIXEL_SIZE][0],
+                                    iimg.metadata[model.MD_POS],
+                                    iimg.shape[0:2],
                                     strm.selected_pixel
                         )
                 strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
@@ -876,7 +876,6 @@ class AnalysisTab(Tab):
                 break
             # If an angle resolve stream is found...
             elif isinstance(strm, streammod.AR_STREAMS):
-                iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
                     if hasattr(viewport.canvas, "points_overlay"):
@@ -1352,15 +1351,15 @@ class MirrorAlignTab(Tab):
 
             # The mirror center (with the lens set) is defined as pole position
             # in the microscope configuration file.
-            goal_im = pkg_resources.resource_stream(
+            goal_rs = pkg_resources.resource_stream(
                             "odemis.gui.img",
                             "calibration/ma_goal_image_5_13_no_lens.png")
-            mpp = 13e-6 # m (not used if everything goes fine)
-            goal_iim = InstrumentalImage(
-                            wx.ImageFromStream(goal_im),
-                            mpp,
-                            (0, 0))
-            goal_stream = streammod.StaticStream("Goal", goal_iim)
+            # Pxs = sensor pxs / lens mag
+            mag = main_data.lens.magnification.value
+            goal_md = {model.MD_PIXEL_SIZE: (13e-6 / mag, 13e-6 / mag), # m
+                       model.MD_POS:(0, 0)}
+            goal_im = model.DataArray(scipy.misc.imread(goal_rs), goal_md)
+            goal_stream = streammod.RGBStream("Goal", goal_im)
 
             # create a view on the microscope model
             vpv = collections.OrderedDict([
@@ -1383,6 +1382,7 @@ class MirrorAlignTab(Tab):
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.flatten()
+            # TODO: use addStatic ?
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
         else:

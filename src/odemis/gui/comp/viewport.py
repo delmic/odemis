@@ -25,8 +25,9 @@ Created on 8 Feb 2012
 
 from __future__ import division
 
+import collections
 import logging
-from odemis import gui
+from odemis import gui, model
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_MOVE, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
@@ -35,7 +36,6 @@ from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after
 from odemis.util import units
 import wx
-import collections
 
 
 class ViewPort(wx.Panel):
@@ -271,11 +271,11 @@ class MicroscopeViewport(ViewPort):
 
         # get all the mpps
         mpps = set()
-        for s in self._microscope_view.getStreams():
-            if hasattr(s, "image"):
-                im = s.image.value
-                if im and im.mpp:
-                    mpps.add(im.mpp)
+        for im in self._microscope_view.stream_tree.getImages():
+            try:
+                mpps.add(im.metadata[model.MD_PIXEL_SIZE][0])
+            except KeyError:
+                pass
 
         if len(mpps) == 1:
             # two magnifications

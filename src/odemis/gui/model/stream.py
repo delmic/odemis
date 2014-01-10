@@ -36,8 +36,6 @@ import logging
 import math
 import numpy
 from numpy.polynomial import polynomial
-from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.util.img import NDImage2wxImage
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar
@@ -59,8 +57,8 @@ UNDEFINED_ROI = (0, 0, 0, 0)
 class Stream(object):
     """ A stream combines a Detector, its associated Dataflow and an Emitter.
 
-    It handles acquiring the data from the hardware and renders it as an
-    InstrumentalImage with the given image transformation.
+    It handles acquiring the data from the hardware and renders it as a RGB 
+    image (with MD_PIXEL_SIZE and MD_POS copied)
 
     This is an abstract class, unless the emitter doesn't need any configuration
     (always on, with the right settings).
@@ -105,7 +103,7 @@ class Stream(object):
         # every time it's modified, image is also modified
         self.raw = []
         # the most important attribute
-        self.image = model.VigilantAttribute(InstrumentalImage(None))
+        self.image = model.VigilantAttribute(None)
 
         # TODO: should maybe to 2 methods activate/deactivate to explicitly
         # start/stop acquisition, and one VA "updated" to stated that the user
@@ -282,41 +280,33 @@ class Stream(object):
 
         return irange
 
-    def _findPos(self, data):
+    def _find_metadata(self, data):
         """
-        Find the (center) position of the given image. Guess if necessary.
-        data (DataArray): image
-        return (tuple of float): position
+        Find the PIXEL_SIZE and POS metadata from the given raw image
+        return (dict MD_* -> value)
         """
+        md = data.metadata
         try:
             pos = data.metadata[MD_POS]
         except KeyError:
             # Note: this log message is disabled to prevent log flooding
             # logging.warning("Position of image unknown")
             pos = (0, 0)
-        return pos
 
-    def _findMPP(self, data):
-        """
-        Find the density of the given image. Guess if necessary.
-        data (DataArray): image
-        return (tuple of float): MPP per dimension
-        """
         try:
-            mpp = data.metadata[MD_PIXEL_SIZE][0]
+            pxs = md[MD_PIXEL_SIZE]
         except KeyError:
-            try:
-                # Hopefully it'll be within the same magnitude
-                mpp = (data.metadata[MD_SENSOR_PIXEL_SIZE][0]
-                        * data.metadata.get(model.MD_BINNING, (1, 1))[0])
-                # Note: this log message is disabled to prevent log flooding
-                # msg = "Pixel density of image unknown, using sensor size"
-                # logging.warning(msg)
-            except KeyError:
-                logging.error("Image has no pixel density known")
-                mpp = 20e-6 # m/px (typical sensor size)
+            # Hopefully it'll be within the same magnitude
+            # default to typical sensor size
+            spxs = md.get(MD_SENSOR_PIXEL_SIZE, (20e-6, 20e-6))
+            binning = md.get(model.MD_BINNING, (1, 1))
+            pxs = spxs[0] / binning[0], spxs[1] / binning[1]
+            # Note: this log message is disabled to prevent log flooding
+            # msg = "Pixel density of image unknown, using sensor size"
+            # logging.warning(msg)
 
-        return mpp
+        return {model.MD_PIXEL_SIZE: pxs,
+                model.MD_POS: pos}
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self, tint=(255, 255, 255)):
@@ -334,12 +324,7 @@ class Stream(object):
             data = self.raw[0]
             irange = self._getDisplayIRange()
             rgbim = img.DataArray2RGB(data, irange, tint)
-            im = NDImage2wxImage(rgbim)
-            im.InitAlpha() # it's a different buffer so useless to do it in numpy
-
-            self.image.value = InstrumentalImage(im,
-                                                 self._findMPP(data),
-                                                 self._findPos(data))
+            self.image.value = model.DataArray(rgbim, self._find_metadata(data))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:
@@ -629,15 +614,6 @@ class SEMStream(Stream):
         if self.spot.value:
             return
         super(SEMStream, self).onNewImage(df, data)
-
-
-    # TODO: should be common to all Stream classes
-    def getStatic(self):
-        """
-        return (StaticSEMStream): similar stream, but static
-        """
-        ss = StaticSEMStream(self.name.value, self.raw[0])
-        return ss
 
 class CameraStream(Stream):
     """ Abstract class representing streams which have a digital camera as a
@@ -1264,12 +1240,6 @@ class SpectrumStream(RepetitionStream):
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
-    def getStatic(self):
-        """
-        return (StaticSpectrumStream): similar stream, but static
-        """
-        raise NotImplementedError("Stream doesn't actually acquire data")
-
 class ARStream(RepetitionStream):
     """
     An angular-resolved stream, for a set of points (on the SEM).
@@ -1283,48 +1253,50 @@ class ARStream(RepetitionStream):
         # For SPARC: typical user wants density much lower than SEM
         self.pixelSize.value *= 30
 
-    def getStatic(self):
-        """
-        return (StaticARStream): similar stream, but static
-        """
-        raise NotImplementedError("Stream doesn't actually acquire data")
-
 class StaticStream(Stream):
-    """ Stream containing one static image.
-
+    """ 
+    Stream containing one static image.
     For testing and static images.
     """
-
     def __init__(self, name, image):
         """
         Note: parameters are different from the base class.
-        image (InstrumentalImage or DataArray of shape (111)YX): image to
-          display or raw data.
-          If it is a DataArray, the metadata should contain at least MD_POS and
-          MD_PIXEL_SIZE.
+        image (DataArray of shape (111)YX): static raw data.
+          The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
         """
         Stream.__init__(self, name, None, None, None)
-        if isinstance(image, InstrumentalImage):
-            # TODO: use original image as raw, to allow changing the B/C/tint
-            # Need to distinguish between greyscale (possible) and colour (impossible)
-            self.image = VigilantAttribute(image)
-        else: # raw data
-            # Check it's 2D
-            if len(image.shape) < 2:
-                raise ValueError("Data must be 2D")
-            # make it 2D by removing first dimensions (which must 1)
-            if len(image.shape) > 2:
-                l1d = len(image.shape) - 2
-                if image.shape[:l1d] != (1,) * l1d: # must look like (1,1,1)
-                    raise ValueError("Data must be 2D but has shape %s" %
-                                     (image.shape,))
-                image = image[(0,) * l1d]
+        # Check it's 2D
+        if len(image.shape) < 2:
+            raise ValueError("Data must be 2D")
+        # make it 2D by removing first dimensions (which must 1)
+        if len(image.shape) > 2:
+            image = img.ensure2DImage(image)
 
-            self.onNewImage(None, image)
+        self.onNewImage(None, image)
 
     def onActive(self, active):
         # don't do anything
         pass
+
+class RGBStream(StaticStream):
+    """
+    A static stream which gets as input the actual RGB image
+    """
+    def __init__(self, name, image):
+        """
+        Note: parameters are different from the base class.
+        image (DataArray of shape YX3): image to display.
+          The metadata should contain at least MD_POS and MD_PIXEL_SIZE.
+        """
+        Stream.__init__(self, name, None, None, None)
+        # Check it's 2D
+        if not (len(image.shape) == 3 and image.shape[2] in [3, 4]):
+            raise ValueError("Data must be RGB(A)")
+        
+        # TODO: use original image as raw, to allow changing the B/C/tint
+        # Need to distinguish between greyscale (possible) and colour (impossible)
+        self.image = VigilantAttribute(image)
+     
 
 class StaticSEMStream(StaticStream):
     """
@@ -1415,9 +1387,7 @@ class StaticARStream(StaticStream):
         """
         Stream.__init__(self, name, None, None, None)
 
-        if isinstance(data, InstrumentalImage):
-            raise NotImplementedError("ARStream needs a list of raw data")
-        elif not isinstance(data, collections.Iterable):
+        if not isinstance(data, collections.Iterable):
             data = [data] # from now it's just a list of DataArray
 
         # find positions of each acquisition
@@ -1490,7 +1460,7 @@ class StaticARStream(StaticStream):
             self._running_upd_img = True
 
             if pos == (None, None):
-                self.image.value = InstrumentalImage(None)
+                self.image.value = None
             else:
                 polar = self._getPolarProjection(pos)
                 # update the histrogram
@@ -1502,11 +1472,8 @@ class StaticARStream(StaticStream):
 
                 # Convert to RGB
                 rgbim = img.DataArray2RGB(polar, irange)
-                im = NDImage2wxImage(rgbim)
-                im.InitAlpha()
-
-                # TODO: Special InstrumentalImage for polar view, without MPP nor pos?
-                self.image.value = InstrumentalImage(im, 0.001, (0, 0))
+                # For polar view, no PIXEL_SIZE nor POS
+                self.image.value = model.DataArray(rgbim)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
         finally:
@@ -1536,9 +1503,6 @@ class StaticSpectrumStream(StaticStream):
         #  * information about the current bandwidth displayed (avg. spectrum)
         #  * coordinates of 1st point (1-point, line)
         #  * coordinates of 2nd point (line)
-
-        if isinstance(image, InstrumentalImage):
-            raise NotImplementedError("SpectrumStream needs a raw cube data")
 
         if len(image.shape) == 3:
             # force 5D
@@ -1704,12 +1668,7 @@ class StaticSpectrumStream(StaticStream):
             bim = img.DataArray2RGB(av_data, irange)
             rgbim[:, :, 2] = bim[:, :, 0]
 
-        im = NDImage2wxImage(rgbim)
-        im.InitAlpha() # it's a different buffer so useless to do it in numpy
-
-        self.image.value = InstrumentalImage(im,
-                                             self._findMPP(data),
-                                             self._findPos(data))
+        self.image.value = model.DataArray(rgbim, self._find_metadata(data))
 
     def get_spectrum_range(self):
         """
@@ -1851,7 +1810,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         # it will always be an empty image, but a different one every time a new
         # acquisition is finished (so subscribing to it, will at least work).
-        self.image = VigilantAttribute(InstrumentalImage(None))
+        self.image = VigilantAttribute(None)
 
         # For the acquisition
         self._acq_lock = threading.Lock()
@@ -2471,13 +2430,13 @@ class StreamTree(object):
     def __init__(self, operator=None, streams=None, **kwargs):
         """
         :param operator: (callable) a function that takes a list of
-            InstrumentalImage in the same order as the streams are given and the
-            additional arguments and returns one InstrumentalImage.
+            RGB DataArrays in the same order as the streams are given and the
+            additional arguments and returns one DataArray.
             By default operator is an average function.
         :param streams: (list of Streams or StreamTree): a list of streams, or
             StreamTrees.
             If a StreamTree is provided, its outlook is first computed and then
-            passed as an InstrumentalImage.
+            passed as an RGB DataArray.
         :param kwargs: any argument to be given to the operator function
         """
         self.operator = operator or img.Average
@@ -2555,7 +2514,7 @@ class StreamTree(object):
 
     def getImage(self, rect, mpp):
         """
-        Returns an InstrumentalImage composed of all the current stream images.
+        Returns an image composed of all the current stream images.
         Precisely, it returns the output of a call to operator.
         rect (2-tuple of 2-tuple of float): top-left and bottom-right points in
           world position (m) of the area to draw
@@ -2579,6 +2538,22 @@ class StreamTree(object):
 
         return self.operator(images, rect, mpp, **self.kwargs)
 
+    def getImages(self):
+        """
+        return a list of all the .image (which are not None)
+        """
+        images = []
+        for s in self.streams:
+            if isinstance(s, StreamTree):
+                images.extend(s.getImages())
+            elif isinstance(s, Stream):
+                if hasattr(s, "image"):
+                    im = s.image.value
+                    if im is not None:
+                        images.append(im)
+
+        return images
+
     def getRawImages(self):
         """
         Returns a list of all the raw images used to create the final image
@@ -2594,12 +2569,7 @@ class StreamTree(object):
     @property
     def spectrum_streams(self):
         """ Return a flat list of spectrum streams """
-        return self.get_streams(SPECTRUM_STREAMS)
-
-    @property
-    def angle_resolve_streams(self):
-        """ Return a flat list of spectrum streams """
-        return self.get_streams(AR_STREAMS)
+        return self.get_streams_by_type(SPECTRUM_STREAMS)
 
     def get_streams_by_name(self, name):
         """ Return a list of streams with have names that match `name` """
@@ -2613,14 +2583,14 @@ class StreamTree(object):
 
         return list(leaves)
 
-    def get_streams(self, stream_types):
+    def get_streams_by_type(self, stream_types):
         """ Return a flat list of streams of `stream_type` within the StreamTree
         """
         streams = []
 
         for s in self.streams:
             if isinstance(s, StreamTree):
-                streams.extend(s._get_streams(stream_types))
+                streams.extend(s.get_streams_by_type(stream_types))
             elif isinstance(s, stream_types):
                 streams.append(s)
 

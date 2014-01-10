@@ -25,9 +25,26 @@ import wx
 # Note: it's also possible to directly generate a wx.Bitmap from a buffer, but
 # always implies a memory copy.
 def NDImage2wxImage(image):
-    assert(len(image.shape) == 3 and image.shape[2] == 3)
+    """
+    Converts a NDImage into a wxImage.
+    Note, the copy of the data will be avoided whenever possible.
+    image (ndarray of uint8 with shape YX3 or YX4): original image, 
+     order of last dimension is RGB(A)
+    return (wxImage)
+    """
+    assert(len(image.shape) == 3)
     size = image.shape[1::-1]
-    return wx.ImageFromBuffer(*size, dataBuffer=image) # 0 copy
+    if image.shape[2] == 3: # RGB
+        wim = wx.ImageFromBuffer(*size, dataBuffer=image) # 0 copy
+        wim.InitAlpha() # it's a different buffer so useless to do it in numpy
+        return wim
+    elif image.shape[2] == 4: # RGBA
+        # 2 copies
+        return wx.ImageFromDataWithAlpha(*size,
+                             data=numpy.ascontiguousarray(image[:, :, 0:3]),
+                             alpha=numpy.ascontiguousarray(image[:, :, 3]))
+    else:
+        raise ValueError("image is of shape %s" % (image.shape,))
 
 def wxImage2NDImage(image, keep_alpha=True):
     """

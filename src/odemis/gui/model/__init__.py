@@ -95,6 +95,7 @@ class MainGUIData(object):
         self.mirror = None # actuator to change the mirror position (on SPARC)
         self.light = None
         self.light_filter = None # emission light filter for fluorescence micro.
+        self.lens = None
         self.ebeam = None
         self.sed = None # secondary electron detector
         self.bsd = None # back-scatter electron detector
@@ -136,6 +137,8 @@ class MainGUIData(object):
                     self._light_power_on = None # None = unknown
                 elif e.role == "filter":
                     self.light_filter = e
+                elif e.role == "lens":
+                    self.lens = e
                 elif e.role == "e-beam":
                     self.ebeam = e
 
@@ -736,7 +739,7 @@ class MicroscopeView(View):
             stream.image.subscribe(self._onNewImage)
 
             # if the stream already has an image, update now
-            if stream.image.value and stream.image.value.image:
+            if stream.image.value is not None:
                 self._onNewImage(stream.image.value)
         else:
             logging.debug("No image found for stream %s", type(stream))
@@ -766,15 +769,19 @@ class MicroscopeView(View):
     def _onNewImage(self, im):
         """
         Called when one stream has its image updated
-        im (InstrumentalImage)
+        im (DataArray)
         """
         # just let everyone that the composited image has changed
         self.lastUpdate.value = time.time()
 
         # if it's the first image ever, set mpp to the mpp of the image
-        if self.getMPPFromNextImage and im.mpp:
-            self.mpp.value = im.mpp
-            self.getMPPFromNextImage = False
+        if self.getMPPFromNextImage:
+            try:
+                self.mpp.value = im.metadata[model.MD_PIXEL_SIZE][0]
+            except KeyError:
+                pass # unknown mpp
+            else:
+                self.getMPPFromNextImage = False
 
     def _onMergeRatio(self, ratio):
         """

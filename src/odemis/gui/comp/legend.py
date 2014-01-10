@@ -204,8 +204,8 @@ class InfoLegend(wx.Panel):
           (stream.EM_STREAMS, getico_blending_semBitmap()),
           # TODO: Spectrum icon
           (stream.SPECTRUM_STREAMS, getico_blending_semBitmap()),
-          # TODO: Goal stream class?!
-          (stream.StaticStream, getico_blending_goalBitmap()),
+          # TODO: Goal stream class?! Or check that the name is "Goal"?
+          (stream.RGBStream, getico_blending_goalBitmap()),
           ]
 
         for cs, i in stream_to_icon:

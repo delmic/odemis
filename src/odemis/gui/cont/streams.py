@@ -191,10 +191,9 @@ class StreamController(object):
                   cls=StaticStream, add_to_all_views=False, visible=True):
         """
         Creates a new static stream and panel in the stream bar
-        Note: only for debugging/testing
 
         :param name: (string)
-        :param image: (InstrumentalImage)
+        :param image: (DataArray)
         :param cls: (class of Stream)
         :param returns: (StreamPanel): the panel created
         """
