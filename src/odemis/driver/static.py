@@ -109,8 +109,9 @@ class LightFilter(model.Actuator):
         self._swVersion = "N/A (Odemis %s)" % odemis.__version__
         self._hwVersion = name
 
-#        # not readonly to allow the user to change manually the filter
-#        self.band = model.ListVA(band, unit="m")
+        # Will always stay at position 0
+        self.position = model.VigilantAttribute({"band": 0}, unit="m",
+                                                readonly=True)
 
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
         self._metadata = {model.MD_FILTER_NAME: name,

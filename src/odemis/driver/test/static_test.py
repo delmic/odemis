@@ -31,6 +31,8 @@ class TestLightFilter(unittest.TestCase):
         band = ((480e-9, 651e-9), (700e-9, 800e-9))
         comp = static.LightFilter("test", "filter", band)
         self.assertEqual({0: band}, comp.axes["band"].choices)
+        cur_pos = comp.position.value["band"]
+        self.assertEqual(band, comp.axes["band"].choices[cur_pos])
         comp.terminate()
 
     def test_one_band(self):
