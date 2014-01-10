@@ -1250,11 +1250,13 @@ class InclinedStage(model.Actuator):
         if len(children) != 1:
             raise ValueError("StageIncliner needs 1 child")
 
-        model.Actuator.__init__(self, name, role, axes={"x", "y"})
-
         self._child = children.values()[0]
         self._axes_child = {"x": axes[0], "y": axes[1]}
         self._angle = angle
+
+        axes_def = {"x": self._child.axes[axes[0]],
+                    "y": self._child.axes[axes[1]]}
+        model.Actuator.__init__(self, name, role, axes=axes_def)
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
@@ -1305,6 +1307,8 @@ class InclinedStage(model.Actuator):
         return f
 
     # For now we don't support moveAbs(), not needed
+    def moveAbs(self, pos):
+        raise NotImplementedError("Do you really need that??")
 
     def stop(self, axes=None):
         # This is normally never used (child is directly stopped)
