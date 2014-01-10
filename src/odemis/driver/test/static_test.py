@@ -26,13 +26,20 @@ import unittest
 # Simple test cases, for the very simple static components
 
 class TestLightFilter(unittest.TestCase):
-#    @timeout(1.2) # this is to test timeout
+    @timeout(1)
     def test_simple(self):
         band = ((480e-9, 651e-9), (700e-9, 800e-9))
         comp = static.LightFilter("test", "filter", band)
         self.assertEqual({0: band}, comp.axes["band"].choices)
+
         cur_pos = comp.position.value["band"]
         self.assertEqual(band, comp.axes["band"].choices[cur_pos])
+
+        f = comp.moveAbs({"band": 0})
+        f.result()
+        cur_pos = comp.position.value["band"]
+        self.assertEqual(band, comp.axes["band"].choices[cur_pos])
+
         comp.terminate()
 
     def test_one_band(self):
