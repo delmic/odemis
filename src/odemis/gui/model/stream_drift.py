@@ -469,6 +469,12 @@ class SEMStream(Stream):
         # TODO: is this the right interface? Shall we just have a different
         # stream type?
         self.spot = model.BooleanVA(False)
+        # DRIFT CORRECTION
+        self.correction_range = model.IntVA(1)
+        self.selected_region = model.TupleContinuous((0, 0, 1, 1),
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+        self.selected_region_dwelltime = model.FloatVA(8e-07)
         # used to reset the previous settings after spot mode
         self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
         self.spot.subscribe(self._onSpot)
@@ -1776,15 +1782,11 @@ class SEMCCDDCtream(MultipleDetectorStream):
     "correction_range" pixels.
     """
     __metaclass__ = ABCMeta
-    def __init__(self, name, sem_stream, ccd_stream, correction_range, selected_region):
+    def __init__(self, name, sem_stream, ccd_stream):
         MultipleDetectorStream.__init__(self, name, [sem_stream, ccd_stream])
 
         self._sem_stream = sem_stream
         self._ccd_stream = ccd_stream
-
-        # DRIFT CORRECTION
-        self._correction_range = correction_range
-        self._selected_region = selected_region
 
         assert sem_stream._emitter == ccd_stream._emitter
         self._emitter = sem_stream._emitter
@@ -1793,6 +1795,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
         self._semd_df = self._sem_stream._dataflow
         self._ccd = self._ccd_stream._detector # CCD
         self._ccd_df = self._ccd_stream._dataflow
+        self._correction_range = self._sem_stream.correction_range
+        self._selected_region = self._sem_stream.selected_region
+        self._selected_region_dwelltime = self._sem_stream.selected_region_dwelltime
 
         # it will always be an empty image, but a different one every time a new
         # acquisition is finished (so subscribing to it, will at least work).
@@ -1953,7 +1958,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
         Update the scanning area of the SEM according to the selected region
         for drift correction.
         """
-        roi = self._selected_region
+        roi = self._selected_region.value
 
         # FIXME: this is fighting against the resolution setting of the SEM
         # => only apply if is_active (and not spot mode...)
@@ -1970,10 +1975,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
         	   max(1, int(round(shape[1] * width[1] / scale[1]))))
 
         # always in this order
-        print res
         self._emitter.resolution.value = res
         self._emitter.translation.value = trans
-        self._emitter.dwellTime.value = self._emitter.dwellTime.range[0]
+        self._emitter.dwellTime.value = self._selected_region_dwelltime.value
 
     def _getSpotPositions(self):
         """
@@ -2020,7 +2024,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             dwell_time = self._emitter.dwellTime.value
 
             # DRIFT CORRECTION
-            correction_range = self._correction_range
+            correction_range = self._correction_range.value
 
             spot_pos = self._getSpotPositions()
             logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], ccd_time, dwell_time)
@@ -2051,6 +2055,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
             logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
             self._acq_sem_complete.clear()
             self._semd_df.subscribe(self._ssOnSelectedRegion)
+            logging.debug("Scanning selected region with resolution " + str(self._emitter.resolution.value)
+                          + " and dwelltime " + str(self._emitter.dwellTime.value)
+                          + " and scale " + str(self._emitter.scale.value))
             if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
                 raise TimeoutError("First acquisition of selected region frame timed out")
             self._semd_df.unsubscribe(self._ssOnSelectedRegion)
@@ -2066,7 +2073,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 # DRIFT CORRECTION
                 # tweak translation according to calculated drift
                 logging.debug("E-beam spot before drift correction: " + str(spot_pos[i[::-1]]))
-                self._emitter.translation.value = (spot_pos[i[::-1]][0] - drift[0], spot_pos[i[::-1]][1] - drift[1])
+                self._emitter.translation.value = (spot_pos[i[::-1]][0] + drift[0], spot_pos[i[::-1]][1] + drift[1])
                 logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()
@@ -2115,6 +2122,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
                     self._acq_sem_complete.clear()
                     self._semd_df.subscribe(self._ssOnSelectedRegion)
+                    logging.debug("Scanning selected region with resolution " + str(self._emitter.resolution.value)
+                                  + " and dwelltime " + str(self._emitter.dwellTime.value)
+                                  + " and scale " + str(self._emitter.scale.value))
                     if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
                         raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
                     self._semd_df.unsubscribe(self._ssOnSelectedRegion)
@@ -2172,7 +2182,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
             z = 1j  # imaginary unit
             deltar = numpy.random.uniform(-5, 5)
             deltac = numpy.random.uniform(-5, 5)
-            print deltar, deltac
             nr, nc = self.data[0].shape
             array_nr = numpy.arange(-numpy.fix(nr / 2), numpy.ceil(nr / 2))
             array_nc = numpy.arange(-numpy.fix(nc / 2), numpy.ceil(nc / 2))
