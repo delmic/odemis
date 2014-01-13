@@ -324,6 +324,7 @@ class Stream(object):
             data = self.raw[0]
             irange = self._getDisplayIRange()
             rgbim = img.DataArray2RGB(data, irange, tint)
+            rgbim.flags.writeable = False
             self.image.value = model.DataArray(rgbim, self._find_metadata(data))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
@@ -1472,6 +1473,7 @@ class StaticARStream(StaticStream):
 
                 # Convert to RGB
                 rgbim = img.DataArray2RGB(polar, irange)
+                rgbim.flags.writeable = False
                 # For polar view, no PIXEL_SIZE nor POS
                 self.image.value = model.DataArray(rgbim)
         except Exception:
@@ -1668,6 +1670,7 @@ class StaticSpectrumStream(StaticStream):
             bim = img.DataArray2RGB(av_data, irange)
             rgbim[:, :, 2] = bim[:, :, 0]
 
+        rgbim.flags.writeable = False
         self.image.value = model.DataArray(rgbim, self._find_metadata(data))
 
     def get_spectrum_range(self):

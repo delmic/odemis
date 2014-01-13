@@ -35,6 +35,7 @@ from odemis.model._dataflow import MD_PIXEL_SIZE
 from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
 import threading
+import weakref
 import wx
 from wx.lib.pubsub import pub
 
@@ -356,18 +357,23 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.images = [None]
 
         # add the images in order
-        for i, rgbim in enumerate(images):
+        ims = []
+        for rgbim in images:
+            # TODO: convert to wxImage (or wxBitmap) later, in canvas.
+            # It's creating a new wxImage for each stream, whenever one stream
+            # is updated.
+            # Canvas needs to accept the NDArray (+ specific attributes
+            # recorded separately).
+
             # convert to wxImage
-            if rgbim.shape[2] == 3:
-                keepalpha = False
-                wim = img.NDImage2wxImage(rgbim)
-            elif rgbim.shape[2] == 4:
-                keepalpha = True
-                wim = img.NDImage2wxImage(rgbim)
+            wim = img.NDImage2wxImage(rgbim)
+            keepalpha = (rgbim.shape[2] == 4)
+
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
 
-            self.set_image(i, wim, pos, scale, keepalpha)
+            ims.append((wim, pos, scale, keepalpha))
+        self.set_images(ims)
 
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
@@ -1129,72 +1135,14 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
         self.abilities -= set([CAN_ZOOM, CAN_MOVE])
-#        self._ccd_mpp = None # tuple of 2 floats of m/px
-#
-#    def setView(self, microscope_view, tab_data):
-#        DblMicroscopeCanvas.setView(self, microscope_view, tab_data)
-#        # find the MPP of the sensor and use it on all images
-#        try:
-#            self._ccd_mpp = self.tab_data.main.ccd.pixelSize.value #pylint: disable=E1101
-#        except AttributeError:
-#            logging.info("Failed to find CCD for Sparc mirror alignment")
 
     def _convertStreamsToImages(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
         """
-        # remove all the images (so they can be garbage collected)
-        self.images = [None]
-
+        ims = [None]
         streams = self.microscope_view.getStreams()
-        # FIXME: check that the simplified version works
-        # (we just need the goal and CCD to display at the same density)
-#        # All the images must be displayed with the same mpp (modulo the binning)
-#        if self._ccd_mpp:
-#            mpp = self._ccd_mpp[0]
-#        else:
-#            # use the most relevant mpp from an image
-#            for s in streams:
-#                if s and not isinstance(s, stream.StaticStream):
-#                    try:
-#                        mpp = s.image.mpp
-#                        break
-#                    except AttributeError:
-#                        pass
-#            else:
-#                mpp = 13e-6 # sensible fallback
-#
-#        # order and display the images
-#        for s in streams:
-#            if not s:
-#                # should not happen, but let's not completely fail on this
-#                logging.error("StreamTree has a None stream")
-#                continue
-#
-#            if not hasattr(s, "image"):
-#                continue
-#            iim = s.image.value
-#            if iim is None or iim.image is None:
-#                continue
-#
-#            # see if image was obtained with some binning
-#            try:
-#                binning = s.raw[0].metadata[model.MD_BINNING][0]
-#            except (AttributeError, IndexError):
-#                binning = 1
-#
-#            scale = mpp * binning / self.mpwu
-#            pos = (0, 0) # the sensor image should be centered on the sensor center
-#
-#            if isinstance(s, stream.StaticStream):
-#                # StaticStream == goal image => add at the end
-#                self.set_image(len(self.images), iim.image, pos, scale, keepalpha=True)
-#            else:
-#                # add at the beginning
-#                self.set_image(0, iim.image, pos, scale)
-
-        # TODO: use the MPP from the goal and be done?
         # order and display the images
         for s in streams:
             if not s:
@@ -1209,23 +1157,21 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 continue
 
             # convert to wxImage
-            if rgbim.shape[2] == 3:
-                keepalpha = False
-                wim = img.NDImage2wxImage(rgbim)
-            elif rgbim.shape[2] == 4:
-                keepalpha = True
-                wim = img.NDImage2wxImage(rgbim)
+            wim = img.NDImage2wxImage(rgbim)
+            keepalpha = (rgbim.shape[2] == 4)
             
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = (0, 0) # the sensor image should be centered on the sensor center
 
-            if s.name == "Goal":
+            if s.name.value == "Goal":
                 # goal image => add at the end
-                self.set_image(len(self.images), wim, pos, scale, keepalpha)
+                ims.append((wim, pos, scale, keepalpha))
             else:
                 # add at the beginning
-                self.set_image(0, wim, pos, scale, keepalpha)
+                ims[0] = (wim, pos, scale, keepalpha)
 
+        self.set_images(ims)
+        
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
 
@@ -1426,14 +1372,13 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         st = self.microscope_view.stream_tree
         images = st.getImages()
 
-        # remove all the images (so they can be garbage collected)
-        self.images = [None]
-
         # add the images in order
-        for i, rgbim in enumerate(images):
+        ims = []
+        for rgbim in images:
             # image is always centered, fitting the whole canvas
             wim = img.NDImage2wxImage(rgbim)
-            self.set_image(i, wim, (0, 0), 0.1)
+            ims.append((wim, (0, 0), 0.1, False))
+        self.set_images(ims)
 
     def _onViewImageUpdate(self, t):
         self._convertStreamsToImages()

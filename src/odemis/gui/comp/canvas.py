@@ -568,40 +568,31 @@ class BitmapCanvas(BufferedCanvas):
 
         self.margins = (0, 0)
 
-    def set_image(self, index, im, w_pos=(0.0, 0.0), scale=1.0, keepalpha=False):
+    def set_images(self, images):
         """ Set (or update)  image
 
-        index (0<=int): index number of the image, can be up to 1 more than the
-            current number of images
-        im (wx.Image): the image, or None to remove the current image
-        w_pos (2-tuple of float): position of the center of the image (in world
-            units)
-        scale (float): scaling of the image
-        keepalpha (boolean): whether the alpha channel must be used to draw
+        images (list of tuple): Each element is either None or:
+            im, w_pos, scale, keepalpha:
+            im (wx.Image): the image
+            w_pos (2-tuple of float): position of the center of the image (in world
+                units)
+            scale (float): scaling of the image
+            keepalpha (boolean): whether the alpha channel must be used to draw
         Note: call request_drawing_update() to actually get the image redrawn
             afterwards
         """
-        assert(0 <= index <= len(self.images))
-
-        if im is None: # Delete the image
-            # always keep at least a length of 1
-            if index == 0:
-                # just replace by None
-                self.images[index] = None
+        self.images = []
+        for args in images:
+            if args is None:
+                self.images.append(None)
             else:
-                del self.images[index]
-        else:
-            im._dc_center = w_pos
-            im._dc_scale = scale
-            im._dc_keepalpha = keepalpha
-            if not im.HasAlpha():
-                im.InitAlpha()
-            if index == len(self.images):
-                # increase the size
+                im, w_pos, scale, keepalpha = args
+                im._dc_center = w_pos
+                im._dc_scale = scale
+                im._dc_keepalpha = keepalpha
+                if not im.HasAlpha():
+                    im.InitAlpha()
                 self.images.append(im)
-            else:
-                # replace
-                self.images[index] = im
 
     def draw(self):
         """ Redraw the buffer with the images and overlays

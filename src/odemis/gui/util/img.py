@@ -18,7 +18,9 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+import logging
 import numpy
+import weakref
 import wx
 
 
@@ -45,6 +47,30 @@ def NDImage2wxImage(image):
                              alpha=numpy.ascontiguousarray(image[:, :, 3]))
     else:
         raise ValueError("image is of shape %s" % (image.shape,))
+
+# Untested
+def NDImage2wxBitmap(image):
+    """
+    Converts a NDImage into a wxBitmap.
+    Note, the copy of the data will be avoided whenever possible.
+    image (ndarray of uint8 with shape YX3 or YX4): original image, 
+     order of last dimension is RGB(A)
+    return (wxImage)
+    """
+    assert(len(image.shape) == 3)
+    size = image.shape[1::-1]
+    if image.shape[2] == 3: # RGB
+        bim = wx.EmptyBitmap(size[0], size[1], 24)
+        bim.CopyFromBuffer(image, wx.BitmapBufferFormat_RGB)
+#        bim = wx.BitmapFromBuffer(size[0], size[1], image)
+    elif image.shape[2] == 4: # RGBA
+        bim = wx.BitmapFromBufferRGBA(size[0], size[1], image)
+    else:
+        raise ValueError("image is of shape %s" % (image.shape,))
+
+    return bim
+
+
 
 def wxImage2NDImage(image, keep_alpha=True):
     """
