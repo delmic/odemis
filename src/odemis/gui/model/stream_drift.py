@@ -2137,7 +2137,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
                         drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 100)
                         logging.debug("Current drift: " + str(drift))
 
-
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
 
