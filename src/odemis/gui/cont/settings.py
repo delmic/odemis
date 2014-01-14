@@ -715,7 +715,7 @@ class SettingsPanel(object):
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
-        
+
         ad = comp.axes[name]
         pos = comp.position.value[name]
         unit = ad.unit
@@ -724,7 +724,7 @@ class SettingsPanel(object):
         # If axis has .choices (enumerated) => combo box
         if hasattr(ad, "range"):
             minv, maxv = ad.range
-    
+
             new_ctrl = UnitFloatSlider(self.panel,
                              value=pos,
                              min_val=minv,
@@ -732,7 +732,7 @@ class SettingsPanel(object):
                              unit=unit,
                              t_size=(50, -1),
                              accuracy=conf.get('accuracy', 3))
-    
+
             # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
             # but to EVT_SCROLL_CHANGED, which happens when the user has made his
             # mind. This avoid too many unnecessary actuator moves and disabling the
@@ -759,7 +759,7 @@ class SettingsPanel(object):
                         wx.ID_ANY,
                         value='', pos=(0, 0), size=(100, 16),
                         # FIXME: should be readonly, but it fails with GetInsertionPoint
-                        style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER) # | wx.CB_READONLY
+                        style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER | wx.CB_READONLY)
 
             def _eat_event(evt):
                 """ Quick and dirty empty function used to 'eat'
