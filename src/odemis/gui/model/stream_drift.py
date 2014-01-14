@@ -470,11 +470,11 @@ class SEMStream(Stream):
         # stream type?
         self.spot = model.BooleanVA(False)
         # DRIFT CORRECTION
-        self.correction_range = model.IntVA(1)
-        self.selected_region = model.TupleContinuous((0, 0, 1, 1),
+        self.dc_period = model.IntVA(1)
+        self.dc_region = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
-        self.selected_region_dwelltime = model.FloatVA(8e-07)
+        self.dc_dwelltime = model.FloatVA(8e-07)
         # used to reset the previous settings after spot mode
         self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
         self.spot.subscribe(self._onSpot)
@@ -1775,12 +1775,14 @@ class MultipleDetectorStream(Stream):
 class SEMCCDDCtream(MultipleDetectorStream):
     """
     Abstract class for multiple detector Stream made of SEM + CCD with drift correction
-    applied. After "correction_range" number of pixels is scanned, it moves the e-beam 
+    applied. After "dc_period" number of pixels is scanned, it moves the e-beam 
     to the "selected region" (roi), scans it and provides the generated frame, along with 
-    the previous one, to CalculateDrift. Then it sets the translation of the e-beam 
-    based on the drift value calculated by CalculateDrift and starts scanning the next 
-    "correction_range" pixels.
+    the previous one to CalculateDrift. Then it sets the translation of the e-beam based 
+    on the drift value calculated by CalculateDrift and starts scanning the next "dc_period" 
+    pixels.
     """
+    # TODO: Handle drift that leads ebeam out of bounds (reducing roi, returning
+    # warning)
     __metaclass__ = ABCMeta
     def __init__(self, name, sem_stream, ccd_stream):
         MultipleDetectorStream.__init__(self, name, [sem_stream, ccd_stream])
@@ -1795,9 +1797,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
         self._semd_df = self._sem_stream._dataflow
         self._ccd = self._ccd_stream._detector # CCD
         self._ccd_df = self._ccd_stream._dataflow
-        self._correction_range = self._sem_stream.correction_range
-        self._selected_region = self._sem_stream.selected_region
-        self._selected_region_dwelltime = self._sem_stream.selected_region_dwelltime
+        self._dc_period = self._sem_stream.dc_period
+        self._dc_region = self._sem_stream.dc_region
+        self._dc_dwelltime = self._sem_stream.dc_dwelltime
 
         # it will always be an empty image, but a different one every time a new
         # acquisition is finished (so subscribing to it, will at least work).
@@ -1958,7 +1960,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
         Update the scanning area of the SEM according to the selected region
         for drift correction.
         """
-        roi = self._selected_region.value
+        roi = self._dc_region.value
 
         # FIXME: this is fighting against the resolution setting of the SEM
         # => only apply if is_active (and not spot mode...)
@@ -1977,7 +1979,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
         # always in this order
         self._emitter.resolution.value = res
         self._emitter.translation.value = trans
-        self._emitter.dwellTime.value = self._selected_region_dwelltime.value
+        self._emitter.dwellTime.value = self._dc_dwelltime.value
 
     def _getSpotPositions(self):
         """
@@ -2024,7 +2026,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             dwell_time = self._emitter.dwellTime.value
 
             # DRIFT CORRECTION
-            correction_range = self._correction_range.value
+            dc_period = self._dc_period.value
 
             spot_pos = self._getSpotPositions()
             logging.debug("Generating %s spots for %g (=%g) s", spot_pos.shape[:2], ccd_time, dwell_time)
@@ -2115,7 +2117,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 self._updateProgress(future, start_time, n / tot_num)
                 
                 # DRIFT CORRECTION
-                if (n % correction_range) == 0:
+                if (n % dc_period) == 0:
                     # DRIFT CORRECTION
                     # Move e-beam to the selected region
                     self._onSelectedRegion()
@@ -2134,7 +2136,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     
                     # Calculate the drift between the last two frames
                     if len(self._sr_data)>1:
-                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 100)
+                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 40)
                         logging.debug("Current drift: " + str(drift))
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
