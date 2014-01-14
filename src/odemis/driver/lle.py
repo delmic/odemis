@@ -92,14 +92,9 @@ class LLE(model.Emitter):
         _serial (serial): for internal use only, directly use a 
         """
         # start with this opening the port: if it fails, we are done
-        if port is None:
-            if _serial is None:
-                # TODO: fake the serial port if port is /fake/LLE, not the component
-                # for FakeLLE only
-                self._serial = None
-            else:
-                self._try_recover = False
-                self._serial = _serial
+        if _serial is not None:
+            self._try_recover = False
+            self._serial = _serial
             self._port = ""
         else:
             self._serial, self._port = self._findDevice(port)
@@ -245,6 +240,15 @@ class LLE(model.Emitter):
             if len(garbage) == 100:
                 raise IOError("Device keeps sending unknown data")
     
+    def _setDeviceManual(self):
+        """
+        Reset the device to the manual mode
+        """
+        with self._ser_access:
+            # from the documentation:
+            self._sendCommand(b"\x57\x02\x55\x50") # Set GPIO0-3 as input
+            self._sendCommand(b"\x57\x03\x55\x50") # Set GPI04-7 as input
+
     def _tryRecover(self):
         # no other access to the serial port should be done
         # so _ser_access should already be acquired
@@ -275,7 +279,7 @@ class LLE(model.Emitter):
                 self._serial.write(b"\x57\x02\xff\x50") # init
                 self._serial.write(b"\x57\x03\xab\x50") 
                 time.sleep(1)
-                self._serial.write(b"\x57\x02\xff\x50") # temp
+                self._serial.write(b"\x53\x91\x02\x50") # temp
                 resp = bytearray()
                 for i in range(2):
                     char = self._serial.read()
@@ -288,23 +292,12 @@ class LLE(model.Emitter):
                 time.sleep(2)
         
         # it now should be accessible again
-        self._serial.write(b"\x57\x02\xff\x50") # init
-        self._serial.write(b"\x57\x03\xab\x50")
         self._prev_intensities = [None] * 7 # => will update for sure
         self._ser_access.release() # because it will try to write on the port
         self._updateIntensities() # reset the sources
         self._ser_access.acquire()
         logging.info("Recovered device on port %s", self._port)
                 
-    def _setDeviceManual(self):
-        """
-        Reset the device to the manual mode
-        """
-        with self._ser_access:
-            # from the documentation:
-            self._sendCommand(b"\x57\x02\x55\x50") # Set GPIO0-3 as input
-            self._sendCommand(b"\x57\x03\x55\x50") # Set GPI04-7 as input
-
 
     # The source ID is more complicated than it looks like:
     # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
@@ -526,7 +519,7 @@ class LLE(model.Emitter):
         for n in names:
             try:
                 ser = cls.openSerialPort(n)
-                dev = cls(None, None, port=None, sources=None, _serial=ser)
+                dev = LLE(None, None, port=None, sources=None, _serial=ser)
             except serial.SerialException:
                 # not possible to use this port? next one!
                 continue
@@ -587,30 +580,90 @@ class LLE(model.Emitter):
         )
         
         return ser
-    
+
 class FakeLLE(LLE):
     """
     For testing purpose only. To test the driver without hardware.
     Pretends to connect but actually just print the commands sent.
     """
+    def __init__(self, name, role, port, *args, **kwargs):
+        # force a port pattern with just one existing file
+        LLE.__init__(self, name, role, port="/dev/null", *args, **kwargs)
     
-    def __init__(self, name, role, port, **kwargs):
-        LLE.__init__(self, name, role, port=None, **kwargs)
-    
-    def _initDevice(self):
-        pass
-    
-    def _sendCommand(self, com):
-        assert(len(com) <= 10) # commands cannot be long
-        logging.debug("Sending: %s", str(com).encode('hex_codec'))
-        
-    def _readResponse(self, length):
-        # it might only ask for the temperature
-        if length == 2:
-            response = bytearray(b"\x26\xA0") # 38.625°C
-        else:
-            raise IOError("Unknown read")
-            
-        logging.debug("Received: %s", str(response).encode('hex_codec'))
-        return response
+    @staticmethod
+    def openSerialPort(port):
+        """
+        opens a fake port, connected to the simulator
+        """
+        ser = LLESimulator(
+            port=port,
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1 #s
+        )
 
+        return ser
+
+class LLESimulator(object):
+    """
+    Simulates a LLE (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._input_buf = bytearray() # what we receive from the "host computer"
+
+    def write(self, data):
+        self._input_buf += data
+        self._processCommand()
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+        
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _processCommand(self):
+        """
+        process the command, and put the result in the output buffer
+        com (str): command
+        """
+
+        while True:
+            if self._input_buf[:4] == bytearray(b"\x53\x91\x02\x50"):
+                # only the temperature returns something
+                self._output_buf += b"\x26\xA0" # 38.625°C
+                processed = 4
+            elif len(self._input_buf) >= 4 and self._input_buf[0] == 0x57:
+                processed = 4
+            elif len(self._input_buf) >= 6 and self._input_buf[0] == 0x53:
+                processed = 6
+            elif len(self._input_buf) >= 3 and self._input_buf[0] == 0x4f:
+                processed = 3
+            else:
+                processed = 0
+
+            if processed:
+                com = self._input_buf[:processed]
+                self._input_buf = self._input_buf[processed:]
+                logging.debug("LLE received %s", str(com).encode('hex_codec'))
+            else:
+                # remove everything useless
+                changed = False
+                while self._input_buf and self._input_buf[:1] not in [0x57, 0x53, 0x4f]:
+                    changed = True
+                    self._input_buf = self._input_buf[1:]
+                if not changed:
+                    return # reached the end of the flow, the rest is unfinished
