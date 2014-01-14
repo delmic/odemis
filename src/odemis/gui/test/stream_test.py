@@ -23,13 +23,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #===============================================================================
 
 from odemis.gui.cont.streams import StreamController
-from odemis.gui.model.stream import Stream
+from odemis.acq.stream import Stream
 from odemis.util import conversion
 import unittest
 
 import odemis.gui.comp.stream as stream_comp
 import odemis.gui.model as guimodel
-import odemis.gui.model.stream as stream_mod
+import odemis.acq.stream as stream_mod
 import odemis.gui.test as test
 import odemis.model as model
 
@@ -454,7 +454,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         stream_bar.add_action("Custom", custom_callback)
 
-        # Clear remainging streams
+        # Clear remaining streams
         stream_bar.clear()
         test.gui_loop()
 

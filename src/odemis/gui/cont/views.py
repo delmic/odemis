@@ -27,7 +27,7 @@ import collections
 import logging
 from odemis.gui import model
 from odemis.gui.cont import tools
-from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS, \
+from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, \
     SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
 import wx

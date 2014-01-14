@@ -34,7 +34,7 @@ import math
 from odemis import model, dataio
 from odemis.gui import acqmng, conf
 from odemis.gui.acqmng import preset_as_is
-from odemis.gui.model.stream import UNDEFINED_ROI
+from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \

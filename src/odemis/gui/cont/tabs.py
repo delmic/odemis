@@ -49,7 +49,7 @@ import wx
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
-import odemis.gui.model.stream as streammod
+import odemis.acq.stream as streammod
 
 
 class Tab(object):

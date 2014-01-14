@@ -28,7 +28,7 @@ from odemis import model
 from odemis.gui import test
 from odemis.gui.comp.canvas import BufferedCanvas
 from odemis.gui.model.img import InstrumentalImage
-from odemis.gui.model.stream import StaticStream
+from odemis.acq.stream import StaticStream
 from odemis.gui.util import tuple_subtract, tuple_multiply
 import logging
 import unittest
@@ -134,6 +134,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         px2_cent = ((im2.Width - 1) // 2 , (im2.Height - 1) // 2)
         # Blue pixel at center (100,100)
         im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
+        # FIXME: InstrumentalImage is now replaced by DataArray, example in gui.cont.tabs
         stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
         # 200, 200 => outside of the im1
         # (+0.5, -0.5) to make it really in the center of the pixel

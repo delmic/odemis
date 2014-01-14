@@ -23,13 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import numpy
 from odemis import model
-from odemis.gui.model import stream
 from odemis.util import driver
 import os
 import subprocess
 import time
 import unittest
 from unittest.case import skip
+
+from odemis.acq import stream
 
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
@@ -39,7 +40,7 @@ logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
