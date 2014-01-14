@@ -1999,6 +1999,8 @@ class PolarOverlay(ViewOverlay):
             self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
         elif self.theta:
             self.theta_radius = (self.theta / (math.pi / 2)) * self.inner_radius
+        else:
+            return
 
         # Calc Theta label pos
         if self.theta_radius < self.center_y / 2:
