@@ -100,6 +100,7 @@ dist = setup(name='Odemis',
              packages=find_packages('src', exclude=["*.test"]),
              package_data={'odemis.gui.img': ["example/*.png", "example/*.mat",
                                               "calibration/*.png"]
+                           'odemis.driver': ["andorcam2-fake-clara.tiff"]
                           },
              scripts=scripts,
              data_files=data_files # not officially in setuptools, but works as for distutils
