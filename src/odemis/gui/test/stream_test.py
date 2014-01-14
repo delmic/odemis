@@ -22,15 +22,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' stream module in gui.comp
 #===============================================================================
 
-from odemis.gui import util
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model.stream import Stream
+from odemis.util import conversion
+import unittest
+
 import odemis.gui.comp.stream as stream_comp
 import odemis.gui.model as guimodel
 import odemis.gui.model.stream as stream_mod
 import odemis.gui.test as test
 import odemis.model as model
-import unittest
+
 
 test.goto_manual()
 
@@ -111,7 +113,7 @@ class FakeFluoStream(stream_mod.FluoStream):
                                 507e-9,
                                 range=[200e-9, 1000e-9],
                                 unit="m")
-        defaultTint = util.conversion.wave2rgb(self.emission.value)
+        defaultTint = conversion.wave2rgb(self.emission.value)
         self.tint = model.VigilantAttribute(defaultTint, unit="RGB")
 
     def _updateImage(self, tint=(255, 255, 255)):  #pylint: disable=W0221

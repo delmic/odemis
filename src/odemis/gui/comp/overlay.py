@@ -34,7 +34,7 @@ import wx
 import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.gui.util as util
-import odemis.gui.util.conversion as conversion
+import odemis.util.conversion as conversion
 from odemis.util.units import readable_str
 import odemis.util.units as units
 

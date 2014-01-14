@@ -22,7 +22,7 @@
 """
 
 from __future__ import division
-from odemis.gui.util.conversion import wxcol_to_frgb, change_brightness, hex_to_frgba
+from odemis.util.conversion import wxcol_to_frgb, change_brightness, hex_to_frgba
 from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import ABCMeta, abstractmethod
 from odemis.gui.img.data import getsliderBitmap, getslider_disBitmap

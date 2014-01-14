@@ -34,7 +34,7 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
 from odemis.gui.util import call_after, wxlimit_invocation
-from odemis.gui.util.conversion import wave2rgb
+from odemis.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from wx.lib.pubsub import pub
 import collections
