@@ -581,6 +581,12 @@ class BitmapCanvas(BufferedCanvas):
         Note: call request_drawing_update() to actually get the image redrawn
             afterwards
         """
+        # TODO:
+        # * image should just be a numpy RGB(A) array
+        # * take an image composition tree (operator + images + scale + pos)
+        # * keepalpha not needed => just use alpha iff the image has it
+        # * allow to indicate just one image has changed (and so the rest
+        #   doesn't need to be recomputed)
         self.images = []
         for args in images:
             if args is None:
@@ -709,6 +715,8 @@ class BitmapCanvas(BufferedCanvas):
             return
 
         imscaled, tl = self._rescale_image(dc_buffer, im, scale, center)
+        # TODO: keep the result cached, and reuse it until image is changed
+        # or buffer has moved/scaled
 
         if not imscaled:
             return
