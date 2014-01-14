@@ -39,5 +39,6 @@ def SelectRegion(detector, emitter, dwell_time, sample_region):
 	sample_region (tuple of 3 floats): roi of the sample in order to avoid overlap
     returns (tuple of 3 floats): roi of the selected region
     """
+    # like in stream_drift_test for roi 0,0,1,1
     # cv2.Canny(img, 100, 200)
     return
