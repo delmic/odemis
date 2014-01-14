@@ -1988,9 +1988,6 @@ class PolarOverlay(ViewOverlay):
             self.px = self.center_x + (radius) * math.cos(self.phi_line_rad)
             self.py = self.center_y + (radius) * math.sin(self.phi_line_rad)
 
-        else:
-            logging.warn("Could not calculate Phi rendering angle!")
-
     def _calculate_theta(self, view_pos=None):
         """ Calculate the Theta angle and the values needed to display it. """
         if view_pos:
@@ -2002,9 +1999,6 @@ class PolarOverlay(ViewOverlay):
             self.theta = (math.pi / 2) * (self.theta_radius / self.inner_radius)
         elif self.theta:
             self.theta_radius = (self.theta / (math.pi / 2)) * self.inner_radius
-        else:
-            logging.warn("Could not calculate Theta radius!")
-            return
 
         # Calc Theta label pos
         if self.theta_radius < self.center_y / 2:
