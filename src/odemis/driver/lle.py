@@ -76,9 +76,11 @@ class LLE(model.Emitter):
     rates, it shouldn't matter much. 
     '''
 
-    def __init__(self, name, role, port, sources, _noinit=False, **kwargs):
+    def __init__(self, name, role, port, sources, _serial=None, **kwargs):
         """
-        port (string): name of the serial port to connect to.
+        port (string): name of the serial port to connect to. Can be a pattern,
+         in which case, all the ports fitting the pattern will be tried, and the
+         first one which looks like an LLE will be used.
         sources (dict string -> 5-tuple of float): the light sources (by colour).
          The string is one of the seven names for the sources: "red", "cyan", 
          "green", "UV", "yellow", "blue", "teal". They correspond to fix 
@@ -87,16 +89,21 @@ class LLE(model.Emitter):
          no have to be extremely precise. The most important is the centre, and
          that they are all increasing values. If the device doesn't have the 
          source it can be skipped.
-        _noinit (boolean): for internal use only, don't try to initialise the device 
+        _serial (serial): for internal use only, directly use a 
         """
         # start with this opening the port: if it fails, we are done
         if port is None:
-            # for FakeLLE only
-            self._serial = None
-            port = ""
+            if _serial is None:
+                # TODO: fake the serial port if port is /fake/LLE, not the component
+                # for FakeLLE only
+                self._serial = None
+            else:
+                self._try_recover = False
+                self._serial = _serial
+            self._port = ""
         else:
-            self._serial = self.openSerialPort(port)
-        self._port = port
+            self._serial, self._port = self._findDevice(port)
+            self._try_recover = True
         
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
@@ -104,8 +111,7 @@ class LLE(model.Emitter):
         # Init the LLE
         self._initDevice()
 
-        self._try_recover = False
-        if _noinit:
+        if _serial is not None: # used for port testing => only simple init
             return
         
         # parse source and do some sanity check
@@ -139,14 +145,6 @@ class LLE(model.Emitter):
         
         model.Emitter.__init__(self, name, role, **kwargs)
         
-        # Test the LLE answers back
-        try:
-            current_temp = self.GetTemperature()
-        except IOError:
-            logging.exception("Device not responding on port %s", port)
-            raise
-        self._try_recover = True
-        
         self._shape = ()
         self._max_power = 100.
         self.power = model.FloatContinuous(0., (0., self._max_power), unit="W")
@@ -162,11 +160,13 @@ class LLE(model.Emitter):
         
         self.power.subscribe(self._updatePower)
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
+                                                      driver.getSerialDriver(self._port))
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
         
         
         # Update temperature every 10s
+        current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._temp_timer = util.RepeatingTimer(10, self._updateTemperature,
                                          "LLE temperature update")
@@ -504,8 +504,47 @@ class LLE(model.Emitter):
         
         return False
 
-    @staticmethod
-    def scan(port=None):
+    @classmethod
+    def _findDevice(cls, ports):
+        """
+        Look for a compatible device
+        ports (str): pattern for the port name
+        return serial, port:
+            serial: serial port found, and open
+            port (str): the name of the port used
+        raises:
+            IOError: if no device are found
+        """
+        # We are called very early, so no attribute is to be expected
+        if os.name == "nt":
+            # TODO
+            #ports = ["COM" + str(n) for n in range (15)]
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(ports)
+
+        for n in names:
+            try:
+                ser = cls.openSerialPort(n)
+                dev = cls(None, None, port=None, sources=None, _serial=ser)
+            except serial.SerialException:
+                # not possible to use this port? next one!
+                continue
+
+            # Try to connect and get back some answer.
+            # The LLE only answers back for the temperature
+            try:
+                temp = dev.GetTemperature()
+                # avoid 0 and 255 (= only 000's or 1111's), which is bad sign
+                if 0 < temp < 250:
+                    return ser, n # found it!
+            except Exception:
+                logging.debug("Port %s doesn't seem to have a LLE device connected", n)
+        else:
+            raise IOError("No device seems to be an LLE for ports '%s'" % (ports,))
+
+    @classmethod
+    def scan(cls, port=None):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
         returns (list of 2-tuple): name, args (port)
@@ -523,20 +562,11 @@ class LLE(model.Emitter):
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
         for p in ports:
             try:
-                logging.debug("Trying port %s", p)
-                dev = LLE(None, None, port=p, sources=None, _noinit=True)
-            except serial.SerialException:
-                # not possible to use this port? next one!
+                cls._findDevice(p)
+            except Exception:
                 continue
-
-            # Try to connect and get back some answer.
-            # The LLE only answers back for the temperature
-            try:
-                temp = dev.GetTemperature()
-                if 0 < temp and temp < 250: # avoid 0 and 255 => only 000's or 1111's, which is bad sign
-                    found.append(("LLE", {"port": p, "sources": DEFAULT_SOURCES}))
-            except:
-                continue
+            else:
+                found.append(("LLE", {"port": p, "sources": DEFAULT_SOURCES}))
 
         return found
     
@@ -561,7 +591,6 @@ class LLE(model.Emitter):
 class FakeLLE(LLE):
     """
     For testing purpose only. To test the driver without hardware.
-    Note: you still need a serial port (but nothing will be sent to it)
     Pretends to connect but actually just print the commands sent.
     """
     
