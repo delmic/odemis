@@ -76,9 +76,9 @@ class TestDriftStream(unittest.TestCase):
         ars = stream_drift.ARStream("test ar", ccd, ccd.data, escan)
         sas = stream_drift.SEMCCDDCtream("test sem-ar", sems, ars)
 
-        sems.correction_range.value = 1
-        sems.selected_region.value = (0.8255, 0.8255, 0.85, 0.85)
-        sems.selected_region_dwelltime.value = 8e-06
+        sems.dc_period.value = 1
+        sems.dc_region.value = (0.8255, 0.8255, 0.85, 0.85)
+        sems.dc_dwelltime.value = 8e-06
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
         ccd.binning.value = (4, 4) # hopefully always supported
