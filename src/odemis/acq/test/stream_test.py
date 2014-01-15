@@ -449,31 +449,6 @@ class SPARCTestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
 
-    # @unittest.skip("skip")
-    def test_drift_stream(self):
-        # Create the stream
-        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        sas = stream.SEMCCDDCtream("test sem-ar", sems, ars)
-
-        sems.dc_period.value = 1
-        sems.dc_region.value = (0.8255, 0.8255, 0.85, 0.85)
-        sems.dc_dwelltime.value = 8e-06
-
-        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4)  # hopefully always supported
-
-        self.ccd.exposureTime.value = 0.2  # s
-        ars.repetition.value = (2, 2)
-
-        # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
-        start = time.time()
-        f = sas.acquire()
-
-        data = f.result()
-        dur = time.time() - start
-        logging.debug("Acquisition took %g s", dur)
-        self.assertTrue(f.done())
 
 
 if __name__ == "__main__":
