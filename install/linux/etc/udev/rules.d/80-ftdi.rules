@@ -1,0 +1,15 @@
+# Force the devices connected via a serial-over-USB FTDI to get explicit names
+# Many devices use this hardware, and quite a few don't bother changing the 
+# vendor/product IDs. It's convenient because the standard driver works out of
+# the box, but then we have no idea what is what when many hardwares are
+# connected.
+
+# All we can do is to at least separate them from the other serial-over-USB hw.
+# Currently, the following hardware devices are known to provide these IDs:
+# * Lumencor Light Engine
+# * Omicron xX
+# * Thorlabs filter wheels
+
+# => add a symlink ttyFTDIxx with the same number as the ttyUSBxx file
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyFTDI%n", GROUP="odemis"
+

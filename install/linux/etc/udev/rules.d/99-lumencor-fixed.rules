@@ -1,4 +1,0 @@
-# Force the Lumencor devices connected via serial connection to specific names, to ease detection
-
-# For the Lumencor Spectra, it comes with a FTDI USB-Serial cable:
-SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyLLE", GROUP="odemis"
