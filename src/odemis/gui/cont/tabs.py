@@ -1061,9 +1061,9 @@ class LensAlignTab(Tab):
         # to the toolbar.
         tb_sizer = tb.GetSizer()
         tb.SetForegroundColour("#BBBBBB")
-        main_frame.vp_align_sem.legend.scaleDisplay.Reparent(tb)
+        main_frame.vp_align_sem.legend.scale_win.Reparent(tb)
         tb_sizer.Add(
-            main_frame.vp_align_sem.legend.scaleDisplay,
+            main_frame.vp_align_sem.legend.scale_win,
             proportion=1,
             flag=wx.EXPAND | wx.ALIGN_LEFT)
         tb.Layout()
