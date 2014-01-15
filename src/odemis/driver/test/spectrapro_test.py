@@ -88,6 +88,7 @@ class TestSP(unittest.TestCase):
         # move back to the original position
         f = self.sp.moveAbs(self.orig_pos)
         f.result()
+        self.sp.terminate()
 
     def test_moverel(self):
         move = {'wavelength':1e-9} # +1nm => should be fast

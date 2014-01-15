@@ -94,7 +94,7 @@ class LightFilter(model.Actuator):
             band = (tuple(band),)
 
         # Check the values are min/max and in m: typically within nm (< µm!)
-        max_val = 1e-6 # m
+        max_val = 10e-6 # m
         for low, high in band:
             if low > high:
                 raise ValueError("Min of band must be first in list")
@@ -110,8 +110,7 @@ class LightFilter(model.Actuator):
         self._hwVersion = name
 
         # Will always stay at position 0
-        self.position = model.VigilantAttribute({"band": 0}, unit="m",
-                                                readonly=True)
+        self.position = model.VigilantAttribute({"band": 0}, readonly=True)
 
         # TODO: MD_OUT_WL or MD_IN_WL depending on affect
         self._metadata = {model.MD_FILTER_NAME: name,

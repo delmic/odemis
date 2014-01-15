@@ -553,7 +553,7 @@ class LLE(model.Emitter):
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
         
         logging.info("Serial ports scanning for Lumencor light engines in progress...")
-        found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
             try:
                 cls._findDevice(p)

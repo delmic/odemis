@@ -549,6 +549,8 @@ class SpectraPro(model.Actuator):
         elif "wavelength" in pos:
             wl = pos["wavelength"]
             return self._executor.submit(self._doSetWavelengthAbs, wl)
+        else: # nothing to do
+            return model.InstantaneousFuture()
     
     
     def _doSetWavelengthRel(self, shift):
@@ -712,7 +714,7 @@ class SpectraPro(model.Actuator):
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
         
         logging.info("Serial ports scanning for Acton SpectraPro spectrograph in progress...")
-        found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
             try:
                 logging.debug("Trying port %s", p)
