@@ -2466,11 +2466,57 @@ getemptyImage = empty.GetImage
 getemptyBitmap = empty.GetBitmap
 
 #----------------------------------------------------------------------
+ico_blending_ang = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tl"
+    "dCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1l"
+    "dGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUu"
+    "My1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpS"
+    "REYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgt"
+    "bnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6"
+    "Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRv"
+    "YmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9u"
+    "cy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRp"
+    "ZDo0MDJFNzU5RkNDN0RFMzExQTUzMTkxNUExRUU5OTk1QiIgeG1wTU06RG9jdW1lbnRJRD0i"
+    "eG1wLmRpZDo5NDYwOThDODdERDExMUUzQjIyMjg5RURBMjE3RjlGOCIgeG1wTU06SW5zdGFu"
+    "Y2VJRD0ieG1wLmlpZDo5NDYwOThDNzdERDExMUUzQjIyMjg5RURBMjE3RjlGOCIgeG1wOkNy"
+    "ZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M2IChXaW5kb3dzKSI+IDx4bXBNTTpEZXJp"
+    "dmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ3MkU3NTlGQ0M3REUzMTFBNTMx"
+    "OTE1QTFFRTk5OTVCIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQwMkU3NTlGQ0M3REUz"
+    "MTFBNTMxOTE1QTFFRTk5OTVCIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwv"
+    "eDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+yOpiSQAAAKdJREFUeNpivHv3LgOxgAmN"
+    "nQbEh4EYZMJ+II4DYkaYAhYozQzEK4FYHIgbgfgeEKsDcTMQOwBxErLieCCWBGJHIP4FFQNp"
+    "OAjEx4A4CIjXwZwRA8StSAoFofQ3IO4E4mhkN0sB8UMoWxWI30FpEHgElQcrBpnyHIi1oJK3"
+    "gdgQSoOANhC/BGIBFqjPQT5ehSfU3gPxBZBiIXLCmSBg/P//P9GKAQIMAC4vH9jYnIuTAAAA"
+    "AElFTkSuQmCC")
+index.append('ico_blending_ang')
+catalog['ico_blending_ang'] = ico_blending_ang
+getico_blending_angData = ico_blending_ang.GetData
+getico_blending_angImage = ico_blending_ang.GetImage
+getico_blending_angBitmap = ico_blending_ang.GetBitmap
+
+#----------------------------------------------------------------------
 ico_blending_goal = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAb0lEQVQY04VQCQrAIAzLv/yQ"
-    "b/UCH+BbNgIN2NVtgWC1aU0LGFprWGuFc86JgDGGBEmsteIIE1wHpqcQSlgsqoET8yGXUpxf"
-    "Y2beiRXTJ+8s2H91XjmgklYQLOJlqCPDVvY9/4IiUrY+0XuHW9WGG3QF0o9GjN1qAAAAAElF"
-    "TkSuQmCC")
+    "iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tl"
+    "dCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1l"
+    "dGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUu"
+    "My1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpS"
+    "REYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgt"
+    "bnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8v"
+    "bnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNv"
+    "bS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEu"
+    "MC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9w"
+    "IENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6ODI3QkE0RjQ3RENG"
+    "MTFFMzk2MEJGMDQwMjREOEIwQ0YiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6ODI3QkE0"
+    "RjU3RENGMTFFMzk2MEJGMDQwMjREOEIwQ0YiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6"
+    "aW5zdGFuY2VJRD0ieG1wLmlpZDo4MjdCQTRGMjdEQ0YxMUUzOTYwQkYwNDAyNEQ4QjBDRiIg"
+    "c3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDo4MjdCQTRGMzdEQ0YxMUUzOTYwQkYwNDAyNEQ4"
+    "QjBDRiIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94"
+    "cGFja2V0IGVuZD0iciI/Ppw/ucIAAACnSURBVHjaYrx79y4DsYAJjZ0GxIeBGGTCfiCOA2JG"
+    "mAIWKM0MxCuBWByIG4H4HhCrA3EzEDsAcRKy4ngglgRiRyD+BRUDaTgIxMeAOAiI18GcEQPE"
+    "rUgKBaH0NyDuBOJoZDdLAfFDKFsViN9BaRB4BJUHKwaZ8hyItaCSt4HYEEqDgDYQvwRiARao"
+    "z0E+XoUn1N4D8QWQYiFywpkgYPz//z/RigECDAAuLx/Y2JyLkwAAAABJRU5ErkJggg==")
 index.append('ico_blending_goal')
 catalog['ico_blending_goal'] = ico_blending_goal
 getico_blending_goalData = ico_blending_goal.GetData
@@ -2479,9 +2525,27 @@ getico_blending_goalBitmap = ico_blending_goal.GetBitmap
 
 #----------------------------------------------------------------------
 ico_blending_opt = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAAAcAAAALCAYAAACzkJeoAAAAY0lEQVQYV2O4e/fuJiC+hwUv"
-    "YwAKJgLxfyw4EiQpi0NSCiTJCMTf0RSA+IwMIABkzEKTnA2WgErao0k6IkvyoEnywSWhum9B"
-    "FTxCkYBK5kIlq7FJqkAl9bBJMgEl/wIxG0wSABaEtbI1lVQCAAAAAElFTkSuQmCC")
+    "iVBORw0KGgoAAAANSUhEUgAAAAcAAAALCAYAAACzkJeoAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tl"
+    "dCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1l"
+    "dGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUu"
+    "My1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpS"
+    "REYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgt"
+    "bnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6"
+    "Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRv"
+    "YmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9u"
+    "cy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRp"
+    "ZDo0MDJFNzU5RkNDN0RFMzExQTUzMTkxNUExRUU5OTk1QiIgeG1wTU06RG9jdW1lbnRJRD0i"
+    "eG1wLmRpZDozNTZEMTE1QTdERDAxMUUzQjVGODg1OTIwNTMzRDJFRSIgeG1wTU06SW5zdGFu"
+    "Y2VJRD0ieG1wLmlpZDozNTZEMTE1OTdERDAxMUUzQjVGODg1OTIwNTMzRDJFRSIgeG1wOkNy"
+    "ZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M2IChXaW5kb3dzKSI+IDx4bXBNTTpEZXJp"
+    "dmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQxMkU3NTlGQ0M3REUzMTFBNTMx"
+    "OTE1QTFFRTk5OTVCIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQwMkU3NTlGQ0M3REUz"
+    "MTFBNTMxOTE1QTFFRTk5OTVCIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwv"
+    "eDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+05ZdggAAAHZJREFUeNpivHv37kkGBgYz"
+    "BkzwgglIrGPADjaCJNfjkFzP+P//f4Z79+5dAXK0kSQ+ALEYE5SDbvRmJSWl3zBJdKM3gAiw"
+    "JFDVeSB1HyrxDYh3wCXRdO8AKv6GS3IDTABZ8hgQPwY5Bi4C8goMA0MrEJkPEGAAtZEyIYLn"
+    "BVYAAAAASUVORK5CYII=")
 index.append('ico_blending_opt')
 catalog['ico_blending_opt'] = ico_blending_opt
 getico_blending_optData = ico_blending_opt.GetData
@@ -2498,6 +2562,37 @@ catalog['ico_blending_sem'] = ico_blending_sem
 getico_blending_semData = ico_blending_sem.GetData
 getico_blending_semImage = ico_blending_sem.GetImage
 getico_blending_semBitmap = ico_blending_sem.GetBitmap
+
+#----------------------------------------------------------------------
+ico_blending_spec = PyEmbeddedImage(
+    "iVBORw0KGgoAAAANSUhEUgAAAAsAAAALCAYAAACprHcmAAAAGXRFWHRTb2Z0d2FyZQBBZG9i"
+    "ZSBJbWFnZVJlYWR5ccllPAAAA2ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tl"
+    "dCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1l"
+    "dGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUu"
+    "My1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpS"
+    "REYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgt"
+    "bnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6"
+    "Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRv"
+    "YmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9u"
+    "cy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRp"
+    "ZDo0MDJFNzU5RkNDN0RFMzExQTUzMTkxNUExRUU5OTk1QiIgeG1wTU06RG9jdW1lbnRJRD0i"
+    "eG1wLmRpZDo2RTY4NEJDNDdERDExMUUzQTREOEQyNUU3NTNDOTM1NCIgeG1wTU06SW5zdGFu"
+    "Y2VJRD0ieG1wLmlpZDo2RTY4NEJDMzdERDExMUUzQTREOEQyNUU3NTNDOTM1NCIgeG1wOkNy"
+    "ZWF0b3JUb29sPSJBZG9iZSBQaG90b3Nob3AgQ1M2IChXaW5kb3dzKSI+IDx4bXBNTTpEZXJp"
+    "dmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjQ3MkU3NTlGQ0M3REUzMTFBNTMx"
+    "OTE1QTFFRTk5OTVCIiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjQwMkU3NTlGQ0M3REUz"
+    "MTFBNTMxOTE1QTFFRTk5OTVCIi8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwv"
+    "eDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+lEljAgAAANxJREFUeNqUjjELglAUhe/r"
+    "RUEtlVPgEmUUNFj+rIaWgiho6H/0U3QPQlASFHRpC2kQdHBIOoEvzCjowMe9vHM497EgCKik"
+    "DjiCKYiLRoU+tQYDsCgb5XAXzPN9Cdq/wlvQyPcWWBVNJhb8vYfhglrBT0AfupabdyKYZZl4"
+    "a4LNWzNaRxhnhLjrumRZ1k3TNElRFGKMpfCGaL+I5n0URVzXdbJt+xmQTNMkwzAojuN6fpWY"
+    "53kz3/dPCLHC+Zc456Sq6h1XxlXHcSZJkhxkWaZvCsOQ0jRV6R89BBgAuLVL/pjUQS4AAAAA"
+    "SUVORK5CYII=")
+index.append('ico_blending_spec')
+catalog['ico_blending_spec'] = ico_blending_spec
+getico_blending_specData = ico_blending_spec.GetData
+getico_blending_specImage = ico_blending_spec.GetImage
+getico_blending_specBitmap = ico_blending_spec.GetBitmap
 
 #----------------------------------------------------------------------
 ico_contrast = PyEmbeddedImage(
