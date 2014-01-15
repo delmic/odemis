@@ -23,17 +23,15 @@
 """
 
 
-import cairo
-import logging
+from odemis.acq import stream
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.img.data import getico_blending_optBitmap, \
-    getico_blending_semBitmap, getico_blending_goalBitmap
-from odemis.acq import stream
 from odemis.util.conversion import wxcol_to_frgb
-import wx
-
+import cairo
+import logging
+import odemis.gui.img.data as imgdata
 import odemis.util.units as units
+import wx
 
 
 class InfoLegend(wx.Panel):
@@ -74,11 +72,11 @@ class InfoLegend(wx.Panel):
         self.bmp_slider_left = wx.StaticBitmap(
                                     self,
                                     wx.ID_ANY,
-                                    getico_blending_optBitmap())
+                                    imgdata.getico_blending_optBitmap())
         self.bmp_slider_right = wx.StaticBitmap(
                                     self,
                                     wx.ID_ANY,
-                                    getico_blending_semBitmap())
+                                    imgdata.getico_blending_semBitmap())
 
         # Scale window
         self.scale_win = ScaleWindow(self)
@@ -192,33 +190,34 @@ class InfoLegend(wx.Panel):
         self.magnification_text.SetLabel(label)
         self.Layout()
 
-    def set_stream_type(self, side, cls):
+    def set_stream_type(self, side, stream_class):
         """
         Set the stream type, to put the right icon on the merge slider
-        side (wx.LEFT or wx.RIGHT): whether this set the left or right stream
-        cls (class inheriting from Stream): the class of the stream
+
+        :param side: (wx.LEFT or wx.RIGHT): whether this set the left or right
+            stream
+        :param stream_class: (Stream (sub)class): the class of the stream
         """
 
         stream_to_icon = [
-          (stream.OPTICAL_STREAMS, getico_blending_optBitmap()),
-          (stream.EM_STREAMS, getico_blending_semBitmap()),
-          # TODO: Spectrum icon
-          (stream.SPECTRUM_STREAMS, getico_blending_semBitmap()),
-          # TODO: Goal stream class?! Or check that the name is "Goal"?
-          (stream.RGBStream, getico_blending_goalBitmap()),
+          (stream.AR_STREAMS, imgdata.getico_blending_angBitmap()),
+          (stream.SPECTRUM_STREAMS, imgdata.getico_blending_specBitmap()),
+          (stream.OPTICAL_STREAMS, imgdata.getico_blending_optBitmap()),
+          (stream.EM_STREAMS, imgdata.getico_blending_semBitmap()),
+          (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
           ]
 
-        for cs, i in stream_to_icon:
-            if issubclass(cls, cs):
-                icon = i
+        for group_of_classes, class_icon in stream_to_icon:
+            if issubclass(stream_class, group_of_classes):
+                icon = class_icon
                 break
         else:
             # Don't fail too bad
-            icon = getico_blending_optBitmap()
+            icon = imgdata.getico_blending_optBitmap()
             if self.merge_slider.IsShown():
                 logging.warning("Failed to find icon for stream of class %s",
-                                cls)
-        if wx.LEFT:
+                                stream_class)
+        if side == wx.LEFT:
             self.bmp_slider_left.SetBitmap(icon)
         else:
             self.bmp_slider_right.SetBitmap(icon)

@@ -321,17 +321,23 @@ class MicroscopeViewport(ViewPort):
         """
         Update the MergeSlider display and icons depending on the state
         """
-        # MergeSlider is displayed iif:
+        # MergeSlider is displayed if:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
         if ("merge" in self._microscope_view.stream_tree.kwargs and
             len(self._microscope_view.stream_tree) >= 2):
+
+            # How is the order guaranteed? (Left vs Right)
+            sc = self._microscope_view.stream_tree[0]
+            self.legend.set_stream_type(wx.LEFT, sc.__class__)
+
+            sc = self._microscope_view.stream_tree[1]
+            self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
 
-        # TODO: update icons depending on type of streams
-        # cf self.legend.set_stream_type()
 
     @call_after
     def _onImageUpdate(self, timestamp):

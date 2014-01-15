@@ -57,7 +57,7 @@ UNDEFINED_ROI = (0, 0, 0, 0)
 class Stream(object):
     """ A stream combines a Detector, its associated Dataflow and an Emitter.
 
-    It handles acquiring the data from the hardware and renders it as a RGB 
+    It handles acquiring the data from the hardware and renders it as a RGB
     image (with MD_PIXEL_SIZE and MD_POS copied)
 
     This is an abstract class, unless the emitter doesn't need any configuration
@@ -877,7 +877,7 @@ class FluoStream(CameraStream):
             logging.warning("Emission wavelength %s doesn't fit the filter",
                             units.readable_str(wl, "m"))
             self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
-            
+
         return
 
     def _setup_excitation(self):
@@ -1255,7 +1255,7 @@ class ARStream(RepetitionStream):
         self.pixelSize.value *= 30
 
 class StaticStream(Stream):
-    """ 
+    """
     Stream containing one static image.
     For testing and static images.
     """
@@ -1293,11 +1293,11 @@ class RGBStream(StaticStream):
         # Check it's 2D
         if not (len(image.shape) == 3 and image.shape[2] in [3, 4]):
             raise ValueError("Data must be RGB(A)")
-        
+
         # TODO: use original image as raw, to allow changing the B/C/tint
         # Need to distinguish between greyscale (possible) and colour (impossible)
         self.image = VigilantAttribute(image)
-     
+
 
 class StaticSEMStream(StaticStream):
     """
@@ -2417,10 +2417,12 @@ EM_STREAMS = (SEMStream,
               StaticSEMStream)
 
 SPECTRUM_STREAMS = (SpectrumStream,
-                    StaticSpectrumStream)
+                    StaticSpectrumStream,
+                    SEMSpectrumMDStream)
 
 AR_STREAMS = (ARStream,
-              StaticARStream)
+              StaticARStream,
+              SEMARMDStream)
 
 # TODO: make it like a VA, so that it's possible to know when it changes
 class StreamTree(object):
