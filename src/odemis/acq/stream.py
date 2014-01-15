@@ -43,8 +43,8 @@ import sys
 import threading
 import time
 
-import odemis.gui.util.conversion as conversion
 import odemis.model as model
+import odemis.util.conversion as conversion
 import odemis.util.img as img
 import odemis.util.units as units
 

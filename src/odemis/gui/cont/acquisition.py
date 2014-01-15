@@ -31,10 +31,9 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 import logging
 import math
-from odemis import model, dataio
-from odemis.gui import acqmng, conf
+from odemis import model, dataio, acq
+from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
-from odemis.gui.model.stream import UNDEFINED_ROI
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
@@ -47,6 +46,8 @@ import threading
 import time
 import wx
 from wx.lib.pubsub import pub
+
+from odemis.acq.stream import UNDEFINED_ROI
 
 
 class SnapshotController(object):
@@ -423,7 +424,7 @@ class SparcAcquiController(object):
             txt = "Region of acquisition needs to be selected"
         else:
             streams = self._tab_data_model.acquisitionView.getStreams()
-            acq_time = acqmng.estimateTime(streams)
+            acq_time = acq.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistic
             txt = "Estimated time is {}."
@@ -522,7 +523,7 @@ class SparcAcquiController(object):
         # start acquisition + connect events to callback
         streams = self._tab_data_model.acquisitionView.getStreams()
 
-        self.acq_future = acqmng.acquire(streams)
+        self.acq_future = acq.acquire(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
@@ -543,7 +544,7 @@ class SparcAcquiController(object):
         return (list of DataArray, filename): data exported and filename
         """
         st = self._tab_data_model.acquisitionView.stream_tree
-        thumb = acqmng.computeThumbnail(st, acq_future)
+        thumb = acq.computeThumbnail(st, acq_future)
         data = acq_future.result()
         filename = self.filename.value
         exporter = dataio.get_exporter(self.conf.last_format)

@@ -29,7 +29,7 @@ Canvas Rendering Pipeline
 
 * Prefixes:
     0,0 at top left
-    v_<name>: in view coordintates = pixels
+    v_<name>: in view coordinates = pixels
     b_<name>: in buffer coordinates = pixels
     w_<name>: in world coordinates
 
@@ -117,7 +117,6 @@ from abc import ABCMeta, abstractmethod
 
 import collections
 import ctypes
-import inspect
 import logging
 import math
 import os
@@ -127,7 +126,7 @@ import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
 
-from ..util.conversion import wxcol_to_frgb, change_brightness
+from odemis.util.conversion import wxcol_to_frgb
 import odemis.gui.img.data as imgdata
 
 #pylint: disable=E1002
@@ -581,6 +580,12 @@ class BitmapCanvas(BufferedCanvas):
         Note: call request_drawing_update() to actually get the image redrawn
             afterwards
         """
+        # TODO:
+        # * image should just be a numpy RGB(A) array
+        # * take an image composition tree (operator + images + scale + pos)
+        # * keepalpha not needed => just use alpha iff the image has it
+        # * allow to indicate just one image has changed (and so the rest
+        #   doesn't need to be recomputed)
         self.images = []
         for args in images:
             if args is None:
@@ -709,6 +714,8 @@ class BitmapCanvas(BufferedCanvas):
             return
 
         imscaled, tl = self._rescale_image(dc_buffer, im, scale, center)
+        # TODO: keep the result cached, and reuse it until image is changed
+        # or buffer has moved/scaled
 
         if not imscaled:
             return

@@ -29,8 +29,8 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.gui.img.data import getico_blending_optBitmap, \
     getico_blending_semBitmap, getico_blending_goalBitmap
-from odemis.gui.model import stream
-from odemis.gui.util.conversion import wxcol_to_frgb, hex_to_frgba
+from odemis.acq import stream
+from odemis.util.conversion import wxcol_to_frgb
 import wx
 
 import odemis.util.units as units

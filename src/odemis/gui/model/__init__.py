@@ -23,7 +23,7 @@ This file is part of Odemis.
 
 from abc import ABCMeta
 from odemis import model
-from odemis.gui.model.stream import Stream, StreamTree
+from odemis.acq.stream import Stream, StreamTree
 from odemis.model import FloatContinuous, VigilantAttribute
 from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections
@@ -712,7 +712,7 @@ class MicroscopeView(View):
         """
         Add a stream to the view. It takes care of updating the StreamTree
         according to the type of stream.
-        stream (model.Stream): stream to add
+        stream (acq.stream.Stream): stream to add
         If the stream is already present, nothing happens
         """
 

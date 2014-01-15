@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from odemis.gui import comp
 from odemis.gui.model import STATE_OFF, STATE_PAUSE, STATE_ON
-from odemis.gui.model.stream import FluoStream, BrightfieldStream, SEMStream, \
+from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
     StaticStream, Stream
 from wx.lib.pubsub import pub
 import logging

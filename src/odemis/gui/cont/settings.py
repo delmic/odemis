@@ -35,7 +35,7 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG
-from odemis.gui.model.stream import SpectrumStream, ARStream
+from odemis.acq.stream import SpectrumStream, ARStream
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue

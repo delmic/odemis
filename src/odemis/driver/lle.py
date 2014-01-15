@@ -76,9 +76,11 @@ class LLE(model.Emitter):
     rates, it shouldn't matter much. 
     '''
 
-    def __init__(self, name, role, port, sources, _noinit=False, **kwargs):
+    def __init__(self, name, role, port, sources, _serial=None, **kwargs):
         """
-        port (string): name of the serial port to connect to.
+        port (string): name of the serial port to connect to. Can be a pattern,
+         in which case, all the ports fitting the pattern will be tried, and the
+         first one which looks like an LLE will be used.
         sources (dict string -> 5-tuple of float): the light sources (by colour).
          The string is one of the seven names for the sources: "red", "cyan", 
          "green", "UV", "yellow", "blue", "teal". They correspond to fix 
@@ -87,16 +89,16 @@ class LLE(model.Emitter):
          no have to be extremely precise. The most important is the centre, and
          that they are all increasing values. If the device doesn't have the 
          source it can be skipped.
-        _noinit (boolean): for internal use only, don't try to initialise the device 
+        _serial (serial): for internal use only, directly use a 
         """
         # start with this opening the port: if it fails, we are done
-        if port is None:
-            # for FakeLLE only
-            self._serial = None
-            port = ""
+        if _serial is not None:
+            self._try_recover = False
+            self._serial = _serial
+            self._port = ""
         else:
-            self._serial = self.openSerialPort(port)
-        self._port = port
+            self._serial, self._port = self._findDevice(port)
+            self._try_recover = True
         
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
@@ -104,8 +106,7 @@ class LLE(model.Emitter):
         # Init the LLE
         self._initDevice()
 
-        self._try_recover = False
-        if _noinit:
+        if _serial is not None: # used for port testing => only simple init
             return
         
         # parse source and do some sanity check
@@ -139,14 +140,6 @@ class LLE(model.Emitter):
         
         model.Emitter.__init__(self, name, role, **kwargs)
         
-        # Test the LLE answers back
-        try:
-            current_temp = self.GetTemperature()
-        except IOError:
-            logging.exception("Device not responding on port %s", port)
-            raise
-        self._try_recover = True
-        
         self._shape = ()
         self._max_power = 100.
         self.power = model.FloatContinuous(0., (0., self._max_power), unit="W")
@@ -162,11 +155,13 @@ class LLE(model.Emitter):
         
         self.power.subscribe(self._updatePower)
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver.getSerialDriver(port))
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
+                                                      driver.getSerialDriver(self._port))
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
         
         
         # Update temperature every 10s
+        current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._temp_timer = util.RepeatingTimer(10, self._updateTemperature,
                                          "LLE temperature update")
@@ -245,6 +240,15 @@ class LLE(model.Emitter):
             if len(garbage) == 100:
                 raise IOError("Device keeps sending unknown data")
     
+    def _setDeviceManual(self):
+        """
+        Reset the device to the manual mode
+        """
+        with self._ser_access:
+            # from the documentation:
+            self._sendCommand(b"\x57\x02\x55\x50") # Set GPIO0-3 as input
+            self._sendCommand(b"\x57\x03\x55\x50") # Set GPI04-7 as input
+
     def _tryRecover(self):
         # no other access to the serial port should be done
         # so _ser_access should already be acquired
@@ -275,7 +279,7 @@ class LLE(model.Emitter):
                 self._serial.write(b"\x57\x02\xff\x50") # init
                 self._serial.write(b"\x57\x03\xab\x50") 
                 time.sleep(1)
-                self._serial.write(b"\x57\x02\xff\x50") # temp
+                self._serial.write(b"\x53\x91\x02\x50") # temp
                 resp = bytearray()
                 for i in range(2):
                     char = self._serial.read()
@@ -288,23 +292,12 @@ class LLE(model.Emitter):
                 time.sleep(2)
         
         # it now should be accessible again
-        self._serial.write(b"\x57\x02\xff\x50") # init
-        self._serial.write(b"\x57\x03\xab\x50")
         self._prev_intensities = [None] * 7 # => will update for sure
         self._ser_access.release() # because it will try to write on the port
         self._updateIntensities() # reset the sources
         self._ser_access.acquire()
         logging.info("Recovered device on port %s", self._port)
                 
-    def _setDeviceManual(self):
-        """
-        Reset the device to the manual mode
-        """
-        with self._ser_access:
-            # from the documentation:
-            self._sendCommand(b"\x57\x02\x55\x50") # Set GPIO0-3 as input
-            self._sendCommand(b"\x57\x03\x55\x50") # Set GPI04-7 as input
-
 
     # The source ID is more complicated than it looks like:
     # 0, 2, 3, 5, 6 are as is. 1 is for Yellow/Green. Setting 4 selects 
@@ -504,8 +497,47 @@ class LLE(model.Emitter):
         
         return False
 
-    @staticmethod
-    def scan(port=None):
+    @classmethod
+    def _findDevice(cls, ports):
+        """
+        Look for a compatible device
+        ports (str): pattern for the port name
+        return serial, port:
+            serial: serial port found, and open
+            port (str): the name of the port used
+        raises:
+            IOError: if no device are found
+        """
+        # We are called very early, so no attribute is to be expected
+        if os.name == "nt":
+            # TODO
+            #ports = ["COM" + str(n) for n in range (15)]
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(ports)
+
+        for n in names:
+            try:
+                ser = cls.openSerialPort(n)
+                dev = LLE(None, None, port=None, sources=None, _serial=ser)
+            except serial.SerialException:
+                # not possible to use this port? next one!
+                continue
+
+            # Try to connect and get back some answer.
+            # The LLE only answers back for the temperature
+            try:
+                temp = dev.GetTemperature()
+                # avoid 0 and 255 (= only 000's or 1111's), which is bad sign
+                if 0 < temp < 250:
+                    return ser, n # found it!
+            except Exception:
+                logging.debug("Port %s doesn't seem to have a LLE device connected", n)
+        else:
+            raise IOError("No device seems to be an LLE for ports '%s'" % (ports,))
+
+    @classmethod
+    def scan(cls, port=None):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
         returns (list of 2-tuple): name, args (port)
@@ -523,20 +555,11 @@ class LLE(model.Emitter):
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
         for p in ports:
             try:
-                logging.debug("Trying port %s", p)
-                dev = LLE(None, None, port=p, sources=None, _noinit=True)
-            except serial.SerialException:
-                # not possible to use this port? next one!
+                cls._findDevice(p)
+            except Exception:
                 continue
-
-            # Try to connect and get back some answer.
-            # The LLE only answers back for the temperature
-            try:
-                temp = dev.GetTemperature()
-                if 0 < temp and temp < 250: # avoid 0 and 255 => only 000's or 1111's, which is bad sign
-                    found.append(("LLE", {"port": p, "sources": DEFAULT_SOURCES}))
-            except:
-                continue
+            else:
+                found.append(("LLE", {"port": p, "sources": DEFAULT_SOURCES}))
 
         return found
     
@@ -557,31 +580,90 @@ class LLE(model.Emitter):
         )
         
         return ser
-    
+
 class FakeLLE(LLE):
     """
     For testing purpose only. To test the driver without hardware.
-    Note: you still need a serial port (but nothing will be sent to it)
     Pretends to connect but actually just print the commands sent.
     """
+    def __init__(self, name, role, port, *args, **kwargs):
+        # force a port pattern with just one existing file
+        LLE.__init__(self, name, role, port="/dev/null", *args, **kwargs)
     
-    def __init__(self, name, role, port, **kwargs):
-        LLE.__init__(self, name, role, port=None, **kwargs)
-    
-    def _initDevice(self):
-        pass
-    
-    def _sendCommand(self, com):
-        assert(len(com) <= 10) # commands cannot be long
-        logging.debug("Sending: %s", str(com).encode('hex_codec'))
-        
-    def _readResponse(self, length):
-        # it might only ask for the temperature
-        if length == 2:
-            response = bytearray(b"\x26\xA0") # 38.625°C
-        else:
-            raise IOError("Unknown read")
-            
-        logging.debug("Received: %s", str(response).encode('hex_codec'))
-        return response
+    @staticmethod
+    def openSerialPort(port):
+        """
+        opens a fake port, connected to the simulator
+        """
+        ser = LLESimulator(
+            port=port,
+            baudrate=9600,
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1 #s
+        )
 
+        return ser
+
+class LLESimulator(object):
+    """
+    Simulates a LLE (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._input_buf = bytearray() # what we receive from the "host computer"
+
+    def write(self, data):
+        self._input_buf += data
+        self._processCommand()
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+        
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _processCommand(self):
+        """
+        process the command, and put the result in the output buffer
+        com (str): command
+        """
+
+        while True:
+            if self._input_buf[:4] == bytearray(b"\x53\x91\x02\x50"):
+                # only the temperature returns something
+                self._output_buf += b"\x26\xA0" # 38.625°C
+                processed = 4
+            elif len(self._input_buf) >= 4 and self._input_buf[0] == 0x57:
+                processed = 4
+            elif len(self._input_buf) >= 6 and self._input_buf[0] == 0x53:
+                processed = 6
+            elif len(self._input_buf) >= 3 and self._input_buf[0] == 0x4f:
+                processed = 3
+            else:
+                processed = 0
+
+            if processed:
+                com = self._input_buf[:processed]
+                self._input_buf = self._input_buf[processed:]
+                logging.debug("LLE received %s", str(com).encode('hex_codec'))
+            else:
+                # remove everything useless
+                changed = False
+                while self._input_buf and self._input_buf[:1] not in [0x57, 0x53, 0x4f]:
+                    changed = True
+                    self._input_buf = self._input_buf[1:]
+                if not changed:
+                    return # reached the end of the flow, the rest is unfinished

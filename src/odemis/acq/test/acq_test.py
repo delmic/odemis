@@ -22,9 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from concurrent.futures._base import CancelledError
 import logging
 import numpy
-from odemis import model
-from odemis.gui import acqmng
-from odemis.gui.acqmng import acquire, computeThumbnail
+from odemis import model, acq
 from odemis.util import driver
 import os
 import subprocess
@@ -32,8 +30,7 @@ import time
 import unittest
 from unittest.case import skip
 
-import odemis.gui.model as guimodel
-import odemis.gui.model.stream as stream
+import odemis.acq.stream as stream
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -77,18 +74,25 @@ class SECOMTestCase(unittest.TestCase):
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
-        # TODO: we actually don't need a GUI data model to set-up streams
-        # => could be removed once acquisition is outside of .gui
-        cls.main_model = guimodel.MainGUIData(cls.microscope)
-        s1 = stream.FluoStream("fluo1",
-                  cls.main_model.ccd, cls.main_model.ccd.data,
-                  cls.main_model.light, cls.main_model.light_filter)
-        s2 = stream.FluoStream("fluo2",
-                  cls.main_model.ccd, cls.main_model.ccd.data,
-                  cls.main_model.light, cls.main_model.light_filter)
-        s3 = stream.BrightfieldStream("bf",
-                  cls.main_model.ccd, cls.main_model.ccd.data,
-                  cls.main_model.light)
+        for comp in model.getComponents():
+            if comp.role == "ccd":
+                cls.ccd = comp
+            elif comp.role == "spectrometer":
+                cls.spec = comp
+            elif comp.role == "e-beam":
+                cls.ebeam = comp
+            elif comp.role == "se-detector":
+                cls.sed = comp
+            elif comp.role == "light":
+                cls.light = comp
+            elif comp.role == "filter":
+                cls.light_filter = comp
+
+        s1 = stream.FluoStream("fluo1", cls.ccd, cls.ccd.data,
+                               cls.light, cls.light_filter)
+        s2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
+                               cls.light, cls.light_filter)
+        s3 = stream.BrightfieldStream("bf", cls.ccd, cls.ccd.data, cls.light)
         cls.streams = [s1, s2, s3]
 
     @classmethod
@@ -108,19 +112,19 @@ class SECOMTestCase(unittest.TestCase):
     def test_simple(self):
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
-        f = acquire(st.getStreams())
+        f = acq.acquire(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
 
-        thumb = computeThumbnail(st, f)
+        thumb = acq.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
-        f = acquire(st.getStreams())
+        f = acq.acquire(st.getStreams())
         data = f.result()
         self.assertIsInstance(data[0], model.DataArray)
 
-        thumb = computeThumbnail(st, f)
+        thumb = acq.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
     def test_progress(self):
@@ -136,7 +140,7 @@ class SECOMTestCase(unittest.TestCase):
         self.left = None
         self.updates = 0
 
-        f = acquire(st.getStreams())
+        f = acq.acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
 
         data = f.result()
@@ -157,7 +161,7 @@ class SECOMTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        f = acquire(st.getStreams())
+        f = acq.acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -204,7 +208,19 @@ class SPARCTestCase(unittest.TestCase):
 
         # Find CCD & SEM components
         cls.microscope = model.getMicroscope()
-        cls.main_model = guimodel.MainGUIData(cls.microscope)
+        for comp in model.getComponents():
+            if comp.role == "ccd":
+                cls.ccd = comp
+            elif comp.role == "spectrometer":
+                cls.spec = comp
+            elif comp.role == "e-beam":
+                cls.ebeam = comp
+            elif comp.role == "se-detector":
+                cls.sed = comp
+            elif comp.role == "light":
+                cls.light = comp
+            elif comp.role == "filter":
+                cls.light_filter = comp
 
     @classmethod
     def tearDownClass(cls):
@@ -224,25 +240,24 @@ class SPARCTestCase(unittest.TestCase):
         """
         try acquisition with fairly complex SEM/CCD stream
         """
-        gm = self.main_model
         # Create the streams and streamTree
-        semsur = stream.SEMStream("test sem", gm.sed, gm.sed.data, gm.ebeam)
+        semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         # the shared SEM stream has a special name
-        sems = stream.SEMStream("SEM CL", gm.sed, gm.sed.data, gm.ebeam)
-        ars = stream.ARStream("test ar", gm.ccd, gm.ccd.data, gm.ebeam)
+        sems = stream.SEMStream("SEM CL", self.sed, self.sed.data, self.ebeam)
+        ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
         st = stream.StreamTree(streams=[semsur, sems, ars])
 
         # SEM survey settings are via the current hardware settings
-        gm.ebeam.dwellTime.value = gm.ebeam.dwellTime.range[0]
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
 
         # SEM/AR settings are via the AR stream
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        gm.ccd.binning.value = (4, 4) # hopefully always supported
-        gm.ccd.exposureTime.value = 1 # s
+        self.ccd.binning.value = (4, 4) # hopefully always supported
+        self.ccd.exposureTime.value = 1 # s
         ars.repetition.value = (2, 3)
         num_ar = numpy.prod(ars.repetition.value)
 
-        est_time = acqmng.estimateTime(st.getStreams())
+        est_time = acq.estimateTime(st.getStreams())
 
         # prepare callbacks
         self.past = None
@@ -252,7 +267,7 @@ class SPARCTestCase(unittest.TestCase):
 
         # Run acquisition
         start = time.time()
-        f = acqmng.acquire(st.getStreams())
+        f = acq.acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
@@ -262,7 +277,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data), num_ar + 2)
 
-        thumb = acqmng.computeThumbnail(st, f)
+        thumb = acq.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end

@@ -21,7 +21,7 @@
 """
 
 from odemis.gui.img.data import getarr_rightBitmap, getarr_downBitmap
-from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb
+from odemis.util.conversion import change_brightness, wxcol_to_frgb
 import wx
 
 

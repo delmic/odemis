@@ -28,14 +28,12 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
-from odemis.gui.model import stream
-from odemis.gui.model.stream import UNDEFINED_ROI, EM_STREAMS
+from odemis.acq import stream
+from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
-from odemis.model._dataflow import MD_PIXEL_SIZE
 from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
 import threading
-import weakref
 import wx
 from wx.lib.pubsub import pub
 
@@ -754,7 +752,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             if rgbim is None:
                 continue
 
-            if isinstance(s, EM_STREAMS):
+            if isinstance(s, stream.EM_STREAMS):
                 # as last
                 images.append(rgbim)
                 # FIXME: See the log warning

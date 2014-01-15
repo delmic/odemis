@@ -24,9 +24,8 @@ from concurrent.futures._base import CancelledError
 import copy
 import logging
 import math
-from odemis import model, dataio
-from odemis.gui import acqmng
-from odemis.gui.acqmng import presets, preset_as_is
+from odemis import acq, model, dataio
+from odemis.gui.acqmng import presets, preset_as_is, apply_preset
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
@@ -216,7 +215,7 @@ class AcquisitionDialog(xrcfr_acq):
     def update_acquisition_time(self):
         streams = self._tab_data_model.focussedView.value.getStreams()
         if streams:
-            acq_time = acqmng.estimateTime(streams)
+            acq_time = acq.estimateTime(streams)
             self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
@@ -260,7 +259,7 @@ class AcquisitionDialog(xrcfr_acq):
         # (eg: accumulation/interpolation) when we have them
 
         # apply the recorded values
-        acqmng.apply_preset(new_preset)
+        apply_preset(new_preset)
 
         # The hardware might not exactly apply the setting as computed in the
         # preset. We need the _exact_ same value to find back which preset is
@@ -326,7 +325,7 @@ class AcquisitionDialog(xrcfr_acq):
         # start acquisition + connect events to callback
         streams = self._tab_data_model.focussedView.value.getStreams()
         # It should never be possible to reach here with no streams
-        self.acq_future = acqmng.acquire(streams)
+        self.acq_future = acq.acquire(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
@@ -382,7 +381,7 @@ class AcquisitionDialog(xrcfr_acq):
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
         try:
-            thumb = acqmng.computeThumbnail(
+            thumb = acq.computeThumbnail(
                             self._tab_data_model.focussedView.value.stream_tree,
                             future)
             filename = self.filename.value

@@ -28,25 +28,25 @@ manipulate various data streams coming from the microscope.
 
 """
 
+import collections
+import logging
+import math
+import numpy
+from odemis import acq
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
     BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE, FOREGROUND_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
 from odemis.gui.util import call_after, wxlimit_invocation
-from odemis.gui.util.conversion import wave2rgb
 from odemis.gui.util.widgets import VigilantAttributeConnector
+import wx.lib.newevent
 from wx.lib.pubsub import pub
-import collections
-import logging
-import math
-import numpy
+
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
-import odemis.gui.model as model
 import odemis.gui.model.dye as dye
-import wx.lib.newevent
-
+from odemis.util.conversion import wave2rgb
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
@@ -1349,14 +1349,14 @@ class StreamBar(wx.Panel):
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
-    STREAM_ORDER = [model.stream.SEMStream,
-                    model.stream.StaticSEMStream,
-                    model.stream.BrightfieldStream,
-                    model.stream.CameraNoLightStream,
-                    model.stream.StaticStream,
-                    model.stream.FluoStream,
-                    model.stream.SpectrumStream,
-                    model.stream.ARStream,
+    STREAM_ORDER = [acq.stream.SEMStream,
+                    acq.stream.StaticSEMStream,
+                    acq.stream.BrightfieldStream,
+                    acq.stream.CameraNoLightStream,
+                    acq.stream.StaticStream,
+                    acq.stream.FluoStream,
+                    acq.stream.SpectrumStream,
+                    acq.stream.ARStream,
                     ]
 
 

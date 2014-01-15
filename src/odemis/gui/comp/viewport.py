@@ -32,7 +32,7 @@ from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_MOVE, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
-from odemis.gui.model.stream import OPTICAL_STREAMS, EM_STREAMS
+from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.util import call_after
 from odemis.util import units
 import wx
