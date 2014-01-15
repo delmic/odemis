@@ -245,9 +245,9 @@ class MicroscopeViewport(ViewPort):
 
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
-        self.legend.bmpSliderLeft.Show(show)
-        self.legend.mergeSlider.Show(show)
-        self.legend.bmpSliderRight.Show(show)
+        self.legend.bmp_slider_left.Show(show)
+        self.legend.merge_slider.Show(show)
+        self.legend.bmp_slider_right.Show(show)
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
@@ -308,11 +308,11 @@ class MicroscopeViewport(ViewPort):
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
-        self.legend.mergeSlider.SetValue(round(val * 100))
+        self.legend.merge_slider.SetValue(round(val * 100))
 
     @call_after
     def _onMPP(self, mpp):
-        self.legend.scaleDisplay.SetMPP(mpp)
+        self.legend.scale_win.SetMPP(mpp)
         self.UpdateHFWLabel()
         self.UpdateMagnification()
         # the MicroscopeView will send an event that the view has to be redrawn
@@ -321,17 +321,23 @@ class MicroscopeViewport(ViewPort):
         """
         Update the MergeSlider display and icons depending on the state
         """
-        # MergeSlider is displayed iif:
+        # MergeSlider is displayed if:
         # * Root operator of StreamTree accepts merge argument
         # * (and) Root operator of StreamTree has >= 2 images
         if ("merge" in self._microscope_view.stream_tree.kwargs and
             len(self._microscope_view.stream_tree) >= 2):
+
+            # How is the order guaranteed? (Left vs Right)
+            sc = self._microscope_view.stream_tree[0]
+            self.legend.set_stream_type(wx.LEFT, sc.__class__)
+
+            sc = self._microscope_view.stream_tree[1]
+            self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
 
-        # TODO: update icons depending on type of streams
-        # cf self.legend.set_stream_type()
 
     @call_after
     def _onImageUpdate(self, timestamp):
@@ -351,7 +357,7 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        val = self.legend.mergeSlider.GetValue() / 100
+        val = self.legend.merge_slider.GetValue() / 100
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
@@ -365,12 +371,12 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        if(evt.GetEventObject() == self.legend.bmpSliderLeft):
-            self.legend.mergeSlider.set_to_min_val()
+        if(evt.GetEventObject() == self.legend.bmp_slider_left):
+            self.legend.merge_slider.set_to_min_val()
         else:
-            self.legend.mergeSlider.set_to_max_val()
+            self.legend.merge_slider.set_to_max_val()
 
-        val = self.legend.mergeSlider.GetValue() / 100
+        val = self.legend.merge_slider.GetValue() / 100
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
@@ -431,7 +437,7 @@ class SparcAlignViewport(MicroscopeViewport):
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
         # pylint: disable=E1103
-        self.legend.bmpSliderRight.SetBitmap(getico_blending_goalBitmap())
+        self.legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
 
 
 class PlotViewport(ViewPort):

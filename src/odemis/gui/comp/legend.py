@@ -23,17 +23,15 @@
 """
 
 
-import cairo
-import logging
+from odemis.acq import stream
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
-from odemis.gui.img.data import getico_blending_optBitmap, \
-    getico_blending_semBitmap, getico_blending_goalBitmap
-from odemis.acq import stream
 from odemis.util.conversion import wxcol_to_frgb
-import wx
-
+import cairo
+import logging
+import odemis.gui.img.data as imgdata
 import odemis.util.units as units
+import wx
 
 
 class InfoLegend(wx.Panel):
@@ -56,7 +54,7 @@ class InfoLegend(wx.Panel):
 
         # Merge slider
         # TODO: should be possible to use VAConnector
-        self.mergeSlider = Slider(
+        self.merge_slider = Slider(
                     self,
                     wx.ID_ANY,
                     50, # val
@@ -67,30 +65,30 @@ class InfoLegend(wx.Panel):
                            wx.SL_TICKS |
                            wx.NO_BORDER))
 
-        self.mergeSlider.SetBackgroundColour(parent.GetBackgroundColour())
-        self.mergeSlider.SetForegroundColour("#4d4d4d")
-        self.mergeSlider.SetToolTipString("Merge ratio")
+        self.merge_slider.SetBackgroundColour(parent.GetBackgroundColour())
+        self.merge_slider.SetForegroundColour("#4d4d4d")
+        self.merge_slider.SetToolTipString("Merge ratio")
 
-        self.bmpSliderLeft = wx.StaticBitmap(
+        self.bmp_slider_left = wx.StaticBitmap(
                                     self,
                                     wx.ID_ANY,
-                                    getico_blending_optBitmap())
-        self.bmpSliderRight = wx.StaticBitmap(
+                                    imgdata.getico_blending_optBitmap())
+        self.bmp_slider_right = wx.StaticBitmap(
                                     self,
                                     wx.ID_ANY,
-                                    getico_blending_semBitmap())
+                                    imgdata.getico_blending_semBitmap())
 
-        # scale
-        self.scaleDisplay = ScaleWindow(self)
+        # Scale window
+        self.scale_win = ScaleWindow(self)
 
-        # Horizontal Full Width text
+        # Horizontal Field Width text
         # TODO: allow the user to select/copy the text
-        self.hfwDisplay = wx.StaticText(self)
-        self.hfwDisplay.SetToolTipString("Horizontal Field Width")
+        self.hfw_text = wx.StaticText(self)
+        self.hfw_text.SetToolTipString("Horizontal Field Width")
 
-        # magnification
-        self.LegendMag = wx.StaticText(self)
-        self.LegendMag.SetToolTipString("Magnification")
+        # Magnification text
+        self.magnification_text = wx.StaticText(self)
+        self.magnification_text.SetToolTipString("Magnification")
 
 
         # TODO more...
@@ -116,23 +114,23 @@ class InfoLegend(wx.Panel):
         # +-------------------------------------------------------+
 
         leftColSizer = wx.BoxSizer(wx.HORIZONTAL)
-        leftColSizer.Add(self.LegendMag,
+        leftColSizer.Add(self.magnification_text,
                          border=10,
                          flag=wx.ALIGN_CENTER | wx.RIGHT)
-        leftColSizer.Add(self.hfwDisplay, border=10, flag=wx.ALIGN_CENTER)
+        leftColSizer.Add(self.hfw_text, border=10, flag=wx.ALIGN_CENTER)
 
 
         sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
         # TODO: need to have the icons updated according to the streams type
         sliderSizer.Add(
-            self.bmpSliderLeft,
+            self.bmp_slider_left,
             border=3,
             flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         sliderSizer.Add(
-            self.mergeSlider,
+            self.merge_slider,
             flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         sliderSizer.Add(
-            self.bmpSliderRight,
+            self.bmp_slider_right,
             border=3,
             flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
 
@@ -140,7 +138,7 @@ class InfoLegend(wx.Panel):
         legendSizer = wx.BoxSizer(wx.HORIZONTAL)
         legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
         legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(self.scaleDisplay,
+        legendSizer.Add(self.scale_win,
                       2,
                       border=2,
                       flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
@@ -157,19 +155,19 @@ class InfoLegend(wx.Panel):
 
 
         # Dragging the slider should set the focus to the right view
-        self.mergeSlider.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.mergeSlider.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.merge_slider.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.merge_slider.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
 
         # Make sure that mouse clicks on the icons set the correct focus
-        self.bmpSliderLeft.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.bmpSliderRight.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.bmp_slider_left.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.bmp_slider_right.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
 
         # Set slider to min/max
-        self.bmpSliderLeft.Bind(wx.EVT_LEFT_UP, parent.OnSliderIconClick)
-        self.bmpSliderRight.Bind(wx.EVT_LEFT_UP, parent.OnSliderIconClick)
+        self.bmp_slider_left.Bind(wx.EVT_LEFT_UP, parent.OnSliderIconClick)
+        self.bmp_slider_right.Bind(wx.EVT_LEFT_UP, parent.OnSliderIconClick)
 
-        self.hfwDisplay.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.LegendMag.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.hfw_text.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.magnification_text.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
 
         # Explicitly set the
         self.SetMinSize((-1, 40))
@@ -185,43 +183,44 @@ class InfoLegend(wx.Panel):
         evt.Skip()
 
     def set_hfw_label(self, label):
-        self.hfwDisplay.SetLabel(label)
+        self.hfw_text.SetLabel(label)
         self.Layout()
 
     def set_mag_label(self, label):
-        self.LegendMag.SetLabel(label)
+        self.magnification_text.SetLabel(label)
         self.Layout()
 
-    def set_stream_type(self, side, cls):
+    def set_stream_type(self, side, stream_class):
         """
         Set the stream type, to put the right icon on the merge slider
-        side (wx.LEFT or wx.RIGHT): whether this set the left or right stream
-        cls (class inheriting from Stream): the class of the stream
+
+        :param side: (wx.LEFT or wx.RIGHT): whether this set the left or right
+            stream
+        :param stream_class: (Stream (sub)class): the class of the stream
         """
 
         stream_to_icon = [
-          (stream.OPTICAL_STREAMS, getico_blending_optBitmap()),
-          (stream.EM_STREAMS, getico_blending_semBitmap()),
-          # TODO: Spectrum icon
-          (stream.SPECTRUM_STREAMS, getico_blending_semBitmap()),
-          # TODO: Goal stream class?! Or check that the name is "Goal"?
-          (stream.RGBStream, getico_blending_goalBitmap()),
+          (stream.AR_STREAMS, imgdata.getico_blending_angBitmap()),
+          (stream.SPECTRUM_STREAMS, imgdata.getico_blending_specBitmap()),
+          (stream.OPTICAL_STREAMS, imgdata.getico_blending_optBitmap()),
+          (stream.EM_STREAMS, imgdata.getico_blending_semBitmap()),
+          (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
           ]
 
-        for cs, i in stream_to_icon:
-            if issubclass(cls, cs):
-                icon = i
+        for group_of_classes, class_icon in stream_to_icon:
+            if issubclass(stream_class, group_of_classes):
+                icon = class_icon
                 break
         else:
             # Don't fail too bad
-            icon = getico_blending_optBitmap()
-            if self.mergeSlider.IsShown():
+            icon = imgdata.getico_blending_optBitmap()
+            if self.merge_slider.IsShown():
                 logging.warning("Failed to find icon for stream of class %s",
-                                cls)
-        if wx.LEFT:
-            self.bmpSliderLeft.SetBitmap(icon)
+                                stream_class)
+        if side == wx.LEFT:
+            self.bmp_slider_left.SetBitmap(icon)
         else:
-            self.bmpSliderRight.SetBitmap(icon)
+            self.bmp_slider_right.SetBitmap(icon)
 
 
 class AxisLegend(wx.Panel):
