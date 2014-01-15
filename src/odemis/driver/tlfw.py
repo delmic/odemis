@@ -18,6 +18,8 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from Pyro4.core import isasync
+import collections
+from concurrent.futures.thread import ThreadPoolExecutor
 import glob
 import logging
 from odemis import model
@@ -27,6 +29,7 @@ import os
 import re
 import serial
 import threading
+import time
 
 
 class HwError(Exception):
@@ -35,49 +38,147 @@ class HwError(Exception):
     """
     pass
 
-class fw102c(model.Actuator):
+class FW102c(model.Actuator):
     """
     Represents a Thorlabs filter wheel FW102C as an actuator.
     It provides one enumerated axis, whose actual band values are provided by
     the user at init.
     """
-    
     # Regex matching the compatible identification strings
     re_idn = "THORLABS.*FW102C.*"
-    def __init__(self, name, role, port, bands, **kwargs):
+
+    def __init__(self, name, role, port, bands, _scan=False, **kwargs):
         """
-        port (string): serial port to use
-        bands (dict 1<=int<=6 -> 2-tuple of floats > 0):
+        port (string): name of the serial port to connect to. Can be a pattern,
+         in which case, all the ports fitting the pattern will be tried, and the
+         first one which looks like an FW102C will be used.
+        bands (dict 1<=int<=12 -> 2-tuple of floats > 0):
           filter position -> lower and higher bound of the wavelength (m) of the
           light which goes _through_. If it's a list, it implies that the filter
           is multi-band.
+        _scan (bool): only for internal usage
         raise IOError if no device answering or not a compatible device
         """
-        # TODO: accept a regex as port, and each port will be scan till the
-        # first compatible device is found. cf omicronxx
-        self.port = port
-        self._serial = self._openSerialPort(port)
         self._ser_access = threading.Lock()
-        self._flushInput() # can have some \x00 bytes at the beginning
-
-        idn = self.GetIdentification()
-        if not re.match(self.re_idn, idn):
-            raise IOError("Device on port %s is not a FW102C (reported: %s)" %
-                          (port, idn))
-
-        # TODO: bands
-
-
+        self._port = self._findDevice(port)
+        logging.info("Found FW102C device on port %s", self._port)
+        if _scan:
+            return
+        
+        # check bands contains correct data
+        self._maxpos = self.GetMaxPosition() 
+        if not bands:
+            raise ValueError("Argument bands must contain at least one band")
+        try:
+            for pos, band in bands.items():
+                if not 1 <= pos <= self._maxpos:
+                    raise ValueError("Filter position should be between 1 and "
+                                     "%d, but got %d." % (self._maxpos, pos))
+                self._checkBand(band)
+        except Exception:
+            logging.exception("Failed to parse bands %s", bands)
+            raise
+        
+        axes = {"band": model.Axis(choices=bands)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
         
-        driver_name = driver.getSerialDriver(port)
+        driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        self._hwVersion = idn
+        self._hwVersion = self._idn
+
+        # will take care of executing axis move asynchronously
+        self._executor = ThreadPoolExecutor(max_workers=1) # one task at a time
+
+
+        curpos = self.GetPosition()
+        self.position = model.VigilantAttribute({"band": curpos}, readonly=True)
+
+        # TODO: MD_OUT_WL or MD_IN_WL depending on affect
+        self._metadata = {model.MD_FILTER_NAME: name,
+                          model.MD_OUT_WL: self._axes["band"].choices[curpos]}
+
+    def getMetadata(self):
+        return self._metadata
 
     def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
         with self._ser_access:
-            self._serial.close()
-            self._serial = None
+            if self._serial:
+                self._serial.close()
+                self._serial = None
+
+    def _checkBand(self, band):
+        """
+        band (object): should be tuple of floats or list of tuple of floats
+        raise ValueError: if the band doesn't follow the convention
+        """
+        if not isinstance(band, collections.Iterable) or len(band) == 0:
+            raise ValueError("band must be a (list of a) list of 2 floats")
+        # is it a list of list?
+        if isinstance(band[0], collections.Iterable):
+            # => set of 2-tuples
+            for sb in band:
+                if len(sb) != 2:
+                    raise ValueError("Expected only 2 floats in band, found %d" % len(sb))
+            band = tuple(band)
+        else:
+            # 2-tuple
+            if len(band) != 2:
+                raise ValueError("Expected only 2 floats in band, found %d" % len(band))
+            band = (tuple(band),)
+
+        # Check the values are min/max and in m: typically within nm (< µm!)
+        max_val = 10e-6 # m
+        for low, high in band:
+            if low > high:
+                raise ValueError("Min of band must be first in list")
+            if low < 0:
+                raise ValueError("Band must be 2 positive value in meters")
+            if low > max_val or high > max_val:
+                raise ValueError("Band contains very high values for light "
+                     "wavelength, ensure the value is in meters: %r." % band)
+
+        # no error found
+        
+    def _findDevice(self, ports):
+        """
+        Look for a compatible device
+        ports (str): pattern for the port name
+        return (str): the name of the port used
+        It also sets ._serial and ._idn to contain the opened serial port, and
+        the identification string.
+        raises:
+            IOError: if no device are found
+        """
+        if os.name == "nt":
+            # TODO
+            #ports = ["COM" + str(n) for n in range (15)]
+            raise NotImplementedError("Windows not supported")
+        else:
+            names = glob.glob(ports)
+
+        for n in names:
+            try:
+                self._serial = self._openSerialPort(n)
+            except serial.SerialException:
+                # not possible to use this port? next one!
+                continue
+
+            # check whether it looks like a FW102C
+            try:
+                self._flushInput() # can have some \x00 bytes at the beginning
+                idn = self.GetIdentification()
+                if re.match(self.re_idn, idn):
+                    self._idn = idn
+                    return n # found it!
+            except Exception:
+                logging.debug("Port %s doesn't seem to have a FW102C device connected", n)
+        else:
+            raise IOError("No device seems to be an FW102C for ports '%s'" % (ports,))
 
     @staticmethod
     def _openSerialPort(port):
@@ -122,6 +223,8 @@ class fw102c(model.Actuator):
             IOError: if there is a timeout
             HwError: if the hardware reports an error 
         """
+        # TODO: handle IOError and automatically try to reconnect (cf LLE)
+
         assert(len(com) <= 50) # commands cannot be long
         full_com = com + "\r"
         with self._ser_access:
@@ -175,7 +278,7 @@ class fw102c(model.Actuator):
         # answer is like "THORLABS FW102C/FW212C Filter Wheel version 1.04"
         return self._sendQuery("*idn?")
 
-    def GetMaxPositions(self):
+    def GetMaxPosition(self):
         """
         return (1<int): maximum number of positions available (eg, 6, 12)
         """
@@ -184,29 +287,252 @@ class fw102c(model.Actuator):
 
     def GetPosition(self):
         """
-        return (1<=int<=6): current position
+        return (1<=int<=maxpos): current position
         Note: might be different from the last position set if the user has
          manually changed it.
         """
         ans = self._sendQuery("pos?")
         return int(ans)
 
+    def SetPosition(self, pos):
+        """
+        pos (1<=int<=maxpos): current position
+        returns when the new position is set
+        raise Exception in case of error
+        """
+        assert(1 <= pos <= self._maxpos)
+        self._sendCommand("pos=%d" % pos)
+        logging.debug("Move to pos %d finished", pos)
+
     # What we don't need:
     # speed?\r1\r>
     # trig?\r0\r>
     # sensors?\r0\r>
 
+    def _doMoveBand(self, pos):
+        """
+        move to the position and updates the metadata and position once it's over
+        """
+        self.SetPosition(pos)
+        self._metadata[model.MD_OUT_WL] = self._axes["band"].choices[pos]
+        self._updatePosition()
+
+    # high-level methods (interface)
+    def _updatePosition(self):
+        """
+        update the position VA
+        Note: it should not be called while holding _ser_access
+        """
+        pos = {"band": self.GetPosition()}
+
+        # it's read-only, so we change it via _value
+        self.position._value = pos
+        self.position.notify(self.position.value)
+
     @isasync
     def moveRel(self, shift):
         logging.warning("Relative move is not advised for enumerated axes")
-        pass # TODO
+        # TODO move to the +N next position?
+        if not shift:
+            return model.InstantaneousFuture()
+        else:
+            raise NotImplementedError("Relative move on enumerated axis not supported")
         
     @isasync
     def moveAbs(self, pos):
-        pass # TODO
+        for axis, val in pos.items():
+            if axis == "band":
+                if val not in self._axes[axis].choices:
+                    raise ValueError("Unsupported position %s" % pos)
+            else:
+                raise ValueError("Unsupported axis %s" % (axis,))
+
+        if "band" in pos:
+            p = pos["band"]
+            return self._executor.submit(self._doMoveBand, p)
+        else: # nothing to do
+            return model.InstantaneousFuture()
     
     def stop(self, axes=None):
-        pass # TODO
+        pass # TODO cancel all the futures not yet executed. cf SpectraPro
 
+    def selfTest(self):
+        """
+        check as much as possible that it works without actually moving the motor
+        return (boolean): False if it detects any problem
+        """
+        try:
+            pos = self.GetPosition()
+            maxpos = self.GetMaxPosition()
+            if 1 <= pos <= maxpos:
+                return True
+        except:
+            logging.exception("Selftest failed")
+        
+        return False
+
+    @classmethod
+    def scan(cls, port=None):
+        """
+        port (string): name of the serial port. If None, all the serial ports are tried
+        returns (list of 2-tuple): name, args (port)
+        Note: it's obviously not advised to call this function if a device is already under use
+        """
+        if port:
+            ports = [port]
+        else:
+            if os.name == "nt":
+                ports = ["COM" + str(n) for n in range (0,8)]
+            else:
+                ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
+        
+        logging.info("Serial ports scanning for Thorlabs filter wheel in progress...")
+        found = []  # (list of 2-tuple): name, kwargs
+        for p in ports:
+            try:
+                logging.debug("Trying port %s", p)
+                dev = cls(None, None, p, bands=None, _scan=True)
+            except (serial.SerialException, IOError):
+                # not possible to use this port? next one!
+                continue
+
+            # Get some more info
+            try:
+                maxpos = dev.GetMaxPosition()
+            except Exception:
+                continue
+            else:
+                # create fake band argument
+                bands = {}
+                for i in range(1, maxpos + 1):
+                    bands[i] = (i * 100e-9, (i + 1) * 100e-9)
+                found.append((model, {"port": p, "bands": bands}))
+
+        return found
     
-# TODO: Emulator
+# Emulator
+class FakeFW102c(FW102c):
+    """
+    For testing purpose only. To test the driver without hardware.
+    Pretends to connect but actually just print the commands sent.
+    """
+    def __init__(self, name, role, port, *args, **kwargs):
+        # force a port pattern with just one existing file
+        FW102c.__init__(self, name, role, port="/dev/null", *args, **kwargs)
+
+    @staticmethod
+    def _openSerialPort(port):
+        """
+        opens a fake port, connected to the simulator
+        """
+        ser = FW102cSimulator(
+            port=port,
+            baudrate=115200, # only correct if setting was not changed
+            bytesize=serial.EIGHTBITS,
+            parity=serial.PARITY_NONE,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=1 #s
+        )
+
+        return ser
+
+    @classmethod
+    def scan(cls, port=None):
+        return super(FakeFW102c, cls).scan(port="/dev/null")
+
+class FW102cSimulator(object):
+    """
+    Simulates a FW102C (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._input_buf = "" # what we receive from the "host computer"
+        
+        # internal values (same as command names)
+        self._state = {"speed": 1,
+                       "trig": 0,
+                       "pos": 3,
+                       "pcount": 6,
+                       "sensors": 0,
+                       }
+
+    def write(self, data):
+        self._input_buf += data
+        # echo is active
+        self._output_buf += data
+
+        # process each commands separated by "\r"
+        commands = self._input_buf.split("\r")
+        self._input_buf = commands.pop() # last one is not complete yet
+        for c in commands:
+            self._processCommand(c)
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def flush(self):
+        pass
+
+    def flushInput(self):
+        self._output_buf = ""
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _processCommand(self, com):
+        """
+        process the command, and put the result in the output buffer
+        com (str): command
+        """
+        logging.debug("Simulator received command %s", com)
+        out = None
+        try:
+            if com == "*idn?":
+                out = "THORLABS FW102C/FW212C Fake Filter Wheel version 1.01"
+            elif com.endswith("?"):
+                name = com[:-1]
+                val = self._state[name]
+                out = "%d" % val
+            elif com.startswith("pos="):
+                val = int(com[4:])
+                if not 1 <= val <= self._state["pcount"]:
+                    raise ValueError("%d" % val)
+                
+                # simulate a move 
+                curpos = self._state["pos"]
+                p1, p2 = sorted([val, curpos])
+                dist = min(p2 - p1, (6 + p1) - p2)
+                if self._state["speed"] == 0:
+                    dur = 2
+                else:
+                    dur = 1
+                time.sleep(dist * dur)
+                self._state["pos"] = val
+                # no output
+            else:
+                # TODO: set of speed, trig, sensors,
+                logging.debug("Command '%s' unknown", com)
+                raise KeyError("%s", com)
+        except ValueError:
+            out = "Command error CMD_ARG_INVALID\n"
+        except KeyError:
+            out = "Command error CMD_NOT_DEFINED\n"
+
+        # add the response end
+        if out is None:
+            out = ""
+        else:
+            out += "\r"
+        out += "> "
+        self._output_buf += out
