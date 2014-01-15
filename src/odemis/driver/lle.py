@@ -98,6 +98,7 @@ class LLE(model.Emitter):
             self._port = ""
         else:
             self._serial, self._port = self._findDevice(port)
+            logging.info("Found LLE device on port %s", self._port)
             self._try_recover = True
         
         # to acquire before sending anything on the serial port
