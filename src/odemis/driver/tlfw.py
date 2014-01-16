@@ -89,6 +89,7 @@ class FW102c(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = ThreadPoolExecutor(max_workers=1) # one task at a time
 
+        self._speed = self.GetSpeed()
 
         curpos = self.GetPosition()
         self.position = model.VigilantAttribute({"band": curpos}, readonly=True)
@@ -294,6 +295,13 @@ class FW102c(model.Actuator):
         ans = self._sendQuery("pos?")
         return int(ans)
 
+    def GetSpeed(self):
+        """
+        return (0 or 1): current "speed" of the wheel, the bigger the faster
+        """
+        ans = self._sendQuery("speed?")
+        return int(ans)
+
     def SetPosition(self, pos):
         """
         pos (1<=int<=maxpos): current position
@@ -301,7 +309,22 @@ class FW102c(model.Actuator):
         raise Exception in case of error
         """
         assert(1 <= pos <= self._maxpos)
-        self._sendCommand("pos=%d" % pos)
+
+        # Estimate how long it'll take
+        cur_pos = self.position.value["band"]
+        p1, p2 = sorted([pos, cur_pos])
+        dist = min(p2 - p1, (6 + p1) - p2)
+        if self._speed == 0:
+            dur_one = 2 #s
+        else:
+            dur_one = 1 #s
+        maxdur = 1 + dist * dur_one * 2 # x 2 as a safe bet
+        prev_timeout = self._serial.timeout
+        try:
+            self._serial.timeout = maxdur
+            self._sendCommand("pos=%d" % pos)
+        finally:
+            self._serial.timeout = prev_timeout
         logging.debug("Move to pos %d finished", pos)
 
     # What we don't need:

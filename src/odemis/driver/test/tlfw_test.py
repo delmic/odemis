@@ -19,6 +19,7 @@ import logging
 from odemis.driver import tlfw
 import os
 import unittest
+from unittest.case import skip
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -28,17 +29,19 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyFTDI*" #"/dev/ttyUSB0"
 
-CLASS = tlfw.FakeFW102c # use FakeFW102C if no hardware present
+CLASS = tlfw.FW102c # use FakeFW102C if no hardware present
 KWARGS = {"name": "test", "role": "filter", "port": PORT,
           "bands": {1: (100e-9, 150e-9),
                    2: (200e-9, 250e-9),
                    3: (100e-9, 300e-9),
                    4: [(200e-9, 250e-9), (500e-9, 600e-9)],
-                   5: (600e-9, 2500e-9),
+                   #5: (600e-9, 2500e-9),
+                   6: (600e-9, 2500e-9),
                    # one filter not present
                    }
           }
 
+#@skip("simple")
 class TestStatic(unittest.TestCase):
     """
     Tests which don't need a component ready
@@ -65,7 +68,7 @@ class TestStatic(unittest.TestCase):
 
     def test_fake(self):
         """
-        Just makes sure we don't (completely) break FakeSpectraPro after an update
+        Just makes sure we don't (completely) break FakeFW102c after an update
         """
         dev = tlfw.FakeFW102c(**KWARGS)
 
@@ -81,7 +84,6 @@ class TestFW102c(unittest.TestCase):
     """
     Tests which need a component ready
     """
-
 
     def setUp(self):
         self.dev = CLASS(**KWARGS)
@@ -116,3 +118,6 @@ class TestFW102c(unittest.TestCase):
         f.result()
         self.assertEqual(self.dev.position.value["band"], new_pos)
 
+if __name__ == "__main__":
+    #import sys;sys.argv = ['', 'Test.testName']
+    unittest.main()
