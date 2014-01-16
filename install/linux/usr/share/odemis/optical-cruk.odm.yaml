@@ -11,7 +11,7 @@ LightHub: {
     class: omicronxx.MultixX,
     role: light,
     init: {
-        ports: "/dev/ttyOXX*",
+        ports: "/dev/ttyFTDI*",
         },
     affects: [Clara],
 }
