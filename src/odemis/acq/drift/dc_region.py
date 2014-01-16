@@ -56,15 +56,16 @@ def GuessAnchorRegion(whole_img, sample_region):
 
     # Mask the sample_region plus a margin equal to the half of dc region and
     # a margin along the edges of the whole image again equal to the half of
-    # the dc_region. Thus we keep pixels that we can use as center of our
+    # the anchor region. Thus we keep pixels that we can use as center of our
     # anchor region knowing that it will not overlap with the sample region
-    # and it will not be outside of bounds.
+    # and it will not be outside of bounds
     masked_img = cannied_img
-    masked_img[sample_region[1] * whole_img.shape[0] - (dc_shape[0] / 2):sample_region[3] * whole_img.shape[0] + (dc_shape[0] / 2),
-               sample_region[0] * whole_img.shape[1] - (dc_shape[1] / 2):sample_region[2] * whole_img.shape[1] + (dc_shape[1] / 2)].fill(0)
-    masked_img[0:(dc_shape[0] / 2), 0:(dc_shape[1] / 2)].fill(0)
-    masked_img[(masked_img.shape[0] - 1):(masked_img.shape[0] - 1) - (dc_shape[0] / 2),
-               (masked_img.shape[1] - 1):(masked_img.shape[1] - 1) - (dc_shape[1] / 2)].fill(0)
+    masked_img[sample_region[0] * whole_img.shape[1] - (dc_shape[0] / 2):sample_region[2] * whole_img.shape[1] + (dc_shape[0] / 2),
+               sample_region[1] * whole_img.shape[0] - (dc_shape[1] / 2):sample_region[3] * whole_img.shape[0] + (dc_shape[1] / 2)].fill(0)
+    masked_img[0:(dc_shape[0] / 2), :].fill(0)
+    masked_img[:, 0:(dc_shape[1] / 2)].fill(0)
+    masked_img[masked_img.shape[0] - (dc_shape[0] / 2):masked_img.shape[0], :].fill(0)
+    masked_img[:, masked_img.shape[1] - (dc_shape[1] / 2):masked_img.shape[1]].fill(0)
     hdf5.export("masked.h5", model.DataArray(masked_img), thumbnail=None)
 
     # Find indices of edge pixels
@@ -74,11 +75,24 @@ def GuessAnchorRegion(whole_img, sample_region):
     occurrences = numpy.hstack([X, Y])
 
     # If there is such a pixel outside of the sample region and there is enough 
-    # space according to dc_shape, use the masked image and crop the dc_region
+    # space according to dc_shape, use the masked image and calculate the anchor
+    # region roi
     if len(occurrences) > 0:
-        print len(occurrences)
-    
-    return (0, 0, 1, 1)
+        # [x, y] = [occurrences[0]]
+        anchor_roi = ((occurrences[0, 0] - (dc_shape[1] / 2)) / whole_img.shape[1],
+                      (occurrences[0, 1] - (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 0] + (dc_shape[1] / 2)) / whole_img.shape[1],
+                      (occurrences[0, 1] + (dc_shape[0] / 2)) / whole_img.shape[0])
+        
+        print anchor_roi
+        cannied_img = cv2.Canny(uint8_img, 100, 200)
+        anchor_img = cannied_img[anchor_roi[0] * whole_img.shape[1]:anchor_roi[2] * whole_img.shape[1],
+                                 anchor_roi[1] * whole_img.shape[0]:anchor_roi[3] * whole_img.shape[0]]
+        hdf5.export("anchor_roi.h5", model.DataArray(anchor_img), thumbnail=None)
+    else:
+        return
+
+    return anchor_roi
 
 
 
