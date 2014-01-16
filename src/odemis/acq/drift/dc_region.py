@@ -34,14 +34,14 @@ from odemis.dataio import hdf5
 from scipy import misc
 from numpy import unravel_index
 
-def DCRegion(whole_img, sample_region):
+def GuessAnchorRegion(whole_img, sample_region):
     """
     It detects a region with clean edges, proper for drift measurements. This region 
     must not overlap with the sample that is to be scanned due to the danger of 
     contamination.
     whole_img (ndarray): 2d array with the whole SEM image
     sample_region (tuple of 4 floats): roi of the sample in order to avoid overlap
-    returns (tuple of 4 floats): roi of the selected region
+    returns (tuple of 4 floats): roi of the anchor region
     """
     # Drift correction region shape
     dc_shape = (50, 50)
@@ -54,19 +54,29 @@ def DCRegion(whole_img, sample_region):
     cannied_img = cv2.Canny(uint8_img, 100, 200)
     hdf5.export("cannied.h5", model.DataArray(cannied_img), thumbnail=None)
 
-    # Mask the sample_region plus a margin equal to the half of dc region
+    # Mask the sample_region plus a margin equal to the half of dc region and
+    # a margin along the edges of the whole image again equal to the half of
+    # the dc_region. Thus we keep pixels that we can use as center of our
+    # anchor region knowing that it will not overlap with the sample region
+    # and it will not be outside of bounds.
     masked_img = cannied_img
     masked_img[sample_region[1] * whole_img.shape[0] - (dc_shape[0] / 2):sample_region[3] * whole_img.shape[0] + (dc_shape[0] / 2),
                sample_region[0] * whole_img.shape[1] - (dc_shape[1] / 2):sample_region[2] * whole_img.shape[1] + (dc_shape[1] / 2)].fill(0)
+    masked_img[0:(dc_shape[0] / 2), 0:(dc_shape[1] / 2)].fill(0)
+    masked_img[(masked_img.shape[0] - 1):(masked_img.shape[0] - 1) - (dc_shape[0] / 2),
+               (masked_img.shape[1] - 1):(masked_img.shape[1] - 1) - (dc_shape[1] / 2)].fill(0)
     hdf5.export("masked.h5", model.DataArray(masked_img), thumbnail=None)
 
     # Find indices of edge pixels
-    occurrences = numpy.where(masked_img == masked_img.max())
+    occurrences_indices = numpy.where(masked_img == masked_img.max())
+    X = numpy.matrix(occurrences_indices[0]).T
+    Y = numpy.matrix(occurrences_indices[1]).T
+    occurrences = numpy.hstack([X, Y])
 
     # If there is such a pixel outside of the sample region and there is enough 
     # space according to dc_shape, use the masked image and crop the dc_region
-    if len(occurrences):
-        print occurrences
+    if len(occurrences) > 0:
+        print len(occurrences)
     
     return (0, 0, 1, 1)
 

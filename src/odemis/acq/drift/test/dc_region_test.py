@@ -33,9 +33,9 @@ from odemis.acq.drift import dc_region
 from numpy import fft
 from numpy import random
 
-class TestDCRegion(unittest.TestCase):
+class TestGuessAnchorRegion(unittest.TestCase):
     """
-    Test DCRegion
+    Test GuessAnchorRegion
     """
     # @unittest.skip("skip")
     def setUp(self):
@@ -49,7 +49,7 @@ class TestDCRegion(unittest.TestCase):
         """
         Tests for known roi.
         """
-        roi = dc_region.DCRegion(self.data[0], (0.3, 0.3, 0.6, 0.6))
+        roi = dc_region.GuessAnchorRegion(self.data[0], (0.3, 0.3, 0.6, 0.6))
         # numpy.testing.assert_almost_equal(drift, (0,0), 1)
 
 
