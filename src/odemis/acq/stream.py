@@ -861,11 +861,13 @@ class FluoStream(CameraStream):
                              Stream.WARNING_EMISSION_NOT_OPT)
         if p is not None:
             f = self._em_filter.moveAbs({"band": p})
-            band = self._em_filter.axes["band"].choices[p]
-            self._current_out_wl = band
+            bands = self._em_filter.axes["band"].choices[p]
+            self._current_out_wl = bands
 
             # Detect if the selected band is outside of wl
-            for l, h in band:
+            if not isinstance(bands[0], collections.Iterable):
+                bands = [bands] # force it to be a list of bands
+            for l, h in bands:
                 if l < wl < h:
                     break
             else:
