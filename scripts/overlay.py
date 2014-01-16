@@ -41,6 +41,9 @@ import time
 import operator
 import argparse
 import math
+import Image
+from scipy import ndimage
+from scipy import misc
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -85,6 +88,7 @@ def main(args):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
     
+        # ccd.data.get()
         future_scan = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
 
         # Wait for ScanGrid to finish
@@ -135,6 +139,28 @@ def main(args):
         variance = (variance_sum / len(coord_diff)) * escan.pixelSize.value[0]
         
         not_found_spots = len(electron_coordinates) - len(final_electron)
+
+        # Generate overlay image
+        logging.debug("Generating images...")
+        (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_electron_coordinates)
+        overlay_coordinates = coordinates._TransformCoordinates(known_electron_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
+
+        electron_grid = numpy.zeros(shape=(optical_image.shape[0], optical_image.shape[1], 3))
+        for ta in overlay_coordinates:
+            electron_grid[ta[0] - 1:ta[0] + 1, ta[1] - 1:ta[1] + 1] = [200, 10, 10]
+
+        misc.imsave('optical_image.png', optical_image)
+        misc.imsave('electron_image.png', electron_grid)
+
+        background = Image.open("optical_image.png")
+        overlay = Image.open("electron_image.png")
+
+        background = background.convert("RGBA")
+        overlay = overlay.convert("RGBA")
+
+        new_img = Image.blend(background, overlay, 0.4)
+        new_img.save("overlay_image.png", "PNG")
+        logging.debug("Done. Check electron_image.png, optical_image.png and overlay_image.png.")
 
     except:
         logging.exception("Unexpected error while performing action.")
