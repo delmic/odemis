@@ -20,7 +20,6 @@ from __future__ import division
 
 import logging
 import numpy
-import weakref
 import wx
 
 
@@ -38,7 +37,6 @@ def NDImage2wxImage(image):
     size = image.shape[1::-1]
     if image.shape[2] == 3: # RGB
         wim = wx.ImageFromBuffer(*size, dataBuffer=image) # 0 copy
-        wim.InitAlpha() # it's a different buffer so useless to do it in numpy
         return wim
     elif image.shape[2] == 4: # RGBA
         # 2 copies

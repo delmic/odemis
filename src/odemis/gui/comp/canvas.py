@@ -595,8 +595,6 @@ class BitmapCanvas(BufferedCanvas):
                 im._dc_center = w_pos
                 im._dc_scale = scale
                 im._dc_keepalpha = keepalpha
-                if not im.HasAlpha():
-                    im.InitAlpha()
                 self.images.append(im)
 
     def draw(self):
@@ -721,6 +719,11 @@ class BitmapCanvas(BufferedCanvas):
             return
 
         if opacity < 1.0:
+            if not imscaled.HasAlpha():
+                # TODO: better have a pre-made alphabuffer, that we set with .SetAlphaBuffer
+                imscaled.InitAlpha() # it's a different buffer so useless to do it in numpy
+                if keepalpha:
+                    logging.warning("adding alpha, with keepalpha")
             if keepalpha:
                 # slow, as it does a multiplication for each pixel
                 imscaled = imscaled.AdjustChannels(1.0, 1.0, 1.0, opacity)
