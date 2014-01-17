@@ -983,7 +983,14 @@ class AndorCam2(model.DigitalCamera):
             logging.info("No temperature update, camera is stopped")
             return
 
-        temp = self.GetTemperature()
+        try:
+            temp = self.GetTemperature()
+        except AndorV2Error as (errno, strerr):
+            # Some cameras are not happy if reading temperature while acquiring
+            # => just ignore, and hopefully next time will work
+            if errno == 20072: # DRV_ACQUIRING
+                logging.debug("Failed to read temperature due to acquisition in progress")
+                return
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
