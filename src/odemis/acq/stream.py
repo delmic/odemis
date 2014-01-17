@@ -287,7 +287,7 @@ class Stream(object):
         """
         md = data.metadata
         try:
-            pos = data.metadata[MD_POS]
+            pos = md[MD_POS]
         except KeyError:
             # Note: this log message is disabled to prevent log flooding
             # logging.warning("Position of image unknown")
@@ -712,12 +712,22 @@ class CameraNoLightStream(CameraStream):
             self._emitter.power.value = self._prev_light_power
         Stream.onActive(self, active)
 
-    def _findPos(self, data):
-        if self._position:
-            pos = self._position.value # a stage should always have x,y axes
-            return (pos["x"], pos["y"])
-        else:
-            return super(CameraNoLightStream, self)._findPos(data)
+    def _find_metadata(self, data):
+        """
+        Find the PIXEL_SIZE and POS metadata from the given raw image
+        return (dict MD_* -> value)
+        """
+        # Override the normal metadata by using the ._position we know
+        md = super(CameraNoLightStream, self)._find_metadata(data)
+
+        try:
+            if self._position:
+                pos = self._position.value # a stage should always have x,y axes
+                md[MD_POS] = pos["x"], pos["y"]
+        except Exception:
+            logging.exception("Failed to get X/Y position")
+
+        return md
 
 class FluoStream(CameraStream):
     """ Stream containing images obtained via epifluorescence.
