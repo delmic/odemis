@@ -471,8 +471,8 @@ class SelectionMixin(object):
     def start_selection(self, start_pos):
         """ Start a new selection.
 
-        :param start_pos: (list of 2 floats) Pixel coordinates where the selection
-            starts
+        :param start_pos: (list of 2 floats) Pixel coordinates where the
+            selection starts
         """
         self.dragging = True
         self.v_start_pos = self.v_end_pos = list(start_pos)
@@ -481,8 +481,8 @@ class SelectionMixin(object):
     def update_selection(self, current_pos):
         """ Update the selection to reflect the given mouse position.
 
-        :param current_pos: (list of 2 floats) Pixel coordinates of the current end
-            point
+        :param current_pos: (list of 2 floats) Pixel coordinates of the current
+            end point
         """
         current_pos = self.cnvs.clip_to_viewport(current_pos)
         self.v_end_pos = list(current_pos)
@@ -1541,6 +1541,8 @@ class PixelSelectOverlay(WorldOverlay):
     def set_values(self, mpp, physical_center, resolution, selected_pixel_va):
         """ Set the values needed for mapping mouse positions to pixel
         coordinates
+
+        :param resoluton: (int, int) The width and height
         """
         if not (len(physical_center) == len(physical_center) == 2):
             raise ValueError("Illegal values for PixelSelectOverlay")
