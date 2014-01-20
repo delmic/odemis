@@ -546,7 +546,7 @@ class FW102cSimulator(object):
             else:
                 # TODO: set of speed, trig, sensors,
                 logging.debug("Command '%s' unknown", com)
-                raise KeyError("%s", com)
+                raise KeyError("%s" % com)
         except ValueError:
             out = "Command error CMD_ARG_INVALID\n"
         except KeyError:
