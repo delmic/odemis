@@ -884,7 +884,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     Same as world selection overlay, but can also display a repetition over it.
     The type of display for the repetition is set by the .fill and repetition
     attributes. You must redraw the canvas for it to be updated.
-    # Note:
     """
     def __init__(self, cnvs, label,
                  sel_cur=None,
@@ -1067,8 +1066,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
             # The number of repetitions that fits into the buffer clipped
             # selection
-            buf_rep_x = int((end_x - start_x) / step_x)
-            buf_rep_y = int((end_y - start_y) / step_y)
+            buf_rep_x = int(round((end_x - start_x) / step_x))
+            buf_rep_y = int(round((end_y - start_y) / step_y))
             buf_shift_x = (b_pos[0] - start_x) % step_x
             buf_shift_y = (b_pos[1] - start_y) % step_y
 
