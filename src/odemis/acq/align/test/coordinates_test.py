@@ -489,7 +489,7 @@ class TestOverallComponent(unittest.TestCase):
         self.scale_x, self.scale_y = self.scale, self.scale
         self.rotation = uniform(-2, 2)
 
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_overall_simple_shuffled_distorted(self):
         """
         Test DivideInNeighborhoods, FindCenterCoordinates, MatchCoordinates, CalculateTransform for 10x10 shuffled and distorted grid of white spots 
@@ -534,21 +534,29 @@ class TestOverallComponent(unittest.TestCase):
         """
         electron_coordinates = self.electron_coordinates_real_example
 
-        grid_data = hdf5.read_data("real_optical.h5")
+        grid_data = hdf5.read_data("scanned_image-33.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (9, 9))
+        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (15, 15))
+        print len(subimages)
+        print subimage_coordinates
+        # hdf5.export("found.h5", model.DataArray(subimages[2]))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
 
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        print optical_coordinates
+        # grid_data[0].reshape(grid_data[0].shape[0], grid_data[0].shape[1], 3)
+        for i in optical_coordinates:
+            grid_data[0][i[1], i[0]] = 12000
+        hdf5.export("found.h5", model.DataArray(grid_data[0]))
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
         optical_scale = sorted_coordinates[0][0] - sorted_coordinates[1][0]
         scale = 249.625 / optical_scale
 
-        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
-
+        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 10000)
+        print len(known_estimated_coordinates), len(known_optical_coordinates)
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
         final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
         numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation), (4218.0607845864843, 3100.907806071255, 0.0653803040366, 0.0653803040366, 1.47833441039), 1)

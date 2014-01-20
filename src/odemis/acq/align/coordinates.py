@@ -53,7 +53,7 @@ def FindCenterCoordinates(subimages):
 
     # Pop each subimage from the list
     for i in xrange(number_of_subimages):
-        subimage = subimages[i]
+        subimage = subimages[i].astype(numpy.float64)
         subimage_x, subimage_y = subimage.shape
 
         # See Parthasarathy's paper for details
@@ -143,25 +143,31 @@ def DivideInNeighborhoods(data, number_of_spots):
     image = numpy.where(data > cosmic_ray_thresh, mean_intensity, data)
 
     # Determine size of filter window
-    filter_window_size = int(image.size / (3 * ((number_of_spots[0] * number_of_spots[1]) ** 2)))
-
-    # Determine threshold
+    filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
+    print filter_window_size
     i_max, j_max = unravel_index(image.argmax(), image.shape)
     i_min, j_min = unravel_index(image.argmin(), image.shape)
     max_diff = image[i_max, j_max] - image[i_min, j_min]
-    threshold = max_diff / 3.5
-
-    # Filter the parts of the image with variance in intensity greater
-    # than the threshold
+    prod_of_spots = numpy.prod(number_of_spots)
     data_max = filters.maximum_filter(image, filter_window_size)
-    maxima = (image == data_max)
     data_min = filters.minimum_filter(image, filter_window_size)
-    diff = ((data_max - data_min) > threshold)
-    maxima[diff == 0] = 0
     
-    labeled, num_objects = ndimage.label(maxima)
-    slices = ndimage.find_objects(labeled)
 
+    for i in numpy.arange(2.5, 20, 0.1):
+        # Determine threshold
+        threshold = max_diff / i
+    
+        # Filter the parts of the image with variance in intensity greater
+        # than the threshold
+        maxima = (image == data_max)
+        diff = ((data_max - data_min) > threshold)
+        maxima[diff == 0] = 0
+
+        labeled, num_objects = ndimage.label(maxima)
+        if num_objects >= prod_of_spots:
+            break
+
+    slices = ndimage.find_objects(labeled)
     # Go through these parts and crop the subimages based on the neighborhood_size value
     for dy,dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
@@ -172,6 +178,7 @@ def DivideInNeighborhoods(data, number_of_spots):
         subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
         subimages.append(subimage)
 
+    # TODO: Handle case where slices is 0 or 1
     # Take care of outliers
     clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
     subimage_size = subimage.shape[0]

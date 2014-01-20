@@ -95,10 +95,12 @@ def main(args):
         optical_image, electron_coordinates, electron_scale = future_scan.result()
 
         ############## TO BE REMOVED ON TESTING##############
+        """
         grid_data = hdf5.read_data("real_optical.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
         optical_image = grid_data[0]
+        """
         #####################################################
     
         logging.debug("Isolating spots...")
