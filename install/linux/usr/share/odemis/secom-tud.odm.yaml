@@ -42,9 +42,9 @@ Spectra: {
         # Use channels and limits to ensure the image has the same orientation
         # as in the SEM software.
         channels: [0, 1],
-        limits: [[-3.5, 3.5], [-3.95, 3.95]],  # V
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
         settle_time: 5.e-6, # s
-        hfw_nomag: 0.276, # m
+        hfw_nomag: 0.25, # m
         # Add 1° rotation in the SEM software
     },
     properties: {
@@ -94,6 +94,7 @@ Clara: {
     }, 
     properties: {
         exposureTime: 0.3, # s
+        # targetTemperature: -40, # °C
     }
 }
 
@@ -161,8 +162,8 @@ PIGCS: {
         # axis -> controller, channel, closed-loop?
         axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
                "x": [4, 1, False], "y": [5, 1, False]},
-        vmin: {"x": 2.4, "y": 2.}, # V : lowest voltage which moves the actuators
-        #speed_base: {"x": 0.03, "y": 0.03}, # m/s : speed at 3.5V
+        vmin: {"x": 2.4, "y": 2.8}, # V : lowest voltage which moves the actuators
+        speed_base: {"x": 0.02, "y": 0.02}, # m/s : speed at 3.5V
         #dist_to_steps: {"a": 100000, "b": 100000}, # step/m
     },
 }
