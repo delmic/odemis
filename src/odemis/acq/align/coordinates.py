@@ -53,7 +53,10 @@ def FindCenterCoordinates(subimages):
 
     # Pop each subimage from the list
     for i in xrange(number_of_subimages):
-        subimage = subimages[i].astype(numpy.float64)
+        #subimage = subimages[i]
+    	# Input might be integer
+    	# TODO Dummy, change the way that you handle the array e.g. convolution
+    	subimage = subimages[i].astype(numpy.float64)
         subimage_x, subimage_y = subimage.shape
 
         # See Parthasarathy's paper for details
