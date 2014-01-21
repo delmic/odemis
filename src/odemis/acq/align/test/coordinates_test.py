@@ -40,7 +40,7 @@ from scipy import imag
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestFindCenterCoordinates(unittest.TestCase):
     """
     Test FindCenterCoordinates
@@ -59,9 +59,16 @@ class TestFindCenterCoordinates(unittest.TestCase):
             subimages.append(data[i][0])
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        expected_coordinates = [(4.9998, 4.9768), (5.4181, 4.2244), (15.5542, 15.4534),
-                                (8.1512, 8.2081), (5.1537, 4.9287), (5.2221, 5.0449),
-                                (4.1433, 6.7063), (6.4313, 7.2690), (4.9355, 5.1400), (5.0209, 4.9929)]
+        expected_coordinates = [(0.00019439548586790034, 0.023174120210179554),
+                                (-0.41813787193469681, 0.77556146879261101),
+                                (-0.05418032832973009, 0.046573726263258203),
+                                (-0.15117173005078957, -0.20813259555303279),
+                                (-0.15372338817998937, 0.071307409462406962),
+                                (-0.22214464176322843, -1.5448851668913044),
+                                (1.3567379189595801, -0.20634334863259929),
+                                (0.068717256379618827, -0.76902400758882417),
+                                (0.064496044288789064, -0.14000630665134439),
+                                (-0.020941736978718473, 0.0071056828496776324)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
 @unittest.skip("skip")
@@ -468,7 +475,7 @@ class TestMatchCoordinates(unittest.TestCase):
         if known_estimated_coordinates != []:
             numpy.testing.assert_equal(known_estimated_coordinates.__len__(), electron_coordinates.__len__() - 1)
             
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestOverallComponent(unittest.TestCase):
     """
     Test the interaction of all the functions together
