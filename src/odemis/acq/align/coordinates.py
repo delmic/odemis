@@ -118,8 +118,8 @@ def FindCenterCoordinates(subimages):
         yc = (swab * swac - swa2 * swbc) / det
 
         # Output relative to upper left coordinate
-        xc = xc + (subimage_y + 1) / 2
-        yc = -yc + (subimage_x + 1) / 2
+        xc = -xc #+ (subimage_y + 1) / 2
+        yc = yc #+ (subimage_x + 1) / 2
         spot_coordinates.append((xc, yc))
 
     return spot_coordinates
@@ -140,13 +140,14 @@ def DivideInNeighborhoods(data, number_of_spots):
     subimage_coordinates = []
     subimages = []
 
-    # Filter cosmic ray pixels
-    mean_intensity = numpy.mean(data)
-    cosmic_ray_thresh = 10 * mean_intensity
-    image = numpy.where(data > cosmic_ray_thresh, mean_intensity, data)
+    image =  data
 
     # Determine size of filter window
     filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
+    
+    # TODO, adjust to magnification
+    filter_window_size = sorted((15, filter_window_size, 55))[1]
+    
     i_max, j_max = unravel_index(image.argmax(), image.shape)
     i_min, j_min = unravel_index(image.argmin(), image.shape)
     max_diff = image[i_max, j_max] - image[i_min, j_min]
@@ -155,7 +156,7 @@ def DivideInNeighborhoods(data, number_of_spots):
     data_min = filters.minimum_filter(image, filter_window_size)
     
 
-    for i in numpy.arange(3.5, 16.5, 0.1):
+    for i in numpy.arange(3.5, 15, 0.1):
         # Determine threshold
         threshold = max_diff / i
 
@@ -173,7 +174,7 @@ def DivideInNeighborhoods(data, number_of_spots):
     
     if len(slices)==0:
         logging.warning("Cannot detect spots.")
-        return [],[],0
+        return [],[]
     
     # Go through these parts and crop the subimages based on the neighborhood_size value
     for dy,dx in slices:
@@ -183,33 +184,32 @@ def DivideInNeighborhoods(data, number_of_spots):
         subimage_coordinates.append((x_center, y_center))
         # TODO: change +10 and -10 to number relative to spot size
         subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
+        #TODO Discard only this image
         if subimage.shape[0]==0 or subimage.shape[1]==0:
             logging.warning("Cannot detect spots.")
-            return [],[],0
+            return [],[]
         subimages.append(subimage)
 
     # TODO: Handle case where slices is 0 or 1
     # Take care of outliers
     clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
-    subimage_size = subimage.shape[0]
 
-    return clean_subimages, clean_subimage_coordinates, subimage_size
+    return clean_subimages, clean_subimage_coordinates
 
-def ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size):
+def ReconstructCoordinates(subimage_coordinates, spot_coordinates):
     """
     Given the coordinates of each subimage as also the coordinates of the spot into it, 
     generates the coordinates of the spots with respect to the overall image.
     subimage_coordinates (List of tuples): The coordinates of the 
                                         center of each subimage with 
                                         respect to the overall image
-    spot_coordinates (List of tuples): Coordinates of spot centers
-    subimage_size(int): One dimension because it is square
+    spot_coordinates (List of tuples): Coordinates of spot centers relative to 
+         the center of the subimage
     returns (List of tuples): Coordinates of spots in optical image
     """
     optical_coordinates = []
-    center_position = (subimage_size / 2) - 1
     for ta, tb in zip(subimage_coordinates, spot_coordinates):
-        t = tuple(a + (b - center_position) for a, b in zip(ta, tb))
+        t = tuple(a + b for a, b in zip(ta, tb))
         optical_coordinates.append(t)
 
     return optical_coordinates
@@ -319,7 +319,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
 
     # Remove unknown coordinates
     known_ordered_coordinates = list(compress(ordered_coordinates, inv_e_wrong_points))
-    known_optical_coordinates = optical_coordinates
+    known_optical_coordinates = list(compress(optical_coordinates, inv_e_wrong_points))
     return known_ordered_coordinates, known_optical_coordinates
 
 def _KNNsearch(x_coordinates, y_coordinates):
