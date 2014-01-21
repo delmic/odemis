@@ -60,8 +60,13 @@ def GuessAnchorRegion(whole_img, sample_region):
     # anchor region knowing that it will not overlap with the sample region
     # and it will not be outside of bounds
     masked_img = cannied_img
-    masked_img[sample_region[0] * whole_img.shape[1] - (dc_shape[0] / 2):sample_region[2] * whole_img.shape[1] + (dc_shape[0] / 2),
-               sample_region[1] * whole_img.shape[0] - (dc_shape[1] / 2):sample_region[3] * whole_img.shape[0] + (dc_shape[1] / 2)].fill(0)
+
+    # Clip between the bounds
+    left = sorted((0, sample_region[0] * whole_img.shape[0] - (dc_shape[0] / 2), whole_img.shape[0]))[1]
+    right = sorted((0, sample_region[2] * whole_img.shape[0] + (dc_shape[0] / 2), whole_img.shape[0]))[1]
+    top = sorted((0, sample_region[1] * whole_img.shape[1] - (dc_shape[1] / 2), whole_img.shape[1]))[1]
+    bottom = sorted((0, sample_region[3] * whole_img.shape[1] + (dc_shape[1] / 2), whole_img.shape[1]))[1]
+    masked_img[left:right, top:bottom].fill(0)
     masked_img[0:(dc_shape[0] / 2), :].fill(0)
     masked_img[:, 0:(dc_shape[1] / 2)].fill(0)
     masked_img[masked_img.shape[0] - (dc_shape[0] / 2):masked_img.shape[0], :].fill(0)
@@ -69,7 +74,7 @@ def GuessAnchorRegion(whole_img, sample_region):
     hdf5.export("masked.h5", model.DataArray(masked_img), thumbnail=None)
 
     # Find indices of edge pixels
-    occurrences_indices = numpy.where(masked_img == masked_img.max())
+    occurrences_indices = numpy.where(masked_img == 255)
     X = numpy.matrix(occurrences_indices[0]).T
     Y = numpy.matrix(occurrences_indices[1]).T
     occurrences = numpy.hstack([X, Y])
@@ -78,19 +83,33 @@ def GuessAnchorRegion(whole_img, sample_region):
     # space according to dc_shape, use the masked image and calculate the anchor
     # region roi
     if len(occurrences) > 0:
+        print "Enough space outside of the sample region."
         # [x, y] = [occurrences[0]]
-        anchor_roi = ((occurrences[0, 0] - (dc_shape[1] / 2)) / whole_img.shape[1],
-                      (occurrences[0, 1] - (dc_shape[0] / 2)) / whole_img.shape[0],
-                      (occurrences[0, 0] + (dc_shape[1] / 2)) / whole_img.shape[1],
-                      (occurrences[0, 1] + (dc_shape[0] / 2)) / whole_img.shape[0])
+        anchor_roi = ((occurrences[0, 0] - (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
+                      (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
         
-        print anchor_roi
-        cannied_img = cv2.Canny(uint8_img, 100, 200)
-        anchor_img = cannied_img[anchor_roi[0] * whole_img.shape[1]:anchor_roi[2] * whole_img.shape[1],
-                                 anchor_roi[1] * whole_img.shape[0]:anchor_roi[3] * whole_img.shape[0]]
+        anchor_img = whole_img[anchor_roi[0] * whole_img.shape[0]:anchor_roi[2] * whole_img.shape[0],
+                               anchor_roi[1] * whole_img.shape[1]:anchor_roi[3] * whole_img.shape[1]]
         hdf5.export("anchor_roi.h5", model.DataArray(anchor_img), thumbnail=None)
     else:
-        return
+        print "Not enough space outside of the sample region."
+        # Otherwise pick a random pixel
+        cannied_img = cv2.Canny(uint8_img, 100, 200)
+        # Find indices of edge pixels
+        occurrences_indices = numpy.where(cannied_img == 255)
+        X = numpy.matrix(occurrences_indices[0]).T
+        Y = numpy.matrix(occurrences_indices[1]).T
+        occurrences = numpy.hstack([X, Y])
+        anchor_roi = ((occurrences[0, 0] - (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
+                      (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
+                      (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
+
+        anchor_img = whole_img[anchor_roi[0] * whole_img.shape[0]:anchor_roi[2] * whole_img.shape[0],
+                               anchor_roi[1] * whole_img.shape[1]:anchor_roi[3] * whole_img.shape[1]]
+        hdf5.export("anchor_roi.h5", model.DataArray(anchor_img), thumbnail=None)
 
     return anchor_roi
 

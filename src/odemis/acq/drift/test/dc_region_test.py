@@ -50,7 +50,8 @@ class TestGuessAnchorRegion(unittest.TestCase):
         """
         Tests for known roi.
         """
-        roi = dc_region.GuessAnchorRegion(self.data[0], (0.3, 0.3, 0.6, 0.6))
+        roi = dc_region.GuessAnchorRegion(self.data[0], (0, 0, 0.87, 0.95))
+        numpy.testing.assert_equal(roi, (0.86923076923076925, 0.74281609195402298, 0.9653846153846154, 0.81465517241379315))
         # numpy.testing.assert_almost_equal(drift, (0,0), 1)
 
 
