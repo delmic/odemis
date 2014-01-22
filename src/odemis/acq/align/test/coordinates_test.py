@@ -22,8 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 import numpy
+import math
 import operator
 
+from scipy.spatial import cKDTree
 from numpy import random
 from random import uniform
 from numpy import reshape
@@ -40,7 +42,7 @@ from scipy import imag
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestFindCenterCoordinates(unittest.TestCase):
     """
     Test FindCenterCoordinates
@@ -86,7 +88,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         spot_image = numpy.zeros(shape=(256, 256))
         spot_image[112:120, 114:122].fill(255)
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image, (1, 1))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(spot_image, (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
     def test_devide_neighborhoods_grid(self):
@@ -102,7 +104,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
                 y_start_in = y_start_in + 40
             x_start = x_start + 40
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_image, (3, 3))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_image, (3, 3))
         self.assertEqual(subimages.__len__(), 9)
 
     # @unittest.skip("skip")
@@ -114,7 +116,7 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         C, T, Z, Y, X = spot_image[0].shape
         spot_image[0].shape = Y, X
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         self.assertEqual(subimages.__len__(), 1)
 
     # @unittest.skip("skip")
@@ -126,9 +128,9 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         C, T, Z, Y, X = spot_image[0].shape
         spot_image[0].shape = Y, X
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(spot_image[0], (1, 1))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
         expected_coordinates = [(23, 20)]
         numpy.testing.assert_almost_equal(optical_coordinates, expected_coordinates, 0)
 
@@ -141,10 +143,10 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(subimages.__len__(), 100)
 
@@ -162,10 +164,10 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
         noisy_grid_data = grid_data[0] + noise_array
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(subimages.__len__(), 100)
 
@@ -183,10 +185,10 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
         noisy_grid_data = grid_data[0] + noise_array
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(subimages.__len__(), 100)
 
@@ -205,10 +207,10 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
         noisy_grid_data = grid_data[0] + noise_array
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(subimages.__len__(), 99)
 
@@ -227,10 +229,10 @@ class TestDivideInNeighborhoods(unittest.TestCase):
         noise_array = noise.reshape(grid_data[0].shape[0], grid_data[0].shape[1])
         noisy_grid_data = grid_data[0] + noise_array
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(noisy_grid_data, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         self.assertEqual(subimages.__len__(), 99)
 
@@ -475,7 +477,7 @@ class TestMatchCoordinates(unittest.TestCase):
         if known_estimated_coordinates != []:
             numpy.testing.assert_equal(known_estimated_coordinates.__len__(), electron_coordinates.__len__() - 1)
             
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestOverallComponent(unittest.TestCase):
     """
     Test the interaction of all the functions together
@@ -525,10 +527,10 @@ class TestOverallComponent(unittest.TestCase):
             (a, b) = x[0]
             grid_optical_image[a - 1:a + 1, b - 1:b + 1].fill(255)
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_optical_image, (10, 10))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_optical_image, (10, 10))
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, 0.25, 0.25)
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
         overlay_coordinates = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
@@ -542,20 +544,21 @@ class TestOverallComponent(unittest.TestCase):
         """
         electron_coordinates = self.electron_coordinates_real_example
 
-        grid_data = hdf5.read_data("scanned_image-33.h5")
+        grid_data = hdf5.read_data("scanned_image-45.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(grid_data[0], (9, 9))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (2, 2))
+        print subimage_coordinates
+        for i in subimages:
+            print i.shape
         print len(subimages)
+        hdf5.export("spot_found.h5", subimages, thumbnail=None)
         #hdf5.export("subimages", model.DataArray(subimages[0]))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
-        for i in optical_coordinates:
-            grid_data[0][i[1], i[0]] = 12000
-        hdf5.export("found.h5", model.DataArray(grid_data[0]))
+        print spot_coordinates
 
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
         print optical_coordinates
         # grid_data[0].reshape(grid_data[0].shape[0], grid_data[0].shape[1], 3)
         for i in optical_coordinates:
@@ -563,10 +566,12 @@ class TestOverallComponent(unittest.TestCase):
         hdf5.export("found.h5", model.DataArray(grid_data[0]))
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
-        optical_scale = sorted_coordinates[0][0] - sorted_coordinates[1][0]
+        tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
+        optical_scale = math.hypot(tab[0], tab[1])
+        print optical_scale
         scale = 249.625 / optical_scale
-
-        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 10000)
+            
+        known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
         print len(known_estimated_coordinates), len(known_optical_coordinates)
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
         final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))

@@ -118,8 +118,8 @@ def FindCenterCoordinates(subimages):
         yc = (swab * swac - swa2 * swbc) / det
 
         # Output relative to upper left coordinate
-        xc = -xc #+ (subimage_y + 1) / 2
-        yc = yc #+ (subimage_x + 1) / 2
+        xc = xc + 3 / 2
+        yc = -yc + 3 / 2
         spot_coordinates.append((xc, yc))
 
     return spot_coordinates
@@ -146,7 +146,8 @@ def DivideInNeighborhoods(data, number_of_spots):
     filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
     
     # TODO, adjust to magnification
-    filter_window_size = sorted((15, filter_window_size, 55))[1]
+    filter_window_size = sorted((15, filter_window_size, 55))[1]  # / (20000 / 6120)
+    # print filter_window_size
     
     i_max, j_max = unravel_index(image.argmax(), image.shape)
     i_min, j_min = unravel_index(image.argmin(), image.shape)
@@ -259,7 +260,12 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     """
     # Remove large outliers
     if len(input_coordinates) > 1:
-        optical_coordinates = _FindOutliers(input_coordinates)
+        optical_coordinates = _FindOuterOutliers(input_coordinates)
+        print len(optical_coordinates), len(electron_coordinates)
+        if len(optical_coordinates) > len(electron_coordinates):
+            optical_coordinates = _FindInnerOutliers(optical_coordinates)
+        print len(optical_coordinates)
+        print optical_coordinates
     else:
         logging.warning("Cannot find overlay.")
         return [], []
@@ -319,7 +325,10 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
 
     # Remove unknown coordinates
     known_ordered_coordinates = list(compress(ordered_coordinates, inv_e_wrong_points))
-    known_optical_coordinates = list(compress(optical_coordinates, inv_e_wrong_points))
+    if len(optical_coordinates) == len(known_ordered_coordinates):
+        known_optical_coordinates = optical_coordinates
+    else:
+        known_optical_coordinates = list(compress(optical_coordinates, inv_e_wrong_points))
     return known_ordered_coordinates, known_optical_coordinates
 
 def _KNNsearch(x_coordinates, y_coordinates):
@@ -490,11 +499,11 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
 
     return estimated_coordinates, new_index1, new_e_wrong_points, total_shift
 
-def _FindOutliers(x_coordinates):
+def _FindOuterOutliers(x_coordinates):
     """
     Removes large outliers from the optical coordinates.
     x_coordinates (List of tuples): List of coordinates
-    returns (List of tuples): Coordinates without outliers
+    returns (List of tuples): Coordinates without outer outliers
     """
     # For each point, search for the 2 closest neighbors
     points = numpy.array(x_coordinates)
@@ -508,3 +517,25 @@ def _FindOutliers(x_coordinates):
     no_outlier_index = list_distance[:, 1] < outlier_value
 
     return list(compress(x_coordinates, no_outlier_index))
+
+def _FindInnerOutliers(x_coordinates):
+    """
+    Removes inner outliers from the optical coordinates.
+    x_coordinates (List of tuples): List of coordinates
+    returns (List of tuples): Coordinates without inner outliers
+    """
+    print len(x_coordinates)
+    points = numpy.array(x_coordinates)
+    tree = cKDTree(points, 2)
+    distance, index = tree.query(x_coordinates, 2)
+    list_distance = numpy.array(distance)
+    list_index = numpy.array(index)
+    print list_index[:, 1]
+    print list_distance[:, 1]
+    counts = numpy.bincount(list_index[:, 1])
+    inner_outlier = numpy.argmax(counts)
+    del x_coordinates[inner_outlier]
+
+    print len(x_coordinates)
+    return x_coordinates
+
