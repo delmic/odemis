@@ -108,7 +108,8 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
     escan.translation.value = (0, 0)
 
     # use the smallest dwell time: avoids CCD/SEM synchronization problems
-    sem_dt = escan.dwellTime.range[0]
+    min_sem_dt = escan.dwellTime.range[0]
+    sem_dt = max(min_sem_dt, dwell_time / 10)
     escan.dwellTime.value = sem_dt
     # For safety, ensure the exposure time is at least twice the time for a whole scan
     if dwell_time < 2 * sem_dt:
@@ -135,7 +136,7 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
         logging.debug("Scanning spot grid...")
 
         # Wait for CCD to capture the image
-        if not _ccd_done.wait(2 * tot_time + 1):
+        if not _ccd_done.wait(2 * tot_time + 4):
             raise TimeoutError("Acquisition of CCD timed out")
 
         with _scan_lock:
