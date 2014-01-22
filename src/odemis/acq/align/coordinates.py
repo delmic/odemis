@@ -261,11 +261,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     # Remove large outliers
     if len(input_coordinates) > 1:
         optical_coordinates = _FindOuterOutliers(input_coordinates)
-        print len(optical_coordinates), len(electron_coordinates)
-        if len(optical_coordinates) > 4:  # len(electron_coordinates):
+        if len(optical_coordinates) > len(electron_coordinates):
             optical_coordinates = _FindInnerOutliers(optical_coordinates)
-        print len(optical_coordinates)
-        print optical_coordinates
     else:
         logging.warning("Cannot find overlay.")
         return [], []
@@ -514,7 +511,6 @@ def _FindOuterOutliers(x_coordinates):
     # Keep only the second ones because the first ones are the points themselves
     sorted_distance = sorted(list_distance[:, 1])
     outlier_value = 1.5 * sorted_distance[int(math.ceil(0.5 * len(sorted_distance)))]
-    print outlier_value
     no_outlier_index = list_distance[:, 1] < outlier_value
 
     return list(compress(x_coordinates, no_outlier_index))
@@ -525,23 +521,18 @@ def _FindInnerOutliers(x_coordinates):
     x_coordinates (List of tuples): List of coordinates
     returns (List of tuples): Coordinates without inner outliers
     """
-    print len(x_coordinates)
     points = numpy.array(x_coordinates)
     tree = cKDTree(points, 2)
     distance, index = tree.query(x_coordinates, 2)
-    list_distance = numpy.array(distance)
     list_index = numpy.array(index)
-    print list_index[:, 1]
-    print list_distance[:, 1]
+
     counts = numpy.bincount(list_index[:, 1])
     list = counts
     inner_outliers = numpy.argwhere(list == numpy.amax(counts))
     inner_outliers = inner_outliers.flatten().tolist()
     inner_outlier = numpy.max(inner_outliers)
-    print counts
-    print inner_outlier
+
     del x_coordinates[inner_outlier]
 
-    print len(x_coordinates)
     return x_coordinates
 

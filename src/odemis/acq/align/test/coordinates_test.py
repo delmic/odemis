@@ -549,17 +549,11 @@ class TestOverallComponent(unittest.TestCase):
         grid_data[0].shape = Y, X
 
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (2, 2))
-        print subimage_coordinates
-        for i in subimages:
-            print i.shape
-        print len(subimages)
         hdf5.export("spot_found.h5", subimages, thumbnail=None)
         #hdf5.export("subimages", model.DataArray(subimages[0]))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        print spot_coordinates
 
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        print optical_coordinates
         # grid_data[0].reshape(grid_data[0].shape[0], grid_data[0].shape[1], 3)
         for i in optical_coordinates:
             grid_data[0][i[1], i[0]] = 12000
@@ -568,11 +562,9 @@ class TestOverallComponent(unittest.TestCase):
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
         tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
         optical_scale = math.hypot(tab[0], tab[1])
-        print optical_scale
         scale = 249.625 / optical_scale
             
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
-        print len(known_estimated_coordinates), len(known_optical_coordinates)
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
         final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
 
