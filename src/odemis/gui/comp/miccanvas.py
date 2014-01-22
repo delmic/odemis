@@ -1157,7 +1157,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
             # convert to wxImage
             wim = img.NDImage2wxImage(rgbim)
             keepalpha = (rgbim.shape[2] == 4)
-            
+
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = (0, 0) # the sensor image should be centered on the sensor center
 
@@ -1169,7 +1169,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 ims[0] = (wim, pos, scale, keepalpha)
 
         self.set_images(ims)
-        
+
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 1)
 

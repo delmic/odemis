@@ -737,11 +737,6 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return
 
-        # Reset tool, layout and visible views
-        self.tab_data_model.tool.value = guimod.TOOL_NONE
-        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
-        self.tab_data_model.visible_views.value = self._def_views
-
         # Detect the format to use
         fn = dialog.GetPath()
         logging.debug("Current file set to %s", fn)
@@ -774,6 +769,12 @@ class AnalysisTab(Tab):
         data (list of model.DataArray): the data to display. Should have at
          least one DataArray.
         """
+
+        # Reset tool, layout and visible views
+        self.tab_data_model.tool.value = guimod.TOOL_NONE
+        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
+        self.tab_data_model.visible_views.value = self._def_views
+
         fi = guimod.FileInfo(filename)
 
         # remove all the previous streams
