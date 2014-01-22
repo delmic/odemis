@@ -157,7 +157,7 @@ def DivideInNeighborhoods(data, number_of_spots):
     data_min = filters.minimum_filter(image, filter_window_size)
     
 
-    for i in numpy.arange(3.5, 15, 0.1):
+    for i in numpy.arange(3.5, 15.5, 0.1):
         # Determine threshold
         threshold = max_diff / i
 
@@ -262,7 +262,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     if len(input_coordinates) > 1:
         optical_coordinates = _FindOuterOutliers(input_coordinates)
         print len(optical_coordinates), len(electron_coordinates)
-        if len(optical_coordinates) > len(electron_coordinates):
+        if len(optical_coordinates) > 4:  # len(electron_coordinates):
             optical_coordinates = _FindInnerOutliers(optical_coordinates)
         print len(optical_coordinates)
         print optical_coordinates
@@ -513,7 +513,8 @@ def _FindOuterOutliers(x_coordinates):
 
     # Keep only the second ones because the first ones are the points themselves
     sorted_distance = sorted(list_distance[:, 1])
-    outlier_value = 2 * sorted_distance[int(math.ceil(0.5 * len(sorted_distance)))]
+    outlier_value = 1.5 * sorted_distance[int(math.ceil(0.5 * len(sorted_distance)))]
+    print outlier_value
     no_outlier_index = list_distance[:, 1] < outlier_value
 
     return list(compress(x_coordinates, no_outlier_index))
@@ -533,7 +534,12 @@ def _FindInnerOutliers(x_coordinates):
     print list_index[:, 1]
     print list_distance[:, 1]
     counts = numpy.bincount(list_index[:, 1])
-    inner_outlier = numpy.argmax(counts)
+    list = counts
+    inner_outliers = numpy.argwhere(list == numpy.amax(counts))
+    inner_outliers = inner_outliers.flatten().tolist()
+    inner_outlier = numpy.max(inner_outliers)
+    print counts
+    print inner_outlier
     del x_coordinates[inner_outlier]
 
     print len(x_coordinates)
