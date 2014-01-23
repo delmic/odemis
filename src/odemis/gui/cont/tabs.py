@@ -1428,6 +1428,8 @@ class TabBarController(object):
         return tabs
 
     def _on_tab(self, tab):
+        """ Tab click event handler """
+
         try:
             self.main_frame.Freeze()
             # TODO: only call Hide() on the previously selected tab
