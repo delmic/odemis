@@ -404,6 +404,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     @wxlimit_invocation(2) # max 1/2 Hz
     @call_after  # needed as it accesses the DC
+    @ignore_dead
     def _updateThumbnail(self):
         # TODO: avoid doing 2 copies, by using directly the wxImage from the
         # result of the StreamTree
