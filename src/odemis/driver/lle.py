@@ -528,12 +528,15 @@ class LLE(model.Emitter):
             # Try to connect and get back some answer.
             # The LLE only answers back for the temperature
             try:
-                temp = dev.GetTemperature()
-                # avoid 0 and 255 (= only 000's or 1111's), which is bad sign
-                if 0 < temp < 250:
-                    return ser, n # found it!
+                for i in range(3): # 3 times in a row good answer?
+                    temp = dev.GetTemperature()
+                    # avoid 0 and 255 (= only 000's or 1111's), which is bad sign
+                    if not(0 < temp < 250):
+                        raise IOError()
             except Exception:
                 logging.debug("Port %s doesn't seem to have a LLE device connected", n)
+                continue
+            return ser, n # found it!
         else:
             raise IOError("No device seems to be an LLE for ports '%s'" % (ports,))
 
@@ -556,6 +559,7 @@ class LLE(model.Emitter):
         found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
             try:
+                logging.debug("Trying port %s", p)
                 cls._findDevice(p)
             except Exception:
                 continue
