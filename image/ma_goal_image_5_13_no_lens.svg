@@ -12,8 +12,8 @@
    id="svg2"
    version="1.1"
    inkscape:version="0.48.3.1 r9886"
-   width="47.161415"
-   height="47.161415"
+   width="98.645668"
+   height="73.700783"
    xml:space="preserve"
    sodipodi:docname="ma_goal_image_5_13_no_lens.svg"
    inkscape:export-filename="/home/piel/development/odemis/image/ma_goal_image_5_13_no_lens.png"
@@ -40,7 +40,7 @@
      fit-margin-right="0"
      fit-margin-bottom="0"
      inkscape:zoom="5.6568543"
-     inkscape:cx="57.413637"
+     inkscape:cx="33.548783"
      inkscape:cy="28.971933"
      inkscape:window-x="0"
      inkscape:window-y="24"
@@ -50,43 +50,44 @@
      id="g10"
      inkscape:groupmode="layer"
      inkscape:label="NANOC-06-02-04A-CL_systeem_Spiegel_11-5x13-25_2010"
-     transform="matrix(1.25,0,0,-1.25,-921.4225,753.17259)"><text
+     transform="matrix(1.25,0,0,-1.25,-921.4225,779.70079)"><text
    xml:space="preserve"
    style="font-size:32px;font-style:normal;font-weight:normal;line-height:125%;letter-spacing:0px;word-spacing:0px;fill:#000000;fill-opacity:1;stroke:none;font-family:Sans"
    x="701.46472"
-   y="-629.24384"
+   y="-646.84357"
    id="text3007"
    sodipodi:linespacing="125%"
    transform="scale(1,-1)"><tspan
      sodipodi:role="line"
      id="tspan3009"
      x="701.46472"
-     y="-629.24384"
+     y="-646.84357"
      style="font-size:3.20000005px">No lens =&gt; image is inverted</tspan><tspan
      sodipodi:role="line"
      x="701.46472"
-     y="-625.24384"
+     y="-642.84357"
      style="font-size:3.20000005px"
      id="tspan3011">And the image is the shape of the mirror, and of the same size,</tspan><tspan
      sodipodi:role="line"
      x="701.46472"
-     y="-621.24384"
+     y="-638.84357"
      style="font-size:3.20000005px"
      id="tspan3013">however far it is.</tspan><tspan
      sodipodi:role="line"
      x="701.46472"
-     y="-617.24384"
+     y="-634.84357"
      style="font-size:3.20000005px"
      id="tspan3015">Document size is the size of the CCD (PIXIS = 1024x1024 px of 13µm)</tspan><tspan
      sodipodi:role="line"
      x="701.46472"
-     y="-613.24384"
+     y="-630.84357"
      style="font-size:3.20000005px"
      id="tspan3019">and the mirror is 23mm x 11mm.</tspan></text>
 
+
 <g
    id="g3294-4"
-   transform="matrix(0.45767271,0,0,0.45767271,386.03619,310.74002)"
+   transform="matrix(0.45767271,0,0,0.45767271,406.6299,324.54683)"
    style="stroke:#2fa7d4;stroke-width:0.30968043;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none"><path
      inkscape:connector-curvature="0"
      id="path3099-5"
