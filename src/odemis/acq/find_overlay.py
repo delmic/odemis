@@ -39,7 +39,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("real_optical.h5")
+grid_data = hdf5.read_data("scanned_image-50.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -92,12 +92,19 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         ############## TO BE REMOVED ON TESTING##############
         optical_image = fake_input
         #####################################################
-
+        # optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (ccd.pixelSize.value[0] * ccd.binning.value[0])
+        optical_scale = (50e-06 / 4) / (2.666666e-07 * ccd.binning.value[0])
+        print escan.pixelSize.value[0], electron_scale[0], ccd.pixelSize.value[0], ccd.binning.value[0]
+        print optical_scale
+        # optical_scale = 45
         # Isolate spots
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Isolating spots...")
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, repetitions)
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
+        if subimages==[]:
+            raise ValueError('Overlay failure')
+        print len(subimages)
 
         # Find the centers of the spots
         if future._find_overlay_state == CANCELLED:
@@ -108,7 +115,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         # Reconstruct the optical coordinates
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])

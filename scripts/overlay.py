@@ -105,10 +105,9 @@ def main(args):
         #####################################################
     
         logging.debug("Isolating spots...")
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions)
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
         logging.debug("Number of spots found: %d", len(subimages))
-        for i in subimages:
-            print i.shape
+
         hdf5.export("spot_found.h5", subimages,thumbnail=None)
         logging.debug("Finding spot centers...")
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)

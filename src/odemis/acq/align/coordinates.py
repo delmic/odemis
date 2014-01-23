@@ -124,7 +124,7 @@ def FindCenterCoordinates(subimages):
 
     return spot_coordinates
 
-def DivideInNeighborhoods(data, number_of_spots):
+def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     """
     Given an image that includes N spots, divides it in N subimages with each of them 
     to include one spot. Briefly, it filters the image, finds the N “brightest” spots 
@@ -141,12 +141,14 @@ def DivideInNeighborhoods(data, number_of_spots):
     subimages = []
 
     image =  data
+    scale = optical_scale
 
     # Determine size of filter window
-    filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
+    # filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
     
     # TODO, adjust to magnification
-    filter_window_size = sorted((15, filter_window_size, 55))[1]  # / (20000 / 6120)
+    filter_window_size = scale / 1.7
+    filter_window_size = sorted((10, filter_window_size, 60))[1]  # / (20000 / 6120)
     # print filter_window_size
     
     i_max, j_max = unravel_index(image.argmax(), image.shape)
@@ -177,19 +179,26 @@ def DivideInNeighborhoods(data, number_of_spots):
         logging.warning("Cannot detect spots.")
         return [],[]
     
+    (x_center_last, y_center_last) = (-10, -10)
+
     # Go through these parts and crop the subimages based on the neighborhood_size value
     for dy,dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
         y_center = (dy.start + dy.stop - 1) / 2
 
-        subimage_coordinates.append((x_center, y_center))
-        # TODO: change +10 and -10 to number relative to spot size
-        subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
-        #TODO Discard only this image
-        if subimage.shape[0]==0 or subimage.shape[1]==0:
-            logging.warning("Cannot detect spots.")
-            return [],[]
-        subimages.append(subimage)
+        # Make sure we don't detect spots on the top of each other
+        tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
+        if math.hypot(tab[0], tab[1]) > 4.5:
+            subimage_coordinates.append((x_center, y_center))
+            # TODO: change +10 and -10 to number relative to spot size
+            subimage = image[(dy.start - scale / 4.5):(dy.stop + 1 + scale / 4.5), (dx.start - scale / 4.5):(dx.stop + 1 + scale / 4.5)]
+            # TODO Discard only this image
+            if subimage.shape[0] == 0 or subimage.shape[1] == 0:
+                logging.warning("Cannot detect spots.")
+                return [], []
+            subimages.append(subimage)
+        
+        (x_center_last, y_center_last) = (x_center, y_center)
 
     # TODO: Handle case where slices is 0 or 1
     # Take care of outliers
@@ -517,7 +526,8 @@ def _FindOuterOutliers(x_coordinates):
 
 def _FindInnerOutliers(x_coordinates):
     """
-    Removes inner outliers from the optical coordinates.
+    Removes inner outliers from the optical coordinates. It assumes
+    that our grid is rectangular.
     x_coordinates (List of tuples): List of coordinates
     returns (List of tuples): Coordinates without inner outliers
     """

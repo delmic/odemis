@@ -544,11 +544,12 @@ class TestOverallComponent(unittest.TestCase):
         """
         electron_coordinates = self.electron_coordinates_real_example
 
-        grid_data = hdf5.read_data("scanned_image-45.h5")
+        grid_data = hdf5.read_data("scanned_image-35.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (2, 2))
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (4, 4), 60)
+        print len(subimages)
         hdf5.export("spot_found.h5", subimages, thumbnail=None)
         #hdf5.export("subimages", model.DataArray(subimages[0]))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
@@ -562,6 +563,7 @@ class TestOverallComponent(unittest.TestCase):
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
         tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
         optical_scale = math.hypot(tab[0], tab[1])
+        print optical_scale
         scale = 249.625 / optical_scale
             
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
