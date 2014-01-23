@@ -289,7 +289,7 @@ class SecomAcquiController(object):
 
         # create the dialog
         acq_dialog = AcquisitionDialog(self._main_frame, self._tab_data_model)
-        parent_size = [v * 0.66 for v in self._main_frame.GetSize()]
+        parent_size = [v * 0.77 for v in self._main_frame.GetSize()]
 
         try:
             acq_dialog.SetSize(parent_size)
@@ -307,7 +307,7 @@ class SecomAcquiController(object):
 
 class SparcAcquiController(object):
     """
-    Takes care of the acquisition button and process on the Sparc acquisition 
+    Takes care of the acquisition button and process on the Sparc acquisition
     tab.
     """
 
@@ -485,7 +485,7 @@ class SparcAcquiController(object):
         if text is not None:
             self.lbl_acqestimate.SetLabel(text)
         else:
-            self.update_acquisition_time()          
+            self.update_acquisition_time()
 
     def _show_acquisition(self, data, acqfile):
         """
