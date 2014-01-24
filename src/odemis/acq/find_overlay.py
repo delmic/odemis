@@ -40,7 +40,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("scanned_image-50.h5")
+grid_data = hdf5.read_data("scanned_image-49.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -65,6 +65,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     returns translation (Tuple of 2 floats), 
             scaling (Float), 
             rotation (Float): Transformation parameters
+            transformed_data : Transformed metadata
     raises:    
             CancelledError() if cancelled
             ValueError
@@ -94,9 +95,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         optical_image = fake_input
         #####################################################
         # optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (ccd.pixelSize.value[0] * ccd.binning.value[0])
-        optical_scale = ((50e-06 / 2048) * electron_scale[0]) / (2.666666e-07 * ccd.binning.value[0])
-        print escan.pixelSize.value[0], electron_scale[0], ccd.pixelSize.value[0], ccd.binning.value[0]
-        print optical_scale
+        # optical_scale = ((50e-06 / 2048) * electron_scale[0]) / (2.666666e-07 * ccd.binning.value[0])
+        optical_scale = 60
         # optical_scale = 45
         # Isolate spots
         if future._find_overlay_state == CANCELLED:
@@ -152,16 +152,21 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     if future._find_overlay_state == CANCELLED:
         raise CancelledError()
     logging.debug("Calculating transformation...")
-    ret = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
+    ret = transform.CalculateTransform(known_optical_coordinates, known_electron_coordinates)
 
     with _overlay_lock:
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         future._find_overlay_state = FINISHED
+    
+    logging.debug("Updating metadata...")
+
+    transformed_data = _updateMetadata(optical_image, ret)
+    if transformed_data == []:
+        raise ValueError('Metadata is missing')
 
     logging.debug("Overlay done.")
-    
-    return ret
+    return ret, transformed_data
 
 def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
     """
@@ -177,6 +182,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
             translation (Tuple of 2 floats), 
             scaling (Float), 
             rotation (Float): Transformation parameters
+            transformed_data : Transformed metadata
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -235,7 +241,40 @@ def estimateOverlayTime(dwell_time, repetitions):
     """
     Estimates overlay procedure duration
     """
-    return 3 + dwell_time * numpy.prod(repetitions)  # s
+    return 2 + dwell_time * numpy.prod(repetitions)  # s
+
+def _updateMetadata(optical_image, transformation_values):
+    """
+    Returns the updated metadata of the optical image based on the 
+    transformation values
+    """
+    transformed_data = optical_image
+    ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation) = transformation_values
+    
+    # Update rotation
+    rotation = optical_image.metadata.get(model.MD_ROTATION, 0)
+    rotation = rotation - calc_rotation
+
+    pixel_size = optical_image.metadata.get(model.MD_PIXEL_SIZE, (0, 0))
+    if pixel_size == (0, 0):
+        logging.warning("No MD_PIXEL_SIZE data available")
+        return []
+
+    # Update scaling
+    scale = (pixel_size[0] * (1 / calc_scaling_x), pixel_size[1] * (1 / calc_scaling_y))
+
+    # Update translation
+    center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
+    if center_pos == (-1, -1):
+        logging.warning("No MD_POS data available")
+        return []
+    center_pos = (center_pos[0] - pixel_size[0] * calc_translation_y, center_pos[1] - pixel_size[1] * calc_translation_x)
+
+    transformed_data.metadata[model.MD_ROTATION] = rotation
+    transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
+    transformed_data.metadata[model.MD_POS] = center_pos
+
+    return transformed_data.metadata
 
 def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     """
