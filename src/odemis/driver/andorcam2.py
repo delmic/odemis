@@ -151,6 +151,8 @@ class AndorCapabilities(Structure):
         CAMERATYPE_CLARA: "Clara",
         CAMERATYPE_IVAC: "iVac",
         CAMERATYPE_IXONULTRA: "iXon Utlra",
+        CAMERATYPE_IXON: "iXon",
+        CAMERATYPE_IDUS: "iDus",
         }
 
 class AndorV2DLL(CDLL):
@@ -755,7 +757,15 @@ class AndorCam2(model.DigitalCamera):
         maxh, maxv = c_int(), c_int()
         self.atcore.GetMaximumBinning(readmode, 0, byref(maxh))
         self.atcore.GetMaximumBinning(readmode, 1, byref(maxv))
-        return maxh.value, maxv.value
+        maxh, maxv = maxh.value, maxv.value
+
+        # The iDus allows horizontal binning up to 1000... but the documentation
+        # recommends to only use 1, and we've noticed crash with 5.
+        caps = self.GetCapabilities()
+        if caps.CameraType == AndorCapabilities.CAMERATYPE_IDUS:
+            maxh = min(maxh, 4) # TODO: just force 1 px?
+
+        return maxh, maxv
 
     def GetTemperature(self):
         """
