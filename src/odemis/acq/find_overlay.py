@@ -29,6 +29,7 @@ import sys
 import time
 import operator
 import math
+import numpy
 from odemis import model
 from align import coordinates, transform, images
 from odemis.dataio import hdf5
@@ -93,7 +94,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         optical_image = fake_input
         #####################################################
         # optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (ccd.pixelSize.value[0] * ccd.binning.value[0])
-        optical_scale = (50e-06 / 4) / (2.666666e-07 * ccd.binning.value[0])
+        optical_scale = ((50e-06 / 2048) * electron_scale[0]) / (2.666666e-07 * ccd.binning.value[0])
         print escan.pixelSize.value[0], electron_scale[0], ccd.pixelSize.value[0], ccd.binning.value[0]
         print optical_scale
         # optical_scale = 45
@@ -234,7 +235,7 @@ def estimateOverlayTime(dwell_time, repetitions):
     """
     Estimates overlay procedure duration
     """
-    return 1 + dwell_time * repetitions[0] * repetitions[1]  # s
+    return 3 + dwell_time * numpy.prod(repetitions)  # s
 
 def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     """
