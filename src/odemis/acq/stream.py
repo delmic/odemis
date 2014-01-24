@@ -2953,7 +2953,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 # DRIFT CORRECTION
                 # tweak translation according to calculated drift
                 logging.debug("E-beam spot before drift correction: " + str(spot_pos[i[::-1]]))
-                self._emitter.translation.value = (spot_pos[i[::-1]][0] + drift[0], spot_pos[i[::-1]][1] + drift[1])
+                self._emitter.translation.value = (spot_pos[i[::-1]][0] - drift[1], spot_pos[i[::-1]][1] - drift[0])
                 logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()

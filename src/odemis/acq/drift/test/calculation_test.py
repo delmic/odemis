@@ -99,7 +99,7 @@ class TestDriftCalculation(unittest.TestCase):
         Tests for input of identical images.
         """
         drift = calculation.CalculateDrift(self.data[0], self.data[0], 1)
-        numpy.testing.assert_almost_equal(drift, (0,0), 1)
+        numpy.testing.assert_almost_equal(drift, (0, 0), 1)
     
     # @unittest.skip("skip")
     def test_known_drift(self):
