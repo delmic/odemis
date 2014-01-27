@@ -1350,12 +1350,12 @@ class MirrorAlignTab(Tab):
                        "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
         except IOError:
             logging.warning(u"Failed to find a fitting goal image for sensor "
-                            "of %dx%d µm" % ccd_sz)
+                            u"of %dx%d µm" % ccd_sz)
             # pick a known file, it's better than nothing
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
                        "calibration/ma_goal_5_13_sensor_13312_13312.png")
         goal_im = model.DataArray(scipy.misc.imread(goal_rs))
-        
+
         # It should be displayed at the same scale as the actual image.
         # In theory, it would be direct, but as the backend doesn't know when
         # the lens is on or not, it's considered always on, and so the optical
