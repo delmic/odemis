@@ -151,6 +151,8 @@ class AndorCapabilities(Structure):
         CAMERATYPE_CLARA: "Clara",
         CAMERATYPE_IVAC: "iVac",
         CAMERATYPE_IXONULTRA: "iXon Utlra",
+        CAMERATYPE_IXON: "iXon",
+        CAMERATYPE_IDUS: "iDus",
         }
 
 class AndorV2DLL(CDLL):
@@ -578,6 +580,12 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
         
         self.atcore.SetTriggerMode(0) # 0 = internal
+
+        # For "Run Til Abort".
+        # We used to do it after changing the settings, but on the iDus, it
+        # sometimes causes GetAcquisitionTimings() to block. It seems like a
+        # bug in the driver, but at least, it works.
+        self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
 
     def getMetadata(self):
         return self._metadata
@@ -1271,6 +1279,15 @@ class AndorCam2(model.DigitalCamera):
 
         new_image_settings = self._binning + self._image_rect
         if prev_image_settings != new_image_settings:
+            # The iDus allows horizontal binning up to 1000... but the
+            # documentation recommends to only use 1, no idea why...
+            if self._binning[0] > 1:
+                caps = self.GetCapabilities()
+                if caps.CameraType == AndorCapabilities.CAMERATYPE_IDUS:
+                    logging.warning("Horizontal binning set to %d, but only "
+                                    "1 is recommended on the iDus",
+                                    self._binning[0])
+
             logging.debug("Updating image settings")
             self.atcore.SetImage(*new_image_settings)
             # there is no metadata for the resolution
@@ -1393,7 +1410,6 @@ class AndorCam2(model.DigitalCamera):
                     # Seems exposure needs to be re-set after setting acquisition mode
                     self._prev_settings[1] = None # 1 => exposure time
                     self._update_settings()
-                    self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
                     self.atcore.StartAcquisition()
 
                     size = self._transposeSizeFromUser(self.resolution.value)
