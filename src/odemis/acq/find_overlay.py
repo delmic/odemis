@@ -96,7 +96,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         #####################################################
         # optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (ccd.pixelSize.value[0] * ccd.binning.value[0])
         # optical_scale = ((50e-06 / 2048) * electron_scale[0]) / (2.666666e-07 * ccd.binning.value[0])
-        optical_scale = 60
+        optical_scale = 60.5
         # optical_scale = 45
         # Isolate spots
         if future._find_overlay_state == CANCELLED:
@@ -152,7 +152,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     if future._find_overlay_state == CANCELLED:
         raise CancelledError()
     logging.debug("Calculating transformation...")
-    ret = transform.CalculateTransform(known_optical_coordinates, known_electron_coordinates)
+    ret = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
 
     with _overlay_lock:
         if future._find_overlay_state == CANCELLED:
@@ -261,15 +261,17 @@ def _updateMetadata(optical_image, transformation_values):
         return []
 
     # Update scaling
-    scale = (pixel_size[0] * (1 / calc_scaling_x), pixel_size[1] * (1 / calc_scaling_y))
+    scale = (2.44140625e-08 * calc_scaling_x, 2.44140625e-08 * calc_scaling_y)
+    # scale = (pixel_size[0], pixel_size[1])
 
     # Update translation
     center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
     if center_pos == (-1, -1):
         logging.warning("No MD_POS data available")
         return []
-    center_pos = (center_pos[0] - pixel_size[0] * calc_translation_y, center_pos[1] - pixel_size[1] * calc_translation_x)
 
+    # center_pos = (center_pos[0] - 2.44140625e-08 * calc_translation_y, center_pos[1] + 2.44140625e-08 * calc_translation_x)
+    center_pos = (center_pos[0] + 2.44140625e-08 * calc_translation_y, center_pos[1] + 2.44140625e-08 * calc_translation_x)
     transformed_data.metadata[model.MD_ROTATION] = rotation
     transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
     transformed_data.metadata[model.MD_POS] = center_pos

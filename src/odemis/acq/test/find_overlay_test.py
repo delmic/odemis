@@ -74,11 +74,19 @@ class TestOverlay(unittest.TestCase):
 
         f = find_overlay.FindOverlay((4, 4), 0.1, 1e-06, escan, ccd, detector)
 
-        opt_im = fake_input
+        # opt_im = fake_input
         transformed_image = fake_input
         ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
+        electron_grid = hdf5.read_data("electron_grid.h5")[0]
+        sem_width = [r * p for r, p in zip(escan.shape, escan.pixelSize.value)]
+        eg_pxs = [w / s for w, s in zip(sem_width, electron_grid.shape[-1:-3:-1])]
+        electron_grid.metadata[model.MD_PIXEL_SIZE] = eg_pxs
+        print eg_pxs
+        electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
+        # electron_grid.metadata[model.MD_POS] = (0, 0)
         transformed_image.metadata = transformed_data
-        hdf5.export("transformed_image.h5", [opt_im, transformed_image])
+        hdf5.export("overlay_image.h5", [transformed_image, electron_grid])
+        # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
         print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data
         # print transformed_image
         #numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation),
