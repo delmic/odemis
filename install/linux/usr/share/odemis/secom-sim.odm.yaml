@@ -57,6 +57,7 @@ Spectra: {
     init: {
         channels: [0, 1],
         limits: [[0, 5], [0, 5]],  # V
+        park: [8, 8], # V
         settle_time: 10.e-6, # s
         hfw_nomag: 10.e-3, # m
     },

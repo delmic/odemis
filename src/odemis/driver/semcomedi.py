@@ -663,6 +663,7 @@ class SEMComedi(model.HwComponent):
         but it's not controllable via the DAQ board.
         """
         pos, channels, ranges = self._scanner.get_resting_point_data()
+        logging.debug("Setting to rest position at %s", pos)
         if self._test:
             return
 
@@ -1930,7 +1931,7 @@ class Scanner(model.Emitter):
       Resolution > Translation.  
     """
     def __init__(self, name, role, parent, channels, limits, settle_time,
-                 hfw_nomag, **kwargs):
+                 hfw_nomag, park=None, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
           the fast scanned axis, Y is the slow scanned axis. 
@@ -1941,6 +1942,8 @@ class Scanner(model.Emitter):
           each scan line
         hfw_nomag (0<float<=1): (theoretical) distance between horizontal borders 
           (lower/upper limit in X) if magnification is 1 (in m)
+        park (None or 2-tuple of (0<=float)): voltage of resting position, 
+          if None, it will default to top-left corner.
         """
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
@@ -1975,6 +1978,18 @@ class Scanner(model.Emitter):
             except comedi.ComediError:
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (data_lim[0], data_lim[1]))
+
+        if park is None:
+            park = limits[0][0], limits[1][0]
+        else:
+            for i, channel in enumerate(channels):
+                try:
+                    comedi.find_range(parent._device, parent._ao_subdevice,
+                                      channel, comedi.UNIT_volt, park[i], park[i])
+                except comedi.ComediError:
+                    raise ValueError("Park voltage %g V is too high for hardware." %
+                                     (park[i],))
+        self._park = park[1], park[0]
 
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
@@ -2101,7 +2116,6 @@ class Scanner(model.Emitter):
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
     def _setDwellTime(self, value):
-        # FIXME: use DPR
         dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value)
         return dt
 
@@ -2179,11 +2193,8 @@ class Scanner(model.Emitter):
             channels: the output channels to use
             ranges: the range index of each output channel
         """
-        # Let's put it at the top-left, where the next acquisition will start,
-        # if the ROI is the full frame.
-        # It has the advantage of not being in the center, so less noticable
-        # if there is an optical camera aligned.
-        pos = [self._limits[0][0], self._limits[1][0]]
+        # Can't blank the beam, but at least, put it somewhere far away
+        pos = self._park
         ranges = []
         for i, channel in enumerate(self._channels):
             best_range = comedi.find_range(self.parent._device,
@@ -2235,6 +2246,10 @@ class Scanner(model.Emitter):
                                         translation[::-1], margin)
 
             self._prev_settings = new_settings
+            # DEBUG
+            range_x = numpy.min(self._scan_array[:, :, 0]), numpy.max(self._scan_array[:, :, 0])
+            range_y = numpy.min(self._scan_array[:, :, 1]), numpy.max(self._scan_array[:, :, 1])
+            logging.debug("Updated scan range to X=%s, Y=%s", range_x, range_y)
 
         return (self._scan_array, dwell_time, resolution[::-1],
                 margin, self._channels, self._ranges, self._osr, self._dpr)

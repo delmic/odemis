@@ -43,6 +43,7 @@ Spectra: {
         # as in the SEM software.
         channels: [0, 1],
         limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
         # Add 1° rotation in the SEM software
