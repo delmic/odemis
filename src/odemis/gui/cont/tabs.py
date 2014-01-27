@@ -737,11 +737,6 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return
 
-        # Reset tool, layout and visible views
-        self.tab_data_model.tool.value = guimod.TOOL_NONE
-        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
-        self.tab_data_model.visible_views.value = self._def_views
-
         # Detect the format to use
         fn = dialog.GetPath()
         logging.debug("Current file set to %s", fn)
@@ -774,6 +769,12 @@ class AnalysisTab(Tab):
         data (list of model.DataArray): the data to display. Should have at
          least one DataArray.
         """
+
+        # Reset tool, layout and visible views
+        self.tab_data_model.tool.value = guimod.TOOL_NONE
+        self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
+        self.tab_data_model.visible_views.value = self._def_views
+
         fi = guimod.FileInfo(filename)
 
         # remove all the previous streams
@@ -1272,17 +1273,9 @@ class MirrorAlignTab(Tab):
                                      main_data.ebeam)
             self._ccd_stream = ccd_stream
 
-
             # The mirror center (with the lens set) is defined as pole position
             # in the microscope configuration file.
-            goal_rs = pkg_resources.resource_stream(
-                            "odemis.gui.img",
-                            "calibration/ma_goal_image_5_13_no_lens.png")
-            # Pxs = sensor pxs / lens mag
-            mag = main_data.lens.magnification.value
-            goal_md = {model.MD_PIXEL_SIZE: (13e-6 / mag, 13e-6 / mag), # m
-                       model.MD_POS:(0, 0)}
-            goal_im = model.DataArray(scipy.misc.imread(goal_rs), goal_md)
+            goal_im = self._getGoalImage(main_data)
             goal_stream = streammod.RGBStream("Goal", goal_im)
 
             # create a view on the microscope model
@@ -1335,6 +1328,55 @@ class MirrorAlignTab(Tab):
         # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
 
+    def _getGoalImage(self, main_data):
+        """
+        main_data (model.MainGUIData)
+        returns (model.DataArray): RGBA DataArray of the goal image for the
+          current hardware
+        """
+        ccd = main_data.ccd
+        lens = main_data.lens
+
+        # TODO: automatically generate the image? Shouldn't be too hard with
+        # cairo, it's just 3 circles and a line.
+
+        # The goal image depends on the physical size of the CCD, so we have
+        # a file for each supported sensor size.
+        pxs = ccd.pixelSize.value
+        ccd_res = ccd.shape[0:2]
+        ccd_sz = tuple(int(p * l * 1e6) for p, l in zip(pxs, ccd_res))
+        try:
+            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
+                       "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
+        except IOError:
+            logging.warning(u"Failed to find a fitting goal image for sensor "
+                            u"of %dx%d µm" % ccd_sz)
+            # pick a known file, it's better than nothing
+            goal_rs = pkg_resources.resource_stream("odemis.gui.img",
+                       "calibration/ma_goal_5_13_sensor_13312_13312.png")
+        goal_im = model.DataArray(scipy.misc.imread(goal_rs))
+
+        # It should be displayed at the same scale as the actual image.
+        # In theory, it would be direct, but as the backend doesn't know when
+        # the lens is on or not, it's considered always on, and so the optical
+        # image get the pixel size multiplied by the magnification.
+
+        # The resolution is the same as the maximum sensor resolution, if not,
+        # we adapt the pixel size
+        im_res = (goal_im.shape[1], goal_im.shape[0])
+        scale = ccd_res[0] / im_res[0]
+        if scale != 1:
+            logging.warning("Goal image has resolution %s while CCD has %s",
+                            im_res, ccd_res)
+
+        # Pxs = sensor pxs / lens mag
+        mag = lens.magnification.value
+        goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag), # m
+                   model.MD_POS:(0, 0)}
+
+        goal_im.metadata = goal_md
+        return goal_im
+
     def Show(self, show=True):
         Tab.Show(self, show=show)
 
@@ -1367,6 +1409,7 @@ class TabBarController(object):
         """
         self.main_frame = main_frame
         self._tab = main_data.tab # VA that we take care of
+        self.main_data = main_data
 
         # create all the tabs that fit the microscope role
         tab_list = self._filter_tabs(tab_rules, main_frame, main_data)
@@ -1427,6 +1470,12 @@ class TabBarController(object):
         return tabs
 
     def _on_tab(self, tab):
+        """ Tab click event handler """
+
+        # if self.main_data.acquiring:
+        #     logging.warn("Acquisition in progress, tabs frozen")
+        #     return
+
         try:
             self.main_frame.Freeze()
             # TODO: only call Hide() on the previously selected tab
@@ -1448,6 +1497,13 @@ class TabBarController(object):
             t.terminate()
 
     def OnClick(self, evt):
+
+        if self.main_data.acquiring:
+            logging.warn("Acquisition in progress, tabs frozen")
+            evt_btn = evt.GetEventObject()
+            evt_btn.SetValue(not evt.btn.GetValue())
+            return
+
         # ie, mouse click or space pressed
         logging.debug("Tab button click")
 

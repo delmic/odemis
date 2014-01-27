@@ -44,6 +44,7 @@ import math
 import Image
 from scipy import ndimage
 from scipy import misc
+from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -93,25 +94,42 @@ def main(args):
 
         # Wait for ScanGrid to finish
         optical_image, electron_coordinates, electron_scale = future_scan.result()
+        hdf5.export("scanned_image.h5", optical_image)
+        logging.debug("electron coord = %s", electron_coordinates)
 
         ############## TO BE REMOVED ON TESTING##############
-        grid_data = hdf5.read_data("real_optical.h5")
-        C, T, Z, Y, X = grid_data[0].shape
-        grid_data[0].shape = Y, X
-        optical_image = grid_data[0]
+#        grid_data = hdf5.read_data("scanned_image.h5")
+#        C, T, Z, Y, X = grid_data[0].shape
+#        grid_data[0].shape = Y, X
+#        optical_image = grid_data[0]
         #####################################################
     
         logging.debug("Isolating spots...")
-        subimages, subimage_coordinates, subimage_size = coordinates.DivideInNeighborhoods(optical_image, repetitions)
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions)
+        logging.debug("Number of spots found: %d", len(subimages))
+        for i in subimages:
+            print i.shape
+        hdf5.export("spot_found.h5", subimages,thumbnail=None)
         logging.debug("Finding spot centers...")
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size)
+        logging.debug("center coord = %s", spot_coordinates)
+        optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+        logging.debug(optical_coordinates)
+        rgb_optical = img.DataArray2RGB(optical_image)
+        
+        for ta in optical_coordinates:
+            rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 0] = 255
+            rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 1] *= 0.5
+            rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 2] *= 0.5
+        
+        misc.imsave('spots_image.png', rgb_optical)
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
         tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
         optical_scale = math.hypot(tab[0], tab[1])
         scale = electron_scale[0] / optical_scale
+        print scale
 
         # max_allowed_diff in pixels
         max_allowed_diff_px = max_allowed_diff / escan.pixelSize.value[0]
@@ -121,6 +139,8 @@ def main(args):
     
         logging.debug("Calculating transformation...")
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
+        logging.debug("Electron->Optical: ")
+        print calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation
         final_electron = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
 
         logging.debug("Overlay done.")
@@ -143,23 +163,15 @@ def main(args):
         # Generate overlay image
         logging.debug("Generating images...")
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_electron_coordinates)
+        logging.debug("Optical->Electron: ")
+        print calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation
         overlay_coordinates = coordinates._TransformCoordinates(known_electron_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
 
-        electron_grid = numpy.zeros(shape=(optical_image.shape[0], optical_image.shape[1], 3))
         for ta in overlay_coordinates:
-            electron_grid[ta[0] - 1:ta[0] + 1, ta[1] - 1:ta[1] + 1] = [200, 10, 10]
-
+            rgb_optical[ta[0] - 1:ta[0] + 1, ta[1] - 1:ta[1] + 1, 1] = 255
+            
+        misc.imsave('overlay_image.png', rgb_optical)
         misc.imsave('optical_image.png', optical_image)
-        misc.imsave('electron_image.png', electron_grid)
-
-        background = Image.open("optical_image.png")
-        overlay = Image.open("electron_image.png")
-
-        background = background.convert("RGBA")
-        overlay = overlay.convert("RGBA")
-
-        new_img = Image.blend(background, overlay, 0.4)
-        new_img.save("overlay_image.png", "PNG")
         logging.debug("Done. Check electron_image.png, optical_image.png and overlay_image.png.")
 
     except:

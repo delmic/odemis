@@ -48,12 +48,15 @@ def FindCenterCoordinates(subimages):
     subimages (List of model.DataArray): List of 2D arrays containing pixel intensity
     returns (List of tuples): Coordinates of spot centers
     """
-    number_of_subimages = subimages.__len__()
+    number_of_subimages = len(subimages)
     spot_coordinates = []
 
     # Pop each subimage from the list
     for i in xrange(number_of_subimages):
-        subimage = subimages[i]
+        #subimage = subimages[i]
+    	# Input might be integer
+    	# TODO Dummy, change the way that you handle the array e.g. convolution
+    	subimage = subimages[i].astype(numpy.float64)
         subimage_x, subimage_y = subimage.shape
 
         # See Parthasarathy's paper for details
@@ -115,8 +118,8 @@ def FindCenterCoordinates(subimages):
         yc = (swab * swac - swa2 * swbc) / det
 
         # Output relative to upper left coordinate
-        xc = xc + (subimage_y + 1) / 2
-        yc = -yc + (subimage_x + 1) / 2
+        xc = xc + 3 / 2
+        yc = -yc + 3 / 2
         spot_coordinates.append((xc, yc))
 
     return spot_coordinates
@@ -137,31 +140,43 @@ def DivideInNeighborhoods(data, number_of_spots):
     subimage_coordinates = []
     subimages = []
 
-    # Filter cosmic ray pixels
-    mean_intensity = numpy.mean(data)
-    cosmic_ray_thresh = 10 * mean_intensity
-    image = numpy.where(data > cosmic_ray_thresh, mean_intensity, data)
+    image =  data
 
     # Determine size of filter window
-    filter_window_size = int(image.size / (3 * ((number_of_spots[0] * number_of_spots[1]) ** 2)))
-
-    # Determine threshold
+    filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
+    
+    # TODO, adjust to magnification
+    filter_window_size = sorted((15, filter_window_size, 55))[1]  # / (20000 / 6120)
+    # print filter_window_size
+    
     i_max, j_max = unravel_index(image.argmax(), image.shape)
     i_min, j_min = unravel_index(image.argmin(), image.shape)
     max_diff = image[i_max, j_max] - image[i_min, j_min]
-    threshold = max_diff / 3.5
-
-    # Filter the parts of the image with variance in intensity greater
-    # than the threshold
+    prod_of_spots = numpy.prod(number_of_spots)
     data_max = filters.maximum_filter(image, filter_window_size)
-    maxima = (image == data_max)
     data_min = filters.minimum_filter(image, filter_window_size)
-    diff = ((data_max - data_min) > threshold)
-    maxima[diff == 0] = 0
     
-    labeled, num_objects = ndimage.label(maxima)
-    slices = ndimage.find_objects(labeled)
 
+    for i in numpy.arange(3.5, 15, 0.1):
+        # Determine threshold
+        threshold = max_diff / i
+
+        # Filter the parts of the image with variance in intensity greater
+        # than the threshold
+        maxima = (image == data_max)
+        diff = ((data_max - data_min) > threshold)
+        maxima[diff == 0] = 0
+
+        labeled, num_objects = ndimage.label(maxima)
+        if num_objects > prod_of_spots:
+            break
+
+    slices = ndimage.find_objects(labeled)
+    
+    if len(slices)==0:
+        logging.warning("Cannot detect spots.")
+        return [],[]
+    
     # Go through these parts and crop the subimages based on the neighborhood_size value
     for dy,dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
@@ -170,29 +185,32 @@ def DivideInNeighborhoods(data, number_of_spots):
         subimage_coordinates.append((x_center, y_center))
         # TODO: change +10 and -10 to number relative to spot size
         subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
+        #TODO Discard only this image
+        if subimage.shape[0]==0 or subimage.shape[1]==0:
+            logging.warning("Cannot detect spots.")
+            return [],[]
         subimages.append(subimage)
 
+    # TODO: Handle case where slices is 0 or 1
     # Take care of outliers
     clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
-    subimage_size = subimage.shape[0]
 
-    return clean_subimages, clean_subimage_coordinates, subimage_size
+    return clean_subimages, clean_subimage_coordinates
 
-def ReconstructCoordinates(subimage_coordinates, spot_coordinates, subimage_size):
+def ReconstructCoordinates(subimage_coordinates, spot_coordinates):
     """
     Given the coordinates of each subimage as also the coordinates of the spot into it, 
     generates the coordinates of the spots with respect to the overall image.
     subimage_coordinates (List of tuples): The coordinates of the 
                                         center of each subimage with 
                                         respect to the overall image
-    spot_coordinates (List of tuples): Coordinates of spot centers
-    subimage_size(int): One dimension because it is square
+    spot_coordinates (List of tuples): Coordinates of spot centers relative to 
+         the center of the subimage
     returns (List of tuples): Coordinates of spots in optical image
     """
     optical_coordinates = []
-    center_position = (subimage_size / 2) - 1
     for ta, tb in zip(subimage_coordinates, spot_coordinates):
-        t = tuple(a + (b - center_position) for a, b in zip(ta, tb))
+        t = tuple(a + b for a, b in zip(ta, tb))
         optical_coordinates.append(t)
 
     return optical_coordinates
@@ -207,20 +225,21 @@ def FilterOutliers(image, subimages, subimage_coordinates):
             (List of tuples): The coordinates of the center of each subimage with respect 
                             to the overall image
     """
-    number_of_subimages = subimages.__len__()
+    number_of_subimages = len(subimages)
     clean_subimages = []
     clean_subimage_coordinates = []
     for i in xrange(number_of_subimages):
         hist, bin_edges = histogram(subimages[i], bins=10)
         # Remove subimage if its histogram implies a cosmic ray
-        if ~((hist[3:7] == numpy.zeros(4)).all()):
+        hist_list = hist.tolist()
+        if hist_list.count(0) < 5:
             clean_subimages.append(subimages[i])
             clean_subimage_coordinates.append(subimage_coordinates[i])
             
     # If we removed more than 3 subimages give up and return the initial list
     # This is based on the assumption that each image would contain at maximum
     # 3 cosmic rays.
-    if (((subimages.__len__()-clean_subimages.__len__())>3) or (clean_subimages.__len__()==0)):
+    if (((len(subimages) - len(clean_subimages)) > 3) or (len(clean_subimages) == 0)):
         clean_subimages = subimages
         clean_subimage_coordinates = subimage_coordinates
 
@@ -240,8 +259,13 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
                                 ordered electron list
     """
     # Remove large outliers
-    if input_coordinates.__len__() > 1:
-        optical_coordinates = _FindOutliers(input_coordinates)
+    if len(input_coordinates) > 1:
+        optical_coordinates = _FindOuterOutliers(input_coordinates)
+        print len(optical_coordinates), len(electron_coordinates)
+        if len(optical_coordinates) > len(electron_coordinates):
+            optical_coordinates = _FindInnerOutliers(optical_coordinates)
+        print len(optical_coordinates)
+        print optical_coordinates
     else:
         logging.warning("Cannot find overlay.")
         return [], []
@@ -258,7 +282,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     guess_sub_electron_mean = tuple(map(operator.sub, numpy.mean(guess_coordinates, 0), numpy.mean(electron_coordinates, 0)))
     transformed_coordinates = [tuple(map(operator.sub, guess, guess_sub_electron_mean)) for guess in guess_coordinates]
 
-    max_wrong_points = math.ceil(0.5 * math.sqrt(electron_coordinates.__len__()))
+    max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
     for step in xrange(MAX_STEPS_NUMBER):
         #Calculate nearest point
         estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates)
@@ -279,7 +303,7 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
             coord_diff.append(math.hypot(tab[0], tab[1]))
 
         sort_diff = sorted(coord_diff)
-        diff_number_sort = math.floor(DIFF_NUMBER * (sort_diff.__len__()))
+        diff_number_sort = math.floor(DIFF_NUMBER * (len(sort_diff)))
         max_diff = sort_diff[int(diff_number_sort)]
 
         if max_diff < max_allowed_diff and sum(e_wrong_points) <= max_wrong_points and total_shift <= max_allowed_diff:
@@ -296,12 +320,15 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     ordered_coordinates_index = zip(index1, electron_coordinates)
     ordered_coordinates_index.sort()
     ordered_coordinates = []
-    for i in xrange(ordered_coordinates_index.__len__()):
+    for i in xrange(len(ordered_coordinates_index)):
         ordered_coordinates.append(ordered_coordinates_index[i][1])
 
     # Remove unknown coordinates
     known_ordered_coordinates = list(compress(ordered_coordinates, inv_e_wrong_points))
-    known_optical_coordinates = list(compress(optical_coordinates, inv_e_wrong_points))
+    if len(optical_coordinates) == len(known_ordered_coordinates):
+        known_optical_coordinates = optical_coordinates
+    else:
+        known_optical_coordinates = list(compress(optical_coordinates, inv_e_wrong_points))
     return known_ordered_coordinates, known_optical_coordinates
 
 def _KNNsearch(x_coordinates, y_coordinates):
@@ -370,8 +397,8 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     o_index = [index1[i] for i in index2]
     e_index = [index2[i] for i in index1]
 
-    transformed_range = range(transformed_coordinates.__len__())
-    electron_range = range(electron_coordinates.__len__())
+    transformed_range = range(len(transformed_coordinates))
+    electron_range = range(len(electron_coordinates))
 
     # Coordinates that have no proper match (optical and electron)
     o_wrong_points = map(operator.ne, o_index, transformed_range)
@@ -404,7 +431,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
 
     # Correct for shift if more than SHIFT_THRESHOLD (percentage) of points are wrong
     # threshold = 2 * SHIFT_THRESHOLD * electron_coordinates.__len__()
-    threshold = math.ceil(0.5 * math.sqrt(electron_coordinates.__len__()))
+    threshold = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
     # If the number of wrong points is above threshold perform corrections
     if sum(o_wrong_points)>threshold and sum(e_wrong_points)>threshold:
         # Shift
@@ -472,11 +499,11 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
 
     return estimated_coordinates, new_index1, new_e_wrong_points, total_shift
 
-def _FindOutliers(x_coordinates):
+def _FindOuterOutliers(x_coordinates):
     """
     Removes large outliers from the optical coordinates.
     x_coordinates (List of tuples): List of coordinates
-    returns (List of tuples): Coordinates without outliers
+    returns (List of tuples): Coordinates without outer outliers
     """
     # For each point, search for the 2 closest neighbors
     points = numpy.array(x_coordinates)
@@ -486,7 +513,29 @@ def _FindOutliers(x_coordinates):
 
     # Keep only the second ones because the first ones are the points themselves
     sorted_distance = sorted(list_distance[:, 1])
-    outlier_value = 2 * sorted_distance[int(math.ceil(0.5 * sorted_distance.__len__()))]
+    outlier_value = 2 * sorted_distance[int(math.ceil(0.5 * len(sorted_distance)))]
     no_outlier_index = list_distance[:, 1] < outlier_value
 
     return list(compress(x_coordinates, no_outlier_index))
+
+def _FindInnerOutliers(x_coordinates):
+    """
+    Removes inner outliers from the optical coordinates.
+    x_coordinates (List of tuples): List of coordinates
+    returns (List of tuples): Coordinates without inner outliers
+    """
+    print len(x_coordinates)
+    points = numpy.array(x_coordinates)
+    tree = cKDTree(points, 2)
+    distance, index = tree.query(x_coordinates, 2)
+    list_distance = numpy.array(distance)
+    list_index = numpy.array(index)
+    print list_index[:, 1]
+    print list_distance[:, 1]
+    counts = numpy.bincount(list_index[:, 1])
+    inner_outlier = numpy.argmax(counts)
+    del x_coordinates[inner_outlier]
+
+    print len(x_coordinates)
+    return x_coordinates
+

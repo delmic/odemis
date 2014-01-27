@@ -444,15 +444,17 @@ class Slider(BaseSlider):
         logging.debug("Setting slider value to %s", value)
 
         if value < self.min_value:
-            logging.warn("Value %s lower than minimum %s!",
+            logging.warn("Value %s lower than minimum! Resetting to %s",
                          value,
                          self.min_value)
             self.current_value = self.min_value
+            self._send_slider_update_event()
         elif value > self.max_value:
-            logging.warn("Value %s higher than maximum %s!",
+            logging.warn("Value %s higher than maximum! Resetting to %s!",
                          value,
                          self.max_value)
             self.current_value = self.max_value
+            self._send_slider_update_event()
         else:
             self.current_value = value
 
@@ -791,13 +793,13 @@ class VisualRangeSlider(BaseSlider):
         if enable != self.Enabled:
             wx.PyControl.Enable(self, enable)
             # Uncomment if you need different colour when disabled
-#            dim = 0.2
-#            if enable:
-#                self.content_color = wxcol_to_frgb(self.GetForegroundColour())
-#                self.select_color = change_brightness(self.select_color, dim)
-#            else:
-#                self.content_color = change_brightness(self.content_color, -dim)
-#                self.select_color = change_brightness(self.select_color, -dim)
+            # dim = 0.2
+            # if enable:
+            #     self.content_color = wxcol_to_frgb(self.GetForegroundColour())
+            #     self.select_color = change_brightness(self.select_color, dim)
+            # else:
+            #     self.content_color = change_brightness(self.content_color, -dim)
+            #     self.select_color = change_brightness(self.select_color, -dim)
             if not enable: # in case the cursor was changed during hover
                 self.SetCursor(wx.STANDARD_CURSOR)
             self.Refresh()

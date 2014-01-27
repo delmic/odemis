@@ -1471,10 +1471,9 @@ class PlotCanvas(BufferedCanvas):
         """
         horz, vert = zip(*self._data)
 
-        if len(horz) != len(set(horz)):
-            dub = [x for x in horz if horz.count(x) > 1]
+        if not all(horz[i] <= horz[i+1] for i in xrange(len(horz)-1)):
             self.clear()
-            raise ValueError("X values need to be unique! (%s)" % dub)
+            raise ValueError("X values need to be sorted!")
 
         self.min_x = min(horz)
         self.max_x = max(horz)
@@ -1566,7 +1565,7 @@ class PlotCanvas(BufferedCanvas):
         perc_x = pos_x / float(self.ClientSize.x)
         val_x = (perc_x * self.data_width) + self.range_x[0]
 
-        if snap and False:
+        if snap:
             # Return the value closest to val_x
             return min([(abs(val_x - x), x) for x, _ in self._data])[1]
         else:

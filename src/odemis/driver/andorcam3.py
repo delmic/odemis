@@ -80,8 +80,10 @@ class ATDLL(CDLL):
     HANDLE_SYSTEM = 1
     INFINITE = 0xFFFFFFFF # "infinite" time
     
-    def __del__(self):
-        self.AT_FinaliseLibrary()
+    # TODO: it'd be better here, but somehow it's never called (some references still holding it)
+#    def __del__(self):
+#        logging.debug("Finalizing library")
+#        self.AT_FinaliseLibrary()
 
     @staticmethod
     def at_errcheck(result, func, args):
@@ -159,15 +161,17 @@ class AndorCam3(model.DigitalCamera):
     """
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
-    This implementation is for the Andor SDK v3.
+    This implementation is for the Andor SDK v3. The Neo and SimCam work with
+    SDK 3.4+, but Zyla needs SDK 3.7+.
     
     It offers mostly a couple of VigilantAttributes to modify the settings, and a 
     DataFlow to get one or several images from the camera.
     
     Note: for the bitflow driver to initialise (and detect cameras), you need
-    to have the BITFLOW_INSTALL_DIRS environment variable set to a good location.
+    to have the BITFLOW_INSTALL_DIRS environment variable set to a good location
+    or to provide the location as parameter.
     
-    It also provide low-level methods corresponding to the SDK functions.
+    It also provides low-level methods corresponding to the SDK functions.
     """
     
     def __init__(self, name, role, device=None, bitflow_install_dirs=None, **kwargs):
@@ -281,6 +285,9 @@ class AndorCam3(model.DigitalCamera):
         else:
             gain = min(gain_choices) # default to low gain = less noise
         self.gain = model.FloatEnumerated(gain, gain_choices, unit="")
+
+        # TODO: add a frameRate VA to allow reduce the speed between acquisitions?
+        # cf FrameRate
 
         current_temp = self.GetFloat(u"SensorTemperature")
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
@@ -526,17 +533,30 @@ class AndorCam3(model.DigitalCamera):
     def _getTargetTemperatureRange(self):
         """
         return (tuple of 2 floats): min/max values for temperature
-        raise NotImplemente
+        raise NotImplementedError: if not possible to change the temperature
         """
         # The real camera supports the "TemperatureControl" attribute while the
         # simulator supports the old  "TargetSensorTemperature"
         try:
+            # On SDK 3.4, the Zyla look like it supports temp control, with 3
+            # values of 0... but setting any of them blocks completely the camera
+            # SDK 3.7 correctly indicates just one value (0°C), non writable
             if self.isImplemented(u"TemperatureControl"):
                 tmps_str = self.GetEnumStringAvailable(u"TemperatureControl")
                 tmps = [float(t) for t in tmps_str if tmps_str is not None]
+                # TODO: always add 25, as a temperature to disable cooling.
+                if not self.isWritable(u"TemperatureControl"):
+                    # The Zyla doesn't support changing the target temperature,
+                    # but still allows to switch on/off sensor cooling
+                    # => 0°C or 25°C
+                    tmps = [min(tmps), 25]
+
+                # TODO: just return a set
                 return min(tmps), max(tmps)
-            else:
+            elif self.isWritable(u"TargetSensorTemperature"):
                 return self.GetFloatRanges(u"TargetSensorTemperature")
+            else:
+                raise NotImplementedError("Changing temperature not supported")
         except (ValueError, ATError):
             logging.exception("Failed to read possible temperatures, disabling feature")
             raise NotImplementedError("Changing temperature not supported")
@@ -553,22 +573,23 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"TemperatureControl"):
             tmps_str = self.GetEnumStringAvailable(u"TemperatureControl")
             tmps = [float(t) if t is not None else 1e100 for t in tmps_str]
-            tmp_idx = util.index_closest(temp, tmps)
-            self.SetEnumIndex(u"TemperatureControl", tmp_idx)
-            temp = tmps[tmp_idx]
-        else:
+            if self.isWritable(u"TemperatureControl"):
+                tmp_idx = util.index_closest(temp, tmps)
+                self.SetEnumIndex(u"TemperatureControl", tmp_idx)
+                temp = tmps[tmp_idx]
+            else:
+                temp = util.find_closest(temp, [min(tmps), 25])
+        elif self.isWritable(u"TargetSensorTemperature"):
             # In theory not necessary as the VA will ensure this anyway
             ranges = self.GetFloatRanges(u"TargetSensorTemperature")
             temp = sorted(ranges + (temp,))[1]
             self.SetFloat(u"TargetSensorTemperature", temp)
         
-        if temp > 20:
+        if temp >= 20:
             self.SetBool(u"SensorCooling", False)
         else:
             self.SetBool(u"SensorCooling", True)
 
-        # TODO: a more generic function which set up the fan to the right speed
-        # according to the target temperature?
         return temp
 
     def updateTemperatureVA(self):
@@ -634,14 +655,21 @@ class AndorCam3(model.DigitalCamera):
     def getModelName(self):
         model_name = "Andor " + self.GetString(u"CameraModel")
         try:
-            serial = self.GetInt(u"SerialNumber")
-            serial_str = " (s/n: %d)" % serial
+            # TODO: any use?
+            logging.debug("Camera name is %s", self.GetString(u"CameraName"))
+        except ATError:
+            pass # not supported on the SimCam :-(
+
+        try:
+            serial = self.GetString(u"SerialNumber")
+            serial_str = " (s/n: %s)" % serial
         except ATError:
             serial_str = ""
 
         try:
-            cont = self.GetInt(u"ControllerID")
-            cont_str = " (controller: %d)" % cont
+            # seems to be a pretty useless int indentifyin the framegrabber in the PC
+            cont = self.GetString(u"ControllerID")
+            cont_str = " (controller: %s)" % cont
         except ATError:
             cont_str = ""
 
@@ -870,8 +898,8 @@ class AndorCam3(model.DigitalCamera):
     # two gains. So it looks like x1, and just introduces a bit more noise. To
     # distinguish it from the normal x1, we put x1.1.
     # Regex -> gain factor
-    re_spagc = {r"11.*[Hh]igh\s+well": 20,
-                r"11.*[Ll]ow\s+noise": 1,
+    re_spagc = {r"1[12].*[Hh]igh\s+well": 20,
+                r"1[12].*[Ll]ow\s+noise": 1,
                 r"16.*[Ll]ow\s+noise": 1.1,
                 }
     def _getGains(self):
@@ -1099,7 +1127,6 @@ class AndorCam3(model.DigitalCamera):
             # So rely on the assumption cbuffer is used as is
             assert(addressof(pbuffer.contents) == addressof(cbuffer))
             array = self._buffer_as_array(cbuffer, size, metadata)
-        
             self.Command(u"AcquisitionStop")
             self.Flush()
             return self._transposeDAToUser(array)
@@ -1165,12 +1192,12 @@ class AndorCam3(model.DigitalCamera):
                         buffers.append(cbuffer)
 
                     # Acquire the images
-                    logging.info("acquiring a series of images of %d bytes", sizeof(cbuffer))
                     self.Command(u"AcquisitionStart")
                     need_reinit = False
 
                 # Acquire an image
                 if synchronised:
+                    logging.debug("waiting for acquisition trigger")
                     self._ready_for_acq_start = True
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
@@ -1184,6 +1211,7 @@ class AndorCam3(model.DigitalCamera):
                 # then wait a bounded time to ensure the image is acquired
                 try:
                     pbuffer, buffersize = self.WaitBuffer(1)
+
                     # Maybe the must_stop flag has been set while we were waiting
                     if self.acquire_must_stop.is_set():
                         raise CancelledError()
@@ -1213,6 +1241,7 @@ class AndorCam3(model.DigitalCamera):
 
                 # Next buffer. We cannot reuse the buffer because we don't know if
                 # the callee still needs it or not
+                logging.debug("Queuing a new buffer")
                 cbuffer = self._allocate_buffer(size)
                 self.QueueBuffer(cbuffer)
                 buffers.append(cbuffer)
@@ -1325,6 +1354,8 @@ class AndorCam3(model.DigitalCamera):
             self.handle = None
 
         if self.atcore is not None:
+            logging.debug("Finalizing library")
+            self.atcore.AT_FinaliseLibrary()
             self.atcore = None
     
     def selfTest(self):

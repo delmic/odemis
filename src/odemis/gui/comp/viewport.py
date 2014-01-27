@@ -119,7 +119,7 @@ class ViewPort(wx.Panel):
                         border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
         else:
             mainSizer.Add(self.canvas, 1,
-                border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
+                border=2, flag=wx.EXPAND | wx.ALL)
 
         self.SetSizerAndFit(mainSizer)
         mainSizer.Fit(self)

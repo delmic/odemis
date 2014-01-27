@@ -171,7 +171,10 @@ class FW102c(model.Actuator):
 
             # check whether it looks like a FW102C
             try:
-                self._flushInput() # can have some \x00 bytes at the beginning
+                # If any garbage was previously received, make it discarded.
+                self._serial.write("\r")
+                # can have some \x00 bytes at the beginning + "CMD_NOT_DEFINED"
+                self._flushInput()
                 idn = self.GetIdentification()
                 if re.match(self.re_idn, idn):
                     self._idn = idn
@@ -208,11 +211,8 @@ class FW102c(model.Actuator):
             self._serial.flushInput()
 
             # Shouldn't be necessary, but just in case
-            while True:
-                char = self._serial.read()
-                if not char:
-                    break
-                logging.info("Skipping input %s", char)
+            skipped = self._serial.read(1000) # More than 1000 chars => give up
+            logging.debug("Skipping input %s", skipped.encode('string_escape'))
 
     re_err = r"Command error (.*)"
     def _sendQuery(self, com):
@@ -546,7 +546,7 @@ class FW102cSimulator(object):
             else:
                 # TODO: set of speed, trig, sensors,
                 logging.debug("Command '%s' unknown", com)
-                raise KeyError("%s", com)
+                raise KeyError("%s" % com)
         except ValueError:
             out = "Command error CMD_ARG_INVALID\n"
         except KeyError:

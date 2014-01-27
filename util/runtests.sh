@@ -8,8 +8,13 @@ ODEMISPATH="$(readlink -m "./src/odemis")"
 
 # Not related to tests, but to QA in general: Expections usually take only 1 argument
 # So a comma is probably a sign of syntax error and should be replace by a %
-grep -IrE --colour 'raise.*",' src/odemis/
+echo "These files might have syntax error when raising an exception:"
+grep -IrE --colour 'raise.*",' --include=*.py src/odemis/
+echo "---"
 
+echo "These files are not using division from the future:"
+grep -IrL "from __future__ import.*division" --include=*.py  src/
+echo "---"
 
 PYTHONPATH=./src/:../Pyro4/src/
 if [ -f /etc/odemis.conf ]; then

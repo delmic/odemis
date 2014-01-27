@@ -102,6 +102,9 @@ class MainGUIData(object):
         self.spectrometer = None # spectrometer
         self.spectrograph = None # actuator to change the wavelength
 
+        self.acquiring = False # Indicates whether the mic is acquiring a high
+                               # quality image
+
         if microscope:
             self.role = microscope.role
 

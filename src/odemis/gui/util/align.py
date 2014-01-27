@@ -14,6 +14,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import division
+
 from Pyro4.core import isasync
 import math
 from odemis import model

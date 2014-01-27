@@ -34,7 +34,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyFTDI*" #"/dev/ttyLLE"
 
-CLASS = lle.FakeLLE # use FakeLLE if no hardware
+CLASS = lle.LLE # use FakeLLE if no hardware
 KWARGS = {"name": "test", "role": "light", "port": PORT, "sources": lle.DEFAULT_SOURCES}
 
 class TestStatic(unittest.TestCase):
@@ -51,7 +51,7 @@ class TestStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
         
         for name, kwargs in devices:
-            print "opening ", name
+            print "opening %s" % (name,)
             dev = CLASS(name, "light", **kwargs)
             self.assertTrue(dev.selfTest(), "Device self-test failed.")
             dev.terminate()

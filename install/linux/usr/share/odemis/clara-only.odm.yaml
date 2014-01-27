@@ -1,6 +1,6 @@
 Optical: {
     class: Microscope,
-    role: brightfield,
+    role: optical,
     emitters: [Light, "Nikon Super Duper", "MultiBand Fixed Filter"],
     detectors: [Clara],
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
@@ -8,7 +8,7 @@ Optical: {
 
 Light: {
     class: simulated.Light,
-    role: brightlight,
+    role: light,
     affects: [Clara],
     properties: {
         power: 100 # W

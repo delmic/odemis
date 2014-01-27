@@ -8,7 +8,7 @@ Created on 22 Nov 2013
 This is a script to acquire a set of images from the SEM along the time.
 
 run as:
-./script/timelapse -n 12 --period 2 --output filename.h5
+./scripts/timelapse-sem -n 12 --period 10 --output filename.h5
 
 -n defines the number of images to acquire
 --output indicates the name of the file which will contain all the output. It 
@@ -52,16 +52,21 @@ def acquire_timelapse(num, period, filename):
             sed = c
 
     images = []
-    for i in range(num):
-        logging.info("Acquiring image %d/%d", i + 1, num)
-        start = time.time()
-        images.append(sed.data.get())
-        left = period - (time.time() - start)
-        if left < 0:
-            logging.warning("Acquisition took longer than the period (%g s overdue)", -left)
-        else:
-            logging.info("Sleeping for another %g s", left)
-            time.sleep(left)
+    try:
+        for i in range(num):
+            logging.info("Acquiring image %d/%d", i + 1, num)
+            start = time.time()
+            images.append(sed.data.get())
+            left = period - (time.time() - start)
+            if left < 0:
+                logging.warning("Acquisition took longer than the period (%g s overdue)", -left)
+            else:
+                logging.info("Sleeping for another %g s", left)
+                time.sleep(left)
+    except KeyboardInterrupt:
+        logging.info("Closing after only %d images acquired", i + 1)
+    except Exception:
+        logging.exception("Failed to acquire all the images, will try to save anyway")
     
     # save the file
     exporter = dataio.find_fittest_exporter(filename)
