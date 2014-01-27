@@ -510,8 +510,6 @@ class SparcAcquiController(object):
         self._pause_settings()
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
-        # FIXME: catch "close the window" event and cancel acquisition before
-        # fully closing.
 
         # the range of the progress bar was already set in
         # update_acquisition_time()
@@ -565,6 +563,8 @@ class SparcAcquiController(object):
         cancelled)
         """
         self.btn_cancel.Disable()
+        self._main_data_model.is_acquiring.value = False
+
         try:
             future.result()
         except CancelledError:
@@ -578,8 +578,6 @@ class SparcAcquiController(object):
             logging.exception("Acquisition failed")
             self._reset_acquisition_gui("Acquisition failed.")
             return
-
-        self._main_data_model.is_acquiring.value = False
 
         # make sure the progress bar is at 100%
         self.gauge_acq.Value = self.gauge_acq.Range
