@@ -342,7 +342,7 @@ see http://www.fluorophores.org/disclaimer/.
         """ This method cleans up and closes the Odemis GUI. """
         logging.info("Exiting Odemis")
 
-        if self.main_data.acquiring:
+        if self.main_data.is_acquiring.value:
             msg = ("Acquisition in progress!\n\n"
                    "Please cancel the current acquistion operation before exiting Odemis." )
             dlg = wx.MessageDialog(self.main_frame, msg, "Exit", wx.OK | wx.ICON_STOP)

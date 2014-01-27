@@ -308,6 +308,7 @@ def __init_resources():
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -333,6 +334,7 @@ def __init_resources():
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -358,6 +360,7 @@ def __init_resources():
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -383,6 +386,7 @@ def __init_resources():
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -408,6 +412,7 @@ def __init_resources():
                 <bitmap>img_tab_inactive_png</bitmap>
                 <hover>img_tab_hover_png</hover>
                 <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>

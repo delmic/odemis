@@ -103,6 +103,7 @@
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
+                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -128,6 +129,7 @@
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
+                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -153,6 +155,7 @@
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
+                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -178,6 +181,7 @@
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
+                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -203,6 +207,7 @@
                 <bitmap>img/tab_inactive.png</bitmap>
                 <hover>img/tab_hover.png</hover>
                 <selected>img/tab_active.png</selected>
+                <disabled>img/tab_hover.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>

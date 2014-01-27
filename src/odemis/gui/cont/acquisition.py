@@ -520,7 +520,7 @@ class SparcAcquiController(object):
         self.gauge_acq.Show()
         self.btn_cancel.Show()
 
-        self._main_data_model.acquiring = True
+        self._main_data_model.is_acquiring.value = True
 
         # FIXME: probably not the whole window is required, just the file settings
         self._main_frame.Layout() # to put the gauge at the right place
@@ -542,7 +542,7 @@ class SparcAcquiController(object):
             return
 
         self.acq_future.cancel()
-        self._main_data_model.acquiring = False
+        self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by on_acquisition_done()
 
     def _export_to_file(self, acq_future):
@@ -579,7 +579,7 @@ class SparcAcquiController(object):
             self._reset_acquisition_gui("Acquisition failed.")
             return
 
-        self._main_data_model.acquiring = False
+        self._main_data_model.is_acquiring.value = False
 
         # make sure the progress bar is at 100%
         self.gauge_acq.Value = self.gauge_acq.Range

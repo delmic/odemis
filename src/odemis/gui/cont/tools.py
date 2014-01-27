@@ -197,10 +197,12 @@ class ToolBar(wx.Panel):
         bmp = img.data.catalog[img_prefix].GetBitmap()
         bmpa = img.data.catalog[img_prefix + "_a"].GetBitmap()
         bmph = img.data.catalog[img_prefix + "_h"].GetBitmap()
+        bmpd = img.data.catalog[img_prefix + "_h"].GetBitmap()
 
         btn = cls(self.btn_panel, bitmap=bmp, size=(24, 24))
         btn.SetBitmapSelected(bmpa)
         btn.SetBitmapHover(bmph)
+        btn.SetBitmapDisabled(bmpd)
 
         if tooltip:
             btn.SetToolTipString(tooltip)
@@ -218,3 +220,9 @@ class ToolBar(wx.Panel):
 
     def enable_button(self, tool_id, enable):
         self._buttons[tool_id].Enable(enable)
+
+    def enable(self, enabled):
+        """ TODO: make a cleverer version that stores the curent state when
+        a first disable is called?"""
+        for _, btn in self._buttons.items():
+            btn.Enable(enabled)

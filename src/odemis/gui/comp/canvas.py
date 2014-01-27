@@ -125,6 +125,7 @@ import time
 import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
+from decorator import decorator
 
 from odemis.util.conversion import wxcol_to_frgb
 import odemis.gui.img.data as imgdata
@@ -135,6 +136,13 @@ import odemis.gui.img.data as imgdata
 CAN_MOVE = 1 # allows moving the view position
 CAN_FOCUS = 2 # allows changing the focus
 CAN_ZOOM = 3 # allows changing the scale
+
+@decorator
+def ignore_if_disabled(f, self, *args, **kwargs):
+    """ This method decorator only runs the method if the instance is 'enabled'
+    """
+    if self.Enabled:
+        return f(self, *args, **kwargs)
 
 class BufferedCanvas(wx.Panel):
     """
@@ -240,34 +248,41 @@ class BufferedCanvas(wx.Panel):
             self.ReleaseMouse()
             self.SetCursor(self.previous_cursor or wx.NullCursor)
 
+    @ignore_if_disabled
     def on_left_down(self, evt, cursor=None):
         """ Standard left mouse button down processor """
         self._on_down(cursor)
         self._call_event_on_overlay('on_left_down', evt)
 
+    @ignore_if_disabled
     def on_left_up(self, evt):
         """ Standard left mouse button release processor """
         self._on_up()
         self._call_event_on_overlay('on_left_up', evt)
 
+    @ignore_if_disabled
     def on_right_down(self, evt, cursor=None):
         """ Standard right mouse button release processor """
         self._on_down(cursor)
         self._call_event_on_overlay('on_right_down', evt)
 
+    @ignore_if_disabled
     def on_right_up(self, evt):
         """ Standard right mouse button release processor """
         self._on_up()
         self._call_event_on_overlay('on_right_up', evt)
 
+    @ignore_if_disabled
     def on_dbl_click(self, evt):
         """ Standard left mouse button double click processor """
         self._call_event_on_overlay('on_dbl_click', evt)
 
+    @ignore_if_disabled
     def on_motion(self, evt):
         """ Standard mouse motion processor """
         self._call_event_on_overlay('on_motion', evt)
 
+    @ignore_if_disabled
     def on_wheel(self, evt):
         """ Standard mouse wheel processor """
         self._call_event_on_overlay('on_wheel', evt)
@@ -280,10 +295,12 @@ class BufferedCanvas(wx.Panel):
         """ Standard mouse leave processor """
         self._call_event_on_overlay('on_leave', evt)
 
+    @ignore_if_disabled
     def on_char(self, evt):
         """ Standard key stroke processor """
         self._call_event_on_overlay('on_char', evt)
 
+    @ignore_if_disabled
     def on_paint(self, evt):
         """ Standard on paint handler """
         dc_view = wx.PaintDC(self)
@@ -1245,7 +1262,7 @@ class DraggableCanvas(BitmapCanvas):
         dragging.
 
         """
-#        TODO: might be obsolete, do test
+        # TODO: might be obsolete, do test
         self.draw()
         self.Refresh(eraseBackground=False)
         self.Update()

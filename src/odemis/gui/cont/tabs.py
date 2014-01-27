@@ -415,6 +415,8 @@ class SparcAcquisitionTab(Tab):
             # only one detector => hide completely the buttons
             main_frame.sparc_button_panel.Hide()
 
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
         # needs settings_controller
         self._acquisition_controller = SparcAcquiController(
                                             self.tab_data_model,
@@ -448,6 +450,13 @@ class SparcAcquisitionTab(Tab):
             self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
             self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
             self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
+
+    def on_acquisition(self, is_acquiring):
+        self.main_frame.acq_btn_spectrometer.Enable(not is_acquiring)
+        self.main_frame.acq_btn_angular.Enable(not is_acquiring)
+        self.tb.enable(not is_acquiring)
+        self.main_frame.vp_sparc_acq_view.Enable(not is_acquiring)
+        self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
 
     # Special event handlers for repetition indication in the ROI selection
 
@@ -1363,7 +1372,7 @@ class MirrorAlignTab(Tab):
 
         # The resolution is the same as the maximum sensor resolution, if not,
         # we adapt the pixel size
-        im_res = (goal_im.shape[1], goal_im.shape[0])
+        im_res = (goal_im.shape[1], goal_im.shape[0]) #pylint: disable=E1101
         scale = ccd_res[0] / im_res[0]
         if scale != 1:
             logging.warning("Goal image has resolution %s while CCD has %s",
@@ -1426,7 +1435,7 @@ class TabBarController(object):
         # Choices is a dict tab -> name of the tab
         choices = dict([(t, t.name) for t in tab_list])
         self._tab.choices = choices
-        self._tab.subscribe(self._on_tab)
+        self._tab.subscribe(self._on_tab_change)
         # force the switch to the first tab
         self._tab.notify(self._tab.value)
 
@@ -1439,6 +1448,12 @@ class TabBarController(object):
         # Also, Gnome's GDK library will start spewing error messages, saying
         # it cannot draw certain images, because the dimensions are 0x0.
         main_frame.SetMinSize((1400, 550))
+
+        self.main_data.is_acquiring.subscribe(self.on_acquisition)
+
+    def on_acquisition(self, is_acquiring):
+        for tab in self._tab.choices:
+            tab.button.Enable(not is_acquiring)
 
     def _filter_tabs(self, tab_defs, main_frame, main_data):
         """
@@ -1469,12 +1484,8 @@ class TabBarController(object):
 
         return tabs
 
-    def _on_tab(self, tab):
-        """ Tab click event handler """
-
-        # if self.main_data.acquiring:
-        #     logging.warn("Acquisition in progress, tabs frozen")
-        #     return
+    def _on_tab_change(self, tab):
+        """ This method is called when the current tab has changed """
 
         try:
             self.main_frame.Freeze()
@@ -1498,11 +1509,11 @@ class TabBarController(object):
 
     def OnClick(self, evt):
 
-        if self.main_data.acquiring:
-            logging.warn("Acquisition in progress, tabs frozen")
-            evt_btn = evt.GetEventObject()
-            evt_btn.SetValue(not evt_btn.GetValue())
-            return
+        # if .value:
+        #     logging.warn("Acquisition in progress, tabs frozen")
+        #     evt_btn = evt.GetEventObject()
+        #     evt_btn.SetValue(not evt_btn.GetValue())
+        #     return
 
         # ie, mouse click or space pressed
         logging.debug("Tab button click")

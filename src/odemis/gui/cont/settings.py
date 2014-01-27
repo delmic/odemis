@@ -199,6 +199,11 @@ class SettingsPanel(object):
             if entry.vac:
                 entry.vac.resume()
 
+    def enable(self, enabled):
+        for entry in self.entries:
+            if entry.ctrl:
+                entry.ctrl.Enable(enabled)
+
     def _clear(self):
         """ Remove default 'no content' label """
         if self.num_entries == 0:
@@ -919,6 +924,10 @@ class SettingsBarController(object):
                     return entry
         return None
 
+    def enable(self, enabled):
+        for panel in self.settings_panels:
+            panel.enable(enabled)
+
     def add_component(self, label, comp, panel):
 
         self.settings_panels.append(panel)
@@ -1011,6 +1020,8 @@ class SparcSettingsController(SettingsBarController):
                                                       highlight_change)
         main_data = tab_data.main
 
+        main_data.is_acquiring.subscribe(self.on_acquisition)
+
         self._sem_panel = SemSettingsPanel(
                                     parent_frame.fp_settings_sparc_sem,
                                     "No SEM found",
@@ -1061,12 +1072,12 @@ class SparcSettingsController(SettingsBarController):
                                             None,  #component
                                             CONFIG["streamspec"]["pixelSize"])
 
-#                # Added for debug only
-#                self._spectrum_panel.add_value(
-#                        "roi",
-#                        s.roi,
-#                        None,  #component
-#                        CONFIG["streamspec"]["roi"])
+                # # Added for debug only
+                # self._spectrum_panel.add_value(
+                #         "roi",
+                #         s.roi,
+                #         None,  #component
+                #         CONFIG["streamspec"]["roi"])
 
             # Add spectrograph control if available
             if main_data.spectrograph:
@@ -1101,6 +1112,8 @@ class SparcSettingsController(SettingsBarController):
         else:
             parent_frame.fp_settings_sparc_angular.Hide()
 
+    def on_acquisition(self, is_acquiring):
+        self.enable(not is_acquiring)
 
 class AnalysisSettingsController(SettingsBarController):
 
