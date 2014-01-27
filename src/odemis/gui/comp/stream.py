@@ -34,7 +34,7 @@ import math
 import numpy
 from odemis import acq
 from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
-    BACKGROUND_COLOUR, BACKGROUND_COLOUR_TITLE, FOREGROUND_COLOUR_DIS
+    BACKGROUND_COLOUR, STREAM_BACKGROUND_COLOUR, FOREGROUND_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
@@ -409,7 +409,7 @@ class StreamPanel(wx.PyPanel):
 
         # Appearance
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
-        self.SetBackgroundColour(BACKGROUND_COLOUR_TITLE)
+        self.SetBackgroundColour(STREAM_BACKGROUND_COLOUR)
         self.SetForegroundColour(FOREGROUND_COLOUR)
 
         # State
@@ -949,7 +949,7 @@ class StreamPanel(wx.PyPanel):
             self._expander.set_label_choices(self._getCompatibleDyes())
             self._expander.onLabelChange = self._onNewDyeName
 
-        # Excitation and emission are a text input + a color display
+        # Excitation and emission are a text input + a colour display
         # Warning: stream.excitation is in m, we present everything in nm
         lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
         self._gbs.Add(lbl_excitation, (self.row_count, 0),

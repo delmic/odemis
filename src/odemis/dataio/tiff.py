@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -374,7 +374,7 @@ def _findElementByID(root, eid, tag=None):
     """
     Find the element with the given ID.
     Note: OME conformant documents cannot have multiple elements with the same
-      ID. It is assumed to be correct. 
+      ID. It is assumed to be correct.
     root (ET.Element): the root element to start the search
     eid (str): the ID to match
     tag (str or None): the tag of the element to match. If None, any element
@@ -384,7 +384,7 @@ def _findElementByID(root, eid, tag=None):
     for el in root.iter(tag):
         if "ID" in el.attrib and el.attrib["ID"] == eid:
             return el
-         
+
     return None
 
 def _updateMDFromOME(root, das):
@@ -392,7 +392,7 @@ def _updateMDFromOME(root, das):
     Updates the metadata of DAs according to OME XML
     root (ET.Element): the root (i.e., OME) element of the XML description
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
-    return None: only the metadata of DA's inside is updated 
+    return None: only the metadata of DA's inside is updated
     """
     # For each Image in the XML, gorge ourself from all the metadata we can
     # find, and then use it to update the metadata of each IFD referenced.
@@ -400,7 +400,7 @@ def _updateMDFromOME(root, das):
         md = {}
         try:
             md[model.MD_DESCRIPTION] = ime.attrib["Name"]
-        except KeyError: 
+        except KeyError:
             pass
 
         try:
@@ -494,7 +494,7 @@ def _updateMDFromOME(root, das):
                     ror = float(d_settings.attrib["ReadOutRate"]) # MHz
                     mdc[model.MD_READOUT_TIME] = 1e-6 / ror # s
                 except (KeyError, ValueError):
-                    pass                
+                    pass
 
             # update all the IFDs related to this channel
             for ifd in ctz_2_ifd[chan].flat:
@@ -534,13 +534,13 @@ def _updateMDFromOME(root, das):
             except KeyError:
                 logging.warning("Failed to parse Plane element, skipping metadata")
                 continue
-            
+
             try:
                 deltat = float(ple.attrib["DeltaT"]) # s
                 mdp[model.MD_ACQ_DATE] = md[model.MD_ACQ_DATE] + deltat
             except (KeyError, ValueError):
                 pass
-            
+
             try:
                 # FIXME: could actually be the dwell time (if scanned)
                 mdp[model.MD_EXP_TIME] = float(ple.attrib["ExposureTime"]) # s
@@ -647,9 +647,9 @@ WHITELIST_MD_MERGE = frozenset([model.MD_DESCRIPTION, model.MD_FILTER_NAME,
                                 model.MD_SENSOR_TEMP, model.MD_ACQ_DATE])
 def _canBeMerged(das):
     """
-    Check whether multiple DataArrays can be merged into a larger DA without 
+    Check whether multiple DataArrays can be merged into a larger DA without
       metadata loss.
-    Note: this is about merging DataArrays for use in Odemis. For use in 
+    Note: this is about merging DataArrays for use in Odemis. For use in
       OME-TIFF, the conditions are different.
     das (list of DataArrays): all the DataArrays
     return (boolean): True if they can be merged, False otherwise.
@@ -668,16 +668,16 @@ def _canBeMerged(das):
             if (mdk not in WHITELIST_MD_MERGE and
                 md.get(mdk) != da.metadata.get(mdk)):
                 return False
-        
+
     return True
 
 def _mergeDA(das, hdim_index):
     """
     Merge multiple DataArrays into a higher dimension DataArray.
-    das (list of DataArrays): ordered list of DataArrays (can contain more 
+    das (list of DataArrays): ordered list of DataArrays (can contain more
       arrays than what is used in the high dimension arrays
-    hdim_index (ndarray of int >= 0): an array representing the higher 
-      dimensions of the final merged arrays. Each value is the index of the 
+    hdim_index (ndarray of int >= 0): an array representing the higher
+      dimensions of the final merged arrays. Each value is the index of the
       small array in das.
     return (DataArray): the merge of all the DAs. The shape is hdim_index.shape
      + shape of original DataArray. The metadata is the metadata of the first
@@ -688,9 +688,9 @@ def _mergeDA(das, hdim_index):
     imset = numpy.empty(tshape, fim.dtype)
     for hi, i in numpy.ndenumerate(hdim_index):
         imset[hi] = das[i]
-    
+
     return model.DataArray(imset, metadata=fim.metadata)
-    
+
 
 def _foldArraysFromOME(root, das):
     """
@@ -701,7 +701,7 @@ def _foldArraysFromOME(root, das):
      base arrays of 3D if the data is RGB (3rd dimension has length 3).
     root (ET.Element): the root (i.e., OME) element of the XML description
     data (list of DataArrays): DataArrays at the same place as the TIFF IFDs
-    return (list of DataArrays): new shorter list of DAs 
+    return (list of DataArrays): new shorter list of DAs
     """
     omedas = []
 
@@ -755,7 +755,7 @@ def _foldArraysFromOME(root, das):
 
         # TODO: Position might also be different. Probably should be grouped
         # by position too, as Odemis doesn't support such case.
-        
+
         # In Odemis, arrays can be merged along C _only_ if they are continuous
         # (like for a spectrum acquisition). If it's like fluorescence, with
         # complex channel metadata, they need to be kept separated.
@@ -764,7 +764,7 @@ def _foldArraysFromOME(root, das):
         das_tz0 = [das[i] for i in das_tz0n]
         if not _canBeMerged(das_tz0):
             for sub_imsetn in imsetn:
-                # Combine all the IFDs into a (1+)4D array    
+                # Combine all the IFDs into a (1+)4D array
                 sub_imsetn.shape = (1,) + sub_imsetn.shape
                 imset = _mergeDA(das, sub_imsetn)
                 omedas.append(imset)
@@ -816,11 +816,11 @@ def _findImageGroups(das):
             # new group
             group_ifd = current_ifd
         groups.setdefault(group_ifd, []).append(da)
-        
+
         # increase ifd by the number of planes
         current_ifd += _countNeededIFDs(da)
         prev_da = da
-            
+
     return groups
 
 def _dtype2OMEtype(dtype):
@@ -851,23 +851,23 @@ def _dtype2OMEtype(dtype):
         return "bit"
     else:
         raise NotImplementedError("data type %s is not support by OME" % dtype)
-    
+
 
 def _addImageElement(root, das, ifd, rois):
     """
     Add the metadata of a list of DataArray to a OME-XML root element
     root (Element): the root element
     das (list of DataArray): all the images to describe. Each DataArray
-     can have up to 5 dimensions in the order CTZYX. IOW, RGB images have C=3. 
+     can have up to 5 dimensions in the order CTZYX. IOW, RGB images have C=3.
     ifd (int): the IFD of the first DataArray
     rois (dict str -> ET element): all ROIs added so, and will be updated as
-      needed. 
+      needed.
     Note: the images in das must be added in the final TIFF in the same order
      and contiguously
     """
     assert(len(das) > 0)
     # all image have the same shape?
-    assert all([das[0].shape == im.shape for im in das]) 
+    assert all([das[0].shape == im.shape for im in das])
 
     idnum = len(root.findall("Image"))
     ime = ET.SubElement(root, "Image", attrib={"ID": "Image:%d" % idnum})
@@ -901,11 +901,11 @@ def _addImageElement(root, das, ifd, rois):
 
 
     # Find a dimension along which the DA can be concatenated. That's a
-    # dimension which is of size 1. 
+    # dimension which is of size 1.
     # For now, if there are many possibilities, we pick the first one.
     da0 = das[0]
-    
-    dshape = das[0].shape 
+
+    dshape = das[0].shape
     if len(dshape) < 5:
         dshape = [1] * (5-len(dshape)) + list(dshape)
     if not 1 in dshape:
@@ -915,7 +915,7 @@ def _addImageElement(root, das, ifd, rois):
     gshape = list(dshape)
     gshape[concat_axis] = len(das)
     gshape = tuple(gshape)
-    
+
     # Note: it seems officially OME-TIFF doesn't support RGB TIFF (instead,
     # each colour should go in a separate channel). However, that'd defeat
     # the purpose of the thumbnail, and it seems at OMERO handles this
@@ -938,7 +938,7 @@ def _addImageElement(root, das, ifd, rois):
         pxs = globalMD[model.MD_PIXEL_SIZE]
         pixels.attrib["PhysicalSizeX"] = "%.15f" % (pxs[0] * 1e6) # in µm
         pixels.attrib["PhysicalSizeY"] = "%.15f" % (pxs[1] * 1e6)
-    
+
     if model.MD_BPP in globalMD:
         bpp = globalMD[model.MD_BPP]
         pixels.attrib["SignificantBits"] = "%d" % bpp # in bits
@@ -977,18 +977,18 @@ def _addImageElement(root, das, ifd, rois):
                                    "ID": "Channel:%d:%d" % (idnum, subid)})
             if is_rgb:
                 chan.attrib["SamplesPerPixel"] = "%d" % dshape[0]
-                
+
             # Name can be different for each channel in case of fluroescence
             if model.MD_DESCRIPTION in da.metadata:
                 chan.attrib["Name"] = da.metadata[model.MD_DESCRIPTION]
-    
+
             # TODO Fluor attrib for the dye?
             # TODO create a Filter with the cut range?
             if model.MD_IN_WL in da.metadata:
                 iwl = da.metadata[model.MD_IN_WL]
                 xwl = numpy.mean(iwl) * 1e9 # in nm
                 chan.attrib["ExcitationWavelength"] = "%d" % round(xwl)
-    
+
                 # if input wavelength range is small, it means we are in epifluoresence
                 if abs(iwl[1] - iwl[0]) < 100e-9:
                     chan.attrib["IlluminationType"] = "Epifluorescence"
@@ -998,12 +998,12 @@ def _addImageElement(root, das, ifd, rois):
                     chan.attrib["IlluminationType"] = "Epifluorescence"
                     chan.attrib["AcquisitionMode"] = "WideField"
                     chan.attrib["ContrastMethod"] = "Brightfield"
-    
+
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
                 ewl = numpy.mean(owl) * 1e9 # in nm
                 chan.attrib["EmissionWavelength"] = "%d" % round(ewl)
-    
+
             if wl_list is not None and len(wl_list) > 0:
                 if model.MD_OUT_WL in da.metadata:
                     logging.warning("DataArray contains both OUT_WL (%s) and "
@@ -1013,10 +1013,10 @@ def _addImageElement(root, das, ifd, rois):
                     chan.attrib["AcquisitionMode"] = "SpectralImaging"
                     # It should be an int, but that looses too much precision
                     chan.attrib["EmissionWavelength"] = "%.15f" % (wl_list[c] * 1e9)
-                 
+
             if model.MD_USER_TINT in da.metadata:
                 # user tint is 3 tuple int
-                # color is hex RGBA (eg: #FFFFFFFF)
+                # colour is hex RGBA (eg: #FFFFFFFF)
                 tint = da.metadata[model.MD_USER_TINT]
                 if len(tint) == 3:
                     tint = tuple(tint) + (255,) # need alpha channel
@@ -1036,7 +1036,7 @@ def _addImageElement(root, das, ifd, rois):
             if model.MD_EBEAM_ENERGY in da.metadata:
                 # Schema only mentions PMT, but we use it for the e-beam too
                 attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_ENERGY] # V
-    
+
             if attrib:
                 # detector of the group has the same id as first IFD of the group
                 attrib["ID"] = "Detector:%d" % ifd
@@ -1197,7 +1197,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
 
         # write_rgb makes it clever to detect RGB vs. Greyscale
         f.write_image(thumbnail, compression=compression, write_rgb=True)
-        
+
 
         # TODO also save it as thumbnail of the image (in limited size)
         # see  http://www.libtiff.org/man/thumbnail.1.html
@@ -1258,7 +1258,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         else:
             write_rgb = False
             hdim = data.shape[:-2]
-            
+
         for i in numpy.ndindex(*hdim):
             # Save metadata (before the image)
             for key, val in tags.items():
@@ -1280,8 +1280,8 @@ def _thumbsFromTIFF(filename):
             image = f.read_image()
             da = model.DataArray(image, metadata=md)
             data.append(da)
-        
-        # TODO: also check SubIFD for sub directories that might contain 
+
+        # TODO: also check SubIFD for sub directories that might contain
         # thumbnails
         if f.ReadDirectory() == 0: # reads _next_ directory
             break
@@ -1293,8 +1293,8 @@ def _reconstructFromOMETIFF(xml, data):
     Update DAs to reflect shape and metadata contained in OME XML
     xml (string): String containing the OME XML declaration
     data (list of model.DataArray): each
-    return (list of model.DataArray): new list with the DAs following the OME 
-      XML description. Note that DAs are either updated or completely recreated.  
+    return (list of model.DataArray): new list with the DAs following the OME
+      XML description. Note that DAs are either updated or completely recreated.
     """
     # Remove "xmlns" which is the default namespace and is appended everywhere
     # It's not beautiful, but the simplest with ET to handle expected namespaces.
@@ -1316,7 +1316,7 @@ def _dataFromTIFF(filename):
     return (list of model.DataArray)
     """
     f = TIFF.open(filename, mode='r')
-    
+
     # open each image/page as a separate image
     data = []
     for image in f.iter_images():
@@ -1327,7 +1327,7 @@ def _dataFromTIFF(filename):
         md = _readTiffTag(f) # reads tag of the current image
         da = model.DataArray(image, metadata=md)
         data.append(da)
-        
+
     # If looks like OME TIFF, reconstruct >2D data and add metadata
     # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
     # Warning: we support what we write, not the whole OME-TIFF specification.
@@ -1351,7 +1351,7 @@ def export(filename, data, thumbnail=None):
     filename (string): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export.
        Metadata is taken directly from the DA object. If it's a list, a multiple
-       page file is created. It must have 5 dimensions in this order: Channel, 
+       page file is created. It must have 5 dimensions in this order: Channel,
        Time, Z, Y, X. However, all the first dimensions of size 1 can be omitted
        (ex: an array of 111YX can be given just as YX, but RGB images are 311YX,
        so must always be 5 dimensions).
@@ -1371,7 +1371,7 @@ def read_data(filename):
     """
     Read an TIFF file and return its content (skipping the thumbnail).
     filename (string): filename of the file to read
-    return (list of model.DataArray): the data to import (with the metadata 
+    return (list of model.DataArray): the data to import (with the metadata
      as .metadata). It might be empty.
      Warning: reading back a file just exported might give a smaller number of
      DataArrays! This is because export() tries to aggregate data which seems
@@ -1390,8 +1390,8 @@ def read_thumbnail(filename):
     """
     Read the thumbnail data of a given TIFF file.
     filename (string): filename of the file to read
-    return (list of model.DataArray): the thumbnails attached to the file. If 
-     the file contains multiple thumbnails, all of them are returned. If it 
+    return (list of model.DataArray): the thumbnails attached to the file. If
+     the file contains multiple thumbnails, all of them are returned. If it
      contains none, an empty list is returned.
     raises:
         IOError in case the file format is not as expected.

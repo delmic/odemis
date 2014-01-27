@@ -24,7 +24,7 @@ import logging
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
 # based on:
-# http://www.physics.sfasu.edu/astro/color/spectra.html
+# http://www.physics.sfasu.edu/astro/colour/spectra.html
 def wave2rgb(wavelength):
     """
     Convert a wavelength into a (r,g,b) value
@@ -67,21 +67,21 @@ def wave2rgb(wavelength):
 
 def hex_to_rgb(hex_str):
     """
-    Convert a Hexadecimal color representation into an 3-tuple of ints
+    Convert a Hexadecimal colour representation into an 3-tuple of ints
     return (tuple of 3 (0<int<255): R, G, and B
     """
     hex_str = hex_str[-6:]
     return tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4])
 
 def hex_to_rgba(hex_str, af=255):
-    """ Convert a Hexadecimal color representation into an 4-tuple of ints """
+    """ Convert a Hexadecimal colour representation into an 4-tuple of ints """
     return hex_to_rgb(hex_str) + (af,)
 
 def wxcol_to_rgb(wxcol):
     return (wxcol.Red(), wxcol.Green(), wxcol.Blue())
 
 def rgb_to_hex(rgb):
-    """ Convert a RGB(A) color to hexadecimal color representation
+    """ Convert a RGB(A) colour to hexadecimal colour representation
     rgb (3 or 4-tuple of ints): actually works with any length
     return (string): in the form "aef1e532"
     """
@@ -92,14 +92,14 @@ def rgb_to_hex(rgb):
 # To handle RGB as floats (for Cairo, etc.)
 def hex_to_frgb(hex_str):
     """
-    Convert a Hexadecimal color representation into an 3-tuple of floats
+    Convert a Hexadecimal colour representation into an 3-tuple of floats
     return (tuple of 3 (0<float<1): R, G, and B
     """
     hex_str = hex_str[-6:]
     return tuple(int(hex_str[i:i + 2], 16) / 255 for i in [0, 2, 4])
 
 def hex_to_frgba(hex_str, af=1.0):
-    """ Convert a Hexadecimal color representation into an 4-tuple of floats """
+    """ Convert a Hexadecimal colour representation into an 4-tuple of floats """
     return hex_to_frgb(hex_str) + (af,)
 
 def wxcol_to_frgb(wxcol):
@@ -108,9 +108,9 @@ def wxcol_to_frgb(wxcol):
 def change_brightness(colf, weight):
     """
     Brighten (or darken) a given colour
-    See also wx.lib.agw.aui.aui_utilities.StepColour() and Colour.ChangeLightness() from 3.0 
+    See also wx.lib.agw.aui.aui_utilities.StepColour() and Colour.ChangeLightness() from 3.0
     colf (tuple of 3+ 0<float<1): RGB colour (and alpha)
-    weight (-1<float<1): how much to brighten (>0) or darken (<0) 
+    weight (-1<float<1): how much to brighten (>0) or darken (<0)
     return (tuple of 3+ 0<float<1): new RGB colour
     """
     if weight > 0:

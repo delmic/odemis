@@ -712,7 +712,7 @@ class VisualRangeSlider(BaseSlider):
         ret = super(VisualRangeSlider, self).SetForegroundColour(col)
         self.content_color = wxcol_to_frgb(self.GetForegroundColour())
         # FIXME: content_color will have wrong value if currently Disabled
-        # Probably has to do with the auto color calculation for disabled
+        # Probably has to do with the auto colour calculation for disabled
         # controls
         return ret
 

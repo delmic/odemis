@@ -55,6 +55,7 @@ TOOL_POINT = 4 # Select a point (to acquire/display)
 TOOL_LINE = 5 # Select a line (to acquire/display)
 TOOL_DICHO = 6 # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
 TOOL_SPOT = 7 # Activate spot mode on the SEM
+TOOL_DRIFTCOR = 8
 
 class MainGUIData(object):
     """
@@ -377,6 +378,7 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
                      TOOL_ZOOM,
                      TOOL_ROI,
                      TOOL_ROA,
+                     TOOL_DRIFTCOR,
                      TOOL_POINT,
                      TOOL_LINE])
 

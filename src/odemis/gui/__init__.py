@@ -1,16 +1,32 @@
 # -*- coding: utf-8 -*-
 
-# Various standard colour definitions
+# Colour definitions
 
-BACKGROUND_COLOUR = "#333333"
-BACKGROUND_COLOUR_TITLE = "#4D4D4D"
-FOREGROUND_COLOUR = "#DDDDDD"
-FOREGROUND_COLOUR_DIS = "#666666"
-FOREGROUND_COLOUR_EDIT = "#2FA7D4"
-FOREGROUND_COLOUR_HIGHLIGHT = "#FFA300"
+# Background colours
+BACKGROUND_COLOUR = "#333333"           # Default dark background
+STREAM_BACKGROUND_COLOUR = "#4D4D4D"    # Stream panel background
+
+# Foreground (i.e text) colours
+FOREGROUND_COLOUR = "#DDDDDD"           # Default foreground colour
+FOREGROUND_COLOUR_DIS = "#666666"       # Disabled foreground colour
+FOREGROUND_COLOUR_EDIT = "#2FA7D4"      # Edit colour
+FOREGROUND_COLOUR_2ND = "#A053D8"       # Secundary edit colour
+FOREGROUND_COLOUR_HIGHLIGHT = "#FFA300" # Highlight colour
+
+# Border colours for the viewports
 BORDER_COLOUR_FOCUS = "#127BA6"
 BORDER_COLOUR_UNFOCUS = "#000000"
-ALERT_CLOUR = "#DD3939"
+
+# Colours for special warnings
+ALERT_COLOUR = "#DD3939"
+
+# Colours for overlay selection selection boxes
+SELECTION_COLOUR = FOREGROUND_COLOUR_EDIT
+SELECTION_COLOUR_2ND = FOREGROUND_COLOUR_2ND
+
+
+# END Colour definitions
+
 
 # Control types
 
@@ -34,6 +50,5 @@ HOVER_BOTTOM_EDGE = 3
 HOVER_LEFT_EDGE = 4
 HOVER_SELECTION = 5
 
-SELECTION_COLOR = FOREGROUND_COLOUR_EDIT
 SELECTION_MINIMUM = 10  # Minimum dimensions for a selection, in pixels
 

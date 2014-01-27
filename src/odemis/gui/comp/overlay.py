@@ -221,11 +221,11 @@ class TextViewOverlay(ViewOverlay):
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, cnvs,
-                 color=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE,
+                 colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE,
                  center=(0, 0)):
         super(CrossHairOverlay, self).__init__(cnvs)
 
-        self.pen = wx.Pen(color)
+        self.pen = wx.Pen(colour)
         self.size = size
         self.center = center
 
@@ -444,7 +444,7 @@ class SelectionMixin(object):
     hover_margin = 10 #px
 
 
-    def __init__(self, sel_cur=None, color=gui.SELECTION_COLOR, center=(0, 0)):
+    def __init__(self, sel_cur=None, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         # The start and end points of the selection rectangle in view port
         # coordinates
         self.v_start_pos = None
@@ -463,7 +463,7 @@ class SelectionMixin(object):
 
         self.edges = {}
 
-        self.color = conversion.hex_to_frgba(color)
+        self.colour = conversion.hex_to_frgba(colour)
         self.center = center
 
     ##### selection methods  #####
@@ -662,11 +662,11 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
     #pylint: disable=W0221
     def __init__(self, cnvs, label,
                  sel_cur=None,
-                 color=gui.SELECTION_COLOR,
+                 colour=gui.SELECTION_COLOUR,
                  center=(0, 0)):
 
         super(ViewSelectOverlay, self).__init__(cnvs, label)
-        SelectionMixin.__init__(self, sel_cur, color, center)
+        SelectionMixin.__init__(self, sel_cur, colour, center)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
 
@@ -697,7 +697,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             ctx.set_line_width(1.5)
             ctx.set_dash([2,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
-            ctx.set_source_rgba(*self.color)
+            ctx.set_source_rgba(*self.colour)
             ctx.rectangle(*rect)
             ctx.stroke()
 
@@ -715,11 +715,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def __init__(self, cnvs, label,
                  sel_cur=None,
-                 color=gui.SELECTION_COLOR,
+                 colour=gui.SELECTION_COLOUR,
                  center=(0, 0)):
 
         super(WorldSelectOverlay, self).__init__(cnvs, label)
-        SelectionMixin.__init__(self, sel_cur, color, center)
+        SelectionMixin.__init__(self, sel_cur, colour, center)
 
         self.w_start_pos = None
         self.w_end_pos = None
@@ -856,7 +856,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.set_line_width(2)
             ctx.set_dash([3,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
-            ctx.set_source_rgba(*self.color)
+            ctx.set_source_rgba(*self.colour)
             ctx.rectangle(*rect)
             ctx.stroke()
 
@@ -887,9 +887,9 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     """
     def __init__(self, cnvs, label,
                  sel_cur=None,
-                 color=gui.SELECTION_COLOR):
+                 colour=gui.SELECTION_COLOUR):
 
-        super(RepetitionSelectOverlay, self).__init__(cnvs, label)
+        super(RepetitionSelectOverlay, self).__init__(cnvs, label, sel_cur, colour)
 
         self._fill = FILL_NONE
         self._repetition = (0, 0)
@@ -954,7 +954,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             # If we cannot fit enough 3x3 bitmaps into either direction,
             # then we just fill a rectangle
             logging.debug("simple fill")
-            r, g, b, _ = self.color
+            r, g, b, _ = self.colour
             ctx.set_source_rgba(r, g, b, 0.5)
             ctx.rectangle(
                 start_x, start_y,
@@ -1049,7 +1049,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         step_x = width / rep_x
         step_y = height / rep_y
 
-        r, g, b, _ = self.color
+        r, g, b, _ = self.colour
 
         # If there are more repetitions in either direction than there
         # are pixels, just fill a semi transparent rectangle
@@ -1106,14 +1106,14 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def __init__(self, cnvs,
                  label="",
                  sel_cur=None,
-                 color=gui.SELECTION_COLOR,
+                 colour=gui.SELECTION_COLOUR,
                  center=(0, 0),
                  orientation=HORIZONTAL):
 
         super(MarkingLineOverlay, self).__init__(cnvs, label)
         DragMixin.__init__(self)
 
-        self.color = conversion.hex_to_frgba(color)
+        self.colour = conversion.hex_to_frgba(colour)
 
         self.v_posx = model.VigilantAttribute(None)
         self.v_posy = model.VigilantAttribute(None)
@@ -1131,13 +1131,13 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def on_left_down(self, evt):
         super(MarkingLineOverlay, self).on_left_down(evt)
         DragMixin.on_left_down(self, evt)
-        self.color = self.color[:3] + (0.5,)
+        self.colour = self.colour[:3] + (0.5,)
         self._set_to_mouse_x(evt)
 
     def on_left_up(self, evt):
         super(MarkingLineOverlay, self).on_left_up(evt)
         DragMixin.on_left_up(self, evt)
-        self.color = self.color[:3] + (1.0,)
+        self.colour = self.colour[:3] + (1.0,)
         self._set_to_mouse_x(evt)
         self.cnvs.Refresh()
 
@@ -1164,7 +1164,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3,])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
-        ctx.set_source_rgba(*self.color)
+        ctx.set_source_rgba(*self.colour)
 
         if (self.v_posx.value is not None and
             self.orientation & HORIZONTAL == HORIZONTAL):
@@ -1184,7 +1184,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
                             dc_buffer.GetSize(),
                             (self.v_posx.value + 4, self.cnvs.ClientSize.y - 6),
                             self.x_label,
-                            colour=self.color)
+                            colour=self.colour)
 
             if self.y_label:
                 yo = max(0, 20 - self.v_posx.value / 5)
@@ -1197,9 +1197,9 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
                     dc_buffer.GetSize(),
                     (2, y_pos),
                     self.y_label,
-                    colour=self.color)
+                    colour=self.colour)
 
-            r, g, b, a = conversion.change_brightness(self.color, -0.2)
+            r, g, b, a = conversion.change_brightness(self.colour, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.v_posx.value, self.v_posy.value, 5.5, 0, 2*math.pi)
@@ -1222,14 +1222,14 @@ class DichotomyOverlay(ViewOverlay):
     quadrant being nested in the one before it.
     """
 
-    def __init__(self, cnvs, sequence_va, color=gui.SELECTION_COLOR):
+    def __init__(self, cnvs, sequence_va, colour=gui.SELECTION_COLOUR):
         """ :param sequence_va: (ListVA) VA to store the sequence in
         """
         super(DichotomyOverlay, self).__init__(cnvs)
 
-        self.color = conversion.hex_to_frgba(color)
+        self.colour = conversion.hex_to_frgba(colour)
         # Color for quadrant that will expand the sequence
-        self.hover_forw = conversion.hex_to_frgba(color, 0.5)
+        self.hover_forw = conversion.hex_to_frgba(colour, 0.5)
         # Color for quadrant that will cut the sequence
         self.hover_back = conversion.change_brightness(self.hover_forw, -0.2)
 
@@ -1404,7 +1404,7 @@ class DichotomyOverlay(ViewOverlay):
         if self.enabled:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
-            ctx.set_source_rgba(*self.color)
+            ctx.set_source_rgba(*self.colour)
             ctx.set_line_width(2)
             ctx.set_dash([2,])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -1469,7 +1469,7 @@ class PixelSelectOverlay(WorldOverlay):
         # The pixel selected by the user: TupleVA (int, int)
         self._selected_pixel = None
 
-        self.color = conversion.hex_to_frgba(gui.SELECTION_COLOR, 0.5)
+        self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.select_color = conversion.hex_to_frgba(
                                     gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
         self.enabled = False
@@ -1668,7 +1668,7 @@ class PixelSelectOverlay(WorldOverlay):
                 self._selected_pixel.value != self._pixel_pos):
                 rect = self.pixel_to_rect(self._pixel_pos, scale)
                 if rect:
-                    ctx.set_source_rgba(*self.color)
+                    ctx.set_source_rgba(*self.colour)
                     ctx.rectangle(*rect)
                     ctx.fill()
 
@@ -1909,8 +1909,8 @@ class PolarOverlay(ViewOverlay):
         self.intersection = None    # The intersection of the cirle and line in
                                     # pixels
 
-        self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOR)
-        self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOR, 0.5)
+        self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)
+        self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.colour_highlight = conversion.hex_to_frgb(
                                             gui.FOREGROUND_COLOUR_HIGHLIGHT)
         self.intensity = None

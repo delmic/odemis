@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -41,19 +41,19 @@ import time
 # device as a spectrograph (and not as a monograph), associated to a CCD. The
 # device is supposed to have already been configured and calibrated.
 #
-# The basic of this device is to move mirror and lenses in order to select a 
+# The basic of this device is to move mirror and lenses in order to select a
 # specific range of wavelength observed. Therefore it's an actuator, with special
 # characteristics. For background knowledge on such system, see wikipedia entry
 # on "Czerny-Turner monochromator".
 #
 # Some vocabulary:
 # Turret: a rotating holder that allows to change the current grating
-# (Diffraction) grating: the optical element that diffracts the light. It is 
+# (Diffraction) grating: the optical element that diffracts the light. It is
 # composed of many parallel grooves. It's "power" is expressed in groove density
 # (g/mm).
 # Blaze: another property of a grating that optimise the diffraction at a certain
 # wavelength, defined in m (or nm).
-# 
+#
 # The devices have a turret with 2 or 3 positions (gratings). Each grating can
 # be shifted to be centred on a specific wavelength. The devices might also
 # have mirrors to select input and outputs.
@@ -78,10 +78,10 @@ FOCAL_LENGTH_OFFICIAL = { # m
                          "SP-2-300i": 300e-3,
                          "SP-2-500i": 500e-3,
                          "SP-2-750i": 750e-3,
-                         "SP-FAKE": 300e-3, 
+                         "SP-FAKE": 300e-3,
                          }
 INCLUSION_ANGLE_OFFICIAL = { # in degrees
-                         "SP-2-150i": 24.66, 
+                         "SP-2-150i": 24.66,
                          "SP-2-300i": 15.15,
                          "SP-2-500i": 8.59,
                          "SP-2-750i": 6.55,
@@ -103,29 +103,29 @@ class SpectraPro(model.Actuator):
         turret (None or 1<=int<=3): turret number set-up. If None, consider that
           the current turret known by the device is correct.
         inverted (None): it is not allowed to invert the axes
-        _noinit (boolean): for internal use only, don't try to initialise the device 
+        _noinit (boolean): for internal use only, don't try to initialise the device
         """
         if kwargs.get("inverted", None):
             raise ValueError("Axis of spectrograph cannot be inverted")
-        
+
         # start with this opening the port: if it fails, we are done
         self._serial = self.openSerialPort(port)
         self._port = port
-        
+
         # to acquire before sending anything on the serial port
         self._ser_access = threading.Lock()
-        
+
         self._try_recover = False
         if _noinit:
             return
-        
+
         self._initDevice()
         self._try_recover = True
-        
+
         # according to the model determine how many gratings per turret
         model_name = self.GetModel()
         self.max_gratings = MAX_GRATINGS_NUM.get(model_name, 3)
-        
+
         if turret is not None:
             if turret < 1 or turret > self.max_gratings:
                 raise ValueError("Turret number given is %s, while expected a value between 1 and %d" %
@@ -134,7 +134,7 @@ class SpectraPro(model.Actuator):
             self._turret = turret
         else:
             self._turret = self.GetTurret()
-    
+
         # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
         max_speed = 1000e-9 / 10 # about 1000 nm takes 10s => max speed in m/s
         self.speed = model.MultiSpeedVA(max_speed, range=[max_speed, max_speed], unit="m/s",
@@ -179,9 +179,9 @@ class SpectraPro(model.Actuator):
         except KeyError:
             self._focal_length = None
             self._inclusion_angle = None
-                
+
     # Low-level methods: to access the hardware (should be called with the lock acquired)
-    
+
     def _sendOrder(self, *args, **kwargs):
         """
         Send a command which does not expect any report back (just OK)
@@ -192,13 +192,13 @@ class SpectraPro(model.Actuator):
         """
         # same as a query but nothing to do with the response
         self._sendQuery(*args, **kwargs)
-        
+
     def _sendQuery(self, com, timeout=1):
         """
         Send a command which expects a report back (in addition to the OK)
         com (str): command to send (non including the \r)
         timeout (0<float): maximum read timeout for the response
-        return (str): the response received (without the ok) 
+        return (str): the response received (without the ok)
         raises:
             SPError: if the command doesn't answer the expected OK.
             IOError: in case of timeout
@@ -212,10 +212,10 @@ class SpectraPro(model.Actuator):
         # \x00X\xf0~\x00X\xf0~MODEL ? \r\n
         #?\r
         # \r\nAddress Error \r\nA=3F4F4445 PC=81444
-        
+
         assert(len(com) > 1 and len(com) <= 100) # commands cannot be long
         com += "\r"
-        
+
         logging.debug("Sending: %s", com.encode('string_escape'))
         # send command until it succeeds
         while True:
@@ -227,7 +227,7 @@ class SpectraPro(model.Actuator):
                     self._tryRecover()
                 else:
                     raise
-        
+
         # read response until timeout or known end of response
         response = ""
         timeend = time.time() + timeout
@@ -238,7 +238,7 @@ class SpectraPro(model.Actuator):
             if not char: # timeout
                 break
             response += char
-        
+
         logging.debug("Received: %s", response.encode('string_escape'))
         if response.endswith(" ok\r\n"):
             return response[:-5]
@@ -256,13 +256,13 @@ class SpectraPro(model.Actuator):
                 if len(garbage) == 100:
                     raise IOError("Device keeps sending data")
                 response += garbage
-                raise SPError("Sent '%s' and received error: '%s'" % 
+                raise SPError("Sent '%s' and received error: '%s'" %
                               (com.encode('string_escape'), response.encode('string_escape')))
-    
+
     def _tryRecover(self):
         # no other access to the serial port should be done
         # so _ser_access should already be acquired
-        
+
         # Retry to open the serial port (in case it was unplugged)
         while True:
             try:
@@ -281,7 +281,7 @@ class SpectraPro(model.Actuator):
             else:
                 break
 
-        self._try_recover = False # to avoid recursion    
+        self._try_recover = False # to avoid recursion
         self._initDevice()
         self._try_recover = True
 
@@ -290,20 +290,20 @@ class SpectraPro(model.Actuator):
         # command ECHO will return the SP-2150i to the default echo state.
         #
         # If is connected via the real serial port (not USB), it is in echo
-        # mode, so we first need to disable it, while allowing echo of the 
+        # mode, so we first need to disable it, while allowing echo of the
         # command we've just sent.
-        
+
         try:
             r = self._sendOrder("no-echo")
         except SPError:
             logging.info("Failed to disable echo, hopping the device has not echo anyway")
-        
+
         # empty the serial port
         self._serial.timeout = 0.1
         garbage = self._serial.read(100)
         if len(garbage) == 100:
             raise IOError("Device keeps sending data")
-    
+
     def GetTurret(self):
         """
         returns (1 <= int <= 3): the current turret number
@@ -314,7 +314,7 @@ class SpectraPro(model.Actuator):
         if val < 1 or val > 3:
             raise SPError("Unexpected turret number '%s'" % res)
         return val
-    
+
     def SetTurret(self, t):
         """
         Set the number of the current turret (for correct settings by the hardware)
@@ -328,7 +328,7 @@ class SpectraPro(model.Actuator):
         assert(1 <= t and t <= 3)
         # TODO check that there is grating configured for this turret (using GetGratingChoices)
         self._sendOrder("%d turret" % t)
-    
+
     # regex to read the gratings
     RE_NOTINSTALLED = re.compile("\D*(\d+)\s+Not Installed")
     RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*([0-9][.0-9]*)\s*(nm|NM|um|UM)")
@@ -362,9 +362,9 @@ class SpectraPro(model.Actuator):
             desc = m.group(2)
             # TODO: provide a nicer description, using RE_INSTALLED?
             gratings[num] = desc
-        
+
         return gratings
-    
+
     RE_GDENSITY = re.compile("(\d+)\s*g/mm")
     def _getGrooveDensity(self, gid):
         """
@@ -381,7 +381,7 @@ class SpectraPro(model.Actuator):
             raise ValueError("Failed to find groove density in '%s'" % gstring)
         density = float(m.group(1)) * 1e3 # l/m
         return density
-    
+
     def GetGrating(self):
         """
         Retuns the current grating in use
@@ -389,17 +389,17 @@ class SpectraPro(model.Actuator):
         """
         # ?GRATING Returns the number of gratings presently being used numbered 1 - 9.
         # On the SP-2150i, it's only up to 6
-        
+
         res = self._sendQuery("?grating")
         val = int(res)
         if val < 1 or val > 9:
             raise SPError("Unexpected grating number '%s'" % res)
         return val
-    
+
     def SetGrating(self, g):
         """
         Change the current grating (the turret turns).
-        g (1<=int<=9): the grating number to change to 
+        g (1<=int<=9): the grating number to change to
         The method is synchronous, it returns once the grating is selected. It
           might take up to 20 s.
         Note: the grating is dependent on turret number (and the self.max_gratting)!
@@ -407,29 +407,29 @@ class SpectraPro(model.Actuator):
         """
         #GRATING Places specified grating in position to the [current] wavelength
         # Note: it always reports ok, and doesn't change the grating if not
-        # installed or wrong value 
+        # installed or wrong value
 
         assert(1 <= g and g <= (3 * self.max_gratings))
         # TODO check that the grating is configured
-        
+
         self._sendOrder("%d grating" % g, timeout=20)
-        
+
     def GetWavelength(self):
         """
         Return (0<=float): the current wavelength at the center (in m)
         """
         # ?NM Returns present wavelength in nm to 0.01nm resolution with units
-        #  nm appended. 
+        #  nm appended.
         # Note: For the SP-2150i, it seems there is no unit appended
         # ?NM 300.00 nm
-        
+
         res = self._sendQuery("?nm")
         m = re.search("\s*(\d+.\d+)( nm)?", res)
         wl = float(m.group(1)) * 1e-9
         if wl > 1e-3:
             raise SPError("Unexpected wavelength of '%s'" % res)
         return wl
-    
+
     def SetWavelength(self, wl):
         """
         Change the wavelength at the center
@@ -443,10 +443,10 @@ class SpectraPro(model.Actuator):
         #  digits after the decimal point or whole number wavelength with no
         #  decimal point.
         # 345.65 GOTO
-        # Note: NM goes to the wavelength slowly (in order to perform a scan). 
+        # Note: NM goes to the wavelength slowly (in order to perform a scan).
         #  It shouldn't be needed for spectrometer
         # Out of bound values are silently ignored by going to the min or max.
-        
+
         assert(0 <= wl and wl <= 10e-6)
         # TODO: check that the value fit the grating configuration?
         self._sendOrder("%.3f goto" % (wl * 1e9), timeout=20)
@@ -454,12 +454,12 @@ class SpectraPro(model.Actuator):
     def GetModel(self):
         """
         Return (str): the model name
-        """ 
+        """
         # MODEL Returns model number of the Acton SP series monochromator.
         # returns something like ' SP-2-150i '
         res = self._sendQuery("model")
         return res.strip()
-    
+
     def GetSerialNumber(self):
         """
         Return the serial number or None if it cannot be determined
@@ -470,10 +470,10 @@ class SpectraPro(model.Actuator):
             logging.exception("Device doesn't support serial number query")
             return None
         return res.strip()
-    
+
     # TODO diverter (mirror) functions: no diverter on SP-2??0i anyway.
-    
-    
+
+
     # high-level methods (interface)
     def _updatePosition(self):
         """
@@ -484,11 +484,11 @@ class SpectraPro(model.Actuator):
             pos = {"wavelength": self.GetWavelength(),
                    "grating": self.GetGrating()
                   }
-        
+
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-        
+
     @isasync
     def moveRel(self, shift):
         """
@@ -496,7 +496,7 @@ class SpectraPro(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
-        # light check it's in the ranges (can only check it's not too huge)    
+        # light check it's in the ranges (can only check it's not too huge)
         for axis, value in shift.items():
             if not axis in self._axes:
                 raise LookupError("Axis '%s' doesn't exist" % axis)
@@ -509,15 +509,15 @@ class SpectraPro(model.Actuator):
             if abs(value) > maxp:
                 raise ValueError("Move by %f of axis '%s' bigger than %f" %
                                  (value, axis, maxp))
-        
+
         for axis in shift:
             if axis == "wavelength":
                 # cannot convert it directly to an absolute move, because
-                # several in a row must mean they accumulate. So we queue a 
+                # several in a row must mean they accumulate. So we queue a
                 # special task. That also means the range check is delayed until
-                # the actual position is known. 
+                # the actual position is known.
                 return self._executor.submit(self._doSetWavelengthRel, shift[axis])
-    
+
     @isasync
     def moveAbs(self, pos):
         """
@@ -525,7 +525,7 @@ class SpectraPro(model.Actuator):
         pos dict(string-> float): name of the axis and new position in m
         returns (Future): future that control the asynchronous move
         """
-        # check it's in the ranges    
+        # check it's in the ranges
         for axis, value in pos.items():
             if not axis in self._axes:
                 raise LookupError("Axis '%s' doesn't exist" % axis)
@@ -551,8 +551,8 @@ class SpectraPro(model.Actuator):
             return self._executor.submit(self._doSetWavelengthAbs, wl)
         else: # nothing to do
             return model.InstantaneousFuture()
-    
-    
+
+
     def _doSetWavelengthRel(self, shift):
         """
         Change the wavelength by a value
@@ -566,7 +566,7 @@ class SpectraPro(model.Actuator):
                                  (pos, "wavelength", minp, maxp))
             self.SetWavelength(pos)
         self._updatePosition()
-        
+
     def _doSetWavelengthAbs(self, pos):
         """
         Change the wavelength to a value
@@ -574,13 +574,13 @@ class SpectraPro(model.Actuator):
         with self._ser_access:
             self.SetWavelength(pos)
         self._updatePosition()
-        
+
     def _doSetGrating(self, g, wl=None):
         """
         Setter for the grating VA.
         g (1<=int<=3): the new grating
         wl (None or float): wavelength to set afterwards. If None, will put the
-          same wavelength as before the change of grating. 
+          same wavelength as before the change of grating.
         returns the actual new grating
         Warning: synchronous until the grating is finished (up to 20s)
         """
@@ -595,37 +595,37 @@ class SpectraPro(model.Actuator):
             raise
 
         self._updatePosition()
-    
+
     def stop(self, axes=None):
         """
         stops the motion
         Warning: Only not yet-executed moves can be cancelled, this hardware
-          doesn't support stopping while a move is going on.  
+          doesn't support stopping while a move is going on.
         """
         self._executor.cancel()
-    
+
     def terminate(self):
         if self._executor:
             self.stop()
             self._executor.shutdown()
             self._executor = None
-            
+
         if self._serial:
             self._serial.close()
             self._serial = None
-    
+
     def getPolyToWavelength(self):
         """
         Compute the right polynomial to convert from a position on the sensor to the
-          wavelength detected. It depends on the current grating, center 
-          wavelength (and focal length of the spectrometer). 
+          wavelength detected. It depends on the current grating, center
+          wavelength (and focal length of the spectrometer).
         Note: It will always return some not-too-stupid values, but the only way
           to get precise values is to have provided a calibration data file.
-          Without it, it will just base the calculations on the theoretical 
-          perfect spectrometer. 
+          Without it, it will just base the calculations on the theoretical
+          perfect spectrometer.
         returns (list of float): polynomial coefficients to apply to get the current
-          wavelength corresponding to a given distance from the center: 
-          w = p[0] + p[1] * x + p[2] * x²... 
+          wavelength corresponding to a given distance from the center:
+          w = p[0] + p[1] * x + p[2] * x²...
           where w is the wavelength (in m), x is the position from the center
           (in m, negative are to the left), and p is the polynomial (in m, m^0, m^-1...).
         """
@@ -642,7 +642,7 @@ class SpectraPro(model.Actuator):
         if not fl:
             # "very very bad" calibration
             return [cw]
-        
+
         # When no calibration available, fallback to theoretical computation
         # based on http://www.roperscientific.de/gratingcalcmaster.html
         gl = self._getGrooveDensity(self.position.value["grating"]) # g/m
@@ -659,13 +659,13 @@ class SpectraPro(model.Actuator):
         except (ValueError, ZeroDivisionError):
             logging.exception("Failed to compute polynomial for wavelength conversion")
             return [cw]
-        # if (document.forms[0].E8.value == "NaN deg." || E8 > 40){document.forms[0].E8.value = "> 40 deg."; document.forms[0].E8.style.color="red";  
+        # if (document.forms[0].E8.value == "NaN deg." || E8 > 40){document.forms[0].E8.value = "> 40 deg."; document.forms[0].E8.style.colour="red";
         if 0.5 > math.degrees(ga) or math.degrees(ga) > 40:
             logging.warning("Failed to compute polynomial for wavelength "
                             "conversion, got grating angle = %g°", math.degrees(ga))
             return [cw]
-        
-        # dispersion: wavelength(m)/distance(m) 
+
+        # dispersion: wavelength(m)/distance(m)
         # F8a = Math.cos(Math.PI/180*(wE*1 + E8))*(1000000)/(gL*fL); // nm/mm
         # to convert from nm/mm -> m/m : *1e-6
         dispersion = math.cos(ia + ga) / (gl*fl) # m/m
@@ -673,10 +673,10 @@ class SpectraPro(model.Actuator):
             logging.warning("Computed dispersion is not within expected bounds: %f nm/mm",
                             dispersion * 1e6)
             return [cw]
-        
+
         # polynomial is cw + dispersion * x
         return [cw, dispersion]
-        
+
     def selfTest(self):
         """
         check as much as possible that it works without actually moving the motor
@@ -688,14 +688,14 @@ class SpectraPro(model.Actuator):
                 if not model.startswith("SP-"):
                     # accept it anyway
                     logging.warning("Device reports unexpected model '%s'", model)
-                    
+
                 turret = self.GetTurret()
                 if not turret in (1,2,3):
                     return False
                 return True
         except:
             logging.exception("Selftest failed")
-        
+
         return False
 
     @staticmethod
@@ -712,7 +712,7 @@ class SpectraPro(model.Actuator):
                 ports = ["COM" + str(n) for n in range (0,8)]
             else:
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
-        
+
         logging.info("Serial ports scanning for Acton SpectraPro spectrograph in progress...")
         found = []  # (list of 2-tuple): name, kwargs
         for p in ports:
@@ -734,8 +734,8 @@ class SpectraPro(model.Actuator):
                 continue
 
         return found
-    
-        
+
+
     @staticmethod
     def openSerialPort(port):
         """
@@ -753,8 +753,8 @@ class SpectraPro(model.Actuator):
             stopbits = serial.STOPBITS_ONE,
             timeout = 2 #s
         )
-        
-        return ser 
+
+        return ser
 
 
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
@@ -764,7 +764,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
     def __init__(self, *args, **kwargs):
         ThreadPoolExecutor.__init__(self, *args, **kwargs)
         self._queue = collections.deque() # thread-safe queue of futures
-    
+
     def submit(self, fn, *args, **kwargs):
         logging.debug("queuing action %s with arguments %s", fn, args)
         f = ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
@@ -772,7 +772,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         self._queue.append(f)
         f.add_done_callback(self._on_done)
         return f
-        
+
     def _on_done(self, future):
         # task is over
         try:
@@ -780,7 +780,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         except ValueError:
             # can happen if it was cancelled
             pass
-     
+
     def cancel(self):
         """
         Cancels all the tasks still in the work queue, if they can be cancelled
@@ -796,7 +796,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
                 break
             if not f.cancel():
                 uncancellables.append(f)
-        
+
         # wait for the non cancellable tasks to finish
         for f in uncancellables:
             try:
@@ -810,7 +810,7 @@ class FakeSpectraPro(SpectraPro):
     """
     Same as SpectraPro but connects to the simulator. Only used for testing.
     """
-    
+
     # FIXME: global scan ends up scanning twice, once for SpectraPro and once for FakeSpectraPro
     # maybe link it to a special "/fake/*" port in openSerialPort() and don't
     # duplicate class? Or have the class be also of a FakeComponent class?
@@ -818,7 +818,7 @@ class FakeSpectraPro(SpectraPro):
     @staticmethod
     def scan(port=None):
         return SpectraPro.scan(port) + [("fakesp", {"port":"fake"})]
-    
+
     @staticmethod
     def openSerialPort(port):
         """
@@ -836,8 +836,8 @@ class FakeSpectraPro(SpectraPro):
             stopbits = serial.STOPBITS_ONE,
             timeout = 2 #s
         )
-        
-        return ser 
+
+        return ser
 
 class SPSimulator(object):
     """
@@ -847,14 +847,14 @@ class SPSimulator(object):
     def __init__(self, timeout=0, *args, **kwargs):
         # we don't care about the actual parameters but timeout
         self.timeout = timeout
-        
+
         # internal values to simulate the device
         self._turret = 1
         self._grating = 2
         self._wavelength = 0 # nm
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
-        
+
     def write(self, data):
         self._input_buf += data
         # process each commands separated by "\r"
@@ -862,21 +862,21 @@ class SPSimulator(object):
         self._input_buf = commands.pop() # last one is not complete yet
         for c in commands:
             self._processCommand(c)
-    
+
     def read(self, size=1):
         ret = self._output_buf[:size]
         self._output_buf = self._output_buf[len(ret):]
-        
+
         if len(ret) < size:
             # simulate timeout
             time.sleep(self.timeout)
         return ret
-    
+
     def close(self):
         # using read or write will fail after that
         del self._output_buf
         del self._input_buf
-    
+
     def _processCommand(self, com):
         """
         process the command, and put the result in the output buffer
@@ -919,11 +919,11 @@ class SPSimulator(object):
                 self._grating = int(m.group(1))
                 out = ""
                 time.sleep(2) # simulate long move
-                
+
         # add the response end
         if out is None:
             out = " %s? \r\n" % com
         else:
             out = " " + out + "  ok\r\n"
         self._output_buf += out
-        
+

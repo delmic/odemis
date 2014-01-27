@@ -125,6 +125,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._fps_ol = comp_overlay.TextViewOverlay(self)
         self.focus_overlay = None
         self.roi_overlay = None
+        self.driftcor_overlay = None
         self.pixel_overlay = None
         self.points_overlay = None
 
@@ -224,6 +225,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if tool == guimodel.TOOL_ROA:
             self.current_mode = MODE_SPARC_SELECT
             self.active_overlay = self.roi_overlay
+            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        elif tool == guimodel.TOOL_DRIFTCOR:
+            self.current_mode = MODE_SPARC_SELECT
+            self.active_overlay = self.driftcor_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
@@ -868,6 +873,13 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         self.roi_overlay = comp_overlay.RepetitionSelectOverlay(
                                                 self, "Region of acquisition")
         self.world_overlays.append(self.roi_overlay)
+
+        self.driftcor_overlay = comp_overlay.RepetitionSelectOverlay(
+                                                self,
+                                                "Region of Drift Correction",
+                                                colour=gui.SELECTION_COLOUR_2ND)
+        self.world_overlays.append(self.driftcor_overlay)
+
 
     def setView(self, microscope_view, tab_data):
         """

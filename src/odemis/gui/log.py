@@ -6,15 +6,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/. """
 
 import logging
@@ -110,33 +110,33 @@ class TextFieldHandler(logging.Handler):
         self.error_va = error_va
 
     def emit(self, record):
-        """ Write a record, in color, to a text field. """
+        """ Write a record, in colour, to a text field. """
         if self.textfield is not None:
             if record.levelno >= logging.ERROR:
-                color = "#B00B2C"
+                colour = "#B00B2C"
             elif record.levelno == logging.WARNING:
-                color = "#C87000"
+                colour = "#C87000"
             elif record.levelno == logging.INFO:
-                color = "#555555"
+                colour = "#555555"
             else:
-                color = "#777777"
+                colour = "#777777"
 
             # Do the actual writing in a CallAfter, so logging won't interfere
             # with the GUI drawing process.
-            wx.CallAfter(self.write_to_field, record, color)
-        
+            wx.CallAfter(self.write_to_field, record, colour)
+
         # Will typically ensure that the text field is displayed
         if self.error_va is not None and record.levelno >= logging.ERROR:
             self.error_va.value = True
 
-    def write_to_field(self, record, color):
+    def write_to_field(self, record, colour):
 
         while self.textfield.GetNumberOfLines() > LOG_LINES:
             # Removes the characters from position 0 up to and including the
             # first line break
             self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
 
-        self.textfield.SetDefaultStyle(wx.TextAttr(color, None))
+        self.textfield.SetDefaultStyle(wx.TextAttr(colour, None))
         self.textfield.AppendText(''.join([self.format(record), '\n']))
         self.textfield.LineUp()
 

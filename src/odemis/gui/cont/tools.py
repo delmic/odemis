@@ -42,6 +42,7 @@ TOOL_POINT = 5 # Select a point
 TOOL_LINE = 6 # Select a line
 TOOL_DICHO = 7 # Dichotomy mode to select a sub-quadrant
 TOOL_SPOT = 8 # Select spot mode on the SEM
+TOOL_DRIFTCOR = 9
 
 # Two types of tools:
 # * mode: they are toggle buttons, changing the tool mode of the GUIModel
@@ -70,28 +71,67 @@ class ModeTool(Tool):
 class ActionTool(Tool):
     pass
 
-TOOLS = {TOOL_RO_ZOOM: ModeTool("btn_view_zoom",
-                                model.TOOL_ZOOM, model.TOOL_NONE,
-                                "Select region of zoom"),
-         TOOL_ROI: ModeTool("btn_view_update",
-                                  model.TOOL_ROI, model.TOOL_NONE,
-                                  "Select region of interest"),
-         TOOL_ROA: ModeTool("btn_view_sel",
-                               model.TOOL_ROA, model.TOOL_NONE,
-                               "Select region of acquisition"),
-         TOOL_POINT: ModeTool("btn_view_pick",
-                              model.TOOL_POINT, model.TOOL_NONE,
-                              "Select point"),
-         TOOL_LINE: ModeTool("btn_view_pick", # TODO icon
-                              model.TOOL_LINE, model.TOOL_NONE,
-                              "Select line"),
-         TOOL_DICHO: ModeTool("btn_view_dicho",
-                              model.TOOL_DICHO, model.TOOL_NONE,
-                              "Dichotomic search for e-beam centre"),
-         TOOL_SPOT: ModeTool("btn_view_spot",
-                              model.TOOL_SPOT, model.TOOL_NONE,
-                              "E-beam spot mode"),
-         TOOL_ZOOM_FIT: ActionTool("btn_view_resize", "Zoom to fit content"),
+TOOLS = {TOOL_RO_ZOOM:
+            ModeTool(
+                "btn_view_zoom",
+                model.TOOL_ZOOM,
+                model.TOOL_NONE,
+                "Select region of zoom"
+            ),
+         TOOL_ROI:
+            ModeTool(
+                "btn_view_update",
+                model.TOOL_ROI,
+                model.TOOL_NONE,
+                "Select region of interest"
+            ),
+         TOOL_ROA:
+            ModeTool(
+                "btn_view_sel",
+                model.TOOL_ROA,
+                model.TOOL_NONE,
+                "Select region of acquisition"
+            ),
+         TOOL_POINT:
+            ModeTool(
+                "btn_view_pick",
+                model.TOOL_POINT,
+                model.TOOL_NONE,
+                "Select point"
+            ),
+         TOOL_LINE:
+            ModeTool(
+                "btn_view_pick", # TODO icon
+                model.TOOL_LINE,
+                model.TOOL_NONE,
+                "Select line"
+            ),
+         TOOL_DICHO:
+            ModeTool(
+                "btn_view_dicho",
+                model.TOOL_DICHO,
+                model.TOOL_NONE,
+                "Dichotomic search for e-beam centre"
+            ),
+         TOOL_SPOT:
+            ModeTool(
+                "btn_view_spot",
+                model.TOOL_SPOT,
+                model.TOOL_NONE,
+                "E-beam spot mode"
+            ),
+         TOOL_ZOOM_FIT:
+            ActionTool(
+                "btn_view_resize",
+                "Zoom to fit content"
+            ),
+         TOOL_DRIFTCOR:
+            ModeTool(
+                "btn_view_sel",
+                model.TOOL_DRIFTCOR,
+                model.TOOL_NONE,
+                "Select region for drift correction"
+            ),
         }
 
 
