@@ -74,9 +74,11 @@ class TestOverlay(unittest.TestCase):
 
         f = find_overlay.FindOverlay((4, 4), 0.1, 1e-06, escan, ccd, detector)
 
-        # opt_im = fake_input
+        opt_im = fake_input
+        transformed_image = fake_input
         ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
-        # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
+        transformed_image.metadata = transformed_data
+        hdf5.export("transformed_image.h5", [opt_im, transformed_image])
         print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data
         # print transformed_image
         #numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation),
