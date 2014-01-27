@@ -1501,7 +1501,7 @@ class TabBarController(object):
         if self.main_data.acquiring:
             logging.warn("Acquisition in progress, tabs frozen")
             evt_btn = evt.GetEventObject()
-            evt_btn.SetValue(not evt.btn.GetValue())
+            evt_btn.SetValue(not evt_btn.GetValue())
             return
 
         # ie, mouse click or space pressed
