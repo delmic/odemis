@@ -87,10 +87,17 @@ TOOLS = {TOOL_RO_ZOOM:
             ),
          TOOL_ROA:
             ModeTool(
-                "btn_view_sel",
+                "btn_view_update",
                 model.TOOL_ROA,
                 model.TOOL_NONE,
                 "Select region of acquisition"
+            ),
+        TOOL_DRIFTCOR:
+            ModeTool(
+                "btn_drift",
+                model.TOOL_DRIFTCOR,
+                model.TOOL_NONE,
+                "Select region for drift correction"
             ),
          TOOL_POINT:
             ModeTool(
@@ -124,13 +131,6 @@ TOOLS = {TOOL_RO_ZOOM:
             ActionTool(
                 "btn_view_resize",
                 "Zoom to fit content"
-            ),
-         TOOL_DRIFTCOR:
-            ModeTool(
-                "btn_view_sel",
-                model.TOOL_DRIFTCOR,
-                model.TOOL_NONE,
-                "Select region for drift correction"
             ),
         }
 
