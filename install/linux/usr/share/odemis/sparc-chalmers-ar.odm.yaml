@@ -63,7 +63,7 @@ ARCam: {
     role: ccd,
     init: {
            device: 0,  # if a real camera is plugged in, it's usually 0
-           bitflow_install_dirs: "/usr/local/share/bitflow/", # Put the path where Bitflow data is installed
+           bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
            #transpose: [1, -2], # mirrored on Y axis
            }
 }
