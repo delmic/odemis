@@ -456,7 +456,7 @@ class SEMStream(Stream):
         self.spot = model.BooleanVA(False)
 
         # drift correction VAs
-        self.dc_period = model.IntVA(1)
+        self.dc_period = model.FloatVA(1)
         self.dc_region = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
@@ -2653,11 +2653,11 @@ class StreamTree(object):
 class SEMCCDDCtream(MultipleDetectorStream):
     """
     Abstract class for multiple detector Stream made of SEM + CCD with drift correction
-    applied. After "dc_period" number of pixels is scanned, it moves the e-beam 
+    applied. After "dc_period" number of seconds is elapsed, it moves the e-beam 
     to the "selected region" (roi), scans it and provides the generated frame, along with 
     the previous one to CalculateDrift. Then it sets the translation of the e-beam based 
-    on the drift value calculated by CalculateDrift and starts scanning the next "dc_period" 
-    pixels.
+    on the drift value calculated by CalculateDrift and starts scanning again for
+    "dc_period" time.
     """
     # TODO: Handle drift that leads ebeam out of bounds (reducing roi, returning
     # warning)
@@ -2943,6 +2943,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             self._semd_df.unsubscribe(self._ssOnSelectedRegion)
 
             start_time = time.time()
+            dc_start = time.time()
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
                 # DRIFT CORRECTION
                 self._emitter.dwellTime.value = dwell_time
@@ -2995,7 +2996,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 self._updateProgress(future, start_time, n / tot_num)
 
                 # DRIFT CORRECTION
-                if (n % dc_period) == 0:
+                if (time.time() - dc_start) >= dc_period:
                     # DRIFT CORRECTION
                     # Move e-beam to the selected region
                     self._onSelectedRegion()
@@ -3016,6 +3017,8 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     if len(self._sr_data) > 1:
                         drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 40)
                         logging.debug("Current drift: " + str(drift))
+
+                    dc_start = time.time()
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
