@@ -1368,6 +1368,7 @@ class TabBarController(object):
         """
         self.main_frame = main_frame
         self._tab = main_data.tab # VA that we take care of
+        self.main_data = main_data
 
         # create all the tabs that fit the microscope role
         tab_list = self._filter_tabs(tab_rules, main_frame, main_data)
@@ -1430,6 +1431,10 @@ class TabBarController(object):
     def _on_tab(self, tab):
         """ Tab click event handler """
 
+        # if self.main_data.acquiring:
+        #     logging.warn("Acquisition in progress, tabs frozen")
+        #     return
+
         try:
             self.main_frame.Freeze()
             # TODO: only call Hide() on the previously selected tab
@@ -1451,6 +1456,13 @@ class TabBarController(object):
             t.terminate()
 
     def OnClick(self, evt):
+
+        if self.main_data.acquiring:
+            logging.warn("Acquisition in progress, tabs frozen")
+            evt_btn = evt.GetEventObject()
+            evt_btn.SetValue(not evt.btn.GetValue())
+            return
+
         # ie, mouse click or space pressed
         logging.debug("Tab button click")
 
