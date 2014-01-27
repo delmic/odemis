@@ -81,7 +81,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         """ The OwnerDrawnComboBox makes the left/right keys change the
         selection instead of moving the caret. This method corrects that problem
         """
-        if self.txt_ctrl and self.Enabled():
+        if self.txt_ctrl and self.Enabled:
             key = evt.GetKeyCode()
             ip = self.txt_ctrl.GetInsertionPoint()
 
