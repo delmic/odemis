@@ -444,19 +444,11 @@ class Slider(BaseSlider):
         logging.debug("Setting slider value to %s", value)
 
         if value < self.min_value:
-            logging.warn("Value %s lower than minimum! Resetting to %s",
-                         value,
-                         self.min_value)
-            self.current_value = self.min_value
-            self._send_slider_update_event()
+            self.min_value = value
         elif value > self.max_value:
-            logging.warn("Value %s higher than maximum! Resetting to %s!",
-                         value,
-                         self.max_value)
-            self.current_value = self.max_value
-            self._send_slider_update_event()
-        else:
-            self.current_value = value
+            self.max_value = value
+
+        self.current_value = value
 
         self.handlePos = self._val_to_pixel()
 
