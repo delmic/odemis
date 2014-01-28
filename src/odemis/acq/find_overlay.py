@@ -94,10 +94,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         ############## TO BE REMOVED ON TESTING##############
         optical_image = fake_input
         #####################################################
-        # optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (ccd.pixelSize.value[0] * ccd.binning.value[0])
-        optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (fake_input.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
-        # optical_scale = 60.5
-        # optical_scale = 45
+        optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
+
         # Isolate spots
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
@@ -261,7 +259,6 @@ def _updateMetadata(optical_image, transformation_values, escan):
         return []
 
     # Update scaling
-    # scale = (2.44140625e-08 * calc_scaling_x, 2.44140625e-08 * calc_scaling_y)
     scale = (escan.pixelSize.value[0] * calc_scaling_x, escan.pixelSize.value[1] * calc_scaling_y)
 
     # Update translation
@@ -271,7 +268,6 @@ def _updateMetadata(optical_image, transformation_values, escan):
         return []
 
     center_pos = (center_pos[0] + escan.pixelSize.value[0] * calc_translation_y, center_pos[1] + escan.pixelSize.value[1] * calc_translation_x)
-    # center_pos = (center_pos[0] + 2.44140625e-08 * calc_translation_y, center_pos[1] + 2.44140625e-08 * calc_translation_x)
 
     transformed_data.metadata[model.MD_ROTATION] = rotation
     transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
