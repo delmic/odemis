@@ -10,7 +10,7 @@ STREAM_BACKGROUND_COLOUR = "#4D4D4D"    # Stream panel background
 FOREGROUND_COLOUR = "#DDDDDD"           # Default foreground colour
 FOREGROUND_COLOUR_DIS = "#666666"       # Disabled foreground colour
 FOREGROUND_COLOUR_EDIT = "#2FA7D4"      # Edit colour
-FOREGROUND_COLOUR_2ND = "#A053D8"       # Secundary edit colour
+FOREGROUND_COLOUR_2ND = "#53D8AD"       # Secundary edit colour
 FOREGROUND_COLOUR_HIGHLIGHT = "#FFA300" # Highlight colour
 
 # Border colours for the viewports
