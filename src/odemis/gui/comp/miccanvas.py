@@ -234,24 +234,24 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
             st = self.microscope_view.stream_tree
-            # TODO: Filtering by the name SEM CL is not desired. There should be
-            # a more intelligent way to query the StreamTree about what's
-            # present, like how it's done for Spectrum and AR streams
-            if (self.pixel_overlay and
-                (st.spectrum_streams or st.get_streams_by_name("SEM CL"))):
-                self.current_mode = MODE_SPARC_PICK
-                self.active_overlay = self.pixel_overlay
-                self.pixel_overlay.enable(True)
             # Enable the Angular Resolve point select overlay when there's a
             # AR stream known anywhere in the data model (and the view has
             # streams).
-            elif (self.points_overlay and
+            if (self.points_overlay and
                   len(self.microscope_view.stream_tree) and
                   any([isinstance(s, stream.AR_STREAMS) for s
                        in self._tab_data_model.streams.value])):
                 self.current_mode = MODE_SPARC_PICK
                 self.active_overlay = self.points_overlay
                 self.points_overlay.enable(True)
+            # TODO: Filtering by the name SEM CL is not desired. There should be
+            # a more intelligent way to query the StreamTree about what's
+            # present, like how it's done for Spectrum and AR streams
+            elif (self.pixel_overlay and
+                (st.spectrum_streams or st.get_streams_by_name("SEM CL"))):
+                self.current_mode = MODE_SPARC_PICK
+                self.active_overlay = self.pixel_overlay
+                self.pixel_overlay.enable(True)
         elif tool == guimodel.TOOL_ROI:
             self.current_mode = MODE_SECOM_UPDATE
             self.active_overlay = self.update_overlay
