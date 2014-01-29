@@ -246,6 +246,7 @@ def _updateMetadata(optical_image, transformation_values, escan):
     Returns the updated metadata of the optical image based on the 
     transformation values
     """
+    escan_pixelSize = escan.pixelSize.value
     transformed_data = optical_image
     ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation) = transformation_values
     
@@ -259,7 +260,7 @@ def _updateMetadata(optical_image, transformation_values, escan):
         return []
 
     # Update scaling
-    scale = (escan.pixelSize.value[0] * calc_scaling_x, escan.pixelSize.value[1] * calc_scaling_y)
+    scale = (escan_pixelSize[0] * calc_scaling_x, escan_pixelSize[1] * calc_scaling_y)
 
     # Update translation
     center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
@@ -267,7 +268,7 @@ def _updateMetadata(optical_image, transformation_values, escan):
         logging.warning("No MD_POS data available")
         return []
 
-    center_pos = (center_pos[0] + escan.pixelSize.value[0] * calc_translation_y, center_pos[1] + escan.pixelSize.value[1] * calc_translation_x)
+    center_pos = (center_pos[0] + escan_pixelSize[0] * calc_translation_y, center_pos[1] + escan_pixelSize[1] * calc_translation_x)
 
     transformed_data.metadata[model.MD_ROTATION] = rotation
     transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
