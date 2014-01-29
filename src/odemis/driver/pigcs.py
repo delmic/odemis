@@ -366,7 +366,7 @@ class Controller(object):
         # look for something like '0x412=\t0\t1\tINT\tmotorcontroller\tI term 1'
         # (and old firmwares report like: '0x412 XXX')
         for l in lines:
-            m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)[= ](?P<desc>(\t\S+)+)", l)
+            m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)[= ]\w*(?P<desc>(\t\S+)+)", l)
             if not m:
                 logging.debug("Line doesn't seem to be a parameter: '%s'", l)
                 continue
