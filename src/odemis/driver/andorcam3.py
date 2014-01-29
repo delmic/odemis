@@ -19,6 +19,13 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+# Note that in Linux the SDK 3.7 32 bits still has problem with the Zyla CL.
+# Using it might crash the computer. There are two possible workarounds:
+# * use a 64 bits OS
+# * limit the memory to about 3G. For example add highmem=3500M to the kernel
+#   command line (in /etc/default/grub)
+
+
 from __future__ import division
 
 from Pyro4.core import oneway
