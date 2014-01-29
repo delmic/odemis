@@ -4,7 +4,7 @@ SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
     emitters: ["EBeam ExtXY", "AR Lens"],
-    detectors: ["SED ExtXY", "ARCam", "Spec10"],
+    detectors: ["SED ExtXY", "ARCam"],
     actuators: ["MirrorMover"],
 }
 
@@ -26,8 +26,9 @@ SPARC-AMOLF: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[3, -3], [-4, 4]],  # V
-        settle_time: 10.e-6, # s
+        limits: [[2.7, -2.7], [-3.5, 3.5]],  # V
+        park: [5, -5],  # V
+        settle_time: 100.e-6, # s
         hfw_nomag: 0.1067, # m
     },
     properties: {
@@ -35,7 +36,7 @@ SPARC-AMOLF: {
         dwellTime: 10.e-6, # s
         magnification: 244, # (ratio)
     },
-    affects: ["SED ExtXY", SpecCam, ARCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", ARCam] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -52,7 +53,7 @@ SPARC-AMOLF: {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 0.4917, # ratio
-           pole_pos: [566, 506], # (px, px), position of the pole (aka the hole in the mirror)
+           pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
           }, 
     affects: ["ARCam"]
 }
@@ -64,34 +65,34 @@ ARCam: {
     role: ccd,
     init: {
            device: "rspipixis", # use 0 if this symlink is no created
-           transpose: [1, -2], # mirrored on Y axis
+           transpose: [-1, -2], # mirrored on Y axis
            }
 }
 
-Spec10: {
-    class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
-    children: {detector: "SpecCam", spectrograph: "FakeSP2300i"},
-    properties: {
-        binning: [4, 16],
-    },
-}
+#Spec10: {
+#    class: spectrometer.CompositedSpectrometer,
+#    role: spectrometer,
+#    children: {detector: "SpecCam", spectrograph: "FakeSP2300i"},
+#    properties: {
+#        binning: [4, 16],
+#    },
+#}
 
-SpecCam: {
-    class: andorcam2.FakeAndorCam2,
-    role: sp-ccd,
-    init: {device: 0} # same device number but it will actually be different device
-}
+#SpecCam: {
+#    class: andorcam2.FakeAndorCam2,
+#    role: sp-ccd,
+#    init: {device: 0} # same device number but it will actually be different device
+#}
 
-# Simulated SP-2300i, the spectrograph part of the Spec-10
-FakeSP2300i: {
-    class: spectrapro.FakeSpectraPro,
-    role: spectrograph,
-    affects: [SpecCam],
-    init: {
-        port: "/dev/ttySP",
-    },
-}
+## Simulated SP-2300i, the spectrograph part of the Spec-10
+#FakeSP2300i: {
+#    class: spectrapro.FakeSpectraPro,
+#    role: spectrograph,
+#    affects: [SpecCam],
+#    init: {
+#        port: "/dev/ttySP",
+#    },
+#}
 
 # PI E-861 jumpers (. = off):
 # X          = 1234.6..
@@ -101,6 +102,7 @@ FakeSP2300i: {
 MirrorMover: {
     class: pigcs.Bus,
     role: mirror,
+    affects: [ARCam],
     init: {
         port: "/dev/ttyPIGCS",
         baudrate: 9600,
