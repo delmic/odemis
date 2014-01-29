@@ -1879,7 +1879,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._acq_state = RUNNING # TODO: move to per acquisition
 
         # Pick the right acquisition method
-        if self._ccd.exposureTime.value <= 0.1:
+        # DEBUG: for now driver-synchronised is too unstable and slow (due to
+        # not able to wait for the CCD to be done). So we always use the
+        # software-synchronised acquisition.
+        if False and self._ccd.exposureTime.value <= 0.1:
             # short dwell time => use driver synchronisation
             runAcquisition = self._dsRunAcquisition
             f.task_canceller = self._dsCancelAcquisition
