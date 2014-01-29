@@ -8,9 +8,10 @@ Created on 22 Nov 2013
 This is a script to acquire a set of images from the SEM along the time.
 
 run as:
-./scripts/timelapse-sem -n 12 --period 10 --output filename.h5
+./scripts/timelapse-sem.py -n 12 --period 10 --output filename.h5
 
 -n defines the number of images to acquire
+--period defines the time between each acquisition
 --output indicates the name of the file which will contain all the output. It 
          should finish by .h5 (for HDF5) or .tiff (for TIFF).
 
