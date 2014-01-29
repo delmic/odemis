@@ -670,6 +670,8 @@ class SEMComedi(model.HwComponent):
         # need lock to avoid setting up the command at the same time as the
         # (next) acquisition is starting.
         with self._acquisition_init_lock:
+            # TODO: instead of using a timed command, just use
+            #comedi.data_write(self._device, self._ao_subdevice, channels[i], ranges[i], comedi.AREF_GROUND, pos[i])
             logging.debug("Setting rest position")
             # There was a bug in the NI driver, it's fixed in the latest kernels.
             # Set min_period to "500" to work around it.
