@@ -1459,6 +1459,20 @@ class StaticARStream(StaticStream):
             # Compute the polar representation
             data = self._sempos[pos]
             try:
+                if numpy.prod(data.shape) > (1280 * 1080):
+                    # FIXME: temporary limit the original image size as the
+                    # computation is too memory demanding for large images
+                    # and cause triggers to OOM
+                    y, x = data.shape
+                    if y > x:
+                        small_shape = 1024, int(round(1024 * x / y))
+                    else:
+                        small_shape = int(round(1024 * y / x)), 1024
+                    # resize
+                    data = img.rescale_hq(data, small_shape)
+
+                size = min(min(data.shape) * 2, 1134)
+
                 # TODO: First compute quickly a low resolution and then
                 # compute a high resolution version.
                 # TODO: could use the size of the canvas that will display
@@ -1471,7 +1485,6 @@ class StaticARStream(StaticStream):
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                size = min(min(data0.shape[-2:]) * 2, 1134)
                 polarp = polar.AngleResolved2Polar(data0, size, hole=False)
                 self._polar[pos] = polarp
             except Exception:
