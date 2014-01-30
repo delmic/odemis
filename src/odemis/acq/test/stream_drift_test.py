@@ -77,7 +77,7 @@ class TestDriftStream(unittest.TestCase):
         ars = stream.ARStream("test ar", ccd, ccd.data, escan)
         sas = stream.SEMCCDDCtream("test sem-ar", sems, ars)
 
-        sems.dc_period.value = 1
+        sems.dc_period.value = 0.2
         sems.dc_region.value = (0.8255, 0.8255, 0.85, 0.85)
         sems.dc_dwelltime.value = 8e-06
 

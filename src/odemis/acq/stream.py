@@ -2697,6 +2697,8 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
         # DRIFT CORRECTION
         self._sr_data = None
+        self._trans = None
+        self._res = None
         # TO BE REMOVED
         self.data = hdf5.read_data("small_data.h5")
         C, T, Z, Y, X = self.data[0].shape
@@ -2833,30 +2835,17 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
         return exp + readout
 
-    def _onSelectedRegion(self):
+    def _onSelectedRegion(self, drift):
         """
         Update the scanning area of the SEM according to the selected region
         for drift correction.
         """
-        roi = self._dc_region.value
-
-        # FIXME: this is fighting against the resolution setting of the SEM
-        # => only apply if is_active (and not spot mode...)
-        # We should remove res setting from the GUI when this ROI is used.
-        center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
-        width = (roi[2] - roi[0], roi[3] - roi[1])
-
-        shape = self._emitter.shape
         # translation is distance from center (situated at 0.5, 0.5), can be floats
-        trans = (shape[0] * (center[0] - 0.5), shape[1] * (center[1] - 0.5))
-        # resolution is the maximum resolution at the scale in proportion of the width
-        scale = self._emitter.scale.value
-        res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
-               max(1, int(round(shape[1] * width[1] / scale[1]))))
+        self._trans = (self._trans[0] - drift[1], self._trans[1] - drift[0])
 
         # always in this order
-        self._emitter.resolution.value = res
-        self._emitter.translation.value = trans
+        self._emitter.resolution.value = self._res
+        self._emitter.translation.value = self._trans
         self._emitter.dwellTime.value = self._dc_dwelltime.value
 
     def _getSpotPositions(self):
@@ -2930,8 +2919,19 @@ class SEMCCDDCtream(MultipleDetectorStream):
             n = 0
             drift = (0, 0)
 
-            # First selected region acquisition
-            self._onSelectedRegion()
+            # First anchor region acquisition
+            roi = self._dc_region.value
+            center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+            width = (roi[2] - roi[0], roi[3] - roi[1])
+            shape = self._emitter.shape
+            # translation is distance from center (situated at 0.5, 0.5), can be floats
+            self._trans = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
+            # resolution is the maximum resolution at the scale in proportion of the width
+            scale = self._emitter.scale.value
+            self._res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
+                   max(1, int(round(shape[1] * width[1] / scale[1]))))
+
+            self._onSelectedRegion(drift)
             logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
             self._acq_sem_complete.clear()
             self._semd_df.subscribe(self._ssOnSelectedRegion)
@@ -2953,9 +2953,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 # set ebeam to position (which is ensured only once acquiring)
                 # DRIFT CORRECTION
                 # tweak translation according to calculated drift
-                logging.debug("E-beam spot before drift correction: " + str(spot_pos[i[::-1]]))
-                self._emitter.translation.value = (spot_pos[i[::-1]][0] - drift[1], spot_pos[i[::-1]][1] - drift[0])
+                self._emitter.translation.value = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
                 logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
+
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
@@ -2999,7 +2999,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 if (time.time() - dc_start) >= dc_period:
                     # DRIFT CORRECTION
                     # Move e-beam to the selected region
-                    self._onSelectedRegion()
+                    self._onSelectedRegion(drift)
                     logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
                     self._acq_sem_complete.clear()
                     self._semd_df.subscribe(self._ssOnSelectedRegion)
@@ -3017,6 +3017,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     if len(self._sr_data) > 1:
                         drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 40)
                         logging.debug("Current drift: " + str(drift))
+                        # Update next positions
+                        spot_pos[:, :, 0] -= drift[0]
+                        spot_pos[:, :, 1] -= drift[1]
 
                     dc_start = time.time()
 
