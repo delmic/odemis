@@ -1426,7 +1426,7 @@ class StaticARStream(StaticStream):
 
         # Cached conversion of the CCD image to polar representation
         self._polar = {} # dict tuple 2 floats -> DataArray
-        # TODO: automatically fill it a background thread
+        # TODO: automatically fill it in a background thread
 
         self.raw = list(self._sempos.values())
 
@@ -1436,7 +1436,16 @@ class StaticARStream(StaticStream):
         self.point.subscribe(self._onPoint)
 
         if self._sempos:
-            self.point.value = list(self._sempos.keys())[0]
+            # Pick one point, e.g., top-left
+            bbtl = (min(x for x, y in self._sempos.keys() if x is not None),
+                    min(y for x, y in self._sempos.keys() if y is not None))
+            # top-left point is the closest from the bounding-box top-left
+            def dis_bbtl(v):
+                try:
+                    return math.hypot(bbtl[0] - v[0], bbtl[1] - v[1])
+                except TypeError:
+                    return float("inf") # for None, None
+            self.point.value = min(self._sempos.keys(), key=dis_bbtl)
 
     def _getPolarProjection(self, pos):
         """
