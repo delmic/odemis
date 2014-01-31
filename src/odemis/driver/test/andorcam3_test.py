@@ -65,7 +65,7 @@ if __name__ == '__main__':
 #import logging
 #logging.getLogger().setLevel(logging.DEBUG)
 #
-#a = andorcam3.AndorCam3("test", "cam", 0)
+#a = andorcam3.AndorCam3("test", "cam", 0, bitflow_install_dirs="/usr/share/bitflow/")
 #a.targetTemperature.value = -15
 #a.fanSpeed.value = 0
 #rr = a.readoutRate.value
