@@ -663,32 +663,15 @@ class SEMComedi(model.HwComponent):
         but it's not controllable via the DAQ board.
         """
         pos, channels, ranges = self._scanner.get_resting_point_data()
-        logging.debug("Setting to rest position at %s", pos)
-        if self._test:
-            return
 
         # need lock to avoid setting up the command at the same time as the
         # (next) acquisition is starting.
         with self._acquisition_init_lock:
-            # TODO: instead of using a timed command, just use
-            #comedi.data_write(self._device, self._ao_subdevice, channels[i], ranges[i], comedi.AREF_GROUND, pos[i])
-            logging.debug("Setting rest position")
-            # There was a bug in the NI driver, it's fixed in the latest kernels.
-            # Set min_period to "500" to work around it.
-            min_period = int(self._min_ao_periods[2] * 1e9)
-            self.setup_timed_command(self._ao_subdevice, channels, ranges, min_period)
-
-            # we expect that both values can fit in the buffer
-            pos.tofile(self._writer.file)
-            self._writer.file.flush()
-
-            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
-
-            # we use a timer because of the problem with the NI driver with 1 scan only
-            # (although it seems to work when period is min_period)
-            time.sleep(0.001) # that should be more than enough
-            logging.debug("Canceling resting command")
-            comedi.cancel(self._device, self._ao_subdevice)
+            logging.debug("Setting to rest position at %s", pos)
+            for i, p in enumerate(pos):
+                comedi.data_write(self._device, self._ao_subdevice,
+                      channels[i], ranges[i], comedi.AREF_GROUND, int(p))
+            logging.debug("Rest position set")
 
     def _prepare_command(self, cmd):
         """
