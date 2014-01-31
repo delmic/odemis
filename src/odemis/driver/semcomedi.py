@@ -615,38 +615,6 @@ class SEMComedi(model.HwComponent):
 
         return buf
 
-    def getTemperatureSCB(self):
-        """
-        returns (-300<float<300): temperature in °C reported by the Shielded
-          Connector Block (which must be set to temperature sensor differential)
-        """
-        # On the SCB-68. From the manual, the temperature sensor outputs on
-        # AI0+/AI0- 10 mV/°C and has an accuracy of ±1 °C => T = 100 * Vt
-
-        channel = 0
-
-        # TODO: selecting a range should be done only once, at initialisation
-        # Get AI0 in differential, with values going between 0 and 1V
-        try:
-            range = comedi.find_range(self._device, self._ai_subdevice, channel,
-                                        comedi.UNIT_volt, 0, 1)
-        except comedi.ComediError:
-            logging.warning("Couldn't find a fitting range, using a random one")
-            range = 0
-
-        range_info = comedi.get_range(self._device, self._ai_subdevice, channel, range)
-        logging.debug("Reading temperature with range %g->%g V", range_info.min, range_info.max)
-
-
-        # read the raw value
-        data = comedi.data_read(self._device, self._ai_subdevice,
-                            channel, range, comedi.AREF_DIFF)
-
-        # convert using calibration
-        pvalue = self._to_phys(self._ai_subdevice, channel, range, data)
-        temp = pvalue * 100.0
-        return temp
-
     def _get_dtype(self, subdevice):
         """
         Return the appropriate numpy.dtype for the given subdevice
