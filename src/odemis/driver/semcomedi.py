@@ -1420,7 +1420,7 @@ class SEMComedi(model.HwComponent):
 
                 kwargs_s = {"name": "scanner", "role":"ebeam",
                             "limits": limits, "channels": wchannels,
-                            "settle_time": min_ao_period, "hfw_nomag": 10e-3}
+                            "settle_time": min_ao_period, "hfw_nomag": 0.25}
 
                 name = "SEM/" + comedi.get_board_name(device)
                 kwargs = {"device": n,
