@@ -685,12 +685,6 @@ class SEMComedi(model.HwComponent):
         period_ns = int(period * 1e9)  # in nanoseconds
 
         # If impossible to do a write so long, do multiple acquisitions
-#        if period_ns > 2 ** 32 - 1:
-#            dpr = 1 + (period_ns >> 32) # = ceil(period_ns / (2 ** 32 - 1))
-#            period_ns = int(period_ns / dpr)
-#        else:
-#            dpr = 1
-
         if period_ns > self._max_ao_period_ns:
             dpr = int(math.ceil(period_ns / self._max_ao_period_ns))
             period_ns = int(period_ns / dpr)
