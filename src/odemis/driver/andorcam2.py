@@ -212,7 +212,10 @@ class AndorV2DLL(CDLL):
         return result
 
     def __getitem__(self, name):
-        func = CDLL.__getitem__(self, name)
+        try:
+            func = super(AndorV2DLL, self).__getitem__(name)
+        except Exception:
+            raise AttributeError("Failed to find %s", name)
         func.__name__ = name
         func.errcheck = self.at_errcheck
         return func
