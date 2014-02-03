@@ -22,22 +22,22 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import odemis.gui.model as guimodel
-import odemis.gui.comp.miccanvas as miccanvas
+import logging
+import numpy
 from odemis import model
 from odemis.gui import test
 from odemis.gui.comp.canvas import BufferedCanvas
-from odemis.gui.model.img import InstrumentalImage
-from odemis.acq.stream import StaticStream
 from odemis.gui.util import tuple_subtract, tuple_multiply
-import logging
 import unittest
 import wx
 
+from odemis.acq.stream import StaticStream, RGBStream
+import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.model as guimodel
+
+
 # logging.getLogger().setLevel(logging.DEBUG)
-
 #pylint: disable=E1103
-
 def GetRGB(im, x, y):
     # TODO: use DC.GetPixel()
     return (im.GetRed(x, y), im.GetGreen(x, y), im.GetBlue(x, y))
@@ -125,23 +125,24 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertEqual(mpp, self.view.mpp.value)
 
         # add images
-        im1 = wx.EmptyImage(11, 11, clear=True)
+        im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
         px1_cent = (5, 5)
         # Red pixel at center, (5,5)
-        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
+        im1[px1_cent] = [255, 0, 0]
+        im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
+        im1.metadata[model.MD_POS] = (0, 0)
+        stream1 = RGBStream("s1", im1)
 
-        im2 = wx.EmptyImage(201, 201, clear=True)
-        px2_cent = ((im2.Width - 1) // 2 , (im2.Height - 1) // 2)
+        im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
+        px2_cent = tuple((s - 1) // 2 for s in im2.shape[:2])
         # Blue pixel at center (100,100)
-        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
-        # FIXME: InstrumentalImage is now replaced by DataArray, example in gui.cont.tabs
-        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
+        im2[px2_cent] = [0, 0, 255]
         # 200, 200 => outside of the im1
         # (+0.5, -0.5) to make it really in the center of the pixel
-        stream2 = StaticStream("s2", InstrumentalImage(
-                                        im2,
-                                        mpp,
-                                        (200.5 * mpp, 199.5 * mpp)))
+        im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
+        im2.metadata[model.MD_POS] = (200.5 * mpp, 199.5 * mpp)
+        stream2 = RGBStream("s2", im2)
+
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
@@ -197,18 +198,24 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
 
-        # add images
-        im1 = wx.EmptyImage(11, 11, clear=True)
+        im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
         px1_cent = (5, 5)
         # Red pixel at center, (5,5)
-        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
-        im2 = wx.EmptyImage(201, 201, clear=True)
-        px2_cent = (100, 100)
+        im1[px1_cent] = [255, 0, 0]
+        im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
+        im1.metadata[model.MD_POS] = (0, 0)
+        stream1 = RGBStream("s1", im1)
+
+        im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
+        px2_cent = tuple((s - 1) // 2 for s in im2.shape[:2])
         # Blue pixel at center (100,100)
-        im2.SetRGB(px2_cent[0], px2_cent[1], 0, 0, 255)
-        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
-        stream2 = StaticStream("s2", InstrumentalImage(
-                                        im2, mpp, (200.5 * mpp, 199.5 * mpp)))
+        im2[px2_cent] = [0, 0, 255]
+        # 200, 200 => outside of the im1
+        # (+0.5, -0.5) to make it really in the center of the pixel
+        im2.metadata[model.MD_PIXEL_SIZE] = (mpp, mpp)
+        im2.metadata[model.MD_POS] = (200.5 * mpp, 199.5 * mpp)
+        stream2 = RGBStream("s2", im2)
+
         self.view.addStream(stream1)
         self.view.addStream(stream2)
         # view might set its mpp to the mpp of first image => reset it
@@ -245,11 +252,14 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.assertEqual(mpp, self.view.mpp.value)
 
         # add images
-        im1 = wx.EmptyImage(11, 11, clear=True)
+        im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
         px1_cent = (5, 5)
         # Red pixel at center, (5,5)
-        im1.SetRGB(px1_cent[0], px1_cent[1], 255, 0, 0)
-        stream1 = StaticStream("s1", InstrumentalImage(im1, mpp * 10, (0, 0)))
+        im1[px1_cent] = [255, 0, 0]
+        im1.metadata[model.MD_PIXEL_SIZE] = (mpp * 10, mpp * 10)
+        im1.metadata[model.MD_POS] = (0, 0)
+        stream1 = RGBStream("s1", im1)
+
         self.view.addStream(stream1)
         # view might set its mpp to the mpp of first image => reset it
         self.view.mpp.value = mpp

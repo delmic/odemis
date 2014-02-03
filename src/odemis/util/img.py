@@ -26,7 +26,10 @@ from __future__ import division
 
 import logging
 import numpy
+from odemis import model
 import scipy.misc
+import scipy.ndimage
+
 
 def findOptimalRange(hist, edges, outliers=0):
     """
@@ -247,6 +250,41 @@ def ensure2DImage(data):
         d.shape = d.shape[-2:] # raise ValueError if it will not work
 
     return d
+
+# FIXME: test it
+def rescale_hq(data, shape):
+    """
+    Resize the image to the new given shape (smaller or bigger). It tries to 
+    smooth the pixels. Metadata is updated.
+    data (DataArray of shape YX): data to be rescaled
+    shape (2 int>0): the new shape of the image (Y,X). The new data will fit 
+      precisely, even if the ratio is different. 
+    return (DataArray of shape YX): The image rescaled. If the metadata contains
+      information that is linked to the size (e.g, pixel size), it is also 
+      updated.
+    """
+    # TODO: support RGB(A) images
+    # TODO: make it faster
+    out = numpy.empty(shape, dtype=data.dtype)
+    scale = tuple(n / o for o, n in zip(data.shape, shape))
+    scipy.ndimage.interpolation.zoom(data, zoom=scale, output=out, order=1, prefilter=False)
+
+    # Update the metadata
+    if hasattr(data, "metadata"):
+        out = model.DataArray(out)
+        # update each metadata which is linked to the pixel size
+        for k in [model.MD_PIXEL_SIZE, model.MD_BINNING, model.MD_AR_POLE]:
+            try:
+                ov = data.metadata[k]
+            except KeyError:
+                continue
+            try:
+                out.metadata[k] = tuple(o * s for o, s in zip(ov, scale))
+            except Exception:
+                logging.exception("Failed to update metadata '%s' when rescaling by %s",
+                                  k, scale)
+
+    return out
 
 # TODO: use VIPS to be fast?
 def Average(images, rect, mpp, merge=0.5):

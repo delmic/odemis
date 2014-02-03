@@ -615,38 +615,6 @@ class SEMComedi(model.HwComponent):
 
         return buf
 
-    def getTemperatureSCB(self):
-        """
-        returns (-300<float<300): temperature in °C reported by the Shielded
-          Connector Block (which must be set to temperature sensor differential)
-        """
-        # On the SCB-68. From the manual, the temperature sensor outputs on
-        # AI0+/AI0- 10 mV/°C and has an accuracy of ±1 °C => T = 100 * Vt
-
-        channel = 0
-
-        # TODO: selecting a range should be done only once, at initialisation
-        # Get AI0 in differential, with values going between 0 and 1V
-        try:
-            range = comedi.find_range(self._device, self._ai_subdevice, channel,
-                                        comedi.UNIT_volt, 0, 1)
-        except comedi.ComediError:
-            logging.warning("Couldn't find a fitting range, using a random one")
-            range = 0
-
-        range_info = comedi.get_range(self._device, self._ai_subdevice, channel, range)
-        logging.debug("Reading temperature with range %g->%g V", range_info.min, range_info.max)
-
-
-        # read the raw value
-        data = comedi.data_read(self._device, self._ai_subdevice,
-                            channel, range, comedi.AREF_DIFF)
-
-        # convert using calibration
-        pvalue = self._to_phys(self._ai_subdevice, channel, range, data)
-        temp = pvalue * 100.0
-        return temp
-
     def _get_dtype(self, subdevice):
         """
         Return the appropriate numpy.dtype for the given subdevice
@@ -663,30 +631,15 @@ class SEMComedi(model.HwComponent):
         but it's not controllable via the DAQ board.
         """
         pos, channels, ranges = self._scanner.get_resting_point_data()
-        logging.debug("Setting to rest position at %s", pos)
-        if self._test:
-            return
 
         # need lock to avoid setting up the command at the same time as the
         # (next) acquisition is starting.
         with self._acquisition_init_lock:
-            logging.debug("Setting rest position")
-            # There was a bug in the NI driver, it's fixed in the latest kernels.
-            # Set min_period to "500" to work around it.
-            min_period = int(self._min_ao_periods[2] * 1e9)
-            self.setup_timed_command(self._ao_subdevice, channels, ranges, min_period)
-
-            # we expect that both values can fit in the buffer
-            pos.tofile(self._writer.file)
-            self._writer.file.flush()
-
-            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
-
-            # we use a timer because of the problem with the NI driver with 1 scan only
-            # (although it seems to work when period is min_period)
-            time.sleep(0.001) # that should be more than enough
-            logging.debug("Canceling resting command")
-            comedi.cancel(self._device, self._ao_subdevice)
+            logging.debug("Setting to rest position at %s", pos)
+            for i, p in enumerate(pos):
+                comedi.data_write(self._device, self._ao_subdevice,
+                      channels[i], ranges[i], comedi.AREF_GROUND, int(p))
+            logging.debug("Rest position set")
 
     def _prepare_command(self, cmd):
         """
@@ -732,12 +685,6 @@ class SEMComedi(model.HwComponent):
         period_ns = int(period * 1e9)  # in nanoseconds
 
         # If impossible to do a write so long, do multiple acquisitions
-#        if period_ns > 2 ** 32 - 1:
-#            dpr = 1 + (period_ns >> 32) # = ceil(period_ns / (2 ** 32 - 1))
-#            period_ns = int(period_ns / dpr)
-#        else:
-#            dpr = 1
-
         if period_ns > self._max_ao_period_ns:
             dpr = int(math.ceil(period_ns / self._max_ao_period_ns))
             period_ns = int(period_ns / dpr)
@@ -1473,7 +1420,7 @@ class SEMComedi(model.HwComponent):
 
                 kwargs_s = {"name": "scanner", "role":"ebeam",
                             "limits": limits, "channels": wchannels,
-                            "settle_time": min_ao_period, "hfw_nomag": 10e-3}
+                            "settle_time": min_ao_period, "hfw_nomag": 0.25}
 
                 name = "SEM/" + comedi.get_board_name(device)
                 kwargs = {"device": n,

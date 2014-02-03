@@ -341,6 +341,7 @@ class AndorCam3(model.DigitalCamera):
         if device is None:
             self.handle = c_int(ATDLL.HANDLE_SYSTEM)
         else:
+            logging.info("Opening camera device, might take time...")
             self.handle = c_int()
             self.atcore.AT_Open(device, byref(self.handle))
     

@@ -4,7 +4,7 @@ SPARC-AMOLF: {
     class: Microscope,
     role: sparc,
     emitters: ["EBeam ExtXY"],
-    detectors: ["SED ExtXY", "ARCam", "Spec10"],
+    detectors: ["SED ExtXY", "Spec10"],
     actuators: ["MirrorMover"],
 }
 
@@ -27,15 +27,16 @@ SPARC-AMOLF: {
     init: {
         channels: [0, 1],
         limits: [[3, -3], [-4, 4]],  # V
-        settle_time: 10.e-6, # s
-        hfw_nomag: 0.136, # m
+        park: [-5, -5],  # V
+        settle_time: 20.e-6, # s
+        hfw_nomag: 0.1067, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 200, # (ratio)
+        magnification: 244, # (ratio)
     },
-    affects: ["SED ExtXY", SpecCam, ARCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", SpecCam] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -46,13 +47,6 @@ SPARC-AMOLF: {
         channel: 0,
         limits: [-3, 3] # V
     },
-}
-
-# PIXIS via USB
-ARCam: {
-    class: andorcam2.FakeAndorCam2,
-    role: ccd,
-    init: {device: 0}
 }
 
 Spec10: {
@@ -77,10 +71,11 @@ SP2300i: {
     },
 }
 
+# We could put the real actuators, but they would not be so useful as there is no feedback to know if the move is correct
 MirrorMover: {
     class: simulated.Stage,
     role: mirror,
-    affects: [SpecCam, ARCam],
+    affects: [SpecCam],
     init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
     properties: {
         speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s

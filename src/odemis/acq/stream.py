@@ -1426,7 +1426,7 @@ class StaticARStream(StaticStream):
 
         # Cached conversion of the CCD image to polar representation
         self._polar = {} # dict tuple 2 floats -> DataArray
-        # TODO: automatically fill it a background thread
+        # TODO: automatically fill it in a background thread
 
         self.raw = list(self._sempos.values())
 
@@ -1436,7 +1436,16 @@ class StaticARStream(StaticStream):
         self.point.subscribe(self._onPoint)
 
         if self._sempos:
-            self.point.value = list(self._sempos.keys())[0]
+            # Pick one point, e.g., top-left
+            bbtl = (min(x for x, y in self._sempos.keys() if x is not None),
+                    min(y for x, y in self._sempos.keys() if y is not None))
+            # top-left point is the closest from the bounding-box top-left
+            def dis_bbtl(v):
+                try:
+                    return math.hypot(bbtl[0] - v[0], bbtl[1] - v[1])
+                except TypeError:
+                    return float("inf") # for None, None
+            self.point.value = min(self._sempos.keys(), key=dis_bbtl)
 
     def _getPolarProjection(self, pos):
         """
@@ -1450,6 +1459,20 @@ class StaticARStream(StaticStream):
             # Compute the polar representation
             data = self._sempos[pos]
             try:
+                if numpy.prod(data.shape) > (1280 * 1080):
+                    # FIXME: temporary limit the original image size as the
+                    # computation is too memory demanding for large images
+                    # and cause triggers to OOM
+                    y, x = data.shape
+                    if y > x:
+                        small_shape = 1024, int(round(1024 * x / y))
+                    else:
+                        small_shape = int(round(1024 * y / x)), 1024
+                    # resize
+                    data = img.rescale_hq(data, small_shape)
+
+                size = min(min(data.shape) * 2, 1134)
+
                 # TODO: First compute quickly a low resolution and then
                 # compute a high resolution version.
                 # TODO: could use the size of the canvas that will display
@@ -1462,7 +1485,6 @@ class StaticARStream(StaticStream):
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                size = min(min(data0.shape[-2:]) * 2, 1134)
                 polarp = polar.AngleResolved2Polar(data0, size, hole=False)
                 self._polar[pos] = polarp
             except Exception:
@@ -1879,7 +1901,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._acq_state = RUNNING # TODO: move to per acquisition
 
         # Pick the right acquisition method
-        if self._ccd.exposureTime.value <= 0.1:
+        # DEBUG: for now driver-synchronised is too unstable and slow (due to
+        # not able to wait for the CCD to be done). So we always use the
+        # software-synchronised acquisition.
+        if False and self._ccd.exposureTime.value <= 0.1:
             # short dwell time => use driver synchronisation
             runAcquisition = self._dsRunAcquisition
             f.task_canceller = self._dsCancelAcquisition

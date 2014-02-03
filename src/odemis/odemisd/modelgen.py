@@ -401,10 +401,18 @@ class Instantiator(object):
                 comp = self.get_component_by_name(name)
                 for prop_name, value in attr["properties"].items():
                     try:
-                        getattr(comp, prop_name).value = value
+                        va = getattr(comp, prop_name)
                     except AttributeError:
                         raise SemanticError("Error in microscope instantiation "
                                 "file: Component '%s' has no property '%s'." % (name, prop_name))
+                    if not isinstance(va, model.VigilantAttributeBase):
+                        raise SemanticError("Error in microscope instantiation "
+                                "file: Component '%s' has no property (VA) '%s'." % (name, prop_name))
+                    try:
+                        va.value = value
+                    except Exception:
+                        raise ValueError("Error in microscope instantiation "
+                                "file: %s.%s = '%s' failed." % (name, prop_name, value))
     
 def instantiate_model(inst_model, container=None, create_sub_containers=False,
                       dry_run=False):

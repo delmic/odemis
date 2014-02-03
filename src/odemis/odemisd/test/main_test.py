@@ -21,14 +21,16 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.odemisd import main
 import StringIO
 import logging
+from odemis.odemisd import main
+from odemis.util import timeout
 import os
 import subprocess
 import sys
 import time
 import unittest
+
 
 ODEMISD_CMD = "python2 -m odemis.odemisd.main"
 SIM_CONFIG = "optical-sim.odm.yaml"
@@ -55,6 +57,9 @@ class TestCommandLine(unittest.TestCase):
                    # Skipped: PyYaml is not able to detect this error :  http://pyyaml.org/ticket/128
                    #"syntax-error-3.odm.yaml",
                    "semantic-error-1.odm.yaml",
+                   "semantic-error-2.odm.yaml",
+                   # This one can only be detected on a real instantiation
+                   # "semantic-error-3.odm.yaml",
                    ]
 
         i = 0
@@ -131,7 +136,8 @@ class TestCommandLine(unittest.TestCase):
         
         output = out.getvalue()
         self.assertTrue("positional arguments" in output)
-    
+
+    @timeout(15)
     def test_daemon(self):
         # First there should be not backend running
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
@@ -165,6 +171,20 @@ class TestCommandLine(unittest.TestCase):
         
         os.remove("test.log")
         os.remove("testdaemon.log")
+
+    @timeout(10)
+    def test_error_instantiate(self):
+        """Test config files which should fail on instantiation"""
+        # Only for the config files that cannot fail on a standard validation
+        filename = "semantic-error-3.odm.yaml"
+        cmdline = "odemisd --log-target=test.log %s" % filename
+        ret = main.main(cmdline.split())
+        if ret == 0:
+            # We also need to stop the backend then
+            cmdline = "odemisd --kill"
+            ret = main.main(cmdline.split())
+            self.fail("no error detected in erroneous config file '%s'" % filename)
+        os.remove("test.log")
         
 # extends the class fully at module 
 TestCommandLine.create_tests()

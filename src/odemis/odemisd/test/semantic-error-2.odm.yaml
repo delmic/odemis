@@ -3,7 +3,7 @@ Optical: {
     role: epifluorescent,
     emitters: [Light],
     detectors: ["Andor SimCam"],
-    actuators: ["Stage", "Non existing component"], # referencing non existing component
+    actuators: ["Stage"],
 }
 
 Light: {
@@ -19,11 +19,11 @@ Light: {
 }
 
 "Stage": {
-    class: simulated.Stage,
+    class: simulated.Booo,  # referencing non-existing class
     role: stage,
     init: {axes: ["x", "y"]},
     affects: ["Andor SimCam"],
     properties: {
-        speed: {'x':1, 'y':1} #m/s
+        speed: {'x':1, 'y':1}
     }
 }
