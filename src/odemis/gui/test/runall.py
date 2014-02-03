@@ -55,8 +55,6 @@ def run_test():
     print "\n** Running..."
     alltests.run(result)
 
-    print result
-
     num_errors = len(result.errors)
     print "\n** %d Errors occured" % num_errors
 

@@ -95,8 +95,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(self.app.test_frame.panel_2.IsExpanded(), False)
         self.assertEqual(self.app.test_frame.panel_3.IsExpanded(), True)
 
-        self.assertEqual(fpb.has_vert_scrollbar(), False)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        false_pos_warn = ("This might be a false positive. "
+                          "Run test module stand-alone to verify")
+
+        self.assertEqual(fpb.has_vert_scrollbar(), False, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         bottom_panel_2 = self.app.test_frame.panel_2.GetPosition()[1] + \
                          self.app.test_frame.panel_2.GetSize().GetHeight()
@@ -142,9 +145,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(self.app.test_frame.panel_3.IsExpanded(), True)
 
         fpb = self.app.test_frame.fpb
+        false_pos_warn = ("This might be a false positive. "
+                          "Run test module stand-alone to verify")
 
-        self.assertEqual(fpb.has_vert_scrollbar(), False)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        self.assertEqual(fpb.has_vert_scrollbar(), False, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         # Squeeze the window horizontally
         self.app.test_frame.SetSize((100, 400))
@@ -154,8 +159,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         wx.MilliSleep(test.SLEEP_TIME)
 
         # No scroll bars should appear
-        self.assertEqual(fpb.has_vert_scrollbar(), False)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        self.assertEqual(fpb.has_vert_scrollbar(), False, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         # Squeeze the window vertically
         self.app.test_frame.SetSize((400, 100))
@@ -164,8 +169,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop()
 
         # A vertical scroll bars should appear
-        self.assertEqual(fpb.has_vert_scrollbar(), True)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        self.assertEqual(fpb.has_vert_scrollbar(), True, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         wx.MilliSleep(test.SLEEP_TIME)
 
@@ -311,9 +316,12 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(
             len(self.app.test_frame.fpb.GetChildren()[0].GetChildren()), 3)
 
+        false_pos_warn = ("This might be a false positive. "
+                          "Run test module stand-alone to verify")
+
         # Scroll bars should be gone again
-        self.assertEqual(fpb.has_vert_scrollbar(), False)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        self.assertEqual(fpb.has_vert_scrollbar(), False, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         wx.MilliSleep(test.SLEEP_TIME)
 
@@ -330,8 +338,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop()
 
         # No Scroll bars yet
-        self.assertEqual(fpb.has_vert_scrollbar(), False)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        self.assertEqual(fpb.has_vert_scrollbar(), False, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         wx.MilliSleep(test.SLEEP_TIME)
 
@@ -343,8 +351,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop()
 
         # Vertical Scroll bar
-        self.assertEqual(fpb.has_vert_scrollbar(), True)
-        self.assertEqual(fpb.has_horz_scrollbar(), False)
+        self.assertEqual(fpb.has_vert_scrollbar(), True, false_pos_warn)
+        self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
         # Count children of the top fold panel: 1 caption bar, 2 labels and 4
         # added labels: 7 total

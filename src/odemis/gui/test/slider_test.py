@@ -100,15 +100,15 @@ class SliderTestCase(test.GuiTestCase):
         self.assertEqual(slider.GetValue(), 0.0)
 
         slider.SetValue(-3)
-        self.assertEqual(slider.GetValue(), 0.0)
+        self.assertEqual(slider.GetValue(), -3.0)
 
         test.gui_loop()
 
         self.assertRaises(TypeError, slider.SetValue, "44")
-        self.assertEqual(slider.GetValue(), 0.0)
+        self.assertEqual(slider.GetValue(), -3.0)
 
         slider.SetValue(44)
-        self.assertEqual(slider.GetValue(), 1.0)
+        self.assertEqual(slider.GetValue(), 44.0)
 
         test.gui_loop()
 
