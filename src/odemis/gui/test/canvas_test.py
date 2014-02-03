@@ -413,6 +413,8 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
     def test_conversion_methods(self):
 
         offset = (200, 200)
+        self.canvas.scale = 1
+
         # Matching values at scale 1
         view_buffer_world_values = [
             # view         buffer       world       physical
@@ -444,7 +446,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # World to buffer
         for _, buffer_point, world_point, _ in view_buffer_world_values:
             bp = self.canvas.world_to_buffer(world_point, offset)
-            self.assertTrue(all([isinstance(v, float) for v in bp]))
+            self.assertTrue(all([isinstance(v, (int, float)) for v in bp]))
             self.assertEqual(buffer_point, bp)
 
         # View to world
@@ -456,21 +458,21 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         # World to View
         for view_point, _, world_point, _ in view_buffer_world_values:
             vp = self.canvas.world_to_view(world_point, offset)
-            self.assertTrue(all([isinstance(v, float) for v in vp]))
+            self.assertTrue(all([isinstance(v, (int, float)) for v in vp]))
             self.assertEqual(view_point, vp)
 
         # World to physical
         for _, _, world_point, physical_point in view_buffer_world_values:
             pp = self.canvas.world_to_physical_pos(
                             world_point)
-            # self.assertTrue(all([isinstance(v, float) for v in pp]))
+            self.assertTrue(all([isinstance(v, float) for v in pp]))
             self.assertEqual(physical_point, pp)
 
         # Physical to world
         for _, _, world_point, physical_point in view_buffer_world_values:
             pp = self.canvas.world_to_physical_pos(
                             world_point)
-            # self.assertTrue(all([isinstance(v, float) for v in pp]))
+            self.assertTrue(all([isinstance(v, float) for v in pp]))
             self.assertEqual(physical_point, pp)
 
 

@@ -458,7 +458,7 @@ class BufferedCanvas(wx.Panel):
         :param offset (int, int): The offset can be used to move the buffer
             origin back to its original position. See `buffer_to_world_pos` for
             more details.
-        :return: (int, int)
+        :return: (int or float, int or float)
         """
         b_pos = ((w_pos[0] - w_buff_center[0]) * scale,
                     (w_pos[1] - w_buff_center[1]) * scale)
@@ -522,7 +522,8 @@ class BufferedCanvas(wx.Panel):
 
         :param v_pos: (int, int) the coordinates in the buffer
         :param margins: (int, int) the horizontal and vertical buffer margins
-        :return: (wx.Point) or (int, int) the calculated view position
+        :return: (wx.Point) or (int or float, int or float) the calculated view
+            position
         """
         v_pos = (b_pos[0] - margins[0], b_pos[1] - margins[1])
 

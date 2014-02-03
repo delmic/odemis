@@ -109,7 +109,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
         # mpp == mpwu => 1 world coord == 1 px => scale == 1
-        self.mpwu = 1 # m/wu
+        self.mpwu = 1.0 # m/wu
         # This is a const, don't change at runtime!
         # FIXME: turns out to be useless. => Need to directly use physical
         # coordinates. Currently, the only difference is that Y in going up in
