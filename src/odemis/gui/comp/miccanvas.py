@@ -39,7 +39,8 @@ from wx.lib.pubsub import pub
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
-import odemis.gui.comp.overlay as comp_overlay
+import odemis.gui.comp.overlay.view as view_overlay
+import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 
 
@@ -122,7 +123,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Some more overlays
         self._crosshair_ol = None
         self._spotmode_ol = None
-        self._fps_ol = comp_overlay.TextViewOverlay(self)
+        self._fps_ol = view_overlay.TextViewOverlay(self)
         self.focus_overlay = None
         self.roi_overlay = None
         self.driftcor_overlay = None
@@ -130,13 +131,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.points_overlay = None
 
         # play/pause icon
-        self.icon_overlay = comp_overlay.StreamIconOverlay(self)
+        self.icon_overlay = view_overlay.StreamIconOverlay(self)
         self.view_overlays.append(self.icon_overlay)
 
-        self.zoom_overlay = comp_overlay.ViewSelectOverlay(self, "Zoom")
+        self.zoom_overlay = view_overlay.ViewSelectOverlay(self, "Zoom")
         self.view_overlays.append(self.zoom_overlay)
 
-        self.update_overlay = comp_overlay.WorldSelectOverlay(self, "Update")
+        self.update_overlay = world_overlay.WorldSelectOverlay(self, "Update")
         self.world_overlays.append(self.update_overlay)
 
     def setView(self, microscope_view, tab_data):
@@ -157,7 +158,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.focus_overlay = None
 
         if self.microscope_view.get_focus_count():
-            self.focus_overlay = comp_overlay.FocusOverlay(self)
+            self.focus_overlay = view_overlay.FocusOverlay(self)
             self.view_overlays.append(self.focus_overlay)
 
         self.microscope_view.mpp.subscribe(self._onMPP, init=True)
@@ -165,15 +166,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if tab_data.tool:
             # If required, create a DichotomyOverlay
             if guimodel.TOOL_DICHO in tab_data.tool.choices:
-                self.dicho_overlay = comp_overlay.DichotomyOverlay(self,
+                self.dicho_overlay = view_overlay.DichotomyOverlay(self,
                                                      tab_data.dicho_seq)
                 self.view_overlays.append(self.dicho_overlay)
 
             # If required, create a PixelSelectOverlay
             if guimodel.TOOL_POINT in tab_data.tool.choices:
-                self.pixel_overlay = comp_overlay.PixelSelectOverlay(self)
+                self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
                 self.world_overlays.append(self.pixel_overlay)
-                self.points_overlay = comp_overlay.PointsOverlay(self)
+                self.points_overlay = world_overlay.PointsOverlay(self)
                 self.world_overlays.append(self.points_overlay)
 
         if hasattr(self.microscope_view, "stage_pos"):
@@ -286,7 +287,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = comp_overlay.CrossHairOverlay(self)
+                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
 
             if self._crosshair_ol not in self.view_overlays:
                 self.view_overlays.append(self._crosshair_ol)
@@ -301,7 +302,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _showSpotMode(self, activated=True):
         if activated:
             if self._spotmode_ol is None:
-                self._spotmode_ol = comp_overlay.SpotModeOverlay(self)
+                self._spotmode_ol = view_overlay.SpotModeOverlay(self)
 
             if self._spotmode_ol not in self.view_overlays:
                 self.view_overlays.append(self._spotmode_ol)
@@ -718,10 +719,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # Hook to update the FPS value
     def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
-        fps = super(DblMicroscopeCanvas, self)._draw_merged_images(dc_buffer,
-                                                         images,
-                                                         mergeratio)
-        self._fps_ol.set_label("%d fps" % fps)
+        pass
+        # fps = super(DblMicroscopeCanvas, self)._draw_merged_images(dc_buffer,
+        #                                                  images,
+        #                                                  mergeratio)
+        # self._fps_ol.set_label("%d fps" % fps)
 
 class SecomCanvas(DblMicroscopeCanvas):
 
@@ -870,11 +872,11 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
         self._roa = None # The ROI VA of SEM CL stream, initialized on setView()
-        self.roi_overlay = comp_overlay.RepetitionSelectOverlay(
+        self.roi_overlay = world_overlay.RepetitionSelectOverlay(
                                                 self, "Region of acquisition")
         self.world_overlays.append(self.roi_overlay)
 
-        self.driftcor_overlay = comp_overlay.RepetitionSelectOverlay(
+        self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
                                                 self,
                                                 "Region of Drift Correction",
                                                 colour=gui.SELECTION_COLOUR_2ND)
@@ -918,7 +920,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         style (overlay.FILL_*): type of repetition display
         """
         if rep is None:
-            self.roi_overlay.fill = comp_overlay.FILL_NONE
+            self.roi_overlay.fill = world_overlay.FILL_NONE
         else:
             self.roi_overlay.fill = style
             self.roi_overlay.repetition = rep
@@ -1061,6 +1063,8 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     def _updateROA(self):
         """
         Update the value of the ROA in the GUI according to the roi_overlay
+
+        TODO: Create an Drift correction equivalent of this method
         """
         try:
             sem = self._tab_data_model.main.ebeam
@@ -1224,7 +1228,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.closed = canvas.PLOT_CLOSE_BOTTOM
         self.plot_mode = canvas.PLOT_MODE_BAR
 
-        self.markline_overlay = comp_overlay.MarkingLineOverlay(
+        self.markline_overlay = view_overlay.MarkingLineOverlay(
                                                 self,
                                                 orientation=3)
         self.add_overlay(self.markline_overlay)
@@ -1348,7 +1352,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         ## Overlays
 
-        self.polar_overlay = comp_overlay.PolarOverlay(self)
+        self.polar_overlay = view_overlay.PolarOverlay(self)
         self.view_overlays.append(self.polar_overlay)
         self.active_overlay = self.polar_overlay
 

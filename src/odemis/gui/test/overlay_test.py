@@ -26,9 +26,11 @@
 # Test module for Odemis' gui.comp.overlay module
 #===============================================================================
 
+from odemis.gui.comp.overlay import view as vol
+from odemis.gui.comp.overlay import world as wol
 import logging
 import odemis.gui.comp.miccanvas as miccanvas
-import odemis.gui.comp.overlay as overlay
+import odemis.gui.comp.canvas as canvas
 import odemis.gui.test as test
 import odemis.gui.model as gmodel
 import odemis.model as omodel
@@ -41,11 +43,169 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 def do_stuff(value):
+    """ Test function that can be used to subscribe to VAs """
     print "value", value
 
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
+
+    def test_text_view_overlay_size(self):
+        cnvs = canvas.BitmapCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        ol = vol.TextViewOverlay(cnvs)
+        cnvs.view_overlays.append(ol)
+
+        for f in (False, True):
+            msg = "TextViewOverlay sizes test {} flip"
+            size = 0
+            y = 0
+            for i in range(10):
+                y += 12 + size
+                size = 10 + i * 3
+                ol.add_label(msg.format("with" if f else "without") ,
+                             font_size=size, pos=(0, y), flip=f)
+                test.gui_loop(50)
+
+            ol.clear()
+
+    def test_text_view_overlay_align(self):
+        cnvs = canvas.BitmapCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        ol = vol.TextViewOverlay(cnvs)
+        cnvs.view_overlays.append(ol)
+
+        ol.add_label("TextViewOverlay left",
+                     pos=(ol.view_width / 2, 10))
+        test.gui_loop(50)
+
+        ol.add_label("TextViewOverlay right",
+                     pos=(ol.view_width / 2, 26),
+                     align=wx.ALIGN_RIGHT)
+        test.gui_loop(50)
+
+        ol.add_label("TextViewOverlay center",
+                     pos=(ol.view_width / 2, 42),
+                          align=wx.ALIGN_CENTER)
+        test.gui_loop(50)
+
+        ol.add_label("|",
+                     pos=(ol.view_width / 2, 58),
+                     align=wx.ALIGN_CENTER)
+        ol.add_label("|",
+                     pos=(ol.view_width / 2, 74),
+                     align=wx.ALIGN_CENTER)
+        ol.add_label("Relative to the center",
+                     pos=(ol.view_width / 2, 90),
+                     align=wx.ALIGN_CENTER)
+        test.gui_loop(50)
+
+        # Example on how a right aligned label can be kept on the right on resize
+        def realign(evt):
+            for label in ol.labels:
+                label.pos = (ol.view_width / 2, label.pos[1])
+            evt.Skip()
+        cnvs.Bind(wx.EVT_SIZE, realign)
+
+        ol.canvas_padding = 0
+
+        ol.add_label("top left",
+                     pos=(0, 0),
+                     align=wx.ALIGN_LEFT)
+        test.gui_loop(50)
+
+        ol.add_label("top right",
+                     pos=(ol.view_width, 0),
+                     align=wx.ALIGN_RIGHT)
+        test.gui_loop(50)
+
+        ol.add_label("bottom left",
+                     pos=(0, ol.view_height),
+                     align=wx.ALIGN_BOTTOM)
+        test.gui_loop(50)
+
+        ol.add_label("bottom right",
+                     pos=(ol.view_width, ol.view_height),
+                     align=wx.ALIGN_RIGHT|wx.ALIGN_BOTTOM,
+                     flip=False)
+        test.gui_loop(50)
+
+        ol.add_label("SHOULD NOT BE SEEN!",
+                     pos=(ol.view_width, ol.view_height / 2),
+                     align=wx.ALIGN_LEFT,
+                     flip=False)
+        test.gui_loop(50)
+
+        ol.add_label("Visible because of flip",
+                     pos=(ol.view_width, ol.view_height / 2),
+                     align=wx.ALIGN_LEFT,
+                     flip=True)
+        test.gui_loop(50)
+
+
+    def test_text_view_overlay_rotate(self):
+        cnvs = canvas.BitmapCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        ol = vol.TextViewOverlay(cnvs)
+        ol.canvas_padding = 0
+        cnvs.view_overlays.append(ol)
+
+        # Text should exactly overlap
+
+        rl = ol.add_label(u"█ you should only see red",
+                          pos=(0, 0),
+                          font_size=20,
+                          deg=0,
+                          flip=False)
+        test.gui_loop(50)
+
+        sl = ol.add_label(u"█ you should only see red",
+                          pos=(0, 0),
+                          font_size=20,
+                          colour=(1, 0, 0),
+                          align=wx.ALIGN_LEFT)
+
+        test.gui_loop(500)
+        self.assertEqual(rl.render_pos, sl.render_pos)
+
+        ol.clear()
+
+
+
+        sl = ol.add_label(u"█ no rotate",
+                          pos=(0, 0),
+                          font_size=20,
+                          colour=(1, 0, 0),
+                          align=wx.ALIGN_LEFT)
+
+        tl = ol.add_label(u"█ rotate",
+                          pos=(140, 0),
+                          font_size=20,
+                          deg=0,
+                          flip=False)
+
+        tr = ol.add_label(u"rotate █",
+                          pos=(ol.view_width, 0),
+                          font_size=20,
+                          align=wx.ALIGN_RIGHT,
+                          deg=0,
+                          flip=False)
+
+
+
+        def _animate(evt):
+            angle_step = 30
+            for i in range(390 // angle_step):
+                tl.deg = i * angle_step
+                tr.deg = i * angle_step
+                test.gui_loop(100)
+                cnvs.Refresh()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_LEFT_UP, _animate)
+
 
     # @unittest.skip("simple")
     def test_polar_overlay(self):
@@ -88,6 +248,7 @@ class OverlayTestCase(test.GuiTestCase):
                     choices=frozenset(phys_points))
 
         pol.set_point(point)
+
 
         test.gui_loop()
         # test.sleep(1000)
@@ -196,6 +357,8 @@ if __name__ == "__main__":
     #unittest.main()
 
     suit = unittest.TestSuite()
-    suit.addTest(OverlayTestCase("test_polar_overlay") )
+    # suit.addTest(OverlayTestCase("test_text_view_overlay_size") )
+    # suit.addTest(OverlayTestCase("test_text_view_overlay_align") )
+    suit.addTest(OverlayTestCase("test_text_view_overlay_rotate") )
     runner = unittest.TextTestRunner()
     runner.run(suit)

@@ -440,8 +440,8 @@ class BufferedCanvas(wx.Panel):
         # center the coordinates
         dc.SetDeviceOrigin(self.ClientSize.x // 2, self.ClientSize.y // 2)
         # TODO: Add filtering for *enabled overlays
-        for o in self.view_overlays:
-            o.Draw(dc)
+        for vo in self.view_overlays:
+            vo.Draw(dc)
 
 
     # Position conversion
