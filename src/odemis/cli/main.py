@@ -48,7 +48,6 @@ class Scanner(model.Component):
         model.Component.__init__(self, "scanner for %s" % cls.__name__, **kwargs)
         self.cls = cls
     def scan(self):
-        logging.info("Scanning for '%s' devices", self.cls.__name__)
         return self.cls.scan()
 
 def scan():
@@ -65,6 +64,7 @@ def scan():
         module = __import__("odemis.driver." + module_name, fromlist=[module_name])
         for cls_name, cls in inspect.getmembers(module, inspect.isclass):
             if issubclass(cls, model.HwComponent) and hasattr(cls, "scan"):
+                logging.info("Scanning for %s.%s components", module_name, cls_name)
                 # do it in a separate container so that we don't have to load
                 # all drivers in the same process (andor cams don't like it)
                 container_name = "scanner%d" % num

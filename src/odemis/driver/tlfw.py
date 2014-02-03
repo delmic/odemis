@@ -429,7 +429,7 @@ class FW102c(model.Actuator):
                 bands = {}
                 for i in range(1, maxpos + 1):
                     bands[i] = (i * 100e-9, (i + 1) * 100e-9)
-                found.append((model, {"port": p, "bands": bands}))
+                found.append((dev._idn, {"port": p, "bands": bands}))
 
         return found
     
