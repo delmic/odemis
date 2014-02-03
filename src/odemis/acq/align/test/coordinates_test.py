@@ -477,7 +477,7 @@ class TestMatchCoordinates(unittest.TestCase):
         if known_estimated_coordinates != []:
             numpy.testing.assert_equal(known_estimated_coordinates.__len__(), electron_coordinates.__len__() - 1)
             
-# @unittest.skip("skip")
+@unittest.skip("skip")
 class TestOverallComponent(unittest.TestCase):
     """
     Test the interaction of all the functions together

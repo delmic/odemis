@@ -33,6 +33,7 @@ from odemis.acq.drift import calculation
 from numpy import fft
 from numpy import random
 
+@unittest.skip("skip")
 class TestDriftCalculation(unittest.TestCase):
     """
     Test CalculateDrift

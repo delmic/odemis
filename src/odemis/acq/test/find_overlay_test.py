@@ -31,6 +31,7 @@ from odemis.acq import find_overlay
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+@unittest.skip("skip")
 class TestOverlay(unittest.TestCase):
     """
     Test Overlay functions

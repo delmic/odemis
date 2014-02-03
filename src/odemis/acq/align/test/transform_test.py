@@ -27,6 +27,7 @@ from odemis.acq.align import transform
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+@unittest.skip("skip")
 class TestTransformationParams(unittest.TestCase):
     """
     Test TransformationParams functions
