@@ -121,7 +121,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs = canvas.BitmapCanvas(self.panel)
         cnvs.SetBackgroundColour("#00599B")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
-        cnvs.set_image(0, data.gettest_pattern_sImage())
+
+        img = (data.gettest_pattern_sImage(), (0.0, 0.0), 1.0, True)
+
+        cnvs.set_images([img, None])
         cnvs.update_drawing()
 
         test.gui_loop()
@@ -132,7 +135,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs = canvas.DraggableCanvas(self.panel)
         cnvs.SetBackgroundColour("#3C9B00")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
-        cnvs.set_image(0, data.gettest_pattern_sImage())
+        cnvs.set_images([img, None])
         cnvs.update_drawing()
 
         # cnvs.fit_view_to_content()
@@ -253,9 +256,9 @@ class PlotCanvasTestCase(test.GuiTestCase):
                         self.assertAlmostEqual(bp[1], nbp[1], msg=err)
 
 if __name__ == "__main__":
-    # unittest.main()
+    unittest.main()
 
-    suit = unittest.TestSuite()
-    suit.addTest(PlotCanvasTestCase("test_plot_canvas") )
-    runner = unittest.TextTestRunner()
-    runner.run(suit)
+    # suit = unittest.TestSuite()
+    # suit.addTest(PlotCanvasTestCase("test_plot_canvas") )
+    # runner = unittest.TextTestRunner()
+    # runner.run(suit)
