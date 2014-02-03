@@ -1453,8 +1453,16 @@ class PlotCanvas(BufferedCanvas):
             # Check if sorted
             s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
             if not s:
-                raise ValueError("The horizontal data should be sorted and each"
-                                 "value should be unique!")
+                m = []
+                x, _ = zip(*data)
+                for v in x:
+                    if x.count(v) > 1:
+                        m.append(v)
+                if m:
+                    raise ValueError("The horizontal data points should be "
+                                     "unique! The values %s have duplicates" % m)
+                else:
+                    raise ValueError("The horizontal data should be sorted!")
             if len(data[0]) != 2:
                 raise ValueError("The data should be 2D!")
 
