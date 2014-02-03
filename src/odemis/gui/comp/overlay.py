@@ -1825,6 +1825,10 @@ class PointsOverlay(WorldOverlay):
             # can't compute the distance => pick something typical
             min_dist = 100e-9 # m
 
+            if len(physical_points) == 1:
+                w_x, w_y = self.cnvs.physical_to_world_pos(physical_points[0])
+                self.choices[(w_x, w_y)] = physical_points[0]
+
         self.min_dist = min_dist / 2.0 # get radius
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
