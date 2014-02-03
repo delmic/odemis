@@ -33,6 +33,7 @@ from odemis.acq.drift import dc_region
 from numpy import fft
 from numpy import random
 
+@unittest.skip("skip")
 class TestGuessAnchorRegion(unittest.TestCase):
     """
     Test GuessAnchorRegion
