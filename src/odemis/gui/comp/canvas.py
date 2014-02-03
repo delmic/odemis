@@ -1451,9 +1451,10 @@ class PlotCanvas(BufferedCanvas):
 
         if data:
             # Check if sorted
-            s = all(data[i][0] <= data[i + 1][0] for i in xrange(len(data) - 1))
+            s = all(data[i][0] < data[i + 1][0] for i in xrange(len(data) - 1))
             if not s:
-                raise ValueError("The horizontal data should be sorted!")
+                raise ValueError("The horizontal data should be sorted and each"
+                                 "value should be unique!")
             if len(data[0]) != 2:
                 raise ValueError("The data should be 2D!")
 
