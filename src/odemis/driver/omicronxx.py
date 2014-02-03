@@ -335,17 +335,14 @@ class MultixX(model.Emitter):
         """
         if ports is None:
             if os.name == "nt":
-                # TODO
-                ports = ["COM" + str(n) for n in range(15)]
-                raise NotImplementedError("Windows not supported")
+                ports = "COM*"
             else:
-                ports = "/dev/tty*"
+                ports = '/dev/ttyUSB?*'
 
         devices = cls._getAvailableDevices(ports)
         if devices:
             return [("OmicronxX", {"ports": ports})]
         else:
             return []
-
 
 # TODO: simulator
