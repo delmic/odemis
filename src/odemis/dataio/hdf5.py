@@ -743,7 +743,11 @@ def _add_acquistion_svi(group, images, **kwargs):
 
     # TODO: use scaleoffset to store the number of bits used (MD_BPP)
     ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
+    # FIXME: if ids.CLASS=IMAGE on 64 bits => attach_scale doesn't work
+    # as a workaround, we temporarily change it
+    ids.attrs["CLASS"] = numpy.string_("BOOO")
     _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
+    ids.attrs["CLASS"] = numpy.string_("IMAGE")
     _add_image_metadata(group, images)
     _add_svi_info(group)
 
