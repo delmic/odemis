@@ -786,13 +786,21 @@ class PointsOverlay(WorldOverlay):
 
         physical_points = [c for c in self.point.choices if None not in c]
 
-        for p_point in physical_points:
-            w_x, w_y = self.cnvs.physical_to_world_pos(p_point)
-            self.choices[(w_x, w_y)] = p_point
-            min_dist = min(
-                    distance(p_point, d)
-                    for d in physical_points if d != p_point
-            )
+        if len(physical_points) > 1:
+            for p_point in physical_points:
+                w_x, w_y = self.cnvs.physical_to_world_pos(p_point)
+                self.choices[(w_x, w_y)] = p_point
+                min_dist = min(
+                        distance(p_point, d)
+                        for d in physical_points if d != p_point
+                )
+        else:
+            # can't compute the distance => pick something typical
+            min_dist = 100e-9 # m
+
+            if len(physical_points) == 1:
+                w_x, w_y = self.cnvs.physical_to_world_pos(physical_points[0])
+                self.choices[(w_x, w_y)] = physical_points[0]
 
         self.min_dist = min_dist / 2.0 # get radius
 
