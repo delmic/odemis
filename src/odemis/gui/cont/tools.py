@@ -87,7 +87,7 @@ TOOLS = {TOOL_RO_ZOOM:
             ),
          TOOL_ROA:
             ModeTool(
-                "btn_view_update",
+                "btn_view_sel",
                 model.TOOL_ROA,
                 model.TOOL_NONE,
                 "Select region of acquisition"

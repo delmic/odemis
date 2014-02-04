@@ -115,7 +115,10 @@ class PVCamDLL(CDLL):
         return result
 
     def __getitem__(self, name):
-        func = CDLL.__getitem__(self, name)
+        try:
+            func = super(PVCamDLL, self).__getitem__(name)
+        except Exception:
+            raise AttributeError("Failed to find %s", name)
         func.__name__ = name
         if not name in self.err_funcs:
             func.errcheck = self.pv_errcheck
@@ -142,6 +145,7 @@ class PVCamDLL(CDLL):
         try:
             self.pl_pvcam_uninit()
         except:
+            logging.exception("Failed during PVCam uninitializion")
             pass
 
 # all the values that say the acquisition is in progress

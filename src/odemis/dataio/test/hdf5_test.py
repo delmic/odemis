@@ -40,7 +40,7 @@ class TestHDF5IO(unittest.TestCase):
     def tearDown(self):
         # clean up
         try:
-            os.remove(FILENAME)
+            pass #os.remove(FILENAME)
         except Exception:
             pass
 
