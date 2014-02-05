@@ -33,17 +33,18 @@ import wx
 from .base import WorldOverlay, SelectionMixin
 import odemis.gui as gui
 import odemis.gui.img.data as img
+import odemis.util as util
 import odemis.util.conversion as conversion
 
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
-    def __init__(self, cnvs, label,
+    def __init__(self, cnvs,
                  sel_cur=None,
                  colour=gui.SELECTION_COLOUR,
                  center=(0, 0)):
 
-        super(WorldSelectOverlay, self).__init__(cnvs, label)
+        super(WorldSelectOverlay, self).__init__(cnvs)
         SelectionMixin.__init__(self, sel_cur, colour, center)
 
         self.w_start_pos = None
@@ -113,7 +114,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
             w_pos = (self.cnvs.view_to_world(self.v_start_pos, offset) +
                      self.cnvs.view_to_world(self.v_end_pos, offset))
-            w_pos = list(normalize_rect(w_pos))
+            w_pos = list(util.normalize_rect(w_pos))
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
 
@@ -126,7 +127,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
         v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
                  self.cnvs.world_to_view(self.w_end_pos, offset))
-        v_pos = list(normalize_rect(v_pos))
+        v_pos = list(util.normalize_rect(v_pos))
         self.v_start_pos = v_pos[:2]
         self.v_end_pos = v_pos[2:4]
         self._calc_edges()
@@ -138,7 +139,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if self.w_start_pos and self.w_end_pos:
             p_pos = (self.cnvs.world_to_physical_pos(self.w_start_pos) +
                      self.cnvs.world_to_physical_pos(self.w_end_pos))
-            return normalize_rect(p_pos)
+            return util.normalize_rect(p_pos)
         else:
             return None
 
@@ -151,7 +152,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         else:
             w_pos = (self.cnvs.physical_to_world_pos(rect[:2]) +
                      self.cnvs.physical_to_world_pos(rect[2:4]))
-            w_pos = normalize_rect(w_pos)
+            w_pos = util.normalize_rect(w_pos)
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
             self._calc_view_pos()
@@ -162,7 +163,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
             b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                      self.cnvs.world_to_buffer(self.w_end_pos, offset))
-            b_pos = normalize_rect(b_pos)
+            b_pos = util.normalize_rect(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
             ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
@@ -210,11 +211,11 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     The type of display for the repetition is set by the .fill and repetition
     attributes. You must redraw the canvas for it to be updated.
     """
-    def __init__(self, cnvs, label,
+    def __init__(self, cnvs,
                  sel_cur=None,
                  colour=gui.SELECTION_COLOUR):
 
-        super(RepetitionSelectOverlay, self).__init__(cnvs, label, sel_cur, colour)
+        super(RepetitionSelectOverlay, self).__init__(cnvs, sel_cur, colour)
 
         self._fill = FILL_NONE
         self._repetition = (0, 0)
@@ -244,6 +245,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def _drawGrid(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+        self._write_labels(ctx)
         # Calculate the offset of the center of the buffer relative to the
         # top left op the buffer
         offset = tuple(v // 2 for v in self.cnvs._bmp_buffer_size)
@@ -252,7 +254,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # values may extend beyond the actual buffer when zoomed in.
         b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                  self.cnvs.world_to_buffer(self.w_end_pos, offset))
-        b_pos = normalize_rect(b_pos)
+        b_pos = util.normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
@@ -343,6 +345,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def _drawPoints(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+        self._write_labels(ctx)
         # Calculate the offset of the center of the buffer relative to the
         # top left op the buffer
         offset = tuple(v // 2 for v in self.cnvs._bmp_buffer_size)
@@ -351,7 +354,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # values may extend beyond the actual buffer when zoomed in.
         b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                  self.cnvs.world_to_buffer(self.w_end_pos, offset))
-        b_pos = normalize_rect(b_pos)
+        b_pos = util.normalize_rect(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
@@ -547,16 +550,16 @@ class PixelSelectOverlay(WorldOverlay):
         if self.values_are_set():
 
             # Get the physical size of the external data
-            physical_size = util.tuple_multiply(self._resolution, self._mpp)
+            physical_size = (self._resolution[0] * self._mpp,
+                             self._resolution[1] * self._mpp)
             # Physical half width and height
-            p_w, p_h = util.tuple_fdiv(physical_size, 2.0)
+            p_w = physical_size[0] / 2.0
+            p_h = physical_size[1] / 2.0
 
             # Get the top left corner of the external data
             # Remember that in physical coordinates, up is positive!
-            self._phys_top_left = util.tuple_subtract(
-                                            self._physical_center,
-                                            (p_w, -p_h)
-                                        )
+            self._phys_top_left = (self._physical_center[0] - p_w,
+                                   self._physical_center[1] + p_h)
 
             logging.debug("Physical top left of PixelSelectOverlay: %s",
                           self._physical_center)
@@ -564,7 +567,8 @@ class PixelSelectOverlay(WorldOverlay):
             # Calculate the cnvs size, in meters, of each pixel.
             # This cnvs size, together with the view's scale, will be used to
             # calculate the actual (int, int) size, before rendering
-            self._pixel_size = util.tuple_tdiv(physical_size, self._resolution)
+            self._pixel_size = (physical_size[0] / self._resolution[0],
+                                physical_size[1] / self._resolution[1])
 
     def view_to_pixel(self):
         """ Translate a view coordinate into a pixel coordinate defined by the
@@ -577,7 +581,7 @@ class PixelSelectOverlay(WorldOverlay):
         if self._current_vpos:
 
             # The offset, in pixels, to the center of the world coordinates
-            offset = util.tuple_idiv(self.cnvs._bmp_buffer_size, 2)
+            offset = self.cnvs.get_half_buffer_size()
 
             wpos = self.cnvs.view_to_world(self._current_vpos, offset)
 
@@ -609,21 +613,19 @@ class PixelSelectOverlay(WorldOverlay):
         # First we calculate the position of the top left in buffer pixels
         # Note the Y flip again, since were going from pixel to physical
         # coordinates
-        p_top_left = util.tuple_add(
-                        self._phys_top_left,
-                        util.tuple_multiply((pixel[0], -pixel[1]), self._mpp)
-                   )
-        # top_left = top_left[0], -top_left[1]
+        offset_x, offset_y = pixel[0] * self._mpp, pixel[1] * self._mpp
+        p_top_left = (self._phys_top_left[0] + offset_x,
+                      self._phys_top_left[1] - offset_y)
 
-        offset = util.tuple_idiv(self.cnvs._bmp_buffer_size, 2)
+        offset = self.cnvs.get_half_buffer_size()
 
         # No need for an explicit Y flip here, since `physical_to_world_pos`
         # takes care of that
         b_top_left = self.cnvs.world_to_buffer(
                             self.cnvs.physical_to_world_pos(p_top_left), offset)
 
-        b_width = util.tuple_multiply(self._pixel_size, scale)
-        b_width = (b_width[0] + 0.5, b_width[1] + 0.5)
+        b_width = (self._pixel_size[0] * scale + 0.5,
+                   self._pixel_size[1] * scale + 0.5)
 
         return b_top_left + b_width
 
@@ -652,10 +654,6 @@ class PixelSelectOverlay(WorldOverlay):
                     ctx.set_source_rgba(*self.select_color)
                     ctx.rectangle(*rect)
                     ctx.fill()
-
-            # Label for debugging purposes
-            pos = self.cnvs.view_to_buffer((10, 16))
-            self.write_label(ctx, dc.GetSize(), pos, self.label)
 
     def enable(self, enable=True):
         """ Enable of disable the overlay """

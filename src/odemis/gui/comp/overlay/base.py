@@ -106,6 +106,9 @@ class Label(object):
         self._deg = val
         self._clear_cache()
 
+    def __repr__(self):
+        return u"%s @ %s" % (self.text, self.render_pos)
+
     def _clear_cache(self):
         self.render_pos = None
         self.text_size = None
@@ -132,7 +135,7 @@ class Overlay(object):
             self.add_label(label)
 
     def add_label(self, text, pos=(0, 0), font_size=12, flip=True,
-                    align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=(1.0, 1.0, 1.0),
+                    align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=None,
                     opacity=1.0, deg=None):
         """ Create a text label and add it to the list of labels
 
@@ -159,6 +162,7 @@ class Overlay(object):
 
     def _write_label(self, ctx, l):
 
+        # Cache the current context settings
         ctx.save()
 
         # TODO: Look at ScaledFont for aditional caching
@@ -167,124 +171,98 @@ class Overlay(object):
                 cairo.FONT_SLANT_NORMAL,
                 cairo.FONT_WEIGHT_NORMAL
         )
-        ctx.set_font_size(l.font_size)
 
-        # If the size and position have already been cached in the label..
-        if l.render_pos:
-            x, y = l.render_pos
-            lw, lh = l.text_size
-        # Calculate the size and position of the label
+        # For some reason, fonts look a little bit smaller when Cairo
+        # plots them at an angle. We compensate for that by increasing the size
+        # by 1 point in that case, so the size visually resembles that of
+        # straight text.
+        if l.deg not in (0.0, 180.0):
+            ctx.set_font_size(l.font_size + 1)
         else:
-            x, y = l.pos
+            ctx.set_font_size(l.font_size)
 
-            # Apply padding (*ONLY* for view overlays!)
-            x = max(
-                    min(x, self.view_width - self.canvas_padding),
-                    self.canvas_padding
-                )
+        x, y = l.render_pos or l.pos
+        lw, lh = l.text_size or ctx.text_extents(l.text)[2:-2]
 
-            y = max(
-                    min(y, self.view_height - self.canvas_padding),
-                    self.canvas_padding
-                )
-
-            lw, lh = ctx.text_extents(l.text)[2:-2]
-            # Add the height, so the top left become (0, 0)
-            y += lh
-
-            # Align the label
-            if l.align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
-                x -= lw
-            elif l.align & wx.ALIGN_CENTER == wx.ALIGN_CENTER:
-                x -= (lw / 2)
-            if l.align & wx.ALIGN_BOTTOM == wx.ALIGN_BOTTOM:
-                y -= lh
-
-            # When we rotate text, flip gets a different meaning
-            if l.deg is None and l.flip:
-                # Prevent the text from running off screen
-                if x + lw + self.canvas_padding > self.view_width:
-                    x = self.view_width - lw - self.canvas_padding
-                elif x < self.canvas_padding:
-                    x = self.canvas_padding
-
-                if y + self.canvas_padding > self.view_height:
-                    y = self.view_height - lh
-                elif y < lh:
-                    y = lh
-
-            l.render_pos = (x, y)
-            l.text_size = (lw, lh)
-
-
+        # Rotation always happens at the plot coordinates
         if l.deg is not None:
-            ctx.set_source_rgba(*(l.colour + (l.opacity,)))
             phi = math.radians(l.deg)
-
-            # if phi == math.pi:
-            #     phi -= math.pi
-            #     # Upside down
-            #     y += 2 * lh
+            rx, ry = l.pos
 
             if l.flip:
                 phi -= math.pi
 
-            rx, ry = x, y - lh
-            xo = 0
-
-            if l.align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
-                rx -= lw
-                xo += lw
-
             ctx.translate(rx, ry)
             ctx.rotate(phi)
-            ctx.move_to(xo, lh)
-            ctx.show_text(l.text)
-        else:
-            # Draw Shadow
+            ctx.translate(-rx, -ry)
+
+        # Calculate the rendering position
+        if not l.render_pos:
+            if isinstance(self, ViewOverlay):
+                # Apply padding
+                x = max(
+                        min(x, self.view_width - self.canvas_padding),
+                        self.canvas_padding
+                    )
+
+                y = max(
+                        min(y, self.view_height - self.canvas_padding),
+                        self.canvas_padding
+                    )
+
+            # Cairo renders text from the bottom left, but we want to treat
+            # the top left as the origin. So we need to add the hight (lower the
+            # render point), to make the given position align with the top left.
+            y += lh
+
+            # Horizontally align the label
+            if l.align & wx.ALIGN_RIGHT == wx.ALIGN_RIGHT:
+                x -= lw
+            elif l.align & wx.ALIGN_CENTRE_HORIZONTAL == wx.ALIGN_CENTRE_HORIZONTAL:
+                x -= lw / 2.0
+
+            # Vertically align the label
+            if l.align & wx.ALIGN_BOTTOM == wx.ALIGN_BOTTOM:
+                y -= lh
+            elif l.align & wx.ALIGN_CENTER_VERTICAL == wx.ALIGN_CENTER_VERTICAL:
+                y -= lh / 2.0
+
+            # When we rotate text, flip gets a different meaning
+            if l.deg is None and l.flip:
+                if isinstance(self, ViewOverlay):
+                    width = self.view_width
+                    height = self.view_height
+                else:
+                    width, height = self.cnvs._bmp_buffer_size
+
+                # Prevent the text from running off screen
+                if x + lw + self.canvas_padding > width:
+                    x = width - lw - self.canvas_padding
+                elif x < self.canvas_padding:
+                    x = self.canvas_padding
+
+                if y + self.canvas_padding > height:
+                    y = height - lh
+                elif y < lh:
+                    y = lh
+            l.render_pos = (x, y)
+            l.text_size = (lw, lh)
+
+
+        # Draw Shadow
+        if l.colour:
             ctx.set_source_rgba(0.0, 0.0, 0.0, 0.7 * l.opacity)
             ctx.move_to(x + 1, y + 1)
             ctx.show_text(l.text)
 
+        # Draw Text
+        if l.colour:
             ctx.set_source_rgba(*(l.colour + (l.opacity,)))
-            ctx.move_to(x, y)
-            ctx.show_text(l.text)
+
+        ctx.move_to(x, y)
+        ctx.show_text(l.text)
 
         ctx.restore()
-
-
-    def text(self, ctx, string, pos, phi, flip=False):
-        ctx.save()
-        # build up an appropriate font
-        font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        ctx.select_font_face(
-                font.GetFaceName(),
-                cairo.FONT_SLANT_NORMAL,
-                cairo.FONT_WEIGHT_NORMAL
-        )
-        ctx.set_font_size(font.GetPointSize() + 3)
-
-        _, _, fheight, _, _ = ctx.font_extents()
-        tw = ctx.text_extents(string)[2]
-        nx = -tw/2.0
-        ny = -fheight/3.0
-
-        if phi == math.pi:
-            phi -= math.pi
-            ny = fheight/1.0
-
-        if flip:
-            phi -= math.pi
-
-        ctx.translate(pos[0], pos[1])
-        ctx.rotate(phi)
-        ctx.translate(nx, ny)
-        ctx.move_to(0, 0)
-        ctx.show_text(string)
-        ctx.restore()
-
-
-
 
     @property
     def view_width(self):

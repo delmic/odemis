@@ -367,6 +367,9 @@ class BufferedCanvas(wx.Panel):
         """ Return the minimum size needed by the buffer """
         return self.ClientSize.x, self.ClientSize.y
 
+    def get_half_buffer_size(self):
+        return tuple(v // 2 for v in self._bmp_buffer_size)
+
     def resize_buffer(self, size):
         """ Resizes the bitmap buffer to the given size
 

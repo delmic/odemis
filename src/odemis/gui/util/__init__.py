@@ -54,9 +54,9 @@ def call_after(f, self, *args, **kwargs):
 # TODO: also do a call_after ?
 def wxlimit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
-    
+
     Same as util.limit_invocation, but also avoid problems with wxPython dead
-    objects that can happen due to delaying a calling a method. 
+    objects that can happen due to delaying a calling a method.
 
     The first call will always immediately be executed. The last call will be
     delayed 'delay_s' seconds at the most. In between the first and last calls,
@@ -270,30 +270,3 @@ class DictObj(dict):
     def __init__(self, **kw):
         dict.__init__(self, kw)
         self.__dict__.update(kw)
-
-def tuple_add(t1, t2):
-    """ Add t1 to t2 """
-    return tuple(x + y for x, y in izip(t1, t2))
-
-def tuple_subtract(t1, t2):
-    """ subtract t1 from t2 """
-    return tuple(x - y for x, y in izip(t1, t2))
-
-def tuple_multiply(t, m):
-    """ Multiply the elements of t with the value m """
-    return tuple(v * m for v in t)
-
-def tuple_fdiv(t, f):
-    """ Divide tuple elements by float value f """
-    if f:
-        f = float(f)
-        return tuple(v / f for v in t)
-
-def tuple_idiv(t, i):
-    """ Divide tuple elements by integer value i """
-    if i:
-        return tuple(v // i for v in t)
-
-def tuple_tdiv(t1, t2):
-    """ Divide t1 elements by the corresponding elements in t2 """
-    return tuple(x / y for x, y in izip(t1, t2))

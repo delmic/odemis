@@ -42,7 +42,7 @@ class TextViewOverlay(ViewOverlay):
     """ This overlay draws the label text at the provided view position """
 
     def __init__(self, cnvs, vpos=((10, 16))):
-        super(TextViewOverlay, self).__init__(cnvs, label="")
+        super(TextViewOverlay, self).__init__(cnvs)
         self.vpos = vpos
 
     def Draw(self, dc):
@@ -268,12 +268,12 @@ class FocusOverlay(ViewOverlay):
 
 class ViewSelectOverlay(ViewOverlay, SelectionMixin):
     #pylint: disable=W0221
-    def __init__(self, cnvs, label,
+    def __init__(self, cnvs,
                  sel_cur=None,
                  colour=gui.SELECTION_COLOUR,
                  center=(0, 0)):
 
-        super(ViewSelectOverlay, self).__init__(cnvs, label)
+        super(ViewSelectOverlay, self).__init__(cnvs)
         SelectionMixin.__init__(self, sel_cur, colour, center)
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -321,13 +321,12 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     TODO: Added a way to have the lines track the mouse's x, y or a and y
     """
     def __init__(self, cnvs,
-                 label="",
                  sel_cur=None,
                  colour=gui.SELECTION_COLOUR,
                  center=(0, 0),
                  orientation=HORIZONTAL):
 
-        super(MarkingLineOverlay, self).__init__(cnvs, label)
+        super(MarkingLineOverlay, self).__init__(cnvs)
         DragMixin.__init__(self)
 
         self.colour = conversion.hex_to_frgba(colour)
@@ -667,6 +666,7 @@ class PolarOverlay(ViewOverlay):
     def __init__(self, cnvs):
         super(PolarOverlay, self).__init__(cnvs)
 
+        self.canvas_padding = 0
         # self.cnvs.canDrag = False
         # Rendering attributes
         self.center_x = None
@@ -677,7 +677,6 @@ class PolarOverlay(ViewOverlay):
         self.num_ticks = 6
         self.ticks = []
 
-        self.padding = 20
         self.ticksize = 10
 
         # Value attributes
@@ -687,8 +686,10 @@ class PolarOverlay(ViewOverlay):
         self.phi = None             # Phi angle in radians
         self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
         self.phi_line_pos = None    # End point in pixels of the Phi line
+        self.phi_label = None
         self.theta = None           # Theta angle in radians
         self.theta_radius = None    # Radius of the theta circle in pixels
+        self.theta_label = None
         self.intersection = None    # The intersection of the cirle and line in
                                     # pixels
 
@@ -759,18 +760,59 @@ class PolarOverlay(ViewOverlay):
         if self.phi:
             self.phi_line_rad = self.phi - math.pi / 2
 
+            cos_phi_line = math.cos(self.phi_line_rad)
+            sin_phi_line = math.sin(self.phi_line_rad)
+
             # Pixel to which to draw the Phi line to
-            phi_x = self.center_x + self.radius * math.cos(self.phi_line_rad)
-            phi_y = self.center_y + self.radius * math.sin(self.phi_line_rad)
+            phi_x = self.center_x + self.radius * cos_phi_line
+            phi_y = self.center_y + self.radius * sin_phi_line
             self.phi_line_pos = (phi_x, phi_y)
 
             # Calc Phi label pos
+
+            # Calculate the view point on the line where to place the label
             if (self.theta_radius > self.inner_radius / 2):
                 radius = self.inner_radius * 0.25
             else:
                 radius = self.inner_radius * 0.75
-            self.px = self.center_x + (radius) * math.cos(self.phi_line_rad)
-            self.py = self.center_y + (radius) * math.sin(self.phi_line_rad)
+
+            x = self.center_x + radius * cos_phi_line
+            y = self.center_y + radius * sin_phi_line
+
+            if not self.phi_label:
+                self.phi_label = self.add_label("")
+                self.phi_label.colour = self.colour
+                self.phi_label.align = wx.ALIGN_CENTER|wx.ALIGN_BOTTOM
+
+            self.phi_label.text = u"φ %0.1f°" % math.degrees(self.phi)
+            self.phi_label.deg = math.degrees(self.phi_line_rad)
+
+            # Now we calculate a perpendicular offset to the Phi line where
+            # we can plot the label. It is also determined if the label should
+            # flip, depending on the angle.
+
+            if self.phi < math.pi:
+                ang = -math.pi / 2.0 # -45 deg
+                self.phi_label.flip = False
+            else:
+                ang = math.pi / 2.0 # 45 deg
+                self.phi_label.flip = True
+
+            # Calculate a point further down the line that we will rotate
+            # around the calculated label x,y. By translating (-x and -y) we
+            # 'move' the origin to label x,y
+            rx = (self.center_x - x) + (radius + 5) * cos_phi_line
+            ry = (self.center_y - y) + (radius + 5) * sin_phi_line
+
+            # Apply the rotation
+            lx = rx * math.cos(ang) - ry * math.sin(ang)
+            ly = rx * math.sin(ang) + ry * math.cos(ang)
+
+            # Translate back to our original origin
+            lx += x
+            ly += y
+
+            self.phi_label.pos = (lx, ly)
 
     def _calculate_theta(self, view_pos=None):
         """ Calculate the Theta angle and the values needed to display it. """
@@ -788,10 +830,20 @@ class PolarOverlay(ViewOverlay):
 
         # Calc Theta label pos
         if self.theta_radius < self.center_y / 2:
-            self.ty = self.center_y + self.theta_radius + 4
+            y = self.center_y + self.theta_radius
         else:
-            self.ty = self.center_y + self.theta_radius - 16
-        self.tx = self.center_x
+            y = self.center_y + self.theta_radius
+        x = self.center_x
+
+        theta_str = u"θ %0.1f°" % math.degrees(self.theta)
+
+        if not self.theta_label:
+            self.theta_label = self.add_label(theta_str)
+            self.theta_label.colour = self.colour
+            self.theta_label.align = wx.ALIGN_CENTER|wx.ALIGN_CENTRE_VERTICAL
+
+        self.theta_label.text = theta_str
+        self.theta_label.pos = (x, y)
 
     def _calculate_intersection(self):
 
@@ -807,7 +859,7 @@ class PolarOverlay(ViewOverlay):
         """ Calculate the values needed for plotting the Phi and Theta lines and
         labels
 
-        If view_pos is not given, the current Phi and Theta angles will be used .
+        If view_pos is not given, the current Phi and Theta angles will be used.
         """
 
         self._calculate_phi(view_pos)
@@ -847,12 +899,30 @@ class PolarOverlay(ViewOverlay):
             # phi needs to be rotated 90 degrees counter clockwise, otherwise
             # 0 degrees will be at the right side of the circle
             phi = (self.tau / self.num_ticks * i) - (math.pi / 2)
-            sx = self.center_x + self.radius * math.cos(phi)
-            sy = self.center_y + self.radius * math.sin(phi)
-            lx = self.center_x + (self.radius - self.ticksize) * math.cos(phi)
-            ly = self.center_y + (self.radius - self.ticksize) * math.sin(phi)
+            deg = round(math.degrees(phi))
 
-            self.ticks.append((sx, sy, lx, ly, phi))
+            cos = math.cos(phi)
+            sin = math.sin(phi)
+
+            # Tick start and end poiint (outer and inner)
+            ox = self.center_x + self.radius * cos
+            oy = self.center_y + self.radius * sin
+            ix = self.center_x + (self.radius - self.ticksize) * cos
+            iy = self.center_y + (self.radius - self.ticksize) * sin
+
+            # Tick label positions
+            lx = self.center_x + (self.radius + 5) * cos
+            ly = self.center_y + (self.radius + 5) * sin
+
+            label = self.add_label(
+                      u"%d°" % (deg + 90),
+                      (lx, ly),
+                      colour=(0.8, 0.8, 0.8),
+                      deg=deg - 90,
+                      flip=True,
+                      align=wx.ALIGN_CENTRE_HORIZONTAL|wx.ALIGN_BOTTOM)
+
+            self.ticks.append((ox, oy, ix, iy, label))
 
         self._calculate_display()
 
@@ -870,6 +940,8 @@ class PolarOverlay(ViewOverlay):
                     self.theta_radius, 0, self.tau)
             ctx.stroke()
 
+            self._write_label(ctx, self.theta_label)
+
         if self.phi is not None:
             # Draw dark unerline Phi line
             ctx.move_to(self.center_x, self.center_y)
@@ -879,6 +951,7 @@ class PolarOverlay(ViewOverlay):
         # Light selection lines formatting
         ctx.set_line_width(2)
         ctx.set_dash([3,])
+
         if self.dragging:
             ctx.set_source_rgba(*self.colour_drag)
         else:
@@ -890,11 +963,13 @@ class PolarOverlay(ViewOverlay):
             ctx.line_to(*self.phi_line_pos)
             ctx.stroke()
 
-        if self.theta is not None:
-            # Draw azimuthal circle
-            ctx.arc(self.center_x, self.center_y,
-                    self.theta_radius, 0, self.tau)
-            ctx.stroke()
+            self._write_label(ctx, self.phi_label)
+
+        # if self.theta is not None:
+        #     # Draw azimuthal circle
+        #     ctx.arc(self.center_x, self.center_y,
+        #             self.theta_radius, 0, self.tau)
+        #     ctx.stroke()
 
         ctx.set_dash([])
 
@@ -923,40 +998,42 @@ class PolarOverlay(ViewOverlay):
             ctx.line_to(lx, ly)
         ctx.stroke()
 
-        # Draw labels
+        # Draw tick labels
         ctx.set_source_rgb(0.8, 0.8, 0.8)
-        for sx, sy, lx, ly, phi in self.ticks:
-            # ctx.move_to(self.center_x, self.center_y)
-            # ctx.rotate(phi)
-            # ctx.move_to(lx, ly)
+        for _, _, _, _, label in self.ticks:
+            self._write_label(ctx, label)
+        #     # ctx.move_to(self.center_x, self.center_y)
+        #     # ctx.rotate(phi)
+        #     # ctx.move_to(lx, ly)
 
-            deg = str(int(round(180 * phi / math.pi) + 90)) + u"°"
-            self.text(ctx, deg, (sx, sy), phi + (math.pi / 2))
+        #     deg = str(int(round(180 * phi / math.pi) + 90)) + u"°"
+        #     self.text(ctx, deg, (sx, sy), phi + (math.pi / 2))
 
 
         ### Draw angle and intensity labels ###
 
-        if self.phi is not None:
-            # Phi label
-            phi_str = u"φ %0.1f°" % math.degrees(self.phi)
-            ctx.set_source_rgb(0.0, 0.0, 0.0)
-            self.text(ctx, phi_str, (self.px, self.py), self.phi_line_rad,
-                      flip=self.phi > math.pi)
-            ctx.set_source_rgb(*self.colour)
-            self.text(ctx, phi_str, (self.px + 1, self.py - 1),
-                      self.phi_line_rad, flip=self.phi > math.pi)
+        # if self.phi is not None:
+        #     # Phi label
+        #     # phi_str = u"φ %0.1f°" % math.degrees(self.phi)
+        #     # ctx.set_source_rgb(0.0, 0.0, 0.0)
+        #     # self.text(ctx, phi_str, (self.px, self.py), self.phi_line_rad,
+        #     #           flip=self.phi > math.pi)
+        #     # ctx.set_source_rgb(*self.colour)
+        #     # self.text(ctx, phi_str, (self.px + 1, self.py - 1),
+        #     #           self.phi_line_rad, flip=self.phi > math.pi)
+        #     self._write_label(ctx, self.phi_label)
 
-        if self.theta is not None:
-            # Theta label
-            theta_str = u"θ %0.1f°" % math.degrees(self.theta)
-            self.write_label(
-                        ctx,
-                        self.cnvs.ClientSize,
-                        (self.tx, self.ty),
-                        theta_str,
-                        fontsize=1,
-                        colour=self.colour,
-                        align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
+        # if self.theta is not None:
+        #     # Theta label
+        #     theta_str = u"θ %0.1f°" % math.degrees(self.theta)
+        #     self.write_label(
+        #                 ctx,
+        #                 self.cnvs.ClientSize,
+        #                 (self.tx, self.ty),
+        #                 theta_str,
+        #                 fontsize=1,
+        #                 colour=self.colour,
+        #                 align=wx.ALIGN_CENTER|wx.ALIGN_BOTTOM)
 
         if self.intensity is not None:
             ctx.set_source_rgb(*self.colour_highlight)
