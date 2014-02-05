@@ -359,12 +359,18 @@ class DataFlow(DataFlowBase):
             self.pipe.send_pyobj(dformat, zmq.SNDMORE)
             self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
             try:
+                if not data.flags["C_CONTIGUOUS"]:
+                    # if not in C order, it will be received incorrectly
+                    # TODO: if it's just rotated, send the info to reconstruct it
+                    # and avoid the memory copy
+                    raise TypeError("Need C ordered array")
                 self.pipe.send(numpy.getbuffer(data), copy=False)
             except TypeError:
                 # not all buffers can be sent zero-copy (e.g., has strides)
                 # try harder by copying (which removes the strides)
                 logging.debug("Failed to send data with zero-copy")
-                self.pipe.send(numpy.getbuffer(data.copy()), copy=False)
+                data = numpy.require(data, requirements=["C_CONTIGUOUS"])
+                self.pipe.send(numpy.getbuffer(data), copy=False)
 
         # publish locally
         DataFlowBase.notify(self, data)
