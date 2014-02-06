@@ -402,11 +402,11 @@ if __name__ == "__main__":
     # suit.addTest(OverlayTestCase("test_text_view_overlay_size") )
     # suit.addTest(OverlayTestCase("test_text_view_overlay_align") )
     # suit.addTest(OverlayTestCase("test_text_view_overlay_rotate") )
-    suit.addTest(OverlayTestCase("test_polar_overlay") )
+    # suit.addTest(OverlayTestCase("test_polar_overlay") )
     # suit.addTest(OverlayTestCase("test_points_select_overlay") )
     # suit.addTest(OverlayTestCase("test_pixel_select_overlay") )
     # suit.addTest(OverlayTestCase("test_view_select_overlay") )
-    # suit.addTest(OverlayTestCase("test_roa_select_overlay") )
+    suit.addTest(OverlayTestCase("test_roa_select_overlay") )
     # suit.addTest(OverlayTestCase("test_dichotomy_overlay") )
     # suit.addTest(OverlayTestCase("test_spot_mode_overlay") )
 

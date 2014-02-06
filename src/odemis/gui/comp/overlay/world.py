@@ -189,6 +189,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
+
             # Label
             if (self.dragging or self.edit) and self.cnvs.microscope_view:
                 w, h = self.cnvs.selection_to_real_size(
@@ -200,13 +201,13 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
-                pos = (b_pos[2] + 5, b_pos[3] - 5)
+                pos = (b_pos[2] + 10, b_pos[3] + 5)
 
                 if not self.position_label:
                     self.position_label = self.add_label("")
-                    self.position_label.colour = (1, 1, 1)
+                    self.position_label.colour = (0.8, 0.8, 0.8)
 
-                self.text = size_lbl
+                self.position_label.text = size_lbl
                 self.position_label.pos = pos
 
                 self._write_label(ctx, self.position_label)
