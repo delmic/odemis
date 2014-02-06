@@ -51,7 +51,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 CONFIG_SED = {"name": "sed", "role": "sed", "channel":5, "limits": [-3, 3]}
 CONFIG_BSD = {"name": "bsd", "role": "bsd", "channel":6, "limits": [-0.1, 0.2]}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "limits": [[-5, 5], [3, -3]],
-                  "channels": [0,1], "settle_time": 10e-6, "hfw_nomag": 10e-3} 
+                  "channels": [0, 1], "settle_time": 10e-6, "hfw_nomag": 10e-3,
+                  "park": [8, 8]}
 CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }

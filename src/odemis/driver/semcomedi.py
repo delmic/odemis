@@ -775,7 +775,9 @@ class SEMComedi(model.HwComponent):
 
         if (cmd.scan_begin_arg != period_ns or cmd.start_arg != start_arg or
             cmd.stop_arg != stop_arg):
-            raise ValueError("Failed to create the precise command")
+            #raise ValueError("Failed to create the precise command")
+            logging.error("Failed to create the precise command period = %d ns "
+                          "(should be %d ns)", cmd.scan_begin_arg, period_ns)
 
         # send the command
         comedi.command(self._device, cmd)
@@ -906,7 +908,7 @@ class SEMComedi(model.HwComponent):
         logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
                       osr * len(rchannels), period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
-        wdata = numpy.empty((dpr, 2), dtype=data.dtype) # just one pixel
+        wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
 
         # allocate one full buffer per channel
         buf = []
@@ -1054,26 +1056,34 @@ class SEMComedi(model.HwComponent):
             # create a command for writing
             logging.debug("Generating new write and read commands for %d scans on "
                           "channels %r/%r", nwscans, wchannels, rchannels)
-            self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
-                        start_src=comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
-                        start_arg=NI_TRIG_AI_START1, # when the AI starts reading
-                        stop_arg=nwscans)
-
             # create a command for reading, with a period osr times smaller than the write
             self.setup_timed_command(self._ai_subdevice, rchannels, rranges, rperiod_ns,
                         stop_arg=nrscans)
-
-            # prepare to write the flattened buffer
-            wbuf = data.reshape((nwscans * nwchans,))
-            self._writer.prepare(wbuf, expected_time)
-
             # prepare to read
             self._reader.prepare(nrscans * nrchans, expected_time)
+
+            # HACK WARNING:
+            # There is a bug (in the NI driver?) that prevents writes of 1 scan
+            # never stop. We used to work around that by cancelling the command,
+            # but it changes the signal. So the simplest way is to just write
+            # directly the data.
+            if nwscans == 1:
+                for i, p in enumerate(data[0]):
+                    comedi.data_write(self._device, self._ao_subdevice,
+                          wchannels[i], wranges[i], comedi.AREF_GROUND, int(p))
+            else:
+                self.setup_timed_command(self._ao_subdevice, wchannels, wranges, period_ns,
+                            start_src=comedi.TRIG_EXT, # from PyComedi docs: should improve synchronisation
+                            start_arg=NI_TRIG_AI_START1, # when the AI starts reading
+                            stop_arg=nwscans)
+                # prepare to write the flattened buffer
+                self._writer.prepare(data.ravel(), expected_time)
 
         # run the commands
         # AO is waiting for AI/Start1, so not sure why internal trigger needed,
         # but it is. Maybe just to let Comedi know that the command has started.
-        comedi.internal_trigger(self._device, self._ao_subdevice, 0)
+        if nwscans != 1:
+            comedi.internal_trigger(self._device, self._ao_subdevice, 0)
         comedi.internal_trigger(self._device, self._ai_subdevice, 0)
         start = time.time()
 
@@ -1086,7 +1096,8 @@ class SEMComedi(model.HwComponent):
             shift_report += 1
 
         self._reader.run()
-        self._writer.run()
+        if nwscans != 1:
+            self._writer.run()
         self._start_new_position_notifier(np_to_report,
                                       start + shift_report * period,
                                       period)
@@ -1094,7 +1105,8 @@ class SEMComedi(model.HwComponent):
         timeout = expected_time * 1.10 + 0.1 # s   == expected time + 10% + 0.1s
         logging.debug("Waiting %g s for the acquisition to finish", timeout)
         rbuf = self._reader.wait(timeout)
-        self._writer.wait() # writer is faster, so there should be no wait
+        if nwscans != 1:
+            self._writer.wait() # writer is faster, so there should be no wait
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
         return rbuf
@@ -1730,6 +1742,15 @@ class Writer(Accesser):
         buf (numpy.ndarray): 1 dimension array to write
         duration: expected total duration it will take (in s)
         """
+        if buf.size <= 2:
+            # TODO: investigate further this issue and report upstream.
+            # Need a C sample code (also seems to work ok if period is min_period)
+            # There seems to be is a bug in the NI comedi driver that cause writes
+            # of only one scan to never finish. So we force the stop by cancelling
+            # after enough time.
+            logging.warning("Buffer has length=%d, probably going to fail",
+                            buf.size)
+
         with self._lock:
             self.duration = duration
             self.buf = buf
@@ -1761,18 +1782,6 @@ class Writer(Accesser):
             if self.cancelled:
                 return
             self.file.flush()
-
-            # TODO: investigate further this issue and report upstream.
-            # Need a C sample code (also seems to work ok if period is min_period)
-            # There seems to be is a bug in the NI comedi driver that cause writes
-            # of only one scan to never finish. So we force the stop by cancelling
-            # after enough time.
-            if self.buf.size <= 2:
-                left = self._expected_end - time.time()
-                if left > 0:
-                    time.sleep(left)
-                comedi.cancel(self._device, self._subdevice)
-                return
         except (IOError, comedi.ComediError):
             # might be due to a cancel
             logging.debug("Write ended before the end")
