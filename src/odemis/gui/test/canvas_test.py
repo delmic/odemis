@@ -207,6 +207,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         stream1 = RGBStream("s1", im1)
 
         im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
+        #pylint: disable=E1101
         px2_cent = tuple((s - 1) // 2 for s in im2.shape[:2])
         # Blue pixel at center (100,100)
         im2[px2_cent] = [0, 0, 255]
@@ -309,9 +310,10 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         scale = 1.0
 
         total_margin = (buffer_margin[0] * 2, buffer_margin[1] * 2)
-        total_size = (total_margin[0] + buffer_size[1],
-                      total_margin[0] + buffer_size[1])
-        self.assertEqual(view_size, total_size, "Illegal test values!")
+        total_size = (buffer_size[0] - total_margin[0],
+                      buffer_size[1] - total_margin[1])
+        self.assertEqual(view_size, total_size,
+                    "Illegal test values! %s != %s" % (view_size, total_size))
 
         # Matching values at scale 1
         view_buffer_world_values = [

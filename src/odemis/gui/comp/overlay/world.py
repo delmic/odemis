@@ -35,6 +35,7 @@ import odemis.gui as gui
 import odemis.gui.img.data as img
 import odemis.util as util
 import odemis.util.conversion as conversion
+import odemis.util.units as units
 
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
@@ -49,6 +50,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         self.w_start_pos = None
         self.w_end_pos = None
+
+        self.position_label = None
 
     # Selection creation
 
@@ -186,6 +189,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
+
             # Label
             if (self.dragging or self.edit) and self.cnvs.microscope_view:
                 w, h = self.cnvs.selection_to_real_size(
@@ -193,12 +197,21 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                                             self.w_end_pos
                 )
 
-                w = readable_str(w, 'm', sig=2)
-                h = readable_str(h, 'm', sig=2)
+                w = units.readable_str(w, 'm', sig=2)
+                h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
-                pos = (b_pos[2] + 5, b_pos[3] - 5)
-                self.write_label(ctx, dc_buffer.GetSize(), pos, size_lbl)
+                pos = (b_pos[2] + 10, b_pos[3] + 5)
+
+                if not self.position_label:
+                    self.position_label = self.add_label("")
+                    self.position_label.colour = (0.8, 0.8, 0.8)
+
+                self.position_label.text = size_lbl
+                self.position_label.pos = pos
+
+                self._write_label(ctx, self.position_label)
+
 
 
 FILL_NONE = 0
