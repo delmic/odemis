@@ -484,9 +484,9 @@ class SparcAcquisitionTab(Tab):
         else:
             rep = stream.repetition.value
             if isinstance(stream, streammod.AR_STREAMS):
-                style = overlay.FILL_POINT
+                style = overlay.world.FILL_POINT
             else:
-                style = overlay.FILL_GRID
+                style = overlay.world.FILL_GRID
             cvs.showRepetition(rep, style)
 
     def on_rep_focus(self, evt):

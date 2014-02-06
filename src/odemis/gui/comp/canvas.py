@@ -367,6 +367,9 @@ class BufferedCanvas(wx.Panel):
         """ Return the minimum size needed by the buffer """
         return self.ClientSize.x, self.ClientSize.y
 
+    def get_half_buffer_size(self):
+        return tuple(v // 2 for v in self._bmp_buffer_size)
+
     def resize_buffer(self, size):
         """ Resizes the bitmap buffer to the given size
 
@@ -440,8 +443,8 @@ class BufferedCanvas(wx.Panel):
         # center the coordinates
         dc.SetDeviceOrigin(self.ClientSize.x // 2, self.ClientSize.y // 2)
         # TODO: Add filtering for *enabled overlays
-        for o in self.view_overlays:
-            o.Draw(dc)
+        for vo in self.view_overlays:
+            vo.Draw(dc)
 
 
     # Position conversion

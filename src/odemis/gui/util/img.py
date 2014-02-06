@@ -29,7 +29,7 @@ def NDImage2wxImage(image):
     """
     Converts a NDImage into a wxImage.
     Note, the copy of the data will be avoided whenever possible.
-    image (ndarray of uint8 with shape YX3 or YX4): original image, 
+    image (ndarray of uint8 with shape YX3 or YX4): original image,
      order of last dimension is RGB(A)
     return (wxImage)
     """
@@ -51,7 +51,7 @@ def NDImage2wxBitmap(image):
     """
     Converts a NDImage into a wxBitmap.
     Note, the copy of the data will be avoided whenever possible.
-    image (ndarray of uint8 with shape YX3 or YX4): original image, 
+    image (ndarray of uint8 with shape YX3 or YX4): original image,
      order of last dimension is RGB(A)
     return (wxImage)
     """
@@ -60,7 +60,7 @@ def NDImage2wxBitmap(image):
     if image.shape[2] == 3: # RGB
         bim = wx.EmptyBitmap(size[0], size[1], 24)
         bim.CopyFromBuffer(image, wx.BitmapBufferFormat_RGB)
-#        bim = wx.BitmapFromBuffer(size[0], size[1], image)
+        # bim = wx.BitmapFromBuffer(size[0], size[1], image)
     elif image.shape[2] == 4: # RGBA
         bim = wx.BitmapFromBufferRGBA(size[0], size[1], image)
     else:
