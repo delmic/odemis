@@ -93,21 +93,21 @@ class OverlayTestCase(test.GuiTestCase):
 
         ol.add_label("TextViewOverlay center",
                      pos=(ol.view_width / 2, 42),
-                     align=wx.ALIGN_CENTER,
+                     align=wx.ALIGN_CENTER_HORIZONTAL,
                      colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("|",
                      pos=(ol.view_width / 2, 58),
-                     align=wx.ALIGN_CENTER,
+                     align=wx.ALIGN_CENTER_HORIZONTAL,
                      colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
         ol.add_label("|",
                      pos=(ol.view_width / 2, 74),
-                     align=wx.ALIGN_CENTER,
+                     align=wx.ALIGN_CENTER_HORIZONTAL,
                      colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
         ol.add_label("Relative to the center",
                      pos=(ol.view_width / 2, 90),
-                     align=wx.ALIGN_CENTER,
+                     align=wx.ALIGN_CENTER_HORIZONTAL,
                      colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
         test.gui_loop(50)
 
@@ -314,7 +314,7 @@ class OverlayTestCase(test.GuiTestCase):
         # cnvs.SetForegroundColour("#DDDDDD")
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        vsol = vol.ViewSelectOverlay(cnvs, "test selection")
+        vsol = vol.ViewSelectOverlay(cnvs, "test view selection")
         cnvs.view_overlays.append(vsol)
         cnvs.active_overlay = vsol
         cnvs.current_mode = miccanvas.MODE_SECOM_ZOOM
@@ -396,13 +396,13 @@ class OverlayTestCase(test.GuiTestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
 
-    # suit = unittest.TestSuite()
+    suit = unittest.TestSuite()
     # suit.addTest(OverlayTestCase("test_text_view_overlay_size") )
     # suit.addTest(OverlayTestCase("test_text_view_overlay_align") )
     # suit.addTest(OverlayTestCase("test_text_view_overlay_rotate") )
-    # suit.addTest(OverlayTestCase("test_polar_overlay") )
+    suit.addTest(OverlayTestCase("test_polar_overlay") )
     # suit.addTest(OverlayTestCase("test_points_select_overlay") )
     # suit.addTest(OverlayTestCase("test_pixel_select_overlay") )
     # suit.addTest(OverlayTestCase("test_view_select_overlay") )

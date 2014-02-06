@@ -1353,6 +1353,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         ## Overlays
 
         self.polar_overlay = view_overlay.PolarOverlay(self)
+        self.polar_overlay.canvas_padding = 10
         self.view_overlays.append(self.polar_overlay)
         self.active_overlay = self.polar_overlay
 
