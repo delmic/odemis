@@ -912,6 +912,57 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Setting EMCCD gain to %s", emgain)
             self.atcore.SetEMCCDGain(emgain)
 
+    # I²C related functions (currently unused)
+    def I2CReset(self):
+        """
+        Resets the data bus
+        """
+        self.atcore.I2CReset()
+
+    def I2CRead(self, i2caddr, addr):
+        """
+        read a single byte from the chosen device.
+        i2caddr (0<int<255): I²C address of the device
+        addr (0<=int<=255): address on the device
+        returns (0<=int<=255): byte read
+        """
+        data = c_ubyte()
+        self.atcore.I2CRead(c_ubyte(i2caddr), c_ubyte(addr), byref(data))
+        return data.value
+
+    def I2CWrite(self, i2caddr, addr, data):
+        """
+        Write a single byte to the chosen device.
+        i2caddr (0<int<255): I²C address of the device
+        addr (0<=int<=255): address on the device
+        data (0<=int<=255): byte to write
+        """
+        self.atcore.I2CWrite(c_ubyte(i2caddr), c_ubyte(addr), c_ubyte(data))
+
+    def I2CBurstRead(self, i2caddr, ldata):
+        """
+        read a series of bytes from the chosen device.
+        i2caddr (0<int<255): I²C address of the device
+        ldata (0<int): number of bytes to read
+        returns (list of 0<=int<255): bytes read
+        """
+        # TODO: use numpy array to avoid conversion to python
+        data = (c_ubyte * ldata)()
+        self.atcore.I2CBurstRead(c_ubyte(i2caddr), ldata, byref(data))
+        
+        pydata = [d for d in data] # Not needed?
+        return pydata
+
+    def I2CBurstWrite(self, i2caddr, data):
+        """
+        write a series of bytes from the chosen device.
+        i2caddr (0<int<255): I²C address of the device
+        data (0<=int<=255): list of bytes to write
+        """
+        cdata = (c_ubyte * len(data))(*data) # TODO: don't do if already a c_byte array
+        self.atcore.I2CBurstWrite(c_ubyte(i2caddr), len(data), byref(cdata))
+
+
     # High level methods
     def select(self):
         """
