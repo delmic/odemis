@@ -28,7 +28,6 @@ import math
 
 from numpy import arange
 from numpy import fft
-from scipy import fftpack
 
 def CalculateDrift(previous_img, current_img, precision):
     """

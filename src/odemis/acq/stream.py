@@ -2904,13 +2904,14 @@ class SEMCCDDCtream(MultipleDetectorStream):
             # We need to use synchronisation event because without it, either we
             # use .get() but it's not possible to cancel the acquisition, or we
             # subscribe/unsubscribe for each image, but the overhead is high.
-            trigger = self._ccd.softwareTrigger
-            self._ccd_df.synchronizedOn(trigger)
-            self._ccd_df.subscribe(self._ssOnCCDImage)
+            # trigger = self._ccd.softwareTrigger
+            # self._ccd_df.synchronizedOn(trigger)
+            # self._ccd_df.subscribe(self._ssOnCCDImage)
 
             tot_num = numpy.prod(rep)
             n = 0
             drift = (0, 0)
+            cur_drift = (0, 0)
 
             # First anchor region acquisition
             roi = self._dc_region.value
@@ -2934,6 +2935,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1000 + 1):
                 raise TimeoutError("First acquisition of selected region frame timed out")
             self._semd_df.unsubscribe(self._ssOnSelectedRegion)
+            hdf5.export("simsem0.h5", self._sr_data[0])
 
             start_time = time.time()
             dc_start = time.time()
@@ -2950,21 +2952,22 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
 
                 self._acq_sem_complete.clear()
-                self._acq_ccd_complete.clear()
+                # self._acq_ccd_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
                 time.sleep(0)  # give more chances spot has been already processed
                 start = time.time()
-                trigger.notify()
+                # trigger.notify()
 
-                if not self._acq_ccd_complete.wait(ccd_time * 1000 + 1):
-                    raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
+                # if not self._acq_ccd_complete.wait(ccd_time * 1000 + 1):
+                #    raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
-                dur = time.time() - start
-                if dur < ccd_time:
-                    logging.warning("CCD acquisition took less that %g s: %g s",
-                                    ccd_time, dur)
+                # dur = time.time() - start
+                # if dur < ccd_time:
+                #    logging.warning("CCD acquisition took less that %g s: %g s",
+                #                    ccd_time, dur)
 
+                print (i,)
                 # Normally, the SEM acquisition has already completed
                 if not self._acq_sem_complete.wait(dwell_time * 1000 + 1):
                     raise TimeoutError("Acquisition of SEM pixel %s timed out" % (i,))
@@ -2980,10 +2983,10 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
                 # MD_POS default to the center of the stage, but it needs to be
                 # the position of the e-beam
-                ccd_data = self._ccd_data
-                ccd_data.metadata[MD_POS] = self._sem_data[-1].metadata[MD_POS]
-                ccd_data.metadata[MD_DESCRIPTION] = self._ccd_stream.name.value
-                ccd_buf.append(ccd_data)
+                # ccd_data = self._ccd_data
+                # ccd_data.metadata[MD_POS] = self._sem_data[-1].metadata[MD_POS]
+                # ccd_data.metadata[MD_DESCRIPTION] = self._ccd_stream.name.value
+                # ccd_buf.append(ccd_data)
 
                 n += 1
                 self._updateProgress(future, start_time, n / tot_num)
@@ -3008,16 +3011,28 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
                     # Calculate the drift between the last two frames
                     if len(self._sr_data) > 1:
-                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 40)
+                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 1)
+                        logging.debug("New drift: " + str(drift))
+                        # recalibrate
+                        drift = (drift[0] + cur_drift[0], drift[1] + cur_drift[1])
+                        cur_drift = drift
                         logging.debug("Current drift: " + str(drift))
+                        """
+                        if drift[1] != drift[0]:
+                            hdf5.export("simsem1.h5", self._sr_data[len(self._sr_data) - 2])
+                            hdf5.export("simsem2.h5", self._sr_data[len(self._sr_data) - 1])
+                            print self._sr_data[len(self._sr_data) - 2]
+                            print self._sr_data[len(self._sr_data) - 1]
+                            return
+                        """
                         # Update next positions
                         spot_pos[:, :, 0] -= drift[0]
                         spot_pos[:, :, 1] -= drift[1]
 
                     dc_start = time.time()
 
-            self._ccd_df.unsubscribe(self._ssOnCCDImage)
-            self._ccd_df.synchronizedOn(None)
+            # self._ccd_df.unsubscribe(self._ssOnCCDImage)
+            # self._ccd_df.synchronizedOn(None)
 
             with self._acq_lock:
                 if self._acq_state == CANCELLED:
@@ -3025,6 +3040,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 self._acq_state = FINISHED
 
             sem_one = self._assembleSEMData(rep, roi, self._sem_data)  # shape is (Y, X)
+            hdf5.export("acquired_sem.h5", sem_one)
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
             self._onSEMCCDData(sem_one, ccd_buf)
@@ -3034,10 +3050,10 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
             # make sure it's all stopped
             self._semd_df.unsubscribe(self._ssOnSEMImage)
-            self._ccd_df.unsubscribe(self._ssOnCCDImage)
-            self._ccd_df.synchronizedOn(None)
+            # self._ccd_df.unsubscribe(self._ssOnCCDImage)
+            # self._ccd_df.synchronizedOn(None)
 
-            self._ccd_stream.raw = []
+            # self._ccd_stream.raw = []
             self._sem_stream.raw = []
             if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
                 logging.warning("Converting exception to cancellation")
@@ -3051,7 +3067,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
     def _ssOnSelectedRegion(self, df, data):
         logging.debug("Selected Region data received")
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
-        if not self._acq_sem_complete.is_set():
+        if (not self._acq_sem_complete.is_set()) and data.shape != (1, 1):
             # only use the first data per pixel
             self._sr_data.append(data)
 
