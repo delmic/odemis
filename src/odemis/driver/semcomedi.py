@@ -1743,11 +1743,8 @@ class Writer(Accesser):
         duration: expected total duration it will take (in s)
         """
         if buf.size <= 2:
-            # TODO: investigate further this issue and report upstream.
-            # Need a C sample code (also seems to work ok if period is min_period)
-            # There seems to be is a bug in the NI comedi driver that cause writes
-            # of only one scan to never finish. So we force the stop by cancelling
-            # after enough time.
+            # Bug reported 20140206: There seems to be is a bug in the NI comedi
+            # driver that cause writes of only one scan to never finish.
             logging.warning("Buffer has length=%d, probably going to fail",
                             buf.size)
 
@@ -1762,14 +1759,22 @@ class Writer(Accesser):
             self._preload_size = dev_buf_size / buf.itemsize
             logging.debug("Going to preload %d bytes", buf[:self._preload_size].nbytes)
             buf[:self._preload_size].tofile(self.file)
-            self.file.flush() # it can block here if we preload too much
 
-            self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
+            if len(buf) <= self._preload_size:
+                # If all the buffer fit within _preload_size, don't start
+                # thread, on small buffers it avoids a lot of overhead.
+                self.thread = None
+                logging.debug("Not running writter thread, as buffer is small")
+            else:
+                self.thread = threading.Thread(name="SEMComedi writer", target=self._thread)
+
+            self.file.flush() # it can block here if we preload too much
 
     def run(self):
         self._begin = time.time()
         self._expected_end = time.time() + self.duration
-        self.thread.start()
+        if self.thread is not None:
+            self.thread.start()
 
     def _thread(self):
         """
@@ -1794,15 +1799,16 @@ class Writer(Accesser):
             timeout = max(now - self._expected_end + 1, 0.1)
         max_time = now + timeout
 
-        self.thread.join(timeout)
+        if self.thread is not None:
+            self.thread.join(timeout)
 
         # Wait until the buffer is fully emptied to state the output is over
         while (comedi.get_subdevice_flags(self._device, self._subdevice)
                & comedi.SDF_RUNNING):
             # sleep longer if the end is far away
-            left = min(self._expected_end - time.time(), 0.1)
+            left = self._expected_end - time.time()
             if left > 0.01:
-                time.sleep(left / 2)
+                time.sleep(min(left / 2, 0.1))
             else:
                 time.sleep(0) # just yield
 
@@ -1810,7 +1816,7 @@ class Writer(Accesser):
                 comedi.cancel(self._device, self._subdevice)
                 raise IOError("Write timeout while device is still generating data")
 
-        if self.thread.isAlive():
+        if self.thread and self.thread.isAlive():
             comedi.cancel(self._device, self._subdevice)
             raise IOError("Write timeout while device is idle")
 
@@ -1830,20 +1836,20 @@ class Writer(Accesser):
         Warning: it's not possible to cancel a thread which has not already been 
          prepared.
         """
-        try:
-            if not self.thread or self.cancelled:
-                return
+        if self.cancelled:
+            return
 
+        try:
             logging.debug("Cancelling write")
             with self._lock:
                 comedi.cancel(self._device, self._subdevice)
                 self.cancelled = True
                 logging.debug("Write cmd cancel sent")
 
-            if not self.thread.isAlive():
-                return
-
-            self.thread.join(0.5)
+            if self.thread:
+                if not self.thread.isAlive():
+                    return
+                self.thread.join(0.5)
         except comedi.ComediError:
             logging.debug("Failed to cancel write")
 
@@ -2202,10 +2208,6 @@ class Scanner(model.Emitter):
                                         translation[::-1], margin)
 
             self._prev_settings = new_settings
-            # DEBUG
-            range_x = numpy.min(self._scan_array[:, :, 0]), numpy.max(self._scan_array[:, :, 0])
-            range_y = numpy.min(self._scan_array[:, :, 1]), numpy.max(self._scan_array[:, :, 1])
-            logging.debug("Updated scan range to X=%s, Y=%s", range_x, range_y)
 
         return (self._scan_array, dwell_time, resolution[::-1],
                 margin, self._channels, self._ranges, self._osr, self._dpr)
