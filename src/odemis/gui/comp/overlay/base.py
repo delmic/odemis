@@ -165,7 +165,7 @@ class Overlay(object):
         # Cache the current context settings
         ctx.save()
 
-        # TODO: Look at ScaledFont for aditional caching
+        # TODO: Look at ScaledFont for additional caching
         ctx.select_font_face(
                 self._font_name,
                 cairo.FONT_SLANT_NORMAL,

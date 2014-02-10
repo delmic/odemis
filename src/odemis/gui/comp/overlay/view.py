@@ -276,7 +276,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
         super(ViewSelectOverlay, self).__init__(cnvs)
         SelectionMixin.__init__(self, sel_cur, colour, center)
 
-        self.position_label = None
+        self.position_label = self.add_label("")
 
 
     def Draw(self, dc, shift=(0, 0), scale=1.0):
@@ -312,12 +312,9 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
-            if not self.position_label:
-                self.position_label = self.add_label("")
-                self.position_label.colour = (1, 1, 1)
-
             self.position_label.pos = start_pos
-            self.text = "kaas"
+            # FIXME: label text is always empty... what's the point of displaying it?
+#            self.text = "kaas"
 
             self._write_label(ctx, self.position_label)
 
@@ -407,6 +404,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             ctx.stroke()
 
         if None not in (self.v_posy.value, self.v_posx.value):
+            # FIXME: use _write_labels()
             if self.x_label:
                 self.write_label(ctx,
                             dc_buffer.GetSize(),
@@ -695,21 +693,23 @@ class PolarOverlay(ViewOverlay):
         self.px, self.py = None, None
         self.tx, self.ty = None, None
 
-        self.phi = None             # Phi angle in radians
-        self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
-        self.phi_line_pos = None    # End point in pixels of the Phi line
-        self.phi_label = None
-        self.theta = None           # Theta angle in radians
-        self.theta_radius = None    # Radius of the theta circle in pixels
-        self.theta_label = None
-        self.intersection = None    # The intersection of the cirle and line in
-                                    # pixels
-
         self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.colour_highlight = conversion.hex_to_frgb(
                                             gui.FOREGROUND_COLOUR_HIGHLIGHT)
         self.intensity = None
+
+        self.phi = None             # Phi angle in radians
+        self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
+        self.phi_line_pos = None    # End point in pixels of the Phi line
+        self.phi_label = self.add_label("", colour=self.colour,
+                           align=wx.ALIGN_CENTER_HORIZONTAL | wx.ALIGN_BOTTOM)
+        self.theta = None           # Theta angle in radians
+        self.theta_radius = None    # Radius of the theta circle in pixels
+        self.theta_label = self.add_label("", colour=self.colour,
+                                          align=wx.ALIGN_CENTER_HORIZONTAL)
+        self.intersection = None    # The intersection of the cirle and line in
+                                    # pixels
 
         self.dragging = False
 
@@ -791,11 +791,6 @@ class PolarOverlay(ViewOverlay):
             x = self.center_x + radius * cos_phi_line
             y = self.center_y + radius * sin_phi_line
 
-            if not self.phi_label:
-                self.phi_label = self.add_label("")
-                self.phi_label.colour = self.colour
-                self.phi_label.align = wx.ALIGN_CENTER_HORIZONTAL|wx.ALIGN_BOTTOM
-
             self.phi_label.text = u"φ %0.1f°" % math.degrees(self.phi)
             self.phi_label.deg = math.degrees(self.phi_line_rad)
 
@@ -845,11 +840,6 @@ class PolarOverlay(ViewOverlay):
         y = self.center_y + self.theta_radius + 3
 
         theta_str = u"θ %0.1f°" % math.degrees(self.theta)
-
-        if not self.theta_label:
-            self.theta_label = self.add_label(theta_str)
-            self.theta_label.colour = self.colour
-            self.theta_label.align = wx.ALIGN_CENTER_HORIZONTAL
 
         self.theta_label.text = theta_str
         self.theta_label.pos = (x, y)
@@ -1010,7 +1000,6 @@ class PolarOverlay(ViewOverlay):
         # Draw tick labels, ignore padding in this case
         pad, self.canvas_padding = self.canvas_padding, 0
 
-        ctx.set_source_rgb(0.8, 0.8, 0.8)
         for _, _, _, _, label in self.ticks:
             self._write_label(ctx, label)
 
@@ -1026,6 +1015,7 @@ class PolarOverlay(ViewOverlay):
             if y < 40:
                 y += 40
 
+            # FIXME: what/where is this method??
             self.write_label(
                     ctx,
                     self.cnvs.ClientSize,
