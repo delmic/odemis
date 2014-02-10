@@ -27,16 +27,17 @@ from decorator import decorator
 import logging
 import numpy
 from odemis import util, model
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
 import threading
+import weakref
 import wx
 from wx.lib.pubsub import pub
 
+from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
@@ -358,8 +359,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         the canvas currently expects.
         """
         images = self._getOrderedImages()
-        # remove all the images (so they can be garbage collected)
-        self.images = [None]
 
         # add the images in order
         ims = []
@@ -1152,6 +1151,13 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
         self.abilities -= set([CAN_ZOOM, CAN_MOVE])
 
+        self._goal_im_ref = None
+        self._goal_wim = None
+
+    def _reset_goal_im(self):
+        """ Called when the goal_im is dereferenced """
+        self._goal_wim = None
+
     def _convertStreamsToImages(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
@@ -1173,7 +1179,21 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 continue
 
             # convert to wxImage
-            wim = img.NDImage2wxImage(rgbim)
+            # Special trick to avoid regenerating the wxImage for Goal all the time
+            # TODO: make it generic
+            if s.name.value == "Goal":
+                prev_im = None if self._goal_im_ref is None else self._goal_im_ref()
+                if (self._goal_wim is None or prev_im is None or
+                    prev_im is not rgbim):
+                    logging.debug("Converting goal image")
+                    wim = img.NDImage2wxImage(rgbim)
+                    self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
+                    self._goal_wim = wim
+                else:
+                    wim = self._goal_wim
+            else:
+                wim = img.NDImage2wxImage(rgbim)
+
             keepalpha = (rgbim.shape[2] == 4)
 
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
