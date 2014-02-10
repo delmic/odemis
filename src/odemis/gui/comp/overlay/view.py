@@ -219,6 +219,8 @@ class FocusOverlay(ViewOverlay):
         self.line_width = 16
         self.shifts = [0, 0]
 
+        self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+
     def Draw(self, dc):
         """
         Draws the crosshair
@@ -243,14 +245,11 @@ class FocusOverlay(ViewOverlay):
             ctx.move_to(x, middle)
             ctx.line_to(x, end_y)
             ctx.stroke()
-            self.write_label(
-                ctx,
-                dc.GetSize(),
-                (x - 10, end_y),
-                "focus %s" % units.readable_str(self.shifts[1], 'm', 2),
-                flip=False,
-                align=wx.ALIGN_RIGHT
-            )
+
+            lbl = "focus %s" % units.readable_str(self.shifts[1], 'm', 2)
+            self.focus_label.text = lbl
+            self.focus_label.pos = (x - 15, end_y)
+            self._write_label(ctx, self.focus_label)
 
     def add_shift(self, shift, axis):
         """ Adds a value on the given axis, and updates the overlay
