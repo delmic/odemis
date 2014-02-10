@@ -717,6 +717,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         h = abs(start_w_pos[1] - end_w_pos[1]) * self.mpwu
         return w, h
 
+    # Hook to update the FPS value
+    def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
+        fps = super(DblMicroscopeCanvas, self)._draw_merged_images(dc_buffer,
+                                                         images,
+                                                         mergeratio)
+        self._fps_ol.set_label("%d fps" % fps)
+
 
 class SecomCanvas(DblMicroscopeCanvas):
 

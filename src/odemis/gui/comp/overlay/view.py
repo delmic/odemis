@@ -45,10 +45,15 @@ class TextViewOverlay(ViewOverlay):
         super(TextViewOverlay, self).__init__(cnvs)
         self.vpos = vpos
 
+        self._content_label = self.add_label("", colour=(255, 255, 255))
+
     def Draw(self, dc):
         if self.labels:
             ctx = wx.lib.wxcairo.ContextFromDC(dc)
             self._write_labels(ctx)
+
+    def set_label(self, txt):
+        self._content_label.text = txt
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, cnvs,
