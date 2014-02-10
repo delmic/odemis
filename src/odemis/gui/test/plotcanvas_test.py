@@ -253,9 +253,10 @@ class PlotCanvasTestCase(test.GuiTestCase):
                         self.assertAlmostEqual(bp[1], nbp[1], msg=err)
 
 if __name__ == "__main__":
-    unittest.main()
+    # unittest.main()
 
-    # suit = unittest.TestSuite()
-    # suit.addTest(PlotCanvasTestCase("test_plot_canvas") )
-    # runner = unittest.TextTestRunner()
-    # runner.run(suit)
+    suit = unittest.TestSuite()
+    # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
+    suit.addTest(PlotCanvasTestCase("test_plot_viewport"))
+    runner = unittest.TextTestRunner()
+    runner.run(suit)

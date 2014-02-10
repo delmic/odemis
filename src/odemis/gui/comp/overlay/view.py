@@ -343,11 +343,29 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posx = model.VigilantAttribute(None)
         self.v_posy = model.VigilantAttribute(None)
 
-        self.x_label = None
-        self.y_label = None
+        self._x_label = self.add_label("", colour=self.colour)
+        self._y_label = self.add_label("", colour=self.colour,
+                                       align=wx.ALIGN_BOTTOM)
 
         self.orientation = orientation
         self.line_width = 2
+
+    @property
+    def x_label(self):
+        return self._x_label
+
+    @x_label.setter
+    def x_label(self, lbl):
+        self._x_label.text = lbl
+
+    @property
+    def y_label(self):
+        return self._y_label
+
+    @y_label.setter
+    def y_label(self, lbl):
+        self._y_label.text = lbl
+
 
     def clear(self):
         self.v_posx.value = None
@@ -379,7 +397,6 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
 
     def set_position(self, pos, label=None):
         self.v_posx.value = max(min(self.cnvs.ClientSize.x, pos[0]), 1)
-
         self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
         self.label = label
 
@@ -404,26 +421,27 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             ctx.stroke()
 
         if None not in (self.v_posy.value, self.v_posx.value):
-            # FIXME: use _write_labels()
-            if self.x_label:
-                self.write_label(ctx,
-                            dc_buffer.GetSize(),
-                            (self.v_posx.value + 4, self.cnvs.ClientSize.y - 6),
-                            self.x_label,
-                            colour=self.colour)
+            if self.x_label.text:
+                self.x_label.pos = (self.v_posx.value + 5,
+                                    self.cnvs.ClientSize.y)
+                self._write_label(ctx, self.x_label)
 
-            if self.y_label:
-                yo = max(0, 20 - self.v_posx.value / 5)
-                y_pos = max(
-                            min(self.v_posy.value - 6,
-                                self.cnvs.ClientSize.y - yo),
-                            14)
+            if self.y_label.text:
+                yp = max(0, self.v_posy.value - 5) # Padding from line
+                # Increase bottom margin if x label is close
 
-                self.write_label(ctx,
-                    dc_buffer.GetSize(),
-                    (2, y_pos),
-                    self.y_label,
-                    colour=self.colour)
+                label_padding = 30 if self.v_posx.value < 50 else 0
+                yn = min(self.cnvs.ClientSize.y - label_padding, yp)
+                self.y_label.pos = (2, yn)
+                self._write_label(ctx, self.y_label)
+
+
+
+            #     self.write_label(ctx,
+            #         dc_buffer.GetSize(),
+            #         (2, y_pos),
+            #         self.y_label,
+            #         colour=self.colour)
 
             r, g, b, a = conversion.change_brightness(self.colour, -0.2)
             a = 0.5
