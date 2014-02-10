@@ -428,29 +428,16 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             if self.y_label.text:
                 yp = max(0, self.v_posy.value - 5) # Padding from line
                 # Increase bottom margin if x label is close
-
                 label_padding = 30 if self.v_posx.value < 50 else 0
                 yn = min(self.cnvs.ClientSize.y - label_padding, yp)
                 self.y_label.pos = (2, yn)
                 self._write_label(ctx, self.y_label)
-
-
-
-            #     self.write_label(ctx,
-            #         dc_buffer.GetSize(),
-            #         (2, y_pos),
-            #         self.y_label,
-            #         colour=self.colour)
 
             r, g, b, a = conversion.change_brightness(self.colour, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.v_posx.value, self.v_posy.value, 5.5, 0, 2*math.pi)
             ctx.fill()
-
-            if self.label:
-                vpos = (self.v_posx.value + 5, self.v_posy.value + 3)
-                self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
 
 
 TOP_LEFT = 0
@@ -714,7 +701,9 @@ class PolarOverlay(ViewOverlay):
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.colour_highlight = conversion.hex_to_frgb(
                                             gui.FOREGROUND_COLOUR_HIGHLIGHT)
-        self.intensity = None
+        self.intensity_label = self.add_label(
+                                    "", align=wx.ALIGN_CENTER_HORIZONTAL,
+                                    colour=self.colour_highlight)
 
         self.phi = None             # Phi angle in radians
         self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
@@ -862,7 +851,6 @@ class PolarOverlay(ViewOverlay):
         self.theta_label.pos = (x, y)
 
     def _calculate_intersection(self):
-
         if None not in (self.phi_line_rad, self.theta_radius):
             # Calculate the intersecion between Phi and Theta
             x = self.center_x + self.theta_radius * math.cos(self.phi_line_rad)
@@ -885,8 +873,9 @@ class PolarOverlay(ViewOverlay):
         if (view_pos and
             0 < self.intersection[0] < self.cnvs.ClientSize.x and
             0 < self.intersection[1] < self.cnvs.ClientSize.y):
-            # Determine actual value here
-            self.intensity = None #"Bingo!"
+            # FIXME: Determine actual value here
+            #self.intensity_label.text = ""
+            pass
 
     def on_left_down(self, evt):
         self.dragging = True
@@ -1022,7 +1011,9 @@ class PolarOverlay(ViewOverlay):
 
         self.canvas_padding = pad
 
-        if self.intensity is not None:
+        if self.intensity_label.text and self.intersection:
+            print "?????????????"
+
             ctx.set_source_rgb(*self.colour_highlight)
             ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
             ctx.fill()
@@ -1032,12 +1023,5 @@ class PolarOverlay(ViewOverlay):
             if y < 40:
                 y += 40
 
-            # FIXME: what/where is this method??
-            self.write_label(
-                    ctx,
-                    self.cnvs.ClientSize,
-                    (x, y),
-                    self.intensity,
-                    flip=True,
-                    align=wx.ALIGN_CENTER_HORIZONTAL,
-                    colour=self.colour_highlight)
+            self.intensity_label.pos = (x, y)
+            self._write_label(ctx, self.intensity_label)
