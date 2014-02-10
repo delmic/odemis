@@ -257,7 +257,10 @@ class Overlay(object):
 
         # Draw Text
         if l.colour:
-            ctx.set_source_rgba(*(l.colour + (l.opacity,)))
+            if len(l.colour) == 3:
+                ctx.set_source_rgba(*(l.colour + (l.opacity,)))
+            else:
+                ctx.set_source_rgba(*l.colour)
 
         ctx.move_to(x, y)
         ctx.show_text(l.text)

@@ -219,6 +219,8 @@ class FocusOverlay(ViewOverlay):
         self.line_width = 16
         self.shifts = [0, 0]
 
+        self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+
     def Draw(self, dc):
         """
         Draws the crosshair
@@ -243,14 +245,11 @@ class FocusOverlay(ViewOverlay):
             ctx.move_to(x, middle)
             ctx.line_to(x, end_y)
             ctx.stroke()
-            self.write_label(
-                ctx,
-                dc.GetSize(),
-                (x - 10, end_y),
-                "focus %s" % units.readable_str(self.shifts[1], 'm', 2),
-                flip=False,
-                align=wx.ALIGN_RIGHT
-            )
+
+            lbl = "focus %s" % units.readable_str(self.shifts[1], 'm', 2)
+            self.focus_label.text = lbl
+            self.focus_label.pos = (x - 15, end_y)
+            self._write_label(ctx, self.focus_label)
 
     def add_shift(self, shift, axis):
         """ Adds a value on the given axis, and updates the overlay
@@ -343,11 +342,29 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posx = model.VigilantAttribute(None)
         self.v_posy = model.VigilantAttribute(None)
 
-        self.x_label = None
-        self.y_label = None
+        self._x_label = self.add_label("", colour=self.colour)
+        self._y_label = self.add_label("", colour=self.colour,
+                                       align=wx.ALIGN_BOTTOM)
 
         self.orientation = orientation
         self.line_width = 2
+
+    @property
+    def x_label(self):
+        return self._x_label
+
+    @x_label.setter
+    def x_label(self, lbl):
+        self._x_label.text = lbl
+
+    @property
+    def y_label(self):
+        return self._y_label
+
+    @y_label.setter
+    def y_label(self, lbl):
+        self._y_label.text = lbl
+
 
     def clear(self):
         self.v_posx.value = None
@@ -379,7 +396,6 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
 
     def set_position(self, pos, label=None):
         self.v_posx.value = max(min(self.cnvs.ClientSize.x, pos[0]), 1)
-
         self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
         self.label = label
 
@@ -404,36 +420,24 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
             ctx.stroke()
 
         if None not in (self.v_posy.value, self.v_posx.value):
-            # FIXME: use _write_labels()
-            if self.x_label:
-                self.write_label(ctx,
-                            dc_buffer.GetSize(),
-                            (self.v_posx.value + 4, self.cnvs.ClientSize.y - 6),
-                            self.x_label,
-                            colour=self.colour)
+            if self.x_label.text:
+                self.x_label.pos = (self.v_posx.value + 5,
+                                    self.cnvs.ClientSize.y)
+                self._write_label(ctx, self.x_label)
 
-            if self.y_label:
-                yo = max(0, 20 - self.v_posx.value / 5)
-                y_pos = max(
-                            min(self.v_posy.value - 6,
-                                self.cnvs.ClientSize.y - yo),
-                            14)
-
-                self.write_label(ctx,
-                    dc_buffer.GetSize(),
-                    (2, y_pos),
-                    self.y_label,
-                    colour=self.colour)
+            if self.y_label.text:
+                yp = max(0, self.v_posy.value - 5) # Padding from line
+                # Increase bottom margin if x label is close
+                label_padding = 30 if self.v_posx.value < 50 else 0
+                yn = min(self.cnvs.ClientSize.y - label_padding, yp)
+                self.y_label.pos = (2, yn)
+                self._write_label(ctx, self.y_label)
 
             r, g, b, a = conversion.change_brightness(self.colour, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
             ctx.arc(self.v_posx.value, self.v_posy.value, 5.5, 0, 2*math.pi)
             ctx.fill()
-
-            if self.label:
-                vpos = (self.v_posx.value + 5, self.v_posy.value + 3)
-                self.write_label(ctx, dc_buffer.GetSize(), vpos, self.label)
 
 
 TOP_LEFT = 0
@@ -697,7 +701,9 @@ class PolarOverlay(ViewOverlay):
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.colour_highlight = conversion.hex_to_frgb(
                                             gui.FOREGROUND_COLOUR_HIGHLIGHT)
-        self.intensity = None
+        self.intensity_label = self.add_label(
+                                    "", align=wx.ALIGN_CENTER_HORIZONTAL,
+                                    colour=self.colour_highlight)
 
         self.phi = None             # Phi angle in radians
         self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
@@ -845,7 +851,6 @@ class PolarOverlay(ViewOverlay):
         self.theta_label.pos = (x, y)
 
     def _calculate_intersection(self):
-
         if None not in (self.phi_line_rad, self.theta_radius):
             # Calculate the intersecion between Phi and Theta
             x = self.center_x + self.theta_radius * math.cos(self.phi_line_rad)
@@ -868,8 +873,9 @@ class PolarOverlay(ViewOverlay):
         if (view_pos and
             0 < self.intersection[0] < self.cnvs.ClientSize.x and
             0 < self.intersection[1] < self.cnvs.ClientSize.y):
-            # Determine actual value here
-            self.intensity = None #"Bingo!"
+            # FIXME: Determine actual value here
+            #self.intensity_label.text = ""
+            pass
 
     def on_left_down(self, evt):
         self.dragging = True
@@ -1005,7 +1011,9 @@ class PolarOverlay(ViewOverlay):
 
         self.canvas_padding = pad
 
-        if self.intensity is not None:
+        if self.intensity_label.text and self.intersection:
+            print "?????????????"
+
             ctx.set_source_rgb(*self.colour_highlight)
             ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
             ctx.fill()
@@ -1015,12 +1023,5 @@ class PolarOverlay(ViewOverlay):
             if y < 40:
                 y += 40
 
-            # FIXME: what/where is this method??
-            self.write_label(
-                    ctx,
-                    self.cnvs.ClientSize,
-                    (x, y),
-                    self.intensity,
-                    flip=True,
-                    align=wx.ALIGN_CENTER_HORIZONTAL,
-                    colour=self.colour_highlight)
+            self.intensity_label.pos = (x, y)
+            self._write_label(ctx, self.intensity_label)
