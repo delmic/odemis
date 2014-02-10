@@ -124,6 +124,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._crosshair_ol = None
         self._spotmode_ol = None
         self._fps_ol = view_overlay.TextViewOverlay(self)
+        self._fps_label = self._fps_ol.add_label("")
         self.focus_overlay = None
         self.roi_overlay = None
         self.driftcor_overlay = None
@@ -722,7 +723,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         fps = super(DblMicroscopeCanvas, self)._draw_merged_images(dc_buffer,
                                                          images,
                                                          mergeratio)
-        self._fps_ol.set_label("%d fps" % fps)
+        self._fps_label.text = "%d fps" % fps
 
 
 class SecomCanvas(DblMicroscopeCanvas):

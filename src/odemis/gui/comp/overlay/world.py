@@ -51,7 +51,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.w_start_pos = None
         self.w_end_pos = None
 
-        self.position_label = None
+        self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8))
 
     # Selection creation
 
@@ -203,15 +203,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
                 pos = (b_pos[2] + 10, b_pos[3] + 5)
 
-                if not self.position_label:
-                    self.position_label = self.add_label("")
-                    self.position_label.colour = (0.8, 0.8, 0.8)
-
                 self.position_label.text = size_lbl
                 self.position_label.pos = pos
-
                 self._write_label(ctx, self.position_label)
-
 
 
 FILL_NONE = 0

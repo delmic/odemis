@@ -147,7 +147,7 @@ class Overlay(object):
                     font_size,
                     flip,
                     align,
-                    colour,
+                    colour or (1.0, 1.0, 1.0), # default to white
                     opacity,
                     deg
                 )
