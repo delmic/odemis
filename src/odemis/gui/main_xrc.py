@@ -1631,8 +1631,8 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mry">
-                          <label>-Pitch</label>
+                        <object class="wxStaticText" name="lbl_pry">
+                          <label>+Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1649,8 +1649,8 @@ def __init_resources():
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pry">
-                          <label>+Pitch</label>
+                        <object class="wxStaticText" name="lbl_mry">
+                          <label>-Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -1704,7 +1704,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_pry">
+                        <object class="ImageTextButton" name="mirror_align_btn_mry">
                           <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1729,7 +1729,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mry">
+                        <object class="ImageTextButton" name="mirror_align_btn_pry">
                           <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
