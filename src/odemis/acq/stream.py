@@ -2456,8 +2456,7 @@ class SEMARMDStream(SEMCCDMDStream):
 
 # Generic cross-cut types
 # All the stream types related to optical
-OPTICAL_STREAMS = (FluoStream,
-                   BrightfieldStream,
+OPTICAL_STREAMS = (CameraStream,
                    StaticFluoStream,
                    StaticBrightfieldStream)
 
