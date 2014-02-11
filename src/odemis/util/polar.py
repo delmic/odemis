@@ -32,7 +32,7 @@ AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the distance be
 AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/4f
 
 
-def AngleResolved2Polar(data, output_size, hole=True):
+def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     """
     Converts an angle resolved image to polar representation
     data (model.DataArray): The image that was projected on the CCD after being
