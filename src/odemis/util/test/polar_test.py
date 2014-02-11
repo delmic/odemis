@@ -71,6 +71,20 @@ class TestPolarConversion(unittest.TestCase):
         white_data_1024[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_1024
         self.white_data_1024 = white_data_1024
 
+        white_data_2500 = hdf5.read_data("white_data_2500.h5")
+        white_mag_2500 = 0.4917
+        white_spxs_2500 = (13e-6, 13e-6)
+        white_binning_2500 = (2, 2)
+        white_data_2500[0].metadata[model.MD_BINNING] = white_binning_2500
+        white_data_2500[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = white_spxs_2500
+        white_data_2500[0].metadata[model.MD_LENS_MAG] = white_mag_2500
+        white_data_2500[0].metadata[model.MD_AR_POLE] = (283, 259)
+        white_mag_2500 = white_data_2500[0].metadata[model.MD_LENS_MAG]
+        white_pxs_2500 = (white_spxs_2500[0] * white_binning_2500[0] / white_mag_2500,
+               white_spxs_2500[1] * white_binning_2500[1] / white_mag_2500)
+        white_data_2500[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_2500
+        self.white_data_2500 = white_data_2500
+
     def test_precomputed(self):
         data = self.data
         C, T, Z, Y, X = data[0].shape
@@ -198,6 +212,21 @@ class TestPolarConversion(unittest.TestCase):
         result = polar.AngleResolved2Polar(white_data_1024[0], 201)
 
         desired_output = hdf5.read_data("desired_white_1024.h5")
+        C, T, Z, Y, X = desired_output[0].shape
+        desired_output[0].shape = Y, X
+
+        numpy.testing.assert_allclose(result, desired_output[0], rtol=1e-04)
+
+    def test_2560x2160(self):
+        """
+        Test for 2560x2160 white image input
+        """
+        white_data_2500 = self.white_data_2500
+        C, T, Z, Y, X = white_data_2500[0].shape
+        white_data_2500[0].shape = Y, X
+        result = polar.AngleResolved2Polar(white_data_2500[0], 2000, dtype=numpy.float16)
+
+        desired_output = hdf5.read_data("desired_white_2500.h5")
         C, T, Z, Y, X = desired_output[0].shape
         desired_output[0].shape = Y, X
 

@@ -52,11 +52,14 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     except KeyError:
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
+    if dtype == None :
+        dtype = numpy.float64
+
     # Crop the input image to half circle
     cropped_image = _CropHalfCircle(data, pixel_size, (mirror_x, mirror_y), hole)
 
-    theta_data = numpy.empty(shape=cropped_image.shape)
-    phi_data = numpy.empty(shape=cropped_image.shape)
+    theta_data = numpy.empty(shape=cropped_image.shape, dtype=dtype)
+    phi_data = numpy.empty(shape=cropped_image.shape, dtype=dtype)
     omega_data = numpy.empty(shape=cropped_image.shape)
 
     # For each pixel of the input ndarray, input metadata is used to
