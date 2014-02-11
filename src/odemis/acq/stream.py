@@ -2699,6 +2699,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
         self._sr_data = None
         self._trans = None
         self._res = None
+        self._min_bound = None
+        self._max_bound = None
+        self._safety_bounds = (-1010,1010)
         # TO BE REMOVED
         self.data = hdf5.read_data("small_data.h5")
         C, T, Z, Y, X = self.data[0].shape
@@ -2834,7 +2837,13 @@ class SEMCCDDCtream(MultipleDetectorStream):
         for drift correction.
         """
         # translation is distance from center (situated at 0.5, 0.5), can be floats
-        self._trans = (self._trans[0] - drift[1], self._trans[1] - drift[0])
+        # we clip translation inside of bounds in case of huge drift
+        new_translation = (self._trans[0] - drift[1], self._trans[1] - drift[0])
+        if (abs(new_translation[0]) > self._safety_bounds[1] or abs(new_translation[1]) > self._safety_bounds[1]):
+            logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
+
+        self._trans = (numpy.clip(new_translation[0], self._min_bound, self._max_bound),
+                       numpy.clip(new_translation[1], self._min_bound, self._max_bound))
 
         # always in this order
         self._emitter.resolution.value = self._res
@@ -2898,6 +2907,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             ccd_buf = []
             self._ccd_stream.raw = []
             self._sem_stream.raw = []
+
             logging.debug("Starting CCD acquisition with components %s and %s",
                           self._semd.name, self._ccd.name)
 
@@ -2923,7 +2933,14 @@ class SEMCCDDCtream(MultipleDetectorStream):
             # resolution is the maximum resolution at the scale in proportion of the width
             scale = self._emitter.scale.value
             self._res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
-                   max(1, int(round(shape[1] * width[1] / scale[1]))))
+                         max(1, int(round(shape[1] * width[1] / scale[1]))))
+
+            # Demand large enough anchor region for drift calculation
+            if self._res[0] < 2 or self._res[1] < 2:
+                raise ValueError("Anchor region too small for drift detection.")
+
+            self._min_bound = self._safety_bounds[0] + (max(self._res[0], self._res[1]) / 2)
+            self._max_bound = self._safety_bounds[1] - (max(self._res[0], self._res[1]) / 2)
 
             self._onSelectedRegion(drift)
             logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
@@ -2948,7 +2965,12 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 # set ebeam to position (which is ensured only once acquiring)
                 # DRIFT CORRECTION
                 # tweak translation according to calculated drift
-                self._emitter.translation.value = (spot_pos[i[::-1]][0], spot_pos[i[::-1]][1])
+                # clip to 2020x2020 for safety
+                if (abs(spot_pos[i[::-1]][0])>self._safety_bounds[1] or abs(spot_pos[i[::-1]][1])>self._safety_bounds[1]):
+                    logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
+                    
+                self._emitter.translation.value = (numpy.clip(spot_pos[i[::-1]][0], self._safety_bounds[0], self._safety_bounds[1]),
+                                                   numpy.clip(spot_pos[i[::-1]][1], self._safety_bounds[0], self._safety_bounds[1]))
                 logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
 
                 self._acq_sem_complete.clear()
@@ -2993,7 +3015,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
                 # DRIFT CORRECTION
                 if (time.time() - dc_start) >= dc_period:
-                    # DRIFT CORRECTION
                     # Move e-beam to the selected region
                     self._onSelectedRegion(drift)
                     logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
@@ -3011,23 +3032,15 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
                     # Calculate the drift between the last two frames
                     if len(self._sr_data) > 1:
-                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 1)
+                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 10)
                         logging.debug("New drift: " + str(drift))
                         # recalibrate
                         drift = (drift[0] + cur_drift[0], drift[1] + cur_drift[1])
                         cur_drift = drift
                         logging.debug("Current drift: " + str(drift))
-                        """
-                        if drift[1] != drift[0]:
-                            hdf5.export("simsem1.h5", self._sr_data[len(self._sr_data) - 2])
-                            hdf5.export("simsem2.h5", self._sr_data[len(self._sr_data) - 1])
-                            print self._sr_data[len(self._sr_data) - 2]
-                            print self._sr_data[len(self._sr_data) - 1]
-                            return
-                        """
                         # Update next positions
-                        spot_pos[:, :, 0] -= drift[0]
-                        spot_pos[:, :, 1] -= drift[1]
+                        spot_pos[:, :, 0] -= drift[1]
+                        spot_pos[:, :, 1] -= drift[0]
 
                     dc_start = time.time()
 
@@ -3040,6 +3053,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 self._acq_state = FINISHED
 
             sem_one = self._assembleSEMData(rep, roi, self._sem_data)  # shape is (Y, X)
+            # hdf5.export("anchor_frames.h5", self._sr_data)
             hdf5.export("acquired_sem.h5", sem_one)
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
@@ -3062,10 +3076,12 @@ class SEMCCDDCtream(MultipleDetectorStream):
         else:
             return self.raw
         finally:
+            hdf5.export("anchor_frames.h5", model.DataArray(self._sr_data))
             del self._sem_data  # regain a bit of memory
 
     def _ssOnSelectedRegion(self, df, data):
         logging.debug("Selected Region data received")
+
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
         if (not self._acq_sem_complete.is_set()) and data.shape != (1, 1):
             # only use the first data per pixel
