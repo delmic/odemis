@@ -51,16 +51,13 @@ class TestDriftStream(unittest.TestCase):
     def setUp(self):
         self._escan = None
         self._detector = None
-        self._ccd = None
         # find components by their role
         for c in model.getComponents():
             if c.role == "e-beam":
                 self._escan = c
             elif c.role == "se-detector":
                 self._detector = c
-            elif c.role == "ccd":
-                self._ccd = c
-        if not all([self._escan, self._detector, self._ccd]):
+        if not all([self._escan, self._detector]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 
@@ -70,28 +67,24 @@ class TestDriftStream(unittest.TestCase):
     def test_drift_stream(self):
         escan = self._escan
         detector = self._detector
-        ccd = self._ccd
         
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
-        ars = stream.ARStream("test ar", ccd, ccd.data, escan)
-        sas = stream.SEMCCDDCtream("test sem-ar", sems, ars)
+        reps = stream.RepetitionStream("test rep", detector, detector.data, escan)
+        sas = stream.SEMCCDDCtream("test sem-rep", sems, reps)
 
-        sems.dc_period.value = 0.1
-        sems.dc_region.value = (0.525, 0.525, 0.575, 0.575)  # (0.425, 0.425, 0.475, 0.475)
-        sems.dc_dwelltime.value = 1e-06
+        sems.dc_period.value = 2
+        sems.dc_region.value = (0.525, 0.525, 0.6, 0.6)  # (0.425, 0.425, 0.475, 0.475)
+        sems.dc_dwelltime.value = 1e-04
+        escan.dwellTime.value = 1e-02
 
-        ars.roi.value = (0.4, 0.4, 0.6, 0.6)
-        ccd.binning.value = (1, 1)  # hopefully always supported
-        
-        ccd.exposureTime.value = 1e-6  # s
-        ars.repetition.value = (410, 410)
+        reps.roi.value = (0.4, 0.4, 0.5, 0.5)
+        reps.repetition.value = (205, 205)
         
         # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
         start = time.time()
         f = sas.acquire()
-        
-        data = f.result()
+        x = f.result()
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
