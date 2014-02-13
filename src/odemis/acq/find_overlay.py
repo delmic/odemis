@@ -40,7 +40,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("scanned_image-47.h5")
+grid_data = hdf5.read_data("scanned_image-49.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -102,6 +102,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Isolating spots...")
+        print electron_coordinates
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
         if subimages==[]:
             raise ValueError('Overlay failure')
@@ -154,7 +155,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         raise CancelledError()
     logging.debug("Calculating transformation...")
     ret = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
-
+    (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = ret
+    overlay_coordinates = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
+    print overlay_coordinates
     with _overlay_lock:
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
