@@ -271,9 +271,21 @@ def rescale_hq(data, shape):
 
     # Update the metadata
     if hasattr(data, "metadata"):
-        out = model.DataArray(out)
+        out = model.DataArray(out, dict(data.metadata))
         # update each metadata which is linked to the pixel size
-        for k in [model.MD_PIXEL_SIZE, model.MD_BINNING, model.MD_AR_POLE]:
+        # Metadata that needs to be divided by the scale (zoom => decrease)
+        for k in [model.MD_PIXEL_SIZE, model.MD_BINNING]:
+            try:
+                ov = data.metadata[k]
+            except KeyError:
+                continue
+            try:
+                out.metadata[k] = tuple(o / s for o, s in zip(ov, scale))
+            except Exception:
+                logging.exception("Failed to update metadata '%s' when rescaling by %s",
+                                  k, scale)
+        # Metadata that needs to be multiplied by the scale (zoom => increase)
+        for k in [model.MD_AR_POLE]:
             try:
                 ov = data.metadata[k]
             except KeyError:

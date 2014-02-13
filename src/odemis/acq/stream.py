@@ -34,23 +34,25 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
+from matplotlib.delaunay.triangulate import DuplicatePointWarning
+from numpy import fft
+from numpy import random
 import numpy
 from numpy.polynomial import polynomial
+from odemis.dataio import hdf5
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar
 import sys
 import threading
 import time
+import warnings
 
+from odemis.acq.drift import calculation
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.img as img
 import odemis.util.units as units
-from numpy import fft
-from numpy import random
-from odemis.dataio import hdf5
-from odemis.acq.drift import calculation
 
 
 # to identify a ROI which must still be defined by the user
@@ -1460,16 +1462,24 @@ class StaticARStream(StaticStream):
             data = self._sempos[pos]
             try:
                 if numpy.prod(data.shape) > (1280 * 1080):
-                    # FIXME: temporary limit the original image size as the
-                    # computation is too memory demanding for large images
-                    # and cause triggers to OOM
-                    y, x = data.shape
-                    if y > x:
-                        small_shape = 1024, int(round(1024 * x / y))
-                    else:
-                        small_shape = int(round(1024 * y / x)), 1024
-                    # resize
-                    data = img.rescale_hq(data, small_shape)
+                    # AR conversion fails one very large images due to too much
+                    # memory consumed (> 2Gb). So, use a "degraded" type that
+                    # uses less memory. As the display size is small (compared
+                    # to the size of the input image, it shouldn't actually
+                    # affect much the output.
+                    dtype = numpy.float16
+#                    # FIXME: temporary limit the original image size as the
+#                    # computation is too memory demanding for large images
+#                    # and cause triggers to OOM
+#                    y, x = data.shape
+#                    if y > x:
+#                        small_shape = 1024, int(round(1024 * x / y))
+#                    else:
+#                        small_shape = int(round(1024 * y / x)), 1024
+#                    # resize
+#                    data = img.rescale_hq(data, small_shape)
+                else:
+                    dtype = None # just let the function use the best one
 
                 size = min(min(data.shape) * 2, 1134)
 
@@ -1485,8 +1495,13 @@ class StaticARStream(StaticStream):
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                polarp = polar.AngleResolved2Polar(data0, size, hole=False)
+                with warnings.catch_warnings():
+                    # disable for DuplicatePointWarning
+                    warnings.simplefilter("ignore")
+                    polarp = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
                 self._polar[pos] = polarp
+#            except DuplicatePointWarning as exc:
+#                logging.info("Got warning while computing the azymuthal projection")
             except Exception:
                 logging.exception("Failed to convert to azymuthal projection")
                 return data # display it raw as fallback
