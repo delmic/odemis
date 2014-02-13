@@ -34,7 +34,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("scanned_image-49.h5")
+grid_data = hdf5.read_data("scanned_image-47.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -78,6 +78,8 @@ class TestOverlay(unittest.TestCase):
         transformed_image = fake_input
         ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
         electron_grid = hdf5.read_data("electron_grid.h5")[0]
+        print "PXS"
+        print escan.pixelSize.value
         sem_width = [r * p for r, p in zip(escan.shape, escan.pixelSize.value)]
         eg_pxs = [w / s for w, s in zip(sem_width, electron_grid.shape[-1:-3:-1])]
         electron_grid.metadata[model.MD_PIXEL_SIZE] = eg_pxs

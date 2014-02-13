@@ -40,7 +40,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("scanned_image-49.h5")
+grid_data = hdf5.read_data("scanned_image-47.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -91,8 +91,10 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
                 if future._find_overlay_state == CANCELLED:
                     raise CancelledError()
 
+        # hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
         optical_image = fake_input
+        print fake_input.metadata.get(model.MD_POS, (-1, -1))
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
@@ -115,6 +117,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+        print optical_coordinates
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
@@ -247,6 +250,7 @@ def _updateMetadata(optical_image, transformation_values, escan):
     transformation values
     """
     escan_pixelSize = escan.pixelSize.value
+    logging.debug("PixelSize: %g ", escan_pixelSize[0])
     transformed_data = optical_image
     ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation) = transformation_values
     
@@ -261,14 +265,17 @@ def _updateMetadata(optical_image, transformation_values, escan):
 
     # Update scaling
     scale = (escan_pixelSize[0] * calc_scaling_x, escan_pixelSize[1] * calc_scaling_y)
+    logging.debug("Scale: %s", scale)
 
     # Update translation
     center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
+    print center_pos
     if center_pos == (-1, -1):
         logging.warning("No MD_POS data available")
         return []
 
     center_pos = (center_pos[0] + escan_pixelSize[0] * calc_translation_y, center_pos[1] + escan_pixelSize[1] * calc_translation_x)
+    logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
 
     transformed_data.metadata[model.MD_ROTATION] = rotation
     transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
