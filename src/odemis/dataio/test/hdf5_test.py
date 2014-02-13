@@ -34,7 +34,7 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = "test" + hdf5.EXTENSIONS[0]
+FILENAME = u"test" + hdf5.EXTENSIONS[0]
 class TestHDF5IO(unittest.TestCase):
 
     def tearDown(self):
@@ -48,11 +48,11 @@ class TestHDF5IO(unittest.TestCase):
     def testExportOnePage(self):
         # create a simple greyscale image
         size = (256, 512) # (width, height)
-        dtype = numpy.dtype("uint16")
-        data = model.DataArray(numpy.zeros(size[-1:-3:-1], dtype))
+        dtype = numpy.uint16
+        data = model.DataArray(numpy.zeros(size[::-1], dtype))
         white = (12, 52) # non symmetric position
         # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
-        data[white[-1:-3:-1]] = 124
+        data[white[::-1]] = 124
 
         # export
         hdf5.export(FILENAME, data)
@@ -67,6 +67,33 @@ class TestHDF5IO(unittest.TestCase):
         im.shape = im.shape[3:5]
         self.assertEqual(im.shape, data.shape)
         self.assertEqual(im[white[-1:-3:-1]], data[white[-1:-3:-1]])
+
+    def testUnicodeName(self):
+        """Try filename not fitting in ascii"""
+        # create a simple greyscale image
+        size = (256, 512)
+        dtype = numpy.uint16
+        data = model.DataArray(numpy.zeros(size[::-1], dtype))
+        white = (12, 52) # non symmetric position
+        # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
+        data[white[::-1]] = 124
+
+        fn = u"𝔸𝔹ℂ" + FILENAME
+        # export
+        hdf5.export(fn, data)
+
+        # check it's here
+        st = os.stat(fn) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        f = h5py.File(fn, "r")
+        # need to transform to a full numpy.array just to remove the dimensions
+        im = numpy.array(f["Acquisition0/ImageData/Image"])
+        im.shape = im.shape[3:5]
+        self.assertEqual(im.shape, data.shape)
+        self.assertEqual(im[white[-1:-3:-1]], data[white[-1:-3:-1]])
+
+        os.remove(fn)
 
 #    @skip("Doesn't work")
     def testExportMultiPage(self):

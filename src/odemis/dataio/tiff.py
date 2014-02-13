@@ -29,6 +29,7 @@ from numpy.polynomial import polynomial
 from odemis import model
 import odemis
 import re
+import sys
 import time
 
 import libtiff.libtiff_ctypes as T # for the constant names
@@ -51,7 +52,7 @@ import xml.etree.ElementTree as ET
 # User-friendly name
 FORMAT = "TIFF"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [".ome.tiff", ".ome.tif", ".tiff", ".tif"]
+EXTENSIONS = [u".ome.tiff", u".ome.tif", u".tiff", u".tif"]
 
 # We try to make it as much as possible looking like a normal (multi-page) TIFF,
 # with as much metadata as possible saved in the known TIFF tags. In addition,
@@ -1345,10 +1346,18 @@ def _dataFromTIFF(filename):
     data = [i for i in data if i is not None]
     return data
 
+def _ensure_fs_encoding(filename):
+    if not isinstance(filename, unicode):
+        logging.warning("Got filename encoded as a string, while should be "
+                        "unicode: %r", filename)
+        return filename # hope it's the correct encoding
+    else:
+        return filename.encode(sys.getfilesystemencoding())
+
 def export(filename, data, thumbnail=None):
     '''
     Write a TIFF file with the given image and metadata
-    filename (string): filename of the file to create (including path)
+    filename (unicode): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export.
        Metadata is taken directly from the DA object. If it's a list, a multiple
        page file is created. It must have 5 dimensions in this order: Channel,
@@ -1360,6 +1369,7 @@ def export(filename, data, thumbnail=None):
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
       be dropped silently.
     '''
+    filename = _ensure_fs_encoding(filename)
     if isinstance(data, list):
         _saveAsMultiTiffLT(filename, data, thumbnail)
     else:
@@ -1370,7 +1380,7 @@ def export(filename, data, thumbnail=None):
 def read_data(filename):
     """
     Read an TIFF file and return its content (skipping the thumbnail).
-    filename (string): filename of the file to read
+    filename (unicode): filename of the file to read
     return (list of model.DataArray): the data to import (with the metadata
      as .metadata). It might be empty.
      Warning: reading back a file just exported might give a smaller number of
@@ -1383,13 +1393,13 @@ def read_data(filename):
     # TODO: support filename to be a File or Stream (but it seems very difficult
     # to do it without looking at the .filename attribute)
     # see http://pytables.github.io/cookbook/inmemory_hdf5_files.html
-
+    filename = _ensure_fs_encoding(filename)
     return _dataFromTIFF(filename)
 
 def read_thumbnail(filename):
     """
     Read the thumbnail data of a given TIFF file.
-    filename (string): filename of the file to read
+    filename (unicode): filename of the file to read
     return (list of model.DataArray): the thumbnails attached to the file. If
      the file contains multiple thumbnails, all of them are returned. If it
      contains none, an empty list is returned.
@@ -1397,5 +1407,5 @@ def read_thumbnail(filename):
         IOError in case the file format is not as expected.
     """
     # TODO: support filename to be a File or Stream
-
+    filename = _ensure_fs_encoding(filename)
     return _thumbsFromTIFF(filename)

@@ -38,7 +38,7 @@ import xml.etree.ElementTree as ET
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-FILENAME = "test" + tiff.EXTENSIONS[0] 
+FILENAME = u"test" + tiff.EXTENSIONS[0]
 class TestTiffIO(unittest.TestCase):
 
     def tearDown(self):
@@ -69,6 +69,31 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(im.format, "TIFF")
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel(white), 124)
+
+
+    def testUnicodeName(self):
+        """Try filename not fitting in ascii"""
+        # create a simple greyscale image
+        size = (256, 512)
+        dtype = numpy.uint16
+        data = model.DataArray(numpy.zeros(size[::-1], dtype))
+        white = (12, 52) # non symmetric position
+        # less that 2**15 so that we don't have problem with PIL.getpixel() always returning an signed int
+        data[white[::-1]] = 124
+
+        fn = u"𝔸𝔹ℂ" + FILENAME
+        # export
+        tiff.export(fn, data)
+
+        # check it's here
+        st = os.stat(fn) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+        im = Image.open(fn)
+        self.assertEqual(im.format, "TIFF")
+        self.assertEqual(im.size, size)
+        self.assertEqual(im.getpixel(white), 124)
+
+        os.remove(fn)
         
 #    @skip("simple")
     def testExportMultiPage(self):

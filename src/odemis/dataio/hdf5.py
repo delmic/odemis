@@ -30,7 +30,7 @@ import time
 # User-friendly name
 FORMAT = "HDF5"
 # list of file-name extensions possible, the first one is the default when saving a file
-EXTENSIONS = [".h5", ".hdf5"]
+EXTENSIONS = [u".h5", u".hdf5"]
 
 # We are trying to follow the same format as SVI, as defined here:
 # http://www.svi.nl/HDF5
@@ -943,7 +943,7 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
 def export(filename, data, thumbnail=None):
     '''
     Write an HDF5 file with the given image and metadata
-    filename (string): filename of the file to create (including path)
+    filename (unicode): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export, 
         must be 2D or more of int or float. Metadata is taken directly from the data 
         object. If it's a list, a multiple page file is created. The order of the
@@ -967,7 +967,7 @@ def export(filename, data, thumbnail=None):
 def read_data(filename):
     """
     Read an HDF5 file and return its content (skipping the thumbnail).
-    filename (string): filename of the file to read
+    filename (unicode): filename of the file to read
     return (list of model.DataArray): the data to import (with the metadata 
      as .metadata). It might be empty.
      Warning: reading back a file just exported might give a smaller number of
@@ -986,7 +986,7 @@ def read_data(filename):
 def read_thumbnail(filename):
     """
     Read the thumbnail data of a given HDF5 file.
-    filename (string): filename of the file to read
+    filename (unicode): filename of the file to read
     return (list of model.DataArray): the thumbnails attached to the file. If 
      the file contains multiple thumbnails, all of them are returned. If it 
      contains none, an empty list is returned.
