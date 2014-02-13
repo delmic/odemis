@@ -34,7 +34,6 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
-from matplotlib.delaunay.triangulate import DuplicatePointWarning
 from numpy import fft
 from numpy import random
 import numpy
@@ -46,7 +45,6 @@ from odemis.util import TimeoutError, limit_invocation, polar
 import sys
 import threading
 import time
-import warnings
 
 from odemis.acq.drift import calculation
 import odemis.model as model
@@ -1467,17 +1465,10 @@ class StaticARStream(StaticStream):
                     # uses less memory. As the display size is small (compared
                     # to the size of the input image, it shouldn't actually
                     # affect much the output.
+                    logging.info("AR image is very large %s, will convert to "
+                                 "azymuthal projection in reduced precision.",
+                                 data.shape)
                     dtype = numpy.float16
-#                    # FIXME: temporary limit the original image size as the
-#                    # computation is too memory demanding for large images
-#                    # and cause triggers to OOM
-#                    y, x = data.shape
-#                    if y > x:
-#                        small_shape = 1024, int(round(1024 * x / y))
-#                    else:
-#                        small_shape = int(round(1024 * y / x)), 1024
-#                    # resize
-#                    data = img.rescale_hq(data, small_shape)
                 else:
                     dtype = None # just let the function use the best one
 
@@ -1495,13 +1486,8 @@ class StaticARStream(StaticStream):
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                with warnings.catch_warnings():
-                    # disable for DuplicatePointWarning
-                    warnings.simplefilter("ignore")
-                    polarp = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
+                polarp = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
                 self._polar[pos] = polarp
-#            except DuplicatePointWarning as exc:
-#                logging.info("Got warning while computing the azymuthal projection")
             except Exception:
                 logging.exception("Failed to convert to azymuthal projection")
                 return data # display it raw as fallback

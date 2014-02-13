@@ -15,11 +15,14 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 import math
 from matplotlib import tri
+from matplotlib.delaunay.triangulate import DuplicatePointWarning
+from numpy import ma
 import numpy
 from odemis import model
-from numpy import ma
+import warnings
 
 
 # Functions to convert/manipulate Angle resolved image to polar projection
@@ -90,7 +93,11 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
 
     # FIXME: need rotation (=swap axes), but swapping theta/phi slows down the
     # interpolation by 3 ?!
-    triang = tri.delaunay.Triangulation(theta_data.flat, phi_data.flat)
+    with warnings.catch_warnings():
+        # Some points might be so close that they are identical (within float
+        # precision). It's fine, no need to generate a warning.
+        warnings.simplefilter("ignore", DuplicatePointWarning)
+        triang = tri.delaunay.Triangulation(theta_data.flat, phi_data.flat)
     interp = triang.linear_interpolator(omega_data.flat, default_value=0)
     qz = interp[-h_output_size:h_output_size:complex(0, output_size), # Y
                 - h_output_size:h_output_size:complex(0, output_size)] # X
