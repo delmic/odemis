@@ -78,14 +78,14 @@ class TestDriftStream(unittest.TestCase):
         sas = stream.SEMCCDDCtream("test sem-ar", sems, ars)
 
         sems.dc_period.value = 0.2
-        sems.dc_region.value = (0.8255, 0.8255, 0.85, 0.85)
-        sems.dc_dwelltime.value = 8e-06
+        sems.dc_region.value = (0.3, 0.3, 0.4, 0.4)
+        sems.dc_dwelltime.value = 1e-06
 
-        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        ccd.binning.value = (4, 4) # hopefully always supported
+        ars.roi.value = (0.4, 0.4, 0.7, 0.7)
+        ccd.binning.value = (1, 1)  # hopefully always supported
         
-        ccd.exposureTime.value = 0.2  # s
-        ars.repetition.value = (2, 2)
+        ccd.exposureTime.value = 1e-6  # s
+        ars.repetition.value = (615, 615)
         
         # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
         start = time.time()

@@ -2731,15 +2731,8 @@ class SEMCCDDCtream(MultipleDetectorStream):
         self._current_future = f
         self._acq_state = RUNNING  # TODO: move to per acquisition
 
-        # Pick the right acquisition method
-        if self._ccd.exposureTime.value <= 0.1:
-            # short dwell time => use driver synchronisation
-            runAcquisition = self._dsRunAcquisition
-            f.task_canceller = self._dsCancelAcquisition
-        else:
-            # long dwell time => use software synchronisation
-            runAcquisition = self._ssRunAcquisition
-            f.task_canceller = self._ssCancelAcquisition
+        runAcquisition = self._ssRunAcquisition
+        f.task_canceller = self._ssCancelAcquisition
 
         # run task in separate thread
         self._acq_thread = threading.Thread(target=self._executeTask,
@@ -2938,7 +2931,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             logging.debug("Scanning selected region with resolution " + str(self._emitter.resolution.value)
                           + " and dwelltime " + str(self._emitter.dwellTime.value)
                           + " and scale " + str(self._emitter.scale.value))
-            if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
+            if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1000 + 1):
                 raise TimeoutError("First acquisition of selected region frame timed out")
             self._semd_df.unsubscribe(self._ssOnSelectedRegion)
 
@@ -2963,7 +2956,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 start = time.time()
                 trigger.notify()
 
-                if not self._acq_ccd_complete.wait(ccd_time * 2 + 1):
+                if not self._acq_ccd_complete.wait(ccd_time * 1000 + 1):
                     raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
@@ -2973,7 +2966,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                                     ccd_time, dur)
 
                 # Normally, the SEM acquisition has already completed
-                if not self._acq_sem_complete.wait(dwell_time * 1.5 + 1):
+                if not self._acq_sem_complete.wait(dwell_time * 1000 + 1):
                     raise TimeoutError("Acquisition of SEM pixel %s timed out" % (i,))
                 # TODO: we don't really need to stop it, we could have a small
                 # dwell time, move the ebeam to the new position, and as soon as
@@ -3006,7 +2999,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     logging.debug("Scanning selected region with resolution " + str(self._emitter.resolution.value)
                                   + " and dwelltime " + str(self._emitter.dwellTime.value)
                                   + " and scale " + str(self._emitter.scale.value))
-                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1.5 + 1):
+                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1000 + 1):
                         raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
                     self._semd_df.unsubscribe(self._ssOnSelectedRegion)
 
@@ -3060,27 +3053,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
         # Do not stop the acquisition, as it ensures the e-beam is at the right place
         if not self._acq_sem_complete.is_set():
             # only use the first data per pixel
-            # self._sr_data.append(data)
-
-            # FAKE FRAMES, TO BE REMOVED
-            # Input drifted by random value
-            z = 1j  # imaginary unit
-            deltar = numpy.random.uniform(-5, 5)
-            deltac = numpy.random.uniform(-5, 5)
-            nr, nc = self.data[0].shape
-            array_nr = numpy.arange(-numpy.fix(nr / 2), numpy.ceil(nr / 2))
-            array_nc = numpy.arange(-numpy.fix(nc / 2), numpy.ceil(nc / 2))
-            Nr = fft.ifftshift(array_nr)
-            Nc = fft.ifftshift(array_nc)
-            [Nc, Nr] = numpy.meshgrid(Nc, Nr)
-            data_random_drifted = fft.ifft2(fft.fft2(self.data[0]) * numpy.power(math.e,
-                            z * 2 * math.pi * (deltar * Nr / nr + deltac * Nc / nc)))
-            # Noise added
-            noise = random.normal(0, 1000, data_random_drifted.size)
-            noise_array = noise.reshape(data_random_drifted.shape[0], data_random_drifted.shape[1])
-
-            data_random_drifted_noisy = data_random_drifted + noise_array
-            self._sr_data.append(data_random_drifted_noisy)
+            self._sr_data.append(data)
 
             self._acq_sem_complete.set()
 
