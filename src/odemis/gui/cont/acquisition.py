@@ -553,7 +553,7 @@ class SparcAcquiController(object):
         filename = self.filename.value
         exporter = dataio.get_exporter(self.conf.last_format)
         exporter.export(filename, data, thumb)
-        logging.info("Acquisition saved as file '%s'.", filename)
+        logging.info(u"Acquisition saved as file '%s'.", filename)
         return data, filename
 
     @call_after

@@ -185,7 +185,7 @@ def get_home_folder():
     """ Return the home directory of the user running the Odemis GUI
     """
     # fall-back to HOME
-    folder = os.path.expanduser("~")
+    folder = os.path.expanduser(u"~")
     if os.path.isdir(folder):
         return folder
 
@@ -195,7 +195,7 @@ def get_home_folder():
 
 def get_picture_folder():
     """
-    return (string): a full path to the "Picture" user folder.
+    return (unicode): a full path to the "Picture" user folder.
     It tries to always return an existing folder.
     """
     if sys.platform.startswith('linux'):
@@ -203,7 +203,7 @@ def get_picture_folder():
         folder = None
         try:
             folder = subprocess.check_output(["xdg-user-dir", "PICTURES"])
-            folder = folder.strip()
+            folder = folder.strip().decode(sys.getfilesystemencoding())
         except subprocess.CalledProcessError:
             # XDG not supported
             pass
@@ -219,7 +219,7 @@ def get_picture_folder():
 
 
     # fall-back to HOME
-    folder = os.path.expanduser("~")
+    folder = os.path.expanduser(u"~")
     if os.path.isdir(folder):
         return folder
 
@@ -230,37 +230,37 @@ def get_picture_folder():
 def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
     """Convert formats into wildcards string compatible with wx.FileDialog()
 
-    formats2ext (dict (string -> list of strings)): format names and lists of
+    formats2ext (dict (unicodes -> list of unicodes)): format names and lists of
         their possible extensions.
     include_all (boolean): If True, also include as first wildcards for all the formats
     include_any (boolean): If True, also include as last the *.* wildcards
 
-    returns (tuple (string, list of strings)): wildcards, name of the format
+    returns (tuple (unicode, list of unicodes)): wildcards, name of the format
         in the same order as in the wildcards (or None if all/any format)
     """
     formats = []
     wildcards = []
     for fmt, extensions in formats2ext.items():
-        ext_wildcards = ";".join(["*" + e for e in extensions])
-        wildcard = "%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
+        ext_wildcards = u";".join([u"*" + e for e in extensions])
+        wildcard = u"%s files (%s)|%s" % (fmt, ext_wildcards, ext_wildcards)
         formats.append(fmt)
         wildcards.append(wildcard)
 
     if include_all:
         fmt_wildcards = []
         for extensions in formats2ext.values():
-            fmt_wildcards.append(";".join(["*" + e for e in extensions]))
-        ext_wildcards = ";".join(fmt_wildcards)
-        wildcard = "All supported files (%s)|%s" % (ext_wildcards, ext_wildcards)
+            fmt_wildcards.append(u";".join([u"*" + e for e in extensions]))
+        ext_wildcards = u";".join(fmt_wildcards)
+        wildcard = u"All supported files (%s)|%s" % (ext_wildcards, ext_wildcards)
         wildcards.insert(0, wildcard)
         formats.insert(0, None)
 
     if include_any:
-        wildcards.append("Any file (*.*)|*.*")
+        wildcards.append(u"Any file (*.*)|*.*")
         formats.append(None)
 
     # the whole importance is that they are in the same order
-    return "|".join(wildcards), formats
+    return u"|".join(wildcards), formats
 
 # Data container
 

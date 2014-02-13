@@ -508,7 +508,7 @@ class FileInfo(object):
 
     def __init__(self, acq_file=None, metadata=None):
         """
-        acq_file (String or File or None): the full name of the file or
+        acq_file (unicode or File or None): the full name of the file or
          a File that contains the acquisition. If provided (and the file
          exists), some fields will be automatically filled in.
         metadata (dict String -> value): The meta-data as model.MD_*.

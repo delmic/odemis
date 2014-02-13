@@ -35,7 +35,7 @@ from odemis import dataio
 from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
 
-CONF_PATH = os.path.join(get_home_folder(), r".config/odemis")
+CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 CONF_ACQUI = None
@@ -96,7 +96,7 @@ class Config(object):
         if self._exists():
             self.config.read(self.file_path)
         else:
-            logging.warn("Using default %s configuration", self.__class__.__name__)
+            logging.warn(u"Using default %s configuration", self.__class__.__name__)
             self.use_default()
 
     def write(self):
@@ -104,7 +104,7 @@ class Config(object):
             otherwise
         """
         if self._exists():
-            logging.debug("Writing configuration file '%s'", self.file_path)
+            logging.debug(u"Writing configuration file '%s'", self.file_path)
             f = open(self.file_path, "w")
             self.config.write(f)
             f.close()
@@ -120,7 +120,7 @@ class Config(object):
         """ Create the configuration file if it does not exist """
         # Create directory structure if it doesn't exist.
         if not os.path.exists(CONF_PATH):
-            logging.debug("Creating path '%s'", CONF_PATH)
+            logging.debug(u"Creating path '%s'", CONF_PATH)
             os.makedirs(CONF_PATH)
 
         # Create file if it doesn't exist.
@@ -159,13 +159,13 @@ class GeneralConfig(Config):
                          os.path.abspath(
                             os.path.join(
                                 __file__,
-                                "../../../../../doc/code/_build/html/index.html")
+                                u"../../../../../doc/code/_build/html/index.html")
                             )
                         )
 
         self.default.set("help",
                          "manual_path",
-                         "/usr/share/doc/odemis/user-guide.pdf"
+                         u"/usr/share/doc/odemis/user-guide.pdf"
                         )
 
     @property
@@ -192,7 +192,11 @@ class AcquisitionConfig(Config):
 
     @property
     def last_path(self):
-        return self.get("acquisition", "last_path")
+        lp = self.get("acquisition", "last_path")
+        # Check that it (still) exists, and if not, fallback to the default
+        if not os.path.isdir(lp):
+            lp = ACQUI_PATH
+        return lp
 
     @last_path.setter
     def last_path(self, last_path):
