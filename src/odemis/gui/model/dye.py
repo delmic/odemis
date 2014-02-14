@@ -31,8 +31,8 @@ import logging
 import time
 
 # List of places to look for the database file
-FLUODB_PATHS = ["/usr/share/odemis/fluodb/",
-                "./install/linux/usr/share/odemis/fluodb/"]
+FLUODB_PATHS = [u"/usr/share/odemis/fluodb/",
+                u"./install/linux/usr/share/odemis/fluodb/"]
 
 # Simple dye database, that will be filled in at initialisation, if there is a
 # database file available
@@ -51,7 +51,7 @@ def LoadDyeDatabase():
     basedir = None
     for p in FLUODB_PATHS:
         try:
-            findex = open(p + "environment/index.json")
+            findex = open(p + u"environment/index.json")
         except IOError:
             # can't find this file, try the next one
             continue
@@ -70,7 +70,7 @@ def LoadDyeDatabase():
         s = e["substance"]
         names.add(s["common_name"].strip()) # in case loading the substance file fails
         nsid = int(s["substance_id"])
-        sname = basedir + "substance/%d.json" % nsid
+        sname = basedir + u"substance/%d.json" % nsid
         try:
             fs = open(sname, "r")
             fulls = json.load(fs)
