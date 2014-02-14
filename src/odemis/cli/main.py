@@ -22,15 +22,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
-from odemis import model, dataio, util
-from odemis.cli.video_displayer import VideoDisplayer
-from odemis.util.driver import reproduceTypedValue, BACKEND_RUNNING, \
-    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
 import argparse
+import codecs
 import collections
 import gc
 import inspect
 import logging
+from odemis import model, dataio, util
+from odemis.cli.video_displayer import VideoDisplayer
+from odemis.util.driver import reproduceTypedValue, BACKEND_RUNNING, \
+    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
 import odemis.util.driver
 import sys
 import time
@@ -95,15 +96,15 @@ def print_component(comp, pretty=True, level=0):
     """
     if pretty:
         if level == 0:
-            indent = ""
+            indent = u""
         else:
-            indent = "  "*level + u"↳ "
+            indent = u"  "*level + u"↳ "
         print u"%s%s\trole:%s" % (indent, comp.name, comp.role)
     else:
-        pstr = ""
+        pstr = u""
         try:
             pname = comp.parent.name
-            if isinstance(pname, (str, unicode)):
+            if isinstance(pname, basestring):
                 pstr = u"\tparent:" + pname
         except AttributeError:
             pass
@@ -152,20 +153,20 @@ def list_components(pretty=True):
 
 def print_axes(name, value, pretty):
     if pretty:
-        print "\t%s (RO Attribute)" % (name,)
+        print u"\t%s (RO Attribute)" % (name,)
         for an, ad in value.items():
-            print "\t\t%s:\t%s" % (an, ad)
+            print u"\t\t%s:\t%s" % (an, ad)
     else:
-        print "%s\ttype:roattr\tvalue:%s" % (name,
-                                             ", ".join(k for k in value.keys()))
+        print u"%s\ttype:roattr\tvalue:%s" % (name,
+                                             u", ".join(k for k in value.keys()))
 def print_roattribute(name, value, pretty):
     if name == "axes":
         return print_axes(name, value, pretty)
     
     if pretty:
-        print "\t%s (RO Attribute)\tvalue: %s" % (name, value)
+        print u"\t%s (RO Attribute)\tvalue: %s" % (name, value)
     else:
-        print "%s\ttype:roattr\tvalue:%s" % (name, value)
+        print u"%s\ttype:roattr\tvalue:%s" % (name, value)
 
 non_roattributes_names = ("name", "role", "parent", "children", "affects",
                           "actuators", "detectors", "emitters")
@@ -177,7 +178,7 @@ def print_roattributes(component, pretty):
         print_roattribute(name, value, pretty)
 
 def print_data_flow(name, df):
-    print "\t" + name + " (Data-flow)"
+    print u"\t" + name + u" (Data-flow)"
 
 def print_data_flows(component):
     # find all dataflows
@@ -185,7 +186,7 @@ def print_data_flows(component):
         print_data_flow(name, value)
 
 def print_event(name, evt):
-    print "\t" + name + " (Event)"
+    print u"\t" + name + u" (Event)"
 
 def print_events(component):
     # find all Events
@@ -195,48 +196,48 @@ def print_events(component):
 def print_vattribute(name, va, pretty):
     if va.unit:
         if pretty:
-            unit = " (unit: %s)" % va.unit
+            unit = u" (unit: %s)" % va.unit
         else:
-            unit = "\tunit:%s" % va.unit
+            unit = u"\tunit:%s" % va.unit
     else:
-        unit = ""
+        unit = u""
 
     if va.readonly:
         if pretty:
-            readonly = "RO "
+            readonly = u"RO "
         else:
-            readonly = "ro"
+            readonly = u"ro"
     else:
-        readonly = ""
+        readonly = u""
 
     # we cannot discover if it continuous or enumerated, just try and see if it fails
     try:
         varange = va.range
         if pretty:
-            str_range = u" (range: %s → %s)" % (str(varange[0]), str(varange[1]))
+            str_range = u" (range: %s → %s)" % (varange[0], varange[1])
         else:
             str_range = u"\trange:%s" % unicode(varange)
     except (AttributeError, model.NotApplicableError):
-        str_range = ""
+        str_range = u""
 
     try:
         vachoices = va.choices # set or dict
         if pretty:
             if isinstance(va.choices, dict):
-                str_choices = " (choices: %s)" % ", ".join(
-                                ["%s: '%s'" % i for i in vachoices.items()])
+                str_choices = u" (choices: %s)" % ", ".join(
+                                [u"%s: '%s'" % i for i in vachoices.items()])
             else:
-                str_choices = " (choices: %s)" % ", ".join([str(c) for c in vachoices])
+                str_choices = u" (choices: %s)" % u", ".join([str(c) for c in vachoices])
         else:
             str_choices = u"\tchoices:%s" % unicode(vachoices)
     except (AttributeError, model.NotApplicableError):
         str_choices = ""
 
     if pretty:
-        print("\t" + name + " (%sVigilant Attribute)\t value: %s%s%s%s" %
-              (readonly, str(va.value), unit, str_range, str_choices))
+        print(u"\t" + name + u" (%sVigilant Attribute)\t value: %s%s%s%s" %
+            (readonly, str(va.value), unit, str_range, str_choices))
     else:
-        print("%s\ttype:%sva\tvalue:%s%s%s%s" %
+        print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
 def print_vattributes(component, pretty):
@@ -245,13 +246,13 @@ def print_vattributes(component, pretty):
 
 def print_attributes(component, pretty):
     if pretty:
-        print "Component '%s':" % component.name
-        print "\trole: %s" % component.role
-        print "\taffects: " + ", ".join(["'" + c.name + "'" for c in component.affects])
+        print u"Component '%s':" % component.name
+        print u"\trole: %s" % component.role
+        print u"\taffects: " + ", ".join([u"'" + c.name + u"'" for c in component.affects])
     else:
-        print "name\tvalue:%s" % component.name
-        print "role\tvalue:%s" % component.role
-        print "affects\tvalue:" + "\t".join([c.name for c in component.affects])
+        print u"name\tvalue:%s" % component.name
+        print u"role\tvalue:%s" % component.role
+        print u"affects\tvalue:" + u"\t".join([c.name for c in component.affects])
     print_roattributes(component, pretty)
     print_vattributes(component, pretty)
     print_data_flows(component) # TODO: pretty
@@ -495,7 +496,7 @@ def acquire(comp_name, dataflow_names, filename):
     Acquire an image from one (or more) dataflow
     comp_name (string): name of the detector to find
     dataflow_names (list of string): name of each dataflow to access
-    filename (string): name of the output file (format depends on the extension)
+    filename (unicode): name of the output file (format depends on the extension)
     """
     try:
         component = get_detector(comp_name)
@@ -549,7 +550,7 @@ def acquire(comp_name, dataflow_names, filename):
     try:
         exporter.export(filename, images)
     except IOError as exc:
-        logging.error("Failed to save to '%s': %s", filename, exc)
+        logging.error(u"Failed to save to '%s': %s", filename, exc)
     return 0
 
 def live_display(comp_name, df_name):
@@ -604,6 +605,21 @@ def live_display(comp_name, df_name):
     finally:
         df.unsubscribe(new_image_wrapper)
 
+def ensure_output_encoding():
+    """
+    Make sure the output encoding supports unicode
+    """
+    # When piping to the terminal, python knows the encoding needed, and
+    # sets it automatically. But when piping, python can not check the output
+    # encoding. In that case, it is None. In that case, we force it to UTF-8
+
+    current = sys.stdout.encoding
+    if current is None :
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
+    current = sys.stderr.encoding
+    if current is None :
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
+
 def main(args):
     """
     Handles the command line arguments
@@ -656,6 +672,9 @@ def main(args):
                          help="display and update an image on the screen (default data-flow is \"data\")")
 
     options = parser.parse_args(args[1:])
+
+    # To allow printing unicode even with pipes
+    ensure_output_encoding()
 
     # Cannot use the internal feature, because it doesn't support multiline
     if options.version:
@@ -753,7 +772,8 @@ def main(args):
                 dataflows = ["data"]
             else:
                 dataflows = options.acquire[1:]
-            return acquire(component, dataflows, options.output)
+            filename = options.output.decode(sys.getfilesystemencoding())
+            return acquire(component, dataflows, filename)
         elif options.live is not None:
             component = options.live[0]
             if len(options.live) == 1:
