@@ -1,3 +1,27 @@
+odemis (1.5-1ubuntu1) precise; urgency=low
+
+  * New version: 1.5
+  * Main new features:
+    - Support for Thorlab filter wheel FW102C
+    - Automatically select the right filter if a filter wheel is used (SECOM)
+    - Support for the Andor Zyla
+    - Support for the Andor iDus
+    - Spectrum display also displays the Y values (SPARC)
+    - ebeam can be parked outside of the SEM field of view
+
+  * Main bug fixed:
+    - Spot mode was sometimes having a second weaker spot
+    - Lumencor Light Engine driver doesn't mistake device
+    - On 64 bits, some metadata where not saved in HDF5
+    - Saving tiff file with a non-ascii character in a name failed
+    - Polar projection of large image consumed too much memory (SPARC)
+    - Large exposure times are displayed correctly in the settings (SECOM)
+    - Display of just one AR image is displayed correctly (SPARC)
+    - Cannot quit the GUI by mistake during a SPARC acquisition (SPARC)
+    - Goal image for mirror alignment depends on the CCD size (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 14 Feb 2014 14:02:25 +0100
+
 odemis (1.4-1ubuntu8) precise; urgency=low
 
   * Clean up build/ directory which is messing if left from previous builds

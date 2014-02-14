@@ -8,7 +8,7 @@ import subprocess
 import sys
 
 # To be updated to the current version
-VERSION = "1.4"
+VERSION = "1.5"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
@@ -99,8 +99,8 @@ dist = setup(name='Odemis',
              package_dir={'': 'src'},
              packages=find_packages('src', exclude=["*.test"]),
              package_data={'odemis.gui.img': ["example/*.png", "example/*.mat",
-                                              "calibration/*.png"]
-                           'odemis.driver': ["andorcam2-fake-clara.tiff"]
+                                              "calibration/*.png"],
+                           'odemis.driver': ["andorcam2-fake-clara.tiff"],
                           },
              scripts=scripts,
              data_files=data_files # not officially in setuptools, but works as for distutils
