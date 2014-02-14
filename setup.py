@@ -59,7 +59,7 @@ if sys.platform.startswith('linux'):
                   # Not copying sudoers file, as we are not sure there is a sudoers.d directory
                   # Not copying bash completion file, as we are not sure there is a directory
                   # TODO udev rules might actually be better off in /lib/udev/rules.d/
-                  ('/etc/udev/rules.d', glob.glob('install/linux/etc/udev/rules.d/*.rules')),
+                  ('/lib/udev/rules.d', glob.glob('install/linux/lib/udev/rules.d/*.rules')),
                   ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.odm.yaml')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
                   ('share/applications/', ['install/linux/usr/share/applications/odemis.desktop']),
@@ -70,12 +70,12 @@ if sys.platform.startswith('linux'):
                   ('share/doc/odemis/scripts/', glob.glob('scripts/*.py')),
                   ]
     # TODO: see if we could use entry_points instead
-    scripts = ['install/linux/usr/local/bin/odemisd',
-               'install/linux/usr/local/bin/odemis-cli',
-               'install/linux/usr/local/bin/odemis-convert',
-               'install/linux/usr/local/bin/odemis-gui',
-               'install/linux/usr/local/bin/odemis-start',
-               'install/linux/usr/local/bin/odemis-stop'
+    scripts = ['install/linux/usr/bin/odemisd',
+               'install/linux/usr/bin/odemis-cli',
+               'install/linux/usr/bin/odemis-convert',
+               'install/linux/usr/bin/odemis-gui',
+               'install/linux/usr/bin/odemis-start',
+               'install/linux/usr/bin/odemis-stop'
                ]
 else:
     data_files = []
