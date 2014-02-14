@@ -1405,7 +1405,7 @@ class AndorCam2(model.DigitalCamera):
             self.WaitForAcquisition(duration + 1)
 
             cbuffer = self._allocate_buffer(size)
-            self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+            self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
             array = self._buffer_as_array(cbuffer, size, metadata)
 
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
@@ -1494,7 +1494,7 @@ class AndorCam2(model.DigitalCamera):
 
                     # it might have acquired _several_ images in the time to process
                     # one image. In this case we discard all but the last one.
-                    self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+                    self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
                 except AndorV2Error as (errno, strerr):
                     # Note: with SDK 2.93 it will happen after a few image grabbed, and
                     # there is no way to recover
@@ -1597,7 +1597,7 @@ class AndorCam2(model.DigitalCamera):
 
                     # it might have acquired _several_ images in the time to process
                     # one image. In this case we discard all but the last one.
-                    self.atcore.GetMostRecentImage16(cbuffer, size[0] * size[1])
+                    self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
                 except AndorV2Error as (errno, strerr):
                     # Note: with SDK 2.93 it will happen after a few image grabbed, and
                     # there is no way to recover
@@ -2234,7 +2234,7 @@ class FakeAndorV2DLL(object):
         p = cast(cbuffer, POINTER(c_uint16))
         res = ((self.roi[1] - self.roi[0] + 1) // self.binning[0],
                (self.roi[3] - self.roi[2] + 1) // self.binning[1])
-        assert res[0] * res[1] == size
+        assert res[0] * res[1] == size.value
         ndbuffer = numpy.ctypeslib.as_array(p, (res[1], res[0]))
         ndbuffer[...] = self._data[self.roi[2] - 1:self.roi[3]:self.binning[1],
                                    self.roi[0] - 1:self.roi[1]:self.binning[0]]
