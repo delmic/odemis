@@ -328,8 +328,8 @@ class SparcAcquisitionTab(Tab):
         # Toolbar
         self.tb = self.main_frame.sparc_acq_toolbar
         self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_DRIFTCOR, self.tab_data_model.tool)
         # TODO: Add the buttons when the functionality is there
+        #self.tb.add_tool(tools.TOOL_DRIFTCOR, self.tab_data_model.tool)
         #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
 
