@@ -40,10 +40,15 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("scanned_image-49.h5")
+grid_data = hdf5.read_data("spots_img.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
+
+grid_data = hdf5.read_data("38.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_input2 = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -134,6 +139,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Matching coordinates...")
         known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
+        print known_electron_coordinates, known_optical_coordinates
 
         if known_electron_coordinates:
             break
@@ -273,9 +279,11 @@ def _updateMetadata(optical_image, transformation_values, escan):
     # Update translation
     center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
     print center_pos
+
     if center_pos == (-1, -1):
         logging.warning("No MD_POS data available")
         return []
+
 
     center_pos = (center_pos[0] + escan_pixelSize[0] * calc_translation_y, center_pos[1] + escan_pixelSize[1] * calc_translation_x)
     logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
