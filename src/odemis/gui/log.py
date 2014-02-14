@@ -29,14 +29,14 @@ LOG_LINES = 500 # maximum lines in the GUI logger
 log = logging.getLogger() # for compatibility only
 
 
-def init_logger():
+def init_logger(level=logging.DEBUG):
     """
     Initializes the logger to some nice defaults
     To be called only once, at the initialisation
     """
     logging.basicConfig(format=" - %(levelname)s \t%(message)s")
     l = logging.getLogger()
-    l.setLevel(logging.DEBUG)
+    l.setLevel(level)
     frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
     l.handlers[0].setFormatter(logging.Formatter(frm))
 

@@ -3,7 +3,7 @@
 """
 @author: Rinze de Laat
 
-Copyright © 2012 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2012-2014 Rinze de Laat, Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import Pyro4.errors
+import argparse
 import logging
 from odemis import model
 from odemis.gui import main_xrc, log
@@ -47,7 +48,10 @@ class OdemisGUIApp(wx.App):
     """ This is Odemis' main GUI application class
     """
 
-    def __init__(self):
+    def __init__(self, standalone=False):
+        """
+        standalone (boolean): do not try to connect to the backend
+        """
         # Replace the standard 'get_resources' with our augmented one, that
         # can handle more control types. See the xhandler package for more info.
         main_xrc.get_resources = odemis_get_resources
@@ -61,11 +65,13 @@ class OdemisGUIApp(wx.App):
         self.main_data = None
         self.main_frame = None
         self._tab_controller = None
+        self._is_standalone = standalone
 
-        try:
-            driver.speedUpPyroConnect(model.getMicroscope())
-        except Exception:
-            logging.exception("Failed to speed up start up")
+        if not standalone:
+            try:
+                driver.speedUpPyroConnect(model.getMicroscope())
+            except Exception:
+                logging.exception("Failed to speed up start up")
 
         # Output catcher using a helper class
         wx.App.outputWindowClass = OdemisOutputWindow
@@ -89,20 +95,23 @@ class OdemisGUIApp(wx.App):
         constructor.
         """
 
-        try:
-            microscope = model.getMicroscope()
-        except (IOError, Pyro4.errors.CommunicationError), e:
-            logging.exception("Failed to connect to back-end")
-            msg = ("The Odemis GUI could not connect to the Odemis back-end:"
-                   "\n\n{0}\n\n"
-                   "Launch user interface anyway?").format(e)
-
-            answer = wx.MessageBox(msg,
-                                   "Connection error",
-                                    style=wx.YES | wx.NO | wx.ICON_ERROR)
-            if answer == wx.NO:
-                sys.exit(1)
+        if self._is_standalone:
             microscope = None
+        else:
+            try:
+                microscope = model.getMicroscope()
+            except (IOError, Pyro4.errors.CommunicationError), e:
+                logging.exception("Failed to connect to back-end")
+                msg = ("The Odemis GUI could not connect to the Odemis back-end:"
+                       "\n\n{0}\n\n"
+                       "Launch user interface anyway?").format(e)
+
+                answer = wx.MessageBox(msg,
+                                       "Connection error",
+                                        style=wx.YES | wx.NO | wx.ICON_ERROR)
+                if answer == wx.NO:
+                    sys.exit(1)
+                microscope = None
 
         self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
@@ -437,11 +446,41 @@ def installThreadExcepthook():
         self.run = run_with_except_hook
     threading.Thread.__init__ = init
 
-def main():
-    log.init_logger()
+def main(args):
+    """
+    args is the list of arguments passed
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="odemis-cli",
+                                     description=odemis.__fullname__)
+
+    parser.add_argument('--version', dest="version", action='store_true',
+                        help="show program's version number and exit")
+    parser.add_argument('--standalone', dest="standalone", action='store_true',
+                        default=False, help="just display simple interface, "
+                        "without trying to connect to the back-end")
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=0, help="set verbosity level (0-2, default = 0)")
+
+    options = parser.parse_args(args[1:])
+
+    # Cannot use the internal feature, because it doesn't support multiline
+    if options.version:
+        print (odemis.__fullname__ + " " + odemis.__version__ + "\n" +
+               odemis.__copyright__ + "\n" +
+               "Licensed under the " + odemis.__license__)
+        return 0
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        parser.error("log-level must be positive.")
+    loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    log.init_logger(loglev)
 
     # Create application
-    app = OdemisGUIApp()
+    app = OdemisGUIApp(standalone=options.standalone)
     # Change exception hook so unexpected exception
     # get caught by the logger
     backup_excepthook, sys.excepthook = sys.excepthook, app.excepthook
@@ -454,4 +493,4 @@ def main():
 
 if __name__ == '__main__':
     installThreadExcepthook()
-    main()
+    main(sys.argv)
