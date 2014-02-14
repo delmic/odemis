@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
-import collections
 import inspect
 import logging
 import odemis
@@ -33,49 +32,6 @@ import weakref
 from . import _core, _dataflow, _vattributes
 from ._core import roattribute
 
-
-BACKEND_FILE = _core.BASE_DIRECTORY + "/backend.ipc" # the official ipc file for backend (just to detect status)
-BACKEND_NAME = "backend" # the official name for the backend container
-
-_microscope = None
-
-def getMicroscope():
-    """
-    return the microscope component managed by the backend
-    Note: if a connection has already been set up, it will reuse it, unless
-    you reset _microscope to None
-    """
-    global _microscope # cached at the module level
-    if _microscope is None:
-        backend = _core.getContainer(BACKEND_NAME)
-        _microscope = backend.getRoot()
-    return _microscope
-
-def getComponents():
-    """
-    return all the HwComponents managed by the backend
-    """
-    microscope = getMicroscope()
-    return _getChildren(microscope)
-
-def _getChildren(root):
-    """
-    Return the set of components which are referenced from the given component
-     (children, emitters, detectors, actuators...)
-    root (HwComponent): the component to start from
-    returns (set of HwComponents)
-    """
-    ret = set([root])
-    for child in getattr(root, "children", set()):
-        ret |= _getChildren(child)
-
-    # cannot check for Microscope because it's a proxy
-    # isinstance(root, Microscope):
-    if isinstance(root.detectors, collections.Set):
-        for child in (root.detectors | root.emitters | root.actuators):
-            ret |= _getChildren(child)
-
-    return ret
 
 # Helper functions to list selectively the special attributes of a component
 def getVAs(component):

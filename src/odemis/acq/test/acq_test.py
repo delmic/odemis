@@ -102,7 +102,7 @@ class SECOMTestCase(unittest.TestCase):
         # end the backend
         cmd = ODEMISD_CMD + ["--kill"]
         subprocess.call(cmd)
-        model._components._microscope = None # force reset of the microscope for next connection
+        model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
     def setUp(self):
@@ -229,7 +229,7 @@ class SPARCTestCase(unittest.TestCase):
         # end the backend
         cmd = ODEMISD_CMD + ["--kill"]
         subprocess.call(cmd)
-        model._components._microscope = None # force reset of the microscope for next connection
+        model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
     def setUp(self):

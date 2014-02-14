@@ -159,7 +159,7 @@ BACKEND_DEAD = "DEAD"
 BACKEND_STOPPED = "STOPPED"
 def get_backend_status():
     try:
-        model._components._microscope = None # force reset of the microscope
+        model._core._microscope = None # force reset of the microscope
         microscope = model.getMicroscope()
         if len(microscope.name) > 0:
             return BACKEND_RUNNING

@@ -38,6 +38,7 @@ from unittest.case import skip
 logging.getLogger().setLevel(logging.DEBUG)
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISCLI_CMD = ["python2", "-m", "odemis.cli.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
@@ -119,7 +120,7 @@ class TestWithBackend(unittest.TestCase):
         # end the backend
         cmd = ODEMISD_CMD + ["--kill"]
         subprocess.call(cmd)
-        model._components._microscope = None # force reset of the microscope for next connection
+        model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
     def test_list(self):
@@ -162,6 +163,15 @@ class TestWithBackend(unittest.TestCase):
         self.assertTrue("role" in output)
         self.assertTrue("swVersion" in output)
         self.assertTrue("power" in output)
+
+    def test_encoding(self):
+        """Check no problem happens due to unicode encoding to ascii"""
+        f = open("test.txt", "w")
+        cmd = ODEMISCLI_CMD + ["--list-prop", "Spectra"]
+        ret = subprocess.check_call(cmd, stdout=f)
+        self.assertEqual(ret, 0, "trying to run %s" % cmd)
+        f.close()
+        os.remove("test.txt")
     
     def test_set_attr(self):
         # to read attribute power

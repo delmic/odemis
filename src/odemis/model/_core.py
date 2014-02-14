@@ -19,21 +19,22 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from Pyro4.core import oneway
 import Pyro4
+from Pyro4.core import oneway
+import collections
 import logging
 import multiprocessing
 import os
 import threading
 import urllib
 import weakref
+
+
 #Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
 # There is a problem with threadpool: threads have a timeout on waiting for a
 # request. That obviously doesn't make much sense, but also means it's not
 # possible to put a global timeout with the current version and threadpool.
 # One possibility is to change ._pyroTimeout on each proxy.
-
-
 # thread is restricted: it can handle at the same time only
 # MAXTHREADS concurrent connections (which is MINTHREADS because there is a bug).
 # After that it simply blocks. As there is one connection per object, it goes fast.
@@ -48,12 +49,86 @@ Pyro4.config.THREADPOOL_MINTHREADS = 24
 BASE_DIRECTORY="/var/run/odemisd"
 BASE_GROUP="odemis" # user group that is allowed to access the backend
 
+
+BACKEND_FILE = BASE_DIRECTORY + "/backend.ipc" # the official ipc file for backend (just to detect status)
+BACKEND_NAME = "backend" # the official name for the backend container
+
+_microscope = None
+
+def getMicroscope():
+    """
+    return the microscope component managed by the backend
+    Note: if a connection has already been set up, it will reuse it, unless
+    you reset _microscope to None
+    """
+    global _microscope # cached at the module level
+    if _microscope is None:
+        backend = getContainer(BACKEND_NAME)
+        _microscope = backend.getRoot()
+    return _microscope
+
+def getComponent(name=None, role=None):
+    """
+    Find a component, according to its name or role.
+    At least a name or a role should be provided
+    name (str): name of the component to look for
+    role (str): role of the component to look for
+    return (Component): the component with the given name
+    raise LookupError: if no component with such a name is given
+    """
+    # Note: we could have a "light-weight" version which directly connects to
+    # the right container (by-passing the backend), but it's probably going to
+    # save time only if just one component is ever used (and immediately found)
+
+    if name is None and role is None:
+        raise ValueError("Need to specify at least a name or a role")
+
+    for c in getComponents():
+        if name is not None and c.name != name:
+            continue
+        if role is not None and c.role != role:
+            continue
+        return c
+    else:
+        errors = []
+        if name is not None:
+            errors.append("name %s" % name)
+        if role is not None:
+            errors.append("role %s" % role)
+        raise LookupError("No component with the %s", " and ".join(errors))
+
+def getComponents():
+    """
+    return all the HwComponents managed by the backend
+    """
+    microscope = getMicroscope()
+    return _getChildren(microscope)
+
+def _getChildren(root):
+    """
+    Return the set of components which are referenced from the given component
+     (children, emitters, detectors, actuators...)
+    root (HwComponent): the component to start from
+    returns (set of HwComponents)
+    """
+    ret = set([root])
+    for child in getattr(root, "children", set()):
+        ret |= _getChildren(child)
+
+    # cannot check for Microscope because it's a proxy
+    # isinstance(root, Microscope):
+    if isinstance(root.detectors, collections.Set):
+        for child in (root.detectors | root.emitters | root.actuators):
+            ret |= _getChildren(child)
+
+    return ret
+
+
 #TODO special attributes, which are just properties that are explicitly duplicated
 # on the proxy. Getting/setting them always access the actual object remotely.
 # declarator is like a property. Two possible implementations:
 # * special message types (get/set) instead of method call
 # * create special methods on the object, to handle these attributes (when the parent object is registered or shared)
-
 
 # The special read-only attribute which are duplicated on proxy objects
 class roattribute(property):
