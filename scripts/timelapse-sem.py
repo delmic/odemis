@@ -43,14 +43,9 @@ logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
 def acquire_timelapse(num, period, filename):
 
-    ebeam = None
-    sed = None
     # find components by their role
-    for c in model.getComponents():
-        if c.role == "ebeam":
-            ccd = c
-        elif c.role == "se-detector":
-            sed = c
+#    ebeam = model.getComponent(role="ebeam")
+    sed = model.getComponent(role="se-detector")
 
     images = []
     try:
