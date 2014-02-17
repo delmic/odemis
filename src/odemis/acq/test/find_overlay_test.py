@@ -38,6 +38,16 @@ grid_data = hdf5.read_data("spots_img.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
+
+grid_data = hdf5.read_data("overlay_image1.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_input2 = grid_data[0]
+
+grid_data = hdf5.read_data("38.h5")
+C, T, Z, Y, X = grid_data[1].shape
+grid_data[1].shape = Y, X
+fake_input3 = grid_data[1]
 #####################################################
 
 class TestOverlay(unittest.TestCase):
@@ -87,7 +97,8 @@ class TestOverlay(unittest.TestCase):
         electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
         # electron_grid.metadata[model.MD_POS] = (0, 0)
         transformed_image.metadata = transformed_data
-        hdf5.export("overlay_image.h5", [transformed_image, electron_grid])
+        print fake_input2.metadata
+        hdf5.export("overlay_image.h5", [fake_input2, fake_input3])
         # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
         print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data
         # print transformed_image

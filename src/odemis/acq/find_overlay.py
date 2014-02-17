@@ -49,6 +49,11 @@ grid_data = hdf5.read_data("38.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input2 = grid_data[0]
+
+grid_data = hdf5.read_data("38.h5")
+C, T, Z, Y, X = grid_data[1].shape
+grid_data[1].shape = Y, X
+fake_input3 = grid_data[1]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -279,6 +284,8 @@ def _updateMetadata(optical_image, transformation_values, escan):
     # Update translation
     center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
     print center_pos
+
+    print fake_input2.metadata[model.MD_POS]
 
     if center_pos == (-1, -1):
         logging.warning("No MD_POS data available")
