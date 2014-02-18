@@ -34,20 +34,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image2.h5")
+grid_data = hdf5.read_data("spots_image4.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
-
-grid_data = hdf5.read_data("overlay_image1.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_input2 = grid_data[0]
-
-grid_data = hdf5.read_data("38.h5")
-C, T, Z, Y, X = grid_data[1].shape
-grid_data[1].shape = Y, X
-fake_input3 = grid_data[1]
 #####################################################
 
 class TestOverlay(unittest.TestCase):
@@ -95,20 +85,15 @@ class TestOverlay(unittest.TestCase):
             for j in range(no_of_points):
                 electron_grid[int(dc / 2 + i * dc), int(dc / 2 + j * dc)] = 0
         hdf5.export("electron_grid.h5", electron_grid)
-        print "PXS"
-        print escan.pixelSize.value
         sem_width = [r * p for r, p in zip(escan.shape, escan.pixelSize.value)]
         eg_pxs = [w / s for w, s in zip(sem_width, electron_grid.shape[-1:-3:-1])]
         electron_grid.metadata[model.MD_PIXEL_SIZE] = eg_pxs
-        print eg_pxs
         electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
         # electron_grid.metadata[model.MD_POS] = (0, 0)
         transformed_image.metadata = transformed_data
 
         hdf5.export("overlay_image.h5", [transformed_image, electron_grid])
         # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
-        print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data
-        # print transformed_image
         #numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation),
 #                                           (-280.91827079065121, -195.55748765461769, 13.9363892133, 13.9363892133, -1.47833441067),
 #                                           decimal=1)

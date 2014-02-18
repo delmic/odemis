@@ -40,20 +40,10 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image2.h5")
+grid_data = hdf5.read_data("spots_image4.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
-
-grid_data = hdf5.read_data("38.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_input2 = grid_data[0]
-
-grid_data = hdf5.read_data("38.h5")
-C, T, Z, Y, X = grid_data[1].shape
-grid_data[1].shape = Y, X
-fake_input3 = grid_data[1]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -80,7 +70,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             CancelledError() if cancelled
             ValueError
     """
-    initial_dwell_time = dwell_time
+    scan_dwell_time = dwell_time
 
     logging.debug("Starting Overlay...")
 
@@ -90,8 +80,18 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
 
+        # Keep initial settings
+        init_scale = escan.scale.value
+        init_se_res = escan.resolution.value
+        init_trans = escan.translation.value
+        init_dt = escan.dwellTime.value
+        
+        init_binning = ccd.binning.value
+        init_ccd_res = ccd.resolution.value
+        init_et = ccd.exposureTime.value
+
         # _img = images.Images()
-        future._future_scan = images.ScanGrid(repetitions, initial_dwell_time, escan, ccd, detector)
+        future._future_scan = images.ScanGrid(repetitions, scan_dwell_time, escan, ccd, detector)
 
         # Wait for ScanGrid to finish
         try:
@@ -104,7 +104,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         # hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
         optical_image = fake_input
-        print fake_input.metadata.get(model.MD_POS, (-1, -1))
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
@@ -112,7 +111,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Isolating spots...")
-        print electron_coordinates
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
         if subimages==[]:
             raise ValueError('Overlay failure')
@@ -128,7 +126,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        print optical_coordinates
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
@@ -144,17 +141,16 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Matching coordinates...")
         known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
-        print known_electron_coordinates, known_optical_coordinates
 
         if known_electron_coordinates:
             break
         else:
             logging.warning("Increased dwell time by factor of 10...")
-            initial_dwell_time *= 10
+            scan_dwell_time *= 10
     else:
         # DEBUG: might go away in production code, or at least go in a separate function
         # Make failure report
-        _MakeReport(optical_image, repetitions, initial_dwell_time, electron_coordinates)
+        _MakeReport(optical_image, repetitions, scan_dwell_time, electron_coordinates)
         with _overlay_lock:
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
@@ -166,9 +162,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         raise CancelledError()
     logging.debug("Calculating transformation...")
     ret = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
-    (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = ret
-    overlay_coordinates = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
-    print overlay_coordinates
+    # (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = ret
+    # overlay_coordinates = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
+    # print overlay_coordinates
     with _overlay_lock:
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
@@ -179,6 +175,16 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     transformed_data = _updateMetadata(optical_image, ret, escan)
     if transformed_data == []:
         raise ValueError('Metadata is missing')
+
+    # Reset initial settings
+    escan.scale.value = init_scale
+    escan.resolution.value = init_se_res
+    escan.translation.value = init_trans
+    escan.dwellTime.value = init_dt
+
+    ccd.binning.value = init_binning
+    ccd.resolution.value = init_ccd_res
+    ccd.exposureTime.value = init_et
 
     logging.debug("Overlay done.")
     return ret, transformed_data
@@ -283,9 +289,6 @@ def _updateMetadata(optical_image, transformation_values, escan):
 
     # Update translation
     center_pos = optical_image.metadata.get(model.MD_POS, (-1, -1))
-    print center_pos
-
-    print fake_input2.metadata[model.MD_POS]
 
     if center_pos == (-1, -1):
         logging.warning("No MD_POS data available")
