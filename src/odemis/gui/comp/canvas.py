@@ -1146,6 +1146,11 @@ class DraggableCanvas(BitmapCanvas):
             # generated here, because it uses them to guesstimate the maximum
             # value produced while focussing.
 
+            if evt.ShiftDown():
+                softener = 0.1 # softer
+            else:
+                softener = 1
+
             linear_zone = 32.0
             pos = evt.GetPositionTuple()
             for i in [0, 1]: # x, y
@@ -1170,7 +1175,7 @@ class DraggableCanvas(BitmapCanvas):
                 #         shift, value, change)
 
                 if change:
-                    self.on_extra_axis_move(i, change)
+                    self.on_extra_axis_move(i, change * softener)
                     self._rdrag_prev_value[i] = value
 
         self.was_dragged = self.dragging
