@@ -40,10 +40,10 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image3.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_input = grid_data[0]
+# grid_data = hdf5.read_data("spots_image3.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_input = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -101,9 +101,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
                 if future._find_overlay_state == CANCELLED:
                     raise CancelledError()
 
-        # hdf5.export("spots_image.h5", optical_image)
+        hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
-        optical_image = fake_input
+        # optical_image = fake_input
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
