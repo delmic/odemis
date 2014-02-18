@@ -40,7 +40,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image4.h5")
+grid_data = hdf5.read_data("spots_image3.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -107,6 +107,16 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
+        # Reset initial settings
+        escan.scale.value = init_scale
+        escan.resolution.value = init_se_res
+        escan.translation.value = init_trans
+        escan.dwellTime.value = init_dt
+
+        ccd.binning.value = init_binning
+        ccd.resolution.value = init_ccd_res
+        ccd.exposureTime.value = init_et
+
         # Isolate spots
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
@@ -172,19 +182,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     
     logging.debug("Updating metadata...")
 
-    transformed_data = _updateMetadata(optical_image, ret, escan)
+    transformed_data = _updateMetadata(optical_image, ret, escan, repetitions)
     if transformed_data == []:
         raise ValueError('Metadata is missing')
-
-    # Reset initial settings
-    escan.scale.value = init_scale
-    escan.resolution.value = init_se_res
-    escan.translation.value = init_trans
-    escan.dwellTime.value = init_dt
-
-    ccd.binning.value = init_binning
-    ccd.resolution.value = init_ccd_res
-    ccd.exposureTime.value = init_et
 
     logging.debug("Overlay done.")
     return ret, transformed_data
@@ -264,7 +264,7 @@ def estimateOverlayTime(dwell_time, repetitions):
     """
     return 2 + dwell_time * numpy.prod(repetitions)  # s
 
-def _updateMetadata(optical_image, transformation_values, escan):
+def _updateMetadata(optical_image, transformation_values, escan, repetitions):
     """
     Returns the updated metadata of the optical image based on the 
     transformation values
@@ -305,8 +305,8 @@ def _updateMetadata(optical_image, transformation_values, escan):
     opt_width = (optical_image.shape[0] * scale[0],
                  optical_image.shape[1] * scale[1])
 
-    ele_width = (eshape[0] * escan_pixelSize[0] * 3 / 4,
-                 eshape[1] * escan_pixelSize[1] * 3 / 4)
+    ele_width = (eshape[0] * escan_pixelSize[0] * (repetitions[0] - 1) / repetitions[0],
+                 eshape[1] * escan_pixelSize[1] * (repetitions[1] - 1) / repetitions[1])
     
     diff_pos = ((-opt_width[0] + ele_width[0]) / 2 - escan_pixelSize[0] * calc_scaling_x * calc_translation_x,
                 (-opt_width[1] + ele_width[1]) / 2 - escan_pixelSize[1] * calc_scaling_y * calc_translation_y)
