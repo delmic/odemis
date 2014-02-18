@@ -34,7 +34,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_img.h5")
+grid_data = hdf5.read_data("spots_image2.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -87,7 +87,14 @@ class TestOverlay(unittest.TestCase):
         # opt_im = fake_input
         transformed_image = fake_input
         ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
-        electron_grid = hdf5.read_data("electron_grid.h5")[0]
+        # electron_grid = hdf5.read_data("electron_grid.h5")[0]
+        electron_grid = model.DataArray(numpy.ones(shape=(2048, 2048)))
+        no_of_points = 4
+        dc = electron_grid.shape[0] / no_of_points
+        for i in range(no_of_points):
+            for j in range(no_of_points):
+                electron_grid[int(dc / 2 + i * dc), int(dc / 2 + j * dc)] = 0
+        hdf5.export("electron_grid.h5", electron_grid)
         print "PXS"
         print escan.pixelSize.value
         sem_width = [r * p for r, p in zip(escan.shape, escan.pixelSize.value)]
@@ -97,8 +104,8 @@ class TestOverlay(unittest.TestCase):
         electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
         # electron_grid.metadata[model.MD_POS] = (0, 0)
         transformed_image.metadata = transformed_data
-        print fake_input2.metadata
-        hdf5.export("overlay_image.h5", [fake_input2, fake_input3])
+
+        hdf5.export("overlay_image.h5", [transformed_image, electron_grid])
         # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
         print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data
         # print transformed_image

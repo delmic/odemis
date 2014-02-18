@@ -40,7 +40,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_img.h5")
+grid_data = hdf5.read_data("spots_image2.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_input = grid_data[0]
@@ -291,10 +291,26 @@ def _updateMetadata(optical_image, transformation_values, escan):
         logging.warning("No MD_POS data available")
         return []
 
-
-    center_pos = (center_pos[0] + escan_pixelSize[0] * calc_translation_y, center_pos[1] + escan_pixelSize[1] * calc_translation_x)
+    eshape = escan.shape[:2]
+    """
+    etl = (eshape[0] - 1) / 2, (eshape[1] - 1) / 2
+    center_pos = (center_pos[0] + escan_pixelSize[0] * (calc_translation_y - etl[0]),
+                  center_pos[1] + escan_pixelSize[1] * (calc_translation_x - etl[1]))
     logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
+    """
+    
+    opt_width = (optical_image.shape[0] * scale[0],
+                 optical_image.shape[1] * scale[1])
 
+    ele_width = (eshape[0] * escan_pixelSize[0] * 3 / 4,
+                 eshape[1] * escan_pixelSize[1] * 3 / 4)
+    
+    diff_pos = ((-opt_width[0] + ele_width[0]) / 2 - escan_pixelSize[0] * calc_scaling_x * calc_translation_x,
+                (-opt_width[1] + ele_width[1]) / 2 - escan_pixelSize[1] * calc_scaling_y * calc_translation_y)
+    center_pos = center_pos[0] + diff_pos[0], center_pos[1] + diff_pos[1]
+    
+    logging.debug("Center correction: %g %g", diff_pos[0], diff_pos[1])
+    # logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
     transformed_data.metadata[model.MD_ROTATION] = rotation
     transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
     transformed_data.metadata[model.MD_POS] = center_pos
