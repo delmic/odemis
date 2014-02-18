@@ -2818,6 +2818,25 @@ class SEMCCDDCtream(MultipleDetectorStream):
         self._emitter.translation.value = self._trans
         self._emitter.dwellTime.value = self._dc_dwelltime.value
 
+    def _onOriginalRegion(self, drift):
+        """
+        Update the scanning area of the SEM according to the selected region
+        for drift correction.
+        """
+        # translation is distance from center (situated at 0.5, 0.5), can be floats
+        # we clip translation inside of bounds in case of huge drift
+        new_translation = (self._transl[0], self._transl[1])
+        if (abs(new_translation[0]) > self._safety_bounds[1] or abs(new_translation[1]) > self._safety_bounds[1]):
+            logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
+
+        self._transl = (numpy.clip(new_translation[0], self._min_bound, self._max_bound),
+                       numpy.clip(new_translation[1], self._min_bound, self._max_bound))
+
+        # always in this order
+        self._emitter.resolution.value = self._res
+        self._emitter.translation.value = self._transl
+        self._emitter.dwellTime.value = self._dc_dwelltime.value
+
     def _getSpotPositions(self):
         """
         Compute the positions of the e-beam for each point in the ROI
@@ -2871,6 +2890,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             roi = self._rep_stream.roi.value
             self._sem_data = []
             self._sr_data = []
+            self._orig_data = []
             self._sem_stream.raw = []
 
             tot_num = numpy.prod(rep)
@@ -2885,6 +2905,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             shape = self._emitter.shape
             # translation is distance from center (situated at 0.5, 0.5), can be floats
             self._trans = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
+            self._transl = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
             # resolution is the maximum resolution at the scale in proportion of the width
             scale = self._emitter.scale.value
             self._res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
@@ -2897,6 +2918,15 @@ class SEMCCDDCtream(MultipleDetectorStream):
             self._min_bound = self._safety_bounds[0] + (max(self._res[0], self._res[1]) / 2)
             self._max_bound = self._safety_bounds[1] - (max(self._res[0], self._res[1]) / 2)
 
+            self._onOriginalRegion(drift)
+            logging.debug("E-beam spot to original region: " + str(self._emitter.translation.value))
+            self._acq_sem_complete.clear()
+            self._semd_df.subscribe(self._ssOnOriginalRegion)
+            if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1000 + 1):
+                raise TimeoutError("First acquisition of original region frame timed out")
+            self._semd_df.unsubscribe(self._ssOnOriginalRegion)
+            hdf5.export("orig0.h5", self._orig_data[0])
+
             self._onSelectedRegion(drift)
             logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
             self._acq_sem_complete.clear()
@@ -2908,6 +2938,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 raise TimeoutError("First acquisition of selected region frame timed out")
             self._semd_df.unsubscribe(self._ssOnSelectedRegion)
             hdf5.export("simsem0.h5", self._sr_data[0])
+
 
             start_time = time.time()
             dc_start = time.time()
@@ -2970,6 +3001,17 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
                 # DRIFT CORRECTION
                 if (time.time() - dc_start) >= dc_period:
+                    self._onOriginalRegion(drift)
+                    logging.debug("E-beam spot to original region: " + str(self._emitter.translation.value))
+                    self._acq_sem_complete.clear()
+                    self._semd_df.subscribe(self._ssOnOriginalRegion)
+                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 1000 + 1):
+                        raise TimeoutError("Acquisition of original region frame %s timed out" % (i,))
+                    self._semd_df.unsubscribe(self._ssOnOriginalRegion)
+
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+
                     # Move e-beam to the selected region
                     self._onSelectedRegion(drift)
                     logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
@@ -2992,6 +3034,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                         # recalibrate
                         drift = (drift[0] + cur_drift[0], drift[1] + cur_drift[1])
                         cur_drift = drift
+                        # drift = (0,0)
                         logging.debug("Current drift: " + str(drift))
                         # Update next positions
                         spot_pos[:, :, 0] -= drift[1]
@@ -3032,6 +3075,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             return self.raw
         finally:
             hdf5.export("anchor_frames.h5", model.DataArray(self._sr_data))
+            hdf5.export("orig_frames.h5", model.DataArray(self._orig_data))
             del self._sem_data  # regain a bit of memory
 
     def _ssOnSelectedRegion(self, df, data):
@@ -3041,6 +3085,16 @@ class SEMCCDDCtream(MultipleDetectorStream):
         if (not self._acq_sem_complete.is_set()) and data.shape != (1, 1):
             # only use the first data per pixel
             self._sr_data.append(data)
+
+            self._acq_sem_complete.set()
+
+    def _ssOnOriginalRegion(self, df, data):
+        logging.debug("Original Region data received")
+
+        # Do not stop the acquisition, as it ensures the e-beam is at the right place
+        if (not self._acq_sem_complete.is_set()) and data.shape != (1, 1):
+            # only use the first data per pixel
+            self._orig_data.append(data)
 
             self._acq_sem_complete.set()
 
