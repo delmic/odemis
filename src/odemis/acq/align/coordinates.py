@@ -159,7 +159,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     data_min = filters.minimum_filter(image, filter_window_size)
     
 
-    for i in numpy.arange(3.5, 15.5, 0.1):
+    for i in numpy.arange(3.5, 15, 0.1):
         # Determine threshold
         threshold = max_diff / i
 

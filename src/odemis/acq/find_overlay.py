@@ -40,7 +40,7 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-# grid_data = hdf5.read_data("spots_image_test.h5")
+# grid_data = hdf5.read_data("spots_image_bad.h5")
 # C, T, Z, Y, X = grid_data[0].shape
 # grid_data[0].shape = Y, X
 # fake_spots = grid_data[0]
