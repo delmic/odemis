@@ -154,12 +154,26 @@ def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
 
     electron_coordinates = []
     # TODO: convert to numpy call?
+    """
     for i in xrange(repetitions[0]):
         for j in xrange(repetitions[1]):
             # Compute electron coordinates based on scale and repetitions
             electron_coordinates.append((i * scale[0], j * scale[1]))
+    """
 
+    bound = ((repetitions[0] - 1) * scale[0]) / 2
+
+    for i in xfrange(-bound, bound, scale[0]):
+        for j in xfrange(-bound, bound, scale[0]):
+            # Compute electron coordinates based on scale and repetitions
+            electron_coordinates.append((i, j))
+    print electron_coordinates
     return ccd.data._optical_image, electron_coordinates, scale
+
+def xfrange(start, stop, step):
+    while start <= stop:
+        yield start
+        start += step
 
 # Copy from acqmng
 # @staticmethod

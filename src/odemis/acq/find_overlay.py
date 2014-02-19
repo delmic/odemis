@@ -40,10 +40,20 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-# grid_data = hdf5.read_data("spots_image3.h5")
+# grid_data = hdf5.read_data("spots_image_test.h5")
 # C, T, Z, Y, X = grid_data[0].shape
 # grid_data[0].shape = Y, X
-# fake_input = grid_data[0]
+# fake_spots = grid_data[0]
+#
+# grid_data = hdf5.read_data("ele_img_test.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_ele = grid_data[0]
+#
+# grid_data = hdf5.read_data("opt_img_test.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_opt = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -103,7 +113,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
 
         hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
-        # optical_image = fake_input
+        # optical_image = fake_spots
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
@@ -136,6 +146,11 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+        opt_offset = (optical_image.shape[0] / 2, optical_image.shape[1] / 2)
+        print opt_offset
+        optical_coordinates = [(x - opt_offset[1], y - opt_offset[0]) for x, y in optical_coordinates]
+
+        print optical_coordinates
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
@@ -270,6 +285,10 @@ def _updateMetadata(optical_image, transformation_values, escan, repetitions):
     transformation values
     """
     escan_pixelSize = escan.pixelSize.value
+    ############## TO BE REMOVED ON TESTING##############
+    # escan_pixelSize = fake_ele.metadata[model.MD_PIXEL_SIZE]
+    # escan_pixelSize = (escan_pixelSize[0] / 4, escan_pixelSize[1] / 4)
+    #####################################################
     logging.debug("PixelSize: %g ", escan_pixelSize[0])
     transformed_data = optical_image
     ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation) = transformation_values
@@ -284,7 +303,9 @@ def _updateMetadata(optical_image, transformation_values, escan, repetitions):
         return []
 
     # Update scaling
-    scale = (escan_pixelSize[0] * calc_scaling_x, escan_pixelSize[1] * calc_scaling_y)
+    scale = (escan_pixelSize[0] * calc_scaling_x * repetitions[0] / (repetitions[0] - 1)
+            , escan_pixelSize[1] * calc_scaling_y * repetitions[1] / (repetitions[1] - 1))
+
     logging.debug("Scale: %s", scale)
 
     # Update translation
@@ -295,24 +316,24 @@ def _updateMetadata(optical_image, transformation_values, escan, repetitions):
         return []
 
     eshape = escan.shape[:2]
+
+    # etl = (eshape[0] - 1) / 2, (eshape[1] - 1) / 2
+    center_pos = (center_pos[0] + scale[0] * calc_translation_x,  # x is good!
+                  center_pos[1] - scale[1] * calc_translation_y)  # y is good!
+    logging.debug("Center shift correction: %g %g", scale[0] * calc_translation_x, scale[1] * calc_translation_y)
+
     """
-    etl = (eshape[0] - 1) / 2, (eshape[1] - 1) / 2
-    center_pos = (center_pos[0] + escan_pixelSize[0] * (calc_translation_y - etl[0]),
-                  center_pos[1] + escan_pixelSize[1] * (calc_translation_x - etl[1]))
-    logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
-    """
-    
     opt_width = (optical_image.shape[0] * scale[0],
                  optical_image.shape[1] * scale[1])
 
     ele_width = (eshape[0] * escan_pixelSize[0] * (repetitions[0] - 1) / repetitions[0],
                  eshape[1] * escan_pixelSize[1] * (repetitions[1] - 1) / repetitions[1])
     
-    diff_pos = ((-opt_width[0] + ele_width[0]) / 2 - escan_pixelSize[0] * calc_scaling_x * calc_translation_x,
-                (-opt_width[1] + ele_width[1]) / 2 - escan_pixelSize[1] * calc_scaling_y * calc_translation_y)
+    diff_pos = ((-opt_width[0] + ele_width[0]) / 2 - escan_pixelSize[0] * calc_scaling_x * calc_translation_y,
+                (-opt_width[1] + ele_width[1]) / 2 - escan_pixelSize[1] * calc_scaling_y * calc_translation_x)
     center_pos = center_pos[0] + diff_pos[0], center_pos[1] + diff_pos[1]
-    
-    logging.debug("Center correction: %g %g", diff_pos[0], diff_pos[1])
+    """
+    # logging.debug("Center correction: %g %g", diff_pos[0], diff_pos[1])
     # logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
     transformed_data.metadata[model.MD_ROTATION] = rotation
     transformed_data.metadata[model.MD_PIXEL_SIZE] = scale

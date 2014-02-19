@@ -34,10 +34,20 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image3.h5")
+grid_data = hdf5.read_data("spots_image_test.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
-fake_input = grid_data[0]
+fake_spots = grid_data[0]
+
+grid_data = hdf5.read_data("ele_img_test.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_ele = grid_data[0]
+
+grid_data = hdf5.read_data("opt_img_test.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_opt = grid_data[0]
 #####################################################
 
 class TestOverlay(unittest.TestCase):
@@ -75,9 +85,10 @@ class TestOverlay(unittest.TestCase):
         f = find_overlay.FindOverlay((4, 4), 0.1, 1e-06, escan, ccd, detector)
 
         # opt_im = fake_input
-        transformed_image = fake_input
+        transformed_image = fake_opt
         ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
         # electron_grid = hdf5.read_data("electron_grid.h5")[0]
+        """
         electron_grid = model.DataArray(numpy.ones(shape=(2048, 2048)))
         no_of_points = 4
         dc = electron_grid.shape[0] / no_of_points
@@ -88,11 +99,13 @@ class TestOverlay(unittest.TestCase):
         sem_width = [r * p for r, p in zip(escan.shape, escan.pixelSize.value)]
         eg_pxs = [w / s for w, s in zip(sem_width, electron_grid.shape[-1:-3:-1])]
         electron_grid.metadata[model.MD_PIXEL_SIZE] = eg_pxs
-        electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
+        """
+        # electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
         # electron_grid.metadata[model.MD_POS] = (0, 0)
+        print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation)
         transformed_image.metadata.update(transformed_data)
 
-        hdf5.export("overlay_image.h5", [transformed_image, electron_grid])
+        hdf5.export("overlay_image.h5", [transformed_image, fake_ele])
         # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
         #numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation),
 #                                           (-280.91827079065121, -195.55748765461769, 13.9363892133, 13.9363892133, -1.47833441067),
