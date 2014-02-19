@@ -390,7 +390,7 @@ class StreamPanel(wx.PyPanel):
                  agwStyle=0,
                  validator=wx.DefaultValidator,
                  name="StreamPanel",
-                 collapsed=True):
+                 collapsed=False):
         """
         :param parent: (StreamBar) The parent widget.
         :param stream: (Stream) The stream data model to be displayed to and
