@@ -146,9 +146,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        opt_offset = (optical_image.shape[0] / 2, optical_image.shape[1] / 2)
+        opt_offset = (optical_image.shape[1] / 2, optical_image.shape[0] / 2)
         print opt_offset
-        optical_coordinates = [(x - opt_offset[1], y - opt_offset[0]) for x, y in optical_coordinates]
+        optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
 
         print optical_coordinates
 
@@ -197,7 +197,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     
     logging.debug("Updating metadata...")
 
-    transformed_data = _updateMetadata(optical_image, ret, escan, repetitions)
+    transformed_data = _updateMetadata(optical_image, ret, escan)
     if transformed_data == []:
         raise ValueError('Metadata is missing')
 
@@ -279,7 +279,7 @@ def estimateOverlayTime(dwell_time, repetitions):
     """
     return 2 + dwell_time * numpy.prod(repetitions)  # s
 
-def _updateMetadata(optical_image, transformation_values, escan, repetitions):
+def _updateMetadata(optical_image, transformation_values, escan):
     """
     Returns the updated metadata of the optical image based on the 
     transformation values
@@ -303,8 +303,8 @@ def _updateMetadata(optical_image, transformation_values, escan, repetitions):
         return []
 
     # Update scaling
-    scale = (escan_pixelSize[0] * calc_scaling_x * repetitions[0] / (repetitions[0] - 1)
-            , escan_pixelSize[1] * calc_scaling_y * repetitions[1] / (repetitions[1] - 1))
+    scale = (escan_pixelSize[0] * calc_scaling_x,
+             escan_pixelSize[1] * calc_scaling_y)
 
     logging.debug("Scale: %s", scale)
 

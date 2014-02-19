@@ -166,7 +166,7 @@ def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
     for i in xfrange(-bound, bound, scale[0]):
         for j in xfrange(-bound, bound, scale[0]):
             # Compute electron coordinates based on scale and repetitions
-            electron_coordinates.append((i, j))
+            electron_coordinates.append((i * repetitions[1] / (repetitions[1] - 1), j * repetitions[1] / (repetitions[1] - 1)))
     print electron_coordinates
     return ccd.data._optical_image, electron_coordinates, scale
 
