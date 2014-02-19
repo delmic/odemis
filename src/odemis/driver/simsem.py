@@ -20,16 +20,17 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model
+
 import logging
 import math
-import threading
-import weakref
-from odemis.dataio import hdf5
 import numpy
-from scipy import ndimage
-from numpy import fft
+from odemis import model, util
+from odemis.dataio import hdf5
+from odemis.util import img
+import os.path
+import threading
 import time
+import weakref
 
 
 class SimSEM(model.HwComponent):
@@ -48,12 +49,9 @@ class SimSEM(model.HwComponent):
         Raise an exception if the device cannot be opened
         '''
         # fake image setup
-        fake_image = hdf5.read_data("./src/odemis/driver/simsem_output.h5")
-        I, T, Z, Y, X = fake_image[0].shape
-        fake_image[0].shape = Y, X
-
-        # ensure C order
-        self.fake_img = numpy.require(fake_image[0], requirements=['C'])
+        fake_image = hdf5.read_data(os.path.dirname(__file__) + u"/simsem-fake-output.h5")
+        # 0MQ can do zero copy if it's in C order
+        self.fake_img = numpy.require(img.ensure2DImage(fake_image[0]), requirements=['C'])
 
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
@@ -80,6 +78,12 @@ class SimSEM(model.HwComponent):
     def updateMetadata(self, md):
         self._metadata.update(md)
 
+    def terminate(self):
+        """
+        Must be called at the end of the usage. Can be called multiple times,
+        but the component shouldn't be used afterward.
+        """
+        self._detector._update_drift_timer.cancel()
 
 class Scanner(model.Emitter):
     """
@@ -95,7 +99,7 @@ class Scanner(model.Emitter):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
-        self._shape = (2048, 2048)
+        self._shape = (1024, 1024)  # half the size of the fake_img
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
@@ -144,7 +148,7 @@ class Scanner(model.Emitter):
         self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
                                               readonly=True)
 
-        self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s", setter=self._setDwellTime)
+        self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -233,17 +237,6 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
 
-    def _setRotation(self, value):
-        """
-        Applies rotation to the output image
-        value (float, float): shift from the center.
-        """
-        pass
-
-    def _setDwellTime(self, value):
-        dt = value
-        return dt
-
     def pixelToPhy(self, px_pos):
         """
         Converts a position in pixels to physical (at the current magnification)
@@ -262,9 +255,10 @@ class Detector(model.Detector):
     of the fake SEM. It sets up a Dataflow and notifies it every time that a fake 
     SEM image is generated. It also keeps and updates a “drift vector”
     """
-    def __init__(self, name, role, parent, drift_period, **kwargs):
+    def __init__(self, name, role, parent, drift_period=None, **kwargs):
         """
         Note: parent should have a child "scanner" already initialised
+        drift_period (None or 0<float): time period for drift updating in seconds
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
@@ -276,9 +270,15 @@ class Detector(model.Detector):
         self.fake_img = self.parent.fake_img
         self.drift_factor = 1  # dummy value for drift in pixels
         self.current_drift = 0
-        self.drifted_img = self.fake_img
-        self.drift_period = drift_period  # time period for drift updating in seconds
-        self._update_drift()
+        # Given that max resolution is (1024,1024) and the shape of fake_img
+        # is (2048,2048) we set the drift bound thus we stay inside of the
+        # fake_img bounds
+        self.drift_bound = 512
+        self.drift_period = drift_period
+        self._update_drift_timer = util.RepeatingTimer(self.drift_period, self._update_drift,
+                                                       "Drift update")
+        if self.drift_period is not None:
+            self._update_drift_timer.start()
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
@@ -313,16 +313,10 @@ class Detector(model.Detector):
         """
         Periodically updates drift according to drift_factor and drift_period.
         """
-        if self.drift_period == 0:
-            return
-
         self.current_drift += self.drift_factor
-        if abs(self.current_drift) == 300:
+        if abs(self.current_drift) == self.drift_bound:
             self.drift_factor = -self.drift_factor
 
-        threading.Timer(self.drift_period, self._update_drift).start()
-
-    
     def _simulate_image(self):
         """
         Generates the fake output based on the translation, resolution and
@@ -340,20 +334,20 @@ class Detector(model.Detector):
             trans = self.parent._scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
-            shape = self.drifted_img.shape
+            shape = self.fake_img.shape
             # Simulate drift
             center = ((shape[0] / 2) - self.current_drift, (shape[1] / 2) + self.current_drift)
 
-            sim_img = self.drifted_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2),
-                                       center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2)]
+            sim_img = self.fake_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2),
+                                    center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2)]
 
             # update fake output metadata
-            return model.DataArray(sim_img, metadata={model.MD_POS: updated_phy_pos,
-                                                      model.MD_PIXEL_SIZE: pxs,
-                                                      model.MD_LENS_MAG: metadata[model.MD_LENS_MAG],
-                                                      model.MD_ACQ_DATE: time.time(),
-                                                      model.MD_ROTATION: self.parent._scanner.rotation.value,
-                                                      model.MD_DWELL_TIME: self.parent._scanner.dwellTime.value})
+            metadata[model.MD_POS] = updated_phy_pos
+            metadata[model.MD_PIXEL_SIZE] = pxs
+            metadata[model.MD_ACQ_DATE] = time.time()
+            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
+            metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+            return model.DataArray(sim_img, metadata)
     
     def _acquire_thread(self, callback):
         """
@@ -364,13 +358,6 @@ class Detector(model.Detector):
         """
         try:
             while not self._acquisition_must_stop.is_set():
-                metadata = dict(self.parent._metadata)  # duplicate
-
-                # add scanner translation to the center
-                center = metadata.get(model.MD_POS, (0, 0))
-                metadata[model.MD_POS] = (center[0], center[1])
-                self.updateMetadata(metadata)
-
                 dwelltime = self.parent._scanner.dwellTime.value
                 resolution = self.parent._scanner.resolution.value
                 duration = numpy.prod(resolution) * dwelltime
