@@ -102,8 +102,8 @@ def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
     _ccd_done.clear()
 
     # Scanner setup (order matters)
-    scale = [(escan.resolution.range[1][0] - 1) / repetitions[0],
-             (escan.resolution.range[1][1] - 1) / repetitions[1]]
+    scale = [(escan.resolution.range[1][0]) / repetitions[0],
+             (escan.resolution.range[1][1]) / repetitions[1]]
     escan.scale.value = scale
     escan.resolution.value = repetitions
     escan.translation.value = (0, 0)
