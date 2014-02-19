@@ -46,7 +46,6 @@ SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("skip")
 class TestDriftStream(unittest.TestCase):
     def setUp(self):
         self._escan = None
