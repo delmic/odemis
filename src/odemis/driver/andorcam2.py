@@ -567,7 +567,7 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (1, 221), in mode 0
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
-            # mode 3 no supported
+            # mode 3 not supported (but reported and should be fixed in SDK 2.97?)
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
