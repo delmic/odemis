@@ -170,8 +170,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if known_electron_coordinates:
             break
         else:
-            logging.warning("Increased dwell time by factor of 10...")
-            scan_dwell_time *= 10
+            logging.warning("Increased dwell time by half a second...")
+            scan_dwell_time += 0.5
     else:
         # DEBUG: might go away in production code, or at least go in a separate function
         # Make failure report
