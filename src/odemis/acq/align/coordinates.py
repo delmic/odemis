@@ -206,7 +206,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
         if math.hypot(tab[0], tab[1]) > 1.5:
             subimage_coordinates.append((x_center, y_center))
             # TODO: change +10 and -10 to number relative to spot size
-            subimage = image[(dy.start - scale / 4.5):(dy.stop + 1 + scale / 4.5), (dx.start - scale / 4.5):(dx.stop + 1 + scale / 4.5)]
+            subimage = image[(dy.start - scale / 4.5):(dy.stop + 0 + scale / 4.5), (dx.start - scale / 4.5):(dx.stop + 0 + scale / 4.5)]
             # TODO Discard only this image
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 logging.warning("Cannot detect spots.")

@@ -37,24 +37,24 @@ from odemis.dataio import hdf5
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 
-MAX_TRIALS_NUMBER = 1  # Maximum number of scan grid repetitions
+MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_spots = grid_data[0]
-
-grid_data = hdf5.read_data("ele_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_ele = grid_data[0]
-
-grid_data = hdf5.read_data("opt_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_opt = grid_data[0]
+# grid_data = hdf5.read_data("spots_image_bug.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_spots = grid_data[0]
+#
+# grid_data = hdf5.read_data("ele_image_bug.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_ele = grid_data[0]
+#
+# grid_data = hdf5.read_data("opt_image_bug.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_opt = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -114,7 +114,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
 
         # hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
-        optical_image = fake_spots
+        # optical_image = fake_spots
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
@@ -143,19 +143,19 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Finding spot centers...")
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        print spot_coordinates
+        # print spot_coordinates
 
         # Reconstruct the optical coordinates
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        found = numpy.zeros(shape=fake_spots.shape)
-        for i, j in optical_coordinates:
-            found[j, i] = 1
-        hdf5.export("found.h5", model.DataArray(found))
+#         found = numpy.zeros(shape=fake_spots.shape)
+#         for i, j in optical_coordinates:
+#             found[j, i] = 1
+#         hdf5.export("found.h5", model.DataArray(found))
         opt_offset = (optical_image.shape[1] / 2, optical_image.shape[0] / 2)
+
         optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
-        # print optical_coordinates
 
         # TODO: Make function for scale calculation
         sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])[0:repetitions[0]]
@@ -172,8 +172,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Matching coordinates...")
         print len(optical_coordinates), len(electron_coordinates)
-        known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
 
+        known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
         if known_electron_coordinates:
             break
         else:
@@ -293,8 +293,8 @@ def _updateMetadata(optical_image, transformation_values, escan):
     """
     escan_pixelSize = escan.pixelSize.value
     ############## TO BE REMOVED ON TESTING##############
-    escan_pixelSize = fake_ele.metadata[model.MD_PIXEL_SIZE]
-    escan_pixelSize = (escan_pixelSize[0] / 1, escan_pixelSize[1] / 1)
+#     escan_pixelSize = fake_ele.metadata[model.MD_PIXEL_SIZE]
+#     escan_pixelSize = (escan_pixelSize[0] / 4, escan_pixelSize[1] / 4)
     #####################################################
     logging.debug("PixelSize: %g ", escan_pixelSize[0])
     transformed_data = optical_image
@@ -307,6 +307,11 @@ def _updateMetadata(optical_image, transformation_values, escan):
     pixel_size = optical_image.metadata.get(model.MD_PIXEL_SIZE, (0, 0))
     if pixel_size == (0, 0):
         logging.warning("No MD_PIXEL_SIZE data available")
+        return []
+    
+    binning = optical_image.metadata.get(model.MD_BINNING, (1, 1))
+    if binning == (0, 0):
+        logging.warning("No MD_BINNING data available")
         return []
 
     # Update scaling
@@ -343,7 +348,7 @@ def _updateMetadata(optical_image, transformation_values, escan):
     # logging.debug("Center correction: %g %g", diff_pos[0], diff_pos[1])
     # logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
     transformed_data.metadata[model.MD_ROTATION] = rotation
-    transformed_data.metadata[model.MD_PIXEL_SIZE] = scale
+    transformed_data.metadata[model.MD_PIXEL_SIZE] = (scale[0] * binning[0], scale[1] * binning[1])
     transformed_data.metadata[model.MD_POS] = center_pos
 
     return transformed_data.metadata

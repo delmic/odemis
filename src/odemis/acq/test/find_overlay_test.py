@@ -34,17 +34,17 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image_m.h5")
+grid_data = hdf5.read_data("spots_image_bug.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_spots = grid_data[0]
 
-grid_data = hdf5.read_data("ele_image_m.h5")
+grid_data = hdf5.read_data("ele_image_bug.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_ele = grid_data[0]
 
-grid_data = hdf5.read_data("opt_image_m.h5")
+grid_data = hdf5.read_data("opt_image_bug.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_opt = grid_data[0]
@@ -82,7 +82,7 @@ class TestOverlay(unittest.TestCase):
         ccd = self._ccd
         # overlay = self._overlay
 
-        f = find_overlay.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
+        f = find_overlay.FindOverlay((9, 9), 0.1, 1e-06, escan, ccd, detector)
 
         # opt_im = fake_input
         transformed_image = fake_opt
