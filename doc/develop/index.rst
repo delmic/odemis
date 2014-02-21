@@ -10,7 +10,7 @@
 Programming with Odemis and programming Odemis
 ##############################################
 
-This document covers the main aspects of developement with Odemis. 
+This document covers the main aspects of development with Odemis. 
 
 .. toctree::
     :maxdepth: 2
@@ -19,6 +19,7 @@ This document covers the main aspects of developement with Odemis.
     extending
     base-api
     backend-api
+    microscope
     documentation
 ..    dataio
 ..    testing
