@@ -20,20 +20,21 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 from Pyro4.core import isasync
-from concurrent.futures.thread import ThreadPoolExecutor
-from odemis import model
-from odemis.util import driver
-import collections
 import glob
 import logging
 import math
+from odemis import model
 import odemis
+from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.util import driver
 import os
 import re
 import serial
 import threading
 import time
+
 
 # This module drives the Acton SpectraPro spectrograph devices. It is tested with
 # the SpectraPro 2150i, but should work with many other devices as the commands
@@ -66,7 +67,6 @@ import time
 # instantaneous). The documentation gives all the commands in uppercase, but
 # from experiments, only commands in lowercase work.
 #
-
 class SPError(IOError):
     """Error related to the hardware behaviour"""
     pass
@@ -756,54 +756,6 @@ class SpectraPro(model.Actuator):
 
         return ser
 
-
-class CancellableThreadPoolExecutor(ThreadPoolExecutor):
-    """
-    An extended ThreadPoolExecutor that can cancel all the jobs not yet started.
-    """
-    def __init__(self, *args, **kwargs):
-        ThreadPoolExecutor.__init__(self, *args, **kwargs)
-        self._queue = collections.deque() # thread-safe queue of futures
-
-    def submit(self, fn, *args, **kwargs):
-        logging.debug("queuing action %s with arguments %s", fn, args)
-        f = ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
-        # add to the queue and track the task
-        self._queue.append(f)
-        f.add_done_callback(self._on_done)
-        return f
-
-    def _on_done(self, future):
-        # task is over
-        try:
-            self._queue.remove(future)
-        except ValueError:
-            # can happen if it was cancelled
-            pass
-
-    def cancel(self):
-        """
-        Cancels all the tasks still in the work queue, if they can be cancelled
-        Returns when all the tasks have been cancelled or are done.
-        """
-        uncancellables = []
-        # cancel one task at a time until there is nothing in the queue
-        while True:
-            try:
-                # Start with the last one added as it's the most likely to be cancellable
-                f = self._queue.pop()
-            except IndexError:
-                break
-            if not f.cancel():
-                uncancellables.append(f)
-
-        # wait for the non cancellable tasks to finish
-        for f in uncancellables:
-            try:
-                f.result()
-            except:
-                # the task raised an exception => we don't care
-                pass
 
 # Additional classes used for testing without the actual hardware
 class FakeSpectraPro(SpectraPro):

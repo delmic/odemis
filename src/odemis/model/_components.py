@@ -87,7 +87,7 @@ class Component(ComponentBase):
             daemon.register(self, urllib.quote(name)) # registered under its name
 
         self._parent = None
-        self.parent = parent
+        self.parent = parent # calls the setter, which updates ._parent
         if children is None:
             children = {}
         # Do not add non-Component, so that it's compatible with passing a kwargs
