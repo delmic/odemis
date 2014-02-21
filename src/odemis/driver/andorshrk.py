@@ -306,6 +306,9 @@ class Shamrock(model.Actuator):
         wavelength (0<=float): wavelength in m
         """
         assert 0 <= wavelength <= 50e-6
+        # FIXME: sometimes it fails with 20201: SHAMROCK_COMMUNICATION_ERROR
+        # It seems that retrying a couple of times just works
+
         # set in nm
         self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
         
@@ -523,14 +526,16 @@ class Shamrock(model.Actuator):
         """
         self._executor.cancel()
 
-    # TODO: method that returns the current MD_WL_LIST
-
     def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
         if self._device is not None:
             logging.debug("Shutting down the spectrograph")
             self.Close()
             self._device = None
-
 
     def __del__(self):
         self.terminate()

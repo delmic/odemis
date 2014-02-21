@@ -35,9 +35,9 @@ KWARGS_CAM = dict(name="spectrometer", role="ccd", device=0, transpose=[-1, 2],
 
 
 #@skip("only simulated")
-class TestCompositedSpectrometer(unittest.TestCase):
+class TestShamrock(unittest.TestCase):
     """
-    Test the CompositedSpectrometer class
+    Test the Shamrock + AndorSpec class
     """
 
     @classmethod
@@ -72,7 +72,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.spectrometer.binning.value = self._orig_binning
         self.spectrometer.resolution.value = self._orig_res
 
-    @skip("simple")
     def test_simple(self):
         """
         Just ensures that the device has all the VA it should
@@ -319,9 +318,9 @@ class TestCompositedSpectrometer(unittest.TestCase):
 if __name__ == '__main__':
     unittest.main()
 
-from odemis.driver import andorcam2, andorshrk
-import logging
-logging.getLogger().setLevel(logging.DEBUG)
-
-cam = andorcam2.AndorCam2(name="spectrometer", role="ccd", device=0)
-sp = andorshrk.Shamrock(name="test", role="spectrograph", device=0, path="/usr/local/etc/andor", parent=cam)
+#from odemis.driver import andorcam2, andorshrk
+#import logging
+#logging.getLogger().setLevel(logging.DEBUG)
+#
+#cam = andorcam2.AndorCam2(name="spectrometer", role="ccd", device=0)
+#sp = andorshrk.Shamrock(name="test", role="spectrograph", device=0, path="/usr/local/etc/andor", parent=cam)
