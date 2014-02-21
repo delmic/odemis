@@ -158,9 +158,8 @@ class CompositedSpectrometer(model.Detector):
             self._pn_phys = sp.getPolyToWavelength()
         except AttributeError:
             raise ValueError("Child spectrograph has no getPolyToWavelength() method")
-        if hasattr(sp, "grating") and isinstance(sp.grating, model.VigilantAttributeBase):
-            sp.grating.subscribe(self._onGratingUpdate)
-        sp.position.subscribe(self._onWavelengthUpdate)
+
+        sp.position.subscribe(self._onPositionUpdate)
         self.resolution.subscribe(self._onResBinningUpdate)
         self.binning.subscribe(self._onResBinningUpdate, init=True) 
     
@@ -177,23 +176,16 @@ class CompositedSpectrometer(model.Detector):
         """
         self._detector.updateMetadata(md)
     
-    def _onWavelengthUpdate(self, pos):
+    def _onPositionUpdate(self, pos):
         """
-        Called when the wavelength position of the spectrograph is changed
+        Called when the wavelength position or grating (ie, groove density) 
+          of the spectrograph is changed.
         """
         # Need to get new conversion polynomial and update metadata
         self._pn_phys = self._spectrograph.getPolyToWavelength()
         self._updateWavelengthPolynomial()
         
     def _onResBinningUpdate(self, value):
-        self._updateWavelengthPolynomial()
-        
-    def _onGratingUpdate(self, grating):
-        """
-        Called when the grating/groove density of the spectrograph is changed
-        """
-        # Need to get new conversion polynomial and update metadata
-        self._pn_phys = self._spectrograph.getPolyToWavelength()
         self._updateWavelengthPolynomial()
         
     def _updateWavelengthPolynomial(self):
