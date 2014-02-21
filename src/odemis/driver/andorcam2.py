@@ -21,20 +21,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
+
 from Pyro4.core import oneway
-from ctypes import *
-from odemis import model, util
-from odemis.dataio import tiff
 import collections
+from ctypes import *
 import ctypes # for fake AndorV2DLL
 import gc
 import logging
 import numpy
+from odemis import model, util
 import odemis
+from odemis.dataio import tiff
+from odemis.driver import andorshrk
 import os
 import threading
 import time
 import weakref
+
 
 class AndorV2Error(Exception):
     def __init__(self, errno, strerror):
@@ -400,6 +403,7 @@ class AndorCam2(model.DigitalCamera):
             self.handle = None
             raise IOError("Failed to find andor camera %d" % device)
         self.select()
+        self._initpath = None
         self.Initialize()
 
         logging.info("opened device %d successfully", device)
@@ -612,7 +616,7 @@ class AndorCam2(model.DigitalCamera):
         # It can take a loooong time (Clara: ~10s)
         logging.info("Initialising Andor camera, can be long...")
         if os.name == "nt":
-            self.atcore.Initialize("")
+            self._initpath = ""
         else:
             # In Linux the library needs to know the installation path (which
             # contains the cameras firmware.
@@ -630,15 +634,15 @@ class AndorCam2(model.DigitalCamera):
 
             for p in possibilities:
                 if os.path.isdir(p):
-                    install_path = p
+                    self._initpath = p
                     break
             else:
                 logging.error("Failed to find the .../etc/andor firmware "
                               "directory, check the andor2 installation.")
-                install_path = possibilities[0] # try just in case
+                self._initpath = possibilities[0] # try just in case
 
-            logging.debug("Initialising with path %s", install_path)
-            self.atcore.Initialize(install_path)
+        logging.debug("Initialising with path %s", self._initpath)
+        self.atcore.Initialize(self._initpath)
         logging.info("Initialisation completed.")
 
     def Reinitialize(self):
@@ -1053,6 +1057,7 @@ class AndorCam2(model.DigitalCamera):
             if errno == 20072: # DRV_ACQUIRING
                 logging.debug("Failed to read temperature due to acquisition in progress")
                 return
+            raise
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
@@ -1813,6 +1818,7 @@ class AndorCam2(model.DigitalCamera):
         camera.handle = None # so that there is no shutdown
         return cameras
 
+
 class AndorCam2DataFlow(model.DataFlow):
     def __init__(self, camera):
         """
@@ -2249,5 +2255,56 @@ class FakeAndorCam2(AndorCam2):
     def scan():
         return AndorCam2.scan(_fake=True)
 
+class AndorSpec(AndorCam2):
+    """
+    Spectrometer component, based on a AndorCam2 and a Shamrock
+    """
+    # TODO: See CombinedSpectrometer for the precise behaviour of the
+    # resolution
+
+    def __init__(self, name, role, children=None, daemon=None, **kwargs):
+        """
+        All the arguments are identical to AndorCam2, expected: 
+        children (dict string->kwargs): name of child must be "shamrock" and the
+          kwargs contains the arguments passed to instantiate the Shamrock component
+        """
+        # We could add it as if it was a child, but it'd not be useful, so simply
+        # keep it for us
+        # TODO: check whether this can be done without too much trick on
+        # overridding roattributes and VAs
+        super(AndorSpec, self).__init__(name, role, **kwargs)
+
+        try:
+            sp_kwargs = children["shamrock"]
+            sp_kwargs["parent"] = self
+            sp_kwargs["path"] = self._initpath
+        except Exception:
+            raise ValueError("AndorSpec excepts one child named 'shamrock'")
+
+        self._spectrograph = andorshrk.Shamrock(**sp_kwargs)
+        self._children.add(self._spectrograph)
+
+        # TODO: resolution + metadata
+        self.binning.subscribe(self._onResBinningUpdate)
+        self.resolution.subscribe(self._onResBinningUpdate)
+        self._spectrograph.position.subscribe(self._onPositionUpdate, init=True)
+
+    def _onResBinningUpdate(self, value):
+        self._updateWavelengthList()
+
+    def _onPositionUpdate(self, pos):
+        """
+        Called when the wavelength position or grating (ie, groove density) 
+          of the spectrograph is changed.
+        """
+        self._updateWavelengthList()
+
+    def _updateWavelengthList(self):
+        wll = self._spectrograph.getPixelToWavelength()
+        md = {model.MD_WL_LIST: wll}
+        self.updateMetadata(md)
+
+    def selfTest(self):
+        return super(AndorSpec, self).selfTest() and self._spectrograph.selfTest()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
