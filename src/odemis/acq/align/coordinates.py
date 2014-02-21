@@ -122,8 +122,8 @@ def FindCenterCoordinates(subimages):
         yc = (swab * swac - swa2 * swbc) / det
 
         # Output relative to upper left coordinate
-        xc = xc + 3 / 2
-        yc = -yc + 3 / 2
+        xc = xc  # + 1 / 2
+        yc = -yc  # + 1 / 2
         spot_coordinates.append((xc, yc))
 
     return spot_coordinates

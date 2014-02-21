@@ -30,6 +30,7 @@ import time
 import operator
 import math
 import numpy
+import shutil
 from odemis import model
 from align import coordinates, transform, images
 from odemis.dataio import hdf5
@@ -142,24 +143,23 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Finding spot centers...")
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+        print spot_coordinates
 
         # Reconstruct the optical coordinates
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        dd = numpy.zeros(shape=fake_spots.shape)
+        found = numpy.zeros(shape=fake_spots.shape)
         for i, j in optical_coordinates:
-            dd[j, i] = 1
-        hdf5.export("found.h5", model.DataArray(dd))
+            found[j, i] = 1
+        hdf5.export("found.h5", model.DataArray(found))
         opt_offset = (optical_image.shape[1] / 2, optical_image.shape[0] / 2)
-        print opt_offset
-        print optical_coordinates
         optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
-        print "AFTER OFFSET"
-        print optical_coordinates
+        # print optical_coordinates
 
         # TODO: Make function for scale calculation
-        sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])
+        sorted_coordinates = sorted(optical_coordinates, key=lambda tup: tup[1])[0:repetitions[0]]
+        sorted_coordinates = sorted(sorted_coordinates, key=lambda tup: tup[0])
         tab = tuple(map(operator.sub, sorted_coordinates[0], sorted_coordinates[1]))
         optical_scale = math.hypot(tab[0], tab[1])
         scale = electron_scale[0] / optical_scale
@@ -358,14 +358,16 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     """
     if not os.path.exists("OverlayReport"):
         os.makedirs("OverlayReport")
-    hdf5.export("OverlayReport/OpticalGrid.h5", optical_image)
-    report = open("OverlayReport/report.txt", 'w')
+    hdf5.export("OpticalGrid.h5", optical_image)
+    shutil.move("OpticalGrid.h5", os.path.dirname(__file__) + u"OverlayReport")
+    report = open("report.txt", 'w')
     report.write("\n****Overlay Failure Report****\n\n"
                  + "\nGrid size:\n" + str(repetitions)
                  + "\n\nMaximum dwell time used:\n" + str(dwell_time)
                  + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
                  + "\n\nThe optical image of the grid can be seen in OpticalGrid.h5\n\n")
     report.close()
+    shutil.move("report.txt", os.path.dirname(__file__) + u"OverlayReport")
 
     logging.warning("Failed to find overlay. Please check the failure report in OverlayReport folder.")
 
