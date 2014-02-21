@@ -30,6 +30,10 @@ import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 import transform
 import logging
+import cv2.cv
+
+from odemis import model
+from odemis.dataio import hdf5
 from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
@@ -137,11 +141,21 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
     """
+    # cannied_img = cv2.Canny(scipy.misc.bytescale(data), 80, 100)
+
+    # circles = cv2.HoughCircles(cannied_img, cv2.cv.CV_HOUGH_GRADIENT, 2, 5,
+    #                           None, 255, 14, 2, 10)[0, :, 0:2]
+    # hdf5.export("cannied_spots.h5", model.DataArray(cannied_img))
+    # print circles
+    # print circles.shape
+    # return [], []
+
     subimage_coordinates = []
     subimages = []
 
-    image =  data
+    image = data
     scale = optical_scale
+    scale = 10
 
     # Determine size of filter window
     # filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
@@ -150,7 +164,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     filter_window_size = scale / 1.7
     filter_window_size = sorted((10, filter_window_size, 60))[1]  # / (20000 / 6120)
     # print filter_window_size
-    
+
     i_max, j_max = unravel_index(image.argmax(), image.shape)
     i_min, j_min = unravel_index(image.argmin(), image.shape)
     max_diff = image[i_max, j_max] - image[i_min, j_min]
@@ -159,36 +173,37 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     data_min = filters.minimum_filter(image, filter_window_size)
     
 
-    for i in numpy.arange(3.5, 5, 0.1):
-        # Determine threshold
-        threshold = max_diff / i
+    # for i in numpy.arange(3.5, 5, 0.1):
+    # Determine threshold
+    i = 8
+    threshold = max_diff / i
 
-        # Filter the parts of the image with variance in intensity greater
-        # than the threshold
-        maxima = (image == data_max)
-        diff = ((data_max - data_min) > threshold)
-        maxima[diff == 0] = 0
+    # Filter the parts of the image with variance in intensity greater
+    # than the threshold
+    maxima = (image == data_max)
+    diff = ((data_max - data_min) > threshold)
+    maxima[diff == 0] = 0
 
-        labeled, num_objects = ndimage.label(maxima)
-        if num_objects > prod_of_spots:
-            break
+    labeled, num_objects = ndimage.label(maxima)
+    # if num_objects > prod_of_spots:
+    #    break
 
     slices = ndimage.find_objects(labeled)
-    
-    if len(slices)==0:
-        logging.warning("Cannot detect spots.")
-        return [],[]
+
+    # if len(slices) <= numpy.prod(number_of_spots) - 5:
+    #    logging.warning("Not enough spots detected.")
+    #    return [],[]
     
     (x_center_last, y_center_last) = (-10, -10)
 
     # Go through these parts and crop the subimages based on the neighborhood_size value
-    for dy,dx in slices:
+    for dy, dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
         y_center = (dy.start + dy.stop - 1) / 2
 
         # Make sure we don't detect spots on the top of each other
         tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
-        if math.hypot(tab[0], tab[1]) > 4.5:
+        if math.hypot(tab[0], tab[1]) > 1.5:
             subimage_coordinates.append((x_center, y_center))
             # TODO: change +10 and -10 to number relative to spot size
             subimage = image[(dy.start - scale / 4.5):(dy.stop + 1 + scale / 4.5), (dx.start - scale / 4.5):(dx.stop + 1 + scale / 4.5)]
@@ -500,7 +515,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     new_e_index = [new_index2[i] for i in new_index1]
     new_e_wrong_points = map(operator.ne, new_e_index, electron_range)
     if (all(new_e_wrong_points) or new_index1.count(new_index1[0]) == len(new_index1)):
-        logging.warning("Cannot perform matching.")
+        logging.warning("Cannot perform matching..")
         return [], [], [], []
 
     return estimated_coordinates, new_index1, new_e_wrong_points, total_shift

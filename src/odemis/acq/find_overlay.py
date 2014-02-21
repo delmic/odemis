@@ -36,24 +36,24 @@ from odemis.dataio import hdf5
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 
-MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
+MAX_TRIALS_NUMBER = 1  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-# grid_data = hdf5.read_data("spots_image_test.h5")
-# C, T, Z, Y, X = grid_data[0].shape
-# grid_data[0].shape = Y, X
-# fake_spots = grid_data[0]
-#
-# grid_data = hdf5.read_data("ele_img_test.h5")
-# C, T, Z, Y, X = grid_data[0].shape
-# grid_data[0].shape = Y, X
-# fake_ele = grid_data[0]
-#
-# grid_data = hdf5.read_data("opt_img_test.h5")
-# C, T, Z, Y, X = grid_data[0].shape
-# grid_data[0].shape = Y, X
-# fake_opt = grid_data[0]
+grid_data = hdf5.read_data("spots_image_m.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_spots = grid_data[0]
+
+grid_data = hdf5.read_data("ele_image_m.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_ele = grid_data[0]
+
+grid_data = hdf5.read_data("opt_image_m.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_opt = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -111,9 +111,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
                 if future._find_overlay_state == CANCELLED:
                     raise CancelledError()
 
-        hdf5.export("spots_image.h5", optical_image)
+        # hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
-        # optical_image = fake_spots
+        optical_image = fake_spots
         #####################################################
         optical_scale = (escan.pixelSize.value[0] * electron_scale[0]) / (optical_image.metadata[model.MD_PIXEL_SIZE][0] * ccd.binning.value[0])
 
@@ -132,6 +132,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Isolating spots...")
         subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
+        hdf5.export("neighborhoods.h5", subimages)
         if subimages==[]:
             raise ValueError('Overlay failure')
         print len(subimages)
@@ -146,10 +147,15 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+        dd = numpy.zeros(shape=fake_spots.shape)
+        for i, j in optical_coordinates:
+            dd[j, i] = 1
+        hdf5.export("found.h5", model.DataArray(dd))
         opt_offset = (optical_image.shape[1] / 2, optical_image.shape[0] / 2)
         print opt_offset
+        print optical_coordinates
         optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
-
+        print "AFTER OFFSET"
         print optical_coordinates
 
         # TODO: Make function for scale calculation
@@ -165,6 +171,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Matching coordinates...")
+        print len(optical_coordinates), len(electron_coordinates)
         known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
 
         if known_electron_coordinates:
@@ -286,8 +293,8 @@ def _updateMetadata(optical_image, transformation_values, escan):
     """
     escan_pixelSize = escan.pixelSize.value
     ############## TO BE REMOVED ON TESTING##############
-    # escan_pixelSize = fake_ele.metadata[model.MD_PIXEL_SIZE]
-    # escan_pixelSize = (escan_pixelSize[0] / 4, escan_pixelSize[1] / 4)
+    escan_pixelSize = fake_ele.metadata[model.MD_PIXEL_SIZE]
+    escan_pixelSize = (escan_pixelSize[0] / 1, escan_pixelSize[1] / 1)
     #####################################################
     logging.debug("PixelSize: %g ", escan_pixelSize[0])
     transformed_data = optical_image
@@ -349,10 +356,9 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     dwell_time (float): Time to scan each spot #s
     electron_coordinates (list of tuples): Coordinates of e-beam grid
     """
-    hdf5.export("OverlayReport/OpticalGrid.h5", model.DataArray(optical_image), thumbnail=None)
     if not os.path.exists("OverlayReport"):
         os.makedirs("OverlayReport")
-
+    hdf5.export("OverlayReport/OpticalGrid.h5", optical_image)
     report = open("OverlayReport/report.txt", 'w')
     report.write("\n****Overlay Failure Report****\n\n"
                  + "\nGrid size:\n" + str(repetitions)

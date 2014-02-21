@@ -54,7 +54,8 @@ def CalculateTransform(optical_coordinates, electron_coordinates):
 
     # Calculate matrix R, R = X\U
     r_array, resid, rank, s = numpy.linalg.lstsq(x_array, u_array)
-
+    # if r_array[1][0] == 0:
+    #    r_array[1][0] = 1
     translation_x = -r_array[2][0]
     translation_y = -r_array[3][0]
     scaling_x = 1 / math.sqrt((r_array[1][0] ** 2) + (r_array[0][0] ** 2))
