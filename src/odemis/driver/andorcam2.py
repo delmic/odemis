@@ -21,20 +21,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
+
 from Pyro4.core import oneway
-from ctypes import *
-from odemis import model, util
-from odemis.dataio import tiff
 import collections
+from ctypes import *
 import ctypes # for fake AndorV2DLL
 import gc
 import logging
+import math
 import numpy
+from odemis import model, util
 import odemis
+from odemis.dataio import tiff
+from odemis.driver import andorshrk
 import os
 import threading
 import time
 import weakref
+
 
 class AndorV2Error(Exception):
     def __init__(self, errno, strerror):
@@ -400,6 +404,7 @@ class AndorCam2(model.DigitalCamera):
             self.handle = None
             raise IOError("Failed to find andor camera %d" % device)
         self.select()
+        self._initpath = None
         self.Initialize()
 
         logging.info("opened device %d successfully", device)
@@ -567,7 +572,7 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (1, 221), in mode 0
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
-            # mode 3 no supported
+            # mode 3 not supported (but reported and should be fixed in SDK 2.97?)
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
@@ -612,7 +617,7 @@ class AndorCam2(model.DigitalCamera):
         # It can take a loooong time (Clara: ~10s)
         logging.info("Initialising Andor camera, can be long...")
         if os.name == "nt":
-            self.atcore.Initialize("")
+            self._initpath = ""
         else:
             # In Linux the library needs to know the installation path (which
             # contains the cameras firmware.
@@ -630,15 +635,15 @@ class AndorCam2(model.DigitalCamera):
 
             for p in possibilities:
                 if os.path.isdir(p):
-                    install_path = p
+                    self._initpath = p
                     break
             else:
                 logging.error("Failed to find the .../etc/andor firmware "
                               "directory, check the andor2 installation.")
-                install_path = possibilities[0] # try just in case
+                self._initpath = possibilities[0] # try just in case
 
-            logging.debug("Initialising with path %s", install_path)
-            self.atcore.Initialize(install_path)
+        logging.debug("Initialising with path %s", self._initpath)
+        self.atcore.Initialize(self._initpath)
         logging.info("Initialisation completed.")
 
     def Reinitialize(self):
@@ -1053,6 +1058,7 @@ class AndorCam2(model.DigitalCamera):
             if errno == 20072: # DRV_ACQUIRING
                 logging.debug("Failed to read temperature due to acquisition in progress")
                 return
+            raise
         self._metadata[model.MD_SENSOR_TEMP] = temp
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
@@ -1742,7 +1748,15 @@ class AndorCam2(model.DigitalCamera):
                 pass
 
             logging.debug("Shutting down the camera")
-            self.Shutdown()
+            try:
+                self.Shutdown()
+            except AndorV2Error as (errno, strerr):
+                if errno == 20075: # DRV_NOT_INITIALIZED
+                    # Seems to happen when closing the Shamrock lib first
+                    logging.debug("Andor2 lib was already shutdown")
+                else:
+                    raise
+
             self.handle = None
 
     def __del__(self):
@@ -1812,6 +1826,7 @@ class AndorCam2(model.DigitalCamera):
 
         camera.handle = None # so that there is no shutdown
         return cameras
+
 
 class AndorCam2DataFlow(model.DataFlow):
     def __init__(self, camera):
@@ -2249,5 +2264,161 @@ class FakeAndorCam2(AndorCam2):
     def scan():
         return AndorCam2.scan(_fake=True)
 
+class AndorSpec(model.Detector):
+    """
+    Spectrometer component, based on a AndorCam2 and a Shamrock
+    """
+    # TODO: See CombinedSpectrometer for the precise behaviour of the
+    # resolution
+
+    def __init__(self, name, role, children=None, daemon=None, **kwargs):
+        """
+        All the arguments are identical to AndorCam2, expected: 
+        children (dict string->kwargs): name of child must be "shamrock" and the
+          kwargs contains the arguments passed to instantiate the Shamrock component
+        """
+        # we will fill the set of children with Components later in ._children
+        model.Detector.__init__(self, name, role, daemon=daemon)
+
+        # We could inherit from it, but difficult to not mix up .binning, .shape
+        # .resolution....
+        self._detector = AndorCam2(name + "-ccd", "sp-ccd", **kwargs)
+        dt = self._detector
+
+        # Copy and adapt the VAs and roattributes from the detector
+                # set up the detector part
+        # check that the shape is "horizontal"
+        if dt.shape[0] <= 1:
+            raise ValueError("Child detector must have at least 2 pixels horizontally")
+        if dt.shape[0] < dt.shape[1]:
+            logging.warning("Child detector is shaped vertically (%dx%d), "
+                            "this is probably incorrect, as wavelengths are "
+                            "expected to be along the horizontal axis",
+                            dt.shape[0], dt.shape[1])
+        # shape is same as detector (raw sensor), but the max resolution is always flat
+        self._shape = tuple(dt.shape) # duplicate
+
+        # The resolution and binning are derived from the detector, but with
+        # settings set so that there is only one horizontal line.
+        if dt.binning.range[1][1] < dt.resolution.range[1][1]:
+            # without software binning, we are stuck to the max binning
+            logging.info("Spectrometer %s will only use a %d px band of the %d "
+                         "px of the sensor", name, dt.binning.range[1][1],
+                         dt.resolution.range[1][1])
+
+        resolution = (dt.resolution.range[1][0], 1) # max,1
+        # vertically: 1, with binning as big as possible
+        binning = (dt.binning.value[0],
+                   min(dt.binning.range[1][1], dt.resolution.range[1][1]))
+
+        min_res = (dt.resolution.range[0][0], 1)
+        max_res = (dt.resolution.range[1][0], 1)
+        self.resolution = model.ResolutionVA(resolution, [min_res, max_res],
+                                             setter=self._setResolution)
+        # 2D binning is like a "small resolution"
+        self._binning = binning
+        self.binning = model.ResolutionVA(self._binning, dt.binning.range,
+                                          setter=self._setBinning)
+
+        self._setBinning(binning) # will also update the resolution
+        
+        # TODO: update also the metadata MD_SENSOR_SIZE, MD_SENSOR_PIXEL_SIZE
+        pxs = dt.pixelSize.value[0], dt.pixelSize.value[1] * dt.binning.value[1]
+        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+        # Note: the metadata has no MD_PIXEL_SIZE, but a MD_WL_LIST
+
+        # TODO: support software binning by rolling up our own dataflow that
+        # does data merging
+        assert dt.resolution.range[0][1] == 1
+        self.data = dt.data
+
+        # duplicate every other VA and Event from the detector
+        # that includes required VAs like .exposureTime
+        for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
+            if not hasattr(self, aname):
+                setattr(self, aname, value)
+            else:
+                logging.debug("skipping duplication of already existing VA '%s'", aname)
+
+        assert hasattr(self, "exposureTime")
+
+        # Create the spectrograph (actuator) child
+        try:
+            sp_kwargs = children["shamrock"]
+            sp_kwargs["parent"] = self
+            sp_kwargs["path"] = self._detector._initpath
+        except Exception:
+            raise ValueError("AndorSpec excepts one child named 'shamrock'")
+
+        self._spectrograph = andorshrk.Shamrock(**sp_kwargs)
+        self._children.add(self._spectrograph)
+
+        self._spectrograph.position.subscribe(self._onPositionUpdate)
+        self.resolution.subscribe(self._onResBinningUpdate)
+        self.binning.subscribe(self._onResBinningUpdate, init=True)
+
+    def _setBinning(self, value):
+        """
+        Called when "binning" VA is modified. It also updates the resolution so
+        that the horizontal AOI is approximately the same. The vertical size
+        stays 1.
+        value (int): how many pixels horizontally and vertically
+          are combined to create "super pixels"
+        """
+        prev_binning = self._binning
+        self._binning = tuple(value) # duplicate
+
+        # adapt horizontal resolution so that the AOI stays the same
+        changeh = prev_binning[0] / self._binning[0]
+        old_resolution = self.resolution.value
+        assert old_resolution[1] == 1
+        new_resh = int(round(old_resolution[0] * changeh))
+        new_resh = max(min(new_resh, self.resolution.range[1][0]), self.resolution.range[0][0])
+        new_resolution = (new_resh, 1)
+
+        # setting resolution and binning is slightly tricky, because binning
+        # will change resolution to keep the same area. So first set binning, then
+        # resolution
+        self._detector.binning.value = value
+        self.resolution.value = new_resolution
+        return value
+
+    def _setResolution(self, value):
+        """
+        Called when the resolution VA is to be updated.
+        """
+        # only the width might change
+        assert value[1] == 1
+
+        # fit the width to the maximum possible given the binning
+        max_size = int(self.resolution.range[1][0] // self._binning[0])
+        min_size = int(math.ceil(self.resolution.range[0][0] / self._binning[0]))
+        size = (max(min(value[0], max_size), min_size), 1)
+
+        self._detector.resolution.value = size
+        assert self._detector.resolution.value[1] == 1 # TODO: handle this by software mean
+
+        return size
+
+    def _onResBinningUpdate(self, value):
+        """
+        Called when the resolution or the binning changes
+        """
+        self._updateWavelengthList()
+
+    def _onPositionUpdate(self, pos):
+        """
+        Called when the wavelength position or grating (ie, groove density) 
+          of the spectrograph is changed.
+        """
+        self._updateWavelengthList()
+
+    def _updateWavelengthList(self):
+        wll = self._spectrograph.getPixelToWavelength()
+        md = {model.MD_WL_LIST: wll}
+        self._detector.updateMetadata(md)
+
+    def selfTest(self):
+        return super(AndorSpec, self).selfTest() and self._spectrograph.selfTest()
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
