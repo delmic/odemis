@@ -229,21 +229,32 @@ class Stream(object):
         if self.raw:
             data = self.raw[0]
             if data.dtype.kind in "biu":
-                if model.MD_BPP in data.metadata:
+                try:
                     depth = 2**data.metadata[model.MD_BPP]
+                    if depth <= 1:
+                        logging.warning("Data reports a BPP of %d",
+                                        data.metadata[model.MD_BPP])
+                        raise ValueError()
+
                     if data.dtype.kind == "i":
                         irange = (-depth // 2, depth // 2 - 1)
                     else:
                         irange = (0, depth - 1)
-                elif self._detector:
-                    depth = self._detector.shape[-1]
-                    if data.dtype.kind == "i":
-                        irange = (-depth // 2, depth // 2 - 1)
-                    else:
-                        irange = (0, depth - 1)
-                else:
-                    idt = numpy.iinfo(data.dtype)
-                    irange = (idt.min, idt.max)
+                except (KeyError, ValueError):
+                    try:
+                        depth = self._detector.shape[-1]
+                        if depth <= 1:
+                            logging.warning("Detector %s report a depth of %d",
+                                             self._detector.name, depth)
+                            raise ValueError()
+    
+                        if data.dtype.kind == "i":
+                            irange = (-depth // 2, depth // 2 - 1)
+                        else:
+                            irange = (0, depth - 1)
+                    except (AttributeError, IndexError, ValueError):
+                        idt = numpy.iinfo(data.dtype)
+                        irange = (idt.min, idt.max)
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
                 irange = (numpy.array(data).min(), numpy.array(data).max())
@@ -252,11 +263,16 @@ class Stream(object):
                               max(irange[1], self._irange[1]))
         else:
             # no data, assume it's uint
-            if self._detector:
+            try:
                 # The last element of the shape indicates the bit depth, which
                 # is used for brightness/contrast adjustment.
-                irange = (0, self._detector.shape[-1] - 1)
-            else:
+                depth = self._detector.shape[-1]
+                if depth <= 1:
+                    logging.warning("Detector %s report a depth of %d",
+                                     self._detector.name, depth)
+                    raise ValueError()
+                irange = (0, depth - 1)
+            except (AttributeError, IndexError, ValueError):
                 irange = None
 
         self._irange = irange
