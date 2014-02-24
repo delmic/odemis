@@ -382,6 +382,9 @@ class AndorCam2(model.DigitalCamera):
         _fake (boolean): for internal use only (will make a fake device)
         Raise an exception if the device cannot be opened.
         """
+        # TODO: add a way to select which camera is to be opened better than
+        # device ID as they can be numbered in any order. Maybe (regex on)
+        # serial number?
         if _fake:
             self.atcore = FakeAndorV2DLL()
         else:
@@ -2268,9 +2271,6 @@ class AndorSpec(model.Detector):
     """
     Spectrometer component, based on a AndorCam2 and a Shamrock
     """
-    # TODO: See CombinedSpectrometer for the precise behaviour of the
-    # resolution
-
     def __init__(self, name, role, children=None, daemon=None, **kwargs):
         """
         All the arguments are identical to AndorCam2, expected: 
@@ -2280,9 +2280,10 @@ class AndorSpec(model.Detector):
         # we will fill the set of children with Components later in ._children
         model.Detector.__init__(self, name, role, daemon=daemon)
 
+        # TODO: also ask AndorCam2 as a child?
         # We could inherit from it, but difficult to not mix up .binning, .shape
         # .resolution....
-        self._detector = AndorCam2(name + "-ccd", "sp-ccd", **kwargs)
+        self._detector = AndorCam2(name + "-ccd", "sp-ccd", daemon=daemon, **kwargs)
         dt = self._detector
 
         # Copy and adapt the VAs and roattributes from the detector
@@ -2345,12 +2346,12 @@ class AndorSpec(model.Detector):
         # Create the spectrograph (actuator) child
         try:
             sp_kwargs = children["shamrock"]
-            sp_kwargs["parent"] = self
-            sp_kwargs["path"] = self._detector._initpath
         except Exception:
             raise ValueError("AndorSpec excepts one child named 'shamrock'")
 
-        self._spectrograph = andorshrk.Shamrock(**sp_kwargs)
+        self._spectrograph = andorshrk.Shamrock(parent=self, daemon=daemon,
+                                                path=self._detector._initpath,
+                                                **sp_kwargs)
         self._children.add(self._spectrograph)
 
         self._spectrograph.position.subscribe(self._onPositionUpdate)
