@@ -141,15 +141,6 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
     """
-    # cannied_img = cv2.Canny(scipy.misc.bytescale(data), 80, 100)
-
-    # circles = cv2.HoughCircles(cannied_img, cv2.cv.CV_HOUGH_GRADIENT, 2, 5,
-    #                           None, 255, 14, 2, 10)[0, :, 0:2]
-    # hdf5.export("cannied_spots.h5", model.DataArray(cannied_img))
-    # print circles
-    # print circles.shape
-    # return [], []
-
     subimage_coordinates = []
     subimages = []
 
