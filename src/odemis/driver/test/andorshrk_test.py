@@ -17,12 +17,13 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
+from concurrent import futures
 import logging
+from odemis import model
 from odemis.driver import andorcam2
 import time
 import unittest
 from unittest.case import skip, skipIf
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -69,8 +70,10 @@ class TestShamrock(unittest.TestCase):
 
     def tearDown(self):
         # put back VAs
+        f = self.spectrograph.moveAbs(self._orig_pos)
         self.spectrometer.binning.value = self._orig_binning
         self.spectrometer.resolution.value = self._orig_res
+        f.result() # wait for the move to finish
 
     def test_simple(self):
         """
@@ -81,8 +84,9 @@ class TestShamrock(unittest.TestCase):
         self.assertEqual(len(self.spectrometer.shape), 3)
         self.assertGreaterEqual(self.spectrometer.shape[0], self.spectrometer.shape[1])
         self.assertGreater(self.spectrometer.exposureTime.value, 0)
+        self.assertIn("wavelength", self.spectrograph.axes)
 
-    @skip("simple")
+#    @skip("simple")
     def test_moverel(self):
         orig_wl = self.spectrograph.position.value["wavelength"]
         move = {'wavelength': 1e-9} # +1nm => should be fast
@@ -103,42 +107,47 @@ class TestShamrock(unittest.TestCase):
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
 
-    # TODO: test wavelength + grating
-
-    @skip("simple")
+#    @skip("simple")
     def test_fail_move(self):
         """
         Check that you cannot move more than allowed
         """
+        sp = self.spectrograph
         # wrong axis
         with self.assertRaises(LookupError):
             pos = {"boo": 0}
-            f = self.sp.moveAbs(pos)
+            f = sp.moveAbs(pos)
             f.result()
 
         # absolute (easy)
         with self.assertRaises(ValueError):
-            pos = {"wavelength": self.sp.axes["wavelength"].range[1] + 1e-9}
-            f = self.sp.moveAbs(pos)
+            pos = {"wavelength": sp.axes["wavelength"].range[1] + 1e-9}
+            f = sp.moveAbs(pos)
             f.result()
 
         # big relative (easy)
         with self.assertRaises(ValueError):
-            pos = {"wavelength":-(self.sp.axes["wavelength"].range[1] + 1e-9)}
-            f = self.sp.moveRel(pos)
+            pos = {"wavelength":-(sp.axes["wavelength"].range[1] + 1e-9)}
+            f = sp.moveRel(pos)
             f.result() # wait for the move to finish
 
         # small relative (harder)
         # move very close from the edge
-        pos = {"wavelength": self.sp.axes["wavelength"].range[1] - 1e-9}
-        f = self.sp.moveAbs(pos) # don't even wait for it to be done
+        pos = {"wavelength": sp.axes["wavelength"].range[1] - 1e-9}
+        f = sp.moveAbs(pos) # don't even wait for it to be done
         with self.assertRaises(ValueError):
             pos = {"wavelength": 5e-9} # a bit after the edge
-            f = self.sp.moveRel(pos)
+            f = sp.moveRel(pos)
             f.result() # will fail here normally
 
+        # wrong grating
+        with self.assertRaises(ValueError):
+            pos = {"grating":-1} # normally no grating is ever named -1
+            f = sp.moveAbs(pos)  # will fail here normally
+            f.result()
 
     def test_grating(self):
+        cw = self.spectrograph.position.value["wavelength"]
         cg = self.spectrograph.position.value["grating"]
         choices = self.spectrograph.axes["grating"].choices
         self.assertGreater(len(choices), 0, "should have at least one grating")
@@ -156,24 +165,32 @@ class TestShamrock(unittest.TestCase):
         f.result()
         self.assertEqual(self.spectrograph.position.value["grating"], newg)
 
-    @skip("simple")
+        # Go back to the original grating, and change wavelength, to test both
+        # changes simultaneously
+        new_wl = cw + 10e-9 # +10nm
+        f = self.spectrograph.moveAbs({"grating": cg, "wavelength": new_wl})
+        f.result()
+        self.assertEqual(self.spectrograph.position.value["grating"], cg)
+        self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
+
     def test_sync(self):
+        sp = self.spectrograph
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
 
         # two big separate positions that should be always acceptable
         pos_1 = {'wavelength':300e-9}
         pos_2 = {'wavelength':500e-9}
-        f = self.sp.moveAbs(pos_1)
+        f = sp.moveAbs(pos_1)
         f.result()
         start = time.time()
-        f = self.sp.moveAbs(pos_2)
+        f = sp.moveAbs(pos_2)
         dur_async = time.time() - start
         f.result()
         self.assertTrue(f.done())
 
         start = time.time()
-        f = self.sp.moveAbs(pos_1)
+        f = sp.moveAbs(pos_1)
         f.result()
         dur_sync = time.time() - start
         self.assertTrue(f.done())
@@ -181,44 +198,46 @@ class TestShamrock(unittest.TestCase):
         self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
 
         # test timeout
-        f = self.sp.moveRel(pos_2)
+        f = sp.moveRel(pos_2)
         # timeout = 0.001s should be too short for such a long move
         self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
 
-    @skip("simple")
+#    @skip("simple")
     def test_stop(self):
-        self.sp.stop()
+        sp = self.spectrograph
+        sp.stop()
 
         # two big separate positions that should be always acceptable
         pos_1 = {'wavelength':300e-9}
         pos_2 = {'wavelength':500e-9}
-        f = self.sp.moveAbs(pos_1)
+        f = sp.moveAbs(pos_1)
         f.result()
-        f = self.sp.moveAbs(pos_2)
-        self.sp.stop()
+        f = sp.moveAbs(pos_2)
+        sp.stop()
         self.assertTrue(f.done() or f.cancelled()) # the current task cannot be cancelled on this hardware
 
-    @skip("simple")
+#    @skip("simple")
     def test_queue(self):
         """
         Ask for several long moves in a row, and checks that nothing breaks
         """
+        sp = self.spectrograph
         pos_1 = {'wavelength':300e-9}
         pos_2 = {'wavelength':500e-9}
 
         # mesure how long it takes to do one move
-        f = self.sp.moveAbs(pos_1)
+        f = sp.moveAbs(pos_1)
         f.result()
         start = time.time()
-        f = self.sp.moveAbs(pos_2)
+        f = sp.moveAbs(pos_2)
         dur = time.time() - start
 
         expected_time = (4 * dur) * 0.9 # a bit less (90%) to take care of randomness
         start = time.time()
-        f0 = self.sp.moveAbs(pos_1)
-        f1 = self.sp.moveAbs(pos_2)
-        f2 = self.sp.moveAbs(pos_1)
-        f3 = self.sp.moveAbs(pos_2)
+        f0 = sp.moveAbs(pos_1)
+        f1 = sp.moveAbs(pos_2)
+        f2 = sp.moveAbs(pos_1)
+        f3 = sp.moveAbs(pos_2)
 
         # intentionally skip some sync (it _should_ not matter)
 #        f0.result()
@@ -229,19 +248,20 @@ class TestShamrock(unittest.TestCase):
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
 
-    @skip("simple")
+#    @skip("simple")
     def test_cancel(self):
+        sp = self.spectrograph
         pos_1 = {'wavelength':300e-9}
         pos_2 = {'wavelength':500e-9}
 
-        f = self.sp.moveAbs(pos_1)
+        f = sp.moveAbs(pos_1)
         # cancel during action is not supported so don't try
         f.result()
         self.assertTrue(f.done())
 
         # test cancel in queue
-        f1 = self.sp.moveAbs(pos_2)
-        f2 = self.sp.moveAbs(pos_1)
+        f1 = sp.moveAbs(pos_2)
+        f2 = sp.moveAbs(pos_1)
         f2.cancel()
         self.assertFalse(f1.done())
         time.sleep(0.02) # make sure the command is started
@@ -257,7 +277,7 @@ class TestShamrock(unittest.TestCase):
         f1.result()
 
 
-    @skip("simple")
+#    @skip("simple")
     def test_acquisition(self):
         exp = 0.1 #s
         self.spectrometer.exposureTime.value = exp
@@ -268,6 +288,9 @@ class TestShamrock(unittest.TestCase):
         self.assertGreaterEqual(duration, exp)
         self.assertEqual(data.shape[0], 1)
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        self.assertIn(model.MD_WL_LIST, data.metadata)
+        wl_list = data.metadata[model.MD_WL_LIST]
+        self.assertEqual(len(wl_list), data.shape[-1])
 
         begin = time.time()
         data = self.spectrometer.data.get()
@@ -275,52 +298,32 @@ class TestShamrock(unittest.TestCase):
         self.assertGreaterEqual(duration, exp)
         self.assertEqual(data.shape[0], 1)
         self.assertEqual(data.shape[-1::-1], self.spectrometer.resolution.value)
+        self.assertIn(model.MD_WL_LIST, data.metadata)
+        wl_list = data.metadata[model.MD_WL_LIST]
+        self.assertEqual(len(wl_list), data.shape[-1])
 
 
-#class TestStatic(unittest.TestCase):
-#    """
-#    Tests which don't need a component ready
-#    """
-#    @skipIf(CLASS == spectrapro.FakeSpectraPro, "Scanning cannot work without real hardware")
-#    def test_scan(self):
-#        devices = CLASS.scan()
-#        self.assertGreater(len(devices), 0)
-#
-#        for name, kwargs in devices:
-#            print "opening ", name
-#            sem = CLASS(name, "spec", **kwargs)
-#            self.assertTrue(sem.selfTest(), "self test failed.")
-#
-#    def test_creation(self):
-#        """
-#        Doesn't even try to acquire an image, just create and delete components
-#        """
-#        sp = CLASS(**KWARGS)
-#
-#        self.assertGreater(len(sp.axes["grating"].choices), 0)
-#
-#        self.assertTrue(sp.selfTest(), "self test failed.")
-#        sp.terminate()
-#
-#    def test_fake(self):
-#        """
-#        Just makes sure we don't (completely) break FakeSpectraPro after an update
-#        """
-#        sp = spectrapro.FakeSpectraPro(**KWARGS)
-#
-#        self.assertGreater(len(sp.axes["grating"].choices), 0)
-#        sp.moveAbs({"wavelength":300e-9})
-#
-#        self.assertTrue(sp.selfTest(), "self test failed.")
-#        sp.terminate()
+    @skip("not implemented")
+    def test_fake(self):
+        """
+        Just makes sure we don't (completely) break Shamrock after an update
+        """
+        sp = andorcam2.FakeAndorSpec(**KWARGS_CAM)
+
+        self.assertGreater(len(sp.axes["grating"].choices), 0)
+        sp.moveAbs({"wavelength":300e-9})
+
+        self.assertTrue(sp.selfTest(), "self test failed.")
+        sp.terminate()
 
 
 if __name__ == '__main__':
     unittest.main()
 
+#logging.getLogger().setLevel(logging.DEBUG)
+#
 #from odemis.driver import andorcam2, andorshrk
 #import logging
-#logging.getLogger().setLevel(logging.DEBUG)
 #
 #cam = andorcam2.AndorCam2(name="spectrometer", role="ccd", device=0)
 #sp = andorshrk.Shamrock(name="test", role="spectrograph", device=0, path="/usr/local/etc/andor", parent=cam)

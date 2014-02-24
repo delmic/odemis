@@ -23,6 +23,7 @@ from odemis import model
 import odemis
 from odemis.model._futures import CancellableThreadPoolExecutor
 import os
+import time
 
 
 class ShamrockError(Exception):
@@ -254,7 +255,22 @@ class Shamrock(model.Actuator):
         grating (0<int<=3)
         """
         assert 1 <= grating <= 3
-        self._dll.ShamrockSetGrating(self._device, grating)
+
+        # Seems currently the SDK sometimes fail with SHAMROCK_COMMUNICATION_ERROR
+        # as in SetWavelength()
+        retry = 0
+        while True:
+            try:
+                self._dll.ShamrockSetGrating(self._device, grating)
+            except ShamrockError as (errno, strerr):
+                if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                    raise
+                # just try again
+                retry += 1
+                logging.info("Failed to set wavelength, will try again")
+                time.sleep(0.1)
+            else:
+                break
     
     def GetGrating(self):
         """
@@ -306,11 +322,25 @@ class Shamrock(model.Actuator):
         wavelength (0<=float): wavelength in m
         """
         assert 0 <= wavelength <= 50e-6
-        # FIXME: sometimes it fails with 20201: SHAMROCK_COMMUNICATION_ERROR
+        
+        # Currently the SDK sometimes fail with 20201: SHAMROCK_COMMUNICATION_ERROR
+        # when changing wavelength by a few additional nm. It _seems_ that it
+        # works anyway (but not sure).
         # It seems that retrying a couple of times just works
-
-        # set in nm
-        self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
+        retry = 0
+        while True:
+            try:
+                # set in nm
+                self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
+            except ShamrockError as (errno, strerr):
+                if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                    raise
+                # just try again
+                retry += 1
+                logging.info("Failed to set wavelength, will try again")
+                time.sleep(0.1)
+            else:
+                break
         
     def GetWavelength(self):
         """
