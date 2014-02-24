@@ -334,7 +334,9 @@ class Detector(model.Detector):
             pxs = self.parent._scanner.pixelSize.value  # m/px
 
             pxs_pos = self.parent._scanner.translation.value
-            res = self.parent._scanner.resolution.value
+            scale = self.parent._scanner.scale.value
+            res = (self.parent._scanner.resolution.value[0] * scale[0],
+                   self.parent._scanner.resolution.value[1] * scale[1])
 
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = self.parent._scanner.pixelToPhy(pxs_pos)
@@ -344,12 +346,12 @@ class Detector(model.Detector):
             # Simulate drift
             center = ((shape[0] / 2) - self.current_drift, (shape[1] / 2) + self.current_drift)
 
-            sim_img = self.fake_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2),
-                                    center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2)]
+            sim_img = self.fake_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2):scale[0],
+                                    center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2):scale[1]]
 
             # update fake output metadata
             metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_PIXEL_SIZE] = pxs
+            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
