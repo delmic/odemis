@@ -267,7 +267,13 @@ class Detector(model.Detector):
         self._acquisition_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
+
         self.fake_img = self.parent.fake_img
+        # The shape is just one point, the depth
+        idt = numpy.iinfo(self.fake_img.dtype)
+        data_depth = idt.max - idt.min + 1
+        self._shape = (data_depth,) # only one point
+
         self.drift_factor = 1  # dummy value for drift in pixels
         self.current_drift = 0
         # Given that max resolution is (1024,1024) and the shape of fake_img
