@@ -19,32 +19,21 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model
-from odemis.driver import simsem
+
 import Pyro4
 import copy
 import logging
-import numpy
+from odemis import model
+from odemis.driver import simsem
 import os
 import pickle
 import threading
 import time
 import unittest
+from unittest.case import skip
 
-"""
-If you don't have a real DAQ comedi device, you can create one that can still 
-pass all the tests by doing this:
-sudo modprobe comedi comedi_num_legacy_minors=4
-sudo modprobe comedi_test
-sudo chmod a+rw /dev/comedi0
-sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
-
-Be aware that comedi_test might crash the system while running those tests (much
-less likely with kernels >= 3.5).
-"""
 
 logging.getLogger().setLevel(logging.DEBUG)
-#comedi.comedi_loglevel(3)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed", "drift_period": 0}

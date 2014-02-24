@@ -330,7 +330,7 @@ class Detector(model.Detector):
             pxs_pos = self.parent._scanner.translation.value
             res = self.parent._scanner.resolution.value
 
-            phy_pos = metadata[model.MD_POS]
+            phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = self.parent._scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
