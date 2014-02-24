@@ -33,7 +33,7 @@ from odemis.acq.drift import calculation
 from numpy import fft
 from numpy import random
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestDriftCalculation(unittest.TestCase):
     """
     Test CalculateDrift
@@ -45,7 +45,6 @@ class TestDriftCalculation(unittest.TestCase):
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.small_data = self.data[0][350:400, 325:375]
-        hdf5.export("small_data.h5", model.DataArray(self.small_data), thumbnail=None)
 
         # Input drifted by known value
         self.data_drifted = hdf5.read_data("example_drifted.h5")
@@ -138,7 +137,6 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for input of identical images after noise is added.
         """
-        hdf5.export("data_noisy.h5", model.DataArray(self.data_noisy), thumbnail=None)
         drift = calculation.CalculateDrift(self.data[0], self.data_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 1)
 
@@ -147,7 +145,6 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by known drift value after noise is added.
         """
-        hdf5.export("data_drifted_noisy.h5", model.DataArray(self.data_drifted_noisy), thumbnail=None)
         drift = calculation.CalculateDrift(self.data[0], self.data_drifted_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (5, -3), 1)
 
@@ -156,7 +153,6 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value after noise is added.
         """
-        hdf5.export("data_random_drifted_noisy.h5", model.DataArray(abs(self.data_random_drifted_noisy)), thumbnail=None)
         drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 10)
         numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 1)
 
@@ -165,7 +161,6 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value using different precisions after noise is added.
         """
-        hdf5.export("data_random_drifted_noisy_2.h5", model.DataArray(abs(self.data_random_drifted_noisy)), thumbnail=None)
         drift = calculation.CalculateDrift(self.data[0], self.data_random_drifted_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (self.deltar, self.deltac), 0)
 
@@ -199,7 +194,6 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for input of identical images after noise is added.
         """
-        hdf5.export("small_data_noisy.h5", model.DataArray(self.small_data_noisy), thumbnail=None)
         drift = calculation.CalculateDrift(self.small_data, self.small_data_noisy, 1)
         numpy.testing.assert_almost_equal(drift, (0, 0), 0)
 
@@ -208,7 +202,6 @@ class TestDriftCalculation(unittest.TestCase):
         """
         Tests for image drifted by random drift value after noise is added.
         """
-        hdf5.export("small_data_random_drifted_noisy.h5", model.DataArray(abs(self.small_data_random_drifted_noisy)), thumbnail=None)
         drift = calculation.CalculateDrift(self.small_data, self.small_data_random_drifted_noisy, 10)
         numpy.testing.assert_almost_equal(drift, (self.small_deltar, self.small_deltac), 0)
 

@@ -2659,8 +2659,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
     on the drift value calculated by CalculateDrift and starts scanning again for
     "dc_period" time.
     """
-    # TODO: Handle drift that leads ebeam out of bounds (reducing roi, returning
-    # warning)
     __metaclass__ = ABCMeta
     def __init__(self, name, sem_stream, rep_stream):
         MultipleDetectorStream.__init__(self, name, [sem_stream, rep_stream])
@@ -2690,7 +2688,9 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
         # For the drift correction
         self._sr_data = None
+        # self._ar_data = None
         self._trans = None
+        self._anchor_trans = None
         self._res = None
         self._min_bound = None
         self._max_bound = None
@@ -2702,7 +2702,21 @@ class SEMCCDDCtream(MultipleDetectorStream):
         self.is_active = model.BooleanVA(False)
 
     def estimateAcquisitionTime(self):
-        return 0
+        # Estimate time spent in scanning the acquisition region
+        repetition = tuple(self._rep_stream.repetition.value)
+        scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.01)
+        
+        # Estimate time spent in scanning the anchor region
+        roi = self._dc_region.value
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        shape = self._emitter.shape
+        scale = self._emitter.scale.value
+        self._res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
+                     max(1, int(round(shape[1] * width[1] / scale[1]))))
+        anchor_time = (scan_time / self._dc_period.value) * numpy.prod(self._res) * self._dc_dwelltime.value
+        total_time = scan_time + anchor_time
+        logging.debug("Estimated time for dc acquisition: " + str(total_time))
+        return total_time
 
     def acquire(self):
         # TODO: if already acquiring, queue the Future for later acquisition
@@ -2813,6 +2827,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                        numpy.clip(new_translation[1], self._min_bound, self._max_bound))
 
         # always in this order
+        self._emitter.scale.value = (1, 1)
         self._emitter.resolution.value = self._res
         self._emitter.translation.value = self._trans
         self._emitter.dwellTime.value = self._dc_dwelltime.value
@@ -2861,7 +2876,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
             self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
 
-            # DRIFT CORRECTION
             dc_period = self._dc_period.value
 
             spot_pos = self._getSpotPositions()
@@ -2875,7 +2889,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
             tot_num = numpy.prod(rep)
             n = 0
             drift = (0, 0)
-            cur_drift = (0, 0)
 
             # First anchor region acquisition
             roi = self._dc_region.value
@@ -2884,7 +2897,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             shape = self._emitter.shape
             # translation is distance from center (situated at 0.5, 0.5), can be floats
             self._trans = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
-            self._transl = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
+            # self._transl = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
             # resolution is the maximum resolution at the scale in proportion of the width
             scale = self._emitter.scale.value
             self._res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
@@ -2909,7 +2922,6 @@ class SEMCCDDCtream(MultipleDetectorStream):
             self._semd_df.unsubscribe(self._ssOnSelectedRegion)
             hdf5.export("simsem0.h5", self._sr_data[0])
 
-
             start_time = time.time()
             dc_start = time.time()
             for i in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
@@ -2929,7 +2941,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 self._acq_sem_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
                 time.sleep(0)  # give more chances spot has been already processed
-                start = time.time()
+                # start = time.time()
 
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
@@ -2948,7 +2960,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
                 self._updateProgress(future, start_time, n / tot_num)
 
                 if (time.time() - dc_start) >= dc_period:
-                    # Move e-beam to the selected region
+                    # Move e-beam to the anchor region
                     self._onSelectedRegion(drift)
                     logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
                     self._acq_sem_complete.clear()
@@ -2963,14 +2975,17 @@ class SEMCCDDCtream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
-                    # Calculate the drift between the last two frames
+                    # Calculate the drift between the last two frames and
+                    # between the last and fisrt frame
                     if len(self._sr_data) > 1:
-                        drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 10)
-                        # recalibrate
-                        drift = (drift[0] + cur_drift[0], drift[1] + cur_drift[1])
-                        cur_drift = drift
+                        anchor_drift = calculation.CalculateDrift(self._sr_data[len(self._sr_data) - 2], self._sr_data[len(self._sr_data) - 1], 10)
+                        drift = calculation.CalculateDrift(self._sr_data[0], self._sr_data[len(self._sr_data) - 1], 10)
 
                         logging.debug("Current drift: " + str(drift))
+                        logging.debug("Previous frame diff: " + str(anchor_drift))
+                        if (math.hypot(drift, anchor_drift)>10):
+                            logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
+
                         # Update next positions
                         spot_pos[:, :, 0] -= drift[1]
                         spot_pos[:, :, 1] -= drift[0]
@@ -3002,6 +3017,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
             return self.raw
         finally:
             hdf5.export("anchor_frames.h5", model.DataArray(self._sr_data))
+            # hdf5.export("anchor_frames2.h5", model.DataArray(self._ar_data))
             del self._sem_data  # regain a bit of memory
 
     def _ssOnSelectedRegion(self, df, data):

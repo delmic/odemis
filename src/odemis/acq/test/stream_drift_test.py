@@ -72,7 +72,7 @@ class TestDriftStream(unittest.TestCase):
         reps = stream.RepetitionStream("test rep", detector, detector.data, escan)
         sas = stream.SEMCCDDCtream("test sem-rep", sems, reps)
 
-        sems.dc_period.value = 2
+        sems.dc_period.value = 1
         sems.dc_region.value = (0.525, 0.525, 0.6, 0.6)  # (0.425, 0.425, 0.475, 0.475)
         sems.dc_dwelltime.value = 1e-04
         escan.dwellTime.value = 1e-02

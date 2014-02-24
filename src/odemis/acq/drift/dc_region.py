@@ -83,8 +83,7 @@ def GuessAnchorRegion(whole_img, sample_region):
     # space according to dc_shape, use the masked image and calculate the anchor
     # region roi
     if len(occurrences) > 0:
-        print "Enough space outside of the sample region."
-        # [x, y] = [occurrences[0]]
+        # Enough space outside of the sample region
         anchor_roi = ((occurrences[0, 0] - (dc_shape[0] / 2)) / whole_img.shape[0],
                       (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
                       (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
@@ -94,8 +93,8 @@ def GuessAnchorRegion(whole_img, sample_region):
                                anchor_roi[1] * whole_img.shape[1]:anchor_roi[3] * whole_img.shape[1]]
         hdf5.export("anchor_roi.h5", model.DataArray(anchor_img), thumbnail=None)
     else:
-        print "Not enough space outside of the sample region."
-        # Otherwise pick a random pixel
+        # Not enough space outside of the sample region
+        # Pick a random pixel
         cannied_img = cv2.Canny(uint8_img, 100, 200)
         # Find indices of edge pixels
         occurrences_indices = numpy.where(cannied_img == 255)
@@ -109,7 +108,6 @@ def GuessAnchorRegion(whole_img, sample_region):
 
         anchor_img = whole_img[anchor_roi[0] * whole_img.shape[0]:anchor_roi[2] * whole_img.shape[0],
                                anchor_roi[1] * whole_img.shape[1]:anchor_roi[3] * whole_img.shape[1]]
-        hdf5.export("anchor_roi.h5", model.DataArray(anchor_img), thumbnail=None)
 
     return anchor_roi
 
