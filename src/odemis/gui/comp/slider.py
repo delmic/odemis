@@ -125,108 +125,14 @@ class BaseSlider(wx.PyControl):
         self.GetEventHandler().ProcessEvent(evt)
 
 
-class Slider(BaseSlider):
-    """ This class describes a Slider control.
+    @staticmethod
+    def _linear_val_to_perc(r0, r1, v):
+        try: return (v - r0) / (r1 - r0)
+        except ZeroDivisionError: return 0.0
 
-    The default value is 0.0 and the default value range is [0.0 ... 1.0]. The
-    SetValue and GetValue methods accept and return float values.
-
-    """
-
-    def __init__(self, parent, wid=wx.ID_ANY, value=0.0, min_val=0.0,
-                 max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
-                 style=wx.NO_BORDER, name="Slider", scale=None):
-        """
-        :param parent: Parent window. Must not be None.
-        :param id:     Slider identifier.
-        :param pos:    Slider position. If the position (-1, -1) is specified
-                       then a default position is chosen.
-        :param size:   Slider size. If the default size (-1, -1) is specified
-                       then a default size is chosen.
-        :param style:  use wx.Panel styles
-        :param name:   Window name.
-        :param scale:  'linear' (default), 'cubic' or 'log'
-            *Note*: Make sure to add any new option to the Slider ParamScale in
-            xmlh.delmic !
-        """
-
-        super(Slider, self).__init__(parent, wid, pos, size, style)
-
-        # Set minimum height
-        if size == (-1, -1):
-            self.SetMinSize((-1, 8))
-
-        self.current_value = value
-
-        # Closed range within which the current value must fall
-        self.min_value = min_val
-        self.max_value = max_val
-
-        # event.GetX() position or Horizontal position across Panel
-        self.x = 0
-        # position of the drag handle within the slider, ranging from 0 to
-        # the slider width
-        self.handlePos = 0
-
-        #Get Pointer's bitmap
-        self.bitmap = getsliderBitmap()
-        self.bitmap_dis = getslider_disBitmap()
-
-        # Pointer dimensions
-        self.handle_width, self.handle_height = self.bitmap.GetSize()
-        self.half_h_width = self.handle_width // 2
-        self.half_h_height = self.handle_height // 2
-
-        if scale == "cubic":
-            self._percentage_to_val = self._cubic_perc_to_val
-            self._val_to_percentage = self._cubic_val_to_perc
-        elif scale == "log":
-            self._percentage_to_val = self._log_perc_to_val
-            self._val_to_percentage = self._log_val_to_perc
-        else:
-            self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
-            self._val_to_percentage = lambda r0, r1, v: (v - r0) / (r1 - r0)
-
-        # Fire slide events at a maximum of once per '_fire_rate' seconds
-        self._fire_rate = 0.05
-        self._fire_time = time.time()
-
-        # Data events
-        self.Bind(wx.EVT_MOTION, self.OnMotion)
-        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
-        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
-
-        # Layout Events
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        self.Bind(wx.EVT_SIZE, self.OnSize)
-
-        # If the user is dragging the NumberSlider, and thus it has the mouse
-        # captured, a call to SetValue will not result in the value of the
-        # slider chaning. This is to prevent the slider from jumping back and
-        # forth, while the user is trying to drag.
-        # A side effect of that is, that when another part of the system (e.g.
-        # a VirtualAttribute) is trying to set the value, it will be ignored.
-        # Instead of ignoring the value, it is now stored in the last_set
-        # attribute, which is used to call _SetValue when the mouse button is
-        # released (i.e. end of draggin).
-
-        self.last_set = None
-
-    def __del__(self):
-        """ TODO: rediscover the reason why this method is here. """
-        try:
-            # Data events
-            self.Unbind(wx.EVT_MOTION, self.OnMotion)
-            self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
-            self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
-            self.Unbind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
-
-            # Layout Events
-            self.Unbind(wx.EVT_PAINT, self.OnPaint)
-            self.Unbind(wx.EVT_SIZE, self.OnSize)
-        except (wx.PyDeadObjectError, AttributeError):
-            pass
+    @staticmethod
+    def _linear_prec_to_val(r0, r1, p):
+        return (r1 - r0) * p + r0
 
     @staticmethod
     def _log_val_to_perc(r0, r1, v):
@@ -277,6 +183,109 @@ class Slider(BaseSlider):
         v = (r1 - r0) * p + r0
         return v
 
+class Slider(BaseSlider):
+    """ This class describes a Slider control.
+
+    The default value is 0.0 and the default value range is [0.0 ... 1.0]. The
+    SetValue and GetValue methods accept and return float values.
+
+    """
+
+    def __init__(self, parent, wid=wx.ID_ANY, value=0.0, min_val=0.0,
+                 max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
+                 style=wx.NO_BORDER, name="Slider", scale=None):
+        """
+        :param parent: Parent window. Must not be None.
+        :param id:     Slider identifier.
+        :param pos:    Slider position. If the position (-1, -1) is specified
+                       then a default position is chosen.
+        :param size:   Slider size. If the default size (-1, -1) is specified
+                       then a default size is chosen.
+        :param style:  use wx.Panel styles
+        :param name:   Window name.
+        :param scale:  'linear' (default), 'cubic' or 'log'
+            *Note*: Make sure to add any new option to the Slider ParamScale in
+            xmlh.delmic !
+        """
+
+        super(Slider, self).__init__(parent, wid, pos, size, style)
+
+        # Set minimum height
+        if size == (-1, -1):
+            self.SetMinSize((-1, 8))
+
+        self.name = name
+        self.current_value = value
+
+        # Closed range within which the current value must fall
+        self.min_value = min_val
+        self.max_value = max_val
+
+        # event.GetX() position or Horizontal position across Panel
+        self.x = 0
+        # position of the drag handle within the slider, ranging from 0 to
+        # the slider width
+        self.handlePos = 0
+
+        #Get Pointer's bitmap
+        self.bitmap = getsliderBitmap()
+        self.bitmap_dis = getslider_disBitmap()
+
+        # Pointer dimensions
+        self.handle_width, self.handle_height = self.bitmap.GetSize()
+        self.half_h_width = self.handle_width // 2
+        self.half_h_height = self.handle_height // 2
+
+        if scale == "cubic":
+            self._percentage_to_val = self._cubic_perc_to_val
+            self._val_to_percentage = self._cubic_val_to_perc
+        elif scale == "log":
+            self._percentage_to_val = self._log_perc_to_val
+            self._val_to_percentage = self._log_val_to_perc
+        else:
+            self._percentage_to_val = self._linear_prec_to_val
+            self._val_to_percentage = self._linear_val_to_perc
+
+        # Fire slide events at a maximum of once per '_fire_rate' seconds
+        self._fire_rate = 0.05
+        self._fire_time = time.time()
+
+        # Data events
+        self.Bind(wx.EVT_MOTION, self.OnMotion)
+        self.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+        self.Bind(wx.EVT_LEFT_UP, self.OnLeftUp)
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
+
+        # Layout Events
+        self.Bind(wx.EVT_PAINT, self.OnPaint)
+        self.Bind(wx.EVT_SIZE, self.OnSize)
+
+        # If the user is dragging the NumberSlider, and thus it has the mouse
+        # captured, a call to SetValue will not result in the value of the
+        # slider chaning. This is to prevent the slider from jumping back and
+        # forth, while the user is trying to drag.
+        # A side effect of that is, that when another part of the system (e.g.
+        # a VirtualAttribute) is trying to set the value, it will be ignored.
+        # Instead of ignoring the value, it is now stored in the last_set
+        # attribute, which is used to call _SetValue when the mouse button is
+        # released (i.e. end of draggin).
+
+        self.last_set = None
+
+    def __del__(self):
+        """ TODO: rediscover the reason why this method is here. """
+        try:
+            # Data events
+            self.Unbind(wx.EVT_MOTION, self.OnMotion)
+            self.Unbind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
+            self.Unbind(wx.EVT_LEFT_UP, self.OnLeftUp)
+            self.Unbind(wx.EVT_MOUSE_CAPTURE_LOST, self.OnCaptureLost)
+
+            # Layout Events
+            self.Unbind(wx.EVT_PAINT, self.OnPaint)
+            self.Unbind(wx.EVT_SIZE, self.OnSize)
+        except (wx.PyDeadObjectError, AttributeError):
+            pass
 
     def OnPaint(self, event=None):
         """ This paint event handler draws the actual control """
@@ -664,6 +673,7 @@ class VisualRangeSlider(BaseSlider):
         if size == (-1, -1): # wxPython follows this too much to always do it
             self.SetMinSize((-1, 40))
 
+        self.name = name
         self.content_list = []
 
         # Two separate buffers are used, one for the 'complex' content
@@ -697,9 +707,8 @@ class VisualRangeSlider(BaseSlider):
         self.drag_start_x = None # px : position at the beginning of the drag
         self.drag_start_pv = None # pixel_value at the beginning of the drag
 
-        # Same code as in other slider. Merge?
-        self._percentage_to_val = lambda r0, r1, p: (r1 - r0) * p + r0
-        self._val_to_percentage = lambda r0, r1, v: (v - r0) / (r1 - r0)
+        self._percentage_to_val = self._linear_prec_to_val
+        self._val_to_percentage = self._linear_val_to_perc
 
         self._SetValue(self.value) # will update .pixel_value and check range
 

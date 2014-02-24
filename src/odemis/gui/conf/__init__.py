@@ -96,12 +96,13 @@ class Config(object):
         if self._exists():
             self.config.read(self.file_path)
         else:
-            logging.warn(u"Using default %s configuration", self.__class__.__name__)
+            logging.warn(u"Using default %s configuration",
+                         self.__class__.__name__)
             self.use_default()
 
     def write(self):
-        """ Write the configuration to the given file if it exists or raise ``IOError``
-            otherwise
+        """ Write the configuration to the given file if it exists or raise
+        ``IOError`` otherwise
         """
         if self._exists():
             logging.debug(u"Writing configuration file '%s'", self.file_path)
@@ -154,27 +155,55 @@ class GeneralConfig(Config):
         # Define the default settings
         self.default.add_section("help")
 
+        self.default.set(
+                    "help",
+                     "html_dev_doc",
+                     os.path.abspath(
+                        os.path.join(
+                            __file__,
+                            u"../../../../../doc/code/_build/html/index.html")
+                        )
+                    )
+
         self.default.set("help",
-                         "html_dev_doc",
-                         os.path.abspath(
-                            os.path.join(
-                                __file__,
-                                u"../../../../../doc/code/_build/html/index.html")
-                            )
+                         "manual_base_name",
+                         u"user-guide.pdf"
                         )
 
         self.default.set("help",
                          "manual_path",
-                         u"/usr/share/doc/odemis/user-guide.pdf"
+                         u"/usr/share/doc/odemis/"
                         )
 
     @property
     def html_dev_doc(self):
         return self.get("help", "html_dev_doc")
 
-    @property
-    def manual_path(self):
-        return self.get("help", "manual_path")
+    def get_manual(self, role=None):
+        """ This method returns the path to the user manual
+
+        First, it will look for a specific manual if a role is defined. If no
+        role is defined or it does not exists, it will try and find the general
+        user manual and return its path. If that also fails, None is returned.
+        """
+        manual_path = self.get("help", "manual_path")
+        manual_base_name = self.get("help", "manual_base_name")
+
+        if role:
+            full_path = os.path.join(
+                                manual_path,
+                                u"%s-%s" % (role, manual_base_name)
+                        )
+            if os.path.exists(full_path):
+                return full_path
+            else:
+                logging.warn("%s Manual not found!", role)
+
+        full_path = os.path.join(manual_path, manual_base_name)
+        if os.path.exists(full_path):
+            return full_path
+        else:
+            return None
 
 
 class AcquisitionConfig(Config):

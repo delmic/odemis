@@ -155,7 +155,7 @@ class OdemisGUIApp(wx.App):
             if os.path.exists(gc.html_dev_doc):
                 self.main_frame.menu_item_htmldoc.Enable(True)
 
-            if os.path.exists(gc.manual_path):
+            if gc.get_manual(self.main_data.role):
                 self.main_frame.menu_item_manual.Enable(True)
 
             # Note: "snapshot" menu is handled by acquisition controller
@@ -315,7 +315,7 @@ see http://www.fluorophores.org/disclaimer/.
 
     def on_manual(self, evt):
         gc = odemis.gui.conf.get_general_conf()
-        subprocess.Popen(['xdg-open', gc.manual_path])
+        subprocess.Popen(['xdg-open', gc.get_manual(self.main_data.role)])
 
     def on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
