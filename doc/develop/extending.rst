@@ -34,7 +34,7 @@ test, and edit efficiently Odemis, we recommend the following environment:
 The source code available via a public git repository: https://github.com/delmic/odemis.
 To *clone* it, type::
 
-   git clone git@github.com:delmic/odemis.git
+   git clone https://github.com/delmic/odemis.git
 
 Note that Odemis can run in fully simulated mode, where no actual hardware is
 needed. In this case, it can run in a virtual machine.
@@ -58,6 +58,7 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo apt-get update
     sudo apt-get dist-upgrade
     sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush
+    sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
     mkdir development
     cd development
@@ -82,9 +83,9 @@ like ``sparc-sim`` or ``secom-sim``). For example::
 If you want to use a simulated microscope, you need to set-up the simulated
 acquisition board of the SEM with the following commands::
 
-    sudo chmod a+rw /dev/comedi0
     sudo modprobe comedi comedi_num_legacy_minors=4
     sudo modprobe comedi_test
+    sudo chmod a+rw /dev/comedi0
     sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 
 To automatically set-up the simulated board at computer start-up, you can copy
@@ -92,9 +93,9 @@ the 4 lines to ``/etc/rc.local``, without the ``sudo`` part.
 
 Install Eclipse and the plugins
 """""""""""""""""""""""""""""""
-Type the folowing commands::
+Type the following commands::
 
-    sudo easy_install pylint
+    sudo easy_install --upgrade pylint
     cd ~
     mkdir usr
     cd usr
@@ -109,7 +110,7 @@ In the Eclipse preference window, go to *PyDev/PyLint* and as location of the
 pylint executable, indicate your lint.py, which is approximately at this place:
 ``/usr/local/lib/python2.7/dist-packages/pylint-1.0.0-py2.7.egg/pylint/lint.py``
 
-Optionally, if you want to edit the microscope configuration file (``*.odm.yaml``), 
+Optionally, if you want to edit the microscope configuration files (``*.odm.yaml``),
 add a file association with the Python editor. For this, in the preference 
 window, go to *General/Editors/File Association* and add a file type "``*.yaml``". As
 default editor, add the Python editor.
@@ -133,7 +134,7 @@ Using Git
 Source code version control is managed with git. If you are not familiar with 
 this tool, it is better to first learning its basics before going further. Refer
 to tutorials such as `Pro Git <http://git-scm.com/book>`_ or
-`Easy Version Control with Git <http://net.tutsplus.com/tutorials/other/easy-version-control-with-git/>`_.
+`Easy Version Control with Git <http://code.tutsplus.com/tutorials/easy-version-control-with-git--net-7449>`_.
 
 Fixing a bug
 ============
@@ -281,7 +282,7 @@ To create a new device adapter, add a python module to the ``src/odemis/drivers/
 directory following the interface for the specific type of component (see the back-end API).
 
 Add a test class to the test directory which instantiates the component and at
-least detects whether the component is connected or not (scan() and selfTest()
+least detects whether the component is connected or not (``scan()`` and ``selfTest()``
 methods) and does basic tasks (e.g., acquiring an image or moving an actuator).
 
 Update the microscope configuration file for instantiating the microscope with the
@@ -294,8 +295,8 @@ Adding a feature to the Graphical User Interface
 ================================================
 
 Note that it's not recommended to modify the GUI before you are already quite
-familiar with Odemis' code. In particular, there is no API for extending the 
-interface, and therefore you'll most likely need to modify the code in many 
+familiar with Odemis' code. In particular, there is no API for extending the
+interface, and therefore you'll most likely need to modify the code in many
 different files.
 
 To edit the interface, you should use XRCed, by typing this (with the right paths)::
