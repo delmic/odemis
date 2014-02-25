@@ -406,6 +406,8 @@ class AcquisitionDialog(xrcfr_acq):
         past (float): number of s already past
         left (float): estimated number of s left
         """
+        # TODO: need to share code with gui.acquisition
+
         if future.done():
             # progress bar and text is handled by on_acquisition_done
             return
