@@ -2097,7 +2097,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 start = time.time()
                 trigger.notify()
 
-                if not self._acq_ccd_complete.wait(ccd_time * 2 + 1):
+                if not self._acq_ccd_complete.wait(ccd_time * 2 + 5):
                     raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
