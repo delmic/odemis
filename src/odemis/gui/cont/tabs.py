@@ -273,12 +273,11 @@ class SecomStreamsTab(Tab):
             self._opt_streams_enabled = enabled
 
         if enabled:
-            # check whether we need to create a (first) bright-field stream
-            has_bf = any(isinstance(s, streammod.BrightfieldStream)
+            # check whether we need to create a (first) fluo stream
+            has_opt = any(isinstance(s, streammod.OPTICAL_STREAMS)
                             for s in self.tab_data_model.streams.value)
-            if not has_bf:
-                sp = self._stream_controller.addBrightfield(add_to_all_views=True)
-                sp.show_remove_btn(False)
+            if not has_opt:
+                sp = self._stream_controller.addFluo(add_to_all_views=True)
                 self._view_controller.focusViewWithStream(sp.stream)
 
             self._stream_controller.resumeStreams(self._opt_stream_to_restart)
