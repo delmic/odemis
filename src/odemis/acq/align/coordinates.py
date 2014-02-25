@@ -151,7 +151,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     
     # TODO, adjust to magnification
     filter_window_size = scale / 1.7
-    filter_window_size = sorted((10, filter_window_size, 60))[1]  # / (20000 / 6120)
+    filter_window_size = sorted((6, filter_window_size, 60))[1]  # / (20000 / 6120)
     # print filter_window_size
 
     i_max, j_max = unravel_index(image.argmax(), image.shape)
