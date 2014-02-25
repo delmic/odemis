@@ -20,22 +20,48 @@ from __future__ import division
 from concurrent import futures
 import logging
 from odemis import model
-from odemis.driver import andorcam2
+from odemis.driver import andorshrk
 import time
 import unittest
-from unittest.case import skip, skipIf
+from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
 #CLASS_SPG = andorshrk.Shamrock
-KWARGS_SPG = dict(name="test", role="spectrograph", device=0)
-CLASS_CAM = andorcam2.AndorSpec
-KWARGS_CAM = dict(name="spectrometer", role="ccd", device=0, transpose=[-1, 2],
-                  children={"shamrock": KWARGS_SPG})
+KWARGS_SPG = dict(name="sr303", role="spectrograph", device=0)
+KWARGS_SPG_SIM = dict(name="sr303", role="spectrograph", device="fake")
+#CLASS_CAM = andorshrk.AndorSpec
+KWARGS_CAM = dict(name="idus", role="ccd", device=0, transpose=[-1, 2])
+KWARGS_CAM_SIM = dict(name="idus", role="ccd", device="fake", transpose=[-1, 2])
+
+CLASS = andorshrk.AndorSpec
+KWARGS_SIM = dict(name="spectrometer", role="ccd",
+              children={"shamrock": KWARGS_SPG_SIM, "andorcam2": KWARGS_CAM_SIM})
+KWARGS = dict(name="spectrometer", role="ccd",
+              children={"shamrock": KWARGS_SPG, "andorcam2": KWARGS_CAM})
+#KWARGS = KWARGS_SIM # uncomment to use the simulator
 
 
-#@skip("only simulated")
+class TestShamrockStatic(unittest.TestCase):
+    def test_fake(self):
+        """
+        Just makes sure we don't (completely) break Shamrock after an update
+        """
+        dev = CLASS(**KWARGS_SIM)
+        self.assertEqual(len(dev.children), 2)
+
+        for c in dev.children:
+            if c.role == "spectrograph":
+                sp = c
+                break
+
+        self.assertGreater(len(sp.axes["grating"].choices), 0)
+        sp.moveAbs({"wavelength":300e-9})
+
+        self.assertTrue(sp.selfTest(), "self test failed.")
+        dev.terminate()
+
 class TestShamrock(unittest.TestCase):
     """
     Test the Shamrock + AndorSpec class
@@ -43,7 +69,7 @@ class TestShamrock(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.spectrometer = CLASS_CAM(**KWARGS_CAM)
+        cls.spectrometer = CLASS(**KWARGS)
         for c in cls.spectrometer.children:
             if c.role == "spectrograph":
                 cls.spectrograph = c
@@ -61,7 +87,6 @@ class TestShamrock(unittest.TestCase):
         f.result() # wait for the move to finish
 
         cls.spectrometer.terminate()
-        cls.spectrograph.terminate()
 
     def setUp(self):
         # save basic VA
@@ -302,19 +327,6 @@ class TestShamrock(unittest.TestCase):
         wl_list = data.metadata[model.MD_WL_LIST]
         self.assertEqual(len(wl_list), data.shape[-1])
 
-
-    @skip("not implemented")
-    def test_fake(self):
-        """
-        Just makes sure we don't (completely) break Shamrock after an update
-        """
-        sp = andorcam2.FakeAndorSpec(**KWARGS_CAM)
-
-        self.assertGreater(len(sp.axes["grating"].choices), 0)
-        sp.moveAbs({"wavelength":300e-9})
-
-        self.assertTrue(sp.selfTest(), "self test failed.")
-        sp.terminate()
 
 
 if __name__ == '__main__':
