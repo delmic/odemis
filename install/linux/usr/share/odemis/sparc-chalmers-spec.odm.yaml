@@ -67,16 +67,22 @@ ARCam: {
 
 # Andor iDus 406 + Shamrock SR303i
 AndorSpec: {
-    class: andorcam2.AndorSpec, # Instantiates an Andorcam2 + Shamrock
+    class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
     role: spectrometer,
-    children: {shamrock: "SR303i"},
+    children: {andorcam2: "iDus", shamrock: "SR303i"},
+    init: {},
+    properties: {
+        #binning: [4, 256],
+    },
+}
+
+iDus: {
+    # no class, as it's instantiated by AndorSpec
+    role: sp-ccd,
     init: {
-           device: 0,  # first and only Andor SDK 2 camera
+           device: 0, # 0 = first and only Andor SDK 2 camera
            #transpose: [-1, 2], # mirrored on X axis if camera is upside-down
            },
-    properties: {
-        #binning: [4, 400],
-    },
 }
 
 SR303i: {
