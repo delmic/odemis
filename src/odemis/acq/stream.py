@@ -2702,7 +2702,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
     def estimateAcquisitionTime(self):
         # Estimate time spent in scanning the acquisition region
         repetition = tuple(self._rep_stream.repetition.value)
-        scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.015)
+        scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.018)
         
         # Estimate time spent in scanning the anchor region
         roi = self._dc_region.value
