@@ -22,14 +22,10 @@ This file is part of Odemis.
 """
 
 import logging
-import numpy
 from odemis import model
-from odemis.util import driver
 import os
-import subprocess
 import time
 import unittest
-from unittest.case import skip
 
 from odemis.acq import stream
 

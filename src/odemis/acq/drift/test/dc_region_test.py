@@ -19,19 +19,11 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import logging
 import numpy
-import time
 import unittest
-import wx
-import math
-import random
 
-from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.drift import dc_region
-from numpy import fft
-from numpy import random
 
 # @unittest.skip("skip")
 class TestGuessAnchorRegion(unittest.TestCase):

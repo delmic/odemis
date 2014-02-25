@@ -34,8 +34,6 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
-from numpy import fft
-from numpy import random
 import numpy
 from numpy.polynomial import polynomial
 from odemis.dataio import hdf5
@@ -2704,7 +2702,7 @@ class SEMCCDDCtream(MultipleDetectorStream):
     def estimateAcquisitionTime(self):
         # Estimate time spent in scanning the acquisition region
         repetition = tuple(self._rep_stream.repetition.value)
-        scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.01)
+        scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.015)
         
         # Estimate time spent in scanning the anchor region
         roi = self._dc_region.value
@@ -2983,8 +2981,8 @@ class SEMCCDDCtream(MultipleDetectorStream):
 
                         logging.debug("Current drift: " + str(drift))
                         logging.debug("Previous frame diff: " + str(anchor_drift))
-                        if (math.hypot(drift, anchor_drift)>10):
-                            logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
+                        if (abs(drift[0] - anchor_drift[0]) > 5 or abs(drift[1] - anchor_drift[1]) > 5):
+                            logging.warning("Drift cannot be measured precisely. Do you want to continue scanning?")
 
                         # Update next positions
                         spot_pos[:, :, 0] -= drift[1]

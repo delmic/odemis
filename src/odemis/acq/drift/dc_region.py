@@ -22,17 +22,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import logging
 import numpy
-import math
 import cv2
-import scipy.ndimage as ndimage
-import scipy.ndimage.filters as filters
-
-from odemis import model
-from odemis.dataio import hdf5
 from scipy import misc
-from numpy import unravel_index
 
 def GuessAnchorRegion(whole_img, sample_region):
     """
@@ -48,11 +40,9 @@ def GuessAnchorRegion(whole_img, sample_region):
 
     # Properly modified image for cv2.Canny
     uint8_img = misc.bytescale(whole_img)
-    hdf5.export("uint8_img.h5", model.DataArray(uint8_img), thumbnail=None)
 
     # Generates black/white image that contains only the edges
     cannied_img = cv2.Canny(uint8_img, 100, 200)
-    hdf5.export("cannied.h5", model.DataArray(cannied_img), thumbnail=None)
 
     # Mask the sample_region plus a margin equal to the half of dc region and
     # a margin along the edges of the whole image again equal to the half of
@@ -71,7 +61,6 @@ def GuessAnchorRegion(whole_img, sample_region):
     masked_img[:, 0:(dc_shape[1] / 2)].fill(0)
     masked_img[masked_img.shape[0] - (dc_shape[0] / 2):masked_img.shape[0], :].fill(0)
     masked_img[:, masked_img.shape[1] - (dc_shape[1] / 2):masked_img.shape[1]].fill(0)
-    hdf5.export("masked.h5", model.DataArray(masked_img), thumbnail=None)
 
     # Find indices of edge pixels
     occurrences_indices = numpy.where(masked_img == 255)
@@ -88,10 +77,7 @@ def GuessAnchorRegion(whole_img, sample_region):
                       (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
                       (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
                       (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
-        
-        anchor_img = whole_img[anchor_roi[0] * whole_img.shape[0]:anchor_roi[2] * whole_img.shape[0],
-                               anchor_roi[1] * whole_img.shape[1]:anchor_roi[3] * whole_img.shape[1]]
-        hdf5.export("anchor_roi.h5", model.DataArray(anchor_img), thumbnail=None)
+
     else:
         # Not enough space outside of the sample region
         # Pick a random pixel
@@ -105,9 +91,6 @@ def GuessAnchorRegion(whole_img, sample_region):
                       (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
                       (occurrences[0, 0] + (dc_shape[0] / 2)) / whole_img.shape[0],
                       (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
-
-        anchor_img = whole_img[anchor_roi[0] * whole_img.shape[0]:anchor_roi[2] * whole_img.shape[0],
-                               anchor_roi[1] * whole_img.shape[1]:anchor_roi[3] * whole_img.shape[1]]
 
     return anchor_roi
 
