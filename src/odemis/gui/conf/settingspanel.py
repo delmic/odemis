@@ -172,6 +172,14 @@ CONFIG = {
                     "control_type": odemis.gui.CONTROL_NONE,
                 },
             },
+            "light":
+            {
+                "power":
+                {
+                    "control_type": odemis.gui.CONTROL_SLIDER,
+                    "scale": "cubic",
+                },
+            },
             "e-beam":
             {
                 "dwellTime":
