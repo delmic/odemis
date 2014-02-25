@@ -1317,11 +1317,11 @@ class StreamPanel(wx.PyPanel):
         if len(gspec) >= 5:
             # skip the 2 biggest peaks
             s_values = numpy.sort(gspec)
-            mins, maxs = s_values[2], s_values[-3]
+            mins, maxs = s_values[0], s_values[-3]
         else:
             mins, maxs = gspec.min(), gspec.max()
 
-        base = min(mins, 0) # to make sure big values look big
+        base = mins # for spectrum, 0 has little sense, just care of the min
         try:
             coef = 1. / (maxs - base)
         except ZeroDivisionError:
