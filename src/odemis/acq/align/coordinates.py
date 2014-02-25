@@ -30,10 +30,7 @@ import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 import transform
 import logging
-import cv2.cv
-
-from odemis import model
-from odemis.dataio import hdf5
+import warnings
 from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
@@ -78,8 +75,10 @@ def FindCenterCoordinates(subimages):
 
         # Smoothing
         h = numpy.tile(numpy.ones(3) / 9, 3).reshape(3, 3)  # simple 3x3 averaging filter
-        dIdu = scipy.signal.convolve2d(dIdu, h, mode='same', fillvalue=0)
-        dIdv = scipy.signal.convolve2d(dIdv, h, mode='same', fillvalue=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", numpy.ComplexWarning)
+            dIdu = scipy.signal.convolve2d(dIdu, h, mode='same', fillvalue=0)
+            dIdv = scipy.signal.convolve2d(dIdv, h, mode='same', fillvalue=0)
 
         # Calculate intensity gradient in xy coordinate system
         dIdx = dIdu - dIdv
@@ -146,7 +145,6 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
 
     image = data
     scale = optical_scale
-    scale = 10
 
     # Determine size of filter window
     # filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
@@ -159,11 +157,9 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     i_max, j_max = unravel_index(image.argmax(), image.shape)
     i_min, j_min = unravel_index(image.argmin(), image.shape)
     max_diff = image[i_max, j_max] - image[i_min, j_min]
-    prod_of_spots = numpy.prod(number_of_spots)
     data_max = filters.maximum_filter(image, filter_window_size)
     data_min = filters.minimum_filter(image, filter_window_size)
     
-
     # for i in numpy.arange(3.5, 5, 0.1):
     # Determine threshold
     i = 8
@@ -194,14 +190,22 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
 
         # Make sure we don't detect spots on the top of each other
         tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
-        if math.hypot(tab[0], tab[1]) > 1.5:
+
+        # TODO: change +10 and -10 to number relative to spot size
+        subimage = image[(dy.start - 2.22):(dy.stop + 2.22), (dx.start - 2.22):(dx.stop + 2.22)]
+        # TODO Discard only this image
+        if subimage.shape[0] == 0 or subimage.shape[1] == 0:
+            logging.warning("Cannot detect spots.")
+            return [], []
+        
+        # if math.hypot(tab[0], tab[1]) > 1.5:
+        # if spots detected too close keep the brightest one
+        if math.hypot(tab[0], tab[1]) < (scale / 2):
+            if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
+                subimages.pop()
+                subimages.append(subimage)
+        else:
             subimage_coordinates.append((x_center, y_center))
-            # TODO: change +10 and -10 to number relative to spot size
-            subimage = image[(dy.start - scale / 4.5):(dy.stop + 0 + scale / 4.5), (dx.start - scale / 4.5):(dx.stop + 0 + scale / 4.5)]
-            # TODO Discard only this image
-            if subimage.shape[0] == 0 or subimage.shape[1] == 0:
-                logging.warning("Cannot detect spots.")
-                return [], []
             subimages.append(subimage)
         
         (x_center_last, y_center_last) = (x_center, y_center)
