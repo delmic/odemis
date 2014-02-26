@@ -330,6 +330,9 @@ class Shamrock(model.Actuator):
         """
         assert 0 <= wavelength <= 50e-6
         
+        # FIXME: this also happens of the CCD is acquiring (at least with iDus),
+        # but then it will keep failing until the acquisition is stopped.
+
         # Currently the SDK sometimes fail with 20201: SHAMROCK_COMMUNICATION_ERROR
         # when changing wavelength by a few additional nm. It _seems_ that it
         # works anyway (but not sure).
