@@ -2127,7 +2127,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 ccd_buf.append(ccd_data)
 
                 n += 1
-                self._updateProgress(future, start_time, n / tot_num)
+                # Trick: we don't count the first frame because it's often
+                # much slower and so messes up the estimation
+                if n == 1:
+                    start_time = time.time()
+                else:
+                    self._updateProgress(future, start_time, (n - 1) / (tot_num - 1))
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
