@@ -492,6 +492,7 @@ class PlotViewport(ViewPort):
         self.canvas.set_1d_data(domain, data, unit_x)  #pylint: disable=E1101
         for l in self.legend:
             l.clear()
+            l.Refresh()
 
     def setView(self, microscope_view, tab_data):
         """

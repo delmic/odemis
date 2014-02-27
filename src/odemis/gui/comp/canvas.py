@@ -227,8 +227,10 @@ class BufferedCanvas(wx.Panel):
 
     def _on_down(self, cursor=None):
         """ General method for any mouse buttons being pressed
+
         .. Note:: A bug prevents the cursor from changing in Ubuntu after the
             mouse is captured.
+
         """
         if cursor:
             self.previous_cursor = self.GetCursor()
@@ -1027,6 +1029,11 @@ class DraggableCanvas(BitmapCanvas):
     @property
     def dragging(self):
         return self._ldragging or self._rdragging
+
+    def cancel_drag(self):
+        self._ldragging = False
+        self._rdragging = False
+        self.was_dragged = False
 
     # END Properties
 
