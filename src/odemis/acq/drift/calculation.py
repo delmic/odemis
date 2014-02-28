@@ -155,7 +155,7 @@ def CalculateDrift(previous_img, current_img, precision=1):
         if nd2 == 1:
             col_shift = 0
 
-    return row_shift, col_shift
+    return col_shift, row_shift
 
 
 def _UpsampledDFT(data, nor, noc, precision=1, roff=0, coff=0):

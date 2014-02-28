@@ -44,7 +44,7 @@ import sys
 import threading
 import time
 
-from odemis.acq import drift
+from odemis.acq import drift as acq_drift
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.img as img
@@ -2685,20 +2685,10 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._sem_data = None
 
         # For the drift correction
-        self._sr_data = None
+        self._dc_estimator = None
         self._dcRegion = self._sem_stream.dcRegion
         self._dcPeriod = self._sem_stream.dcPeriod
         self._dcDwellTime = self._sem_stream.dcDwellTime
-        self._trans = None
-        self._anchor_trans = None
-        self._res = None
-        self._min_bound = None
-        self._max_bound = None
-        self._scan_time = None
-        self._repetition = None
-        shape = self._emitter.shape
-        self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
-        print self._safety_bounds
         self._current_future = None
 
         self.should_update = model.BooleanVA(False)
@@ -2713,19 +2703,9 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._scan_time = scan_time
         self._repetition = repetition
         
-        # TODO: only if anchor region not undefined
         # Estimate time spent in scanning the anchor region
-        anchor_time = 0
-        roi = self._dcRegion.value
-        print roi
-        if roi != UNDEFINED_ROI:
-            width = (roi[2] - roi[0], roi[3] - roi[1])
-            shape = self._emitter.shape
-            scale = self._emitter.scale.value  # pxs of anchor is same as SEM
-            res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
-                   max(1, int(round(shape[1] * width[1] / scale[1]))))
-            n_anchor = 1 + int(scan_time / self._dcPeriod.value)
-            anchor_time = n_anchor * numpy.prod(res) * self._dcDwellTime.value + 0.01
+        n_anchor = 1 + int(scan_time / self._dcPeriod.value)
+        anchor_time = n_anchor * self._dc_estimator.estimateAcquisitionTime()
 
         total_time = scan_time + anchor_time
         logging.debug("Estimated overhead time for drift correction: %g s / %g s",
@@ -2742,6 +2722,12 @@ class SEMCCDDCStream(MultipleDetectorStream):
             self._acq_thread.join(10)
             if self._acq_thread.isAlive():
                 logging.error("Previous acquisition not ending")
+                
+        # At this point dcRegion and dcDwellTime must have been set
+        self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
+                                     self._semd,
+                                     self._sem_stream.dcRegion,
+                                     self._sem_stream.dcDwellTime)
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2826,26 +2812,6 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
         self._emitter.resolution.value = (1, 1)
 
-    def _onSelectedRegion(self, drift):
-        """
-        Update the scanning area of the SEM according to the selected region
-        for drift correction.
-        """
-        # translation is distance from center (situated at 0.5, 0.5), can be floats
-        # we clip translation inside of bounds in case of huge drift
-        new_translation = (self._trans[0] - drift[1], self._trans[1] - drift[0])
-        if (abs(new_translation[0]) > self._safety_bounds[1] or abs(new_translation[1]) > self._safety_bounds[1]):
-            logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
-
-        self._trans = (numpy.clip(new_translation[0], self._min_bound, self._max_bound),
-                       numpy.clip(new_translation[1], self._min_bound, self._max_bound))
-
-        # always in this order
-        self._emitter.scale.value = (1, 1)
-        self._emitter.resolution.value = self._res
-        self._emitter.translation.value = self._trans
-        self._emitter.dwellTime.value = self._dcDwellTime.value
-
     def _getSpotPositions(self):
         """
         Compute the positions of the e-beam for each point in the ROI
@@ -2893,54 +2859,25 @@ class SEMCCDDCStream(MultipleDetectorStream):
             dc_period = self._dcPeriod.value
 
             spot_pos = self._getSpotPositions()
-            logging.debug("Generating %s spots for %g s", spot_pos.shape[:2], dwell_time)
+            logging.debug("Generating %s spots for %g s",
+                          spot_pos.shape[:2], dwell_time)
             rep = self._rep_stream.repetition.value
             roi = self._rep_stream.roi.value
             self._sem_data = []
-            self._sr_data = []
+            # self._sr_data = []
             self._sem_stream.raw = []
 
             tot_num = numpy.prod(rep)
             n = 0
-            drift = (0, 0)
+            orig_drift = (0, 0)
 
-            # First anchor region acquisition
-            roi = self._dcRegion.value
-            center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
-            width = (roi[2] - roi[0], roi[3] - roi[1])
-            shape = self._emitter.shape
-            # translation is distance from center (situated at 0.5, 0.5), can be floats
-            self._trans = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
-            # self._transl = (shape[0] * (center[0] - 0.5) - drift[1], shape[1] * (center[1] - 0.5) - drift[0])
-            # resolution is the maximum resolution at the scale in proportion of the width
-            scale = self._emitter.scale.value
-            anchor_res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
-                          max(1, int(round(shape[1] * width[1] / scale[1]))))
-            
             # Translate dc_period to a number of pixels
             pxs_dc_period = (numpy.prod(self._repetition) * dc_period) // self._scan_time
             logging.debug("Drift correction will be being performed every %s pixels",
                           pxs_dc_period)
 
-            # Demand large enough anchor region for drift calculation
-            if anchor_res[0] < 2 or anchor_res[1] < 2:
-                # TODO: just use a smaller scale (if possible) in that case?
-                raise ValueError("Anchor region too small for drift detection.")
-
-            self._min_bound = self._safety_bounds[0] + (max(self._res[0], self._res[1]) / 2)
-            self._max_bound = self._safety_bounds[1] - (max(self._res[0], self._res[1]) / 2)
-
-            if roi != UNDEFINED_ROI:
-                self._onSelectedRegion(drift)
-                logging.debug("E-beam spot to selected region: " + str(self._emitter.translation.value))
-                self._acq_sem_complete.clear()
-                self._semd_df.subscribe(self._ssOnSelectedRegion)
-                logging.debug("Scanning selected region with resolution " + str(self._emitter.resolution.value)
-                              + " and dwelltime " + str(self._emitter.dwellTime.value)
-                              + " and scale " + str(self._emitter.scale.value))
-                if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 4 + 1):
-                    raise TimeoutError("First acquisition of selected region frame timed out")
-                self._semd_df.unsubscribe(self._ssOnSelectedRegion)
+            # First acquisition of anchor area
+            self._dc_estimator.scan()
 
             start_time = time.time()
             # dc_start = time.time()
@@ -2951,12 +2888,21 @@ class SEMCCDDCStream(MultipleDetectorStream):
 
                 # tweak translation according to calculated drift
                 # clip to 2020x2020 for safety
-                if (abs(spot_pos[i[::-1]][0])>self._safety_bounds[1] or abs(spot_pos[i[::-1]][1])>self._safety_bounds[1]):
-                    logging.warning("Generated image may be incorrect due to extensive drift. Do you want to continue scanning?")
+                # TODO:use the self._estimator.safety_bounds
+                safety_bounds = self._dc_estimator.safety_bounds
+                if (abs(spot_pos[i[::-1]][0]) > abs(safety_bounds[0])
+                    or abs(spot_pos[i[::-1]][1]) > abs(safety_bounds[1])):
+                    logging.warning("Generated image may be incorrect due to \
+                                    extensive drift. Do you want to continue scanning?")
                     
-                self._emitter.translation.value = (numpy.clip(spot_pos[i[::-1]][0], self._safety_bounds[0], self._safety_bounds[1]),
-                                                   numpy.clip(spot_pos[i[::-1]][1], self._safety_bounds[0], self._safety_bounds[1]))
-                logging.debug("E-beam spot after drift correction: " + str(self._emitter.translation.value))
+                self._emitter.translation.value = (numpy.clip(spot_pos[i[::-1]][0],
+                                                              safety_bounds[0],
+                                                              safety_bounds[1]),
+                                                   numpy.clip(spot_pos[i[::-1]][1],
+                                                              safety_bounds[0],
+                                                              safety_bounds[1]))
+                logging.debug("E-beam spot after drift correction: %s",
+                              self._emitter.translation.value)
 
                 self._acq_sem_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
@@ -2981,41 +2927,17 @@ class SEMCCDDCStream(MultipleDetectorStream):
 
                 # FIXME: instead of using time here, it'd better to use the number
                 # of pixels, so that if it's, for example one line, it stays one line.
-                if roi != UNDEFINED_ROI and n >= pxs_dc_period:
-                    # Move e-beam to the anchor region
-                    self._onSelectedRegion(drift)
-                    logging.debug("E-beam spot to selected region: %s", self._emitter.translation.value)
-                    self._acq_sem_complete.clear()
-                    self._semd_df.subscribe(self._ssOnSelectedRegion)
-                    logging.debug("Scanning selected region with resolution %s,"
-                                  " dwelltime %g s and scale %s.",
-                                  self._emitter.resolution.value,
-                                  self._emitter.dwellTime.value,
-                                  self._emitter.scale.value)
-                    if not self._acq_sem_complete.wait(self._emitter.dwellTime.value * numpy.prod(self._emitter.resolution.value) * 4 + 1):
-                        raise TimeoutError("Acquisition of selected region frame %s timed out" % (i,))
-                    self._semd_df.unsubscribe(self._ssOnSelectedRegion)
+                if n >= pxs_dc_period:
+                    # Acquisition of anchor area
+                    self._dc_estimator.scan()
 
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
-                    # Calculate the drift between the last two frames and
-                    # between the last and fisrt frame
-                    if len(self._sr_data) > 1:
-                        prev_drift = drift.CalculateDrift(self._sr_data[-2], self._sr_data[-1], 10)
-                        orig_drift = drift.CalculateDrift(self._sr_data[0], self._sr_data[-1], 10)
-
-                        logging.debug("Current drift: %s", orig_drift)
-                        logging.debug("Previous frame diff: %s", prev_drift)
-                        if (abs(orig_drift[0] - prev_drift[0]) > 5 or
-                            abs(orig_drift[1] - prev_drift[1]) > 5):
-                            logging.warning("Drift cannot be measured precisely, "
-                                            "hesitating between %s and %s px",
-                                             orig_drift, prev_drift)
-
-                        # Update next positions
-                        spot_pos[:, :, 0] -= orig_drift[1] # FIXME: why are X/Y inverted?
-                        spot_pos[:, :, 1] -= orig_drift[0]
+                    # Estimate drift and update next positions
+                    orig_drift = self._dc_estimator.estimate()
+                    spot_pos[:, :, 0] -= orig_drift[0]
+                    spot_pos[:, :, 1] -= orig_drift[1]
 
                     n = 0
                     # dc_start = time.time()
@@ -3028,7 +2950,9 @@ class SEMCCDDCStream(MultipleDetectorStream):
             sem_one = self._assembleSEMData(rep, roi, self._sem_data)  # shape is (Y, X)
 
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
+            hdf5.export("sem_img", sem_one)
             self._onSEMData(sem_one)
+            hdf5.export("frames", model.DataArray(self._dc_estimator._sr_data))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of SEM/CCD failed")
@@ -3044,15 +2968,6 @@ class SEMCCDDCStream(MultipleDetectorStream):
             return self.raw
         finally:
             del self._sem_data  # regain a bit of memory
-
-    def _ssOnSelectedRegion(self, df, data):
-        logging.debug("Selected Region data received")
-
-        # Do not stop the acquisition, as it ensures the e-beam is at the right place
-        if (not self._acq_sem_complete.is_set()) and data.shape != (1, 1):
-            # only use the first data per pixel
-            self._sr_data.append(data)
-            self._acq_sem_complete.set()
 
     def _ssOnSEMImage(self, df, data):
         logging.debug("SEM data received")
