@@ -46,12 +46,15 @@ class TestDriftStream(unittest.TestCase):
     def setUp(self):
         self._escan = None
         self._detector = None
+        self._ccd = None
         # find components by their role
         for c in model.getComponents():
             if c.role == "e-beam":
                 self._escan = c
             elif c.role == "se-detector":
                 self._detector = c
+            elif c.role == "ccd":
+                self._ccd = c
         if not all([self._escan, self._detector]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
@@ -62,19 +65,23 @@ class TestDriftStream(unittest.TestCase):
     def test_drift_stream(self):
         escan = self._escan
         detector = self._detector
+        ccd = self._ccd
         
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
-        reps = stream.RepetitionStream("test rep", detector, detector.data, escan)
-        sas = stream.SEMCCDDCStream("test sem-rep", sems, reps)
+        ars = stream.ARStream("test ar", ccd, ccd.data, escan)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
+
+        # Long acquisition
+        ccd.exposureTime.value = 0.2  # s
 
         sems.dcPeriod.value = 1
         sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)  # (0.425, 0.425, 0.475, 0.475)
         sems.dcDwellTime.value = 1e-04
         escan.dwellTime.value = 1e-02
 
-        reps.roi.value = (0.4, 0.4, 0.5, 0.5)
-        reps.repetition.value = (205, 205)
+        ars.roi.value = (0.4, 0.4, 0.5, 0.5)
+        ars.repetition.value = (205, 205)
 
         # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
         start = time.time()

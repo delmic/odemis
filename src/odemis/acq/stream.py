@@ -1872,15 +1872,31 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._sem_data = None
         self._ccd_data = None
 
+        # For the drift correction
+        self._dc_estimator = None
+        self._dcPeriod = self._sem_stream.dcPeriod
         self._current_future = None
 
         self.should_update = model.BooleanVA(False)
         self.is_active = model.BooleanVA(False)
 
     def estimateAcquisitionTime(self):
-        # that's the same as the CCD stream (and SEM stream, once the hardware
-        # settings are correct)
-        return self._ccd_stream.estimateAcquisitionTime()
+        # Estimate time spent in scanning the acquisition region
+        repetition = tuple(self._ccd_stream.repetition.value)
+        scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.018)
+
+        # To be used in translation of dc_period to pixels
+        self._scan_time = scan_time
+        self._repetition = repetition
+
+        # Estimate time spent in scanning the anchor region
+        n_anchor = 1 + int(scan_time / self._dcPeriod.value)
+        anchor_time = n_anchor * self._dc_estimator.estimateAcquisitionTime()
+
+        total_time = scan_time + anchor_time
+        logging.debug("Estimated overhead time for drift correction: %g s / %g s",
+                      anchor_time, total_time)
+        return total_time
 
     def acquire(self):
         # TODO: if already acquiring, queue the Future for later acquisition
@@ -1892,6 +1908,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._acq_thread.join(10)
             if self._acq_thread.isAlive():
                 logging.error("Previous acquisition not ending")
+
+        # At this point dcRegion and dcDwellTime must have been set
+        self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
+                                     self._semd,
+                                     self._sem_stream.dcRegion,
+                                     self._sem_stream.dcDwellTime,
+                                     self._sem_stream.dcPeriod)
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2068,10 +2091,36 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             tot_num = numpy.prod(rep)
             n = 0
+            orig_drift = (0, 0)
+
+            # Translate dc_period to a number of pixels
+            pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(self._scan_time,
+                                                                        rep)
+            # First acquisition of anchor area
+            self._dc_estimator.scan()
+
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
-                # set ebeam to position (which is ensured only once acquiring)
-                self._emitter.translation.value = spot_pos[i[::-1]]
+                self._emitter.dwellTime.value = dwell_time
+                self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
+                self._emitter.resolution.value = (1, 1)
+
+                # tweak translation according to calculated drift
+                safety_bounds = self._dc_estimator.safety_bounds
+                if (abs(spot_pos[i[::-1]][0]) > abs(safety_bounds[0])
+                    or abs(spot_pos[i[::-1]][1]) > abs(safety_bounds[1])):
+                    logging.warning("Generated image may be incorrect due to \
+                                    extensive drift. Do you want to continue scanning?")
+                    
+                self._emitter.translation.value = (numpy.clip(spot_pos[i[::-1]][0],
+                                                              safety_bounds[0],
+                                                              safety_bounds[1]),
+                                                   numpy.clip(spot_pos[i[::-1]][1],
+                                                              safety_bounds[0],
+                                                              safety_bounds[1]))
+                logging.debug("E-beam spot after drift correction: %s",
+                              self._emitter.translation.value)
+
                 self._acq_sem_complete.clear()
                 self._acq_ccd_complete.clear()
                 self._semd_df.subscribe(self._ssOnSEMImage)
@@ -2111,6 +2160,22 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 n += 1
                 self._updateProgress(future, start_time, n / tot_num)
 
+                # FIXME: instead of using time here, it'd better to use the number
+                # of pixels, so that if it's, for example one line, it stays one line.
+                if n >= pxs_dc_period:
+                    # Acquisition of anchor area
+                    self._dc_estimator.scan()
+
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+
+                    # Estimate drift and update next positions
+                    orig_drift = self._dc_estimator.estimate()
+                    spot_pos[:, :, 0] -= orig_drift[0]
+                    spot_pos[:, :, 1] -= orig_drift[1]
+
+                    n = 0
+
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)
 
@@ -2122,6 +2187,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             sem_one = self._assembleSEMData(rep, roi, self._sem_data) # shape is (Y, X)
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
+            hdf5.export("sem_img", sem_one)
+            self._onSEMData(sem_one)
+            hdf5.export("frames", model.DataArray(self._dc_estimator.raw))
             self._onSEMCCDData(sem_one, ccd_buf)
         except Exception as exp:
             if not isinstance(exp, CancelledError):
@@ -2686,9 +2754,7 @@ class SEMCCDDCStream(MultipleDetectorStream):
 
         # For the drift correction
         self._dc_estimator = None
-        self._dcRegion = self._sem_stream.dcRegion
         self._dcPeriod = self._sem_stream.dcPeriod
-        self._dcDwellTime = self._sem_stream.dcDwellTime
         self._current_future = None
 
         self.should_update = model.BooleanVA(False)
@@ -2727,7 +2793,8 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
                                      self._semd,
                                      self._sem_stream.dcRegion,
-                                     self._sem_stream.dcDwellTime)
+                                     self._sem_stream.dcDwellTime,
+                                     self._sem_stream.dcPeriod)
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2856,8 +2923,6 @@ class SEMCCDDCStream(MultipleDetectorStream):
             self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
 
-            dc_period = self._dcPeriod.value
-
             spot_pos = self._getSpotPositions()
             logging.debug("Generating %s spots for %g s",
                           spot_pos.shape[:2], dwell_time)
@@ -2872,9 +2937,8 @@ class SEMCCDDCStream(MultipleDetectorStream):
             orig_drift = (0, 0)
 
             # Translate dc_period to a number of pixels
-            pxs_dc_period = (numpy.prod(self._repetition) * dc_period) // self._scan_time
-            logging.debug("Drift correction will be being performed every %s pixels",
-                          pxs_dc_period)
+            pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(self._scan_time,
+                                                                        self._repetition)
 
             # First acquisition of anchor area
             self._dc_estimator.scan()
@@ -2950,9 +3014,10 @@ class SEMCCDDCStream(MultipleDetectorStream):
             sem_one = self._assembleSEMData(rep, roi, self._sem_data)  # shape is (Y, X)
 
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
+            # TODO: Remove exports
             hdf5.export("sem_img", sem_one)
             self._onSEMData(sem_one)
-            hdf5.export("frames", model.DataArray(self._dc_estimator._sr_data))
+            hdf5.export("frames", model.DataArray(self._dc_estimator.raw))
         except Exception as exp:
             if not isinstance(exp, CancelledError):
                 logging.exception("Software sync acquisition of SEM/CCD failed")

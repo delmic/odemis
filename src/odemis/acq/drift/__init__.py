@@ -42,17 +42,16 @@ class AnchoredEstimator(object):
     the global scan, such as at the beginning of a line), and call .estimate()
     to measure the drift.
     """
-    def __init__(self, scanner, detector, region, dwell_time):
+    def __init__(self, scanner, detector, region, dwell_time, period):
         """
         """
         self._emitter = scanner
         self._semd = detector
-        self._semd_df = detector.data
         self._dcRegion = region
+        self._dcPeriod = period
         self._dcDwellTime = dwell_time
         self.orig_drift = (0, 0)
         self.raw = [] # all the anchor areas acquired (in order)
-        self._sr_data = []
         self._acq_sem_complete = threading.Event()
         
         # Calculate initial translation for anchor region acquisition
@@ -91,30 +90,25 @@ class AnchoredEstimator(object):
             self._onAnchorRegion()
             logging.debug("E-beam spot to anchor region: %s",
                           self._emitter.translation.value)
-            self._acq_sem_complete.clear()
-            self._semd_df.subscribe(self._ssOnAnchorRegion)
             logging.debug("Scanning anchor region with resolution %s \
                             and dwelltime %s and scale %s",
                           self._emitter.resolution.value,
                           self._emitter.dwellTime.value,
                           self._emitter.scale.value)
-            prod_res = numpy.prod(self._emitter.resolution.value)
-            if not self._acq_sem_complete.wait(self._emitter.dwellTime.value *
-                                               prod_res * 4 + 1):
-                raise TimeoutError("Acquisition of anchor region frame timed out")
-            self._semd_df.unsubscribe(self._ssOnAnchorRegion)
-     
+            data = self._semd.data.get()
+            self.raw.append(data)
+
     def estimate(self):
         """
         return (float, float): estimated current drift in X/Y SEM px
         """
         # Calculate the drift between the last two frames and
         # between the last and fisrt frame
-        if len(self._sr_data) > 1:
-            prev_drift = CalculateDrift(self._sr_data[-2],
-                                        self._sr_data[-1], 10)
-            self.orig_drift = CalculateDrift(self._sr_data[0],
-                                             self._sr_data[-1], 10)
+        if len(self.raw) > 1:
+            prev_drift = CalculateDrift(self.raw[-2],
+                                        self.raw[-1], 10)
+            self.orig_drift = CalculateDrift(self.raw[0],
+                                             self.raw[-1], 10)
 
             logging.debug("Current drift: %s", self.orig_drift)
             logging.debug("Previous frame diff: %s", prev_drift)
@@ -141,6 +135,19 @@ class AnchoredEstimator(object):
 
         return anchor_time
 
+    def estimateCorrectionPeriod(self, scan_time, repetitions):
+        """
+        scan_time (float): acquisition time for the acquisition region
+        repetitions (tuple of ints): number of spots 
+        
+        return (float): correction period in number of pixels
+        """
+        # TODO: implement more clever calculation
+        pxs_dc_period = (numpy.prod(repetitions) * self._dcPeriod.value) // scan_time
+        logging.debug("Drift correction will be being performed every %s pixels",
+                        pxs_dc_period)
+        return pxs_dc_period
+
     def _onAnchorRegion(self):
         """
         Update the scanning area of the SEM according to the anchor region
@@ -165,11 +172,3 @@ class AnchoredEstimator(object):
         self._emitter.translation.value = self._trans
         self._emitter.dwellTime.value = self._dcDwellTime.value
 
-    def _ssOnAnchorRegion(self, df, data):
-        logging.debug("Anchor Region data received")
-
-        # Do not stop the acquisition, as it ensures the e-beam is at the right place
-        if (not self._acq_sem_complete.is_set()) and data.shape != (1, 1):
-            # only use the first data per pixel
-            self._sr_data.append(data)
-            self._acq_sem_complete.set()
