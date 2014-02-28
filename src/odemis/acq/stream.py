@@ -2668,7 +2668,6 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._rep_stream = rep_stream
 
         self._emitter = sem_stream._emitter
-        print self._sem_stream._emitter.dcDwellTime.value
         # probably secondary electron detector
         self._semd = self._sem_stream._detector
         self._semd_df = self._sem_stream._dataflow
@@ -2687,7 +2686,9 @@ class SEMCCDDCStream(MultipleDetectorStream):
 
         # For the drift correction
         self._sr_data = None
-        # self._ar_data = None
+        self._dcRegion = self._sem_stream.dcRegion
+        self._dcPeriod = self._sem_stream.dcPeriod
+        self._dcDwellTime = self._sem_stream.dcDwellTime
         self._trans = None
         self._anchor_trans = None
         self._res = None
@@ -2697,6 +2698,7 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._repetition = None
         shape = self._emitter.shape
         self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
+        print self._safety_bounds
         self._current_future = None
 
         self.should_update = model.BooleanVA(False)
@@ -2714,7 +2716,7 @@ class SEMCCDDCStream(MultipleDetectorStream):
         # TODO: only if anchor region not undefined
         # Estimate time spent in scanning the anchor region
         anchor_time = 0
-        roi = self._emitter.dcRegion.value
+        roi = self._dcRegion.value
         print roi
         if roi != UNDEFINED_ROI:
             width = (roi[2] - roi[0], roi[3] - roi[1])
@@ -2722,8 +2724,8 @@ class SEMCCDDCStream(MultipleDetectorStream):
             scale = self._emitter.scale.value  # pxs of anchor is same as SEM
             res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                    max(1, int(round(shape[1] * width[1] / scale[1]))))
-            n_anchor = 1 + int(scan_time / self._sem_stream.dcPeriod.value)
-            anchor_time = n_anchor * numpy.prod(res) * self._sem_stream.dcDwellTime.value + 0.01
+            n_anchor = 1 + int(scan_time / self._dcPeriod.value)
+            anchor_time = n_anchor * numpy.prod(res) * self._dcDwellTime.value + 0.01
 
         total_time = scan_time + anchor_time
         logging.debug("Estimated overhead time for drift correction: %g s / %g s",
@@ -2842,7 +2844,7 @@ class SEMCCDDCStream(MultipleDetectorStream):
         self._emitter.scale.value = (1, 1)
         self._emitter.resolution.value = self._res
         self._emitter.translation.value = self._trans
-        self._emitter.dwellTime.value = self._emitter.dcDwellTime.value
+        self._emitter.dwellTime.value = self._dcDwellTime.value
 
     def _getSpotPositions(self):
         """
@@ -2888,7 +2890,7 @@ class SEMCCDDCStream(MultipleDetectorStream):
             self._ssAdjustHardwareSettings()
             dwell_time = self._emitter.dwellTime.value
 
-            dc_period = self._emitter.dcPeriod.value
+            dc_period = self._dcPeriod.value
 
             spot_pos = self._getSpotPositions()
             logging.debug("Generating %s spots for %g s", spot_pos.shape[:2], dwell_time)
@@ -2903,7 +2905,7 @@ class SEMCCDDCStream(MultipleDetectorStream):
             drift = (0, 0)
 
             # First anchor region acquisition
-            roi = self._emitter.dcRegion.value
+            roi = self._dcRegion.value
             center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
             width = (roi[2] - roi[0], roi[3] - roi[1])
             shape = self._emitter.shape
@@ -2916,8 +2918,8 @@ class SEMCCDDCStream(MultipleDetectorStream):
                           max(1, int(round(shape[1] * width[1] / scale[1]))))
             
             # Translate dc_period to a number of pixels
-            pxs_dc_period = (self._repetition * dc_period) // self._scan_time
-            logging.debug("Drift correction will be being performed every %s s",
+            pxs_dc_period = (numpy.prod(self._repetition) * dc_period) // self._scan_time
+            logging.debug("Drift correction will be being performed every %s pixels",
                           pxs_dc_period)
 
             # Demand large enough anchor region for drift calculation
