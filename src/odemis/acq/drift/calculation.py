@@ -34,6 +34,11 @@ def CalculateDrift(previous_img, current_img, precision=1):
     Given two images, it calculates the drift in x and y axis. It first computes
     the cross-correlation of the two images and then locates the peak. The coordinates 
     of the peak of the cross-correlation define the shift vector between the two images. 
+    This implementation is based on the "Efficient subpixel image registration by 
+    cross-correlation" by Manuel Guizar, for the corresponding matlab code see 
+    http://www.mathworks.com/matlabcentral/fileexchange/
+    18401-efficient-subpixel-image-registration-by-cross-correlation.
+    
     previous_img (numpy.array): 2d array with the previous frame
     current_img (numpy.array): 2d array with the last frame, must be of same 
       shape as previous_img
@@ -57,8 +62,6 @@ def CalculateDrift(previous_img, current_img, precision=1):
         loc1 = ACC.argmax(0)
         max1 = ACC[(loc1, range(ACC.shape[1]))]
         loc2 = max1.argmax(0)
-#        max1, loc1 = abs(CC).max(0), abs(CC).argmax(0)
-#        max2, loc2 = abs(max1).max(0), abs(max1).argmax(0)
 
         rloc = loc1[loc2]
         cloc = loc2

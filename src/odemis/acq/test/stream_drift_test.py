@@ -66,16 +66,16 @@ class TestDriftStream(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
         reps = stream.RepetitionStream("test rep", detector, detector.data, escan)
-        sas = stream.SEMCCDDCtream("test sem-rep", sems, reps)
+        sas = stream.SEMCCDDCStream("test sem-rep", sems, reps)
 
-        sems.dc_period.value = 1
-        sems.dc_region.value = (0.525, 0.525, 0.6, 0.6)  # (0.425, 0.425, 0.475, 0.475)
-        sems.dc_dwelltime.value = 1e-04
+        sems.dcPeriod.value = 1
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)  # (0.425, 0.425, 0.475, 0.475)
+        sems.dcDwellTime.value = 1e-04
         escan.dwellTime.value = 1e-02
 
         reps.roi.value = (0.4, 0.4, 0.5, 0.5)
         reps.repetition.value = (205, 205)
-        
+
         # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
         start = time.time()
         f = sas.acquire()

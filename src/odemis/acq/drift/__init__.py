@@ -21,6 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
+from .calculation import *
+from .dc_region import *
 
 
 class AnchoredEstimator(object):
