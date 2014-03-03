@@ -1887,6 +1887,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # To be used in translation of dc_period to pixels
         self._ccd_time = ccd_time
 
+        # FIXME: a separate _dc_estimator should be created here, as it cannot be assumed
+        # it's already existing
         # Estimate time spent in scanning the anchor region
         n_anchor = 1 + int(ccd_time / self._dcPeriod.value)
         anchor_time = n_anchor * self._dc_estimator.estimateAcquisitionTime()
@@ -1911,8 +1913,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
                                      self._semd,
                                      self._sem_stream.dcRegion,
-                                     self._sem_stream.dcDwellTime,
-                                     self._sem_stream.dcPeriod)
+                                     self._sem_stream.dcDwellTime)
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2089,11 +2090,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             tot_num = numpy.prod(rep)
             n = 0
-            orig_drift = (0, 0)
 
             # Translate dc_period to a number of pixels
-            pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(self._ccd_time,
-                                                                        rep)
+            pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
+                                    self._sem_stream.dcPeriod.value,
+                                    self._ccd_time,
+                                    rep)
             cur_dc_period = pxs_dc_period.next()
             
             # First acquisition of anchor area
@@ -2171,9 +2173,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         raise CancelledError()
 
                     # Estimate drift and update next positions
-                    orig_drift = self._dc_estimator.estimate()
-                    spot_pos[:, :, 0] -= orig_drift[0]
-                    spot_pos[:, :, 1] -= orig_drift[1]
+                    drift = self._dc_estimator.estimate()
+                    spot_pos[:, :, 0] -= drift[0]
+                    spot_pos[:, :, 1] -= drift[1]
 
                     n = 0
 

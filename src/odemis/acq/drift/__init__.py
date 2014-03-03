@@ -44,13 +44,12 @@ class AnchoredEstimator(object):
     the global acquire, such as at the beginning of a line), and call .estimate()
     to measure the drift.
     """
-    def __init__(self, scanner, detector, region, dwell_time, period):
+    def __init__(self, scanner, detector, region, dwell_time):
         """
         """
         self._emitter = scanner
         self._semd = detector
         self._dcRegion = region
-        self._dcPeriod = period
         self._dcDwellTime = dwell_time
         self.orig_drift = (0, 0)
         self.max_drift = (0, 0)
@@ -90,8 +89,9 @@ class AnchoredEstimator(object):
         """
         Scan the anchor area
         """
+        # TODO: save and restore SEM settings
         if self._roi != UNDEFINED_ROI:
-            self._onAnchorRegion()
+            self._updateSEMSettings()
             logging.debug("E-beam spot to anchor region: %s",
                           self._emitter.translation.value)
             logging.debug("Scanning anchor region with resolution "
@@ -144,16 +144,21 @@ class AnchoredEstimator(object):
 
         return anchor_time
 
-    def estimateCorrectionPeriod(self, scan_time, repetitions):
+    def estimateCorrectionPeriod(self, period, dwell_time, repetitions):
         """
-        scan_time (float): acquisition time for the acquisition region
-        repetitions (tuple of ints): number of spots 
-        
-        return (itertools.cycle): correction period in number of pixels
+        Convert the correction period (as a time) into a number of pixel
+        period (float): maximum time between acquisition of the anchor region
+          in seconds.
+        dwell_time (float): integration time of each pixel in the drift-
+          corrected acquisition.
+        repetitions (tuple of 2 ints): number of pixel in the entire drift-
+          corrected acquisition. 
+        return (iterator yielding 0<int): iterator which yields number of pixels
+          until next correction
         """
         # TODO: implement more clever calculation
         pxs_dc_period = []
-        pxs = (numpy.prod(repetitions) * self._dcPeriod.value) // scan_time
+        pxs = (numpy.prod(repetitions) * period) // dwell_time
         pxs_per_line = repetitions[1]
         if pxs > pxs_per_line:
             # Correct every (pxs // pxs_per_line) lines
@@ -172,7 +177,7 @@ class AnchoredEstimator(object):
                         pxs_dc_period)
         return cycle(pxs_dc_period)
 
-    def _onAnchorRegion(self):
+    def _updateSEMSettings(self):
         """
         Update the scanning area of the SEM according to the anchor region
         for drift correction.
