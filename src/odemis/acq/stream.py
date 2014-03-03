@@ -1884,13 +1884,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # Time required without drift correction
         ccd_time = self._ccd_stream.estimateAcquisitionTime()
 
-#         # Estimate time spent in scanning the acquisition region
-#         repetition = tuple(self._ccd_stream.repetition.value)
-#         scan_time = numpy.prod(repetition) * (self._emitter.dwellTime.value + 0.018)
-#
-#         # To be used in translation of dc_period to pixels
-#         self._scan_time = scan_time
-#         self._repetition = repetition
         # To be used in translation of dc_period to pixels
         self._ccd_time = ccd_time
 
