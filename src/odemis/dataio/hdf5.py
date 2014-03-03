@@ -20,13 +20,17 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from numpy.polynomial import polynomial
-from odemis import model
+
 import h5py
 import logging
 import numpy
+from numpy.polynomial import polynomial
+from odemis import model
+from odemis.util import spectrum
 import os
 import time
+
+
 # User-friendly name
 FORMAT = "HDF5"
 # list of file-name extensions possible, the first one is the default when saving a file
@@ -276,26 +280,30 @@ def _add_image_info(group, dataset, image, rgb=False):
 
     # Wavelength (for spectrograms)
     if l >= 5:
-        if (model.MD_WL_POLYNOMIAL in image.metadata and
-            len(image.metadata[model.MD_WL_POLYNOMIAL]) > 0):
-            pn = image.metadata[model.MD_WL_POLYNOMIAL]
-            # polynomial of degree = 2 => linear
-            group["COffset"] = pn[0]
-            _h5svi_set_state(group["COffset"], ST_REPORTED)
-            if len(pn) == 2:
-                group["DimensionScaleC"] = pn[1] # m
-            elif len(pn) > 2:
-                # polynomial of degree > 2 => need to store the values of each
-                # pixel index explicitly. We follow another way to express
-                # scaling in HDF5.
-                pnl = polynomial.Polynomial(pn, domain=[0, image.shape[l - 5] - 1])
-                _, px_values = pnl.linspace(image.shape[l - 5])
-                group["DimensionScaleC"] = px_values # m
-            if len(pn) > 1:
+        try:
+            if (model.MD_WL_POLYNOMIAL in image.metadata or
+                model.MD_WL_LIST in image.metadata):
+                # polynomial of degree = 2 => linear, so use compact notation
+                if (model.MD_WL_POLYNOMIAL in image.metadata and
+                    len(image.metadata[model.MD_WL_POLYNOMIAL]) == 2):
+                    pn = image.metadata[model.MD_WL_POLYNOMIAL]
+                    group["COffset"] = pn[0]
+                    _h5svi_set_state(group["COffset"], ST_REPORTED)
+                    group["DimensionScaleC"] = pn[1] # m
+                else:
+                    wll = spectrum.get_wavelength_per_pixel(image)
+                    # list or polynomial of degree > 2 => store the values of each
+                    # pixel index explicitly. We follow another way to express
+                    # scaling in HDF5.
+                    group["DimensionScaleC"] = wll # m
+
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
                 dataset.dims.create_scale(group["DimensionScaleC"], "C")
                 _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
                 dataset.dims[l - 5].attach_scale(group["DimensionScaleC"])
+        except Exception:
+            logging.exception("Failed to record wavelength information")
+        
 
     # TODO: extension for Rotation:
 #   RotationAngle (scalar): angle in radian
