@@ -61,7 +61,7 @@ Spectra: {
 "SED ExtXY": { # aka ETD
     # Internal child of Quanta ExtXY, so no class
     role: se-detector,
-    init: {drift_period: 4} # seconds
+    init: {drift_period: 15} # seconds
 }
 
 "Nikon Super Duper": {

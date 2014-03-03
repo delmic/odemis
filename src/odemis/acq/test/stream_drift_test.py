@@ -59,7 +59,6 @@ class TestDriftStream(unittest.TestCase):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 
-        # self._overlay = find_overlay.Overlay()
 
     # @unittest.skip("skip")
     def test_drift_stream(self):
@@ -73,17 +72,16 @@ class TestDriftStream(unittest.TestCase):
         sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
         # Long acquisition
-        ccd.exposureTime.value = 0.2  # s
+        ccd.exposureTime.value = 1e-02  # s
 
-        sems.dcPeriod.value = 1
-        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)  # (0.425, 0.425, 0.475, 0.475)
+        sems.dcPeriod.value = 5
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
         sems.dcDwellTime.value = 1e-04
         escan.dwellTime.value = 1e-02
 
-        ars.roi.value = (0.4, 0.4, 0.5, 0.5)
-        ars.repetition.value = (205, 205)
+        ars.roi.value = (0.4, 0.4, 0.6, 0.6)
+        ars.repetition.value = (20, 20)
 
-        # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
         start = time.time()
         f = sas.acquire()
         x = f.result()

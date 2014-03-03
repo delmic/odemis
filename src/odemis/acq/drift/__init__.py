@@ -24,6 +24,7 @@ from __future__ import division
 from .calculation import CalculateDrift
 from .dc_region import GuessAnchorRegion
 from odemis.util import TimeoutError
+from itertools import cycle
 
 import logging
 import numpy
@@ -31,6 +32,7 @@ import threading
 
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
+MIN_RESOLUTION = (50, 50)
 
 class AnchoredEstimator(object):
     """
@@ -38,8 +40,8 @@ class AnchoredEstimator(object):
     (the anchor) is scanned. By comparing the images of the anchor area over
     time, an estimation of the drift is computed.
     
-    To use, call .scan() periodically (and preferably at specific places of 
-    the global scan, such as at the beginning of a line), and call .estimate()
+    To use, call .acquire() periodically (and preferably at specific places of 
+    the global acquire, such as at the beginning of a line), and call .estimate()
     to measure the drift.
     """
     def __init__(self, scanner, detector, region, dwell_time, period):
@@ -51,6 +53,7 @@ class AnchoredEstimator(object):
         self._dcPeriod = period
         self._dcDwellTime = dwell_time
         self.orig_drift = (0, 0)
+        self.max_drift = (0, 0)
         self.raw = [] # all the anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
         
@@ -72,9 +75,10 @@ class AnchoredEstimator(object):
                      max(1, int(round(shape[1] * width[1]))))
 
         # Demand large enough anchor region for drift calculation
-        if self._res[0] < 2 or self._res[1] < 2:
-            # TODO: just use a smaller scale (if possible) in that case?
-            raise ValueError("Anchor region too small for drift detection.")
+        if self._res[0] < 50:
+            self._res = (MIN_RESOLUTION[0], self._res[1])
+        elif self._res[1] < 50:
+            self._res[1] = (self._res[1], MIN_RESOLUTION[1])
 
         self.safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = self.safety_bounds[0] + (max(self._res[0],
@@ -82,7 +86,7 @@ class AnchoredEstimator(object):
         self._max_bound = self.safety_bounds[1] - (max(self._res[0],
                                                         self._res[1]) / 2)
 
-    def scan(self):
+    def acquire(self):
         """
         Scan the anchor area
         """
@@ -90,12 +94,14 @@ class AnchoredEstimator(object):
             self._onAnchorRegion()
             logging.debug("E-beam spot to anchor region: %s",
                           self._emitter.translation.value)
-            logging.debug("Scanning anchor region with resolution %s \
-                            and dwelltime %s and scale %s",
+            logging.debug("Scanning anchor region with resolution "
+                          "%s and dwelltime %s and scale %s",
                           self._emitter.resolution.value,
                           self._emitter.dwellTime.value,
                           self._emitter.scale.value)
             data = self._semd.data.get()
+            if data.shape == (1, 1):
+                data = self._semd.data.get()
             self.raw.append(data)
 
     def estimate(self):
@@ -118,6 +124,9 @@ class AnchoredEstimator(object):
                                 "hesitating between %s and %s px",
                                  self.orig_drift, prev_drift)
 
+            # Update max_drift
+            if abs(numpy.prod(self.orig_drift)) > abs(numpy.prod(self.max_drift)):
+                self.max_drift = self.orig_drift
         return self.orig_drift
     
     def estimateAcquisitionTime(self):
@@ -140,13 +149,28 @@ class AnchoredEstimator(object):
         scan_time (float): acquisition time for the acquisition region
         repetitions (tuple of ints): number of spots 
         
-        return (float): correction period in number of pixels
+        return (itertools.cycle): correction period in number of pixels
         """
         # TODO: implement more clever calculation
-        pxs_dc_period = (numpy.prod(repetitions) * self._dcPeriod.value) // scan_time
+        pxs_dc_period = []
+        pxs = (numpy.prod(repetitions) * self._dcPeriod.value) // scan_time
+        pxs_per_line = repetitions[1]
+        if pxs > pxs_per_line:
+            # Correct every (pxs // pxs_per_line) lines
+            pxs_dc_period.append((pxs // pxs_per_line) * pxs_per_line)
+        else:
+            half_rep = pxs_per_line // 2
+            if pxs < half_rep:
+                # Correct every pixel
+                pxs_dc_period.append(1)
+            else:
+                # Correct every half a line
+                pxs_dc_period.append(half_rep)
+                pxs_dc_period.append(pxs_per_line - half_rep)
+
         logging.debug("Drift correction will be being performed every %s pixels",
                         pxs_dc_period)
-        return pxs_dc_period
+        return cycle(pxs_dc_period)
 
     def _onAnchorRegion(self):
         """
@@ -160,8 +184,8 @@ class AnchoredEstimator(object):
 
         if (abs(new_translation[0]) > abs(self.safety_bounds[0])
             or abs(new_translation[1]) > abs(self.safety_bounds[1])):
-            logging.warning("Generated image may be incorrect due to extensive drift. \
-                            Do you want to continue scanning?")
+            logging.warning("Generated image may be incorrect due to extensive drift. "
+                            "Do you want to continue scanning?")
 
         self._trans = (numpy.clip(new_translation[0], self._min_bound, self._max_bound),
                        numpy.clip(new_translation[1], self._min_bound, self._max_bound))
