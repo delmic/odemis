@@ -112,6 +112,12 @@ def get_spectrum_efficiency(das):
     if numpy.any(ret < 0):
         logging.warning("Spectrum efficiency correction data contains "
                         "non-positive values.")
+
+    # wavelength should be in meter, so detect wavelength recorded in nm
+    if any(wl > 50e-6 for wl in ret.metadata[model.MD_WL_LIST]):
+        raise ValueError("Spectrum efficiency correction data very large "
+                         "wavelength, probably not in meters.")
+
     return ret
 
 
@@ -133,7 +139,7 @@ def compensate_spectrum_efficiency(data, calib):
     wl_calib = spectrum.get_wavelength_per_pixel(calib)
 
     # Warn if the calibration is not enough for the data
-    if wl_calib[0] > wl_data or wl_calib[-1] < wl_data[-1]:
+    if wl_calib[0] > wl_data[0] or wl_calib[-1] < wl_data[-1]:
         logging.warning("Spectrum efficiency compensation is only between "
                         "%g->%g nm, while the spectrum is between %g-> %g nm.",
                         wl_calib[0] * 1e9, wl_calib[-1] * 1e9,
