@@ -2195,10 +2195,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
             sem_one = self._assembleSEMData(rep, roi, self._sem_data) # shape is (Y, X)
             # explicitly add names to make sure they are different
             sem_one.metadata[MD_DESCRIPTION] = self._sem_stream.name.value
-            hdf5.export("sem_img", sem_one)
-            print self._dc_estimator.max_drift
-            hdf5.export("frames", model.DataArray(self._dc_estimator.raw))
-            self._onSEMData(sem_one)
             self._onSEMCCDData(sem_one, ccd_buf)
         except Exception as exp:
             if not isinstance(exp, CancelledError):
