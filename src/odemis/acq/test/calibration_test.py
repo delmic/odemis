@@ -20,7 +20,9 @@ import logging
 import numpy
 from odemis import model, dataio
 from odemis.acq import calibration
+from odemis.util import img
 import os
+import time
 import unittest
 
 
@@ -32,8 +34,86 @@ class TestAR(unittest.TestCase):
     Test the AR related functions
     """
 
-    # TODO
-    pass
+    def test_load_simple(self):
+        # AR background data
+        dcalib = numpy.zeros((512, 1024), dtype=numpy.uint16)
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "AR",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_BINNING: (1, 1), # px, px
+             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
+             model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+             model.MD_POS: (1.2e-3, -30e-3), # m
+             model.MD_EXP_TIME: 1.2, # s
+             model.MD_AR_POLE: (253.1, 65.1),
+             model.MD_LENS_MAG: 60, # ratio
+            }
+        calib = model.DataArray(dcalib, md)
+
+        # Give one DA, the correct one, so expect to get it back
+        out = calibration.get_ar_data([calib])
+        numpy.testing.assert_equal(out, calib)
+
+        # More DataArrays, just to make it slightly harder to find the data
+        data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16),
+                                metadata={model.MD_POS: (1.2e-3, -30e-3)})
+        data2 = model.DataArray(17 * numpy.ones((1, 1), dtype=numpy.uint16),
+                                metadata={model.MD_POS: (1.2e-3, -30e-3)})
+        out = calibration.get_ar_data([data1, calib, data2])
+        numpy.testing.assert_equal(out, calib)
+
+    def test_load_full(self):
+        """
+        Check the whole sequence: saving calibration data to file, loading it 
+        back from file, finding it.
+        """
+        # AR background data
+        dcalib = numpy.zeros((512, 1024), dtype=numpy.uint16)
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "AR",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_BINNING: (1, 1), # px, px
+             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
+             model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+             model.MD_POS: (1.2e-3, -30e-3), # m
+             model.MD_EXP_TIME: 1.2, # s
+             model.MD_AR_POLE: (253.1, 65.1),
+             model.MD_LENS_MAG: 60, # ratio
+            }
+        calib = model.DataArray(dcalib, md)
+
+        # Give one DA, the correct one, so expect to get it back
+        out = calibration.get_ar_data([calib])
+        numpy.testing.assert_equal(out, calib)
+
+        # More DataArrays, just to make it slightly harder to find the data
+        data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16),
+                                metadata={model.MD_POS: (1.2e-3, -30e-3)})
+        data2 = model.DataArray(17 * numpy.ones((1, 1), dtype=numpy.uint16),
+                                metadata={model.MD_POS: (1.2e-3, -30e-3)})
+        # RGB image
+        thumb = model.DataArray(numpy.ones((520, 230, 3), dtype=numpy.uint8))
+
+        full_data = [data1, calib, data2]
+
+        for fmt in dataio.get_available_formats():
+            exporter = dataio.get_exporter(fmt)
+            logging.info("Trying to export/import with %s", fmt)
+            fn = u"test_ar" + exporter.EXTENSIONS[0]
+            exporter.export(fn, full_data, thumb)
+
+            idata = exporter.read_data(fn)
+            icalib = calibration.get_ar_data(idata)
+            icalib2d = img.ensure2DImage(icalib)
+            numpy.testing.assert_equal(icalib2d, calib)
+            numpy.testing.assert_almost_equal(icalib.metadata[model.MD_AR_POLE],
+                                              calib.metadata[model.MD_AR_POLE])
+            os.remove(fn)
+
 
 class TestSpectrum(unittest.TestCase):
     """
