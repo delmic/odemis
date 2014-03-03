@@ -330,8 +330,11 @@ class Shamrock(model.Actuator):
         """
         assert 0 <= wavelength <= 50e-6
         
-        # FIXME: this also happens of the CCD is acquiring (at least with iDus),
-        # but then it will keep failing until the acquisition is stopped.
+        # Note: When connected via the I²C bus of the camera, it is not
+        # possible to change the wavelength (or the grating) while the CCD
+        # is acquiring. So this will fail with an exception, and that's
+        # probably the best we can do (unless we want to synchronize with the
+        # CCD and ask to temporarily stop the acquisition).
 
         # Currently the SDK sometimes fail with 20201: SHAMROCK_COMMUNICATION_ERROR
         # when changing wavelength by a few additional nm. It _seems_ that it
