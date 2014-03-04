@@ -62,7 +62,7 @@ class ChoiceListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         wx.ListCtrl.__init__(self, parent, ID, pos, size, style)
         listmix.ListCtrlAutoWidthMixin.__init__(self)
 
-class SuggestTextCtrl (wx.TextCtrl, listmix.ColumnSorterMixin):
+class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
     def __init__ (self, parent, colNames=None, choices=None,
                   showHead=True, dropDownClick=True,
                   colFetch= -1, colSearch=0, hideOnNoMatch=True,

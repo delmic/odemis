@@ -28,9 +28,20 @@ setting column of the user interface.
 import collections
 import logging
 import numbers
-from odemis import model
+import re
+import time
+
+import wx
+from wx.lib.pubsub import pub
+
 import odemis.gui
+import odemis.dataio
+import odemis.gui.comp.text as text
+import odemis.gui.util
+
+from odemis import model
 from odemis.gui.comp.combo import ComboBox
+from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -39,17 +50,13 @@ from odemis.acq.stream import SpectrumStream, ARStream
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
-import re
-import time
-import wx
-from wx.lib.pubsub import pub
-
-import odemis.gui.comp.text as text
 from odemis.util.units import readable_str
+
 import odemis.util.units as utun
 
 
 ####### Utility functions #######
+
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
@@ -104,13 +111,13 @@ class SettingEntry(object):
     # TODO: merge with VAC?
     def __init__(self, name, va=None, comp=None, label=None, ctrl=None, vac=None):
         """
-        name (string): name of the va in the component (as-is)
-        va (VA): the actual VigilanAttribute
-        comp (model.Component): the component that has this VA
-        label (wx.LabelTxt): a widget which displays the name of the VA
-        ctrl (wx.Window): a widget that allows to change the value
-        vac (VigilantAttributeController): the object that ensures the connection
-          between the VA and the widget
+        :param name: (string): name of the va in the component (as-is)
+        :param va: (VA): the actual VigilanAttribute
+        :param comp: (model.Component): the component that has this VA
+        :param label: (wx.LabelTxt): a widget which displays the name of the VA
+        :param ctrl: (wx.Window): a widget that allows to change the value
+        :param vac: (VigilantAttributeController): the object that ensures the
+            connection between the VA and the widget
         """
 
         self.name = name
@@ -121,10 +128,11 @@ class SettingEntry(object):
         self.vac = vac
 
     def __repr__(self):
-        msg = "Name: %s, label: %s, comp: %s"
+        msg = "Name: %s, label: %s, comp: %s, ctrl: %s"
         return msg % (self.name,
                       self.label.GetLabel() if self.label else None,
-                      self.comp.name if self.comp else None)
+                      self.comp.name if self.comp else None,
+                      type(self.ctrl) if self.ctrl else None)
 
     def highlight(self, active=True):
         """
@@ -314,6 +322,7 @@ class SettingsPanel(object):
     def add_label(self, label, value=None, selectable=True):
         """ Adds a label to the settings panel, accompanied by an immutable
         value if one's provided.
+
         value (None or stringable): value to display after the label
         selectable (boolean): whether the value can be selected by the user
           (iow, copy/pasted)
@@ -340,6 +349,31 @@ class SettingsPanel(object):
                                border=5)
         else:
             value_ctrl = None
+
+        ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
+        self.entries.append(ne)
+        self.num_entries += 1
+
+        return ne
+
+    def add_browse_button(self, label, file_name=None):
+        # Create label
+        lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
+        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+
+        value_ctrl = FileBrowser(self.panel,
+                                    style=wx.BORDER_NONE | wx.TE_READONLY)
+        value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+
+        if file_name:
+            value_ctrl.SetValue(file_name)
+
+        self._gb_sizer.Add(value_ctrl,
+                           (self.num_entries, 1),
+                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                           border=5)
 
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
@@ -670,15 +704,6 @@ class SettingsPanel(object):
         self.fold_panel.Parent.Layout()
 
         return ne
-
-        # if hasattr(new_ctrl, 'GetTextCtrl'):
-        #     txt_ctrl = new_ctrl.GetTextCtrl()
-        #     txt_ctrl.SetSizeWH(274, 18)
-        #     print txt_ctrl, txt_ctrl.GetSize()
-
-            # new_ctrl.SetBackgroundColour(wx.RED)
-            # print new_ctrl.GetBackgroundColour()
-            # new_ctrl.SetBackgroundColour(wx.RED)
 
     def _create_label(self, panel, vigil_attr, unit):
         # Read only value
@@ -1125,24 +1150,42 @@ class AnalysisSettingsController(SettingsBarController):
         self._file_panel = FileInfoSettingsPanel(
                                     parent_frame.fp_inspect_file_info,
                                     "No file loaded")
-
-        tab_data.fileinfo.subscribe(self.on_fileinfo_change, init=True)
+        self.tab_data = tab_data
+        self.tab_data.fileinfo.subscribe(self.on_fileinfo_change, init=True)
 
     def on_fileinfo_change(self, fi):
         """ Update the data we wish to display from the FileInfo object """
+
         self._file_panel.clear()
 
         if fi:
-            self._file_panel.add_label("File", fi.basename)
-            se_path = self._file_panel.add_label("Path", fi.path)
+            self._file_panel.add_label("File", fi.acq_file_basename)
+            se_path = self._file_panel.add_label("Path", fi.acq_file_path)
             # show the end of the path (usually more important)
             se_path.ctrl.SetInsertionPointEnd()
 
             for key, value in fi.metadata.items():
                 self._file_panel.add_metadata(key, value)
 
-            self._file_panel.Refresh()
+            if fi.can_handle_calibration:
+                btn_entry = self._file_panel.add_browse_button(
+                                    "Calibration file", fi.cali_file_name)
+                wildcards, _ = odemis.gui.util.formats_to_wildcards(
+                                        odemis.dataio.get_available_formats(),
+                                        include_all=True)
+                btn_entry.ctrl.SetWildcard(wildcards)
+                btn_entry.ctrl.SetValue(fi.cali_file_name)
+                pth_entry = self._file_panel.add_label("Path",
+                                                       fi.cali_file_path or " ")
 
+                def on_changed(evt):
+                    obj = evt.GetEventObject()
+                    fi.cali_file_name = obj.GetValue()
+                    pth_entry.ctrl.SetValue(obj.path)
+
+                btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
+
+            self._file_panel.Refresh()
 
 class SparcAlignSettingsController(SettingsBarController):
 
