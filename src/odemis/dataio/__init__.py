@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
@@ -42,9 +42,10 @@ __all__ = ["tiff", "hdf5"]
 def get_available_formats(mode=os.O_RDWR):
     """
     Find the available file formats
-    mode (os.O_RDONLY, os.O_WRONLY, or os.O_RDWR): whether only list formats
-     which can be read, which can be written, or all of them.  
-    returns (dict string -> list of strings): name of each format -> list of
+
+    :param mode: (os.O_RDONLY, os.O_WRONLY, or os.O_RDWR): whether only list
+        formats which can be read, which can be written, or all of them.
+    :returns: (dict string -> list of strings): name of each format -> list of
         extensions
     """
     formats = {}
@@ -52,7 +53,7 @@ def get_available_formats(mode=os.O_RDWR):
     for module_name in __all__:
         try:
             exporter = importlib.import_module("." + module_name, "odemis.dataio")
-        except Exception:  #pylint: disable=W0702
+        except Exception: #pylint: disable=W0703
             continue # module cannot be loaded
         if ((mode == os.O_RDONLY and not hasattr(exporter, "read_data")) or
             (mode == os.O_WRONLY and not hasattr(exporter, "export"))):

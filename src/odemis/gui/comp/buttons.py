@@ -240,8 +240,6 @@ class ImageButton(GenBitmapButton):
 class ImageTextButton(GenBitmapTextButton):
     """ Graphical button with text and hover effect.
 
-
-
     The text can be align using the following styles:
     wx.ALIGN_LEFT, wx.ALIGN_CENTER, wx.ALIGN_RIGHT.
 
