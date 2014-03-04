@@ -453,16 +453,26 @@ class SEMStream(Stream):
         # stream type?
         self.spot = model.BooleanVA(False)
 
-        # drift correction VAs
-        self.dcPeriod = model.FloatVA(1)
-        self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
-                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
-        self.dcDwellTime = model.FloatVA(8e-07)
-
         # used to reset the previous settings after spot mode
         self._no_spot_settings = (None, None, None) # dwell time, resolution, translation
         self.spot.subscribe(self._onSpot)
+
+        # drift correction VAs:
+        # dcRegion defines the anchor region, drift correction will be disabled
+        #   if it is set to UNDEFINED_ROI
+        # dcDwellTime: dwell time used when acquiring anchor region
+        # dcPeriod is the (approximate) time between two acquisition of the
+        #  anchor (and drift compensation). The exact period is determined so
+        #  that it fits with the region of acquisition.
+        # Note: the scale used for the acquisition of the anchor region is the
+        #  same as the scale of the SEM. We could add a dcScale if it's needed.
+        self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
+                                         range=((0, 0, 0, 0), (1, 1, 1, 1)),
+                                         cls=(int, long, float))
+        self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
+                                         range=emitter.dwellTime.range, unit="s")
+        self.dcPeriod = model.FloatContinuous(60,  # s, default to one minute
+                                              range=[0.1, 1e6], unit="s")
 
     def _onROI(self, roi):
         """
@@ -577,6 +587,10 @@ class SEMStream(Stream):
 
             # update hw settings to our own ROI
             self._onROI(self.roi.value)
+
+            if self.dcRegion.value != UNDEFINED_ROI:
+                raise NotImplementedError("SEM drift correction on simple SEM "
+                                          "acquisition not yet implemented")
 
         # handle spot mode
         if self.spot.value:
@@ -1856,10 +1870,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
         self._ccd = self._ccd_stream._detector # CCD
         self._ccd_df = self._ccd_stream._dataflow
 
-        # it will always be an empty image, but a different one every time a new
-        # acquisition is finished (so subscribing to it, will at least work).
-        self.image = VigilantAttribute(None)
-
         # For the acquisition
         self._acq_lock = threading.Lock()
         self._acq_state = RUNNING
@@ -1882,18 +1892,31 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
     def estimateAcquisitionTime(self):
         # Time required without drift correction
-        ccd_time = self._ccd_stream.estimateAcquisitionTime()
+        acq_time = self._ccd_stream.estimateAcquisitionTime()
 
-        # To be used in translation of dc_period to pixels
-        self._ccd_time = ccd_time
+        if self._sem_stream.dcRegion.value == UNDEFINED_ROI:
+            return acq_time
 
-        # FIXME: a separate _dc_estimator should be created here, as it cannot be assumed
-        # it's already existing
         # Estimate time spent in scanning the anchor region
-        n_anchor = 1 + int(ccd_time / self._dcPeriod.value)
-        anchor_time = n_anchor * self._dc_estimator.estimateAcquisitionTime()
+        exp = self._ccd.exposureTime.value #s
+        ccd_size = self._ccd.resolution.value
+        readout = numpy.prod(ccd_size) / self._ccd.readoutRate.value
+        dt = exp + readout
 
-        total_time = ccd_time + anchor_time
+        dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
+                             self._semd,
+                             self._sem_stream.dcRegion.value,
+                             self._sem_stream.dcDwellTime.value)
+        period = dc_estimator.estimateCorrectionPeriod(
+                                           self._sem_stream.dcPeriod.value,
+                                           dt,
+                                           self._ccd_stream.repetition.value)
+        # number of times the anchor will be acquired
+        npixels = numpy.prod(self._ccd_stream.repetition.value)
+        n_anchor = 1 + int(npixels / period.next())
+        anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
+
+        total_time = acq_time + anchor_time
         logging.debug("Estimated overhead time for drift correction: %g s / %g s",
                       anchor_time, total_time)
         return total_time
@@ -1912,8 +1935,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # At this point dcRegion and dcDwellTime must have been set
         self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
                                      self._semd,
-                                     self._sem_stream.dcRegion,
-                                     self._sem_stream.dcDwellTime)
+                                     self._sem_stream.dcRegion.value,
+                                     self._sem_stream.dcDwellTime.value)
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2094,7 +2117,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             # Translate dc_period to a number of pixels
             pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
                                     self._sem_stream.dcPeriod.value,
-                                    self._ccd_time,
+                                    ccd_time,
                                     rep)
             cur_dc_period = pxs_dc_period.next()
             
@@ -2166,6 +2189,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 if n >= cur_dc_period:
                     cur_dc_period = pxs_dc_period.next()
 
+                    # Cannot cancel during this time, but hopefully it's short
                     # Acquisition of anchor area
                     self._dc_estimator.acquire()
 

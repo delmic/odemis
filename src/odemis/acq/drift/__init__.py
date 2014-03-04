@@ -46,18 +46,21 @@ class AnchoredEstimator(object):
     """
     def __init__(self, scanner, detector, region, dwell_time):
         """
+        scanner (Emitter)
+        detector (Detector)
+        region (4 floats)
+        dwell_time (float)
         """
         self._emitter = scanner
         self._semd = detector
-        self._dcRegion = region
-        self._dcDwellTime = dwell_time
+        self._dwell_time = dwell_time
         self.orig_drift = (0, 0)
         self.max_drift = (0, 0)
         self.raw = [] # all the anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
         
         # Calculate initial translation for anchor region acquisition
-        self._roi = self._dcRegion.value
+        self._roi = region
         center = ((self._roi[0] + self._roi[2]) / 2,
                   (self._roi[1] + self._roi[3]) / 2)
         width = (self._roi[2] - self._roi[0], self._roi[3] - self._roi[1])
@@ -133,14 +136,15 @@ class AnchoredEstimator(object):
         """
         return (float): estimated time to acquire 1 anchor area
         """
-        anchor_time = 0
-        roi = self._dcRegion.value
-        if roi != UNDEFINED_ROI:
-            width = (roi[2] - roi[0], roi[3] - roi[1])
-            shape = self._emitter.shape
-            res = (max(1, int(round(shape[0] * width[0]))),
-                   max(1, int(round(shape[1] * width[1]))))
-            anchor_time = numpy.prod(res) * self._dcDwellTime.value + 0.01
+        roi = self._roi
+        if roi == UNDEFINED_ROI:
+            return 0
+
+        width = (roi[2] - roi[0], roi[3] - roi[1])
+        shape = self._emitter.shape
+        res = (max(1, int(round(shape[0] * width[0]))),
+               max(1, int(round(shape[1] * width[1]))))
+        anchor_time = numpy.prod(res) * self._dwell_time + 0.01
 
         return anchor_time
 
@@ -199,5 +203,5 @@ class AnchoredEstimator(object):
         self._emitter.scale.value = (1, 1)
         self._emitter.resolution.value = self._res
         self._emitter.translation.value = self._trans
-        self._emitter.dwellTime.value = self._dcDwellTime.value
+        self._emitter.dwellTime.value = self._dwell_time
 
