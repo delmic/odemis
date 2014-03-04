@@ -1884,7 +1884,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
         # For the drift correction
         self._dc_estimator = None
-        self._dcPeriod = self._sem_stream.dcPeriod
         self._current_future = None
 
         self.should_update = model.BooleanVA(False)
@@ -1913,7 +1912,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                            self._ccd_stream.repetition.value)
         # number of times the anchor will be acquired
         npixels = numpy.prod(self._ccd_stream.repetition.value)
-        n_anchor = 1 + int(npixels / period.next())
+        n_anchor = 1 + npixels // period.next()
         anchor_time = n_anchor * dc_estimator.estimateAcquisitionTime()
 
         total_time = acq_time + anchor_time

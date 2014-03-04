@@ -32,7 +32,7 @@ import threading
 
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
-MIN_RESOLUTION = (50, 50)
+MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
 
 class AnchoredEstimator(object):
     """
@@ -162,7 +162,7 @@ class AnchoredEstimator(object):
         """
         # TODO: implement more clever calculation
         pxs_dc_period = []
-        pxs = (numpy.prod(repetitions) * period) // dwell_time
+        pxs = period // dwell_time # number of pixels per period
         pxs_per_line = repetitions[1]
         if pxs > pxs_per_line:
             # Correct every (pxs // pxs_per_line) lines
@@ -193,8 +193,8 @@ class AnchoredEstimator(object):
 
         if (abs(new_translation[0]) > abs(self.safety_bounds[0])
             or abs(new_translation[1]) > abs(self.safety_bounds[1])):
-            logging.warning("Generated image may be incorrect due to extensive drift. "
-                            "Do you want to continue scanning?")
+            logging.warning("Generated image may be incorrect due to extensive "
+                            "drift of %s", new_translation)
 
         self._trans = (numpy.clip(new_translation[0], self._min_bound, self._max_bound),
                        numpy.clip(new_translation[1], self._min_bound, self._max_bound))
