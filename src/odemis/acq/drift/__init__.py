@@ -82,18 +82,22 @@ class AnchoredEstimator(object):
         elif self._res[1] < 50:
             self._res[1] = (self._res[1], MIN_RESOLUTION[1])
 
-        self.safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
-        self._min_bound = self.safety_bounds[0] + (max(self._res[0],
+        self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
+        self._min_bound = self._safety_bounds[0] + (max(self._res[0],
                                                         self._res[1]) / 2)
-        self._max_bound = self.safety_bounds[1] - (max(self._res[0],
+        self._max_bound = self._safety_bounds[1] - (max(self._res[0],
                                                         self._res[1]) / 2)
 
     def acquire(self):
         """
         Scan the anchor area
         """
-        # TODO: save and restore SEM settings
         if self._roi != UNDEFINED_ROI:
+            # Save current SEM settings
+            cur_dwell_time = self._emitter.dwellTime.value
+            cur_scale = self._emitter.scale.value
+            cur_resolution = self._emitter.resolution.value
+
             self._updateSEMSettings()
             logging.debug("E-beam spot to anchor region: %s",
                           self._emitter.translation.value)
@@ -106,6 +110,12 @@ class AnchoredEstimator(object):
             if data.shape == (1, 1):
                 data = self._semd.data.get()
             self.raw.append(data)
+
+            # Restore SEM settings
+            self._emitter.dwellTime.value = cur_dwell_time
+            self._emitter.scale.value = cur_scale
+            self._emitter.resolution.value = cur_resolution
+
 
     def estimate(self):
         """
@@ -191,8 +201,8 @@ class AnchoredEstimator(object):
         new_translation = (self._trans[0] - self.orig_drift[0],
                            self._trans[1] - self.orig_drift[1])
 
-        if (abs(new_translation[0]) > abs(self.safety_bounds[0])
-            or abs(new_translation[1]) > abs(self.safety_bounds[1])):
+        if (abs(new_translation[0]) > abs(self._safety_bounds[0])
+            or abs(new_translation[1]) > abs(self._safety_bounds[1])):
             logging.warning("Generated image may be incorrect due to extensive "
                             "drift of %s", new_translation)
 

@@ -2125,23 +2125,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
-                self._emitter.dwellTime.value = dwell_time
-                self._emitter.scale.value = (1, 1)  # min, to avoid limits on translation
-                self._emitter.resolution.value = (1, 1)
-
-                # tweak translation according to calculated drift
-                safety_bounds = self._dc_estimator.safety_bounds
-                if (abs(spot_pos[i[::-1]][0]) > abs(safety_bounds[0])
-                    or abs(spot_pos[i[::-1]][1]) > abs(safety_bounds[1])):
-                    logging.warning("Generated image may be incorrect due to "
-                                    "extensive drift. Do you want to continue scanning?")
-                    
-                self._emitter.translation.value = (numpy.clip(spot_pos[i[::-1]][0],
-                                                              safety_bounds[0],
-                                                              safety_bounds[1]),
-                                                   numpy.clip(spot_pos[i[::-1]][1],
-                                                              safety_bounds[0],
-                                                              safety_bounds[1]))
+                self._emitter.translation.value = (spot_pos[i[::-1]][0],
+                                                   spot_pos[i[::-1]][1])
                 logging.debug("E-beam spot after drift correction: %s",
                               self._emitter.translation.value)
 
