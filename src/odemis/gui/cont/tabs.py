@@ -729,8 +729,8 @@ class AnalysisTab(Tab):
 
         fi = self.tab_data_model.fileinfo.value
         #pylint: disable=E1103
-        if fi and fi.file_name:
-            path, _ = os.path.split(fi.file_name)
+        if fi and fi.acq_file_name:
+            path, _ = os.path.split(fi.acq_file_name)
         else:
             path = get_picture_folder()
 
@@ -774,6 +774,7 @@ class AnalysisTab(Tab):
     def display_new_data(self, filename, data):
         """
         Display a new data set (removing all references to the current one)
+
         filename (string): Name of the file containing the data.
         data (list of model.DataArray): the data to display. Should have at
          least one DataArray.
@@ -784,7 +785,17 @@ class AnalysisTab(Tab):
         self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
         self.tab_data_model.visible_views.value = self._def_views
 
+        # Create a new file info model object
         fi = guimod.FileInfo(filename)
+
+        # TODO: Determine if the new data to be displayed supports the use
+        # of a calibration image.
+        # For now, we just put `False`
+        if False:
+            ofi = self.tab_data_model.fileinfo.value
+            # If there's old file info, copy the calibration file name from it
+            if ofi:
+                fi.cali_file_name = ofi.cali_file_name
 
         # remove all the previous streams
         self._stream_controller.clear()

@@ -508,51 +508,82 @@ class FileInfo(object):
     attributes should be considered readonly after initialisation.
     """
 
-    def __init__(self, acq_file=None, metadata=None):
+    def __init__(self, acq_file=None, cali_file=None, metadata=None):
         """
-        acq_file (unicode or File or None): the full name of the file or
-         a File that contains the acquisition. If provided (and the file
-         exists), some fields will be automatically filled in.
-        metadata (dict String -> value): The meta-data as model.MD_*.
+        :param acq_file: (unicode or File or None): the full name of the file or
+            a File that contains the acquisition. If provided (and the file
+            exists), some fields will be automatically filled in.
+        :param cali_file: (unicode or File or None): Secondary file which
+            contains calibration data that can be used to display acq_file.
+        :param metadata: (dict String -> value): The meta-data as model.MD_*.
         """
+
+        self.can_handle_calibration = True
+
         self._acq_file = None
 
         if isinstance(acq_file, basestring):
             # the name of the file
-            self.file_name = acq_file
+            self.acq_file_name = acq_file
         elif acq_file is not None:
             # a File object
-            self.file_name = acq_file.name
+            self.acq_file_name = acq_file.name
             self._acq_file = acq_file # file object
         else:
-            self.file_name = None
+            self.acq_file_name = None
+
+        self._cali_file = None
+
+        if isinstance(cali_file, basestring):
+            # the name of the calibration file
+            self.cali_file_name = cali_file
+        elif cali_file is not None:
+            # a File object
+            self.cali_file_name = cali_file.name
+            self._cali_file = cali_file # file object
+        else:
+            self.cali_file_name = None
 
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
         self.metadata = metadata or {}
 
-        if not model.MD_ACQ_DATE in self.metadata and self.file_name:
+        if not model.MD_ACQ_DATE in self.metadata and self.acq_file_name:
             # try to auto fill acquisition time (seconds from epoch)
             try:
-                acq_date = os.stat(self.file_name).st_ctime
+                acq_date = os.stat(self.acq_file_name).st_ctime
                 self.metadata[model.MD_ACQ_DATE] = acq_date
             except OSError:
                 # can't open the file => just cannot guess the time
                 pass
 
     @property
-    def path(self):
+    def acq_file_path(self):
         """
-        the name of the directory containing the file
+        the name of the directory containing the acquisition file
         """
-        return os.path.dirname(self.file_name)
+        return os.path.dirname(self.acq_file_name)
 
     @property
-    def basename(self):
+    def acq_file_basename(self):
         """
-        the base name of the file
+        the base name of the acquisition file
         """
-        return os.path.basename(self.file_name)
+        return os.path.basename(self.acq_file_name)
+
+    @property
+    def cali_file_path(self):
+        """
+        the name of the directory containing the calibration file
+        """
+        return os.path.dirname(self.cali_file_name or "")
+
+    @property
+    def cali_file_basename(self):
+        """
+        the base name of the calibration file
+        """
+        return os.path.basename(self.cali_file_name or "")
 
 
 class View(object):
