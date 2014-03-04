@@ -23,14 +23,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import numpy
 from odemis import model
+from odemis.acq import stream, calibration
 from odemis.util import driver
 import os
 import subprocess
 import time
 import unittest
 from unittest.case import skip
-
-from odemis.acq import stream
 
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
@@ -159,7 +158,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_rep, ss.repetition.value)
         self.assertEqual(old_roi, ss.roi.value)
 
-#@skip("test")
+@skip("test")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -448,6 +447,69 @@ class SPARCTestCase(unittest.TestCase):
         spec_md = specs.raw[0].metadata
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+
+class TestStaticStreams(unittest.TestCase):
+    """
+    Test static streams, which don't need any backend running
+    """
+
+    def test_spec(self):
+        """Test StaticSpectrumStream"""
+        # Spectrum
+        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data[2, :, :, :, :] = range(300)
+        data[200, 0, 0, 2] = range(300)
+        wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "Spectrum",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_PIXEL_SIZE: (2e-5, 2e-5), # m/px
+             model.MD_POS: (1.2e-3, -30e-3), # m
+             model.MD_EXP_TIME: 0.2, # s
+             model.MD_LENS_MAG: 60, # ratio
+             model.MD_WL_LIST: wld,
+            }
+        spec = model.DataArray(data, md)
+
+        specs = stream.StaticSpectrumStream("test", spec)
+
+        # Control spatial spectrum
+        im2d = specs.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+        # Check it's at the right position
+        md2d = im2d.metadata
+        self.assertEqual(md2d[model.MD_POS], md[model.MD_POS])
+
+        # change bandwidth to max
+        specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0],
+                                         specs.spectrumBandwidth.range[1][1])
+        im2d = specs.image.value
+        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+
+        # Check 0D spectrum
+        specs.selected_pixel.value = (1, 1)
+        sp0d = specs.get_pixel_spectrum()
+        wl0d = specs.get_spectrum_range()
+        self.assertEqual(sp0d.shape, (data.shape[0],))
+        self.assertEqual(wl0d.shape, (data.shape[0],))
+
+        # Check efficiency compensation
+        prev_im2d = specs.image.value
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
+        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
+
+        specs.efficiencyCompensation.value = calib
+
+        # Control spatial spectrum
+        im2d = specs.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+        self.assertTrue(numpy.any(im2d != prev_im2d))
 
 
 
