@@ -22,14 +22,10 @@ This file is part of Odemis.
 """
 
 import logging
-import numpy
 from odemis import model
-from odemis.util import driver
 import os
-import subprocess
 import time
 import unittest
-from unittest.case import skip
 
 from odemis.acq import stream
 
@@ -46,7 +42,6 @@ SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("skip")
 class TestDriftStream(unittest.TestCase):
     def setUp(self):
         self._escan = None
@@ -60,11 +55,10 @@ class TestDriftStream(unittest.TestCase):
                 self._detector = c
             elif c.role == "ccd":
                 self._ccd = c
-        if not all([self._escan, self._detector, self._ccd]):
+        if not all([self._escan, self._detector]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 
-        # self._overlay = find_overlay.Overlay()
 
     # @unittest.skip("skip")
     def test_drift_stream(self):
@@ -75,23 +69,22 @@ class TestDriftStream(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
         ars = stream.ARStream("test ar", ccd, ccd.data, escan)
-        sas = stream.SEMCCDDCtream("test sem-ar", sems, ars)
+        sas = stream.SEMARMDStream("test sem-ar", sems, ars)
 
-        sems.dc_period.value = 1
-        sems.dc_region.value = (0.8255, 0.8255, 0.85, 0.85)
-        sems.dc_dwelltime.value = 8e-06
+        # Long acquisition
+        ccd.exposureTime.value = 1e-02  # s
 
-        ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        ccd.binning.value = (4, 4) # hopefully always supported
-        
-        ccd.exposureTime.value = 0.2  # s
-        ars.repetition.value = (2, 2)
-        
-        # timeout = 1 + 1.5 * sas.estimateAcquisitionTime()
+        sems.dcPeriod.value = 5
+        sems.dcRegion.value = (0.525, 0.525, 0.6, 0.6)
+        sems.dcDwellTime.value = 1e-04
+        escan.dwellTime.value = 1e-02
+
+        ars.roi.value = (0.4, 0.4, 0.6, 0.6)
+        ars.repetition.value = (20, 20)
+
         start = time.time()
         f = sas.acquire()
-        
-        data = f.result()
+        x = f.result()
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())

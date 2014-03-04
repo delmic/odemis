@@ -19,21 +19,13 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import logging
 import numpy
-import time
 import unittest
-import wx
-import math
-import random
 
-from odemis import model
 from odemis.dataio import hdf5
 from odemis.acq.drift import dc_region
-from numpy import fft
-from numpy import random
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestGuessAnchorRegion(unittest.TestCase):
     """
     Test GuessAnchorRegion
@@ -50,7 +42,7 @@ class TestGuessAnchorRegion(unittest.TestCase):
         """
         Tests for known roi.
         """
-        roi = dc_region.GuessAnchorRegion(self.data[0], (0.3, 0.3, 0.6, 0.6))
-        # numpy.testing.assert_almost_equal(drift, (0,0), 1)
+        roi = dc_region.GuessAnchorRegion(self.data[0], (0, 0, 0.87, 0.95))
+        numpy.testing.assert_equal(roi, (0.86923076923076925, 0.74281609195402298, 0.9653846153846154, 0.81465517241379315))
 
 

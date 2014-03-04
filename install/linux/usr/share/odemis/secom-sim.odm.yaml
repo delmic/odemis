@@ -44,9 +44,9 @@ Spectra: {
 # sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
 
 "SEM ExtXY": {
-    class: semcomedi.SEMComedi,
+    class: simsem.SimSEM,
     role: none,
-    init: {device: "/dev/comedi0"},
+    init: {},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
 }
@@ -54,28 +54,14 @@ Spectra: {
 "EBeam ExtXY": {
     # Internal child of Quanta ExtXY, so no class
     role: e-beam,
-    init: {
-        channels: [0, 1],
-        limits: [[0, 5], [0, 5]],  # V
-        park: [8, 8], # V
-        settle_time: 10.e-6, # s
-        hfw_nomag: 10.e-3, # m
-    },
-    properties: {
-        scale: [8, 8], # (ratio) : start with a pretty fast scan
-        dwellTime: 10.e-6, # s
-        magnification: 1.e+3, # (ratio)
-    },
+    init: {},
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
     # Internal child of Quanta ExtXY, so no class
     role: se-detector,
-    init: {
-        channel: 0, # 0-> sawtooth waves, 1-> square waves
-        limits: [-3, 3] # V
-    },
+    init: {drift_period: 15} # seconds
 }
 
 "Nikon Super Duper": {
@@ -184,4 +170,5 @@ PIGCS: {
         axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False]},
     },
 }
+
 
