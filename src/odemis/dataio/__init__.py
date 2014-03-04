@@ -22,8 +22,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # for listing all the types of file format supported
-from odemis.dataio import tiff
+import importlib
 import logging
+from odemis.dataio import tiff
 import os
 
 
@@ -35,7 +36,6 @@ import os
 #  * get_data (callable): read a file into model.DataArray
 #  if it doesn't support writing, then is has no .export(), and if it doesn't
 #  support reading, then it has not get_data().
-
 __all__ = ["tiff", "hdf5"]
 
 
@@ -51,7 +51,7 @@ def get_available_formats(mode=os.O_RDWR):
     # Look dynamically which format is available
     for module_name in __all__:
         try:
-            exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
+            exporter = importlib.import_module("." + module_name, "odemis.dataio")
         except Exception:  #pylint: disable=W0702
             continue # module cannot be loaded
         if ((mode == os.O_RDONLY and not hasattr(exporter, "read_data")) or
@@ -78,7 +78,7 @@ def get_exporter(fmt):
     # Look dynamically which format is available
     for module_name in __all__:
         try:
-            exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
+            exporter = importlib.import_module("." + module_name, "odemis.dataio")
         except:  #pylint: disable=W0702
             continue # module cannot be loaded
         if fmt == exporter.FORMAT:
@@ -105,7 +105,7 @@ def find_fittest_exporter(filename, default=tiff):
     best_fmt = default
     for module_name in __all__:
         try:
-            exporter = __import__("odemis.dataio." + module_name, fromlist=[module_name])
+            exporter = importlib.import_module("." + module_name, "odemis.dataio")
         except Exception:  #pylint: disable=W0702
             continue # module cannot be loaded
         for e in exporter.EXTENSIONS:

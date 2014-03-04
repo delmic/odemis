@@ -199,6 +199,7 @@ class AndorCam3(model.DigitalCamera):
 
         if bitflow_install_dirs is not None:
             os.environ["BITFLOW_INSTALL_DIRS"] = bitflow_install_dirs
+        self._bitflow_install_dirs = bitflow_install_dirs
         self.atcore = ATDLL()
         
         self.Open(device)
@@ -335,7 +336,7 @@ class AndorCam3(model.DigitalCamera):
     
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
-    
+
     def Open(self, device):
         """
         device (None or int): number of the device to open, as defined by Andor, cd scan()
@@ -346,8 +347,30 @@ class AndorCam3(model.DigitalCamera):
         else:
             logging.info("Opening camera device, might take time...")
             self.handle = c_int()
-            self.atcore.AT_Open(device, byref(self.handle))
-    
+            try:
+                self.atcore.AT_Open(device, byref(self.handle))
+            except ATError:
+                # Let's try to diagnose a bit the problem...
+                if self._bitflow_install_dirs is None:
+                    logging.warning("No bitflow_install_dirs value set, so " 
+                                    "cameras connected via CameraLink will not "
+                                    "be detected.")
+                    raise
+                if not os.path.isdir(self._bitflow_install_dirs):
+                    logging.error("The directory '%s' is not present. Check "
+                                  "that the libandor3 package is installed, "
+                                  "and the configuration is correct.",
+                                  self._bitflow_install_dirs)
+                    raise
+                # check if bitflow module is loaded
+                fmodules = open("/proc/modules").readlines()
+                if not any(re.match("bitflow ", l) for l in fmodules):
+                    logging.error("The bitflow module is not loaded. Check "
+                                  "that libandor3 is correctly installed and "
+                                  "you are using a supported kernel.")
+                    raise
+                raise
+
     def Close(self):
         assert self.handle is not None
         self.atcore.AT_Close(self.handle)

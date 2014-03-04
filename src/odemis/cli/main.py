@@ -26,6 +26,7 @@ import argparse
 import codecs
 import collections
 import gc
+import importlib
 import inspect
 import logging
 from odemis import model, dataio, util
@@ -62,7 +63,7 @@ def scan():
     num = 0
     # we scan by using every HwComponent class which has a .scan() method
     for module_name in driver.__all__:
-        module = __import__("odemis.driver." + module_name, fromlist=[module_name])
+        module = importlib.import_module("." + module_name, "odemis.driver")
         for cls_name, cls in inspect.getmembers(module, inspect.isclass):
             if issubclass(cls, model.HwComponent) and hasattr(cls, "scan"):
                 logging.info("Scanning for %s.%s components", module_name, cls_name)

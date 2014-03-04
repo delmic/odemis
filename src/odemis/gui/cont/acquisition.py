@@ -619,9 +619,9 @@ class SparcAcquiController(object):
 
         # Time left
         left = math.ceil(left) # pessimistic
-        # Avoid back and forth estimation => don't increase unless really huge
+        # Avoid back and forth estimation => don't increase unless really huge (> 5s)
         if (self._prev_left is not None and
-            (min(-left, -5) < self._prev_left - left < 0)):
+            0 < left - self._prev_left < 5):
             logging.debug("No updating progress bar as new estimation is %g s "
                           "while the previous was only %g s",
                           left, self._prev_left)

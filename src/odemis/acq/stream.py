@@ -38,15 +38,16 @@ from numpy import fft
 from numpy import random
 import numpy
 from numpy.polynomial import polynomial
+from odemis.acq import calibration
+from odemis.acq.drift import calculation
 from odemis.dataio import hdf5
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL, MD_DESCRIPTION
-from odemis.util import TimeoutError, limit_invocation, polar
+from odemis.util import TimeoutError, limit_invocation, polar, spectrum
 import sys
 import threading
 import time
 
-from odemis.acq.drift import calculation
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.img as img
@@ -102,6 +103,10 @@ class Stream(object):
         # has a separate attribute.
         self._dataflow = dataflow
 
+        # TODO: this flag is horrendous as it can lead to not updating the image
+        # with the latest image. We need to reorganise everything so that the
+        # image display is done via a dataflow (in a separate thread), instead
+        # of a VA.
         self._running_upd_img = False # to avoid simultaneous updates in different threads
         # list of DataArray received and used to generate the image
         # every time it's modified, image is also modified
@@ -219,31 +224,48 @@ class Stream(object):
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
 
-    def _updateIRange(self):
+    def _updateIRange(self, data=None):
         """
         Update the ._irange, with whatever data is known so far.
+        data (None or DataArray): data on which to base the detection. If None,
+          it will try to use .raw, and if there is nothing, will just use the
+          detector information.
         """
         # 2 types of irange management:
         # * dtype is int -> follow MD_BPP/shape/dtype.max
         # * dtype is float -> always increase, starting from 0-depth
-        if self.raw:
-            data = self.raw[0]
+        if data is None:
+            if self.raw:
+                data = self.raw[0]
+
+        if data is not None:
             if data.dtype.kind in "biu":
-                if model.MD_BPP in data.metadata:
+                try:
                     depth = 2**data.metadata[model.MD_BPP]
+                    if depth <= 1:
+                        logging.warning("Data reports a BPP of %d",
+                                        data.metadata[model.MD_BPP])
+                        raise ValueError()
+
                     if data.dtype.kind == "i":
                         irange = (-depth // 2, depth // 2 - 1)
                     else:
                         irange = (0, depth - 1)
-                elif self._detector:
-                    depth = self._detector.shape[-1]
-                    if data.dtype.kind == "i":
-                        irange = (-depth // 2, depth // 2 - 1)
-                    else:
-                        irange = (0, depth - 1)
-                else:
-                    idt = numpy.iinfo(data.dtype)
-                    irange = (idt.min, idt.max)
+                except (KeyError, ValueError):
+                    try:
+                        depth = self._detector.shape[-1]
+                        if depth <= 1:
+                            logging.warning("Detector %s report a depth of %d",
+                                             self._detector.name, depth)
+                            raise ValueError()
+    
+                        if data.dtype.kind == "i":
+                            irange = (-depth // 2, depth // 2 - 1)
+                        else:
+                            irange = (0, depth - 1)
+                    except (AttributeError, IndexError, ValueError):
+                        idt = numpy.iinfo(data.dtype)
+                        irange = (idt.min, idt.max)
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
                 irange = (numpy.array(data).min(), numpy.array(data).max())
@@ -252,11 +274,16 @@ class Stream(object):
                               max(irange[1], self._irange[1]))
         else:
             # no data, assume it's uint
-            if self._detector:
+            try:
                 # The last element of the shape indicates the bit depth, which
                 # is used for brightness/contrast adjustment.
-                irange = (0, self._detector.shape[-1] - 1)
-            else:
+                depth = self._detector.shape[-1]
+                if depth <= 1:
+                    logging.warning("Detector %s report a depth of %d",
+                                     self._detector.name, depth)
+                    raise ValueError()
+                irange = (0, depth - 1)
+            except (AttributeError, IndexError, ValueError):
                 irange = None
 
         self._irange = irange
@@ -1536,8 +1563,8 @@ class StaticSpectrumStream(StaticStream):
     """
     A Spectrum stream which displays only one static image/data.
     The main difference from the normal streams is that the data is 3D (a cube)
-    The metadata should have a MD_WL_POLYNOMIAL
-    Note that the data received should be of the (numpy) shape CYX.
+    The metadata should have a MD_WL_POLYNOMIAL or MD_WL_LIST
+    Note that the data received should be of the (numpy) shape CYX or C11YX.
     When saving, the data will be converted to CTZYX (where TZ is 11)
     """
     def __init__(self, name, image):
@@ -1547,6 +1574,7 @@ class StaticSpectrumStream(StaticStream):
         MD_WL_POLYNOMIAL should be included in order to associate the C to a
         wavelength.
         """
+        self._calibrated = None # just for the _updateIRange to not complain
         Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
         #  * information about the current bandwidth displayed (avg. spectrum)
@@ -1563,7 +1591,7 @@ class StaticSpectrumStream(StaticStream):
         ### this is for "average spectrum" projection
         try:
             # cached list of wavelength for each pixel pos
-            self._wl_px_values = self._get_wavelength_per_pixel(image)
+            self._wl_px_values = spectrum.get_wavelength_per_pixel(image)
         except (ValueError, KeyError):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             # TODO: try to make them always int?
@@ -1580,6 +1608,11 @@ class StaticSpectrumStream(StaticStream):
             cwl = (max_bw + min_bw) / 2
             width = (max_bw - min_bw) / 12
 
+        # TODO: allow to pass the calibration data as argument to avoid
+        # recomputing the data just after init?
+        # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
+        self.efficiencyCompensation = model.VigilantAttribute(None)
+
         # low/high values of the spectrum displayed
         self.spectrumBandwidth = model.TupleContinuous(
                                     (cwl - width, cwl + width),
@@ -1591,56 +1624,41 @@ class StaticSpectrumStream(StaticStream):
         # which are applied to RGB
         self.fitToRGB = model.BooleanVA(False)
 
-        # TODO: min/max: tl and br points of the image in physical coordinates
-        # TODO: also need the size of a point (and density?)
-        #self.point1 = model.ResolutionVA(unit="m") # FIXME: float
-        #self.point2 = model.ResolutionVA(unit="m") # FIXME: float
-
         self._irange = None
-        self._updateIRange()
 
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
         self.selected_pixel = model.TupleVA((None, None)) # int, int
 
+        # TODO: also need the size of a point (and density?)
+        # TODO: selected_line = first point, second point in pixels?
+        # Should be independent from selected_pixel as it should be possible
+        # to get simulatenously a spectrum along a line, and a spectrum of a
+        # point (on this line)
+
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
+        self.efficiencyCompensation.subscribe(self._onEffComp)
 
-        self.onNewImage(None, image) # generates the first rgb image
+        self.raw = [image] # for compatibility with other streams (like saving...)
+        self._calibrated = image # the raw data after calibration
 
-    def _get_wavelength_per_pixel(self, da):
-        """
-        Computes the wavelength for each pixel along the C dimension
-        da (model.DataArray of shape C...): the DataArray with metadata either
-          MD_WL_POLYNOMIAL or MD_WL_LIST
-        return (list of float of length C): the wavelength (in m) for each pixel
-         in C
-        raises:
-            KeyError: if no metadata is available
-            ValueError: if the metadata doesn't provide enough information
-        """
-        # MD_WL_LIST has priority
-        if model.MD_WL_LIST in da.metadata:
-            wl = da.metadata[model.MD_WL_LIST]
-            if len(wl) == da.shape[0]:
-                return wl
-            else:
-                logging.warning("MD_WL_LIST is not the same length as the data")
+        self._updateIRange()
+        self._updateHistogram()
+        self._updateImage()
 
-        if MD_WL_POLYNOMIAL in da.metadata:
-            pn = da.metadata[MD_WL_POLYNOMIAL]
-            pn = polynomial.polytrim(pn)
-            if len(pn) >= 2:
-                npn = polynomial.Polynomial(pn,  #pylint: disable=E1101
-                                            domain=[0, da.shape[0] - 1],
-                                            window=[0, da.shape[0] - 1])
-                return npn.linspace(da.shape[0])[1]
-            else:
-                # a polynomial or 0 or 1 value is useless
-                raise ValueError("Wavelength polynomial has only %d degree"
-                                 % len(pn))
+    # The tricky part is we need to keep the raw data as .raw for things
+    # like saving the stream or updating the calibration, but all the 
+    # display-related methods must work on the calibrated data.
+    def _updateIRange(self, data=None):
+        if data is None:
+            data = self._calibrated
+        super(StaticSpectrumStream, self)._updateIRange()
 
-        raise KeyError("No MD_WL_* metadata available")
+    def _updateHistogram(self, data=None):
+        if data is None:
+            data = self._calibrated
+        super(StaticSpectrumStream, self)._updateHistogram(data=data)
 
     def _get_bandwidth_in_pixel(self):
         """
@@ -1690,6 +1708,7 @@ class StaticSpectrumStream(StaticStream):
         if not self.fitToRGB.value:
             # TODO: use better intermediary type if possible?, cf semcomedi
             av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1], axis=0)
+            av_data = img.ensure2DImage(av_data)
             rgbim = img.DataArray2RGB(av_data, irange)
         else:
             # Note: For now this method uses three independant bands. To give
@@ -1729,12 +1748,10 @@ class StaticSpectrumStream(StaticStream):
           If no data is available, None is returned.
         """
         # TODO return unit too? (i.e., m or px)
-        if not self.raw:
-            return None
+        data = self._calibrated
 
-        data = self.raw[0]
         try:
-            return self._get_wavelength_per_pixel(data)
+            return spectrum.get_wavelength_per_pixel(data)
         except (ValueError, KeyError):
             # useless polynomial => just show pixels values (ex: -50 -> +50 px)
             max_bw = data.shape[0] // 2
@@ -1747,28 +1764,8 @@ class StaticSpectrumStream(StaticStream):
         """
         if self.selected_pixel.value != (None, None):
             x, y = self.selected_pixel.value
-            return self.raw[0][:, 0, 0, y, x]
+            return self._calibrated[:, 0, 0, y, x]
         return None
-
-    @limit_invocation(0.1) # Max 10 Hz
-    def _updateImage(self):
-        """ Recomputes the image with all the raw data available
-          Note: for spectrum-based data, it mostly computes a projection of the
-          3D data to a 2D array. The type of projection used depends on
-          self.projection.
-        """
-        # check to avoid running it if there is already one running
-        if self._running_upd_img or not self.raw:
-            return
-
-        try:
-            self._running_upd_img = True
-            data = self.raw[0][:, 0, 0, :, :]
-            self._updateImageAverage(data)
-        except Exception:
-            logging.exception("Updating %s image", self.__class__.__name__)
-        finally:
-            self._running_upd_img = False
 
     # TODO: have an "area=None" argument which allows to specify the 2D region
     # within which the spectrum should be computed
@@ -1782,15 +1779,50 @@ class StaticSpectrumStream(StaticStream):
          wavelength for each pixel, but the range of wavelengthBandwidth is
          the same as the range of this spectrum.
         """
-        if not self.raw:
-            return []
-
-        data = numpy.array(self.raw[0])
+        data = self._calibrated
         # flatten all but the C dimension, for the average
         data = data.reshape((data.shape[0], numpy.prod(data.shape[1:])))
         av_data = numpy.mean(data, axis=1)
 
         return av_data
+
+    @limit_invocation(0.1) # Max 10 Hz
+    def _updateImage(self):
+        """ Recomputes the image with all the raw data available
+          Note: for spectrum-based data, it mostly computes a projection of the
+          3D data to a 2D array.
+        """
+        try:
+            data = self._calibrated
+            if data is None: # can happen during __init__
+                return
+            self._updateImageAverage(data)
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+
+
+    def _onEffComp(self, calib_data):
+        """
+        called when the efficiency compensation is changed
+        """
+        data = self.raw[0]
+
+        # We don't have problems of rerunning this when the data is updated,
+        # as the data is static.
+        if calib_data is None:
+            self._calibrated = data
+        else:
+            try:
+                self._calibrated = calibration.compensate_spectrum_efficiency(data, calib_data)
+            except Exception:
+                logging.exception("Failed to apply the spectrum efficiency compensation")
+                self._calibrated = data
+        
+        # histogram will change as the pixel intensity is different
+        self._updateIRange()
+        self._updateHistogram()
+        
+        self._updateImage()
 
     def onFitToRGB(self, value):
         """
@@ -2081,7 +2113,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 start = time.time()
                 trigger.notify()
 
-                if not self._acq_ccd_complete.wait(ccd_time * 2 + 1):
+                if not self._acq_ccd_complete.wait(ccd_time * 2 + 5):
                     raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
@@ -2111,7 +2143,12 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 ccd_buf.append(ccd_data)
 
                 n += 1
-                self._updateProgress(future, start_time, n / tot_num)
+                # Trick: we don't count the first frame because it's often
+                # much slower and so messes up the estimation
+                if n == 1:
+                    start_time = time.time()
+                else:
+                    self._updateProgress(future, start_time, (n - 1) / (tot_num - 1))
 
             self._ccd_df.unsubscribe(self._ssOnCCDImage)
             self._ccd_df.synchronizedOn(None)

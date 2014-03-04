@@ -4,6 +4,8 @@
 # Accepts one argument: the microscope model file, which overrides the MODEL
 # default value.
 
+LOGLEVEL=1 # default that will be overrided (probably) in odemis.conf
+
 . /etc/odemis.conf
 
 MODEL="${1:-"$MODEL"}" # uses first argument if available, otherwise $MODEL
@@ -40,7 +42,7 @@ if [ $status -ne 0 ]; then
     # odemisd likes to start as root to be able to create /var/run files, but then
     # drop its priviledges to the odemis group
     # use sudo background mode to be sure it won't be killed at the end
-    sudo -b odemisd --daemonize --log-level=2 --log-target "$LOGFILE" "$MODEL"
+    sudo -b odemisd --daemonize --log-level=$LOGLEVEL --log-target "$LOGFILE" "$MODEL"
     status=$?
     if [ $status -ne 0 ]; then
         echo " failed"
@@ -68,4 +70,4 @@ if [ $status -ne 0 ]; then
 fi
 
 # start the GUI
-odemis-gui
+odemis-gui --log-level=$LOGLEVEL

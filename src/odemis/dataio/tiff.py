@@ -740,10 +740,11 @@ def _foldArraysFromOME(root, das):
 
         # Remove C dim if 3D
         if is_3d:
-            if imsetn.shape != fim.shape[0]:
+            if imsetn.shape[0] != fim.shape[0]:
                 # 3D data arrays are not officially supported in OME-TIFF anyway
                 raise NotImplementedError("Loading of %d channel from images "
-                       "with %d channels not supported" % (imsetn.shape, fim.shape[0]))
+                       "with %d channels not supported" %
+                       (imsetn.shape[0], fim.shape[0]))
             imsetn = imsetn[0]
 
         # Short-circuit for dataset with only one IFD

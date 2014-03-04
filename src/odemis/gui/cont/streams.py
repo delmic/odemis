@@ -146,7 +146,7 @@ class StreamController(object):
                                     sem_capable)
 
 
-    def addFluo(self, add_to_all_views=False, visible=True):
+    def addFluo(self, add_to_all_views=True, visible=True):
         """
         Creates a new fluorescence stream and a stream panel in the stream bar
         returns (StreamPanel): the panel created
@@ -167,7 +167,7 @@ class StreamController(object):
                 self._main_data_model.light, self._main_data_model.light_filter)
         return self._addStream(s, add_to_all_views, visible)
 
-    def addBrightfield(self, add_to_all_views=False, visible=True):
+    def addBrightfield(self, add_to_all_views=True, visible=True):
         """
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
@@ -177,7 +177,7 @@ class StreamController(object):
                   self._main_data_model.light)
         return self._addStream(s, add_to_all_views, visible)
 
-    def addSEMSED(self, add_to_all_views=False, visible=True):
+    def addSEMSED(self, add_to_all_views=True, visible=True):
         """
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
@@ -188,7 +188,7 @@ class StreamController(object):
         return self._addStream(s, add_to_all_views, visible)
 
     def addStatic(self, name, image,
-                  cls=StaticStream, add_to_all_views=False, visible=True):
+                  cls=StaticStream, add_to_all_views=True, visible=True):
         """
         Creates a new static stream and panel in the stream bar
 

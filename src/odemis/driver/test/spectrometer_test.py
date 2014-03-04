@@ -101,6 +101,7 @@ class TestSimulated(unittest.TestCase):
         self.assertEqual(len(self.spectrometer.shape), 3)
         self.assertGreaterEqual(self.spectrometer.shape[0], self.spectrometer.shape[1])
         self.assertGreater(self.spectrometer.exposureTime.value, 0)
+        self.assertIn("wavelength", self.spectrograph.axes)
     
     def test_acquisition(self):
         exp = 0.1 #s

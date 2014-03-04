@@ -18,11 +18,15 @@ from __future__ import division
 
 from Pyro4.core import isasync
 from ctypes import *
+import ctypes
 import logging
+import math
 from odemis import model
 import odemis
+from odemis.driver import andorcam2
 from odemis.model._futures import CancellableThreadPoolExecutor
 import os
+import time
 
 
 class ShamrockError(Exception):
@@ -137,7 +141,7 @@ class Shamrock(model.Actuator):
     """
     def __init__(self, name, role, device, path=None, parent=None, **kwargs):
         """
-        device (0<=int): device number
+        device (0<=int or "fake"): device number
         path (None or string): initialisation path of the Andorcam2 SDK or None
           if independent of a camera. If the path is set, a parent should also
           be passed, which is a DigitalCamera component.
@@ -152,7 +156,11 @@ class Shamrock(model.Actuator):
         if kwargs.get("inverted", None):
             raise ValueError("Axis of spectrograph cannot be inverted")
 
-        self._dll = ShamrockDLL()
+        if device == "fake":
+            self._dll = FakeShamrockDLL()
+            device = 0
+        else:
+            self._dll = ShamrockDLL()
         self._path = path or ""
         self._device = device
 
@@ -254,7 +262,22 @@ class Shamrock(model.Actuator):
         grating (0<int<=3)
         """
         assert 1 <= grating <= 3
-        self._dll.ShamrockSetGrating(self._device, grating)
+
+        # Seems currently the SDK sometimes fail with SHAMROCK_COMMUNICATION_ERROR
+        # as in SetWavelength()
+        retry = 0
+        while True:
+            try:
+                self._dll.ShamrockSetGrating(self._device, grating)
+            except ShamrockError as (errno, strerr):
+                if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                    raise
+                # just try again
+                retry += 1
+                logging.info("Failed to set wavelength, will try again")
+                time.sleep(0.1)
+            else:
+                break
     
     def GetGrating(self):
         """
@@ -296,7 +319,7 @@ class Shamrock(model.Actuator):
         Home = c_int()
         Offset = c_int()
         self._dll.ShamrockGetGratingInfo(self._device, grating, 
-                         byref(Lines), byref(Blaze), byref(Home), byref(Offset))
+                         byref(Lines), Blaze, byref(Home), byref(Offset))
         return Lines.value * 1e3, float(Blaze.value) * 1e-9, Home.value, Offset.value
 
 
@@ -306,11 +329,31 @@ class Shamrock(model.Actuator):
         wavelength (0<=float): wavelength in m
         """
         assert 0 <= wavelength <= 50e-6
-        # FIXME: sometimes it fails with 20201: SHAMROCK_COMMUNICATION_ERROR
-        # It seems that retrying a couple of times just works
+        
+        # Note: When connected via the I²C bus of the camera, it is not
+        # possible to change the wavelength (or the grating) while the CCD
+        # is acquiring. So this will fail with an exception, and that's
+        # probably the best we can do (unless we want to synchronize with the
+        # CCD and ask to temporarily stop the acquisition).
 
-        # set in nm
-        self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
+        # Currently the SDK sometimes fail with 20201: SHAMROCK_COMMUNICATION_ERROR
+        # when changing wavelength by a few additional nm. It _seems_ that it
+        # works anyway (but not sure).
+        # It seems that retrying a couple of times just works
+        retry = 0
+        while True:
+            try:
+                # set in nm
+                self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
+            except ShamrockError as (errno, strerr):
+                if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                    raise
+                # just try again
+                retry += 1
+                logging.info("Failed to set wavelength, will try again")
+                time.sleep(0.1)
+            else:
+                break
         
     def GetWavelength(self):
         """
@@ -384,7 +427,7 @@ class Shamrock(model.Actuator):
         gchoices = {}
         for g in range(1, ngratings + 1):
             lines, blaze, home, offset = self.GetGratingInfo(g)
-            gchoices[g] = "%g l/mm (%g nm)" % (lines * 1e-3, blaze * 1e9)
+            gchoices[g] = "%.1f l/mm (blaze: %g nm)" % (lines * 1e-3, blaze * 1e9)
 
         return gchoices
 
@@ -393,7 +436,6 @@ class Shamrock(model.Actuator):
     def _updatePosition(self):
         """
         update the position VA
-        Note: it should not be called while holding _ser_access
         """
         pos = {"wavelength": self.GetWavelength(),
                "grating": self.GetGrating()
@@ -408,7 +450,7 @@ class Shamrock(model.Actuator):
         return (list of floats): pixel number -> wavelength in m
         """
         ccd = self.parent
-        # TODO: allow to override these values by ones passes as arguments?
+        # TODO: allow to override these values by ones passed as arguments?
         npixels = ccd.shape[0]
         self.SetNumberPixels(npixels)
         self.SetPixelWidth(ccd.pixelSize.value[0] * ccd.binning.value[0])
@@ -488,6 +530,11 @@ class Shamrock(model.Actuator):
         if not minp <= pos <= maxp:
             raise ValueError("Position %f of axis '%s' not within range %f→%f" %
                              (pos, "wavelength", minp, maxp))
+
+        # don't complain if the user asked for non reachable wl: he couldn't know
+        minp, maxp = self.GetWavelengthLimits(self.GetGrating())
+        pos = min(max(minp, pos), maxp)
+
         self.SetWavelength(pos)
         self._updatePosition()
 
@@ -495,6 +542,10 @@ class Shamrock(model.Actuator):
         """
         Change the wavelength to a value
         """
+        # don't complain if the user asked for non reachable wl: he couldn't know
+        minp, maxp = self.GetWavelengthLimits(self.GetGrating())
+        pos = min(max(minp, pos), maxp)
+
         self.SetWavelength(pos)
         self._updatePosition()
 
@@ -553,4 +604,287 @@ class Shamrock(model.Actuator):
 
         return False
 
+    # TODO scan
 
+# Only for testing/simulation purpose
+# Very rough version that is just enough so that if the wrapper behaves correctly,
+# it returns the expected values. Copied from andorcam2
+
+def _deref(p, typep):
+    """
+    p (byref object)
+    typep (c_type): type of pointer
+    Use .value to change the value of the object
+    """
+    # This is using internal ctypes attributes, that might change in later
+    # versions. Ugly!
+    # Another possibility would be to redefine byref by identity function:
+    # byref= lambda x: x
+    # and then dereferencing would be also identity function.
+    return typep.from_address(addressof(p._obj))
+
+def _val(obj):
+    """
+    return the value contained in the object. Needed because ctype automatically
+    converts the arguments to c_types if they are not already c_type
+    obj (c_type or python object)
+    """
+    if isinstance(obj, ctypes._SimpleCData):
+        return obj.value
+    else:
+        return obj
+
+
+class FakeShamrockDLL(object):
+    """
+    Fake ShamrockDLL. It basically simulates a spectrograph connected.
+    """
+
+    def __init__(self):
+        # gratings: l/mm, blaze, home, offset, min wl, max wl
+        self._gratings = [(299.9, "300.0", 1000, -200, 0.0, 5003.6),
+                          (601.02, "500.0", 10000, 26, 0.0, 1578.95),
+                          (1200.1, "500.0", 30000, -65, 0.0, 808.65)]
+
+        self._cw = 300.2 # current wavelength (nm)
+        self._cg = 1 # current grating (1->3)
+        self._pw = 0 # pixel width
+        self._np = 0 # number of pixels
+    
+    def ShamrockInitialize(self, path):
+        pass
+    
+    def ShamrockClose(self):
+        self._cw = None # should cause failure if calling anything else
+        
+    def ShamrockGetNumberDevices(self, p_nodevices):
+        nodevices = _deref(p_nodevices, c_int)
+        nodevices.value = 1
+    
+    def ShamrockGetSerialNumber(self, device, serial):
+        serial.value = "SR303fake"
+        
+#    def ShamrockEepromGetOpticalParams(self, device,
+#                 byref(FocalLength), byref(AngularDeviation), byref(FocalTilt)):
+#        pass
+        
+    def ShamrockSetGrating(self, device, grating):
+        new_g = _val(grating)
+        time.sleep(min(1, abs(new_g - self._cg)) * 5) # very bad estimation
+        self._cg = new_g
+
+    def ShamrockGetGrating(self, device, p_grating):
+        grating = _deref(p_grating, c_int)
+        grating.value = self._cg
+
+    def ShamrockGetNumberGratings(self, device, p_nogratings):
+        nogratings = _deref(p_nogratings, c_int)
+        nogratings.value = len(self._gratings)
+
+    def ShamrockWavelengthReset(self, device):
+        self._cw = 0
+
+    def ShamrockGetGratingInfo(self, device, grating, 
+                               p_lines, s_blaze, p_home, p_offset):
+        lines = _deref(p_lines, c_float)
+        home = _deref(p_home, c_int)
+        offset = _deref(p_offset, c_int)
+        info = self._gratings[_val(grating) - 1][0:4]
+        lines.value, s_blaze.value, home.value, offset.value = info
+    
+    def ShamrockSetWavelength(self, device, wavelength):
+        # TODO: raise if outside of the grating range
+        new_wl = _val(wavelength)
+        time.sleep(abs(self._cw - new_wl) / 1000)
+        self._cw = new_wl
+    
+    def ShamrockGetWavelength(self, device, p_wavelength):
+        wavelength = _deref(p_wavelength, c_float)
+        wavelength.value = self._cw
+    
+    def ShamrockGetWavelengthLimits(self, device, grating, p_min, p_max):
+        minwl, maxwl = _deref(p_min, c_float), _deref(p_max, c_float)
+        minwl.value, maxwl.value = self._gratings[_val(grating) - 1][4:6]
+    
+    def ShamrockWavelengthIsPresent(self, device, p_present):
+        present = _deref(p_present, c_int)
+        present.value = 1 # yes!
+    
+    def ShamrockGetCalibration(self, device, calibval, npixels):
+        center = (self._np - 1) / 2 # pixel containing center wl
+        px_wl = self._pw / 10 # in nm
+        minwl = self._gratings[self._cg - 1][4]
+        for i in range(npixels):
+            # return stupid values (that look slightly correct)
+            calibval[i] = max(minwl, self._cw + (i - center) * px_wl)
+    
+    def ShamrockSetPixelWidth(self, device, width):
+        self._pw = _val(width)
+        
+    def ShamrockSetNumberPixels(self, device, npixels):
+        self._np = _val(npixels)
+        
+
+class AndorSpec(model.Detector):
+    """
+    Spectrometer component, based on a AndorCam2 and a Shamrock
+    """
+    def __init__(self, name, role, children=None, daemon=None, **kwargs):
+        """
+        All the arguments are identical to AndorCam2, expected: 
+        children (dict string->kwargs): name of child must be "shamrock" and the
+          kwargs contains the arguments passed to instantiate the Shamrock component
+        """
+        # we will fill the set of children with Components later in ._children
+        model.Detector.__init__(self, name, role, daemon=daemon, **kwargs)
+
+        # Create the detector (ccd) child
+        try:
+            dt_kwargs = children["andorcam2"]
+        except Exception:
+            raise ValueError("AndorSpec excepts one child named 'andorcam2'")
+
+        # We could inherit from it, but difficult to not mix up .binning, .shape
+        # .resolution...
+        self._detector = andorcam2.AndorCam2(daemon=daemon, **dt_kwargs)
+        self._children.add(self._detector)
+        dt = self._detector
+
+        # Copy and adapt the VAs and roattributes from the detector
+                # set up the detector part
+        # check that the shape is "horizontal"
+        if dt.shape[0] <= 1:
+            raise ValueError("Child detector must have at least 2 pixels horizontally")
+        if dt.shape[0] < dt.shape[1]:
+            logging.warning("Child detector is shaped vertically (%dx%d), "
+                            "this is probably incorrect, as wavelengths are "
+                            "expected to be along the horizontal axis",
+                            dt.shape[0], dt.shape[1])
+        # shape is same as detector (raw sensor), but the max resolution is always flat
+        self._shape = tuple(dt.shape) # duplicate
+
+        # The resolution and binning are derived from the detector, but with
+        # settings set so that there is only one horizontal line.
+        if dt.binning.range[1][1] < dt.resolution.range[1][1]:
+            # without software binning, we are stuck to the max binning
+            logging.info("Spectrometer %s will only use a %d px band of the %d "
+                         "px of the sensor", name, dt.binning.range[1][1],
+                         dt.resolution.range[1][1])
+
+        resolution = (dt.resolution.range[1][0], 1) # max,1
+        # vertically: 1, with binning as big as possible
+        binning = (dt.binning.value[0],
+                   min(dt.binning.range[1][1], dt.resolution.range[1][1]))
+
+        min_res = (dt.resolution.range[0][0], 1)
+        max_res = (dt.resolution.range[1][0], 1)
+        self.resolution = model.ResolutionVA(resolution, [min_res, max_res],
+                                             setter=self._setResolution)
+        # 2D binning is like a "small resolution"
+        self._binning = binning
+        self.binning = model.ResolutionVA(self._binning, dt.binning.range,
+                                          setter=self._setBinning)
+
+        self._setBinning(binning) # will also update the resolution
+
+        # TODO: update also the metadata MD_SENSOR_PIXEL_SIZE
+        pxs = dt.pixelSize.value[0], dt.pixelSize.value[1] * dt.binning.value[1]
+        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+        # Note: the metadata has no MD_PIXEL_SIZE, but a MD_WL_LIST
+
+        # TODO: support software binning by rolling up our own dataflow that
+        # does data merging
+        assert dt.resolution.range[0][1] == 1
+        self.data = dt.data
+
+        # duplicate every other VA and Event from the detector
+        # that includes required VAs like .exposureTime
+        for aname, value in model.getVAs(dt).items() + model.getEvents(dt).items():
+            if not hasattr(self, aname):
+                setattr(self, aname, value)
+            else:
+                logging.debug("skipping duplication of already existing VA '%s'", aname)
+
+        assert hasattr(self, "exposureTime")
+
+        # Create the spectrograph (actuator) child
+        try:
+            sp_kwargs = children["shamrock"]
+        except Exception:
+            raise ValueError("AndorSpec excepts one child named 'shamrock'")
+
+        self._spectrograph = Shamrock(parent=self, path=self._detector._initpath,
+                                      daemon=daemon, **sp_kwargs)
+        self._children.add(self._spectrograph)
+
+        self._spectrograph.position.subscribe(self._onPositionUpdate)
+        self.resolution.subscribe(self._onResBinningUpdate)
+        self.binning.subscribe(self._onResBinningUpdate, init=True)
+
+    def _setBinning(self, value):
+        """
+        Called when "binning" VA is modified. It also updates the resolution so
+        that the horizontal AOI is approximately the same. The vertical size
+        stays 1.
+        value (int): how many pixels horizontally and vertically
+          are combined to create "super pixels"
+        """
+        prev_binning = self._binning
+        self._binning = tuple(value) # duplicate
+
+        # adapt horizontal resolution so that the AOI stays the same
+        changeh = prev_binning[0] / self._binning[0]
+        old_resolution = self.resolution.value
+        assert old_resolution[1] == 1
+        new_resh = int(round(old_resolution[0] * changeh))
+        new_resh = max(min(new_resh, self.resolution.range[1][0]), self.resolution.range[0][0])
+        new_resolution = (new_resh, 1)
+
+        # setting resolution and binning is slightly tricky, because binning
+        # will change resolution to keep the same area. So first set binning, then
+        # resolution
+        self._detector.binning.value = value
+        self.resolution.value = new_resolution
+        return value
+
+    def _setResolution(self, value):
+        """
+        Called when the resolution VA is to be updated.
+        """
+        # only the width might change
+        assert value[1] == 1
+
+        # fit the width to the maximum possible given the binning
+        max_size = int(self.resolution.range[1][0] // self._binning[0])
+        min_size = int(math.ceil(self.resolution.range[0][0] / self._binning[0]))
+        size = (max(min(value[0], max_size), min_size), 1)
+
+        self._detector.resolution.value = size
+        assert self._detector.resolution.value[1] == 1 # TODO: handle this by software mean
+
+        return size
+
+    def _onResBinningUpdate(self, value):
+        """
+        Called when the resolution or the binning changes
+        """
+        self._updateWavelengthList()
+
+    def _onPositionUpdate(self, pos):
+        """
+        Called when the wavelength position or grating (ie, groove density) 
+          of the spectrograph is changed.
+        """
+        self._updateWavelengthList()
+
+    def _updateWavelengthList(self):
+        wll = self._spectrograph.getPixelToWavelength()
+        md = {model.MD_WL_LIST: wll}
+        self._detector.updateMetadata(md)
+
+    def terminate(self):
+        self._spectrograph.terminate()
+        self._detector.terminate()
+
+    def selfTest(self):
+        return super(AndorSpec, self).selfTest() and self._spectrograph.selfTest()

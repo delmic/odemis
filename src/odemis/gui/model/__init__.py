@@ -214,12 +214,14 @@ class MainGUIData(object):
                     if self._light_power_on: # re-use previous value
                         self.light.power.value = self._light_power_on
                     else:
-                        # pick a nice value (=max), if not already on
+                        # pick a nice value (= slighty more than 0), if not already on
                         try:
-                            self.light.power.value = max(self.light.power.range)
+                            # if continuous: 10 %
+                            self.light.power.value = self.light.power.range[1] * 0.1
                         except (AttributeError, model.NotApplicableError):
                             try:
-                                self.light.power.value = max(self.light.power.choices)
+                                # if enumerated: the second lowest
+                                self.light.power.value = sorted(self.light.power.choices)[1]
                             except (AttributeError, model.NotApplicableError):
                                 logging.error("Unknown light power range, setting to 1 W")
                                 self.light.power.value = 1

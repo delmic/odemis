@@ -980,7 +980,9 @@ class SecomSettingsController(SettingsBarController):
                 self._optical_panel.add_value(
                                         "power",
                                         main_data.light.power,
-                                        main_data.light)
+                                        main_data.light,
+                                        CONFIG["light"]["power"]
+                                        )
 
         if main_data.ebeam:
             self.add_component("SEM", main_data.ebeam, self._sem_panel)
