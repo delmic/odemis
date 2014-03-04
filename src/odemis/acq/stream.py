@@ -35,12 +35,9 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import logging
 import math
 import numpy
-from numpy.polynomial import polynomial
 from odemis.acq import calibration
-from odemis.acq.drift import calculation
-from odemis.dataio import hdf5
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
-    MD_SENSOR_PIXEL_SIZE, MD_WL_POLYNOMIAL, MD_DESCRIPTION
+    MD_SENSOR_PIXEL_SIZE, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
 import sys
 import threading

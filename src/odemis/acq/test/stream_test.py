@@ -158,7 +158,6 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_rep, ss.repetition.value)
         self.assertEqual(old_roi, ss.roi.value)
 
-@skip("test")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
