@@ -32,6 +32,7 @@ from odemis import dataio, model
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
+from odemis.gui.conf import get_calibration_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -792,12 +793,12 @@ class AnalysisTab(Tab):
         # of a calibration image.
         # For now, we just put `False`
         if True:
-            self.tab_data_model.cal_fileinfo.value = guimod.FileInfo()
-            # fi.can_handle_calibration = True
-            # ofi = self.tab_data_model.acq_fileinfo.value
-            # # If there's old file info, copy the calibration file name from it
-            # if ofi:
-            #     fi.cali_file_name = ofi.cali_file_name
+            if not self.tab_data_model.cal_fileinfo.value:
+                conf = get_calibration_conf()
+                last = conf.get("history", "last") or None
+                self.tab_data_model.cal_fileinfo.value = guimod.FileInfo(last)
+        else:
+            self.tab_data_model.cal_fileinfo.value = None
 
         # remove all the previous streams
         self._stream_controller.clear()

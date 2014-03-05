@@ -44,13 +44,14 @@ import odemis.gui.comp.text as text
 import odemis.gui.util
 
 from odemis import model
+from odemis.acq.stream import SpectrumStream, ARStream
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
+from odemis.gui.conf import get_calibration_conf
 from odemis.gui.conf.settingspanel import CONFIG
-from odemis.acq.stream import SpectrumStream, ARStream
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
@@ -199,6 +200,12 @@ class SettingsPanel(object):
         self.num_entries = 0
         self.entries = [] # list of SettingEntry
 
+    def Hide(self, *args, **kwargs):
+        self.panel.Hide(*args, **kwargs)
+
+    def Show(self, *args, **kwargs):
+        self.panel.Show(*args, **kwargs)
+
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
         for entry in self.entries:
@@ -229,9 +236,6 @@ class SettingsPanel(object):
             for c in self.panel.GetChildren():
                 c.Destroy()
             self.num_entries = 0
-        else:
-            self._clear()
-
 
     def _label_to_human(self, label):
         """ Converts a camel-case label into a human readable one
@@ -363,6 +367,7 @@ class SettingsPanel(object):
         return ne
 
     def add_browse_button(self, label, file_name=None):
+        self._clear()
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
@@ -1151,16 +1156,21 @@ class SparcSettingsController(SettingsBarController):
 
 class AnalysisSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, tab_data):
+    def __init__(self, parent, tab_data):
         super(AnalysisSettingsController, self).__init__(tab_data)
 
+        self.parent = parent
+
         self._acq_file_panel = FileInfoSettingsPanel(
-                                    parent_frame.fp_inspect_file_info,
+                                    parent.fp_inspect_file_info,
                                     "No file loaded")
 
         self._cal_file_panel = FileInfoSettingsPanel(
-                                    parent_frame.fp_inspect_file_info,
+                                    parent.fp_inspect_file_info,
                                     "No calibration file loaded")
+        self._cal_file_panel.Hide()
+
+        parent.Layout()
 
         self.tab_data = tab_data
 
@@ -1203,13 +1213,22 @@ class AnalysisSettingsController(SettingsBarController):
                                                    fi.acq_file_path or " ")
 
             def on_changed(evt):
-                obj = evt.GetEventObject()
-                fi.acq_file_name = obj.GetValue()
-                pth_entry.ctrl.SetValue(obj.path)
+                filebrowser = evt.GetEventObject()
+                fi.acq_file_name = filebrowser.GetValue()
+                pth_entry.ctrl.SetValue(filebrowser.path)
+
+                conf = get_calibration_conf()
+                conf.set("history", "last", filebrowser.GetValue() or "")
+                conf.write()
 
             btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
 
             self._cal_file_panel.Refresh()
+            self._cal_file_panel.Show()
+            self.parent.Layout()
+        else:
+            self._cal_file_panel.Hide()
+            self.parent.Layout()
 
 class SparcAlignSettingsController(SettingsBarController):
 

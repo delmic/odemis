@@ -40,6 +40,15 @@ ACQUI_PATH = get_picture_folder()
 
 CONF_ACQUI = None
 CONF_GENERAL = None
+CONF_CALIBRATION = None
+
+def get_general_conf():
+    global CONF_GENERAL
+
+    if not CONF_GENERAL:
+        CONF_GENERAL = GeneralConfig()
+
+    return CONF_GENERAL
 
 def get_acqui_conf():
     """ Return the Acquisition config object and create/read it first if it does
@@ -52,13 +61,13 @@ def get_acqui_conf():
 
     return CONF_ACQUI
 
-def get_general_conf():
-    global CONF_GENERAL
+def get_calibration_conf():
+    global CONF_CALIBRATION
 
-    if not CONF_GENERAL:
-        CONF_GENERAL = GeneralConfig()
+    if not CONF_CALIBRATION:
+        CONF_CALIBRATION = CalibratinConfig()
 
-    return CONF_GENERAL
+    return CONF_CALIBRATION
 
 class Config(object):
     """ Configuration super class
@@ -247,3 +256,13 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
+class CalibratinConfig(Config):
+
+    def __init__(self):
+        file_name = "calibration.config"
+
+        super(CalibratinConfig, self).__init__(file_name)
+
+        # Define the default settings
+        self.default.add_section("history")
+        self.default.set("history", "last", "")
