@@ -32,6 +32,7 @@ from odemis import dataio, model
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
+from odemis.gui.conf import get_calibration_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -727,7 +728,7 @@ class AnalysisTab(Tab):
         # Find the available formats (and corresponding extensions)
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
-        fi = self.tab_data_model.fileinfo.value
+        fi = self.tab_data_model.acq_fileinfo.value
         #pylint: disable=E1103
         if fi and fi.acq_file_name:
             path, _ = os.path.split(fi.acq_file_name)
@@ -791,11 +792,13 @@ class AnalysisTab(Tab):
         # TODO: Determine if the new data to be displayed supports the use
         # of a calibration image.
         # For now, we just put `False`
-        if False:
-            ofi = self.tab_data_model.fileinfo.value
-            # If there's old file info, copy the calibration file name from it
-            if ofi:
-                fi.cali_file_name = ofi.cali_file_name
+        if True:
+            if not self.tab_data_model.cal_fileinfo.value:
+                conf = get_calibration_conf()
+                last = conf.get("history", "last") or None
+                self.tab_data_model.cal_fileinfo.value = guimod.FileInfo(last)
+        else:
+            self.tab_data_model.cal_fileinfo.value = None
 
         # remove all the previous streams
         self._stream_controller.clear()
@@ -872,7 +875,7 @@ class AnalysisTab(Tab):
 
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
-        self.tab_data_model.fileinfo.value = fi
+        self.tab_data_model.acq_fileinfo.value = fi
 
         # Share spectrum pixel positions with other viewports
         # TODO: a better place for this code?
