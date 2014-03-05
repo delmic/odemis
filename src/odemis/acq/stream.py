@@ -1472,6 +1472,12 @@ class StaticARStream(StaticStream):
                      choices=frozenset([(None, None)] + list(self._sempos.keys())))
         self.point.subscribe(self._onPoint)
 
+        # The background data (typically, an acquisition without ebeam).
+        # It is subtracted from the acquisition data.
+        # If set to None, a simple baseline background value is subtracted.
+        self.background = model.VigilantAttribute(None, setter=self._setBackground)
+        self.background.subscribe(self._onBackground)
+
         if self._sempos:
             # Pick one point, e.g., top-left
             bbtl = (min(x for x, y in self._sempos.keys() if x is not None),
@@ -1516,10 +1522,12 @@ class StaticARStream(StaticStream):
                 # TODO: could use the size of the canvas that will display
                 # the image to save some computation time.
 
-                # TODO: handle having a background image (i.e., same acquisition
-                # but with e-beam blanked)
-                # Remove the background value
-                data0 = polar.ARBackgroundSubtract(data)
+                bg_data = self.background.value
+                if bg_data is None:
+                    # Simple version: remove the background value
+                    data0 = polar.ARBackgroundSubtract(data)
+                else:
+                    data0 = data - bg_data # metadata from data
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
@@ -1537,13 +1545,11 @@ class StaticARStream(StaticStream):
         selected point.
         """
         # check to avoid running it if there is already one running
-        if self._running_upd_img or not self.raw:
+        if not self.raw:
             return
 
         pos = self.point.value
         try:
-            self._running_upd_img = True
-
             if pos == (None, None):
                 self.image.value = None
             else:
@@ -1562,12 +1568,52 @@ class StaticARStream(StaticStream):
                 self.image.value = model.DataArray(rgbim)
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
-        finally:
-            self._running_upd_img = False
 
     def _onPoint(self, pos):
         self._updateImage()
 
+    def _setBackground(self, data):
+        """Called when the background is about to be changed"""
+        # check it's compatible with the data
+
+        arpole = data.metadata[model.MD_AR_POLE] # we expect the data has AR_POLE
+
+        # TODO: allow data which is the same shape but lower binning by
+        # estimating the binned image
+        # Check the background data and all the raw data have the same resolution
+        # TODO: how to handle if the .raw has different resolutions?
+        for r in self.raw:
+            if data.shape != r.shape:
+                raise ValueError("Incompatible resolution of background data "
+                                 "%s with the Angular resolved resolution %s." %
+                                 (data.shape, r.shape))
+            if data.dtype != r.dtype:
+                raise ValueError("Incompatible encoding of background data "
+                                 "%s with the Angular resolved encoding %s." %
+                                 (data.dtype, r.dtype))
+            try:
+                if data.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
+                    raise ValueError("Incompatible format of background data "
+                                 "(%d bits) with the Angular resolved format "
+                                 "(%d bits)." %
+                                 (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
+            except KeyError:
+                pass # no metadata, let's hope it's the same BPP
+
+        # check the AR pole is at the same position
+        for r in self.raw:
+            if r.metadata[model.MD_AR_POLE] != arpole:
+                logging.warning("Pole position of background data %s is "
+                                "different from the data %s.",
+                                arpole, r.metadata[model.MD_AR_POLE])
+
+        return data
+
+    def _onBackground(self, data):
+        """Called when the background is changed"""
+        # uncache all the polar images, and update the current image
+        self._polar = {}
+        self._updateImage()
 
 class StaticSpectrumStream(StaticStream):
     """

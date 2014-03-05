@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import numpy
 from odemis import model
-from odemis.acq import stream, calibration
+from odemis.acq import stream
 from odemis.util import driver
 import os
 import subprocess
@@ -158,6 +158,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_rep, ss.repetition.value)
         self.assertEqual(old_roi, ss.roi.value)
 
+@skip("faster")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -451,6 +452,71 @@ class TestStaticStreams(unittest.TestCase):
     """
     Test static streams, which don't need any backend running
     """
+
+    def test_ar(self):
+        """Test StaticARStream"""
+        # AR background data
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake ccd",
+             model.MD_DESCRIPTION: "AR",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_BINNING: (1, 1), # px, px
+             model.MD_SENSOR_PIXEL_SIZE: (13e-6, 13e-6), # m/px
+             model.MD_PIXEL_SIZE: (2e-5, 2e-5), # m/px
+             model.MD_POS: (1.2e-3, -30e-3), # m
+             model.MD_EXP_TIME: 1.2, # s
+             model.MD_AR_POLE: (253.1, 65.1),
+             model.MD_LENS_MAG: 0.4, # ratio
+            }
+
+        # AR data
+        md0 = dict(md)
+        data0 = model.DataArray(1500 + numpy.zeros((512, 1024), dtype=numpy.uint16), md0)
+        md1 = dict(md)
+        md1[model.MD_POS] = (1.5e-3, -30e-3)
+        md1[model.MD_BASELINE] = 300 # AR background should take this into account
+        data1 = model.DataArray(6345 + numpy.zeros((512, 1024), dtype=numpy.uint16), md1)
+
+        logging.info("setting up stream")
+        ars = stream.StaticARStream("test", [data0, data1])
+
+        # Control AR projection
+        im2d0 = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d0.shape[2], 3)
+
+        logging.info("changing AR pos")
+        # Wait a bit to be sure the projection doesn't get postponed to later
+        time.sleep(0.2)
+        # change position
+        for p in ars.point.choices:
+            if p != (None, None) and p != ars.point.value:
+                ars.point.value = p
+                break
+        else:
+            self.fail("Failed to find a second point in AR")
+
+        im2d1 = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2d1.shape[2], 3)
+
+        self.assertFalse(im2d0 is im2d1)
+
+        logging.info("testing image background correction")
+        # test background correction from image
+        dcalib = numpy.ones((512, 1024), dtype=numpy.uint16)
+        calib = model.DataArray(dcalib, md)
+
+        time.sleep(0.2)
+        ars.background.value = calib
+        self.assertTrue(ars.background.value is calib)
+
+        im2dc = ars.image.value
+        # Check it's a RGB DataArray
+        self.assertEqual(im2dc.shape[2], 3)
+
+        self.assertFalse(im2d1 is im2dc)
 
     def test_spec(self):
         """Test StaticSpectrumStream"""
