@@ -369,7 +369,8 @@ class SettingsPanel(object):
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         value_ctrl = FileBrowser(self.panel,
-                                    style=wx.BORDER_NONE | wx.TE_READONLY)
+                                 style=wx.BORDER_NONE | wx.TE_READONLY,
+                                 clear=True)
         value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
 

@@ -30,7 +30,7 @@ import os
 import wx
 
 import odemis.gui
-from .buttons import ImageTextButton
+from .buttons import ImageTextButton, ImageButton
 from odemis.gui.img import data
 from odemis.gui.util import get_picture_folder
 
@@ -41,6 +41,7 @@ class FileBrowser(wx.Panel):
                   size=wx.DefaultSize,
                   style=wx.TAB_TRAVERSAL,
                   tool_tip=None,
+                  clear=False,
                   dialog_title="Browse for file",
                   wildcard="*.*",
                   name='fileBrowser',
@@ -50,9 +51,11 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.wildcard = wildcard
+        self.clear = clear
 
         self.text_ctrl = None
         self.btn_ctrl = None
+        self._btn_clear = None
 
         self.create_dialog(parent, id, pos, size, style, name)
 
@@ -71,15 +74,29 @@ class FileBrowser(wx.Panel):
 
         box.Add(self.text_ctrl, 1)
 
+        if self.clear:
+            self._btn_clear = ImageButton(self,
+                                          wx.ID_ANY,
+                                          data.getico_clearBitmap(),
+                                          (10, 8),
+                                          (18, 18),
+                                          background_parent=parent)
+            self._btn_clear.SetBitmaps(data.getico_clear_hBitmap())
+            self._btn_clear.SetToolTipString("Clear calibration")
+            self._btn_clear.Hide()
+            self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
+            box.Add(self._btn_clear, 0, wx.LEFT, 10)
+
         self.btn_ctrl = ImageTextButton(self, -1, data.getbtn_64x16Bitmap(),
-                                        label_delta=1)
+                                        label_delta=1,
+                                        style=wx.ALIGN_CENTER)
         self.btn_ctrl.SetBitmaps(data.getbtn_64x16_hBitmap(),
                                  data.getbtn_64x16_aBitmap())
         self.btn_ctrl.SetForegroundColour("#000000")
         self.btn_ctrl.SetLabel("Browse")
         self.btn_ctrl.Bind(wx.EVT_BUTTON, self._on_browse)
 
-        box.Add(self.btn_ctrl, 0, wx.LEFT, 10)
+        box.Add(self.btn_ctrl, 0, wx.LEFT, 5)
 
         self.SetAutoLayout(True)
         self.SetSizer(box)
@@ -97,11 +114,19 @@ class FileBrowser(wx.Panel):
             self.file_path = file_path
             if not os.path.exists(file_path):
                 self.text_ctrl.SetForegroundColour(odemis.gui.ALERT_COLOUR)
+            else:
+                self.text_ctrl.SetForegroundColour(
+                                            odemis.gui.FOREGROUND_COLOUR_EDIT)
             self.text_ctrl.SetValue(os.path.basename(file_path))
             self.text_ctrl.SetToolTipString(file_path)
             self.text_ctrl.SetInsertionPointEnd()
+            self._btn_clear.Show()
         else:
             self.file_path = None
+            self.text_ctrl.SetValue(os.path.basename(""))
+            self.text_ctrl.SetToolTipString("")
+            self._btn_clear.Hide()
+        self.Layout()
 
     def GetValue(self):
         return self.file_path
@@ -122,6 +147,9 @@ class FileBrowser(wx.Panel):
 
     def SetWildcard(self, wildcard):
         self.wildcard = wildcard
+
+    def _on_clear(self, evt):
+        self.SetValue(None)
 
     def _on_browse(self, evt):
         current = self.GetValue() or ""
