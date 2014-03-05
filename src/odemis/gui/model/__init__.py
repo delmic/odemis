@@ -406,7 +406,12 @@ class AnalysisGUIData(MicroscopyGUIData):
 
         # The current file it displays. If None, it means there is no file
         # associated to the data displayed
-        self.fileinfo = VigilantAttribute(None) # a FileInfo
+        self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
+
+        # The current file being used for calibration. It is set to `None`
+        # when no calibration is used.
+        self.cal_fileinfo = VigilantAttribute(None) # a FileInfo
+
 
 # TODO: use it for FirstStep too
 class ActuatorGUIData(MicroscopyGUIData):
@@ -508,41 +513,25 @@ class FileInfo(object):
     attributes should be considered readonly after initialisation.
     """
 
-    def __init__(self, acq_file=None, cali_file=None, metadata=None):
+    def __init__(self, acq_file=None, metadata=None):
         """
         :param acq_file: (unicode or File or None): the full name of the file or
             a File that contains the acquisition. If provided (and the file
             exists), some fields will be automatically filled in.
-        :param cali_file: (unicode or File or None): Secondary file which
-            contains calibration data that can be used to display acq_file.
         :param metadata: (dict String -> value): The meta-data as model.MD_*.
         """
 
-        self.can_handle_calibration = True
-
-        self._acq_file = None
+        self.acq_file_obj = None
 
         if isinstance(acq_file, basestring):
-            # the name of the file
+            # The given parameter is a file name
             self.acq_file_name = acq_file
         elif acq_file is not None:
-            # a File object
+            # Assume the given parameter is a File Objecot
             self.acq_file_name = acq_file.name
-            self._acq_file = acq_file # file object
+            self.acq_file_obj = acq_file # file object
         else:
             self.acq_file_name = None
-
-        self._cali_file = None
-
-        if isinstance(cali_file, basestring):
-            # the name of the calibration file
-            self.cali_file_name = cali_file
-        elif cali_file is not None:
-            # a File object
-            self.cali_file_name = cali_file.name
-            self._cali_file = cali_file # file object
-        else:
-            self.cali_file_name = None
 
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
@@ -562,29 +551,14 @@ class FileInfo(object):
         """
         the name of the directory containing the acquisition file
         """
-        return os.path.dirname(self.acq_file_name)
+        return os.path.dirname(self.acq_file_name or "")
 
     @property
     def acq_file_basename(self):
         """
         the base name of the acquisition file
         """
-        return os.path.basename(self.acq_file_name)
-
-    @property
-    def cali_file_path(self):
-        """
-        the name of the directory containing the calibration file
-        """
-        return os.path.dirname(self.cali_file_name or "")
-
-    @property
-    def cali_file_basename(self):
-        """
-        the base name of the calibration file
-        """
-        return os.path.basename(self.cali_file_name or "")
-
+        return os.path.basename(self.acq_file_name or "")
 
 class View(object):
 

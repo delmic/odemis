@@ -6,13 +6,13 @@ Copyright © 2012-2013 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -22,6 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 This module contains classes to control the settings controls in the right
 setting column of the user interface.
+
+
+..NOTE:
+    This module is a prime candiate for a refactoring session!!!
 
 """
 
@@ -225,6 +229,8 @@ class SettingsPanel(object):
             for c in self.panel.GetChildren():
                 c.Destroy()
             self.num_entries = 0
+        else:
+            self._clear()
 
 
     def _label_to_human(self, label):
@@ -1147,45 +1153,62 @@ class AnalysisSettingsController(SettingsBarController):
     def __init__(self, parent_frame, tab_data):
         super(AnalysisSettingsController, self).__init__(tab_data)
 
-        self._file_panel = FileInfoSettingsPanel(
+        self._acq_file_panel = FileInfoSettingsPanel(
                                     parent_frame.fp_inspect_file_info,
                                     "No file loaded")
-        self.tab_data = tab_data
-        self.tab_data.fileinfo.subscribe(self.on_fileinfo_change, init=True)
 
-    def on_fileinfo_change(self, fi):
+        self._cal_file_panel = FileInfoSettingsPanel(
+                                    parent_frame.fp_inspect_file_info,
+                                    "No calibration file loaded")
+
+        self.tab_data = tab_data
+
+        self.tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
+        self.tab_data.cal_fileinfo.subscribe(self.on_calfile_change, init=True)
+
+    def on_acqfile_change(self, fi):
         """ Update the data we wish to display from the FileInfo object """
 
-        self._file_panel.clear()
+        self._acq_file_panel.clear()
 
         if fi:
-            self._file_panel.add_label("File", fi.acq_file_basename)
-            se_path = self._file_panel.add_label("Path", fi.acq_file_path)
+            se_file = self._acq_file_panel.add_label("File", fi.acq_file_basename)
+            se_file.ctrl.SetInsertionPointEnd()
+
+
+            se_path = self._acq_file_panel.add_label("Path", fi.acq_file_path)
             # show the end of the path (usually more important)
             se_path.ctrl.SetInsertionPointEnd()
 
             for key, value in fi.metadata.items():
-                self._file_panel.add_metadata(key, value)
+                self._acq_file_panel.add_metadata(key, value)
 
-            if fi.can_handle_calibration:
-                btn_entry = self._file_panel.add_browse_button(
-                                    "Calibration file", fi.cali_file_name)
-                wildcards, _ = odemis.gui.util.formats_to_wildcards(
-                                        odemis.dataio.get_available_formats(),
-                                        include_all=True)
-                btn_entry.ctrl.SetWildcard(wildcards)
-                btn_entry.ctrl.SetValue(fi.cali_file_name)
-                pth_entry = self._file_panel.add_label("Path",
-                                                       fi.cali_file_path or " ")
+            self._acq_file_panel.Refresh()
 
-                def on_changed(evt):
-                    obj = evt.GetEventObject()
-                    fi.cali_file_name = obj.GetValue()
-                    pth_entry.ctrl.SetValue(obj.path)
+    def on_calfile_change(self, fi):
+        """ Update the calibartion file controls """
 
-                btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
+        self._cal_file_panel.clear()
 
-            self._file_panel.Refresh()
+        if fi:
+            btn_entry = self._cal_file_panel.add_browse_button(
+                                "Calibration file", fi.acq_file_name)
+            wildcards, _ = odemis.gui.util.formats_to_wildcards(
+                                    odemis.dataio.get_available_formats(),
+                                    include_all=True)
+            btn_entry.ctrl.SetWildcard(wildcards)
+            btn_entry.ctrl.SetValue(fi.acq_file_name)
+            pth_entry = self._cal_file_panel.add_label("Path",
+                                                   fi.acq_file_path or " ")
+
+            def on_changed(evt):
+                obj = evt.GetEventObject()
+                fi.acq_file_name = obj.GetValue()
+                pth_entry.ctrl.SetValue(obj.path)
+
+            btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
+
+            self._cal_file_panel.Refresh()
 
 class SparcAlignSettingsController(SettingsBarController):
 

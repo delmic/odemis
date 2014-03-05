@@ -727,7 +727,7 @@ class AnalysisTab(Tab):
         # Find the available formats (and corresponding extensions)
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
-        fi = self.tab_data_model.fileinfo.value
+        fi = self.tab_data_model.acq_fileinfo.value
         #pylint: disable=E1103
         if fi and fi.acq_file_name:
             path, _ = os.path.split(fi.acq_file_name)
@@ -791,11 +791,13 @@ class AnalysisTab(Tab):
         # TODO: Determine if the new data to be displayed supports the use
         # of a calibration image.
         # For now, we just put `False`
-        if False:
-            ofi = self.tab_data_model.fileinfo.value
-            # If there's old file info, copy the calibration file name from it
-            if ofi:
-                fi.cali_file_name = ofi.cali_file_name
+        if True:
+            self.tab_data_model.cal_fileinfo.value = guimod.FileInfo()
+            # fi.can_handle_calibration = True
+            # ofi = self.tab_data_model.acq_fileinfo.value
+            # # If there's old file info, copy the calibration file name from it
+            # if ofi:
+            #     fi.cali_file_name = ofi.cali_file_name
 
         # remove all the previous streams
         self._stream_controller.clear()
@@ -872,7 +874,7 @@ class AnalysisTab(Tab):
 
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
-        self.tab_data_model.fileinfo.value = fi
+        self.tab_data_model.acq_fileinfo.value = fi
 
         # Share spectrum pixel positions with other viewports
         # TODO: a better place for this code?
