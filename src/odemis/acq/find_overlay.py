@@ -41,20 +41,20 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_spots = grid_data[0]
-
-grid_data = hdf5.read_data("ele_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_ele = grid_data[0]
-
-grid_data = hdf5.read_data("opt_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_opt = grid_data[0]
+# grid_data = hdf5.read_data("spots_image_m.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_spots = grid_data[0]
+#
+# grid_data = hdf5.read_data("ele_image_m.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_ele = grid_data[0]
+#
+# grid_data = hdf5.read_data("opt_image_m.h5")
+# C, T, Z, Y, X = grid_data[0].shape
+# grid_data[0].shape = Y, X
+# fake_opt = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -114,7 +114,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
 
         # hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
-        optical_image = fake_spots
+#         optical_image = fake_spots
         #####################################################
 
         # Distance between spots in the optical image (in optical pixels)
@@ -152,7 +152,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        found = numpy.zeros(shape=fake_spots.shape)
+        found = numpy.zeros(shape=optical_image.shape)
         for i, j in optical_coordinates:
             found[j, i] = 1
         hdf5.export("found.h5", model.DataArray(found))
@@ -178,7 +178,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
 
         known_electron_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
         filtered_coordinates = [(x + opt_offset[0], y + opt_offset[1]) for x, y in known_optical_coordinates]
-        filtered = numpy.zeros(shape=fake_spots.shape)
+        filtered = numpy.zeros(shape=optical_image.shape)
         for i, j in filtered_coordinates:
             filtered[j, i] = 1
         hdf5.export("filtered.h5", model.DataArray(filtered))
