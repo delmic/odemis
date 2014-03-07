@@ -43,6 +43,7 @@ from odemis.util import driver
 import sys
 import time
 import threading
+import numpy
 
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
@@ -93,7 +94,7 @@ class Acquirer(object):
         self.escan.resolution.value = (1, 1)
         self.escan.dwellTime.value = 0.1 # s, anything not too short/long is fine
         # start the e-beam "scanning"
-        self.sed.data.acquire(self.discard_sem)
+        self.sed.data.subscribe(self.discard_sem)
 
         # start the CCD acquisition, blocked on softwareTrigger
         self.spect.data.synchronizedOn(self.spect.softwareTrigger)
@@ -158,7 +159,7 @@ def main(args):
                         help="shape of AR image on the Y axis")
     parser.add_argument("--spot", dest="spot", required=True,
                         help="e-beam spot position")
-    parser.add_argument("--drift", "-d", dest="period", type=float, default=None,
+    parser.add_argument("--drift", "-d", dest="drift", type=float, default=None,
                         help="time between 2 drift corrections")
     parser.add_argument("--anchor", dest="anchor", default=None,
                         help="e-beam spot position")
