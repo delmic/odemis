@@ -426,10 +426,9 @@ class OdemisOutputWindow(object):
         if txt.strip() != "":
             logging.error("[CAP] %s", txt.strip())
 
+    # Just to comply with the interface of sys.stdout
     def flush(self):
-        for handler in logging.getLogger().handlers:
-            if hasattr(handler, 'flush'):
-                handler.flush()
+        pass
 
 def installThreadExcepthook():
     """ Workaround for sys.excepthook thread bug
