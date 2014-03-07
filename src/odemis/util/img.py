@@ -191,6 +191,11 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
                     irange = [irange[1] - 1, irange[1]]
                 else:
                     irange = [irange[0], irange[0] + 1]
+            try:
+                return DataArray2RGB_fast(data, irange, tint)
+            except Exception:
+                logging.exception("Failed to use the fast conversion")
+
             if irange[0] > idt.min or irange[1] < idt.max:
                 data = data.clip(*irange)
         else: # floats et al. => always clip
@@ -200,6 +205,10 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
                 force_white = True
             else:
                 force_white = False
+            try:
+                return DataArray2RGB_fast(data, irange, tint)
+            except Exception:
+                logging.exception("Failed to use the fast conversion")
             data = data.clip(*irange)
             if force_white:
                 irange = [irange[1] - 1, irange[1]]
@@ -233,6 +242,49 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         numpy.multiply(drescaled, btint / 255, out=rgb[:, :, 2])
 
     return rgb
+
+def DataArray2RGB_fast(data, irange, tint=(255, 255, 255)):
+    """
+    Do not call directly, use DataArray2RGB.
+    Fast version of DataArray2RGB, which is based on C code
+    """
+    # we use weave to do the assignment in C code
+    # this only gets compiled on the first call
+    import scipy.weave as weave
+    w, h = data.shape
+    ret = numpy.empty((w, h, 3), dtype=numpy.uint8)
+    assert irange[0] < irange[1]
+    irange = numpy.array(irange, dtype=data.dtype) # ensure it's the same type
+    tintr = numpy.array([t / 255 for t in tint], dtype=numpy.float)
+
+    # TODO: special code when tint == white (should be 2x faster)
+    code = """
+    int impos=0;
+    int retpos=0;
+    float b = 255. / float(irange[1] - irange[0]);
+    float d;
+    for(int j=0; j<Ndata[1]; j++)
+    {
+        for (int i=0; i<Ndata[0]; i++)
+        {
+            // clip
+            if (data[impos] <= irange[0]) {
+                d = 0;
+            } else if (data[impos] >= irange[1]) {
+                d = 255;
+            } else {
+                d = float(data[impos] - irange[0]) * b;
+            }
+            // Note: can go x2 faster if tintr is skipped
+            ret[retpos++] = d * tintr[0];
+            ret[retpos++] = d * tintr[1];
+            ret[retpos++] = d * tintr[2];
+            impos++;
+        }
+    }
+    """
+    weave.inline(code, ["data", "ret", "irange", "tintr"])
+    return ret
 
 def ensure2DImage(data):
     """
