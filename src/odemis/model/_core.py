@@ -95,7 +95,7 @@ def getComponent(name=None, role=None):
             errors.append("name %s" % name)
         if role is not None:
             errors.append("role %s" % role)
-        raise LookupError("No component with the %s", " and ".join(errors))
+        raise LookupError("No component with the %s" % (" and ".join(errors),))
 
 def getComponents():
     """
