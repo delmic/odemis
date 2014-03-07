@@ -127,7 +127,7 @@ def FindCenterCoordinates(subimages):
 
     return spot_coordinates
 
-def DivideInNeighborhoods(data, number_of_spots, optical_scale):
+def DivideInNeighborhoods(data, number_of_spots, optical_scale, sensitivity):
     """
     Given an image that includes N spots, divides it in N subimages with each of them 
     to include one spot. Briefly, it filters the image, finds the N “brightest” spots 
@@ -139,6 +139,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
+            sensitivity (float): Sensitivity factor of spot detection
     """
     subimage_coordinates = []
     subimages = []
@@ -162,7 +163,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     
     # for i in numpy.arange(3.5, 5, 0.1):
     # Determine threshold
-    i = 8
+    i = sensitivity
     threshold = max_diff / i
 
     # Filter the parts of the image with variance in intensity greater
@@ -196,8 +197,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
         subimage = image[(dy.start - 2.22):(dy.stop + 2.22), (dx.start - 2.22):(dx.stop + 2.22)]
         # TODO Discard only this image
         if subimage.shape[0] == 0 or subimage.shape[1] == 0:
-            logging.warning("Cannot detect spots.")
-            return [], []
+            continue
         
         # if math.hypot(tab[0], tab[1]) > 1.5:
         # if spots detected too close keep the brightest one

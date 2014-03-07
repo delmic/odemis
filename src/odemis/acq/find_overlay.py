@@ -38,23 +38,25 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
+LOW_SENSITIVITY = 3.5
+HIGH_SENSITIVITY = 8
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-# grid_data = hdf5.read_data("spots.h5")
-# C, T, Z, Y, X = grid_data[0].shape
-# grid_data[0].shape = Y, X
-# fake_spots = grid_data[0]
-#
-# grid_data = hdf5.read_data("ele_image.h5")
-# C, T, Z, Y, X = grid_data[0].shape
-# grid_data[0].shape = Y, X
-# fake_ele = grid_data[0]
-#
-# grid_data = hdf5.read_data("opt_image1.h5")
-# C, T, Z, Y, X = grid_data[0].shape
-# grid_data[0].shape = Y, X
-# fake_opt = grid_data[0]
+grid_data = hdf5.read_data("spots.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_spots = grid_data[0]
+
+grid_data = hdf5.read_data("ele_image.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_ele = grid_data[0]
+
+grid_data = hdf5.read_data("opt_image1.h5")
+C, T, Z, Y, X = grid_data[0].shape
+grid_data[0].shape = Y, X
+fake_opt = grid_data[0]
 #####################################################
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -114,7 +116,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
 
         # hdf5.export("spots_image.h5", optical_image)
         ############## TO BE REMOVED ON TESTING##############
-#         optical_image = fake_spots
+        optical_image = fake_spots
         #####################################################
 
         # Distance between spots in the optical image (in optical pixels)
@@ -135,7 +137,9 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
         logging.debug("Isolating spots...")
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale)
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale, LOW_SENSITIVITY)
+        if (numpy.prod(repetitions)>len(subimages)):
+            subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_scale, HIGH_SENSITIVITY)
         hdf5.export("neighborhoods.h5", subimages)
         if subimages==[]:
             raise ValueError('Overlay failure')
