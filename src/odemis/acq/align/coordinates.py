@@ -187,6 +187,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     for dy, dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
         y_center = (dy.start + dy.stop - 1) / 2
+        print x_center, y_center
 
         # Make sure we don't detect spots on the top of each other
         tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))

@@ -41,17 +41,17 @@ MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
 
 ############## TO BE REMOVED ON TESTING##############
-# grid_data = hdf5.read_data("spots_image_m.h5")
+# grid_data = hdf5.read_data("spots.h5")
 # C, T, Z, Y, X = grid_data[0].shape
 # grid_data[0].shape = Y, X
 # fake_spots = grid_data[0]
 #
-# grid_data = hdf5.read_data("ele_image_m.h5")
+# grid_data = hdf5.read_data("ele_image.h5")
 # C, T, Z, Y, X = grid_data[0].shape
 # grid_data[0].shape = Y, X
 # fake_ele = grid_data[0]
 #
-# grid_data = hdf5.read_data("opt_image_m.h5")
+# grid_data = hdf5.read_data("opt_image1.h5")
 # C, T, Z, Y, X = grid_data[0].shape
 # grid_data[0].shape = Y, X
 # fake_opt = grid_data[0]
@@ -214,7 +214,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     
     logging.debug("Updating metadata...")
 
-    transformed_data = _updateMetadata(optical_image, ret, escan)
+    transformed_data = _updateMetadata(optical_image, ret, escan, ccd)
     if transformed_data == []:
         raise ValueError('Metadata is missing')
 
@@ -296,7 +296,7 @@ def estimateOverlayTime(dwell_time, repetitions):
     """
     return 2 + dwell_time * numpy.prod(repetitions)  # s
 
-def _updateMetadata(optical_image, transformation_values, escan):
+def _updateMetadata(optical_image, transformation_values, escan, ccd):
     """
     Returns the updated metadata of the optical image based on the 
     transformation values
@@ -315,10 +315,10 @@ def _updateMetadata(optical_image, transformation_values, escan):
         logging.warning("No MD_PIXEL_SIZE data available")
         return []
     
-    binning = optical_image.metadata.get(model.MD_BINNING, (1, 1))
-    if binning == (0, 0):
-        logging.warning("No MD_BINNING data available")
-        return []
+#     binning = optical_image.metadata.get(model.MD_BINNING, (1, 1))
+#     if binning == (0, 0):
+#         logging.warning("No MD_BINNING data available")
+#         return []
 
     # Update scaling
     scale = (escan_pixelSize[0] * calc_scaling_x,
@@ -354,7 +354,7 @@ def _updateMetadata(optical_image, transformation_values, escan):
     # logging.debug("Center correction: %g %g", diff_pos[0], diff_pos[1])
     # logging.debug("Center shift correction: %g %g", escan_pixelSize[0] * calc_translation_x, escan_pixelSize[1] * calc_translation_y)
     transformed_data.metadata[model.MD_ROTATION] = rotation
-    transformed_data.metadata[model.MD_PIXEL_SIZE] = (scale[0] * binning[0], scale[1] * binning[1])
+    transformed_data.metadata[model.MD_PIXEL_SIZE] = (scale[0] * ccd.binning.value[0], scale[1] * ccd.binning.value[1])
     transformed_data.metadata[model.MD_POS] = center_pos
 
     return transformed_data.metadata
