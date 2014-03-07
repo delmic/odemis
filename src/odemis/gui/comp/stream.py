@@ -1327,8 +1327,7 @@ class StreamPanel(wx.PyPanel):
         except ZeroDivisionError:
             coef = 1
 
-        gspec = gspec + base
-        gspec *= coef
+        gspec = (gspec - base) * coef
         wx.CallAfter(self._sld_spec.SetContent, gspec.tolist())
 
 
