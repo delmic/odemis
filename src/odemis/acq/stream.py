@@ -1801,11 +1801,14 @@ class StaticSpectrumStream(StaticStream):
 
             # FIXME: unoptimized, as each channel is duplicated 3 times, and discarded
             av_data = numpy.mean(data[rrange[0]:rrange[1] + 1], axis=0)
+            av_data = img.ensure2DImage(av_data)
             rgbim = img.DataArray2RGB(av_data, irange)
             av_data = numpy.mean(data[grange[0]:grange[1] + 1], axis=0)
+            av_data = img.ensure2DImage(av_data)
             gim = img.DataArray2RGB(av_data, irange)
             rgbim[:, :, 1] = gim[:, :, 0]
             av_data = numpy.mean(data[brange[0]:brange[1] + 1], axis=0)
+            av_data = img.ensure2DImage(av_data)
             bim = img.DataArray2RGB(av_data, irange)
             rgbim[:, :, 2] = bim[:, :, 0]
 
