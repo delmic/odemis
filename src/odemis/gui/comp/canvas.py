@@ -120,7 +120,6 @@ import ctypes
 import logging
 import math
 import os
-import time
 
 import cairo
 import wx
@@ -675,9 +674,7 @@ class BitmapCanvas(BufferedCanvas):
         """
 
         if not images or images == [None]:
-            return 0
-
-        t_start = time.time()
+            return
 
         # The idea:
         # * display all the images but the last as average (fluo => expected all big)
@@ -689,7 +686,7 @@ class BitmapCanvas(BufferedCanvas):
         nb_firsts = len(first_ims)
 
         for i, im in enumerate(first_ims):
-            r = 1.0 - i / float(nb_firsts) # display as if they are averages
+            r = 1.0 - i / nb_firsts # display as if they are averages
             self._draw_image(
                 dc_buffer,
                 im,
@@ -712,9 +709,6 @@ class BitmapCanvas(BufferedCanvas):
                 scale=im._dc_scale,
                 keepalpha=im._dc_keepalpha
             )
-
-        t_now = time.time()
-        return 1.0 / float(t_now - t_start)
 
     def _draw_image(self, dc_buffer, im, center,
                     opacity=1.0, scale=1.0, keepalpha=False):
@@ -843,6 +837,8 @@ class BitmapCanvas(BufferedCanvas):
                 unsc_rnd_rect[2] = orig_size[0] - unsc_rnd_rect[0]
                 unsc_rnd_rect[3] = orig_size[1] - unsc_rnd_rect[1]
 
+            # FIXME: there is a bug causing non square pixels when (probably)
+            # one dimension is truncated and another not.
             imcropped = im.GetSubImage(unsc_rnd_rect)
 
             # like goal_rect but taking into account rounding

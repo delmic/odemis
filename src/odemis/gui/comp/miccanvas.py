@@ -28,16 +28,17 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.acq import stream
+from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
 import threading
+import time
 import weakref
 import wx
 from wx.lib.pubsub import pub
 
-from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
@@ -379,6 +380,15 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             ims.append((wim, pos, scale, keepalpha))
         self.set_images(ims)
 
+        # For debug only:
+        if images:
+            self._latest = max(i.metadata.get(model.MD_ACQ_DATE, 0) for i in images)
+        else:
+            self._latest = 0
+            if self._latest > 0:
+                logging.debug("Updated canvas list %g s after acquisition",
+                               time.time() - self._latest)
+
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
@@ -511,7 +521,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Update the mpp, so that the same width is displayed
         if self._previous_size and self.microscope_view:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
-            self.microscope_view.mpp.value = hfw / new_size[0]
+            new_mpp = hfw / new_size[0]
+            rng_mpp = self.microscope_view.mpp.range
+            new_mpp = max(rng_mpp[0], min(new_mpp, rng_mpp[1]))
+            self.microscope_view.mpp.value = new_mpp
 
         super(DblMicroscopeCanvas, self).on_size(event)
         self._previous_size = new_size
@@ -718,11 +731,29 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         return w, h
 
     # Hook to update the FPS value
-    def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
-        fps = super(DblMicroscopeCanvas, self)._draw_merged_images(dc_buffer,
-                                                         images,
-                                                         mergeratio)
-        self._fps_label.text = "%d fps" % fps
+    def draw(self):
+        if hasattr(self, "_latest"):
+            latest = self._latest
+        else:
+            latest = 0
+
+        t_start = time.time()
+        super(DblMicroscopeCanvas, self).draw()
+        dur = time.time() - t_start
+        fps = 1 / dur
+        self._fps_label.text = "%.3g fps" % fps
+
+        if latest > 0:
+            logging.debug("Drew canvas %g s after acquisition (took %g s).",
+                           time.time() - self._latest, dur)
+
+    # DEBUG only
+    def on_paint(self, evt):
+        canvas.DraggableCanvas.on_paint(self, evt)
+
+        if hasattr(self, "_latest") and self._latest > 0:
+            logging.debug("Painted canvas %g s after acquisition",
+                           time.time() - self._latest)
 
 
 class SecomCanvas(DblMicroscopeCanvas):
