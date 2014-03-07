@@ -252,6 +252,8 @@ def DataArray2RGB_fast(data, irange, tint=(255, 255, 255)):
     # we use weave to do the assignment in C code
     # this only gets compiled on the first call
     import scipy.weave as weave
+    # ensure it's a basic ndarray, otherwise it confuses weave
+    data = data.view(numpy.ndarray)
     w, h = data.shape
     ret = numpy.empty((w, h, 3), dtype=numpy.uint8)
     assert irange[0] < irange[1]
