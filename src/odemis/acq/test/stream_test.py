@@ -158,7 +158,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_rep, ss.repetition.value)
         self.assertEqual(old_roi, ss.roi.value)
 
-@skip("faster")
+#@skip("faster")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -453,6 +453,7 @@ class TestStaticStreams(unittest.TestCase):
     Test static streams, which don't need any backend running
     """
 
+#    @skip("simple")
     def test_ar(self):
         """Test StaticARStream"""
         # AR background data
@@ -551,6 +552,12 @@ class TestStaticStreams(unittest.TestCase):
         # change bandwidth to max
         specs.spectrumBandwidth.value = (specs.spectrumBandwidth.range[0][0],
                                          specs.spectrumBandwidth.range[1][1])
+        im2d = specs.image.value
+        self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
+
+        # Check RGB spatial projection
+        time.sleep(0.2)
+        specs.fitToRGB.value = True
         im2d = specs.image.value
         self.assertEqual(im2d.shape, data.shape[-2:] + (3,))
 
