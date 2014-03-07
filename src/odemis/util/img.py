@@ -206,7 +206,8 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
             else:
                 force_white = False
             try:
-                return DataArray2RGB_fast(data, irange, tint)
+                if irange[0] < irange[1]: # avoid if irange is empty
+                    return DataArray2RGB_fast(data, irange, tint)
             except Exception:
                 logging.exception("Failed to use the fast conversion")
             data = data.clip(*irange)
