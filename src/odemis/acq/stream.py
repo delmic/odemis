@@ -314,26 +314,33 @@ class Stream(object):
         """
         md = data.metadata
         try:
-            pos = md[MD_POS]
+            pos = md[model.MD_POS]
         except KeyError:
             # Note: this log message is disabled to prevent log flooding
             # logging.warning("Position of image unknown")
             pos = (0, 0)
 
         try:
-            pxs = md[MD_PIXEL_SIZE]
+            pxs = md[model.MD_PIXEL_SIZE]
         except KeyError:
             # Hopefully it'll be within the same magnitude
             # default to typical sensor size
-            spxs = md.get(MD_SENSOR_PIXEL_SIZE, (20e-6, 20e-6))
+            spxs = md.get(model.MD_SENSOR_PIXEL_SIZE, (20e-6, 20e-6))
             binning = md.get(model.MD_BINNING, (1, 1))
             pxs = spxs[0] / binning[0], spxs[1] / binning[1]
             # Note: this log message is disabled to prevent log flooding
             # msg = "Pixel density of image unknown, using sensor size"
             # logging.warning(msg)
+        
+        # Not necessary, but handy to debug latency problems
+        try:
+            date = md[model.MD_ACQ_DATE]
+        except KeyError:
+            date = time.time()
 
         return {model.MD_PIXEL_SIZE: pxs,
-                model.MD_POS: pos}
+                model.MD_POS: pos,
+                model.MD_ACQ_DATE: date}
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self, tint=(255, 255, 255)):
@@ -343,7 +350,10 @@ class Stream(object):
             FluoStream to avoid code duplication
         """
         # check to avoid running it if there is already one running
-        if self._running_upd_img or not self.raw:
+        if self._running_upd_img:
+            logging.debug("Dropping image conversion to RGB, as the previous one is still running")
+            return
+        if not self.raw:
             return
 
         try:
@@ -352,6 +362,9 @@ class Stream(object):
             irange = self._getDisplayIRange()
             rgbim = img.DataArray2RGB(data, irange, tint)
             rgbim.flags.writeable = False
+            if model.MD_ACQ_DATE in data.metadata:
+                logging.debug("Computed RGB projection %g s after acquisition",
+                               time.time() - data.metadata[model.MD_ACQ_DATE])
             self.image.value = model.DataArray(rgbim, self._find_metadata(data))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
@@ -422,6 +435,10 @@ class Stream(object):
         # For now, raw images are pretty simple: we only have one
         # (in the future, we could keep the old ones which are not fully
         # overlapped)
+
+        if model.MD_ACQ_DATE in data.metadata:
+            logging.debug("Receive raw %g s after acquisition",
+                           time.time() - data.metadata[model.MD_ACQ_DATE])
 
         old_irange = self._irange
         if not self.raw:
