@@ -1968,7 +1968,7 @@ class FakeAndorV2DLL(object):
             self.bpp = 16
             self.maxBinning = (16, 16) # px
         else:
-            self.shape = (1280, 1024) # px
+            self.shape = (2560, 2048) # px
             self.bpp = 12
             self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
             end = 2 ** self.bpp
