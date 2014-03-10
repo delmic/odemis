@@ -37,16 +37,14 @@ from __future__ import division
 
 import argparse
 import logging
+import numpy
 from odemis import dataio, model
-import odemis
 from odemis.util import driver
 import sys
-import time
 import threading
-import numpy
 
 
-logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
+logging.getLogger().setLevel(logging.DEBUG) # put "DEBUG" level for more messages
 
 class Acquirer(object):
     def __init__(self):
@@ -58,6 +56,8 @@ class Acquirer(object):
         # the spectrometer
         self.spect = model.getComponent(role="spectrometer")
         
+        # For acquisition
+        self.spec_data = None
         self.acq_done = threading.Event()
 
     def acquire_spec(self, spot):
@@ -73,6 +73,7 @@ class Acquirer(object):
         self.spect.softwareTrigger.notify()
 
         # wait for it
+        logging.debug("Waiting for acquisition")
         self.acq_done.wait()
 
         # reshape to just one dimension
@@ -98,23 +99,29 @@ class Acquirer(object):
 
         # start the CCD acquisition, blocked on softwareTrigger
         self.spect.data.synchronizedOn(self.spect.softwareTrigger)
+        self.spect.data.subscribe(self.on_spectrum)
 
         spec_data = []
         for i in numpy.ndindex(shape):
             logging.info("Going to acquire AR point %s", i)
 
             raw_input("Press enter to start next spectrum acquisition...")
-            spec = acquire_spec(spot)
+            spec = self.acquire_spec(spot)
             print("Spectrum for point %s just acquired" % (i,))
 
             spec_data.append(spec)
 
             # TODO: do drift correction if requested
 
-        data = assemble_cube(shape, spec_data)
+        # Stop all acquisition
+        self.spect.data.unsubscribe(self.on_spectrum)
+        self.spect.data.synchronizedOn(None)
+        self.sed.data.unsubscribe(self.discard_sem)
+
+        data = self.assemble_cube(shape, spec_data)
         # save the file
         exporter = dataio.find_fittest_exporter(filename)
-        exporter.export(filename, images)
+        exporter.export(filename, data)
 
     def assemble_cube(self, shape, specs):
         """
@@ -129,12 +136,12 @@ class Acquirer(object):
         assert len(specs) == numpy.prod(shape)
         # each element of specs has a shape of (N)
         # reshape to (N, 1)
-        for e in self.acq_spect_buf:
-            e.shape = e.shape[-1::-1]
-        # concatenate into one big array of (N, X*Y)
+        for s in specs:
+            s.shape += (1,)
+        # concatenate into one big array of (N, Y*X)
         spect_data = numpy.concatenate(specs, axis=1)
         # reshape to (N, 1, 1, Y, X)
-        spect_data.shape = (spect_data.shape[0], numpy.newaxis, numpy.newaxis, shape[1], shape[0])
+        spect_data.shape = (spect_data.shape[0], 1, 1, shape[1], shape[0])
 
         # copy the metadata from the first point
         spect_data = model.DataArray(spect_data, metadata=specs[0].metadata)
@@ -174,7 +181,7 @@ def main(args):
 
     spot = driver.reproduceTypedValue([1.0], options.spot)
     if not (0 <= spot[0] <= 1 and 0 <= spot[1] <= 1):
-         raise ValueError("spot must be between 0 and 1")
+        raise ValueError("spot must be between 0 and 1")
 
     if options.anchor is None:
         anchor = None
