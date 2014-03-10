@@ -54,6 +54,7 @@ class AnchoredEstimator(object):
         self._emitter = scanner
         self._semd = detector
         self._dwell_time = dwell_time
+        self._scale = (1, 1) # TODO: allow the user to select different scale
         self.orig_drift = (0, 0)
         self.max_drift = (0, 0)
         self.raw = [] # all the anchor areas acquired (in order)
@@ -122,7 +123,7 @@ class AnchoredEstimator(object):
         return (float, float): estimated current drift in X/Y SEM px
         """
         # Calculate the drift between the last two frames and
-        # between the last and fisrt frame
+        # between the last and first frame
         if len(self.raw) > 1:
             prev_drift = CalculateDrift(self.raw[-2],
                                         self.raw[-1], 10)
@@ -166,14 +167,15 @@ class AnchoredEstimator(object):
         dwell_time (float): integration time of each pixel in the drift-
           corrected acquisition.
         repetitions (tuple of 2 ints): number of pixel in the entire drift-
-          corrected acquisition. 
+          corrected acquisition.
+          First value is the fastest dimension scanned (X).
         return (iterator yielding 0<int): iterator which yields number of pixels
           until next correction
         """
         # TODO: implement more clever calculation
         pxs_dc_period = []
         pxs = period // dwell_time # number of pixels per period
-        pxs_per_line = repetitions[1]
+        pxs_per_line = repetitions[0]
         if pxs > pxs_per_line:
             # Correct every (pxs // pxs_per_line) lines
             pxs_dc_period.append((pxs // pxs_per_line) * pxs_per_line)
@@ -210,7 +212,7 @@ class AnchoredEstimator(object):
                        numpy.clip(new_translation[1], self._min_bound, self._max_bound))
 
         # always in this order
-        self._emitter.scale.value = (1, 1)
+        self._emitter.scale.value = self._scale
         self._emitter.resolution.value = self._res
         self._emitter.translation.value = self._trans
         self._emitter.dwellTime.value = self._dwell_time
