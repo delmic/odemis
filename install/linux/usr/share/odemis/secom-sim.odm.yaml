@@ -37,12 +37,6 @@ Spectra: {
 #    role: e-beam,
 #}
 
-# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
-# sudo modprobe comedi comedi_num_legacy_minors=4
-# sudo modprobe comedi_test
-# sudo chmod a+rw /dev/comedi0
-# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
-
 "SEM ExtXY": {
     class: simsem.SimSEM,
     role: none,
