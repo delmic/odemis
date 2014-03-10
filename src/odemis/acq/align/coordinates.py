@@ -35,7 +35,7 @@ from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
 from itertools import compress
-
+from odemis.dataio import hdf5
 
 MAX_STEPS_NUMBER = 100  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
@@ -147,9 +147,17 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale, sensitivity):
     image = data
     scale = optical_scale
 
-    # Determine size of filter window
-    # filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
+    # Filter cosmic rays
+#     min_intensity = numpy.min(image)
+#     max_intensity = numpy.max(image)
+    avg_intensity = numpy.average(image)
+#     print min_intensity, max_intensity, avg_intensity
+#
+#     image[image > 3 * avg_intensity] = avg_intensity
+#     sensitivity = 1.4
+#     hdf5.export("cosmic_filtered.h5", image)
     
+
     # TODO, adjust to magnification
     filter_window_size = scale / 1.7
     filter_window_size = sorted((6, filter_window_size, 60))[1]  # / (20000 / 6120)
@@ -161,7 +169,6 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale, sensitivity):
     data_max = filters.maximum_filter(image, filter_window_size)
     data_min = filters.minimum_filter(image, filter_window_size)
     
-    # for i in numpy.arange(3.5, 5, 0.1):
     # Determine threshold
     i = sensitivity
     threshold = max_diff / i
@@ -188,16 +195,34 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale, sensitivity):
     for dy, dx in slices:
         x_center = (dx.start + dx.stop - 1) / 2
         y_center = (dy.start + dy.stop - 1) / 2
-        print x_center, y_center
+        # print x_center, y_center
+        # print image.shape
+            
+        if x_center >= image.shape[1] - 3 or y_center >= image.shape[0] - 3:
+            continue
 
         # Make sure we don't detect spots on the top of each other
         tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
 
         # TODO: change +10 and -10 to number relative to spot size
         subimage = image[(dy.start - 2.22):(dy.stop + 2.22), (dx.start - 2.22):(dx.stop + 2.22)]
+        
         # TODO Discard only this image
         if subimage.shape[0] == 0 or subimage.shape[1] == 0:
             continue
+
+        if (subimage > 1.3 * avg_intensity).sum() < 9:
+            continue
+#         if (h_center > image[sub_j + 1, sub_i]) \
+#             or (h_center > image[sub_j - 1, sub_i]) \
+#             or (h_center > image[sub_j, sub_i + 1]) \
+#             or (h_center > image[sub_j, sub_i - 1]) \
+#             or (h_center > image[sub_j + 1, sub_i + 1]) \
+#             or (h_center > image[sub_j - 1, sub_i - 1]) \
+#             or (h_center > image[sub_j + 1, sub_i - 1]) \
+#             or (h_center > image[sub_j - 1, sub_i + 1]):
+#             print "OUT"
+#             continue
         
         # if math.hypot(tab[0], tab[1]) > 1.5:
         # if spots detected too close keep the brightest one
