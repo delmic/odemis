@@ -273,7 +273,7 @@ class TestDataArray2RGB(unittest.TestCase):
         grey_img[0, 1] = depth - 10
 
         # should keep the grey
-        out = img.DataArray2RGB(grey_img, irange=(0, depth))
+        out = img.DataArray2RGB(grey_img, irange=(0, depth - 1))
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 3)
         pixel = out[2, 2]
