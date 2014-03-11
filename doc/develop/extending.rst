@@ -57,12 +57,14 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo add-apt-repository ppa:delmic-soft/odemis
     sudo apt-get update
     sudo apt-get dist-upgrade
-    sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush
+    sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp libhdf5-serial-1.8.4 python-pyro4-delmic odemis fluodb python-wxtools python-setuptools python-sphinx inkscape dia-gnome texlive pngcrush cython
     sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
     mkdir development
     cd development
     git clone git@github.com:delmic/odemis.git
+    cd odemis
+    python setup.py build_ext --inplace
 
 Configure Odemis for development
 """"""""""""""""""""""""""""""""
