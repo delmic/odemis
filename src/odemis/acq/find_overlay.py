@@ -122,14 +122,14 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         print optical_scale
 
         # Reset initial settings
-#         escan.scale.value = init_scale
-#         escan.resolution.value = init_se_res
-#         escan.translation.value = init_trans
-#         escan.dwellTime.value = init_dt
-#
-#         ccd.binning.value = init_binning
-#         ccd.resolution.value = init_ccd_res
-#         ccd.exposureTime.value = init_et
+        escan.scale.value = init_scale
+        escan.resolution.value = init_se_res
+        escan.translation.value = init_trans
+        escan.dwellTime.value = init_dt
+
+        ccd.binning.value = init_binning
+        ccd.resolution.value = init_ccd_res
+        ccd.exposureTime.value = init_et
 
         # Isolate spots
         if future._find_overlay_state == CANCELLED:

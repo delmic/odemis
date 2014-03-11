@@ -82,7 +82,7 @@ class TestOverlay(unittest.TestCase):
         ccd = self._ccd
         # overlay = self._overlay
 
-        f = find_overlay.FindOverlay((4, 4), 0.1, 1e-06, escan, ccd, detector)
+        f = find_overlay.FindOverlay((5, 5), 0.1, 1e-06, escan, ccd, detector)
 
         # opt_im = fake_input
         transformed_image = fake_opt
