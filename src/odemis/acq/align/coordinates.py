@@ -127,7 +127,7 @@ def FindCenterCoordinates(subimages):
 
     return spot_coordinates
 
-def DivideInNeighborhoods(data, number_of_spots, optical_scale, sensitivity):
+def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     """
     Given an image that includes N spots, divides it in N subimages with each of them 
     to include one spot. Briefly, it filters the image, finds the N “brightest” spots 
@@ -139,106 +139,109 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale, sensitivity):
             subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
-            sensitivity (float): Sensitivity factor of spot detection
     """
-    subimage_coordinates = []
-    subimages = []
 
     image = data
     scale = optical_scale
-
-    # Filter cosmic rays
-#     min_intensity = numpy.min(image)
-#     max_intensity = numpy.max(image)
     avg_intensity = numpy.average(image)
-#     print min_intensity, max_intensity, avg_intensity
-#
-#     image[image > 3 * avg_intensity] = avg_intensity
-#     sensitivity = 1.4
-#     hdf5.export("cosmic_filtered.h5", image)
     
-
-    # TODO, adjust to magnification
-    filter_window_size = scale / 1.7
-    filter_window_size = sorted((6, filter_window_size, 60))[1]  # / (20000 / 6120)
-    # print filter_window_size
-
-    i_max, j_max = unravel_index(image.argmax(), image.shape)
-    i_min, j_min = unravel_index(image.argmin(), image.shape)
-    max_diff = image[i_max, j_max] - image[i_min, j_min]
-    data_max = filters.maximum_filter(image, filter_window_size)
-    data_min = filters.minimum_filter(image, filter_window_size)
+    for sensitivity in range(4, 40, 4):
+        subimage_coordinates = []
+        subimages = []
+        # Filter cosmic rays
+    #     min_intensity = numpy.min(image)
+    #     max_intensity = numpy.max(image)
+    #     print min_intensity, max_intensity, avg_intensity
+    #
+    #     image[image > 3 * avg_intensity] = avg_intensity
+    #     sensitivity = 1.4
+    #     hdf5.export("cosmic_filtered.h5", image)
+        
     
-    # Determine threshold
-    i = sensitivity
-    threshold = max_diff / i
-
-    # Filter the parts of the image with variance in intensity greater
-    # than the threshold
-    maxima = (image == data_max)
-    diff = ((data_max - data_min) > threshold)
-    maxima[diff == 0] = 0
-
-    labeled, num_objects = ndimage.label(maxima)
-    # if num_objects > prod_of_spots:
-    #    break
-
-    slices = ndimage.find_objects(labeled)
-
-    # if len(slices) <= numpy.prod(number_of_spots) - 5:
-    #    logging.warning("Not enough spots detected.")
-    #    return [],[]
+        # TODO, adjust to magnification
+        filter_window_size = scale / 1.7
+        filter_window_size = sorted((6, filter_window_size, 60))[1]  # / (20000 / 6120)
+        # print filter_window_size
     
-    (x_center_last, y_center_last) = (-10, -10)
-
-    # Go through these parts and crop the subimages based on the neighborhood_size value
-    for dy, dx in slices:
-        x_center = (dx.start + dx.stop - 1) / 2
-        y_center = (dy.start + dy.stop - 1) / 2
-        # print x_center, y_center
-        # print image.shape
+        i_max, j_max = unravel_index(image.argmax(), image.shape)
+        i_min, j_min = unravel_index(image.argmin(), image.shape)
+        max_diff = image[i_max, j_max] - image[i_min, j_min]
+        data_max = filters.maximum_filter(image, filter_window_size)
+        data_min = filters.minimum_filter(image, filter_window_size)
+        
+        # Determine threshold
+        i = sensitivity
+        threshold = max_diff / i
+    
+        # Filter the parts of the image with variance in intensity greater
+        # than the threshold
+        maxima = (image == data_max)
+        diff = ((data_max - data_min) > threshold)
+        maxima[diff == 0] = 0
+    
+        labeled, num_objects = ndimage.label(maxima)
+        # if num_objects > prod_of_spots:
+        #    break
+    
+        slices = ndimage.find_objects(labeled)
+    
+        # if len(slices) <= numpy.prod(number_of_spots) - 5:
+        #    logging.warning("Not enough spots detected.")
+        #    return [],[]
+        
+        (x_center_last, y_center_last) = (-10, -10)
+    
+        # Go through these parts and crop the subimages based on the neighborhood_size value
+        for dy, dx in slices:
+            x_center = (dx.start + dx.stop - 1) / 2
+            y_center = (dy.start + dy.stop - 1) / 2
+            # print x_center, y_center
+            # print image.shape
+                
+            if x_center >= image.shape[1] - 3 or y_center >= image.shape[0] - 3:
+                continue
+    
+            # Make sure we don't detect spots on the top of each other
+            tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
+    
+            # TODO: change +10 and -10 to number relative to spot size
+            subimage = image[(dy.start - 2.22):(dy.stop + 2.22), (dx.start - 2.22):(dx.stop + 2.22)]
             
-        if x_center >= image.shape[1] - 3 or y_center >= image.shape[0] - 3:
-            continue
-
-        # Make sure we don't detect spots on the top of each other
-        tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
-
-        # TODO: change +10 and -10 to number relative to spot size
-        subimage = image[(dy.start - 2.22):(dy.stop + 2.22), (dx.start - 2.22):(dx.stop + 2.22)]
-        
-        # TODO Discard only this image
-        if subimage.shape[0] == 0 or subimage.shape[1] == 0:
-            continue
-
-        if (subimage > 1.3 * avg_intensity).sum() < 9:
-            continue
-#         if (h_center > image[sub_j + 1, sub_i]) \
-#             or (h_center > image[sub_j - 1, sub_i]) \
-#             or (h_center > image[sub_j, sub_i + 1]) \
-#             or (h_center > image[sub_j, sub_i - 1]) \
-#             or (h_center > image[sub_j + 1, sub_i + 1]) \
-#             or (h_center > image[sub_j - 1, sub_i - 1]) \
-#             or (h_center > image[sub_j + 1, sub_i - 1]) \
-#             or (h_center > image[sub_j - 1, sub_i + 1]):
-#             print "OUT"
-#             continue
-        
-        # if math.hypot(tab[0], tab[1]) > 1.5:
-        # if spots detected too close keep the brightest one
-        if math.hypot(tab[0], tab[1]) < (scale / 2):
-            if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
-                subimages.pop()
+            # TODO Discard only this image
+            if subimage.shape[0] == 0 or subimage.shape[1] == 0:
+                continue
+    
+            if (subimage > 1.3 * avg_intensity).sum() < 9:
+                continue
+    #         if (h_center > image[sub_j + 1, sub_i]) \
+    #             or (h_center > image[sub_j - 1, sub_i]) \
+    #             or (h_center > image[sub_j, sub_i + 1]) \
+    #             or (h_center > image[sub_j, sub_i - 1]) \
+    #             or (h_center > image[sub_j + 1, sub_i + 1]) \
+    #             or (h_center > image[sub_j - 1, sub_i - 1]) \
+    #             or (h_center > image[sub_j + 1, sub_i - 1]) \
+    #             or (h_center > image[sub_j - 1, sub_i + 1]):
+    #             print "OUT"
+    #             continue
+            
+            # if math.hypot(tab[0], tab[1]) > 1.5:
+            # if spots detected too close keep the brightest one
+            if math.hypot(tab[0], tab[1]) < (scale / 2):
+                if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
+                    subimages.pop()
+                    subimages.append(subimage)
+            else:
+                subimage_coordinates.append((x_center, y_center))
                 subimages.append(subimage)
-        else:
-            subimage_coordinates.append((x_center, y_center))
-            subimages.append(subimage)
-        
-        (x_center_last, y_center_last) = (x_center, y_center)
-
-    # TODO: Handle case where slices is 0 or 1
-    # Take care of outliers
-    clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
+            
+            (x_center_last, y_center_last) = (x_center, y_center)
+    
+        # TODO: Handle case where slices is 0 or 1
+        # Take care of outliers
+        clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
+        print len(clean_subimages)
+        if len(clean_subimages) >= numpy.prod(number_of_spots):
+            break
 
     return clean_subimages, clean_subimage_coordinates
 

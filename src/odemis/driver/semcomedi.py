@@ -2111,8 +2111,8 @@ class Scanner(model.Emitter):
          scanned area.
         returns the actual value used
         """
-        max_size = (int(self._shape[0] // self._scale[0]),
-                    int(self._shape[1] // self._scale[1]))
+        max_size = (int(self._shape[0] / self._scale[0]),
+                    int(self._shape[1] / self._scale[1]))
 
         # at least one pixel, and at most the whole area
         size = (max(min(value[0], max_size[0]), 1),
