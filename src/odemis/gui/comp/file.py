@@ -26,6 +26,7 @@ Content:
 """
 
 import os
+import logging
 
 import wx
 
@@ -42,6 +43,7 @@ class FileBrowser(wx.Panel):
                   style=wx.TAB_TRAVERSAL,
                   tool_tip=None,
                   clear=False,
+                  label="",
                   dialog_title="Browse for file",
                   wildcard="*.*",
                   name='fileBrowser',
@@ -51,7 +53,8 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.wildcard = wildcard
-        self.clear = clear
+        self.clear = clear # Add clear buttons
+        self.label = label # Text to show when the control is cleared
 
         self.text_ctrl = None
         self.btn_ctrl = None
@@ -93,7 +96,7 @@ class FileBrowser(wx.Panel):
         self.btn_ctrl.SetBitmaps(data.getbtn_64x16_hBitmap(),
                                  data.getbtn_64x16_aBitmap())
         self.btn_ctrl.SetForegroundColour("#000000")
-        self.btn_ctrl.SetLabel("Browse")
+        self.btn_ctrl.SetLabel("change...")
         self.btn_ctrl.Bind(wx.EVT_BUTTON, self._on_browse)
 
         box.Add(self.btn_ctrl, 0, wx.LEFT, 5)
@@ -109,7 +112,7 @@ class FileBrowser(wx.Panel):
         evt.SetEventObject(self)
         evt.Skip()
 
-    def SetValue(self, file_path):
+    def _SetValue(self, file_path, raise_event):
         if file_path:
             self.file_path = file_path
             if not os.path.exists(file_path):
@@ -117,16 +120,31 @@ class FileBrowser(wx.Panel):
             else:
                 self.text_ctrl.SetForegroundColour(
                                             odemis.gui.FOREGROUND_COLOUR_EDIT)
-            self.text_ctrl.SetValue(os.path.basename(file_path))
+            if raise_event:
+                self.text_ctrl.SetValue(file_path)
+            else:
+                self.text_ctrl.ChangeValue(file_path)
             self.text_ctrl.SetToolTipString(file_path)
             self.text_ctrl.SetInsertionPointEnd()
             self._btn_clear.Show()
         else:
             self.file_path = None
-            self.text_ctrl.SetValue(os.path.basename(""))
+            self.text_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            if raise_event:
+                self.text_ctrl.SetValue(self.label)
+            else:
+                self.text_ctrl.ChangeValue(self.label)
             self.text_ctrl.SetToolTipString("")
             self._btn_clear.Hide()
         self.Layout()
+
+    def SetValue(self, file_path):
+        logging.debug("File set to '%s' by user input", file_path)
+        self._SetValue(file_path, True)
+
+    def ChangeValue(self, file_path):
+        logging.debug("File set to '%s' by Odemis", file_path)
+        self._SetValue(file_path, False)
 
     def GetValue(self):
         return self.file_path

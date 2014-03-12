@@ -61,7 +61,8 @@ def get_available_formats(mode=os.O_RDWR):
         formats[exporter.FORMAT] = exporter.EXTENSIONS
 
     if not formats:
-        logging.error("Not file converter found!")
+        logging.error("No file converter found!")
+
     return formats
 
 # TODO: change name to imply reading is possible too:

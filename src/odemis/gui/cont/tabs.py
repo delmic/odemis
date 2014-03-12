@@ -29,6 +29,7 @@ import collections
 import logging
 import math
 from odemis import dataio, model
+from odemis.acq.calibration import get_ar_data, get_spectrum_efficiency
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
@@ -683,6 +684,9 @@ class AnalysisTab(Tab):
                                         self.tab_data_model
                                     )
 
+        self.tab_data_model.ar_cal_finfo.subscribe(self.load_ar_background)
+        self.tab_data_model.spec_cal_finfo.subscribe(self.load_spec_comp)
+
         buttons = OrderedDict([
             (self.main_frame.btn_sparc_view_all,
                     (None, self.main_frame.lbl_sparc_view_all)),
@@ -730,8 +734,8 @@ class AnalysisTab(Tab):
 
         fi = self.tab_data_model.acq_fileinfo.value
         #pylint: disable=E1103
-        if fi and fi.acq_file_name:
-            path, _ = os.path.split(fi.acq_file_name)
+        if fi and fi.file_name:
+            path, _ = os.path.split(fi.file_name)
         else:
             path = get_picture_folder()
 
@@ -788,17 +792,6 @@ class AnalysisTab(Tab):
 
         # Create a new file info model object
         fi = guimod.FileInfo(filename)
-
-        # TODO: Determine if the new data to be displayed supports the use
-        # of a calibration image.
-        # For now, we just put `False`
-        if True:
-            if not self.tab_data_model.cal_fileinfo.value:
-                conf = get_calibration_conf()
-                last = conf.get("history", "last") or None
-                self.tab_data_model.cal_fileinfo.value = guimod.FileInfo(last)
-        else:
-            self.tab_data_model.cal_fileinfo.value = None
 
         # remove all the previous streams
         self._stream_controller.clear()
@@ -877,11 +870,16 @@ class AnalysisTab(Tab):
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.acq_fileinfo.value = fi
 
+        # TODO: change the control flow? Seems messy like this.
+        ar_found = False
+        spec_found = False
+
         # Share spectrum pixel positions with other viewports
         # TODO: a better place for this code?
         for strm in self.tab_data_model.streams.value:
             # If a spectrum stream is found...
             if isinstance(strm, streammod.SPECTRUM_STREAMS):
+                spec_found = True
                 iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
@@ -906,6 +904,7 @@ class AnalysisTab(Tab):
                 break
             # If an angle resolve stream is found...
             elif isinstance(strm, streammod.AR_STREAMS):
+                ar_found = True
                 # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
                     if hasattr(viewport.canvas, "points_overlay"):
@@ -917,6 +916,98 @@ class AnalysisTab(Tab):
                 break
         else:
             self.tb.enable_button(tools.TOOL_POINT, False)
+
+
+        # Initialize calibration controls
+        conf = get_calibration_conf()
+
+        if ar_found:
+            if not self.tab_data_model.ar_cal_finfo.value:
+                last = conf.get("ar_history", "last") or None
+                self.tab_data_model.ar_cal_finfo.value = guimod.FileInfo(last)
+        else:
+            self.tab_data_model.ar_cal_finfo.value = None
+
+        if spec_found:
+            if not self.tab_data_model.spec_cal_finfo.value:
+                last = conf.get("spec_history", "last") or None
+                self.tab_data_model.spec_cal_finfo.value = guimod.FileInfo(last)
+        else:
+            self.tab_data_model.spec_cal_finfo.value = None
+
+    def load_ar_background(self, file_info):
+
+        ar_strms = [s for s
+                    in  self.tab_data_model.streams.value
+                    if isinstance(s, streammod.AR_STREAMS)]
+
+        fn = None
+        fmt = None
+
+        try:
+            logging.debug("Loading AR background")
+
+            if file_info and file_info.file_name and file_info.filetype:
+                fn = file_info.file_name
+                fmt = file_info.filetype
+                converter = dataio.get_exporter(fmt)
+                data = converter.read_data(fn)
+            else:
+                data = None
+
+            for strm in ar_strms:
+                strm.background.value = data
+        except ValueError, err: #pylint: disable=W0703
+            msg = "File '%s' not suitable for background calibration:\n\n%s"
+            dlg = wx.MessageDialog(self.main_frame,
+                                   msg % (fn, err),
+                                   "Unusable background file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+        except Exception: #pylint: disable=W0703
+            logging.exception("Failed to open file '%s' with format %s",
+                              fn, fmt)
+
+    def load_spec_comp(self, file_info):
+
+        spec_strms = [s for s
+                      in  self.tab_data_model.streams.value
+                      if isinstance(s, streammod.SPECTRUM_STREAMS)]
+
+        fn = None
+        fmt = None
+
+        try:
+            logging.debug("Loading spectrum efficiency compensation")
+
+            if file_info and file_info.file_name and file_info.filetype:
+                fn = file_info.file_name
+                fmt = file_info.filetype
+                converter = dataio.get_exporter(fmt)
+                data = converter.read_data(fn)
+            else:
+                data = None
+
+            # If data has no metadata, an exception will be raised that can
+            # not be cought here! (Need some workaround for that?)
+            if hasattr(data, 'metadata') or data is None:
+                for strm in spec_strms:
+                    strm.efficiencyCompensation.value = data
+            else:
+                raise ValueError("No metadata present!")
+
+        except ValueError, err: #pylint: disable=W0703
+            msg = "File '%s' not suitable for efficiency compensation:\n\n%s"
+            dlg = wx.MessageDialog(self.main_frame,
+                                   msg % (fn, err),
+                                   "Unusable efficiency file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+        except Exception: #pylint: disable=W0703
+            logging.exception("Failed to open file '%s' with format %s",
+                              fn, fmt)
 
     @call_after
     def _onTool(self, tool):

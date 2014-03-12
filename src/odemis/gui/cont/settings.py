@@ -41,6 +41,7 @@ from wx.lib.pubsub import pub
 import odemis.gui
 import odemis.dataio
 import odemis.gui.comp.text as text
+import odemis.gui.model as guimod
 import odemis.gui.util
 
 from odemis import model
@@ -366,7 +367,7 @@ class SettingsPanel(object):
 
         return ne
 
-    def add_browse_button(self, label, file_name=None):
+    def add_browse_button(self, label, clearlabel, file_name=None):
         self._clear()
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
@@ -375,6 +376,7 @@ class SettingsPanel(object):
 
         value_ctrl = FileBrowser(self.panel,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
+                                 label=clearlabel,
                                  clear=True)
         value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
@@ -1155,80 +1157,189 @@ class SparcSettingsController(SettingsBarController):
         self.enable(not is_acquiring)
 
 class AnalysisSettingsController(SettingsBarController):
+    """ Control the widgets/settings in the right column of the analysis tab """
 
     def __init__(self, parent, tab_data):
         super(AnalysisSettingsController, self).__init__(tab_data)
 
         self.parent = parent
-
-        self._acq_file_panel = FileInfoSettingsPanel(
-                                    parent.fp_inspect_file_info,
-                                    "No file loaded")
-
-        self._cal_file_panel = FileInfoSettingsPanel(
-                                    parent.fp_inspect_file_info,
-                                    "No calibration file loaded")
-        self._cal_file_panel.Hide()
-
-        parent.Layout()
-
+        # Gui data model
         self.tab_data = tab_data
 
-        self.tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
-        self.tab_data.cal_fileinfo.subscribe(self.on_calfile_change, init=True)
+        # We add 3 different panels so, they can each be hiddne/shown
+        # individually
+        self._pnl_acqfile = None
+        self._pnl_arfile = None
+        self.arfile_ctrl = None
+        self._pnl_specfile = None
+        self.specfile_ctrl = None
 
-    def on_acqfile_change(self, fi):
-        """ Update the data we wish to display from the FileInfo object """
+        self._create_controls()
 
-        self._acq_file_panel.clear()
+        # Subscribe to the VAs that influence how the settings look.
+        # All these VAs contain FileInfo object
+        tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
+        tab_data.ar_cal_finfo.subscribe(self.on_ar_change, init=True)
+        tab_data.spec_cal_finfo.subscribe(self.on_spec_change, init=True)
 
-        if fi:
-            se_file = self._acq_file_panel.add_label("File", fi.acq_file_basename)
+    def _create_controls(self):
+        """ Create the default controls
+
+        We create a Panel for each group of controls that we need to be able
+        to show and hide seperately.
+
+        """
+
+        ### Panel containing information about the acquisition file
+
+        self._pnl_acqfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+                                                  "No file loaded")
+
+        wildcards, _ = odemis.gui.util.formats_to_wildcards(
+                                        odemis.dataio.get_available_formats(),
+                                        include_all=True)
+
+
+
+        ### Panel with AR background file information
+
+        self._pnl_arfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+                                                 "No AR background loaded")
+        fi = self.tab_data.ar_cal_finfo.value
+        current_file = fi.file_name if fi else None
+        self.arfile_ctrl = self._pnl_arfile.add_browse_button(
+                                                        "AR background",
+                                                        "No background loaded",
+                                                        current_file).ctrl
+        self.arfile_ctrl.SetWildcard(wildcards)
+
+        def _on_ar_file_select(evt):
+            logging.debug("Updating AR calibration file info")
+            new_path = evt.GetEventObject().GetValue()
+            self.tab_data.ar_cal_finfo.value = guimod.FileInfo(new_path)
+
+            conf = get_calibration_conf()
+            conf.set("ar_history", "last", new_path or "")
+            conf.write()
+
+        self.arfile_ctrl.Bind(wx.EVT_TEXT, _on_ar_file_select)
+        self._pnl_arfile.Hide()
+
+
+
+        ###  Panel with spectrum efficiency compensation file information
+
+        self._pnl_specfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+                                                "No spectrum correction loaded")
+        fi = self.tab_data.spec_cal_finfo.value
+        current_file = fi.file_name if fi else None
+        self.specfile_ctrl = self._pnl_specfile.add_browse_button(
+                                                        "Spec. correction",
+                                                        "No correction loaded",
+                                                        current_file).ctrl
+        self.specfile_ctrl.SetWildcard(wildcards)
+
+        def _on_spec_file_select(evt):
+            logging.debug("Updating Spec calibration file info")
+            new_path = evt.GetEventObject().GetValue()
+            self.tab_data.spec_cal_finfo.value = guimod.FileInfo(new_path)
+
+            conf = get_calibration_conf()
+            conf.set("spec_history", "last", new_path or "")
+            conf.write()
+
+        self.specfile_ctrl.Bind(wx.EVT_TEXT, _on_spec_file_select)
+        self._pnl_specfile.Hide()
+
+        self.parent.Layout()
+
+    def on_acqfile_change(self, file_info):
+        """ Display the name and location of the file described by file_info
+
+        The controls in the acquisition file panel can be destroyed and
+        re-created each time, because it's one-way traffic between the VA and
+        the controls.
+
+        """
+
+        # Remove the old controls
+        self._pnl_acqfile.clear()
+
+        if file_info:
+            se_file = self._pnl_acqfile.add_label("File", file_info.file_basename)
             se_file.ctrl.SetInsertionPointEnd()
 
-
-            se_path = self._acq_file_panel.add_label("Path", fi.acq_file_path)
-            # show the end of the path (usually more important)
+            se_path = self._pnl_acqfile.add_label("Path", file_info.file_path)
+            # Make sure the file name is visible
             se_path.ctrl.SetInsertionPointEnd()
 
-            for key, value in fi.metadata.items():
-                self._acq_file_panel.add_metadata(key, value)
+            # Add any meta data as labels
+            for key, value in file_info.metadata.items():
+                self._pnl_acqfile.add_metadata(key, value)
 
-            self._acq_file_panel.Refresh()
+        self._pnl_acqfile.Refresh()
 
-    def on_calfile_change(self, fi):
+
+    def on_ar_change(self, file_info):
         """ Update the calibartion file controls """
+        self._on_calibartion_change(file_info,
+                                    self.tab_data.ar_cal_finfo,
+                                    self.arfile_ctrl,
+                                    "ar_history")
 
-        self._cal_file_panel.clear()
+    def on_spec_change(self, file_info):
+        self._on_calibartion_change(file_info,
+                                    self.tab_data.spec_cal_finfo,
+                                    self.specfile_ctrl,
+                                    "spec_history")
 
-        if fi:
-            btn_entry = self._cal_file_panel.add_browse_button(
-                                "Calibration file", fi.acq_file_name)
-            wildcards, _ = odemis.gui.util.formats_to_wildcards(
-                                    odemis.dataio.get_available_formats(),
-                                    include_all=True)
-            btn_entry.ctrl.SetWildcard(wildcards)
-            btn_entry.ctrl.SetValue(fi.acq_file_name)
-            pth_entry = self._cal_file_panel.add_label("Path",
-                                                   fi.acq_file_path or " ")
 
-            def on_changed(evt):
-                filebrowser = evt.GetEventObject()
-                fi.acq_file_name = filebrowser.GetValue()
-                pth_entry.ctrl.SetValue(filebrowser.path)
+    def _on_calibartion_change(self, file_info, file_va, file_ctrl, hist):
 
-                conf = get_calibration_conf()
-                conf.set("history", "last", filebrowser.GetValue() or "")
-                conf.write()
-
-            btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
-
-            self._cal_file_panel.Refresh()
-            self._cal_file_panel.Show()
-            self.parent.Layout()
+        if file_info:
+            file_ctrl.ChangeValue(file_info.file_name or None)
+            logging.debug("Showing %s and setting value to %s", hist, file_info.file_name)
+            self._pnl_specfile.Show()
         else:
-            self._cal_file_panel.Hide()
-            self.parent.Layout()
+            logging.debug("Hiding %s", hist)
+            file_ctrl.ChangeValue(None)
+            self._pnl_specfile.Hide()
+
+        self.parent.Layout()
+
+
+
+
+        # logging.debug("Clearing '%s' panel", label)
+        # panel.clear()
+
+        # if file_info:
+        #     btn_entry = panel.add_browse_button(label, clearlabel,
+        #                                         file_info.file_name)
+        #     wildcards, _ = odemis.gui.util.formats_to_wildcards(
+        #                             odemis.dataio.get_available_formats(),
+        #                             include_all=True)
+        #     btn_entry.ctrl.SetWildcard(wildcards)
+        #     btn_entry.ctrl.SetValue(file_info.file_name)
+
+        #     def on_changed(evt):
+        #         logging.debug("Updating file info")
+        #         path = evt.GetEventObject().GetValue()
+        #         fi_va.value = guimod.FileInfo(path)
+
+        #         conf = get_calibration_conf()
+        #         conf.set(histconf, "last", path or "")
+        #         conf.write()
+
+        #     btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
+
+        #     panel.Refresh()
+        #     panel.Show()
+        #     self.parent.Layout()
+        # else:
+        #     panel.Hide()
+        #     self.parent.Layout()
+
 
 class SparcAlignSettingsController(SettingsBarController):
 

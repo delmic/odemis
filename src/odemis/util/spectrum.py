@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
-'''
+
+"""
 Created on 28 Feb 2014
 
 @author: Éric Piel
@@ -8,12 +9,19 @@ Copyright © 2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+"""
+
 # Various function to handle spectral data
 # Note that the spectrum is normally contained on the C dimension, which is
 # by convention the first of the 5 dimensions of a DataArray (CTZYX).
@@ -28,14 +36,20 @@ from odemis import model
 def get_wavelength_per_pixel(da):
     """
     Computes the wavelength for each pixel along the C dimension
-    da (model.DataArray of shape C...): the DataArray with metadata either
-      MD_WL_POLYNOMIAL or MD_WL_LIST
-    return (list of float of length C): the wavelength (in m) for each pixel
-     in C
-    raises:
+
+    :param da: (model.DataArray of shape C...): the DataArray with metadata
+        either MD_WL_POLYNOMIAL or MD_WL_LIST
+    :return: (list of float of length C): the wavelength (in m) for each pixel
+        in C
+    :raises:
+        AttributeError: if no metadata is present
         KeyError: if no metadata is available
         ValueError: if the metadata doesn't provide enough information
     """
+
+    if not hasattr(da, 'metadata'):
+        raise AttributeError("No metadata found in data array")
+
     # MD_WL_LIST has priority
     if model.MD_WL_LIST in da.metadata:
         wl = da.metadata[model.MD_WL_LIST]

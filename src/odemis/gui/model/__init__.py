@@ -21,6 +21,7 @@ This file is part of Odemis.
 
 """
 
+import odemis.dataio as dataio
 from abc import ABCMeta
 from odemis import model
 from odemis.acq.stream import Stream, StreamTree
@@ -410,7 +411,8 @@ class AnalysisGUIData(MicroscopyGUIData):
 
         # The current file being used for calibration. It is set to `None`
         # when no calibration is used.
-        self.cal_fileinfo = VigilantAttribute(None) # a FileInfo
+        self.ar_cal_finfo = VigilantAttribute(None) # a FileInfo
+        self.spec_cal_finfo = VigilantAttribute(None) # a FileInfo
 
 
 # TODO: use it for FirstStep too
@@ -513,52 +515,69 @@ class FileInfo(object):
     attributes should be considered readonly after initialisation.
     """
 
-    def __init__(self, acq_file=None, metadata=None):
+    def __init__(self, a_file=None, metadata=None):
         """
-        :param acq_file: (unicode or File or None): the full name of the file or
+        :param a_file: (unicode or File or None): the full name of the file or
             a File that contains the acquisition. If provided (and the file
             exists), some fields will be automatically filled in.
         :param metadata: (dict String -> value): The meta-data as model.MD_*.
         """
 
-        self.acq_file_obj = None
+        self.file_obj = None
 
-        if isinstance(acq_file, basestring):
+        if isinstance(a_file, basestring):
             # The given parameter is a file name
-            self.acq_file_name = acq_file
-        elif acq_file is not None:
+            self.file_name = a_file
+        elif a_file is not None:
             # Assume the given parameter is a File Objecot
-            self.acq_file_name = acq_file.name
-            self.acq_file_obj = acq_file # file object
+            self.file_name = a_file.name
+            self.file_obj = a_file # file object
         else:
-            self.acq_file_name = None
+            self.file_name = None
 
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
         self.metadata = metadata or {}
 
-        if not model.MD_ACQ_DATE in self.metadata and self.acq_file_name:
+        if not model.MD_ACQ_DATE in self.metadata and self.file_name:
             # try to auto fill acquisition time (seconds from epoch)
             try:
-                acq_date = os.stat(self.acq_file_name).st_ctime
+                acq_date = os.stat(self.file_name).st_ctime
                 self.metadata[model.MD_ACQ_DATE] = acq_date
             except OSError:
                 # can't open the file => just cannot guess the time
                 pass
 
     @property
-    def acq_file_path(self):
-        """
-        the name of the directory containing the acquisition file
-        """
-        return os.path.dirname(self.acq_file_name or "")
+    def file_path(self):
+        """ Return the directory that contains the file """
+        return os.path.dirname(self.file_name or "")
 
     @property
-    def acq_file_basename(self):
-        """
-        the base name of the acquisition file
-        """
-        return os.path.basename(self.acq_file_name or "")
+    def file_basename(self):
+        """ Return the file name """
+        return os.path.basename(self.file_name or "")
+
+    @property
+    def filetype(self):
+        if not self.file_name:
+            return None
+
+        _, ext = os.path.splitext(self.file_name)
+
+        if ext:
+            # First, try our own, known file formats
+            formats_to_ext = dataio.get_available_formats(os.O_RDWR)
+            for format, extensions in formats_to_ext.iteritems():
+                if ext in extensions:
+                    return format
+
+            # Return the found extension as a last resort
+            logging.warn("Guessing file type")
+            return ext.upper()
+        else:
+            return None
+
 
 class View(object):
 
