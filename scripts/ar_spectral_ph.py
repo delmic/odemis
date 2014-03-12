@@ -9,7 +9,7 @@ This is a script to acquire a set of spectrums via a AR pinhole to recreate
 an entire AR spectral data cube. It doesn't handle the pinhole actuator.
 
 run as:
-./scripts/ar-spectral-ph.py -x 12 -y 15 --spot=0.5,0.6 --drift 60  --anchor=0.1,0.2,0.1,0.2 --output filename.h5
+./scripts/ar-spectral-ph.py -x 12 -y 15 --spot=0.5,0.6 --drift 10 --anchor=0.1,0.2,0.1,0.2 --output filename.h5
 
 -x -y defines the number of images to acquire in X and Y (resolution of the AR)
 --spot defines the position of the ebeam spot (in coordinates between 0->1 of
@@ -28,22 +28,21 @@ To change some configuration settings, you can use the cli:
 # ensure the magnification is correct
 odemis-cli --set-attr "EBeam ExtXY" magnification 5000
 # to select the spectrometer exposure time:
-odemis-cli --set-attr "Spec10" exposureTime 0.1
+odemis-cli --set-attr "Spec10" exposureTime 0.1 # in s
 # to select the center wavelength of the spectrometer
-odemis-cli --position "SP2300i" wavelength 500e-9
+odemis-cli --position "SP2300i" wavelength 500e-3 # in µm
 '''
 
 from __future__ import division
 
 import argparse
 import logging
+import numpy
 from odemis import dataio, model
-import odemis
+from odemis.acq import drift
 from odemis.util import driver
 import sys
-import time
 import threading
-import numpy
 
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
@@ -58,7 +57,12 @@ class Acquirer(object):
         # the spectrometer
         self.spect = model.getComponent(role="spectrometer")
         
+        # For acquisition
+        self.spec_data = None
         self.acq_done = threading.Event()
+
+        # For drift correction
+        self.drift = (0, 0)
 
     def acquire_spec(self, spot):
         """
@@ -66,13 +70,15 @@ class Acquirer(object):
         spot (2 0<=float<=1): ebeam position
         return (DataArray of one dimension): spectrum
         """
-        self.escan.translation.value = spot
+        self.escan.translation.value = (spot[0] - self.drift[0],
+                                        spot[1] - self.drift[1])
 
         # trigger the CCD acquisition
         self.acq_done.clear()
         self.spect.softwareTrigger.notify()
 
         # wait for it
+        logging.debug("Waiting for acquisition")
         self.acq_done.wait()
 
         # reshape to just one dimension
@@ -87,7 +93,24 @@ class Acquirer(object):
         # receives SEM image... and discards it
         pass
 
-    def acquire_arcube(self, shape, spot, filename, drift=None, anchor=None):
+    def acquire_arcube(self, shape, spot, filename, dperiod=None, anchor=None):
+        """
+        shape (int, int)
+        spot (float, float)
+        filename (str)
+        dperiod (0<float): drift correction period
+        anchor (4* 0<=float<=1): anchor region for drift correction
+        """
+        # Set up the drift correction (using a 10µs dwell time for the anchor)
+        if anchor:
+            de = drift.AnchoredEstimator(self.escan, self.sed, anchor, 10e-6)
+            de.acquire() # original anchor region
+            # Estimate the number of pixels the drift period corresponds to
+            px_time = (self.spect.exposureTime.value + # exposure time
+                       numpy.prod(self.spect.resolution.value) / self.spect.readoutRate.value + # readout time
+                       0.1) # overhead (eg, pinhole movement)
+            px_iter = de.estimateCorrectionPeriod(dperiod, px_time, shape)
+            next_dc = px_iter.next()
 
         # Set the E-beam in spot mode (order matters)
         self.escan.scale.value = (1, 1)
@@ -98,23 +121,43 @@ class Acquirer(object):
 
         # start the CCD acquisition, blocked on softwareTrigger
         self.spect.data.synchronizedOn(self.spect.softwareTrigger)
+        self.spect.data.subscribe(self.on_spectrum)
 
         spec_data = []
-        for i in numpy.ndindex(shape):
+        n = 0
+        for i in numpy.ndindex(shape[::-1]): # scan along X fast, then Y
             logging.info("Going to acquire AR point %s", i)
 
+            # TODO: replace next line by code waiting for the pinhole actuator
+            # to be finished moving.
             raw_input("Press enter to start next spectrum acquisition...")
-            spec = acquire_spec(spot)
+            spec = self.acquire_spec(spot)
+            # TODO: replace next line by code letting know the pinhole actuator
+            # that it should go to next point.
             print("Spectrum for point %s just acquired" % (i,))
 
             spec_data.append(spec)
 
-            # TODO: do drift correction if requested
+            if anchor:
+                # Time to do drift-correction?
+                n += 1
+                if n >= next_dc:
+                    de.acquire() # take a new
+                    d = de.estimate()
+                    self.drift = (self.drift[0] + d[0], self.drift[1] + d[1])
+                    logging.info("Drift estimated to %s", self.drift)
+                    n = 0
+                    next_dc = px_iter.next()
 
-        data = assemble_cube(shape, spec_data)
+        # Stop all acquisition
+        self.spect.data.unsubscribe(self.on_spectrum)
+        self.spect.data.synchronizedOn(None)
+        self.sed.data.unsubscribe(self.discard_sem)
+
+        data = self.assemble_cube(shape, spec_data)
         # save the file
         exporter = dataio.find_fittest_exporter(filename)
-        exporter.export(filename, images)
+        exporter.export(filename, data)
 
     def assemble_cube(self, shape, specs):
         """
@@ -129,12 +172,12 @@ class Acquirer(object):
         assert len(specs) == numpy.prod(shape)
         # each element of specs has a shape of (N)
         # reshape to (N, 1)
-        for e in self.acq_spect_buf:
-            e.shape = e.shape[-1::-1]
-        # concatenate into one big array of (N, X*Y)
+        for s in specs:
+            s.shape += (1,)
+        # concatenate into one big array of (N, Y*X)
         spect_data = numpy.concatenate(specs, axis=1)
         # reshape to (N, 1, 1, Y, X)
-        spect_data.shape = (spect_data.shape[0], numpy.newaxis, numpy.newaxis, shape[1], shape[0])
+        spect_data.shape = (spect_data.shape[0], 1, 1, shape[1], shape[0])
 
         # copy the metadata from the first point
         spect_data = model.DataArray(spect_data, metadata=specs[0].metadata)
@@ -174,15 +217,15 @@ def main(args):
 
     spot = driver.reproduceTypedValue([1.0], options.spot)
     if not (0 <= spot[0] <= 1 and 0 <= spot[1] <= 1):
-         raise ValueError("spot must be between 0 and 1")
+        raise ValueError("spot must be between 0 and 1")
 
-    if options.anchor is None:
+    if options.anchor is None or options.drift is None:
         anchor = None
     else:
         anchor = driver.reproduceTypedValue([1.0], options.anchor)
 
     a = Acquirer()
-    a.acquire_arcube(shape, spot, drift=options.drift, anchor=anchor,
+    a.acquire_arcube(shape, spot, dperiod=options.drift, anchor=anchor,
                      filename=options.filename)
 
 if __name__ == '__main__':

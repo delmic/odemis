@@ -302,7 +302,8 @@ def _add_image_info(group, dataset, image, rgb=False):
                 _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
                 dataset.dims[l - 5].attach_scale(group["DimensionScaleC"])
         except Exception:
-            logging.exception("Failed to record wavelength information")
+            logging.exception("Failed to record wavelength information, "
+                              "it will not be saved.")
         
 
     # TODO: extension for Rotation:

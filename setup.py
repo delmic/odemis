@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+# To rebuild just the cython modules, use this command:
+# python setup.py build_ext --inplace
+
 from setuptools import setup, find_packages
+from Cython.Build import cythonize # Warning: must be _after_ setup import
 import glob
 import os
 import subprocess
 import sys
 
+
 # To be updated to the current version
-VERSION = "1.5"
+VERSION = "1.6~1"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
@@ -75,7 +80,7 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-convert',
                'install/linux/usr/bin/odemis-gui',
                'install/linux/usr/bin/odemis-start',
-               'install/linux/usr/bin/odemis-stop'
+               'install/linux/usr/bin/odemis-stop',
                ]
 else:
     data_files = []
@@ -85,8 +90,8 @@ else:
 dist = setup(name='Odemis',
              version=VERSION,
              description='Open Delmic Microscope Software',
-             author='Éric Piel, Rinze de Laat',
-             author_email='piel@delmic.com, laat@delmic.com',
+             author='Éric Piel, Rinze de Laat, Kimon Tsitsikas',
+             author_email='piel@delmic.com, laat@delmic.com, tsitsikas@delmic.com',
              url='https://github.com/delmic/odemis',
              classifiers=["License :: OSI Approved :: GNU General Public License v2 (GPLv2)",
                           "Operating System :: POSIX :: Linux",
@@ -100,10 +105,12 @@ dist = setup(name='Odemis',
              packages=find_packages('src', exclude=["*.test"]),
              package_data={'odemis.gui.img': ["example/*.png", "example/*.mat",
                                               "calibration/*.png"],
-                           'odemis.driver': ["andorcam2-fake-clara.tiff"],
+                           'odemis.driver': ["andorcam2-fake-clara.tiff",
+                                             "simsem-fake-output.h5"],
                           },
+            ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
              scripts=scripts,
-             data_files=data_files # not officially in setuptools, but works as for distutils
+             data_files=data_files, # not officially in setuptools, but works as for distutils
             )
 
 if ROOT and dist != None:
