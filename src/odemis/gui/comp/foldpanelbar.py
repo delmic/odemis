@@ -132,6 +132,7 @@ class FoldPanelItem(wx.Panel):
         self.grandparent = self.Parent.Parent
         assert isinstance(self.grandparent, wx.ScrolledWindow)
 
+        self.childvis = {}  # Keep track of the child visibility
         self._sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sizer)
 
@@ -155,6 +156,7 @@ class FoldPanelItem(wx.Panel):
         first = True
         for child in self.GetChildren():
             if not first:
+                self.childvis[child] = child.IsShown()
                 child.Hide()
             first = False
 
@@ -165,16 +167,19 @@ class FoldPanelItem(wx.Panel):
         first = True
         for child in self.GetChildren():
             if not first:
-                child.Show()
+                if child in self.childvis:
+                    child.Show(self.childvis[child])
+                else:
+                    child.Show()
             first = False
 
         self._refresh()
 
-    def Show(self, show=True):
+    def Show(self, show=True): #pylint: disable=W0221
         wx.Panel.Show(self, show)
         self._refresh()
 
-    def Hide(self):
+    def Hide(self): #pylint: disable=W0221
         self.Show(False)
 
     def IsExpanded(self):
@@ -289,7 +294,6 @@ class CaptionBar(wx.Window):
 
     def IsCollapsed(self):
         """ Returns wether the status of the bar is expanded or collapsed. """
-
         return self._collapsed
 
     def Collapse(self):

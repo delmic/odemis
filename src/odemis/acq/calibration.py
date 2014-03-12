@@ -35,9 +35,10 @@ def get_ar_data(das):
     """
     Finds the DataArray that contains the Angular Resolved data for calibration
     (typically, a "background" image, ie, an image taken without ebeam).
-    das (list of DataArrays): all the DA into which to look for.
-    return (DataArray): the first DA that seems good.
-    raise LookupError: if no DA can be found
+
+    :param das: (list of DataArrays): all the DA into which to look for.
+    :return: (DataArray): the first DA that seems good.
+    :raises: LookupError: if no DA can be found
     """
     # TODO: also allow to pass an expected resolution, in order to support
     # a calibration file with multiple calibrations resolution?
@@ -68,7 +69,7 @@ def get_ar_data(das):
 
         return da
 
-# One calibration for spectrum is the efficiency correction. That's to 
+# One calibration for spectrum is the efficiency correction. That's to
 # compensate the difference in intensity loss depending on the wavelength in
 # the optical path. The main source of loss is the CCD quantum efficiency.
 # It is saved as in a file with one data of shape C>1 and TZYX = 1111 (similar
@@ -79,15 +80,16 @@ def get_spectrum_efficiency(das):
     """
     Finds the DataArray that contains the spectrum efficiency compensation data
     (a "spectrum" which contains factors for each given wavelength).
-    das (list of DataArrays): all the DA into which to look for.
-    return (DataArray): the first DA that seems good.
-    raise LookupError: if no DA can be found
+
+    :param das: (list of DataArrays): all the DA into which to look for.
+    :return: (DataArray): the first DA that seems good.
+    :raises: LookupError: if no DA can be found
     """
     # expect the worse: multiple DAs available
     specs = []
     for da in das:
         # What we are looking for is very specific: has MD_WL_* and has C > 1.
-        # Actually, we even check for C > 3 (as a spectrum with less than 4 
+        # Actually, we even check for C > 3 (as a spectrum with less than 4
         # points would be very weird).
         if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
             and len(da.shape) == 5 and da.shape[-5] > 4 and da.shape[-4:] == (1,1,1,1)
