@@ -510,7 +510,8 @@ class SEMStream(Stream):
         #  same as the scale of the SEM. We could add a dcScale if it's needed.
         self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, long, float),
+                                         setter=self._setDCRegion)
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                          range=emitter.dwellTime.range, unit="s")
         self.dcPeriod = model.FloatContinuous(60,  # s, default to one minute
@@ -526,8 +527,6 @@ class SEMStream(Stream):
         if not self.is_active.value or self.spot.value:
             return
 
-        # FIXME: this is fighting against the resolution setting of the SEM
-        # => only apply if is_active (and not spot mode...)
         # We should remove res setting from the GUI when this ROI is used.
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         width = (roi[2] - roi[0], roi[3] - roi[1])
@@ -543,6 +542,19 @@ class SEMStream(Stream):
         # always in this order
         self._emitter.resolution.value = res
         self._emitter.translation.value = trans
+
+    def _setDCRegion(self, roi):
+        """
+        Called when the dcRegion is set
+        """
+        logging.debug("dcRegion set to %s", roi)
+        if roi == UNDEFINED_ROI:
+            return roi # No need to discuss it
+
+        # TODO: ensure the ROI is at least as big as the MINIMUM_SIZE defined
+        # in the drift estimator (knowing it always uses scale = 1)
+
+        return roi
 
     def _onSpot(self, active):
         if active:

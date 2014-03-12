@@ -57,7 +57,7 @@ SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE)
 MODE_SPARC_SELECT = guimodel.TOOL_ROA
 MODE_SPARC_PICK = guimodel.TOOL_POINT
 
-SPARC_MODES = (MODE_SPARC_SELECT, MODE_SPARC_PICK)
+SPARC_MODES = (MODE_SPARC_SELECT, MODE_SPARC_PICK, guimodel.TOOL_DRIFTCOR)
 
 
 
@@ -129,7 +129,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._fps_label = self._fps_ol.add_label("")
         self.focus_overlay = None
         self.roi_overlay = None
-        self.driftcor_overlay = None
+        self.anchor_overlay = None
         self.pixel_overlay = None
         self.points_overlay = None
 
@@ -231,8 +231,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.active_overlay = self.roi_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_DRIFTCOR:
-            self.current_mode = MODE_SPARC_SELECT
-            self.active_overlay = self.driftcor_overlay
+            self.current_mode = tool
+            self.active_overlay = self.anchor_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
@@ -907,11 +907,12 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                                                 self, "Region of acquisition")
         self.world_overlays.append(self.roi_overlay)
 
-        self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(
-                                                self,
-                                                "Region of Drift Correction",
-                                                colour=gui.SELECTION_COLOUR_2ND)
-        self.world_overlays.append(self.driftcor_overlay)
+        self._dcRegion = None # The dcRegion VA of the SEM CL
+        self.anchor_overlay = world_overlay.RepetitionSelectOverlay(
+                                            self,
+                                            "Anchor region for drift correction",
+                                            colour=gui.SELECTION_COLOUR_2ND)
+        self.world_overlays.append(self.anchor_overlay)
 
 
     def setView(self, microscope_view, tab_data):
@@ -928,17 +929,22 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         for s in tab_data.acquisitionView.getStreams():
             if s.name.value == "SEM CL":
                 self._roa = s.roi
+                if hasattr(s, "dcRegion"):
+                    self._dcRegion = s.dcRegion
                 break
         else:
             raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
 
         # TODO: move this to the RepetitionSelectOverlay?
         self._roa.subscribe(self._onROA, init=True)
+        if self._dcRegion:
+            self._dcRegion.subscribe(self._onDCRegion, init=True)
 
         sem = tab_data.main.ebeam
         if not sem:
             raise AttributeError("No SEM on the microscope")
 
+        # Regions depend on the magnification (=field of view)
         if isinstance(sem.magnification, VigilantAttributeBase):
             sem.magnification.subscribe(self._onSEMMag)
 
@@ -979,7 +985,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked inside selection
-            elif self.current_mode == MODE_SPARC_SELECT:
+            elif self.current_mode in [MODE_SPARC_SELECT, guimodel.TOOL_DRIFTCOR]:
                 self._ldragging = True
                 self.active_overlay.start_drag(vpos)
                 if not self.HasCapture():
@@ -997,14 +1003,26 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.active_overlay.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
-                self._updateROA()
-                # force it to redraw the selection, even if the ROA hasn't changed
-                # because the selection is clipped identically
-                if self._roa:
-                    self._onROA(self._roa.value)
+                # FIXME: depend on current mode
+                if self.current_mode == MODE_SPARC_SELECT:
+                    self._updateROA()
+                elif self.current_mode == guimodel.TOOL_DRIFTCOR:
+                    self._updateDCRegion()
+                # TODO: check this is indeed not needed
+#                # force it to redraw the selection, even if the ROA hasn't changed
+#                # because the selection is clipped identically
+#                if self._roa:
+#                    self._onROA(self._roa.value)
             else:
-                if self._roa:
-                    self._roa.value = UNDEFINED_ROI
+                # TODO: set the rect of the active_overlay to None, then do the
+                # normal _update*. This would avoid redundancy
+                # Simple click => delete ROI 
+                if self.current_mode == MODE_SPARC_SELECT:
+                    if self._roa:
+                        self._roa.value = UNDEFINED_ROI
+                elif self.current_mode == guimodel.TOOL_DRIFTCOR:
+                    if self._dcRegion:
+                        self._dcRegion.value = UNDEFINED_ROI
 
         else:
             super(SparcAcquiCanvas, self).on_left_up(event)
@@ -1091,22 +1109,18 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         return sem_rect
 
-    def _updateROA(self):
+    def _convertROIPhysToRatio(self, phys_rect):
         """
-        Update the value of the ROA in the GUI according to the roi_overlay
-
-        TODO: Create an Drift correction equivalent of this method
+        Convert and truncate the ROI in physical coordinates to the coordinates
+         relative to the SEM FoV 
+        phys_rect (None or 4 floats): physical position of the tl and br points
+        return (4 floats): tlbr positions relative to the FoV
         """
-        try:
-            sem = self._tab_data_model.main.ebeam
-            if not self._roa or not sem:
-                raise AttributeError()
-        except AttributeError:
-            logging.warning("ROA is supposed to be updated, but no ROA/SEM attribute")
-            return
+        sem = self._tab_data_model.main.ebeam
+        if not sem:
+            raise AttributeError("No SEM on the microscope")
 
         # Get the position of the overlay in physical coordinates
-        phys_rect = self.roi_overlay.get_physical_sel()
         if phys_rect is None:
             self._roa.value = UNDEFINED_ROI
             return
@@ -1138,13 +1152,64 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             rel_rect[1] -= rel_rect[3] - 1
             rel_rect[3] = 1
 
-        # Update ROA. We need to unsubscribe to be sure we don't received
-        # intermediary values as ROA is modified by the stream further on, and
-        # VA don't ensure the notifications are in ordered.
+        return rel_rect
+
+    def _updateROA(self):
+        """
+        Update the value of the ROA VA according to the roi_overlay
+        """
+        if self._roa is None:
+            logging.warning("ROA is supposed to be updated, but no ROA VA")
+            return
+
+        phys_rect = self.roi_overlay.get_physical_sel()
+        rel_rect = self._convertROIPhysToRatio(phys_rect)
+
+        # Update VA. We need to unsubscribe to be sure we don't received
+        # intermediary values as the VA is modified by the stream further on, and
+        # VA don't ensure the notifications are ordered (so the listener could
+        # receive the final value, and then our requested ROI value).
         self._roa.unsubscribe(self._onROA)
         self._roa.value = rel_rect
         self._roa.subscribe(self._onROA, init=True)
-        # FIXME: we receive both this value and the value updated by the stream
+
+    def _updateDCRegion(self):
+        """
+        Update the value of the dcRegion VA according to the anchor_overlay
+        """
+        if self._dcRegion is None:
+            logging.warning("dcRegion is supposed to be updated, but no dcRegion VA")
+            return
+
+        phys_rect = self.anchor_overlay.get_physical_sel()
+        rel_rect = self._convertROIPhysToRatio(phys_rect)
+        self._dcRegion.value = rel_rect
+
+    def _convertROIRatioToPhys(self, roi):
+        """
+        Convert the ROI in relative coordinates (to the SEM FoV) into physical
+         coordinates
+        roi (4 floats): tlbr positions relative to the FoV
+        return (None or 4 floats): physical position of the tl and br points, or
+          None if no ROI is defined
+        """
+        if roi == UNDEFINED_ROI:
+            return None
+        else:
+            # convert relative position to physical position
+            try:
+                sem_rect = self._getSEMRect()
+            except AttributeError:
+                logging.warning("Trying to convert a SEM ROI, but no SEM available")
+                return None
+
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
+                     sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
+                     sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
+                     sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
+
+        return phys_rect
 
     def _onROA(self, roi):
         """
@@ -1153,23 +1218,20 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         roi (tuple of 4 floats): top, left, bottom, right position relative to
           the SEM image
         """
-        if roi == UNDEFINED_ROI:
-            phys_rect = None
-        else:
-            # convert relative position to physical position
-            try:
-                sem_rect = self._getSEMRect()
-            except AttributeError:
-                return # no SEM => ROA is not meaningful
-
-            # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-            phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
-                         sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
-                         sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
-                         sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
-
+        phys_rect = self._convertROIRatioToPhys(roi)
         self.roi_overlay.set_physical_sel(phys_rect)
         wx.CallAfter(self.request_drawing_update)
+
+    def _onDCRegion(self, roi):
+        """
+        Called when dcRegion (ie, the anchor region) of the SEM CL is updated.
+        roi (tuple of 4 floats): top, left, bottom, right position relative to
+          the SEM image
+        """
+        phys_rect = self._convertROIRatioToPhys(roi)
+        self.anchor_overlay.set_physical_sel(phys_rect)
+        wx.CallAfter(self.request_drawing_update)
+
 
 class SparcAlignCanvas(DblMicroscopeCanvas):
     """

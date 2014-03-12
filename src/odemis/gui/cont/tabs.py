@@ -328,8 +328,8 @@ class SparcAcquisitionTab(Tab):
         # Toolbar
         self.tb = self.main_frame.sparc_acq_toolbar
         self.tb.add_tool(tools.TOOL_ROA, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_DRIFTCOR, self.tab_data_model.tool)
         # TODO: Add the buttons when the functionality is there
-        #self.tb.add_tool(tools.TOOL_DRIFTCOR, self.tab_data_model.tool)
         #self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         #self.tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
 
@@ -383,7 +383,10 @@ class SparcAcquisitionTab(Tab):
 
         # indicate ROI must still be defined by the user
         semcl_stream.roi.value = streammod.UNDEFINED_ROI
-        semcl_stream.roi.subscribe(self.onROI, init=True)
+        semcl_stream.roi.subscribe(self.onROI)
+
+        # drift correction is disabled until a roi is selected
+        semcl_stream.dcRegion.value = streammod.UNDEFINED_ROI
 
         # create a view on the tab model
         self._view_controller = viewcont.ViewController(
