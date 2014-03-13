@@ -2381,18 +2381,27 @@ class SEMDataFlow(model.DataFlow):
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
+        comp = self.component()
+        if comp is None:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            return
+
         try:
             # TODO specify if phys or raw, or maybe always raw and notify is
             # in charge of converting if we want phys
-            self._sem.start_acquire(self.component(), self.notify)
+            self._sem.start_acquire(comp, self.notify)
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
     def stop_generate(self):
+        comp = self.component()
+        if comp is None:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            return
+
         try:
-            self._sem.stop_acquire(self.component())
-            # Note that after that acquisition might still go on for a short time
+            self._sem.stop_acquire(comp)
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
