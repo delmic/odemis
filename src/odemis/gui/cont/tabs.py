@@ -679,13 +679,14 @@ class AnalysisTab(Tab):
                                         static=True
                                   )
 
+        self.tab_data_model.ar_cal_finfo.subscribe(self.load_ar_background)
+        self.tab_data_model.spec_cal_finfo.subscribe(self.load_spec_comp)
+
         self._settings_controller = settings.AnalysisSettingsController(
                                         self.main_frame,
                                         self.tab_data_model
                                     )
 
-        self.tab_data_model.ar_cal_finfo.subscribe(self.load_ar_background)
-        self.tab_data_model.spec_cal_finfo.subscribe(self.load_spec_comp)
 
         buttons = OrderedDict([
             (self.main_frame.btn_sparc_view_all,
@@ -921,43 +922,69 @@ class AnalysisTab(Tab):
         # Initialize calibration controls
         conf = get_calibration_conf()
 
-        if ar_found:
-            if not self.tab_data_model.ar_cal_finfo.value:
-                last = conf.get("ar_history", "last") or None
-                self.tab_data_model.ar_cal_finfo.value = guimod.FileInfo(last)
+        if ar_found: # AR streams found
+            if self.tab_data_model.ar_cal_finfo.value is None:
+                # No FileInfo stored
+                previous = conf.get("ar_history", "last") or None
+                if previous:
+                    logging.debug("Grabbing AR background from config")
+            else:
+                previous = self.tab_data_model.ar_cal_finfo.value.file_name
+            self.tab_data_model.ar_cal_finfo.value = guimod.FileInfo(previous)
         else:
+            # Set the VA to None, hiding the panel
             self.tab_data_model.ar_cal_finfo.value = None
 
-        if spec_found:
-            if not self.tab_data_model.spec_cal_finfo.value:
-                last = conf.get("spec_history", "last") or None
-                self.tab_data_model.spec_cal_finfo.value = guimod.FileInfo(last)
+        if spec_found: # Spec. streams found
+            if self.tab_data_model.spec_cal_finfo.value is None:
+                # No FileInfo stored
+                previous = conf.get("spec_history", "last") or None
+                if previous:
+                    logging.debug("Grabbing Spec compensation from config")
+            else:
+                previous = self.tab_data_model.spec_cal_finfo.value.file_name
+            self.tab_data_model.spec_cal_finfo.value = guimod.FileInfo(previous)
         else:
+            # Set the VA to None, hiding the panel
             self.tab_data_model.spec_cal_finfo.value = None
 
     def load_ar_background(self, file_info):
+        """ Load the data from the AR background file and apply to streams """
 
-        ar_strms = [s for s
-                    in  self.tab_data_model.streams.value
+        ar_strms = [s for s in  self.tab_data_model.streams.value
                     if isinstance(s, streammod.AR_STREAMS)]
 
         fn = None
-        fmt = None
 
         try:
-            logging.debug("Loading AR background")
-
-            if file_info and file_info.file_name and file_info.filetype:
-                fn = file_info.file_name
-                fmt = file_info.filetype
-                converter = dataio.get_exporter(fmt)
-                data = converter.read_data(fn)
-            else:
+            if file_info is None:
+                self._settings_controller.on_ar_change(file_info)
+                return
+            elif file_info.is_empty:
+                logging.debug("Clearing AR background")
                 data = None
+            else:
+                if file_info.file_name and file_info.filetype:
 
+                    logging.debug("Loading AR background data")
+
+                    fn = file_info.file_name
+                    converter = dataio.find_fittest_exporter(fn)
+                    data = converter.read_data(fn)
+
+                    logging.debug("Storing AR background in config")
+                else:
+                    raise ValueError("Insufficient file information")
+
+            # Apply data to the relevant streams
+
+            # FIXME: When assigning data from test-ar-background.h5, Python
+            # crashes without anything being logged
             for strm in ar_strms:
                 strm.background.value = data
-        except ValueError, err: #pylint: disable=W0703
+
+        except Exception, err: #pylint: disable=W0703
+            # logging.exception("Problem loading file")
             msg = "File '%s' not suitable for background calibration:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -965,39 +992,53 @@ class AnalysisTab(Tab):
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()
-        except Exception: #pylint: disable=W0703
-            logging.exception("Failed to open file '%s' with format %s",
-                              fn, fmt)
+
+            # Clear the calibration file
+            file_info.file_name = None
+
+        conf = get_calibration_conf()
+        conf.set("ar_history", "last", file_info.file_name or "")
+        conf.write()
+
+        self._settings_controller.on_ar_change(file_info)
 
     def load_spec_comp(self, file_info):
 
-        spec_strms = [s for s
-                      in  self.tab_data_model.streams.value
+        spec_strms = [s for s in  self.tab_data_model.streams.value
                       if isinstance(s, streammod.SPECTRUM_STREAMS)]
 
         fn = None
-        fmt = None
 
         try:
-            logging.debug("Loading spectrum efficiency compensation")
-
-            if file_info and file_info.file_name and file_info.filetype:
-                fn = file_info.file_name
-                fmt = file_info.filetype
-                converter = dataio.get_exporter(fmt)
-                data = converter.read_data(fn)
-            else:
+            if file_info is None:
+                self._settings_controller.on_spec_change(file_info)
+                return
+            elif file_info.is_empty:
+                logging.debug("Clearing spectrum efficiency compensation")
                 data = None
+            else:
+                if file_info.file_name and file_info.filetype:
+                    logging.debug("Loading spectrum efficiency compensation")
+                    fn = file_info.file_name
+                    converter = dataio.find_fittest_exporter(fn)
+                    data = converter.read_data(fn)
+                else:
+                    raise ValueError("Insufficient file information")
 
-            # If data has no metadata, an exception will be raised that can
-            # not be cought here! (Need some workaround for that?)
-            if hasattr(data, 'metadata') or data is None:
+            # data is expected to have a metadata attribute, or be None for
+            # clearing pusposes
+
+            # FIXME: If data without a metadata attribute is used, an exception
+            # is thrown in odemis.util.spectrum (get_wavelength_per_pixel)
+            # AttributeError: No metadata found in data array
+            # However, the test-spec-calib.h5 doesn't seem to have meta data
+            if data is None or hasattr(data, 'metadata'):
                 for strm in spec_strms:
                     strm.efficiencyCompensation.value = data
             else:
                 raise ValueError("No metadata present!")
 
-        except ValueError, err: #pylint: disable=W0703
+        except Exception, err: #pylint: disable=W0703
             msg = "File '%s' not suitable for efficiency compensation:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1005,9 +1046,15 @@ class AnalysisTab(Tab):
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()
-        except Exception: #pylint: disable=W0703
-            logging.exception("Failed to open file '%s' with format %s",
-                              fn, fmt)
+
+            # Clear the calibration file
+            file_info.file_name = None
+
+        conf = get_calibration_conf()
+        conf.set("spec_history", "last", file_info.file_name or "")
+        conf.write()
+
+        self._settings_controller.on_spec_change(file_info)
 
     @call_after
     def _onTool(self, tool):
@@ -1025,7 +1072,7 @@ class AnalysisTab(Tab):
     def _on_point_select(self, selected_point):
         """ Event handler for when a point is selected """
         # If we're in 1x1 view, we're bringing the plot to the front
-        if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
+        if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             ang_view = self.main_frame.vp_angular.microscope_view
             self.tab_data_model.focussedView.value = ang_view
 
@@ -1049,7 +1096,7 @@ class AnalysisTab(Tab):
                 self.tab_data_model.visible_views.value[pos] = plot_view
 
             # If we're in 1x1 view, we're bringing the plot to the front
-            if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
+            if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
                 self.tab_data_model.focussedView.value = plot_view
 
 

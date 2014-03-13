@@ -29,11 +29,14 @@ import os
 import logging
 
 import wx
+import wx.lib.newevent
 
 import odemis.gui
 from .buttons import ImageTextButton, ImageButton
 from odemis.gui.img import data
 from odemis.gui.util import get_picture_folder
+
+FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
 class FileBrowser(wx.Panel):
 
@@ -42,7 +45,7 @@ class FileBrowser(wx.Panel):
                   size=wx.DefaultSize,
                   style=wx.TAB_TRAVERSAL,
                   tool_tip=None,
-                  clear=False,
+                  clear_btn=False,
                   label="",
                   dialog_title="Browse for file",
                   wildcard="*.*",
@@ -53,7 +56,7 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.wildcard = wildcard
-        self.clear = clear # Add clear buttons
+        self.clear_btn = clear_btn # Add clear buttons
         self.label = label # Text to show when the control is cleared
 
         self.text_ctrl = None
@@ -64,7 +67,7 @@ class FileBrowser(wx.Panel):
 
     def create_dialog(self, parent, id, pos, size, style, name):
         """Setup the graphic representation of the dialog"""
-        wx.Panel.__init__ (self, parent, id, pos, size, style, name)
+        wx.Panel.__init__(self, parent, id, pos, size, style, name)
         self.SetBackgroundColour(parent.GetBackgroundColour())
 
         box = wx.BoxSizer(wx.HORIZONTAL)
@@ -77,7 +80,7 @@ class FileBrowser(wx.Panel):
 
         box.Add(self.text_ctrl, 1)
 
-        if self.clear:
+        if self.clear_btn:
             self._btn_clear = ImageButton(self,
                                           wx.ID_ANY,
                                           data.getico_clearBitmap(),
@@ -113,30 +116,38 @@ class FileBrowser(wx.Panel):
         evt.Skip()
 
     def _SetValue(self, file_path, raise_event):
+
         if file_path:
+            logging.debug("Setting file control to %s", file_path)
+
             self.file_path = file_path
-            if not os.path.exists(file_path):
+
+            if not os.path.exists(self.file_path):
                 self.text_ctrl.SetForegroundColour(odemis.gui.ALERT_COLOUR)
             else:
                 self.text_ctrl.SetForegroundColour(
                                             odemis.gui.FOREGROUND_COLOUR_EDIT)
-            if raise_event:
-                self.text_ctrl.SetValue(file_path)
-            else:
-                self.text_ctrl.ChangeValue(file_path)
-            self.text_ctrl.SetToolTipString(file_path)
+
+            self.text_ctrl.SetValue(self.file_path)
+
+            self.text_ctrl.SetToolTipString(self.file_path)
             self.text_ctrl.SetInsertionPointEnd()
             self._btn_clear.Show()
         else:
+            logging.debug("Clearing file control")
+
             self.file_path = None
             self.text_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-            if raise_event:
-                self.text_ctrl.SetValue(self.label)
-            else:
-                self.text_ctrl.ChangeValue(self.label)
+
+            self.text_ctrl.SetValue(self.label)
+
             self.text_ctrl.SetToolTipString("")
             self._btn_clear.Hide()
+
         self.Layout()
+
+        if raise_event:
+            wx.PostEvent(self, FileSelectEvent(selected_file=self.file_path))
 
     def SetValue(self, file_path):
         logging.debug("File set to '%s' by user input", file_path)
@@ -169,16 +180,19 @@ class FileBrowser(wx.Panel):
     def _on_clear(self, evt):
         self.SetValue(None)
 
+    def clear(self):
+        self.ChangeValue(None)
+
     def _on_browse(self, evt):
         current = self.GetValue() or ""
         directory = os.path.split(current)
 
-        if os.path.isdir( current):
+        if os.path.isdir(current):
             directory = current
             current = ""
-        elif directory and os.path.isdir( directory[0] ):
+        elif directory and os.path.isdir(directory[0]):
             current = directory[1]
-            directory = directory [0]
+            directory = directory[0]
         else:
             directory = get_picture_folder()
             current = ""

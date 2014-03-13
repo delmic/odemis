@@ -523,6 +523,7 @@ class FileInfo(object):
         :param metadata: (dict String -> value): The meta-data as model.MD_*.
         """
 
+        self.file_name = None
         self.file_obj = None
 
         if isinstance(a_file, basestring):
@@ -532,8 +533,6 @@ class FileInfo(object):
             # Assume the given parameter is a File Objecot
             self.file_name = a_file.name
             self.file_obj = a_file # file object
-        else:
-            self.file_name = None
 
         # TODO: settings of the instruments for the acquisition?
         # Might be per stream
@@ -551,12 +550,12 @@ class FileInfo(object):
     @property
     def file_path(self):
         """ Return the directory that contains the file """
-        return os.path.dirname(self.file_name or "")
+        return os.path.dirname(self.file_name) if self.file_name else None
 
     @property
     def file_basename(self):
         """ Return the file name """
-        return os.path.basename(self.file_name or "")
+        return os.path.basename(self.file_name) if self.file_name else None
 
     @property
     def filetype(self):
@@ -568,9 +567,9 @@ class FileInfo(object):
         if ext:
             # First, try our own, known file formats
             formats_to_ext = dataio.get_available_formats(os.O_RDWR)
-            for format, extensions in formats_to_ext.iteritems():
+            for frm, extensions in formats_to_ext.iteritems():
                 if ext in extensions:
-                    return format
+                    return frm
 
             # Return the found extension as a last resort
             logging.warn("Guessing file type")
@@ -578,6 +577,12 @@ class FileInfo(object):
         else:
             return None
 
+    @property
+    def is_empty(self):
+        return self.file_name is None
+
+    def __repr__(self):
+        return "%s (%s)" % (self.__class__, self.file_name)
 
 class View(object):
 
