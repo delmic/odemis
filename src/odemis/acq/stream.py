@@ -2060,10 +2060,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 logging.error("Previous acquisition not ending")
 
         # At this point dcRegion and dcDwellTime must have been set
-        self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
-                                     self._semd,
-                                     self._sem_stream.dcRegion.value,
-                                     self._sem_stream.dcDwellTime.value)
+        if self._sem_stream.dcRegion.value != UNDEFINED_ROI:
+            self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
+                                         self._semd,
+                                         self._sem_stream.dcRegion.value,
+                                         self._sem_stream.dcDwellTime.value)
+        else:
+            self._dc_estimator = None
+
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2242,14 +2246,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
             n = 0
 
             # Translate dc_period to a number of pixels
-            pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
-                                    self._sem_stream.dcPeriod.value,
-                                    ccd_time,
-                                    rep)
-            cur_dc_period = pxs_dc_period.next()
-            
-            # First acquisition of anchor area
-            self._dc_estimator.acquire()
+            if self._dc_estimator is not None:
+                pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
+                                        self._sem_stream.dcPeriod.value,
+                                        ccd_time,
+                                        rep)
+                cur_dc_period = pxs_dc_period.next()
+
+                # First acquisition of anchor area
+                self._dc_estimator.acquire()
 
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
@@ -2303,7 +2308,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     self._updateProgress(future, start_time, (n - 1) / (tot_num - 1))
 
                 # Check if it is time for drift correction
-                if n >= cur_dc_period:
+                if self._dc_estimator is not None and n >= cur_dc_period:
                     cur_dc_period = pxs_dc_period.next()
 
                     # Cannot cancel during this time, but hopefully it's short
