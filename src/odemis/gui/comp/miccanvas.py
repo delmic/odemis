@@ -57,7 +57,7 @@ SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE)
 MODE_SPARC_SELECT = guimodel.TOOL_ROA
 MODE_SPARC_PICK = guimodel.TOOL_POINT
 
-SPARC_MODES = (MODE_SPARC_SELECT, MODE_SPARC_PICK, guimodel.TOOL_DRIFTCOR)
+SPARC_MODES = (MODE_SPARC_SELECT, MODE_SPARC_PICK, guimodel.TOOL_RO_ANCHOR)
 
 
 
@@ -230,7 +230,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.current_mode = MODE_SPARC_SELECT
             self.active_overlay = self.roi_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool == guimodel.TOOL_DRIFTCOR:
+        elif tool == guimodel.TOOL_RO_ANCHOR:
             self.current_mode = tool
             self.active_overlay = self.anchor_overlay
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
@@ -926,14 +926,14 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
 
         # Associate the ROI of the SEM CL stream to the region of acquisition
-        for s in tab_data.acquisitionView.getStreams():
-            if s.name.value == "SEM CL":
-                self._roa = s.roi
-                if hasattr(s, "dcRegion"):
-                    self._dcRegion = s.dcRegion
-                break
-        else:
-            raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
+        sem_stream = tab_data.semStream
+        if sem_stream is None:
+            raise KeyError("SEM CL stream not set, required for the SPARC acquisition")
+        
+        self._roa = sem_stream.roi
+        # TODO: simplify, and expect dcRegion to be there
+        if hasattr(sem_stream, "dcRegion"):
+            self._dcRegion = sem_stream.dcRegion
 
         # TODO: move this to the RepetitionSelectOverlay?
         self._roa.subscribe(self._onROA, init=True)
@@ -985,7 +985,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked inside selection
-            elif self.current_mode in [MODE_SPARC_SELECT, guimodel.TOOL_DRIFTCOR]:
+            elif self.current_mode in [MODE_SPARC_SELECT, guimodel.TOOL_RO_ANCHOR]:
                 self._ldragging = True
                 self.active_overlay.start_drag(vpos)
                 if not self.HasCapture():
@@ -1003,16 +1003,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.active_overlay.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
-                # FIXME: depend on current mode
                 if self.current_mode == MODE_SPARC_SELECT:
                     self._updateROA()
-                elif self.current_mode == guimodel.TOOL_DRIFTCOR:
+                elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
                     self._updateDCRegion()
-                # TODO: check this is indeed not needed
-#                # force it to redraw the selection, even if the ROA hasn't changed
-#                # because the selection is clipped identically
-#                if self._roa:
-#                    self._onROA(self._roa.value)
             else:
                 # TODO: set the rect of the active_overlay to None, then do the
                 # normal _update*. This would avoid redundancy
@@ -1020,7 +1014,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if self.current_mode == MODE_SPARC_SELECT:
                     if self._roa:
                         self._roa.value = UNDEFINED_ROI
-                elif self.current_mode == guimodel.TOOL_DRIFTCOR:
+                elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
                     if self._dcRegion:
                         self._dcRegion.value = UNDEFINED_ROI
 
@@ -1080,6 +1074,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # that the user has forgotten to set the magnification before, so let's
         # pick solution 2.
         self._onROA(self._roa.value)
+        self._onDCRegion(self._dcRegion.value)
 
     def _getSEMRect(self):
         """
@@ -1089,8 +1084,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         raises AttributeError in case no SEM is found
         """
         sem = self._tab_data_model.main.ebeam
-        if not sem:
-            raise AttributeError("No SEM on the microscope")
 
         try:
             sem_center = self.microscope_view.stage_pos.value
@@ -1117,13 +1110,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         return (4 floats): tlbr positions relative to the FoV
         """
         sem = self._tab_data_model.main.ebeam
-        if not sem:
-            raise AttributeError("No SEM on the microscope")
 
         # Get the position of the overlay in physical coordinates
         if phys_rect is None:
-            self._roa.value = UNDEFINED_ROI
-            return
+            return UNDEFINED_ROI
 
         # Position of the complete SEM scan in physical coordinates
         sem_rect = self._getSEMRect()
@@ -1131,8 +1121,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # Take only the intersection so that that ROA is always inside the SEM scan
         phys_rect = util.rect_intersect(phys_rect, sem_rect)
         if phys_rect is None:
-            self._roa.value = UNDEFINED_ROI
-            return
+            return UNDEFINED_ROI
 
         # Convert the ROI into relative value compared to the SEM scan
         # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"

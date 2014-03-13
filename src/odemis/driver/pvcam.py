@@ -1375,21 +1375,22 @@ class PVCamDataFlow(model.DataFlow):
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
-        try:
-            self.component().start_flow(self.notify)
-        except ReferenceError:
+        comp = self.component()
+        if comp is None:
             # camera has been deleted, it's all fine, we'll be GC'd soon
-            pass
+            return
+
+        comp.start_flow(self.notify)
 
     def stop_generate(self):
-        try:
-            self.component().req_stop_flow()
-            # we cannot wait for the thread to stop because:
-            # * it would be long
-            # * we can be called inside a notify(), which is inside the thread => would cause a dead-lock
-        except ReferenceError:
-            # camera has been deleted, it's all fine, we'll be GC'd soon
-            pass
+        comp = self.component()
+        if comp is None:
+            return
+
+        # we cannot wait for the thread to stop because:
+        # * it would be long
+        # * we can be called inside a notify(), which is inside the thread => would cause a dead-lock
+        comp.req_stop_flow()
 
 
     def synchronizedOn(self, event):
@@ -1405,6 +1406,8 @@ class PVCamDataFlow(model.DataFlow):
             return
 
         comp = self.component()
+        if comp is None:
+            return
 
         if self._sync_event:
             self._sync_event.unsubscribe(comp)

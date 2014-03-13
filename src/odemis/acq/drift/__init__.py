@@ -21,17 +21,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from .calculation import CalculateDrift
-from .dc_region import GuessAnchorRegion
-from odemis.util import TimeoutError
-from itertools import cycle
 
+from itertools import cycle
 import logging
 import numpy
 import threading
 
-# to identify a ROI which must still be defined by the user
-UNDEFINED_ROI = (0, 0, 0, 0)
+from .calculation import CalculateDrift
+from .dc_region import GuessAnchorRegion
+
+
 MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
 
 class AnchoredEstimator(object):
@@ -70,18 +69,17 @@ class AnchoredEstimator(object):
         # translation is distance from center (situated at 0.5, 0.5), can be floats
         self._trans = (shape[0] * (center[0] - 0.5) - self.orig_drift[1],
                        shape[1] * (center[1] - 0.5) - self.orig_drift[0])
-        # self._transl = (shape[0] * (center[0] - 0.5) - drift[1],
-        #                 shape[1] * (center[1] - 0.5) - drift[0])
 
         # resolution is the maximum resolution at the scale in proportion of the width
         self._res = (max(1, int(round(shape[0] * width[0]))),
                      max(1, int(round(shape[1] * width[1]))))
 
         # Demand large enough anchor region for drift calculation
-        if self._res[0] < 50:
-            self._res = (MIN_RESOLUTION[0], self._res[1])
-        elif self._res[1] < 50:
-            self._res[1] = (self._res[1], MIN_RESOLUTION[1])
+        if self._res[0] < MIN_RESOLUTION[0] or self._res[1] < MIN_RESOLUTION[1]:
+            old_res = tuple(self._res)
+            self._res = tuple(max(a, b) for a, b in zip(self._res, MIN_RESOLUTION))
+            logging.warning("Anchor region too small %s, will be set to %s",
+                            old_res, self._res)
 
         self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = self._safety_bounds[0] + (max(self._res[0],
@@ -93,30 +91,28 @@ class AnchoredEstimator(object):
         """
         Scan the anchor area
         """
-        if self._roi != UNDEFINED_ROI:
-            # Save current SEM settings
-            cur_dwell_time = self._emitter.dwellTime.value
-            cur_scale = self._emitter.scale.value
-            cur_resolution = self._emitter.resolution.value
+        # Save current SEM settings
+        cur_dwell_time = self._emitter.dwellTime.value
+        cur_scale = self._emitter.scale.value
+        cur_resolution = self._emitter.resolution.value
 
-            self._updateSEMSettings()
-            logging.debug("E-beam spot to anchor region: %s",
-                          self._emitter.translation.value)
-            logging.debug("Scanning anchor region with resolution "
-                          "%s and dwelltime %s and scale %s",
-                          self._emitter.resolution.value,
-                          self._emitter.dwellTime.value,
-                          self._emitter.scale.value)
+        self._updateSEMSettings()
+        logging.debug("E-beam spot to anchor region: %s",
+                      self._emitter.translation.value)
+        logging.debug("Scanning anchor region with resolution "
+                      "%s and dwelltime %s and scale %s",
+                      self._emitter.resolution.value,
+                      self._emitter.dwellTime.value,
+                      self._emitter.scale.value)
+        data = self._semd.data.get()
+        if data.shape == (1, 1):
             data = self._semd.data.get()
-            if data.shape == (1, 1):
-                data = self._semd.data.get()
-            self.raw.append(data)
+        self.raw.append(data)
 
-            # Restore SEM settings
-            self._emitter.dwellTime.value = cur_dwell_time
-            self._emitter.scale.value = cur_scale
-            self._emitter.resolution.value = cur_resolution
-
+        # Restore SEM settings
+        self._emitter.dwellTime.value = cur_dwell_time
+        self._emitter.scale.value = cur_scale
+        self._emitter.resolution.value = cur_resolution
 
     def estimate(self):
         """
@@ -148,8 +144,6 @@ class AnchoredEstimator(object):
         return (float): estimated time to acquire 1 anchor area
         """
         roi = self._roi
-        if roi == UNDEFINED_ROI:
-            return 0
 
         width = (roi[2] - roi[0], roi[3] - roi[1])
         shape = self._emitter.shape
@@ -159,7 +153,8 @@ class AnchoredEstimator(object):
 
         return anchor_time
 
-    def estimateCorrectionPeriod(self, period, dwell_time, repetitions):
+    @staticmethod
+    def estimateCorrectionPeriod(period, dwell_time, repetitions):
         """
         Convert the correction period (as a time) into a number of pixel
         period (float): maximum time between acquisition of the anchor region
@@ -191,7 +186,7 @@ class AnchoredEstimator(object):
 
         logging.debug("Drift correction will be being performed every %s pixels",
                         pxs_dc_period)
-        return cycle(pxs_dc_period)
+        return itertools.cycle(pxs_dc_period)
 
     def _updateSEMSettings(self):
         """

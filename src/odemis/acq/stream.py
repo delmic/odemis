@@ -35,15 +35,13 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import logging
 import math
 import numpy
-from odemis.acq import calibration
-from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
-    MD_SENSOR_PIXEL_SIZE, MD_DESCRIPTION
+from odemis.acq import calibration, _futures
+from odemis.acq import drift as acq_drift
+from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
-import sys
 import threading
 import time
 
-from odemis.acq import drift as acq_drift
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.img as img
@@ -551,8 +549,28 @@ class SEMStream(Stream):
         if roi == UNDEFINED_ROI:
             return roi # No need to discuss it
 
-        # TODO: ensure the ROI is at least as big as the MINIMUM_SIZE defined
-        # in the drift estimator (knowing it always uses scale = 1)
+        width = [roi[2] - roi[0], roi[3] - roi[1]]
+        center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
+
+        # Ensure the ROI is at least as big as the MIN_RESOLUTION
+        # (knowing it always uses scale = 1)
+        shape = self._emitter.shape
+        min_width = [r / s for r, s in zip(acq_drift.MIN_RESOLUTION, shape)]
+        width = [max(a, b) for a, b in zip(width, min_width)]
+
+        # Recompute the ROI so that it fits
+        roi = (center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2)
+        if roi[0] < 0:
+            center[0] += roi[0]
+        elif roi[2] > 1:
+            center[0] -= roi[2] - 1
+        if roi[1] < 0:
+            center[1] += roi[1]
+        elif roi[3] > 1:
+            center[3] -= roi[3] - 1
+        roi = (center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2)
 
         return roi
 
@@ -2056,10 +2074,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 logging.error("Previous acquisition not ending")
 
         # At this point dcRegion and dcDwellTime must have been set
-        self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
-                                     self._semd,
-                                     self._sem_stream.dcRegion.value,
-                                     self._sem_stream.dcDwellTime.value)
+        if self._sem_stream.dcRegion.value != UNDEFINED_ROI:
+            self._dc_estimator = acq_drift.AnchoredEstimator(self._emitter,
+                                         self._semd,
+                                         self._sem_stream.dcRegion.value,
+                                         self._sem_stream.dcDwellTime.value)
+        else:
+            self._dc_estimator = None
+
 
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
@@ -2081,34 +2103,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
             f.task_canceller = self._ssCancelAcquisition
 
         # run task in separate thread
-        self._acq_thread = threading.Thread(target=self._executeTask,
+        self._acq_thread = threading.Thread(target=_futures.executeTask,
                               name="SEM/CCD acquisition",
                               args=(f, runAcquisition, f))
         self._acq_thread.start()
         return f
-
-    # Copy from acqmng
-    @staticmethod
-    def _executeTask(future, fn, *args, **kwargs):
-        """
-        Executes a task represented by a future.
-        Usually, called as main task of a (separate thread).
-        Based on the standard futures code _WorkItem.run()
-        future (Future): future that is used to represent the task
-        fn (callable): function to call for running the future
-        *args, **kwargs: passed to the fn
-        returns None: when the task is over (or cancelled)
-        """
-        if not future.set_running_or_notify_cancel():
-            return
-
-        try:
-            result = fn(*args, **kwargs)
-        except BaseException:
-            e = sys.exc_info()[1]
-            future.set_exception(e)
-        else:
-            future.set_result(result)
 
     @abstractmethod
     def _onSEMCCDData(self, sem_data, ccd_data):
@@ -2299,7 +2298,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     self._updateProgress(future, start_time, (n - 1) / (tot_num - 1))
 
                 # Check if it is time for drift correction
-                if n >= cur_dc_period:
+                if self._dc_estimator is not None and n >= cur_dc_period:
                     cur_dc_period = pxs_dc_period.next()
 
                     # Cannot cancel during this time, but hopefully it's short
