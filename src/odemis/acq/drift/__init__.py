@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from .calculation import CalculateDrift
 from .dc_region import GuessAnchorRegion
-from odemis.util import TimeoutError
 from itertools import cycle
 
 import logging
@@ -152,7 +151,8 @@ class AnchoredEstimator(object):
 
         return anchor_time
 
-    def estimateCorrectionPeriod(self, period, dwell_time, repetitions):
+    @staticmethod
+    def estimateCorrectionPeriod(period, dwell_time, repetitions):
         """
         Convert the correction period (as a time) into a number of pixel
         period (float): maximum time between acquisition of the anchor region
