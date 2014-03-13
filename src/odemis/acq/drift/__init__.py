@@ -78,10 +78,11 @@ class AnchoredEstimator(object):
                      max(1, int(round(shape[1] * width[1]))))
 
         # Demand large enough anchor region for drift calculation
-        if self._res[0] < 50:
-            self._res = (MIN_RESOLUTION[0], self._res[1])
-        elif self._res[1] < 50:
-            self._res[1] = (self._res[1], MIN_RESOLUTION[1])
+        if self._res[0] < MIN_RESOLUTION[0] or self._res[1] < MIN_RESOLUTION[1]:
+            old_res = tuple(self._res)
+            self._res = (max(a, b) for a, b in zip(self._res, MIN_RESOLUTION))
+            logging.warning("Anchor region too small %s, will be set to %s",
+                            old_res, self._res)
 
         self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = self._safety_bounds[0] + (max(self._res[0],
