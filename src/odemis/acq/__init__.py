@@ -126,7 +126,14 @@ def _weight_stream(stream):
     """
     # SECOM: Optical before SEM to avoid bleaching
     if isinstance(stream, FluoStream):
-        return 100 # Fluorescence ASAP to avoid bleaching
+        # Fluorescence ASAP to avoid bleaching
+
+        # If multiple fluorescence acquisitions: prefer the long emission
+        # wavelengths first because there is no chance their emission light
+        # affects the other dyes (and which could lead to a little bit of
+        # bleaching).
+        ewl_bonus = stream.excitation.value # normally, between 0 and 1
+        return 100 + ewl_bonus
     elif isinstance(stream, OPTICAL_STREAMS):
         return 90 # any other kind of optical after fluorescence
     elif isinstance(stream, EM_STREAMS):
