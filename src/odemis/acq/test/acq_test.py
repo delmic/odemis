@@ -92,6 +92,7 @@ class SECOMTestCase(unittest.TestCase):
                                cls.light, cls.light_filter)
         s2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
                                cls.light, cls.light_filter)
+        s2.excitation.value = s2.excitation.range[1]
         s3 = stream.BrightfieldStream("bf", cls.ccd, cls.ccd.data, cls.light)
         cls.streams = [s1, s2, s3]
 
@@ -242,10 +243,10 @@ class SPARCTestCase(unittest.TestCase):
         """
         # Create the streams and streamTree
         semsur = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
-        # the shared SEM stream has a special name
-        sems = stream.SEMStream("SEM CL", self.sed, self.sed.data, self.ebeam)
+        sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
         ars = stream.ARStream("test ar", self.ccd, self.ccd.data, self.ebeam)
-        st = stream.StreamTree(streams=[semsur, sems, ars])
+        semars = stream.SEMARMDStream("test SEM/AR", sems, ars)
+        st = stream.StreamTree(streams=[semsur, semars])
 
         # SEM survey settings are via the current hardware settings
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
