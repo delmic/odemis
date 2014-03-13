@@ -65,7 +65,7 @@ def get_calibration_conf():
     global CONF_CALIBRATION
 
     if not CONF_CALIBRATION:
-        CONF_CALIBRATION = CalibratinConfig()
+        CONF_CALIBRATION = CalibrationConfig()
 
     return CONF_CALIBRATION
 
@@ -144,13 +144,16 @@ class Config(object):
 
     def set(self, section, option, value):
         """ Set the value of an option """
+        if not self.config.has_section(section):
+            logging.warn("Section %s not found, creating...", section)
+            self.config.add_section(section)
         self.config.set(section, option, value)
 
     def get(self, section, option):
         """ Get the value of an option """
         try:
             return self.config.get(section, option)
-        except ConfigParser.NoOptionError:
+        except (ConfigParser.NoOptionError, ConfigParser.NoSectionError):
             return self.default.get(section, option)
 
 class GeneralConfig(Config):
@@ -256,13 +259,20 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
-class CalibratinConfig(Config):
+class CalibrationConfig(Config):
 
     def __init__(self):
         file_name = "calibration.config"
 
-        super(CalibratinConfig, self).__init__(file_name)
+        super(CalibrationConfig, self).__init__(file_name)
 
         # Define the default settings
-        self.default.add_section("history")
-        self.default.set("history", "last", "")
+        self.default.add_section("ar_history")
+        self.default.set("ar_history", "last", "")
+
+        self.default.add_section("spec_history")
+        self.default.set("spec_history", "last", "")
+
+    def write(self):
+        logging.debug("Writing calibration config")
+        super(CalibrationConfig, self).write()

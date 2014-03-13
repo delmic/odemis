@@ -41,16 +41,16 @@ from wx.lib.pubsub import pub
 import odemis.gui
 import odemis.dataio
 import odemis.gui.comp.text as text
+import odemis.gui.model as guimod
 import odemis.gui.util
 
 from odemis import model
 from odemis.acq.stream import SpectrumStream, ARStream
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.file import FileBrowser
+from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
-from odemis.gui.conf import get_calibration_conf
 from odemis.gui.conf.settingspanel import CONFIG
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
@@ -205,6 +205,9 @@ class SettingsPanel(object):
 
     def Show(self, *args, **kwargs):
         self.panel.Show(*args, **kwargs)
+
+    def IsShown(self):
+        return self.panel.IsShown()
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
@@ -366,7 +369,7 @@ class SettingsPanel(object):
 
         return ne
 
-    def add_browse_button(self, label, file_name=None):
+    def add_browse_button(self, label, clearlabel, file_name=None):
         self._clear()
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
@@ -375,7 +378,8 @@ class SettingsPanel(object):
 
         value_ctrl = FileBrowser(self.panel,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
-                                 clear=True)
+                                 label=clearlabel,
+                                 clear_btn=True)
         value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
 
@@ -1155,80 +1159,172 @@ class SparcSettingsController(SettingsBarController):
         self.enable(not is_acquiring)
 
 class AnalysisSettingsController(SettingsBarController):
+    """ Control the widgets/settings in the right column of the analysis tab """
 
     def __init__(self, parent, tab_data):
         super(AnalysisSettingsController, self).__init__(tab_data)
 
         self.parent = parent
-
-        self._acq_file_panel = FileInfoSettingsPanel(
-                                    parent.fp_inspect_file_info,
-                                    "No file loaded")
-
-        self._cal_file_panel = FileInfoSettingsPanel(
-                                    parent.fp_inspect_file_info,
-                                    "No calibration file loaded")
-        self._cal_file_panel.Hide()
-
-        parent.Layout()
-
+        # Gui data model
         self.tab_data = tab_data
 
-        self.tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
-        self.tab_data.cal_fileinfo.subscribe(self.on_calfile_change, init=True)
+        # We add 3 different panels so, they can each be hiddne/shown
+        # individually
+        self._pnl_acqfile = None
+        self._pnl_arfile = None
+        self.arfile_ctrl = None
+        self._pnl_specfile = None
+        self.specfile_ctrl = None
 
-    def on_acqfile_change(self, fi):
-        """ Update the data we wish to display from the FileInfo object """
+        self._create_controls()
 
-        self._acq_file_panel.clear()
+        # Subscribe to the VAs that influence how the settings look.
+        # All these VAs contain FileInfo object
+        tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
 
-        if fi:
-            se_file = self._acq_file_panel.add_label("File", fi.acq_file_basename)
+    def _create_controls(self):
+        """ Create the default controls
+
+        We create a Panel for each group of controls that we need to be able
+        to show and hide seperately.
+
+        ** AR background and Specturm efficiency compenstation **
+
+        These two controls are linked using VAs in the tab_data model.
+
+        They will be hidden if their corresponding VAs have the value 'None'
+        and they will be displayed otherwise.
+
+        The controls are also linked to the VAs using event handlers, so that
+        they can pass on their changing data.
+
+        NOTE: To make sure that *only* user interactions get passed on to the
+        VAs, we use both SetValue and ChangeValue on these controls. (The latter
+        prevents events from being posted.)
+
+        """
+
+        ### Panel containing information about the acquisition file
+
+        self._pnl_acqfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+                                                  "No file loaded")
+
+        wildcards, _ = odemis.gui.util.formats_to_wildcards(
+                                        odemis.dataio.get_available_formats(),
+                                        include_all=True)
+
+
+        ### Panel with AR background file information
+
+        self._pnl_arfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+                                                 "No AR background loaded")
+        fi = self.tab_data.ar_cal_finfo.value
+        current_file = fi.file_name if fi else None
+        self.arfile_ctrl = self._pnl_arfile.add_browse_button(
+                                                        "AR background",
+                                                        "No background loaded",
+                                                        current_file).ctrl
+        self.arfile_ctrl.SetWildcard(wildcards)
+        self.arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
+        self._pnl_arfile.Hide()
+
+
+        ###  Panel with spectrum efficiency compensation file information
+
+        self._pnl_specfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+                                                "No spectrum correction loaded")
+        fi = self.tab_data.spec_cal_finfo.value
+        current_file = fi.file_name if fi else None
+        self.specfile_ctrl = self._pnl_specfile.add_browse_button(
+                                                        "Spec. correction",
+                                                        "No correction loaded",
+                                                        current_file).ctrl
+        self.specfile_ctrl.SetWildcard(wildcards)
+
+        self.specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
+        self._pnl_specfile.Hide()
+
+        self.parent.Layout()
+
+    def _on_ar_file_select(self, evt):
+        """ Pass the selected AR background file on to the VA """
+        logging.debug("AR background selected by user")
+        new_path = evt.selected_file
+        if new_path != self.tab_data.ar_cal_finfo.value.file_name:
+            self.tab_data.ar_cal_finfo.value = guimod.FileInfo(new_path)
+        else:
+            logging.debug("Ignoring same file selection")
+
+    def _on_spec_file_select(self, evt):
+        """ Pass the selected efficiency compensation file on to the VA """
+        logging.debug("Efficiency compensation file selected by user")
+        new_path = evt.selected_file
+        if new_path != self.tab_data.spec_cal_finfo.value.file_name:
+            self.tab_data.spec_cal_finfo.value = guimod.FileInfo(new_path)
+        else:
+            logging.debug("Ignoring same file selection")
+
+    def on_acqfile_change(self, file_info):
+        """ Display the name and location of the file described by file_info
+
+        The controls in the acquisition file panel can be destroyed and
+        re-created each time, because it's one-way traffic between the VA and
+        the controls.
+
+        """
+
+        # Remove the old controls
+        self._pnl_acqfile.clear()
+
+        if file_info:
+            se_file = self._pnl_acqfile.add_label("File",
+                                                  file_info.file_basename)
             se_file.ctrl.SetInsertionPointEnd()
 
-
-            se_path = self._acq_file_panel.add_label("Path", fi.acq_file_path)
-            # show the end of the path (usually more important)
+            se_path = self._pnl_acqfile.add_label("Path", file_info.file_path)
+            # Make sure the file name is visible
             se_path.ctrl.SetInsertionPointEnd()
 
-            for key, value in fi.metadata.items():
-                self._acq_file_panel.add_metadata(key, value)
+            # Add any meta data as labels
+            for key, value in file_info.metadata.items():
+                self._pnl_acqfile.add_metadata(key, value)
 
-            self._acq_file_panel.Refresh()
+        self._pnl_acqfile.Refresh()
 
-    def on_calfile_change(self, fi):
-        """ Update the calibartion file controls """
 
-        self._cal_file_panel.clear()
+    def on_ar_change(self, file_info):
+        """ Update the AR background file controls """
+        self._on_calibartion_change(file_info,
+                                    self.tab_data.ar_cal_finfo,
+                                    self._pnl_arfile,
+                                    self.arfile_ctrl)
 
-        if fi:
-            btn_entry = self._cal_file_panel.add_browse_button(
-                                "Calibration file", fi.acq_file_name)
-            wildcards, _ = odemis.gui.util.formats_to_wildcards(
-                                    odemis.dataio.get_available_formats(),
-                                    include_all=True)
-            btn_entry.ctrl.SetWildcard(wildcards)
-            btn_entry.ctrl.SetValue(fi.acq_file_name)
-            pth_entry = self._cal_file_panel.add_label("Path",
-                                                   fi.acq_file_path or " ")
+    def on_spec_change(self, file_info):
+        self._on_calibartion_change(file_info,
+                                    self.tab_data.spec_cal_finfo,
+                                    self._pnl_specfile,
+                                    self.specfile_ctrl)
 
-            def on_changed(evt):
-                filebrowser = evt.GetEventObject()
-                fi.acq_file_name = filebrowser.GetValue()
-                pth_entry.ctrl.SetValue(filebrowser.path)
 
-                conf = get_calibration_conf()
-                conf.set("history", "last", filebrowser.GetValue() or "")
-                conf.write()
+    def _on_calibartion_change(self, file_info, file_va, panel, file_ctrl):
+        """ Set the value of the file_ctrl and show/hide the panel """
 
-            btn_entry.ctrl.Bind(wx.EVT_TEXT, on_changed)
-
-            self._cal_file_panel.Refresh()
-            self._cal_file_panel.Show()
-            self.parent.Layout()
+        if file_info:
+            # file_name is equal to a path (str) or None
+            # Using ChangeValue prevents event from being ranged, so we don't
+            # get stuck in an update loop.
+            file_ctrl.ChangeValue(file_info.file_name)
+            if not panel.IsShown():
+                logging.debug("Showing calibration fold panel")
+                panel.Show()
         else:
-            self._cal_file_panel.Hide()
-            self.parent.Layout()
+            file_ctrl.ChangeValue(None)
+            if panel.IsShown():
+                logging.debug("Hiding calibration fold panel")
+                panel.Hide()
+
+        self.parent.Layout()
+
 
 class SparcAlignSettingsController(SettingsBarController):
 

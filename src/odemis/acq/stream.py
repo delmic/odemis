@@ -254,7 +254,7 @@ class Stream(object):
                             logging.warning("Detector %s report a depth of %d",
                                              self._detector.name, depth)
                             raise ValueError()
-    
+
                         if data.dtype.kind == "i":
                             irange = (-depth // 2, depth // 2 - 1)
                         else:
@@ -331,7 +331,7 @@ class Stream(object):
             # Note: this log message is disabled to prevent log flooding
             # msg = "Pixel density of image unknown, using sensor size"
             # logging.warning(msg)
-        
+
         # Not necessary, but handy to debug latency problems
         try:
             date = md[model.MD_ACQ_DATE]
@@ -1504,7 +1504,8 @@ class StaticARStream(StaticStream):
         # The background data (typically, an acquisition without ebeam).
         # It is subtracted from the acquisition data.
         # If set to None, a simple baseline background value is subtracted.
-        self.background = model.VigilantAttribute(None, setter=self._setBackground)
+        self.background = model.VigilantAttribute(None,
+                                                  setter=self._setBackground)
         self.background.subscribe(self._onBackground)
 
         if self._sempos:
@@ -1605,6 +1606,13 @@ class StaticARStream(StaticStream):
         """Called when the background is about to be changed"""
         # check it's compatible with the data
 
+        if data is None:
+            return
+        elif not hasattr(data, 'metadata'):
+            raise ValueError("Background data does not contain meta data!")
+        elif model.MD_AR_POLE not in data.metadata:
+            raise ValueError("Data does not contain AR_POLE!")
+
         arpole = data.metadata[model.MD_AR_POLE] # we expect the data has AR_POLE
 
         # TODO: allow data which is the same shape but lower binning by
@@ -1622,10 +1630,11 @@ class StaticARStream(StaticStream):
                                  (data.dtype, r.dtype))
             try:
                 if data.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
-                    raise ValueError("Incompatible format of background data "
-                                 "(%d bits) with the Angular resolved format "
-                                 "(%d bits)." %
-                                 (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
+                    raise ValueError(
+                        "Incompatible format of background data "
+                        "(%d bits) with the Angular resolved format "
+                        "(%d bits)." %
+                        (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
             except KeyError:
                 pass # no metadata, let's hope it's the same BPP
 
@@ -1733,7 +1742,7 @@ class StaticSpectrumStream(StaticStream):
         self._updateImage()
 
     # The tricky part is we need to keep the raw data as .raw for things
-    # like saving the stream or updating the calibration, but all the 
+    # like saving the stream or updating the calibration, but all the
     # display-related methods must work on the calibrated data.
     def _updateIRange(self, data=None):
         if data is None:
@@ -1901,15 +1910,22 @@ class StaticSpectrumStream(StaticStream):
             self._calibrated = data
         else:
             try:
-                self._calibrated = calibration.compensate_spectrum_efficiency(data, calib_data)
+                self._calibrated = calibration.compensate_spectrum_efficiency(
+                                                                    data,
+                                                                    calib_data)
+            except (AttributeError, ValueError):
+                # These exceptions are typically raised when there is something
+                # wrong with the calibration data
+                raise
             except Exception:
-                logging.exception("Failed to apply the spectrum efficiency compensation")
+                logging.exception(
+                    "Failed to apply the spectrum efficiency compensation")
                 self._calibrated = data
-        
+
         # histogram will change as the pixel intensity is different
         self._updateIRange()
         self._updateHistogram()
-        
+
         self._updateImage()
 
     def onFitToRGB(self, value):
@@ -2227,7 +2243,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                     ccd_time,
                                     rep)
             cur_dc_period = pxs_dc_period.next()
-            
+
             # First acquisition of anchor area
             self._dc_estimator.acquire()
 

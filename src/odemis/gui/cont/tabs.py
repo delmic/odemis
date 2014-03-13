@@ -29,6 +29,7 @@ import collections
 import logging
 import math
 from odemis import dataio, model
+from odemis.acq.calibration import get_ar_data, get_spectrum_efficiency
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
@@ -681,10 +682,14 @@ class AnalysisTab(Tab):
                                         static=True
                                   )
 
+        self.tab_data_model.ar_cal_finfo.subscribe(self.load_ar_background)
+        self.tab_data_model.spec_cal_finfo.subscribe(self.load_spec_comp)
+
         self._settings_controller = settings.AnalysisSettingsController(
                                         self.main_frame,
                                         self.tab_data_model
                                     )
+
 
         buttons = OrderedDict([
             (self.main_frame.btn_sparc_view_all,
@@ -733,8 +738,8 @@ class AnalysisTab(Tab):
 
         fi = self.tab_data_model.acq_fileinfo.value
         #pylint: disable=E1103
-        if fi and fi.acq_file_name:
-            path, _ = os.path.split(fi.acq_file_name)
+        if fi and fi.file_name:
+            path, _ = os.path.split(fi.file_name)
         else:
             path = get_picture_folder()
 
@@ -791,17 +796,6 @@ class AnalysisTab(Tab):
 
         # Create a new file info model object
         fi = guimod.FileInfo(filename)
-
-        # TODO: Determine if the new data to be displayed supports the use
-        # of a calibration image.
-        # For now, we just put `False`
-        if True:
-            if not self.tab_data_model.cal_fileinfo.value:
-                conf = get_calibration_conf()
-                last = conf.get("history", "last") or None
-                self.tab_data_model.cal_fileinfo.value = guimod.FileInfo(last)
-        else:
-            self.tab_data_model.cal_fileinfo.value = None
 
         # remove all the previous streams
         self._stream_controller.clear()
@@ -880,11 +874,16 @@ class AnalysisTab(Tab):
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.acq_fileinfo.value = fi
 
+        # TODO: change the control flow? Seems messy like this.
+        ar_found = False
+        spec_found = False
+
         # Share spectrum pixel positions with other viewports
         # TODO: a better place for this code?
         for strm in self.tab_data_model.streams.value:
             # If a spectrum stream is found...
             if isinstance(strm, streammod.SPECTRUM_STREAMS):
+                spec_found = True
                 iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
@@ -909,6 +908,7 @@ class AnalysisTab(Tab):
                 break
             # If an angle resolve stream is found...
             elif isinstance(strm, streammod.AR_STREAMS):
+                ar_found = True
                 # ... set the PointOverlay values for each viewport
                 for viewport in self._view_controller.viewports:
                     if hasattr(viewport.canvas, "points_overlay"):
@@ -920,6 +920,144 @@ class AnalysisTab(Tab):
                 break
         else:
             self.tb.enable_button(tools.TOOL_POINT, False)
+
+
+        # Initialize calibration controls
+        conf = get_calibration_conf()
+
+        if ar_found: # AR streams found
+            if self.tab_data_model.ar_cal_finfo.value is None:
+                # No FileInfo stored
+                previous = conf.get("ar_history", "last") or None
+                if previous:
+                    logging.debug("Grabbing AR background from config")
+            else:
+                previous = self.tab_data_model.ar_cal_finfo.value.file_name
+            self.tab_data_model.ar_cal_finfo.value = guimod.FileInfo(previous)
+        else:
+            # Set the VA to None, hiding the panel
+            self.tab_data_model.ar_cal_finfo.value = None
+
+        if spec_found: # Spec. streams found
+            if self.tab_data_model.spec_cal_finfo.value is None:
+                # No FileInfo stored
+                previous = conf.get("spec_history", "last") or None
+                if previous:
+                    logging.debug("Grabbing Spec compensation from config")
+            else:
+                previous = self.tab_data_model.spec_cal_finfo.value.file_name
+            self.tab_data_model.spec_cal_finfo.value = guimod.FileInfo(previous)
+        else:
+            # Set the VA to None, hiding the panel
+            self.tab_data_model.spec_cal_finfo.value = None
+
+    def load_ar_background(self, file_info):
+        """ Load the data from the AR background file and apply to streams """
+
+        ar_strms = [s for s in  self.tab_data_model.streams.value
+                    if isinstance(s, streammod.AR_STREAMS)]
+
+        fn = None
+
+        try:
+            if file_info is None:
+                self._settings_controller.on_ar_change(file_info)
+                return
+            elif file_info.is_empty:
+                logging.debug("Clearing AR background")
+                data = None
+            else:
+                if file_info.file_name and file_info.filetype:
+
+                    logging.debug("Loading AR background data")
+
+                    fn = file_info.file_name
+                    converter = dataio.find_fittest_exporter(fn)
+                    data = converter.read_data(fn)
+
+                    logging.debug("Storing AR background in config")
+                else:
+                    raise ValueError("Insufficient file information")
+
+            # Apply data to the relevant streams
+
+            # FIXME: When assigning data from test-ar-background.h5, Python
+            # crashes without anything being logged
+            for strm in ar_strms:
+                strm.background.value = data
+
+        except Exception, err: #pylint: disable=W0703
+            # logging.exception("Problem loading file")
+            msg = "File '%s' not suitable for background calibration:\n\n%s"
+            dlg = wx.MessageDialog(self.main_frame,
+                                   msg % (fn, err),
+                                   "Unusable background file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+
+            # Clear the calibration file
+            file_info.file_name = None
+
+        conf = get_calibration_conf()
+        conf.set("ar_history", "last", file_info.file_name or "")
+        conf.write()
+
+        self._settings_controller.on_ar_change(file_info)
+
+    def load_spec_comp(self, file_info):
+
+        spec_strms = [s for s in  self.tab_data_model.streams.value
+                      if isinstance(s, streammod.SPECTRUM_STREAMS)]
+
+        fn = None
+
+        try:
+            if file_info is None:
+                self._settings_controller.on_spec_change(file_info)
+                return
+            elif file_info.is_empty:
+                logging.debug("Clearing spectrum efficiency compensation")
+                data = None
+            else:
+                if file_info.file_name and file_info.filetype:
+                    logging.debug("Loading spectrum efficiency compensation")
+                    fn = file_info.file_name
+                    converter = dataio.find_fittest_exporter(fn)
+                    data = converter.read_data(fn)
+                else:
+                    raise ValueError("Insufficient file information")
+
+            # data is expected to have a metadata attribute, or be None for
+            # clearing pusposes
+
+            # FIXME: If data without a metadata attribute is used, an exception
+            # is thrown in odemis.util.spectrum (get_wavelength_per_pixel)
+            # AttributeError: No metadata found in data array
+            # However, the test-spec-calib.h5 doesn't seem to have meta data
+            if data is None or hasattr(data, 'metadata'):
+                for strm in spec_strms:
+                    strm.efficiencyCompensation.value = data
+            else:
+                raise ValueError("No metadata present!")
+
+        except Exception, err: #pylint: disable=W0703
+            msg = "File '%s' not suitable for efficiency compensation:\n\n%s"
+            dlg = wx.MessageDialog(self.main_frame,
+                                   msg % (fn, err),
+                                   "Unusable efficiency file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+
+            # Clear the calibration file
+            file_info.file_name = None
+
+        conf = get_calibration_conf()
+        conf.set("spec_history", "last", file_info.file_name or "")
+        conf.write()
+
+        self._settings_controller.on_spec_change(file_info)
 
     @call_after
     def _onTool(self, tool):
@@ -937,7 +1075,7 @@ class AnalysisTab(Tab):
     def _on_point_select(self, selected_point):
         """ Event handler for when a point is selected """
         # If we're in 1x1 view, we're bringing the plot to the front
-        if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
+        if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
             ang_view = self.main_frame.vp_angular.microscope_view
             self.tab_data_model.focussedView.value = ang_view
 
@@ -961,7 +1099,7 @@ class AnalysisTab(Tab):
                 self.tab_data_model.visible_views.value[pos] = plot_view
 
             # If we're in 1x1 view, we're bringing the plot to the front
-            if (self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE):
+            if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
                 self.tab_data_model.focussedView.value = plot_view
 
 
