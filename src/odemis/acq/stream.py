@@ -35,12 +35,10 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import logging
 import math
 import numpy
-from odemis.acq import calibration, drift
+from odemis.acq import calibration, _futures
 from odemis.acq import drift as acq_drift
-from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
-    MD_SENSOR_PIXEL_SIZE, MD_DESCRIPTION
+from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
-import sys
 import threading
 import time
 
@@ -557,7 +555,7 @@ class SEMStream(Stream):
         # Ensure the ROI is at least as big as the MIN_RESOLUTION
         # (knowing it always uses scale = 1)
         shape = self._emitter.shape
-        min_width = [r / s for r, s in zip(drift.MIN_RESOLUTION, shape)]
+        min_width = [r / s for r, s in zip(acq_drift.MIN_RESOLUTION, shape)]
         width = [max(a, b) for a, b in zip(width, min_width)]
 
         # Recompute the ROI so that it fits
@@ -2089,34 +2087,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
             f.task_canceller = self._ssCancelAcquisition
 
         # run task in separate thread
-        self._acq_thread = threading.Thread(target=self._executeTask,
+        self._acq_thread = threading.Thread(target=_futures.executeTask,
                               name="SEM/CCD acquisition",
                               args=(f, runAcquisition, f))
         self._acq_thread.start()
         return f
-
-    # Copy from acqmng
-    @staticmethod
-    def _executeTask(future, fn, *args, **kwargs):
-        """
-        Executes a task represented by a future.
-        Usually, called as main task of a (separate thread).
-        Based on the standard futures code _WorkItem.run()
-        future (Future): future that is used to represent the task
-        fn (callable): function to call for running the future
-        *args, **kwargs: passed to the fn
-        returns None: when the task is over (or cancelled)
-        """
-        if not future.set_running_or_notify_cancel():
-            return
-
-        try:
-            result = fn(*args, **kwargs)
-        except BaseException:
-            e = sys.exc_info()[1]
-            future.set_exception(e)
-        else:
-            future.set_result(result)
 
     @abstractmethod
     def _onSEMCCDData(self, sem_data, ccd_data):

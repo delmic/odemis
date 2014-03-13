@@ -22,16 +22,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import logging
-import time
-import sys
-import threading
-import numpy
-
-from odemis import model
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import logging
+import numpy
+from odemis import model, acq
+from odemis.acq import _futures
 from odemis.util import TimeoutError
+import sys
+import threading
+import time
+
 
 _scan_lock = threading.Lock()
 _ccd_done = threading.Event()
@@ -59,7 +60,7 @@ def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
     f.task_canceller = _CancelScanGrid
 
     # Run in separate thread
-    scan_thread = threading.Thread(target=_executeTask,
+    scan_thread = threading.Thread(target=_futures.executeTask,
                   name="Scan grid",
                   args=(f, doScanGrid, f, repetitions, dwell_time, escan, ccd, detector))
 
@@ -159,26 +160,6 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
             electron_coordinates.append((i * scale[0], j * scale[1]))
 
     return ccd.data._optical_image, electron_coordinates, scale
-
-# Copy from acqmng
-# @staticmethod
-def _executeTask(future, fn, *args, **kwargs):
-    """
-    Executes a task represented by a future.
-    Usually, called as main task of a (separate thread).
-    Based on the standard futures code _WorkItem.run()
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    *args, **kwargs: passed to the fn
-    returns None: when the task is over (or cancelled)
-    """
-    try:
-        result = fn(*args, **kwargs)
-    except BaseException:
-        e = sys.exc_info()[1]
-        future.set_exception(e)
-    else:
-        future.set_result(result)
 
 def _CancelScanGrid(future):
     """

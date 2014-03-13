@@ -21,13 +21,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from __future__ import division
-from .calculation import CalculateDrift
-from .dc_region import GuessAnchorRegion
-from itertools import cycle
 
+from itertools import cycle
 import logging
 import numpy
 import threading
+
+from .calculation import CalculateDrift
+from .dc_region import GuessAnchorRegion
+
 
 MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
 
@@ -184,7 +186,7 @@ class AnchoredEstimator(object):
 
         logging.debug("Drift correction will be being performed every %s pixels",
                         pxs_dc_period)
-        return cycle(pxs_dc_period)
+        return itertools.cycle(pxs_dc_period)
 
     def _updateSEMSettings(self):
         """
