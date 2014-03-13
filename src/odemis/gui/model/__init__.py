@@ -55,7 +55,7 @@ TOOL_POINT = 4 # Select a point (to acquire/display)
 TOOL_LINE = 5 # Select a line (to acquire/display)
 TOOL_DICHO = 6 # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
 TOOL_SPOT = 7 # Activate spot mode on the SEM
-TOOL_DRIFTCOR = 8
+TOOL_RO_ANCHOR = 8
 
 class MainGUIData(object):
     """
@@ -380,7 +380,7 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
                      TOOL_ZOOM,
                      TOOL_ROI,
                      TOOL_ROA,
-                     TOOL_DRIFTCOR,
+                     TOOL_RO_ANCHOR,
                      TOOL_POINT,
                      TOOL_LINE])
 
@@ -390,6 +390,10 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         # stream will be acquired (for the Sparc acquisition interface only).
         # The tab controller will take care of filling it
         self.acquisitionView = MicroscopeView("Acquisition")
+
+        # The SEM CL stream that is used to select the acquisition settings
+        # It will be set at start up by the tab controller
+        self.semStream = None
 
 class AnalysisGUIData(MicroscopyGUIData):
     """

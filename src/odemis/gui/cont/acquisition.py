@@ -311,15 +311,19 @@ class SparcAcquiController(object):
     tab.
     """
 
-    def __init__(self, tab_data, main_frame, settings_controller):
+    def __init__(self, tab_data, main_frame, settings_controller, roa, vas):
         """
         main_frame: (wx.Frame): the frame which contains the 4 viewports
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         settings_controller (SettingsController)
+        roa (VA): VA of the ROA
+        vas (list of VAs): all the VAs which might affect acquisition (time)
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
+        self._roa = roa
+        self._vas = vas
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -360,20 +364,13 @@ class SparcAcquiController(object):
         # TODO: we need to be informed if the user closes suddenly the window
         # self.Bind(wx.EVT_CLOSE, self.on_close)
 
-        # look for the SEM CL stream
-        self._sem_cl = None # SEM CL stream
-        for s in self._tab_data_model.acquisitionView.getStreams():
-            if s.name.value == "SEM CL":
-                self._sem_cl = s
-                break
-        else:
-            raise KeyError("Failed to find SEM CL stream, required for the Sparc acquisition")
-
         # Event binding
         pub.subscribe(self.on_setting_change, 'setting.changed')
-        self._sem_cl.roi.subscribe(self.onROI, init=True)
-        # We should also listen to repetition, in case it's modified after we've
+        # TODO We should also listen to repetition, in case it's modified after we've
         # received the new ROI. Or maybe always compute acquisition time a bit delayed?
+        for va in vas:
+            va.subscribe(self.onAnyVA)
+        roa.subscribe(self.onROA, init=True)
 
     def __del__(self):
         self._executor.shutdown(wait=False)
@@ -396,11 +393,16 @@ class SparcAcquiController(object):
         self._main_frame.txt_destination.SetInsertionPointEnd()
         self._main_frame.txt_filename.SetValue(unicode(base))
 
-    def onROI(self, roi):
+    def onROA(self, roi):
         """ updates the acquire button according to the acquisition ROI """
         self.btn_acquire.Enable(roi != UNDEFINED_ROI)
         self.update_acquisition_time() # to update the message
 
+    def onAnyVA(self, val):
+        """
+        Called whenever a VA which might affect the acquisition is modified
+        """
+        self.update_acquisition_time() # to update the message
 
     def on_setting_change(self, setting_ctrl):
         """ Handler for pubsub 'setting.changed' messages """
@@ -419,7 +421,7 @@ class SparcAcquiController(object):
     @call_after
     def update_acquisition_time(self):
 
-        if self._sem_cl.roi.value == UNDEFINED_ROI:
+        if self._roa.value == UNDEFINED_ROI:
             # TODO: update the default text to be the same
             txt = "Region of acquisition needs to be selected"
         else:

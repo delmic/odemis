@@ -1054,7 +1054,8 @@ class LensAlignSettingsController(SettingsBarController):
 
 class SparcSettingsController(SettingsBarController):
 
-    def __init__(self, parent_frame, tab_data, highlight_change=False):
+    def __init__(self, parent_frame, tab_data, highlight_change=False,
+                 spec_stream=None, ar_stream=None):
         super(SparcSettingsController, self).__init__(tab_data,
                                                       highlight_change)
         main_data = tab_data.main
@@ -1096,27 +1097,21 @@ class SparcSettingsController(SettingsBarController):
             )
 
             self._spectrum_panel.add_divider()
-            spectrum_streams = [s for s in acq_streams if isinstance(s, SpectrumStream)]
-            assert len(spectrum_streams) <= 1 # there should be one or none
-            for s in spectrum_streams:
+            if spec_stream:
                 self.spectro_rep_ent = self._spectrum_panel.add_value(
                                             "repetition",
-                                            s.repetition,
+                                            spec_stream.repetition,
                                             None,  #component
                                             CONFIG["streamspec"]["repetition"])
 
                 self.spec_pxs_ent = self._spectrum_panel.add_value(
                                             "pixelSize",
-                                            s.pixelSize,
+                                            spec_stream.pixelSize,
                                             None,  #component
                                             CONFIG["streamspec"]["pixelSize"])
+            else:
+                logging.warning("Spectrometer available, but no spectrum stream provided")
 
-                # # Added for debug only
-                # self._spectrum_panel.add_value(
-                #         "roi",
-                #         s.roi,
-                #         None,  #component
-                #         CONFIG["streamspec"]["roi"])
 
             # Add spectrograph control if available
             if main_data.spectrograph:
@@ -1139,14 +1134,14 @@ class SparcSettingsController(SettingsBarController):
             self.add_component("Camera", main_data.ccd, self._angular_panel)
 
             self._angular_panel.add_divider()
-            ar_streams = [s for s in acq_streams if isinstance(s, ARStream)]
-            assert len(ar_streams) <= 1 # there should be one or none
-            for s in ar_streams:
+            if ar_stream is not None:
                 self.angular_rep_ent = self._angular_panel.add_value(
                                         "repetition",
-                                        s.repetition,
+                                        ar_stream.repetition,
                                         None,  #component
                                         CONFIG["streamar"]["repetition"])
+            else:
+                logging.warning("AR camera available, but no AR stream provided")
 
         else:
             parent_frame.fp_settings_sparc_angular.Hide()

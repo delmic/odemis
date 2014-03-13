@@ -35,7 +35,8 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import logging
 import math
 import numpy
-from odemis.acq import calibration
+from odemis.acq import calibration, drift
+from odemis.acq import drift as acq_drift
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, \
     MD_SENSOR_PIXEL_SIZE, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
@@ -43,7 +44,6 @@ import sys
 import threading
 import time
 
-from odemis.acq import drift as acq_drift
 import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.img as img
@@ -551,8 +551,28 @@ class SEMStream(Stream):
         if roi == UNDEFINED_ROI:
             return roi # No need to discuss it
 
-        # TODO: ensure the ROI is at least as big as the MINIMUM_SIZE defined
-        # in the drift estimator (knowing it always uses scale = 1)
+        width = [roi[2] - roi[0], roi[3] - roi[1]]
+        center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
+
+        # Ensure the ROI is at least as big as the MIN_RESOLUTION
+        # (knowing it always uses scale = 1)
+        shape = self._emitter.shape
+        min_width = [r / s for r, s in zip(drift.MIN_RESOLUTION, shape)]
+        width = [max(a, b) for a, b in zip(width, min_width)]
+
+        # Recompute the ROI so that it fits
+        roi = (center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2)
+        if roi[0] < 0:
+            center[0] += roi[0]
+        elif roi[2] > 1:
+            center[0] -= roi[2] - 1
+        if roi[1] < 0:
+            center[1] += roi[1]
+        elif roi[3] > 1:
+            center[3] -= roi[3] - 1
+        roi = (center[0] - width[0] / 2, center[1] - width[1] / 2,
+               center[0] + width[0] / 2, center[1] + width[1] / 2)
 
         return roi
 

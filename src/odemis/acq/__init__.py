@@ -32,8 +32,7 @@ from concurrent.futures._base import CancelledError, FINISHED, CANCELLED, \
 import logging
 import numpy
 from odemis import model
-from odemis.acq.stream import FluoStream, ARStream, SpectrumStream, \
-    SEMSpectrumMDStream, OPTICAL_STREAMS, EM_STREAMS, SEMARMDStream
+from odemis.acq.stream import FluoStream, OPTICAL_STREAMS, EM_STREAMS, SEMCCDMDStream
 from odemis.gui.util import img
 import sys
 import threading
@@ -64,7 +63,7 @@ def acquire(streams):
     future = model.ProgressiveFuture()
 
     # create a task
-    task = AcquisitionTask(_mergeStreams(streams), future)
+    task = AcquisitionTask(streams, future)
     future.task_canceller = task.cancel # let the future cancel the task
 
     # run executeTask in a thread
@@ -118,47 +117,6 @@ def computeThumbnail(streamTree, acqTask):
     iim.metadata[model.MD_DESCRIPTION] = "Composited image preview"
     return iim
 
-def _mergeStreams(streams):
-    """
-    Modifies a list of streams by merging possible streams into
-    MultipleDetectorStreams
-    streams (list of streams): the original list of streams
-    return (list of streams): the same list or a shorter one
-    """
-    # TODO: move the logic to all the MDStreams? Each class would be able to
-    # say whether it finds some potential streams to merge?
-
-    merged = list(streams)
-    # For now, this applies only to the SPARC streams
-    # SEM CL + Spectrum => SEMSpectrumMD
-    # SEM CL + AR => SEMARMD
-    semcls = [s for s in streams if isinstance(s, EM_STREAMS) and s.name.value == "SEM CL"]
-    specs = [s for s in streams if isinstance(s, SpectrumStream)]
-    ars = [s for s in streams if isinstance(s, ARStream)]
-    if semcls:
-        if len(semcls) > 1:
-            logging.warning("More than one SEM CL stream, not sure how to use them")
-        semcl = semcls[0]
-
-        for s in specs:
-            mds = SEMSpectrumMDStream("%s - %s" % (semcl.name.value, s.name.value),
-                                      semcl, s)
-            merged.remove(s)
-            if semcl in merged:
-                merged.remove(semcl)
-            merged.append(mds)
-
-        for s in ars:
-            mds = SEMARMDStream("%s - %s" % (semcl.name.value, s.name.value),
-                                semcl, s)
-            merged.remove(s)
-            if semcl in merged:
-                merged.remove(semcl)
-            merged.append(mds)
-
-    return merged
-
-
 def _weight_stream(stream):
     """
     Defines how much a stream is of priority (should be done first) for
@@ -172,18 +130,9 @@ def _weight_stream(stream):
     elif isinstance(stream, OPTICAL_STREAMS):
         return 90 # any other kind of optical after fluorescence
     elif isinstance(stream, EM_STREAMS):
-        if stream.name.value == "SEM CL": # special name on Sparc
-            return 40 # should be done after SEM live
-        else:
-            return 50 # can be done after any light
-    elif isinstance(stream, SEMSpectrumMDStream):
-        return 40 # at the same time as SEM CL
-    elif isinstance(stream, SpectrumStream):
-        return 40 # at the same time as SEM CL
-    elif isinstance(stream, SEMARMDStream):
-        return 40 # at the same time as SEM CL
-    elif isinstance(stream, ARStream):
-        return 40 # at the same time as SEM CL
+        return 50 # can be done after any light
+    elif isinstance(stream, SEMCCDMDStream):
+        return 40 # after standard (=survey) SEM
     else:
         logging.debug("Unexpected stream of type %s", stream.__class__.__name__)
         return 0
