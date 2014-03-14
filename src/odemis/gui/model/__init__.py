@@ -534,7 +534,7 @@ class FileInfo(object):
             # The given parameter is a file name
             self.file_name = a_file
         elif a_file is not None:
-            # Assume the given parameter is a File Objecot
+            # Assume the given parameter is a File Object
             self.file_name = a_file.name
             self.file_obj = a_file # file object
 
@@ -560,26 +560,6 @@ class FileInfo(object):
     def file_basename(self):
         """ Return the file name """
         return os.path.basename(self.file_name) if self.file_name else None
-
-    @property
-    def filetype(self):
-        if not self.file_name:
-            return None
-
-        _, ext = os.path.splitext(self.file_name)
-
-        if ext:
-            # First, try our own, known file formats
-            formats_to_ext = dataio.get_available_formats(os.O_RDWR)
-            for frm, extensions in formats_to_ext.iteritems():
-                if ext in extensions:
-                    return frm
-
-            # Return the found extension as a last resort
-            logging.warn("Guessing file type")
-            return ext.upper()
-        else:
-            return None
 
     @property
     def is_empty(self):

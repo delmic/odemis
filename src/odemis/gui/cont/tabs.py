@@ -29,7 +29,7 @@ import collections
 import logging
 import math
 from odemis import dataio, model
-from odemis.acq.calibration import get_ar_data, get_spectrum_efficiency
+from odemis.acq import calibration
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
@@ -48,10 +48,11 @@ import scipy.misc
 import weakref
 import wx
 
+from odemis.acq.calibration import get_ar_data, get_spectrum_efficiency
+import odemis.acq.stream as streammod
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
-import odemis.acq.stream as streammod
 
 
 class Tab(object):
@@ -988,12 +989,13 @@ class AnalysisTab(Tab):
             # Set the VA to None, hiding the panel
             self.tab_data_model.spec_cal_finfo.value = None
 
+    # TODO: Move it to model, as a setter of the VA?
+    # But obviously the exceptions to message must be staying in the GUI side.
+    # Or maybe: call this function first, and if successful, set the VA, otherwise
+    # don't change. In particular, if setting the background VA fails, we should
+    # fallback to the previous value, not to None.
     def load_ar_background(self, file_info):
         """ Load the data from the AR background file and apply to streams """
-
-        ar_strms = [s for s in  self.tab_data_model.streams.value
-                    if isinstance(s, streammod.AR_STREAMS)]
-
         fn = None
 
         try:
@@ -1002,37 +1004,32 @@ class AnalysisTab(Tab):
                 return
             elif file_info.is_empty:
                 logging.debug("Clearing AR background")
-                data = None
+                cdata = None
             else:
-                if file_info.file_name and file_info.filetype:
-
-                    logging.debug("Loading AR background data")
-
-                    fn = file_info.file_name
-                    converter = dataio.find_fittest_exporter(fn)
-                    data = converter.read_data(fn)
-
-                    logging.debug("Storing AR background in config")
-                else:
-                    raise ValueError("Insufficient file information")
+                logging.debug("Loading AR background data")
+                fn = file_info.file_name
+                converter = dataio.find_fittest_exporter(fn)
+                data = converter.read_data(fn)
+                cdata = calibration.get_ar_data(data)
 
             # Apply data to the relevant streams
+            ar_strms = [s for s in  self.tab_data_model.streams.value
+                        if isinstance(s, streammod.AR_STREAMS)]
 
-            # FIXME: When assigning data from test-ar-background.h5, Python
-            # crashes without anything being logged
             for strm in ar_strms:
-                strm.background.value = data
+                strm.background.value = cdata
 
         except Exception, err: #pylint: disable=W0703
             # logging.exception("Problem loading file")
-            msg = "File '%s' not suitable for background calibration:\n\n%s"
+            msg = "File '%s' not suitable as angular resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
-                                   "Unusable background file",
+                                   "Unusable AR background file",
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()
 
+            # FIXME: we should not do that: FileInfo should be considered RO
             # Clear the calibration file
             file_info.file_name = None
 
@@ -1040,49 +1037,39 @@ class AnalysisTab(Tab):
         conf.set("ar_history", "last", file_info.file_name or "")
         conf.write()
 
+        # TODO: should not be called here, but on loading a file, to decide
+        # whether calibration panel is displayed or not
         self._settings_controller.on_ar_change(file_info)
 
     def load_spec_comp(self, file_info):
-
-        spec_strms = [s for s in  self.tab_data_model.streams.value
-                      if isinstance(s, streammod.SPECTRUM_STREAMS)]
-
         fn = None
-
         try:
             if file_info is None:
                 self._settings_controller.on_spec_change(file_info)
                 return
             elif file_info.is_empty:
                 logging.debug("Clearing spectrum efficiency compensation")
-                data = None
+                cdata = None
             else:
-                if file_info.file_name and file_info.filetype:
-                    logging.debug("Loading spectrum efficiency compensation")
-                    fn = file_info.file_name
-                    converter = dataio.find_fittest_exporter(fn)
-                    data = converter.read_data(fn)
-                else:
-                    raise ValueError("Insufficient file information")
+                logging.debug("Loading spectrum efficiency compensation")
+                fn = file_info.file_name
+                converter = dataio.find_fittest_exporter(fn)
+                data = converter.read_data(fn)
+                cdata = calibration.get_spectrum_efficiency(data)
 
-            # data is expected to have a metadata attribute, or be None for
-            # clearing pusposes
+            # data is expected to be a DataArra or be None for clearing purposes
 
-            # FIXME: If data without a metadata attribute is used, an exception
-            # is thrown in odemis.util.spectrum (get_wavelength_per_pixel)
-            # AttributeError: No metadata found in data array
-            # However, the test-spec-calib.h5 doesn't seem to have meta data
-            if data is None or hasattr(data, 'metadata'):
-                for strm in spec_strms:
-                    strm.efficiencyCompensation.value = data
-            else:
-                raise ValueError("No metadata present!")
+            spec_strms = [s for s in self.tab_data_model.streams.value
+                          if isinstance(s, streammod.SPECTRUM_STREAMS)]
+
+            for strm in spec_strms:
+                strm.efficiencyCompensation.value = cdata
 
         except Exception, err: #pylint: disable=W0703
-            msg = "File '%s' not suitable for efficiency compensation:\n\n%s"
+            msg = "File '%s' not suitable for spectrum efficiency compensation:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
-                                   "Unusable efficiency file",
+                                   "Unusable spectrum efficiency file",
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()

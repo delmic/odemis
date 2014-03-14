@@ -1286,22 +1286,23 @@ class AnalysisSettingsController(SettingsBarController):
 
         self._pnl_acqfile.Refresh()
 
-
+    # FIXME: these should be just 2 simple functions allowing to show/hide the panel
+    # (updating the content of the text ctrl should be done independently, via the VA)
     def on_ar_change(self, file_info):
         """ Update the AR background file controls """
-        self._on_calibartion_change(file_info,
+        self._on_calibration_change(file_info,
                                     self.tab_data.ar_cal_finfo,
                                     self._pnl_arfile,
                                     self.arfile_ctrl)
 
     def on_spec_change(self, file_info):
-        self._on_calibartion_change(file_info,
+        self._on_calibration_change(file_info,
                                     self.tab_data.spec_cal_finfo,
                                     self._pnl_specfile,
                                     self.specfile_ctrl)
 
 
-    def _on_calibartion_change(self, file_info, file_va, panel, file_ctrl):
+    def _on_calibration_change(self, file_info, file_va, panel, file_ctrl):
         """ Set the value of the file_ctrl and show/hide the panel """
 
         if file_info:
