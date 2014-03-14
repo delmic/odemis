@@ -32,36 +32,31 @@ setting column of the user interface.
 import collections
 import logging
 import numbers
-import re
-import time
-
-import wx
-from wx.lib.pubsub import pub
-
-import odemis.gui
-import odemis.dataio
-import odemis.gui.comp.text as text
-import odemis.gui.model as guimod
-import odemis.gui.util
-
 from odemis import model
-from odemis.acq.stream import SpectrumStream, ARStream
+import odemis.dataio
+from odemis.gui import conf
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG
+import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from odemis.util.units import readable_str
+import re
+import time
+import wx
+from wx.lib.pubsub import pub
 
+from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
+import odemis.gui.comp.text as text
+import odemis.gui.model as guimod
 import odemis.util.units as utun
 
 
 ####### Utility functions #######
-
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
@@ -376,10 +371,12 @@ class SettingsPanel(object):
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
+        config = conf.get_acqui_conf()
         value_ctrl = FileBrowser(self.panel,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
                                  label=clearlabel,
-                                 clear_btn=True)
+                                 clear_btn=True,
+                                 default_dir=config.last_path)
         value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
 
@@ -1181,9 +1178,9 @@ class AnalysisSettingsController(SettingsBarController):
         """ Create the default controls
 
         We create a Panel for each group of controls that we need to be able
-        to show and hide seperately.
+        to show and hide separately.
 
-        ** AR background and Specturm efficiency compenstation **
+        ** AR background and Spectrum efficiency compensation **
 
         These two controls are linked using VAs in the tab_data model.
 
@@ -1192,10 +1189,6 @@ class AnalysisSettingsController(SettingsBarController):
 
         The controls are also linked to the VAs using event handlers, so that
         they can pass on their changing data.
-
-        NOTE: To make sure that *only* user interactions get passed on to the
-        VAs, we use both SetValue and ChangeValue on these controls. (The latter
-        prevents events from being posted.)
 
         """
 
@@ -1309,12 +1302,12 @@ class AnalysisSettingsController(SettingsBarController):
             # file_name is equal to a path (str) or None
             # Using ChangeValue prevents event from being ranged, so we don't
             # get stuck in an update loop.
-            file_ctrl.ChangeValue(file_info.file_name)
+            file_ctrl.SetValue(file_info.file_name)
             if not panel.IsShown():
                 logging.debug("Showing calibration fold panel")
                 panel.Show()
         else:
-            file_ctrl.ChangeValue(None)
+            file_ctrl.SetValue(None)
             if panel.IsShown():
                 logging.debug("Hiding calibration fold panel")
                 panel.Hide()

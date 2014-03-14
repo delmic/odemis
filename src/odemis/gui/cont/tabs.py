@@ -33,13 +33,13 @@ from odemis.acq import calibration
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.stream import StreamPanel
-from odemis.gui.conf import get_calibration_conf
+from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
-from odemis.gui.util import get_picture_folder, formats_to_wildcards, \
+from odemis.gui.util import formats_to_wildcards, \
     call_after, align
 from odemis.util import units
 import os.path
@@ -48,7 +48,6 @@ import scipy.misc
 import weakref
 import wx
 
-from odemis.acq.calibration import get_ar_data, get_spectrum_efficiency
 import odemis.acq.stream as streammod
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
@@ -779,7 +778,8 @@ class AnalysisTab(Tab):
         if fi and fi.file_name:
             path, _ = os.path.split(fi.file_name)
         else:
-            path = get_picture_folder()
+            config = get_acqui_conf()
+            path = config.last_path
 
         wildcards, formats = formats_to_wildcards(formats_to_ext, include_all=True)
         dialog = wx.FileDialog(self.panel,
@@ -961,29 +961,17 @@ class AnalysisTab(Tab):
 
 
         # Initialize calibration controls
-        conf = get_calibration_conf()
+        conf = get_general_conf()
 
         if ar_found: # AR streams found
-            if self.tab_data_model.ar_cal_finfo.value is None:
-                # No FileInfo stored
-                previous = conf.get("ar_history", "last") or None
-                if previous:
-                    logging.debug("Grabbing AR background from config")
-            else:
-                previous = self.tab_data_model.ar_cal_finfo.value.file_name
+            previous = conf.get("calibration", "ar_file") or None
             self.tab_data_model.ar_cal_finfo.value = guimod.FileInfo(previous)
         else:
             # Set the VA to None, hiding the panel
             self.tab_data_model.ar_cal_finfo.value = None
 
         if spec_found: # Spec. streams found
-            if self.tab_data_model.spec_cal_finfo.value is None:
-                # No FileInfo stored
-                previous = conf.get("spec_history", "last") or None
-                if previous:
-                    logging.debug("Grabbing Spec compensation from config")
-            else:
-                previous = self.tab_data_model.spec_cal_finfo.value.file_name
+            previous = conf.get("calibration", "spec_file") or None
             self.tab_data_model.spec_cal_finfo.value = guimod.FileInfo(previous)
         else:
             # Set the VA to None, hiding the panel
@@ -1033,8 +1021,8 @@ class AnalysisTab(Tab):
             # Clear the calibration file
             file_info.file_name = None
 
-        conf = get_calibration_conf()
-        conf.set("ar_history", "last", file_info.file_name or "")
+        conf = get_general_conf()
+        conf.set("calibration", "ar_file", file_info.file_name or "")
         conf.write()
 
         # TODO: should not be called here, but on loading a file, to decide
@@ -1077,8 +1065,8 @@ class AnalysisTab(Tab):
             # Clear the calibration file
             file_info.file_name = None
 
-        conf = get_calibration_conf()
-        conf.set("spec_history", "last", file_info.file_name or "")
+        conf = get_general_conf()
+        conf.set("calibration", "spec_file", file_info.file_name or "")
         conf.write()
 
         self._settings_controller.on_spec_change(file_info)

@@ -61,13 +61,6 @@ def get_acqui_conf():
 
     return CONF_ACQUI
 
-def get_calibration_conf():
-    global CONF_CALIBRATION
-
-    if not CONF_CALIBRATION:
-        CONF_CALIBRATION = CalibrationConfig()
-
-    return CONF_CALIBRATION
 
 class Config(object):
     """ Configuration super class
@@ -187,6 +180,11 @@ class GeneralConfig(Config):
                          u"/usr/share/doc/odemis/"
                         )
 
+        # For the calibration files (used in analysis tab)
+        self.default.add_section("calibration")
+        self.default.set("calibration", "ar_file", "")
+        self.default.set("calibration", "spec_file", "")
+
     @property
     def html_dev_doc(self):
         return self.get("help", "html_dev_doc")
@@ -259,20 +257,3 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
-class CalibrationConfig(Config):
-
-    def __init__(self):
-        file_name = "calibration.config"
-
-        super(CalibrationConfig, self).__init__(file_name)
-
-        # Define the default settings
-        self.default.add_section("ar_history")
-        self.default.set("ar_history", "last", "")
-
-        self.default.add_section("spec_history")
-        self.default.set("spec_history", "last", "")
-
-    def write(self):
-        logging.debug("Writing calibration config")
-        super(CalibrationConfig, self).write()

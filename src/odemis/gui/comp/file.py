@@ -34,13 +34,18 @@ import wx.lib.newevent
 import odemis.gui
 from .buttons import ImageTextButton, ImageButton
 from odemis.gui.img import data
-from odemis.gui.util import get_picture_folder
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
 class FileBrowser(wx.Panel):
+    """
+    Widget that displays a file name and allows to change it by selecting a 
+    different file.
+    It will generate a EVT_FILE_SELECT when the file changes.
+    Note that like most of the wx widgets, SetValue does not generate an event.
+    """
 
-    def __init__(self, parent, id=-1,
+    def __init__(self, parent, id=wx.ID_ANY,
                   pos=wx.DefaultPosition,
                   size=wx.DefaultSize,
                   style=wx.TAB_TRAVERSAL,
@@ -50,9 +55,11 @@ class FileBrowser(wx.Panel):
                   dialog_title="Browse for file",
                   wildcard="*.*",
                   name='fileBrowser',
+                  default_dir=None
         ):
 
         self.file_path = None
+        self.default_dir = default_dir or os.path.curdir
 
         self.dialog_title = dialog_title
         self.wildcard = wildcard
@@ -88,7 +95,7 @@ class FileBrowser(wx.Panel):
                                           (18, 18),
                                           background_parent=parent)
             self._btn_clear.SetBitmaps(data.getico_clear_hBitmap())
-            self._btn_clear.SetToolTipString("Clear calibration")
+            self._btn_clear.SetToolTipString("Clear calibration") # FIXME: do not hard code
             self._btn_clear.Hide()
             self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
             box.Add(self._btn_clear, 0, wx.LEFT, 10)
@@ -150,12 +157,8 @@ class FileBrowser(wx.Panel):
             wx.PostEvent(self, FileSelectEvent(selected_file=self.file_path))
 
     def SetValue(self, file_path):
-        logging.debug("File set to '%s' by user input", file_path)
-        self._SetValue(file_path, True)
-
-    def ChangeValue(self, file_path):
         logging.debug("File set to '%s' by Odemis", file_path)
-        self._SetValue(file_path, False)
+        self._SetValue(file_path, raise_event=False)
 
     def GetValue(self):
         return self.file_path
@@ -178,10 +181,10 @@ class FileBrowser(wx.Panel):
         self.wildcard = wildcard
 
     def _on_clear(self, evt):
-        self.SetValue(None)
+        self._SetValue(None, raise_event=True)
 
     def clear(self):
-        self.ChangeValue(None)
+        self.SetValue(None)
 
     def _on_browse(self, evt):
         current = self.GetValue() or ""
@@ -194,7 +197,7 @@ class FileBrowser(wx.Panel):
             current = directory[1]
             directory = directory[0]
         else:
-            directory = get_picture_folder()
+            directory = self.default_dir
             current = ""
 
         dlg = wx.FileDialog(self, self.dialog_title, directory, current,
@@ -203,5 +206,5 @@ class FileBrowser(wx.Panel):
 
 
         if dlg.ShowModal() == wx.ID_OK:
-            self.SetValue(dlg.GetPath())
+            self._SetValue(dlg.GetPath(), raise_event=True)
         dlg.Destroy()

@@ -413,6 +413,7 @@ class AnalysisGUIData(MicroscopyGUIData):
         # associated to the data displayed
         self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
 
+        # TODO: Just use a simple StringVA for the next 2 VAs?
         # The current file being used for calibration. It is set to `None`
         # when no calibration is used.
         self.ar_cal_finfo = VigilantAttribute(None) # a FileInfo
