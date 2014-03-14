@@ -142,35 +142,25 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             subimage_size (int): One dimension because it is square
     """
     image = data
-    filtered_image = ndimage.median_filter(image, 3)
-    filtered_image = _BandPassFilter(filtered_image, 1, optical_scale / 2)
-    # Denoise
-    # filtered_image = ndimage.median_filter(filtered_image, 3)
-    image = model.DataArray(filtered_image, data.metadata)
-    hdf5.export("median.h5", image)
     scale = optical_scale
     avg_intensity = numpy.average(image)
     max_intensity = numpy.max(image)
 
     # Check if cosmic ray affects the avg_intensity
-#     if max_intensity > 8 * avg_intensity:
-#         spot_factor = 1.3
-#     elif max_intensity < 4 * avg_intensity:
-#         spot_factor = 1.1
-#     else:
-#         spot_factor = 1.2
+    if max_intensity > 8 * avg_intensity:
+        spot_factor = 1.3
+    elif max_intensity < 4 * avg_intensity:
+        spot_factor = 1.1
+    else:
+        spot_factor = 1.2
 
-    spot_factor = 10
-
-    print spot_factor
     step = 1
     sensitivity = 4
     while sensitivity <= 100:
         subimage_coordinates = []
         subimages = []
 
-        filter_window_size = 8  # scale / 4
-        print filter_window_size
+        filter_window_size = scale / 4
         filter_window_size = sorted((4, filter_window_size, 60))[1]
     
         i_max, j_max = unravel_index(image.argmax(), image.shape)
@@ -218,8 +208,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 continue
     
-            if (subimage > spot_factor * avg_intensity).sum() < 8:
-                # print x_center, y_center
+            if (subimage > spot_factor * avg_intensity).sum() < 6:
                 continue
             
             # if spots detected too close keep the brightest one
