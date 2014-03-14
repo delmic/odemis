@@ -485,6 +485,10 @@ class PlotViewport(ViewPort):
 
     def _on_pixel_select(self, pixel):
         """ Pixel selection event handler """
+        if pixel == (None, None):
+            # TODO: handle more graciously when pixel is unselected?
+            logging.warning("Don't know what to do when no pixel is selected")
+            return
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit

@@ -1943,7 +1943,8 @@ class StaticSpectrumStream(StaticStream):
         # TODO: if the 0D spectrum is used, it should be updated too, but
         # there is no explicit way to do it, so instead, pretend the pixel has
         # moved. It could be solved by using dataflows.
-        self.selected_pixel.notify(self.selected_pixel.value)
+        if self.selected_pixel.value != (None, None):
+            self.selected_pixel.notify(self.selected_pixel.value)
 
     def onFitToRGB(self, value):
         """
