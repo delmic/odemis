@@ -360,6 +360,20 @@ def rescale_hq(data, shape):
 
     return out
 
+def Subtract(a, b):
+    """
+    Subtract 2 images, with clipping if needed
+    a (DataArray)
+    b (DataArray)
+    return (DataArray): a - b, with same dtype and metadata as a
+    """
+    # TODO: see if it is more useful to upgrade the type to a bigger if overflow
+    if a.dtype.kind in "biu":
+        # avoid overflow so that 1 - 2 = 0 (and not 65536)
+        return numpy.maximum(a, b) - b
+    else:
+        return (a - b)
+
 # TODO: use VIPS to be fast?
 def Average(images, rect, mpp, merge=0.5):
     """
