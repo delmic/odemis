@@ -36,8 +36,6 @@ from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
 from itertools import compress
-from odemis import model
-from odemis.dataio import hdf5
 
 MAX_STEPS_NUMBER = 100  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
@@ -136,6 +134,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     until image division is feasible.
     data (model.DataArray): 2D array containing the intensity of each pixel
     number_of_spots (int,int): The number of CL spots
+    optical_scale (float): Distance between spots in optical grid #pixels
     returns subimages (List of DataArrays): One subimage per spot
             subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
@@ -200,11 +199,9 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             tab = tuple(map(operator.sub, (x_center_last, y_center_last),
                             (x_center, y_center)))
     
-            # TODO: change +10 and -10 to number relative to spot size
-            subimage = image[(dy.start - 2.22):(dy.stop + 2.22),
-                             (dx.start - 2.22):(dx.stop + 2.22)]
+            subimage = image[(dy.start - 2.5):(dy.stop + 2.5),
+                             (dx.start - 2.5):(dx.stop + 2.5)]
             
-            # TODO Discard only this image
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 continue
     
@@ -224,11 +221,12 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             
             (x_center_last, y_center_last) = (x_center, y_center)
     
-        # TODO: Handle case where slices is 0 or 1
         # Take care of outliers
         expected_spots = numpy.prod(number_of_spots)
-        clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates, expected_spots)
-        print len(clean_subimages)
+        clean_subimages, clean_subimage_coordinates = FilterOutliers(image,
+                                                                     subimages,
+                                                                     subimage_coordinates,
+                                                                     expected_spots)
         if len(clean_subimages) >= numpy.prod(number_of_spots):
            break
 
@@ -349,16 +347,22 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     guess_rotation = 0
 
     # Informed guess
-    guess_coordinates = _TransformCoordinates(optical_coordinates, (guess_x_move, guess_y_move), guess_rotation, (guess_scale, guess_scale))
+    guess_coordinates = _TransformCoordinates(optical_coordinates, (guess_x_move, 
+                                                                    guess_y_move), 
+                                              guess_rotation, (guess_scale, guess_scale))
 
     # Overlay center
-    guess_sub_electron_mean = tuple(map(operator.sub, numpy.mean(guess_coordinates, 0), numpy.mean(electron_coordinates, 0)))
-    transformed_coordinates = [tuple(map(operator.sub, guess, guess_sub_electron_mean)) for guess in guess_coordinates]
+    guess_sub_electron_mean = tuple(map(operator.sub, numpy.mean(guess_coordinates, 0), 
+                                        numpy.mean(electron_coordinates, 0)))
+    transformed_coordinates = [tuple(map(operator.sub, guess, 
+                                         guess_sub_electron_mean)) for guess in guess_coordinates]
 
     max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
     for step in xrange(MAX_STEPS_NUMBER):
         #Calculate nearest point
-        estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates)
+        estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates, 
+                                                                                        optical_coordinates, 
+                                                                                        electron_coordinates)
 
         if estimated_coordinates == []:
             quality = 0
@@ -366,7 +370,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
 
         # Calculate quality
         inv_e_wrong_points = [not i for i in e_wrong_points]
-        electron_e_inv_points = [estimated_coordinates[i] for i in list(compress(index1, inv_e_wrong_points))]
+        electron_e_inv_points = [estimated_coordinates[i] for i in list(compress(index1, 
+                                                                                 inv_e_wrong_points))]
         electron_e_points = list(compress(electron_coordinates, inv_e_wrong_points))
 
         # Calculate distance between the expected and found electron coordinates
@@ -484,13 +489,15 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     # Calculate the transform parameters for the correct electron_coordinates
     #TODO: Throw exception if inv_e_wrong_points or inv_o_wrong_points has only False elements!!!
     inv_e_wrong_points = [not i for i in e_wrong_points]
-    (x_move1, y_move1), (x_scale1, y_scale1), rotation1 = transform.CalculateTransform(list(compress(electron_coordinates, inv_e_wrong_points))
+    (x_move1, y_move1), (x_scale1, y_scale1), rotation1 = transform.CalculateTransform(list(compress(electron_coordinates,
+                                                                                                     inv_e_wrong_points))
                                  , list(compress(knn_points1, inv_e_wrong_points)))
     x_move1, y_move1 = x_move1, y_move1
 
     # Calculate the transform parameters for the correct optical_coordinates
     inv_o_wrong_points = [not i for i in o_wrong_points]
-    (x_move2, y_move2), (x_scale2, y_scale2), rotation2 = transform.CalculateTransform(list(compress(knn_points2, inv_o_wrong_points))
+    (x_move2, y_move2), (x_scale2, y_scale2), rotation2 = transform.CalculateTransform(list(compress(knn_points2,
+                                                                                                     inv_o_wrong_points))
                                  , list(compress(optical_coordinates, inv_o_wrong_points)))
     x_move2, y_move2 = x_move2, y_move2
 
@@ -616,7 +623,6 @@ def _FindInnerOutliers(x_coordinates):
 def _BandPassFilter(image, len_noise, len_object):
     b = len_noise
     w = round(len_object)
-    print w
     N = 2 * w + 1
 
     # Gaussian Convolution Kernel
@@ -636,7 +642,6 @@ def _BandPassFilter(image, len_noise, len_object):
     tmpg = g
     g = signal.convolve(tmpg, gy, 'valid')
     tmpres = res
-    print "filtering..."
     res = signal.convolve(tmpres, bx, 'valid')
     tmpres = res
     res = signal.convolve(tmpres, by, 'valid')
@@ -648,5 +653,4 @@ def _BandPassFilter(image, len_noise, len_object):
     arr_g[w:-w, w:-w] = g
 
     res = numpy.maximum(arr_g - arr_res, 0)
-    hdf5.export("bpass_fil.h5", model.DataArray(res))
     return res

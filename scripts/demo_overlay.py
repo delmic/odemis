@@ -94,21 +94,16 @@ def main(args):
         f_acq = SEMCCDAcquisition(escan, ccd, detector, light)
 
         optical_image_1, optical_image_2, optical_image_3, electron_image = f_acq.result()
-
-        hdf5.export("opt_image1.h5", optical_image_1)
-        hdf5.export("opt_image2.h5", optical_image_2)
-        hdf5.export("opt_image3.h5", optical_image_3)
-        hdf5.export("ele_image.h5", electron_image)
         
         f = find_overlay.FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
-        ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
-        print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation)
+        trans_val, correction_md = f.result()
 
-        optical_image_1.metadata.update(transformed_data)
-        optical_image_2.metadata.update(transformed_data)
-        optical_image_3.metadata.update(transformed_data)
-        hdf5.export("overlay_image.h5", [optical_image_1, optical_image_2,
-                                         optical_image_3, electron_image])
+        md_1 = img.mergeMetadata(optical_image_1.metadata, correction_md)
+        md_2 = img.mergeMetadata(optical_image_2.metadata, correction_md)
+        md_3 = img.mergeMetadata(optical_image_3.metadata, correction_md)
+        optical_image_1.metadata.update(md_1)
+        optical_image_2.metadata.update(md_2)
+        optical_image_3.metadata.update(md_3)
 
     except:
         logging.exception("Unexpected error while performing action.")

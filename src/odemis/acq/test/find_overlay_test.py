@@ -26,29 +26,9 @@ import unittest
 
 from odemis import model
 from odemis.acq import find_overlay
-from odemis.dataio import hdf5
-from odemis.util import img
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-
-############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_spots = grid_data[0]
-
-grid_data = hdf5.read_data("ele_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_ele = grid_data[0]
-
-grid_data = hdf5.read_data("opt_image_m.h5")
-C, T, Z, Y, X = grid_data[0].shape
-grid_data[0].shape = Y, X
-fake_opt = grid_data[0]
-#####################################################
 
 class TestOverlay(unittest.TestCase):
     """
@@ -80,29 +60,10 @@ class TestOverlay(unittest.TestCase):
         escan = self._escan
         detector = self._detector
         ccd = self._ccd
-        # overlay = self._overlay
 
         f = find_overlay.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
 
-        # opt_im = fake_input
-        transformed_image = fake_opt
-        transformation_values, transform_md = f.result()
-        print transform_md
-        print transformation_values
-        current_md = transformed_image.metadata
-        merged_md = img.mergeMetadata(current_md, transform_md)
-#         rotation = transformed_image.metadata.get(model.MD_ROTATION, 0)
-#         pixel_size = transformed_image.metadata.get(model.MD_PIXEL_SIZE, (0, 0))
-#         position = transformed_image.metadata.get(model.MD_POS, (0, 0))
-#
-#         transformed_image.metadata[model.MD_ROTATION] = rotation - rotation_cor
-#         transformed_image.metadata[model.MD_PIXEL_SIZE] = (pixel_size[0] * pixel_size_cor[0],
-#                                                            pixel_size[1] * pixel_size_cor[1])
-#         transformed_image.metadata[model.MD_POS] = (position[0] + position_cor[0],
-#                                                     position[1] - position_cor[1])
-        print merged_md
-        transformed_image.metadata = merged_md
-        hdf5.export("overlay_image.h5", [transformed_image, fake_ele])
+        self.assertRaises(ValueError, f.result)
 
     @unittest.skip("skip")
     def test_find_overlay_failure(self):
@@ -112,7 +73,6 @@ class TestOverlay(unittest.TestCase):
         escan = self._escan
         detector = self._detector
         ccd = self._ccd
-        # overlay = self._overlay
 
         f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
 
@@ -126,7 +86,6 @@ class TestOverlay(unittest.TestCase):
         escan = self._escan
         detector = self._detector
         ccd = self._ccd
-        # overlay = self._overlay
 
         f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
         time.sleep(0.04)  # Cancel almost after the half grid is scanned

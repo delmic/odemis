@@ -48,7 +48,6 @@ import odemis.util.img as img
 import odemis.util.units as units
 from odemis.acq import find_overlay
 
-
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
 
