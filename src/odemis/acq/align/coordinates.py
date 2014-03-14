@@ -621,6 +621,10 @@ def _FindInnerOutliers(x_coordinates):
     return x_coordinates
 
 def _BandPassFilter(image, len_noise, len_object):
+    """
+    bandpass filter implementation. 
+    Source: http://physics-server.uoregon.edu/~raghu/particle_tracking.html
+    """
     b = len_noise
     w = round(len_object)
     N = 2 * w + 1
