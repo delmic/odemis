@@ -21,30 +21,30 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from concurrent import futures
 import logging
-import numpy
 import time
 import unittest
 
 from odemis import model
 from odemis.acq import find_overlay
 from odemis.dataio import hdf5
+from odemis.util import img
 
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
 ############## TO BE REMOVED ON TESTING##############
-grid_data = hdf5.read_data("spots.h5")
+grid_data = hdf5.read_data("spots_image_m.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_spots = grid_data[0]
 
-grid_data = hdf5.read_data("ele_image.h5")
+grid_data = hdf5.read_data("ele_image_m.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_ele = grid_data[0]
 
-grid_data = hdf5.read_data("opt_image1.h5")
+grid_data = hdf5.read_data("opt_image_m.h5")
 C, T, Z, Y, X = grid_data[0].shape
 grid_data[0].shape = Y, X
 fake_opt = grid_data[0]
@@ -82,34 +82,27 @@ class TestOverlay(unittest.TestCase):
         ccd = self._ccd
         # overlay = self._overlay
 
-        f = find_overlay.FindOverlay((5, 5), 0.1, 1e-06, escan, ccd, detector)
+        f = find_overlay.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
 
         # opt_im = fake_input
         transformed_image = fake_opt
-        ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation), transformed_data = f.result()
-        # electron_grid = hdf5.read_data("electron_grid.h5")[0]
-        """
-        electron_grid = model.DataArray(numpy.ones(shape=(2048, 2048)))
-        no_of_points = 4
-        dc = electron_grid.shape[0] / no_of_points
-        for i in range(no_of_points):
-            for j in range(no_of_points):
-                electron_grid[int(dc / 2 + i * dc), int(dc / 2 + j * dc)] = 0
-        hdf5.export("electron_grid.h5", electron_grid)
-        sem_width = [r * p for r, p in zip(escan.shape, escan.pixelSize.value)]
-        eg_pxs = [w / s for w, s in zip(sem_width, electron_grid.shape[-1:-3:-1])]
-        electron_grid.metadata[model.MD_PIXEL_SIZE] = eg_pxs
-        """
-        # electron_grid.metadata[model.MD_POS] = fake_input.metadata[model.MD_POS]
-        # electron_grid.metadata[model.MD_POS] = (0, 0)
-        print ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation)
-        transformed_image.metadata.update(transformed_data)
-
+        transformation_values, transform_md = f.result()
+        print transform_md
+        print transformation_values
+        current_md = transformed_image.metadata
+        merged_md = img.mergeMetadata(current_md, transform_md)
+#         rotation = transformed_image.metadata.get(model.MD_ROTATION, 0)
+#         pixel_size = transformed_image.metadata.get(model.MD_PIXEL_SIZE, (0, 0))
+#         position = transformed_image.metadata.get(model.MD_POS, (0, 0))
+#
+#         transformed_image.metadata[model.MD_ROTATION] = rotation - rotation_cor
+#         transformed_image.metadata[model.MD_PIXEL_SIZE] = (pixel_size[0] * pixel_size_cor[0],
+#                                                            pixel_size[1] * pixel_size_cor[1])
+#         transformed_image.metadata[model.MD_POS] = (position[0] + position_cor[0],
+#                                                     position[1] - position_cor[1])
+        print merged_md
+        transformed_image.metadata = merged_md
         hdf5.export("overlay_image.h5", [transformed_image, fake_ele])
-        # hdf5.export("transformed_image.h5", [opt_im, transformed_image])
-        #numpy.testing.assert_almost_equal((calc_translation_x, calc_translation_y, calc_scaling_x, calc_scaling_y, calc_rotation),
-#                                           (-280.91827079065121, -195.55748765461769, 13.9363892133, 13.9363892133, -1.47833441067),
-#                                           decimal=1)
 
     @unittest.skip("skip")
     def test_find_overlay_failure(self):

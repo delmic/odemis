@@ -161,18 +161,17 @@ def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
             electron_coordinates.append((i * scale[0], j * scale[1]))
     """
 
-    bound = ((repetitions[0] - 1) * scale[0]) / 2
+    bound = ((repetitions[0] - 1) * scale[0]) / 2, ((repetitions[1] - 1) * scale[1]) / 2
 
-    for i in xfrange(-bound, bound, scale[0]):
-        for j in xfrange(-bound, bound, scale[0]):
+    for i in xfrange(-bound[0], bound[0] + 1, scale[0]):
+        for j in xfrange(-bound[1], bound[1] + 1, scale[1]):
             # Compute electron coordinates based on scale and repetitions
             electron_coordinates.append((i * repetitions[1] / (repetitions[1] - 1), j * repetitions[1] / (repetitions[1] - 1)))
 
-    print scale
     return ccd.data._optical_image, electron_coordinates, scale
 
 def xfrange(start, stop, step):
-    while start <= stop:
+    while start < stop:
         yield start
         start += step
 

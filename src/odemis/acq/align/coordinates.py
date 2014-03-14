@@ -26,6 +26,7 @@ import numpy
 import math
 import operator
 import scipy.signal
+import scipy.signal as signal
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 import transform
@@ -35,6 +36,7 @@ from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
 from itertools import compress
+from odemis import model
 from odemis.dataio import hdf5
 
 MAX_STEPS_NUMBER = 100  # How many steps to perform in coordinates matching
@@ -54,7 +56,6 @@ def FindCenterCoordinates(subimages):
 
     # Pop each subimage from the list
     for i in xrange(number_of_subimages):
-        #subimage = subimages[i]
     	# Input might be integer
     	# TODO Dummy, change the way that you handle the array e.g. convolution
     	subimage = subimages[i].astype(numpy.float64)
@@ -140,28 +141,37 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
     """
-
     image = data
+    filtered_image = ndimage.median_filter(image, 3)
+    filtered_image = _BandPassFilter(filtered_image, 1, optical_scale / 2)
+    # Denoise
+    # filtered_image = ndimage.median_filter(filtered_image, 3)
+    image = model.DataArray(filtered_image, data.metadata)
+    hdf5.export("median.h5", image)
     scale = optical_scale
     avg_intensity = numpy.average(image)
-    
-    for sensitivity in range(4, 40, 4):
+    max_intensity = numpy.max(image)
+
+    # Check if cosmic ray affects the avg_intensity
+#     if max_intensity > 8 * avg_intensity:
+#         spot_factor = 1.3
+#     elif max_intensity < 4 * avg_intensity:
+#         spot_factor = 1.1
+#     else:
+#         spot_factor = 1.2
+
+    spot_factor = 10
+
+    print spot_factor
+    step = 1
+    sensitivity = 4
+    while sensitivity <= 100:
         subimage_coordinates = []
         subimages = []
-        # Filter cosmic rays
-    #     min_intensity = numpy.min(image)
-    #     max_intensity = numpy.max(image)
-    #     print min_intensity, max_intensity, avg_intensity
-    #
-    #     image[image > 3 * avg_intensity] = avg_intensity
-    #     sensitivity = 1.4
-    #     hdf5.export("cosmic_filtered.h5", image)
-        
-    
-        # TODO, adjust to magnification
-        filter_window_size = scale / 1.7
-        filter_window_size = sorted((6, filter_window_size, 60))[1]  # / (20000 / 6120)
-        # print filter_window_size
+
+        filter_window_size = 8  # scale / 4
+        print filter_window_size
+        filter_window_size = sorted((4, filter_window_size, 60))[1]
     
         i_max, j_max = unravel_index(image.argmax(), image.shape)
         i_min, j_min = unravel_index(image.argmin(), image.shape)
@@ -180,14 +190,8 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
         maxima[diff == 0] = 0
     
         labeled, num_objects = ndimage.label(maxima)
-        # if num_objects > prod_of_spots:
-        #    break
     
         slices = ndimage.find_objects(labeled)
-    
-        # if len(slices) <= numpy.prod(number_of_spots) - 5:
-        #    logging.warning("Not enough spots detected.")
-        #    return [],[]
         
         (x_center_last, y_center_last) = (-10, -10)
     
@@ -195,40 +199,35 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
         for dy, dx in slices:
             x_center = (dx.start + dx.stop - 1) / 2
             y_center = (dy.start + dy.stop - 1) / 2
-            # print x_center, y_center
-            # print image.shape
-                
-            if x_center >= image.shape[1] - 3 or y_center >= image.shape[0] - 3:
+
+            if x_center >= image.shape[1] - scale \
+                or y_center >= image.shape[0] - scale \
+                or x_center <= scale \
+                or y_center <= scale:
                 continue
-    
+
             # Make sure we don't detect spots on the top of each other
-            tab = tuple(map(operator.sub, (x_center_last, y_center_last), (x_center, y_center)))
+            tab = tuple(map(operator.sub, (x_center_last, y_center_last),
+                            (x_center, y_center)))
     
             # TODO: change +10 and -10 to number relative to spot size
-            subimage = image[(dy.start - 2.22):(dy.stop + 2.22), (dx.start - 2.22):(dx.stop + 2.22)]
+            subimage = image[(dy.start - 2.22):(dy.stop + 2.22),
+                             (dx.start - 2.22):(dx.stop + 2.22)]
             
             # TODO Discard only this image
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 continue
     
-            if (subimage > 1.3 * avg_intensity).sum() < 9:
+            if (subimage > spot_factor * avg_intensity).sum() < 8:
+                # print x_center, y_center
                 continue
-    #         if (h_center > image[sub_j + 1, sub_i]) \
-    #             or (h_center > image[sub_j - 1, sub_i]) \
-    #             or (h_center > image[sub_j, sub_i + 1]) \
-    #             or (h_center > image[sub_j, sub_i - 1]) \
-    #             or (h_center > image[sub_j + 1, sub_i + 1]) \
-    #             or (h_center > image[sub_j - 1, sub_i - 1]) \
-    #             or (h_center > image[sub_j + 1, sub_i - 1]) \
-    #             or (h_center > image[sub_j - 1, sub_i + 1]):
-    #             print "OUT"
-    #             continue
             
-            # if math.hypot(tab[0], tab[1]) > 1.5:
             # if spots detected too close keep the brightest one
             if math.hypot(tab[0], tab[1]) < (scale / 2):
                 if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
                     subimages.pop()
+                    subimage_coordinates.pop()
+                    subimage_coordinates.append((x_center, y_center))
                     subimages.append(subimage)
             else:
                 subimage_coordinates.append((x_center, y_center))
@@ -238,10 +237,15 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     
         # TODO: Handle case where slices is 0 or 1
         # Take care of outliers
-        clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
+        expected_spots = numpy.prod(number_of_spots)
+        clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates, expected_spots)
         print len(clean_subimages)
         if len(clean_subimages) >= numpy.prod(number_of_spots):
-            break
+           break
+
+        if sensitivity > 4:
+            step = 4
+        sensitivity += step
 
     return clean_subimages, clean_subimage_coordinates
 
@@ -263,7 +267,7 @@ def ReconstructCoordinates(subimage_coordinates, spot_coordinates):
 
     return optical_coordinates
 
-def FilterOutliers(image, subimages, subimage_coordinates):
+def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     """
     It removes subimages that contain outliers (e.g. cosmic rays).
     image (model.DataArray): 2D array containing the intensity of each pixel
@@ -276,11 +280,14 @@ def FilterOutliers(image, subimages, subimage_coordinates):
     number_of_subimages = len(subimages)
     clean_subimages = []
     clean_subimage_coordinates = []
+    filtered_subimages = []
+    filtered_subimage_coordinates = []
+
     for i in xrange(number_of_subimages):
         hist, bin_edges = histogram(subimages[i], bins=10)
         # Remove subimage if its histogram implies a cosmic ray
         hist_list = hist.tolist()
-        if hist_list.count(0) < 5:
+        if hist_list.count(0) < 6:
             clean_subimages.append(subimages[i])
             clean_subimage_coordinates.append(subimage_coordinates[i])
             
@@ -290,6 +297,38 @@ def FilterOutliers(image, subimages, subimage_coordinates):
     if (((len(subimages) - len(clean_subimages)) > 3) or (len(clean_subimages) == 0)):
         clean_subimages = subimages
         clean_subimage_coordinates = subimage_coordinates
+
+    # If we still have more spots than expected we discard the ones
+    # with "stranger" distances from their closest spots
+    if len(clean_subimage_coordinates) > expected_spots:
+        points = numpy.array(clean_subimage_coordinates)
+        tree = cKDTree(points, 5)
+        distance, index = tree.query(clean_subimage_coordinates, 5)
+        list_distance = numpy.array(distance)
+        avg_1 = numpy.average(list_distance[:, 1])
+        avg_2 = numpy.average(list_distance[:, 2])
+        avg_3 = numpy.average(list_distance[:, 3])
+        avg_4 = numpy.average(list_distance[:, 4])
+        diff_avg_list = numpy.array(list_distance[:, 1:5])
+        for i in xrange(0, len(list_distance), 1):
+            diff_avg = [abs(list_distance[i, 1] - avg_1),
+                        abs(list_distance[i, 2] - avg_2),
+                        abs(list_distance[i, 3] - avg_3),
+                        abs(list_distance[i, 4] - avg_4)]
+            diff_avg_list[i] = diff_avg
+        var_1 = numpy.average(diff_avg_list[:, 0])
+        var_2 = numpy.average(diff_avg_list[:, 1])
+        var_3 = numpy.average(diff_avg_list[:, 2])
+        var_4 = numpy.average(diff_avg_list[:, 3])
+
+        for i in xrange(len(clean_subimage_coordinates)):
+            if diff_avg_list[i, 0] <= var_1 \
+                or diff_avg_list[i, 1] <= var_2 \
+                or diff_avg_list[i, 2] <= var_3 \
+                or diff_avg_list[i, 3] <= var_4:
+                filtered_subimages.append(clean_subimages[i])
+                filtered_subimage_coordinates.append(clean_subimage_coordinates[i])
+        return filtered_subimages, filtered_subimage_coordinates
 
     return clean_subimages, clean_subimage_coordinates
 
@@ -585,3 +624,40 @@ def _FindInnerOutliers(x_coordinates):
 
     return x_coordinates
 
+def _BandPassFilter(image, len_noise, len_object):
+    b = len_noise
+    w = round(len_object)
+    print w
+    N = 2 * w + 1
+
+    # Gaussian Convolution Kernel
+    sm = numpy.arange(0, N, dtype=numpy.float)
+    r = (sm - w) / (2 * b)
+    gx = numpy.power(math.e, -r ** 2) / (2 * b * math.sqrt(math.pi))
+    gx = numpy.reshape(gx, (gx.shape[0], 1))
+    gy = gx.conj().transpose()
+
+    # Boxcar average kernel, background
+    bx = numpy.zeros((1, N), numpy.float) + 1 / N
+    by = bx.conj().transpose()
+
+    # Convolution with the matrix and kernels
+    res = image
+    g = signal.convolve(res, gx, 'valid')
+    tmpg = g
+    g = signal.convolve(tmpg, gy, 'valid')
+    tmpres = res
+    print "filtering..."
+    res = signal.convolve(tmpres, bx, 'valid')
+    tmpres = res
+    res = signal.convolve(tmpres, by, 'valid')
+    tmpg = 0
+    tmpres = 0
+    arr_res = numpy.zeros((image.shape))
+    arr_g = numpy.zeros((image.shape))
+    arr_res[w:-w, w:-w] = res
+    arr_g[w:-w, w:-w] = g
+
+    res = numpy.maximum(arr_g - arr_res, 0)
+    hdf5.export("bpass_fil.h5", model.DataArray(res))
+    return res
