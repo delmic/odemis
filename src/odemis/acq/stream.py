@@ -1575,7 +1575,7 @@ class StaticARStream(StaticStream):
                     # Simple version: remove the background value
                     data0 = polar.ARBackgroundSubtract(data)
                 else:
-                    data0 = data - bg_data # metadata from data
+                    data0 = img.Subtract(data, bg_data) # metadata from data
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
@@ -1622,15 +1622,11 @@ class StaticARStream(StaticStream):
 
     def _setBackground(self, data):
         """Called when the background is about to be changed"""
-        # check it's compatible with the data
-
         if data is None:
             return
-        elif not hasattr(data, 'metadata'):
-            raise ValueError("Background data does not contain meta data!")
-        elif model.MD_AR_POLE not in data.metadata:
-            raise ValueError("Data does not contain AR_POLE!")
 
+        # check it's compatible with the data
+        data = img.ensure2DImage(data)
         arpole = data.metadata[model.MD_AR_POLE] # we expect the data has AR_POLE
 
         # TODO: allow data which is the same shape but lower binning by
@@ -1640,17 +1636,17 @@ class StaticARStream(StaticStream):
         for r in self.raw:
             if data.shape != r.shape:
                 raise ValueError("Incompatible resolution of background data "
-                                 "%s with the Angular resolved resolution %s." %
+                                 "%s with the angular resolved resolution %s." %
                                  (data.shape, r.shape))
             if data.dtype != r.dtype:
                 raise ValueError("Incompatible encoding of background data "
-                                 "%s with the Angular resolved encoding %s." %
+                                 "%s with the angular resolved encoding %s." %
                                  (data.dtype, r.dtype))
             try:
                 if data.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
                     raise ValueError(
                         "Incompatible format of background data "
-                        "(%d bits) with the Angular resolved format "
+                        "(%d bits) with the angular resolved format "
                         "(%d bits)." %
                         (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
             except KeyError:
@@ -1926,15 +1922,14 @@ class StaticSpectrumStream(StaticStream):
         # as the data is static.
         if calib_data is None:
             self._calibrated = data
+        elif not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            # don't try if there is no wavelength info (in px)
+            self._calibrated = data
         else:
             try:
                 self._calibrated = calibration.compensate_spectrum_efficiency(
                                                                     data,
                                                                     calib_data)
-            except (AttributeError, ValueError):
-                # These exceptions are typically raised when there is something
-                # wrong with the calibration data
-                raise
             except Exception:
                 logging.exception(
                     "Failed to apply the spectrum efficiency compensation")
@@ -1945,6 +1940,10 @@ class StaticSpectrumStream(StaticStream):
         self._updateHistogram()
 
         self._updateImage()
+        # TODO: if the 0D spectrum is used, it should be updated too, but
+        # there is no explicit way to do it, so instead, pretend the pixel has
+        # moved. It could be solved by using dataflows.
+        self.selected_pixel.notify(self.selected_pixel.value)
 
     def onFitToRGB(self, value):
         """
