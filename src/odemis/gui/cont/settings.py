@@ -364,30 +364,32 @@ class SettingsPanel(object):
 
         return ne
 
-    def add_browse_button(self, label, clearlabel, file_name=None):
+    def add_browse_button(self, label, label_tl=None, clearlabel=None):
         self._clear()
+
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
+        if label_tl:
+            lbl_ctrl.SetToolTipString(label_tl)
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
+        # Add the File control
         config = conf.get_acqui_conf()
         value_ctrl = FileBrowser(self.panel,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
-                                 label=clearlabel,
-                                 clear_btn=True,
+                                 clear_label=clearlabel,
+                                 clear_btn=(clearlabel != None),
                                  default_dir=config.last_path)
         value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
-
-        if file_name:
-            value_ctrl.SetValue(file_name)
 
         self._gb_sizer.Add(value_ctrl,
                            (self.num_entries, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
 
+        # Add the corresponding setting entry
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
         self.num_entries += 1
@@ -1160,19 +1162,26 @@ class AnalysisSettingsController(SettingsBarController):
         # Gui data model
         self.tab_data = tab_data
 
-        # We add 3 different panels so, they can each be hiddne/shown
+        # We add 3 different panels so, they can each be hidden/shown
         # individually
         self._pnl_acqfile = None
         self._pnl_arfile = None
-        self.arfile_ctrl = None
+        self._arfile_ctrl = None
         self._pnl_specfile = None
-        self.specfile_ctrl = None
+        self._specfile_ctrl = None
 
         self._create_controls()
 
         # Subscribe to the VAs that influence how the settings look.
         # All these VAs contain FileInfo object
         tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
+
+        # The following two can be replaced by callables taking a unicode and
+        # returning a unicode (or raising a ValueError exception). They are
+        # "filters" on what value can be accepted when changing the calibration
+        # files. (Typically, the tab controller will put some of its functions)
+        self.setter_ar_file = None
+        self.setter_spec_file = None
 
     def _create_controls(self):
         """ Create the default controls
@@ -1184,73 +1193,43 @@ class AnalysisSettingsController(SettingsBarController):
 
         These two controls are linked using VAs in the tab_data model.
 
-        They will be hidden if their corresponding VAs have the value 'None'
-        and they will be displayed otherwise.
-
         The controls are also linked to the VAs using event handlers, so that
         they can pass on their changing data.
-
         """
 
         ### Panel containing information about the acquisition file
-
         self._pnl_acqfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
                                                   "No file loaded")
 
+        ### Panel with AR background file information
+        # It's displayed only if there are AR streams (handled by the tab cont)
+        self._pnl_arfile = FileInfoSettingsPanel(self.parent.fp_fileinfo, "")
+        self._arfile_ctrl = self._pnl_arfile.add_browse_button(
+                                   "AR background",
+                                   "Angular resolved background acquisition file",
+                                   "None").ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(
                                         odemis.dataio.get_available_formats(),
                                         include_all=True)
-
-
-        ### Panel with AR background file information
-
-        self._pnl_arfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
-                                                 "No AR background loaded")
-        fi = self.tab_data.ar_cal_finfo.value
-        current_file = fi.file_name if fi else None
-        self.arfile_ctrl = self._pnl_arfile.add_browse_button(
-                                                        "AR background",
-                                                        "No background loaded",
-                                                        current_file).ctrl
-        self.arfile_ctrl.SetWildcard(wildcards)
-        self.arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
+        self._arfile_ctrl.SetWildcard(wildcards)
         self._pnl_arfile.Hide()
-
+        self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
+        self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
         ###  Panel with spectrum efficiency compensation file information
-
-        self._pnl_specfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
-                                                "No spectrum correction loaded")
-        fi = self.tab_data.spec_cal_finfo.value
-        current_file = fi.file_name if fi else None
-        self.specfile_ctrl = self._pnl_specfile.add_browse_button(
-                                                        "Spec. correction",
-                                                        "No correction loaded",
-                                                        current_file).ctrl
-        self.specfile_ctrl.SetWildcard(wildcards)
-
-        self.specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
+        # It's displayed only if there are Spectrum streams
+        self._pnl_specfile = FileInfoSettingsPanel(self.parent.fp_fileinfo, "")
+        self._specfile_ctrl = self._pnl_specfile.add_browse_button(
+                                            "Spec. correction",
+                                            "Spectrum efficiency correction file",
+                                            "None").ctrl
+        self._specfile_ctrl.SetWildcard(wildcards)
         self._pnl_specfile.Hide()
+        # connect
+        self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
+        self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
         self.parent.Layout()
-
-    def _on_ar_file_select(self, evt):
-        """ Pass the selected AR background file on to the VA """
-        logging.debug("AR background selected by user")
-        new_path = evt.selected_file
-        if new_path != self.tab_data.ar_cal_finfo.value.file_name:
-            self.tab_data.ar_cal_finfo.value = guimod.FileInfo(new_path)
-        else:
-            logging.debug("Ignoring same file selection")
-
-    def _on_spec_file_select(self, evt):
-        """ Pass the selected efficiency compensation file on to the VA """
-        logging.debug("Efficiency compensation file selected by user")
-        new_path = evt.selected_file
-        if new_path != self.tab_data.spec_cal_finfo.value.file_name:
-            self.tab_data.spec_cal_finfo.value = guimod.FileInfo(new_path)
-        else:
-            logging.debug("Ignoring same file selection")
 
     def on_acqfile_change(self, file_info):
         """ Display the name and location of the file described by file_info
@@ -1279,38 +1258,48 @@ class AnalysisSettingsController(SettingsBarController):
 
         self._pnl_acqfile.Refresh()
 
-    # FIXME: these should be just 2 simple functions allowing to show/hide the panel
-    # (updating the content of the text ctrl should be done independently, via the VA)
-    def on_ar_change(self, file_info):
-        """ Update the AR background file controls """
-        self._on_calibration_change(file_info,
-                                    self.tab_data.ar_cal_finfo,
-                                    self._pnl_arfile,
-                                    self.arfile_ctrl)
+    def _on_ar_file_select(self, evt):
+        """ Pass the selected AR background file on to the VA """
+        logging.debug("AR background selected by user")
+        fn = evt.selected_file or u"" # selected_file is None if no file
+        if self.setter_ar_file:
+            try:
+                fn = self.setter_ar_file(fn)
+            except ValueError:
+                logging.debug(u"Setter refused the file '%s'", fn)
+                return
 
-    def on_spec_change(self, file_info):
-        self._on_calibration_change(file_info,
-                                    self.tab_data.spec_cal_finfo,
-                                    self._pnl_specfile,
-                                    self.specfile_ctrl)
+        self.tab_data.ar_cal.value = fn
 
+    def _on_spec_file_select(self, evt):
+        """ Pass the selected efficiency compensation file on to the VA """
+        logging.debug("Efficiency compensation file selected by user")
+        fn = evt.selected_file or u""
+        if self.setter_spec_file:
+            try:
+                fn = self.setter_spec_file(fn)
+            except ValueError:
+                logging.debug(u"Setter refused the file '%s'", fn)
+                return
 
-    def _on_calibration_change(self, file_info, file_va, panel, file_ctrl):
-        """ Set the value of the file_ctrl and show/hide the panel """
+        self.tab_data.spec_cal.value = fn
 
-        if file_info:
-            # file_name is equal to a path (str) or None
-            # Using ChangeValue prevents event from being ranged, so we don't
-            # get stuck in an update loop.
-            file_ctrl.SetValue(file_info.file_name)
-            if not panel.IsShown():
-                logging.debug("Showing calibration fold panel")
-                panel.Show()
-        else:
-            file_ctrl.SetValue(None)
-            if panel.IsShown():
-                logging.debug("Hiding calibration fold panel")
-                panel.Hide()
+    def _on_ar_cal(self, val):
+        self._arfile_ctrl.SetValue(val)
+
+    def _on_spec_cal(self, val):
+        self._specfile_ctrl.SetValue(val)
+
+    def ShowCalibrationPanel(self, ar=None, spec=None):
+        """
+        Show/hide the ar/spec panels
+        ar (boolean or None): show, hide or don't change AR calib panel
+        spec (boolean or None): show, hide or don't change spec calib panel 
+        """
+        if ar is not None:
+            self._pnl_arfile.Show(ar)
+        if spec is not None:
+            self._pnl_specfile.Show(spec)
 
         self.parent.Layout()
 

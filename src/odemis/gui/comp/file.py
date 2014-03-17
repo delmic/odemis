@@ -51,7 +51,7 @@ class FileBrowser(wx.Panel):
                   style=wx.TAB_TRAVERSAL,
                   tool_tip=None,
                   clear_btn=False,
-                  label="",
+                  clear_label="",
                   dialog_title="Browse for file",
                   wildcard="*.*",
                   name='fileBrowser',
@@ -63,16 +63,15 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.wildcard = wildcard
-        self.clear_btn = clear_btn # Add clear buttons
-        self.label = label # Text to show when the control is cleared
+        self.label = clear_label # Text to show when the control is cleared
 
         self.text_ctrl = None
         self.btn_ctrl = None
         self._btn_clear = None
 
-        self.create_dialog(parent, id, pos, size, style, name)
+        self.create_dialog(parent, id, pos, size, style, name, clear_btn)
 
-    def create_dialog(self, parent, id, pos, size, style, name):
+    def create_dialog(self, parent, id, pos, size, style, name, clear_btn):
         """Setup the graphic representation of the dialog"""
         wx.Panel.__init__(self, parent, id, pos, size, style, name)
         self.SetBackgroundColour(parent.GetBackgroundColour())
@@ -87,7 +86,7 @@ class FileBrowser(wx.Panel):
 
         box.Add(self.text_ctrl, 1)
 
-        if self.clear_btn:
+        if clear_btn:
             self._btn_clear = ImageButton(self,
                                           wx.ID_ANY,
                                           data.getico_clearBitmap(),
@@ -139,7 +138,8 @@ class FileBrowser(wx.Panel):
 
             self.text_ctrl.SetToolTipString(self.file_path)
             self.text_ctrl.SetInsertionPointEnd()
-            self._btn_clear.Show()
+            if self._btn_clear:
+                self._btn_clear.Show()
         else:
             logging.debug("Clearing file control")
 
@@ -149,7 +149,8 @@ class FileBrowser(wx.Panel):
             self.text_ctrl.SetValue(self.label)
 
             self.text_ctrl.SetToolTipString("")
-            self._btn_clear.Hide()
+            if self._btn_clear:
+                self._btn_clear.Hide()
 
         self.Layout()
 
