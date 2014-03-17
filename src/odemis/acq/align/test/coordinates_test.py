@@ -42,7 +42,7 @@ from scipy import imag
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestFindCenterCoordinates(unittest.TestCase):
     """
     Test FindCenterCoordinates
@@ -61,16 +61,17 @@ class TestFindCenterCoordinates(unittest.TestCase):
             subimages.append(data[i][0])
 
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        expected_coordinates = [(0.00019439548586790034, 0.023174120210179554),
-                                (-0.41813787193469681, 0.77556146879261101),
-                                (-0.05418032832973009, 0.046573726263258203),
-                                (-0.15117173005078957, -0.20813259555303279),
-                                (-0.15372338817998937, 0.071307409462406962),
-                                (-0.22214464176322843, -1.5448851668913044),
-                                (1.3567379189595801, -0.20634334863259929),
-                                (0.068717256379618827, -0.76902400758882417),
-                                (0.064496044288789064, -0.14000630665134439),
-                                (-0.020941736978718473, 0.0071056828496776324)]
+        print spot_coordinates
+        expected_coordinates = [(-0.00019439548586790034, -0.023174120210179554),
+                                (0.41813787193469681, -0.77556146879261101),
+                                (0.05418032832973009, -0.046573726263258203),
+                                (0.15117173005078957, 0.20813259555303279),
+                                (0.15372338817998937, -0.071307409462406962),
+                                (0.22214464176322843, 1.5448851668913044),
+                                (-1.3567379189595801, 0.20634334863259929),
+                                (-0.068717256379618827, 0.76902400758882417),
+                                (-0.064496044288789064, 0.14000630665134439),
+                                (0.020941736978718473, -0.0071056828496776324)]
         numpy.testing.assert_almost_equal(spot_coordinates, expected_coordinates, 3)
 
 @unittest.skip("skip")
@@ -544,22 +545,17 @@ class TestOverallComponent(unittest.TestCase):
         """
         electron_coordinates = self.electron_coordinates_real_example
 
-        grid_data = hdf5.read_data("scanned_image-45.h5")
+        grid_data = hdf5.read_data("scanned_image-35.h5")
         C, T, Z, Y, X = grid_data[0].shape
         grid_data[0].shape = Y, X
 
-        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (2, 2))
-        print subimage_coordinates
-        for i in subimages:
-            print i.shape
+        subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(grid_data[0], (4, 4), 60)
         print len(subimages)
         hdf5.export("spot_found.h5", subimages, thumbnail=None)
         #hdf5.export("subimages", model.DataArray(subimages[0]))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
-        print spot_coordinates
 
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-        print optical_coordinates
         # grid_data[0].reshape(grid_data[0].shape[0], grid_data[0].shape[1], 3)
         for i in optical_coordinates:
             grid_data[0][i[1], i[0]] = 12000
@@ -572,7 +568,6 @@ class TestOverallComponent(unittest.TestCase):
         scale = 249.625 / optical_scale
             
         known_estimated_coordinates, known_optical_coordinates = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, 25)
-        print len(known_estimated_coordinates), len(known_optical_coordinates)
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_optical_coordinates, known_estimated_coordinates)
         final_optical = coordinates._TransformCoordinates(known_estimated_coordinates, (calc_translation_y, calc_translation_x), -calc_rotation, (calc_scaling_x, calc_scaling_y))
 

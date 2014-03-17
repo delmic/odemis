@@ -26,7 +26,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import numpy
-from odemis import model, acq
+from odemis import model
 from odemis.acq import _futures
 from odemis.util import TimeoutError
 import sys
@@ -34,7 +34,7 @@ import threading
 import time
 
 
-_scan_lock = threading.Lock()
+_acq_lock = threading.Lock()
 _ccd_done = threading.Event()
 
 
@@ -52,12 +52,12 @@ def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateScanTime(dwell_time, repetitions))
-    f._scan_state = RUNNING
+                                end=est_start + estimateAcqTime(dwell_time, repetitions))
+    f._acq_state = RUNNING
 
     # Task to run
-    doScanGrid = _DoScanGrid
-    f.task_canceller = _CancelScanGrid
+    doScanGrid = _DoAcquisition
+    f.task_canceller = _CancelAcquisition
 
     # Run in separate thread
     scan_thread = threading.Thread(target=_futures.executeTask,
@@ -84,7 +84,7 @@ def _ssOnCCDImage(df, data):
     _ccd_done.set()
     logging.debug("Got CCD image!")
     
-def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
+def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
     """
     Uses the e-beam to scan the rectangular grid consisted of the given number 
     of spots and acquires the corresponding CCD image
@@ -102,8 +102,8 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
     _ccd_done.clear()
 
     # Scanner setup (order matters)
-    scale = [(escan.resolution.range[1][0] - 1) / repetitions[0],
-             (escan.resolution.range[1][1] - 1) / repetitions[1]]
+    scale = [(escan.resolution.range[1][0]) / repetitions[0],
+             (escan.resolution.range[1][1]) / repetitions[1]]
     escan.scale.value = scale
     escan.resolution.value = repetitions
     escan.translation.value = (0, 0)
@@ -129,7 +129,7 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
     tot_time = et + readout + 0.05
 
     try:
-        if future._scan_state == CANCELLED:
+        if future._acq_state == CANCELLED:
             raise CancelledError()
         detector.data.subscribe(_discard_data)
         ccd.data.subscribe(_ssOnCCDImage)
@@ -140,44 +140,72 @@ def _DoScanGrid(future, repetitions, dwell_time, escan, ccd, detector):
         if not _ccd_done.wait(2 * tot_time + 4):
             raise TimeoutError("Acquisition of CCD timed out")
 
-        with _scan_lock:
-            if future._scan_state == CANCELLED:
+        with _acq_lock:
+            if future._acq_state == CANCELLED:
                 detector.data.unsubscribe(_discard_data)
                 ccd.data.unsubscribe(_ssOnCCDImage)
                 raise CancelledError()
             logging.debug("Scan done.")
-            future._scan_state = FINISHED
+            future._acq_state = FINISHED
 
     finally:
         detector.data.unsubscribe(_discard_data)
         ccd.data.unsubscribe(_ssOnCCDImage)
 
     electron_coordinates = []
-    # TODO: convert to numpy call?
-    for i in xrange(repetitions[0]):
-        for j in xrange(repetitions[1]):
+
+    bound = ((repetitions[0] - 1) * scale[0]) / 2, ((repetitions[1] - 1) * scale[1]) / 2
+
+    for i in xfrange(-bound[0], bound[0] + 1, scale[0]):
+        for j in xfrange(-bound[1], bound[1] + 1, scale[1]):
             # Compute electron coordinates based on scale and repetitions
-            electron_coordinates.append((i * scale[0], j * scale[1]))
+            electron_coordinates.append((i * repetitions[1] / (repetitions[1] - 1),
+                                         j * repetitions[1] / (repetitions[1] - 1)))
 
     return ccd.data._optical_image, electron_coordinates, scale
 
-def _CancelScanGrid(future):
+def xfrange(start, stop, step):
+    while start < stop:
+        yield start
+        start += step
+
+# Copy from acqmng
+# @staticmethod
+def _executeTask(future, fn, *args, **kwargs):
     """
-    Canceller of _DoScanGrid task.
+    Executes a task represented by a future.
+    Usually, called as main task of a (separate thread).
+    Based on the standard futures code _WorkItem.run()
+    future (Future): future that is used to represent the task
+    fn (callable): function to call for running the future
+    *args, **kwargs: passed to the fn
+    returns None: when the task is over (or cancelled)
+    """
+    try:
+        result = fn(*args, **kwargs)
+    except BaseException:
+        e = sys.exc_info()[1]
+        future.set_exception(e)
+    else:
+        future.set_result(result)
+
+def _CancelAcquisition(future):
+    """
+    Canceller of _DoAcquisition task.
     """    
     logging.debug("Cancelling scan...")
     
-    with _scan_lock:
-        if future._scan_state == FINISHED:
+    with _acq_lock:
+        if future._acq_state == FINISHED:
             logging.debug("Scan already finished.")
             return False
-        future._scan_state = CANCELLED
+        future._acq_state = CANCELLED
         _ccd_done.set()
         logging.debug("Scan cancelled.")
 
     return True
 
-def estimateScanTime(dwell_time, repetitions):
+def estimateAcqTime(dwell_time, repetitions):
     """
     Estimates scan procedure duration
     """

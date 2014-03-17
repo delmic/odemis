@@ -26,15 +26,16 @@ import numpy
 import math
 import operator
 import scipy.signal
+import scipy.signal as signal
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 import transform
 import logging
+import warnings
 from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
 from itertools import compress
-
 
 MAX_STEPS_NUMBER = 100  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
@@ -53,7 +54,6 @@ def FindCenterCoordinates(subimages):
 
     # Pop each subimage from the list
     for i in xrange(number_of_subimages):
-        #subimage = subimages[i]
     	# Input might be integer
     	# TODO Dummy, change the way that you handle the array e.g. convolution
     	subimage = subimages[i].astype(numpy.float64)
@@ -74,8 +74,10 @@ def FindCenterCoordinates(subimages):
 
         # Smoothing
         h = numpy.tile(numpy.ones(3) / 9, 3).reshape(3, 3)  # simple 3x3 averaging filter
-        dIdu = scipy.signal.convolve2d(dIdu, h, mode='same', fillvalue=0)
-        dIdv = scipy.signal.convolve2d(dIdv, h, mode='same', fillvalue=0)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", numpy.ComplexWarning)
+            dIdu = scipy.signal.convolve2d(dIdu, h, mode='same', fillvalue=0)
+            dIdv = scipy.signal.convolve2d(dIdv, h, mode='same', fillvalue=0)
 
         # Calculate intensity gradient in xy coordinate system
         dIdx = dIdu - dIdv
@@ -118,13 +120,13 @@ def FindCenterCoordinates(subimages):
         yc = (swab * swac - swa2 * swbc) / det
 
         # Output relative to upper left coordinate
-        xc = xc + 3 / 2
-        yc = -yc + 3 / 2
+        xc = xc  # + 1 / 2
+        yc = -yc  # + 1 / 2
         spot_coordinates.append((xc, yc))
 
     return spot_coordinates
 
-def DivideInNeighborhoods(data, number_of_spots):
+def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     """
     Given an image that includes N spots, divides it in N subimages with each of them 
     to include one spot. Briefly, it filters the image, finds the N “brightest” spots 
@@ -132,68 +134,105 @@ def DivideInNeighborhoods(data, number_of_spots):
     until image division is feasible.
     data (model.DataArray): 2D array containing the intensity of each pixel
     number_of_spots (int,int): The number of CL spots
+    optical_scale (float): Distance between spots in optical grid #pixels
     returns subimages (List of DataArrays): One subimage per spot
             subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
     """
-    subimage_coordinates = []
-    subimages = []
+    image = data
+    scale = optical_scale
+    avg_intensity = numpy.average(image)
+    max_intensity = numpy.max(image)
 
-    image =  data
+    # Check if cosmic ray affects the avg_intensity
+    if max_intensity > 8 * avg_intensity:
+        spot_factor = 1.3
+    elif max_intensity < 4 * avg_intensity:
+        spot_factor = 1.1
+    else:
+        spot_factor = 1.2
 
-    # Determine size of filter window
-    filter_window_size = int(image.size / (((number_of_spots[0] * number_of_spots[1]) ** 4))) + 15
-    
-    # TODO, adjust to magnification
-    filter_window_size = sorted((15, filter_window_size, 55))[1]  # / (20000 / 6120)
-    # print filter_window_size
-    
-    i_max, j_max = unravel_index(image.argmax(), image.shape)
-    i_min, j_min = unravel_index(image.argmin(), image.shape)
-    max_diff = image[i_max, j_max] - image[i_min, j_min]
-    prod_of_spots = numpy.prod(number_of_spots)
-    data_max = filters.maximum_filter(image, filter_window_size)
-    data_min = filters.minimum_filter(image, filter_window_size)
-    
+    step = 1
+    sensitivity = 4
+    while sensitivity <= 100:
+        subimage_coordinates = []
+        subimages = []
 
-    for i in numpy.arange(3.5, 15, 0.1):
+        filter_window_size = scale / 4
+        filter_window_size = sorted((4, filter_window_size, 60))[1]
+    
+        i_max, j_max = unravel_index(image.argmax(), image.shape)
+        i_min, j_min = unravel_index(image.argmin(), image.shape)
+        max_diff = image[i_max, j_max] - image[i_min, j_min]
+        data_max = filters.maximum_filter(image, filter_window_size)
+        data_min = filters.minimum_filter(image, filter_window_size)
+        
         # Determine threshold
+        i = sensitivity
         threshold = max_diff / i
-
+    
         # Filter the parts of the image with variance in intensity greater
         # than the threshold
         maxima = (image == data_max)
         diff = ((data_max - data_min) > threshold)
         maxima[diff == 0] = 0
-
+    
         labeled, num_objects = ndimage.label(maxima)
-        if num_objects > prod_of_spots:
-            break
-
-    slices = ndimage.find_objects(labeled)
     
-    if len(slices)==0:
-        logging.warning("Cannot detect spots.")
-        return [],[]
+        slices = ndimage.find_objects(labeled)
+        
+        (x_center_last, y_center_last) = (-10, -10)
     
-    # Go through these parts and crop the subimages based on the neighborhood_size value
-    for dy,dx in slices:
-        x_center = (dx.start + dx.stop - 1) / 2
-        y_center = (dy.start + dy.stop - 1) / 2
+        # Go through these parts and crop the subimages based on the neighborhood_size value
+        for dy, dx in slices:
+            x_center = (dx.start + dx.stop - 1) / 2
+            y_center = (dy.start + dy.stop - 1) / 2
 
-        subimage_coordinates.append((x_center, y_center))
-        # TODO: change +10 and -10 to number relative to spot size
-        subimage = image[(dy.start - 10):(dy.stop + 1 + 10), (dx.start - 10):(dx.stop + 1 + 10)]
-        #TODO Discard only this image
-        if subimage.shape[0]==0 or subimage.shape[1]==0:
-            logging.warning("Cannot detect spots.")
-            return [],[]
-        subimages.append(subimage)
+            if x_center >= image.shape[1] - scale \
+                or y_center >= image.shape[0] - scale \
+                or x_center <= scale \
+                or y_center <= scale:
+                continue
 
-    # TODO: Handle case where slices is 0 or 1
-    # Take care of outliers
-    clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages, subimage_coordinates)
+            # Make sure we don't detect spots on the top of each other
+            tab = tuple(map(operator.sub, (x_center_last, y_center_last),
+                            (x_center, y_center)))
+    
+            subimage = image[(dy.start - 2.5):(dy.stop + 2.5),
+                             (dx.start - 2.5):(dx.stop + 2.5)]
+            
+            if subimage.shape[0] == 0 or subimage.shape[1] == 0:
+                continue
+    
+            if (subimage > spot_factor * avg_intensity).sum() < 6:
+                continue
+            
+            # if spots detected too close keep the brightest one
+            if math.hypot(tab[0], tab[1]) < (scale / 2):
+                if numpy.sum(subimage) > numpy.sum(subimages[len(subimages) - 1]):
+                    subimages.pop()
+                    subimage_coordinates.pop()
+                    subimage_coordinates.append((x_center, y_center))
+                    subimages.append(subimage)
+            else:
+                subimage_coordinates.append((x_center, y_center))
+                subimages.append(subimage)
+            
+            (x_center_last, y_center_last) = (x_center, y_center)
+    
+        # Take care of outliers
+        expected_spots = numpy.prod(number_of_spots)
+        clean_subimages, clean_subimage_coordinates = FilterOutliers(image,
+                                                                     subimages,
+                                                                     subimage_coordinates,
+                                                                     expected_spots)
+        if len(clean_subimages) >= numpy.prod(number_of_spots):
+           break
+
+        if sensitivity > 4:
+            step = 4
+        sensitivity += step
 
     return clean_subimages, clean_subimage_coordinates
 
@@ -215,7 +254,7 @@ def ReconstructCoordinates(subimage_coordinates, spot_coordinates):
 
     return optical_coordinates
 
-def FilterOutliers(image, subimages, subimage_coordinates):
+def FilterOutliers(image, subimages, subimage_coordinates, expected_spots):
     """
     It removes subimages that contain outliers (e.g. cosmic rays).
     image (model.DataArray): 2D array containing the intensity of each pixel
@@ -228,11 +267,14 @@ def FilterOutliers(image, subimages, subimage_coordinates):
     number_of_subimages = len(subimages)
     clean_subimages = []
     clean_subimage_coordinates = []
+    filtered_subimages = []
+    filtered_subimage_coordinates = []
+
     for i in xrange(number_of_subimages):
         hist, bin_edges = histogram(subimages[i], bins=10)
         # Remove subimage if its histogram implies a cosmic ray
         hist_list = hist.tolist()
-        if hist_list.count(0) < 5:
+        if hist_list.count(0) < 6:
             clean_subimages.append(subimages[i])
             clean_subimage_coordinates.append(subimage_coordinates[i])
             
@@ -242,6 +284,38 @@ def FilterOutliers(image, subimages, subimage_coordinates):
     if (((len(subimages) - len(clean_subimages)) > 3) or (len(clean_subimages) == 0)):
         clean_subimages = subimages
         clean_subimage_coordinates = subimage_coordinates
+
+    # If we still have more spots than expected we discard the ones
+    # with "stranger" distances from their closest spots
+    if len(clean_subimage_coordinates) > expected_spots:
+        points = numpy.array(clean_subimage_coordinates)
+        tree = cKDTree(points, 5)
+        distance, index = tree.query(clean_subimage_coordinates, 5)
+        list_distance = numpy.array(distance)
+        avg_1 = numpy.average(list_distance[:, 1])
+        avg_2 = numpy.average(list_distance[:, 2])
+        avg_3 = numpy.average(list_distance[:, 3])
+        avg_4 = numpy.average(list_distance[:, 4])
+        diff_avg_list = numpy.array(list_distance[:, 1:5])
+        for i in xrange(0, len(list_distance), 1):
+            diff_avg = [abs(list_distance[i, 1] - avg_1),
+                        abs(list_distance[i, 2] - avg_2),
+                        abs(list_distance[i, 3] - avg_3),
+                        abs(list_distance[i, 4] - avg_4)]
+            diff_avg_list[i] = diff_avg
+        var_1 = numpy.average(diff_avg_list[:, 0])
+        var_2 = numpy.average(diff_avg_list[:, 1])
+        var_3 = numpy.average(diff_avg_list[:, 2])
+        var_4 = numpy.average(diff_avg_list[:, 3])
+
+        for i in xrange(len(clean_subimage_coordinates)):
+            if diff_avg_list[i, 0] <= var_1 \
+                or diff_avg_list[i, 1] <= var_2 \
+                or diff_avg_list[i, 2] <= var_3 \
+                or diff_avg_list[i, 3] <= var_4:
+                filtered_subimages.append(clean_subimages[i])
+                filtered_subimage_coordinates.append(clean_subimage_coordinates[i])
+        return filtered_subimages, filtered_subimage_coordinates
 
     return clean_subimages, clean_subimage_coordinates
 
@@ -261,11 +335,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     # Remove large outliers
     if len(input_coordinates) > 1:
         optical_coordinates = _FindOuterOutliers(input_coordinates)
-        print len(optical_coordinates), len(electron_coordinates)
         if len(optical_coordinates) > len(electron_coordinates):
             optical_coordinates = _FindInnerOutliers(optical_coordinates)
-        print len(optical_coordinates)
-        print optical_coordinates
     else:
         logging.warning("Cannot find overlay.")
         return [], []
@@ -276,16 +347,22 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
     guess_rotation = 0
 
     # Informed guess
-    guess_coordinates = _TransformCoordinates(optical_coordinates, (guess_x_move, guess_y_move), guess_rotation, (guess_scale, guess_scale))
+    guess_coordinates = _TransformCoordinates(optical_coordinates, (guess_x_move, 
+                                                                    guess_y_move), 
+                                              guess_rotation, (guess_scale, guess_scale))
 
     # Overlay center
-    guess_sub_electron_mean = tuple(map(operator.sub, numpy.mean(guess_coordinates, 0), numpy.mean(electron_coordinates, 0)))
-    transformed_coordinates = [tuple(map(operator.sub, guess, guess_sub_electron_mean)) for guess in guess_coordinates]
+    guess_sub_electron_mean = tuple(map(operator.sub, numpy.mean(guess_coordinates, 0), 
+                                        numpy.mean(electron_coordinates, 0)))
+    transformed_coordinates = [tuple(map(operator.sub, guess, 
+                                         guess_sub_electron_mean)) for guess in guess_coordinates]
 
     max_wrong_points = math.ceil(0.5 * math.sqrt(len(electron_coordinates)))
     for step in xrange(MAX_STEPS_NUMBER):
         #Calculate nearest point
-        estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_coordinates)
+        estimated_coordinates, index1, e_wrong_points, total_shift = _MatchAndCalculate(transformed_coordinates, 
+                                                                                        optical_coordinates, 
+                                                                                        electron_coordinates)
 
         if estimated_coordinates == []:
             quality = 0
@@ -293,7 +370,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guessing_scale, ma
 
         # Calculate quality
         inv_e_wrong_points = [not i for i in e_wrong_points]
-        electron_e_inv_points = [estimated_coordinates[i] for i in list(compress(index1, inv_e_wrong_points))]
+        electron_e_inv_points = [estimated_coordinates[i] for i in list(compress(index1, 
+                                                                                 inv_e_wrong_points))]
         electron_e_points = list(compress(electron_coordinates, inv_e_wrong_points))
 
         # Calculate distance between the expected and found electron coordinates
@@ -411,13 +489,15 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     # Calculate the transform parameters for the correct electron_coordinates
     #TODO: Throw exception if inv_e_wrong_points or inv_o_wrong_points has only False elements!!!
     inv_e_wrong_points = [not i for i in e_wrong_points]
-    (x_move1, y_move1), (x_scale1, y_scale1), rotation1 = transform.CalculateTransform(list(compress(electron_coordinates, inv_e_wrong_points))
+    (x_move1, y_move1), (x_scale1, y_scale1), rotation1 = transform.CalculateTransform(list(compress(electron_coordinates,
+                                                                                                     inv_e_wrong_points))
                                  , list(compress(knn_points1, inv_e_wrong_points)))
     x_move1, y_move1 = x_move1, y_move1
 
     # Calculate the transform parameters for the correct optical_coordinates
     inv_o_wrong_points = [not i for i in o_wrong_points]
-    (x_move2, y_move2), (x_scale2, y_scale2), rotation2 = transform.CalculateTransform(list(compress(knn_points2, inv_o_wrong_points))
+    (x_move2, y_move2), (x_scale2, y_scale2), rotation2 = transform.CalculateTransform(list(compress(knn_points2,
+                                                                                                     inv_o_wrong_points))
                                  , list(compress(optical_coordinates, inv_o_wrong_points)))
     x_move2, y_move2 = x_move2, y_move2
 
@@ -494,7 +574,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     new_e_index = [new_index2[i] for i in new_index1]
     new_e_wrong_points = map(operator.ne, new_e_index, electron_range)
     if (all(new_e_wrong_points) or new_index1.count(new_index1[0]) == len(new_index1)):
-        logging.warning("Cannot perform matching.")
+        logging.warning("Cannot perform matching..")
         return [], [], [], []
 
     return estimated_coordinates, new_index1, new_e_wrong_points, total_shift
@@ -513,29 +593,68 @@ def _FindOuterOutliers(x_coordinates):
 
     # Keep only the second ones because the first ones are the points themselves
     sorted_distance = sorted(list_distance[:, 1])
-    outlier_value = 2 * sorted_distance[int(math.ceil(0.5 * len(sorted_distance)))]
+    outlier_value = 1.5 * sorted_distance[int(math.ceil(0.5 * len(sorted_distance)))]
     no_outlier_index = list_distance[:, 1] < outlier_value
 
     return list(compress(x_coordinates, no_outlier_index))
 
 def _FindInnerOutliers(x_coordinates):
     """
-    Removes inner outliers from the optical coordinates.
+    Removes inner outliers from the optical coordinates. It assumes
+    that our grid is rectangular.
     x_coordinates (List of tuples): List of coordinates
     returns (List of tuples): Coordinates without inner outliers
     """
-    print len(x_coordinates)
     points = numpy.array(x_coordinates)
     tree = cKDTree(points, 2)
     distance, index = tree.query(x_coordinates, 2)
-    list_distance = numpy.array(distance)
     list_index = numpy.array(index)
-    print list_index[:, 1]
-    print list_distance[:, 1]
+
     counts = numpy.bincount(list_index[:, 1])
-    inner_outlier = numpy.argmax(counts)
+    list = counts
+    inner_outliers = numpy.argwhere(list == numpy.amax(counts))
+    inner_outliers = inner_outliers.flatten().tolist()
+    inner_outlier = numpy.max(inner_outliers)
+
     del x_coordinates[inner_outlier]
 
-    print len(x_coordinates)
     return x_coordinates
 
+def _BandPassFilter(image, len_noise, len_object):
+    """
+    bandpass filter implementation. 
+    Source: http://physics-server.uoregon.edu/~raghu/particle_tracking.html
+    """
+    b = len_noise
+    w = round(len_object)
+    N = 2 * w + 1
+
+    # Gaussian Convolution Kernel
+    sm = numpy.arange(0, N, dtype=numpy.float)
+    r = (sm - w) / (2 * b)
+    gx = numpy.power(math.e, -r ** 2) / (2 * b * math.sqrt(math.pi))
+    gx = numpy.reshape(gx, (gx.shape[0], 1))
+    gy = gx.conj().transpose()
+
+    # Boxcar average kernel, background
+    bx = numpy.zeros((1, N), numpy.float) + 1 / N
+    by = bx.conj().transpose()
+
+    # Convolution with the matrix and kernels
+    res = image
+    g = signal.convolve(res, gx, 'valid')
+    tmpg = g
+    g = signal.convolve(tmpg, gy, 'valid')
+    tmpres = res
+    res = signal.convolve(tmpres, bx, 'valid')
+    tmpres = res
+    res = signal.convolve(tmpres, by, 'valid')
+    tmpg = 0
+    tmpres = 0
+    arr_res = numpy.zeros((image.shape))
+    arr_g = numpy.zeros((image.shape))
+    arr_res[w:-w, w:-w] = res
+    arr_g[w:-w, w:-w] = g
+
+    res = numpy.maximum(arr_g - arr_res, 0)
+    return res
