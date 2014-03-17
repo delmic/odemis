@@ -230,6 +230,10 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_NONE,
         },
+        "pixelSize":
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
     },
     "spectrometer":
     {

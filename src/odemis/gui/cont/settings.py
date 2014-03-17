@@ -253,9 +253,9 @@ class SettingsPanel(object):
             return odemis.gui.CONTROL_NONE
 
         if va.readonly:
-            # Read only VAs are no longer displayed.
-            # return odemis.gui.CONTROL_LABEL
-            return odemis.gui.CONTROL_NONE
+            # Uncomment this line to hide Read only VAs by default
+            # return odemis.gui.CONTROL_NONE
+            return odemis.gui.CONTROL_LABEL
         else:
             try:
                 # This statement will raise an exception when no choices are
