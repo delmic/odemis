@@ -253,7 +253,9 @@ class SettingsPanel(object):
             return odemis.gui.CONTROL_NONE
 
         if va.readonly:
-            return odemis.gui.CONTROL_LABEL
+            # Read only VAs are no longer displayed.
+            # return odemis.gui.CONTROL_LABEL
+            return odemis.gui.CONTROL_NONE
         else:
             try:
                 # This statement will raise an exception when no choices are
@@ -867,7 +869,7 @@ class SettingsPanel(object):
 
     def add_metadata(self, key, value):
         """
-        Adds an entry representing a specific metadata. According to the
+        Adds an entry representing specific metadata. According to the
          metadata key, the right representation is used for the value.
         key (model.MD_*): the metadata key
         value (depends on the metadata): the value to display
@@ -979,7 +981,8 @@ class SettingsBarController(object):
 
         try:
             name = "Name" # for exception handling only
-            panel.add_label(label, comp.name, selectable=False)
+            # We no longer display the component name
+            # panel.add_label(label, comp.name, selectable=False)
             vigil_attrs = getVAs(comp)
             for name, value in vigil_attrs.items():
                 if comp.role in CONFIG and name in CONFIG[comp.role]:
