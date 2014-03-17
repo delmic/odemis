@@ -719,14 +719,13 @@ class AnalysisTab(Tab):
                                         static=True
                                   )
 
-        self.tab_data_model.ar_cal_finfo.subscribe(self.load_ar_background)
-        self.tab_data_model.spec_cal_finfo.subscribe(self.load_spec_comp)
 
         self._settings_controller = settings.AnalysisSettingsController(
                                         self.main_frame,
                                         self.tab_data_model
                                     )
-
+        self._settings_controller.setter_ar_file = self.set_ar_background
+        self._settings_controller.setter_spec_file = self.set_spec_comp
 
         buttons = OrderedDict([
             (self.main_frame.btn_sparc_view_all,
@@ -960,55 +959,54 @@ class AnalysisTab(Tab):
             self.tb.enable_button(tools.TOOL_POINT, False)
 
 
-        # Initialize calibration controls
-        conf = get_general_conf()
+        # Reload current calibration on the new streams
+        if ar_found:
+            try:
+                self.set_ar_background(self.tab_data_model.ar_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.ar_cal.value)
+                self.tab_data_model.ar_cal.value = u"" # remove the calibration
 
-        if ar_found: # AR streams found
-            previous = conf.get("calibration", "ar_file") or None
-            self.tab_data_model.ar_cal_finfo.value = guimod.FileInfo(previous)
-        else:
-            # Set the VA to None, hiding the panel
-            self.tab_data_model.ar_cal_finfo.value = None
+        if spec_found:
+            try:
+                self.set_spec_comp(self.tab_data_model.spec_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.spec_cal.value)
+                self.tab_data_model.spec_cal.value = u"" # remove the calibration
 
-        if spec_found: # Spec. streams found
-            previous = conf.get("calibration", "spec_file") or None
-            self.tab_data_model.spec_cal_finfo.value = guimod.FileInfo(previous)
-        else:
-            # Set the VA to None, hiding the panel
-            self.tab_data_model.spec_cal_finfo.value = None
+        # Only show the panels that fit the current streams
+        self._settings_controller.ShowCalibrationPanel(ar_found, spec_found)
 
-    # TODO: Move it to model, as a setter of the VA?
-    # But obviously the exceptions to message must be staying in the GUI side.
-    # Or maybe: call this function first, and if successful, set the VA, otherwise
-    # don't change. In particular, if setting the background VA fails, we should
-    # fallback to the previous value, not to None.
-    def load_ar_background(self, file_info):
-        """ Load the data from the AR background file and apply to streams """
-        fn = None
-
+    def set_ar_background(self, fn):
+        """
+        Load the data from the AR background file and apply to streams
+        return (unicode): the filename as it has been accepted
+        raise ValueError if the file is not correct or calibration cannot be applied 
+        """
         try:
-            if file_info is None:
-                self._settings_controller.on_ar_change(file_info)
-                return
-            elif file_info.is_empty:
+            if fn == u"":
                 logging.debug("Clearing AR background")
                 cdata = None
             else:
                 logging.debug("Loading AR background data")
-                fn = file_info.file_name
                 converter = dataio.find_fittest_exporter(fn)
                 data = converter.read_data(fn)
+                # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_ar_data(data)
 
             # Apply data to the relevant streams
             ar_strms = [s for s in  self.tab_data_model.streams.value
                         if isinstance(s, streammod.AR_STREAMS)]
 
+            # This might raise more exceptions if calibration is not compatible
+            # with the data.
             for strm in ar_strms:
                 strm.background.value = cdata
 
         except Exception, err: #pylint: disable=W0703
-            # logging.exception("Problem loading file")
+            logging.exception("Problem loading file")
             msg = "File '%s' not suitable as angular resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1016,36 +1014,26 @@ class AnalysisTab(Tab):
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()
+            raise ValueError("File '%s' not suitable" % fn)
 
-            # FIXME: we should not do that: FileInfo should be considered RO
-            # Clear the calibration file
-            file_info.file_name = None
+        return fn
 
-        conf = get_general_conf()
-        conf.set("calibration", "ar_file", file_info.file_name or "")
-        conf.write()
-
-        # TODO: should not be called here, but on loading a file, to decide
-        # whether calibration panel is displayed or not
-        self._settings_controller.on_ar_change(file_info)
-
-    def load_spec_comp(self, file_info):
-        fn = None
+    def set_spec_comp(self, fn):
+        """
+        Load the data from a spectrum calibration file and apply to streams
+        return (unicode): the filename as it has been accepted
+        raise ValueError if the file is not correct or calibration cannot be applied 
+        """
         try:
-            if file_info is None:
-                self._settings_controller.on_spec_change(file_info)
-                return
-            elif file_info.is_empty:
+            if fn == u"":
                 logging.debug("Clearing spectrum efficiency compensation")
                 cdata = None
             else:
                 logging.debug("Loading spectrum efficiency compensation")
-                fn = file_info.file_name
                 converter = dataio.find_fittest_exporter(fn)
                 data = converter.read_data(fn)
+                # will raise exception if doesn't contain good calib data
                 cdata = calibration.get_spectrum_efficiency(data)
-
-            # data is expected to be a DataArra or be None for clearing purposes
 
             spec_strms = [s for s in self.tab_data_model.streams.value
                           if isinstance(s, streammod.SPECTRUM_STREAMS)]
@@ -1061,15 +1049,9 @@ class AnalysisTab(Tab):
                                    wx.OK | wx.ICON_STOP)
             dlg.ShowModal()
             dlg.Destroy()
+            raise ValueError("File '%s' not suitable" % fn)
 
-            # Clear the calibration file
-            file_info.file_name = None
-
-        conf = get_general_conf()
-        conf.set("calibration", "spec_file", file_info.file_name or "")
-        conf.write()
-
-        self._settings_controller.on_spec_change(file_info)
+        return fn
 
     @call_after
     def _onTool(self, tool):

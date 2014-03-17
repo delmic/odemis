@@ -21,18 +21,20 @@ This file is part of Odemis.
 
 """
 
-import odemis.dataio as dataio
 from abc import ABCMeta
-from odemis import model
-from odemis.acq.stream import Stream, StreamTree
-from odemis.model import FloatContinuous, VigilantAttribute
-from odemis.model._vattributes import IntEnumerated, NotSettableError
 import collections
 import logging
 import math
+from odemis import model
+from odemis.acq.stream import Stream, StreamTree
+from odemis.gui.conf import get_general_conf
+from odemis.model import FloatContinuous, VigilantAttribute
+from odemis.model._vattributes import IntEnumerated, NotSettableError, StringVA
 import os
 import threading
 import time
+
+import odemis.dataio as dataio
 
 
 # The different states of a microscope
@@ -404,6 +406,7 @@ class AnalysisGUIData(MicroscopyGUIData):
     """
     def __init__(self, main):
         MicroscopyGUIData.__init__(self, main)
+        self._conf = get_general_conf()
 
         # only tool to zoom and pick point/line
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_POINT, TOOL_LINE])
@@ -413,11 +416,24 @@ class AnalysisGUIData(MicroscopyGUIData):
         # associated to the data displayed
         self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
 
-        # TODO: Just use a simple StringVA for the next 2 VAs?
-        # The current file being used for calibration. It is set to `None`
-        # when no calibration is used.
-        self.ar_cal_finfo = VigilantAttribute(None) # a FileInfo
-        self.spec_cal_finfo = VigilantAttribute(None) # a FileInfo
+        # The current file being used for calibration. It is set to u""
+        # when no calibration is used. They are directly synchronised with the
+        # configuration file.
+        ar_file = self._conf.get("calibration", "ar_file")
+        spec_file = self._conf.get("calibration", "spec_file")
+        self.ar_cal = StringVA(ar_file) # a unicode
+        self.spec_cal = StringVA(spec_file) # a unicode
+
+        self.ar_cal.subscribe(self._on_ar_cal)
+        self.spec_cal.subscribe(self._on_spec_cal)
+
+    def _on_ar_cal(self, fn):
+        self._conf.set("calibration", "ar_file", fn)
+        self._conf.write()
+
+    def _on_spec_cal(self, fn):
+        self._conf.set("calibration", "spec_file", fn)
+        self._conf.write()
 
 
 # TODO: use it for FirstStep too

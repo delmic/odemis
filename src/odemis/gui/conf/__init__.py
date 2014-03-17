@@ -182,8 +182,8 @@ class GeneralConfig(Config):
 
         # For the calibration files (used in analysis tab)
         self.default.add_section("calibration")
-        self.default.set("calibration", "ar_file", "")
-        self.default.set("calibration", "spec_file", "")
+        self.default.set("calibration", "ar_file", u"")
+        self.default.set("calibration", "spec_file", u"")
 
     @property
     def html_dev_doc(self):
