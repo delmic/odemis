@@ -271,8 +271,8 @@ class SettingsPanel(object):
                 if len(va.choices) <= 1:
                     # not much choices really
                     return odemis.gui.CONTROL_LABEL
-                elif len(va.choices) < max_items and \
-                   len(choices_str) < max_items * max_len:
+                elif (len(va.choices) < max_items and
+                      len(choices_str) < max_items * max_len):
                     return odemis.gui.CONTROL_RADIO
                 else:
                     return odemis.gui.CONTROL_COMBO

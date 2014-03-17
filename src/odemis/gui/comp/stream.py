@@ -757,15 +757,15 @@ class StreamPanel(wx.PyPanel):
 
         tooltip = "Toggle auto brightness and contrast"
         self._btn_autobc.SetToolTipString(tooltip)
-        self._btn_autobc.SetBitmaps(
-                                        bmp_h=img.getbtn_contrast_hBitmap(),
-                                        bmp_sel=img.getbtn_contrast_aBitmap())
+        self._btn_autobc.SetBitmaps(bmp_h=img.getbtn_contrast_hBitmap(),
+                                    bmp_sel=img.getbtn_contrast_aBitmap())
         self._btn_autobc.SetForegroundColour("#000000")
-        self._vac_autobc = VigilantAttributeConnector(self.stream.auto_bc,
-                                  self._btn_autobc,
-                                  self._btn_autobc.SetToggle,
-                                  self._btn_autobc.GetToggle,
-                                  events=wx.EVT_BUTTON)
+        self._vac_autobc = VigilantAttributeConnector(
+                                            self.stream.auto_bc,
+                                            self._btn_autobc,
+                                            self._btn_autobc.SetToggle,
+                                            self._btn_autobc.GetToggle,
+                                            events=wx.EVT_BUTTON)
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         self._sld_bc_outliers = UnitFloatSlider(
