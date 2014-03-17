@@ -34,7 +34,7 @@ import logging
 import numbers
 from odemis import model
 import odemis.dataio
-from odemis.gui import conf
+import odemis.gui.conf as guiconf
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
@@ -289,20 +289,25 @@ class SettingsPanel(object):
             # Return default control
             return odemis.gui.CONTROL_TEXT
 
-    def _get_va_meta(self, va, conf):
+    def _get_va_meta(self, comp, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
         or override them with the values provided in the configuration.
         """
 
-        minv, maxv = conf.get("range", (None, None))
+        r = conf.get("range", (None, None))
+        minv, maxv = (None, None)
         try:
-            if (minv, maxv) == (None, None):
+            if callable(r):
+                minv, maxv = r(comp, va, conf)
+            elif r == (None, None):
                 minv, maxv = va.range
             else: # merge
                 # TODO: handle iterables
+                minv, maxv = r
                 minv, maxv = max(minv, va.range[0]), min(maxv, va.range[1])
         except (AttributeError, NotApplicableError):
             pass
+
         # Ensure the range encompasses the current value
         if minv is not None and maxv is not None:
             val = va.value
@@ -312,7 +317,7 @@ class SettingsPanel(object):
         choices = conf.get("choices", None)
         try:
             if callable(choices):
-                choices = choices(va, conf)
+                choices = choices(comp, va, conf)
             elif choices is None:
                 choices = va.choices
             else: # merge = intersection
@@ -371,7 +376,7 @@ class SettingsPanel(object):
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
-        config = conf.get_acqui_conf()
+        config = guiconf.get_acqui_conf()
         value_ctrl = FileBrowser(self.panel,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
                                  label=clearlabel,
@@ -420,7 +425,9 @@ class SettingsPanel(object):
         conf = conf or {}
 
         # Get the range and choices
-        min_val, max_val, choices, unit = self._get_va_meta(vigil_attr, conf)
+        min_val, max_val, choices, unit = self._get_va_meta(comp,
+                                                            vigil_attr,
+                                                            conf)
 
         format = conf.get("format", True)
 
