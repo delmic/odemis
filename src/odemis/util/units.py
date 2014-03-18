@@ -99,10 +99,12 @@ def to_string_si_prefix(x, sig=None):
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
 
 def to_string_pretty(x, sig=None):
-    """
-    Convert a number to a string as int or float as most appropriate
+    """ Convert a number to a string as int or float as most appropriate
+
     :param sig: (int) The number of significant decimals
+
     """
+
     if x == 0:
         # don't consider this a float
         return u"0"
@@ -117,6 +119,7 @@ def to_string_pretty(x, sig=None):
     if isinstance(x, float):
         # just a float
         return u"%r" % x
+
     # TODO: if very big or very small, use e-N notation, with N a multiple of 3
 
     return u"%s" % x

@@ -617,7 +617,8 @@ class UnitFloatCtrlHandler(xrc.XmlResourceHandler):
     def DoCreateResource(self):
         assert self.GetInstance() is None
 
-        val = float(self.GetText('value'))
+        val = self.GetText('value').strip()
+        val = float(val) if val else 0.0
 
         w = txt.UnitFloatCtrl(self.GetParentAsWindow(),
                               id=self.GetID(),

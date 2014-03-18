@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="stream_frame">
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
@@ -48,120 +48,95 @@
   <object class="wxFrame" name="text_frame">
     <object class="wxPanel" name="text_panel">
       <object class="wxBoxSizer">
-        <object class="sizeritem">
-          <object class="SuggestTextCtrl" name="txt_suggest">
-            <size>200,-1</size>
-            <value>suggest text field</value>
-            <fg>#1E90FF</fg>
-            <bg>#A52A2A</bg>
-            <style>wxBORDER_NONE</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>0</option>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
-        <object class="sizeritem">
-          <object class="UnitIntegerCtrl">
-            <size>200,-1</size>
-            <value>9</value>
-            <min>-10</min>
-            <max>10</max>
-            <unit>cm</unit>
-            <fg>#1E90FF</fg>
-            <bg>#A52A2A</bg>
-            <style>wxBORDER_NONE</style>
-          </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
-        <object class="sizeritem">
-          <object class="UnitIntegerCtrl">
-            <size>200,-1</size>
-            <value>0</value>
-            <min>-10</min>
-            <max>10</max>
-            <unit>μm</unit>
-            <fg>#1E90FF</fg>
-            <bg>#A52A2A</bg>
-            <style>wxBORDER_NONE</style>
-          </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
-        <object class="sizeritem">
-          <object class="UnitFloatCtrl">
-            <size>200,-1</size>
-            <value>4.44</value>
-            <unit>kg</unit>
-            <fg>#1E90FF</fg>
-            <bg>#A52A2A</bg>
-            <style>wxBORDER_NONE</style>
-          </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
         <orient>wxVERTICAL</orient>
         <object class="sizeritem">
-          <object class="wxOwnerDrawnComboBox" name="txt_odcbox">
-            <size>200,14</size>
-            <content>
-              <item>aap</item>
-              <item>noot</item>
-              <item>mies</item>
-            </content>
-            <selection>1</selection>
-            <fg>#1E90FF</fg>
-            <bg>#A52A2A</bg>
-            <style>wxBORDER_NONE|wxCB_READONLY</style>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
+          <object class="wxFlexGridSizer">
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>SuggestTextCtrl</label>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="SuggestTextCtrl" name="txt_suggest">
+                <size>200,-1</size>
+                <value>suggest text field</value>
+                <fg>#1E90FF</fg>
+                <bg>#4D4D4D</bg>
+                <style>wxBORDER_NONE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>UnitIntegerCtrl</label>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="UnitIntegerCtrl">
+                <size>200,-1</size>
+                <value>0</value>
+                <min>-10</min>
+                <max>10</max>
+                <unit>μm</unit>
+                <fg>#1E90FF</fg>
+                <bg>#4D4D4D</bg>
+                <style>wxBORDER_NONE</style>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText" name="unit_float_label">
+                <label>UnitFloatCtrl</label>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="UnitFloatCtrl" name="unit_float">
+                <size>200,-1</size>
+                <unit>g</unit>
+                <fg>#1E90FF</fg>
+                <bg>#4D4D4D</bg>
+                <style>wxBORDER_NONE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>OwnerDrawnComboBox</label>
+              </object>
+            </object>
+            <object class="sizeritem">
+              <object class="wxOwnerDrawnComboBox" name="txt_odcbox">
+                <size>200,14</size>
+                <content>
+                  <item>aap</item>
+                  <item>noot</item>
+                  <item>mies</item>
+                </content>
+                <selection>1</selection>
+                <fg>#1E90FF</fg>
+                <bg>#4D4D4D</bg>
+                <style>wxBORDER_NONE|wxCB_READONLY</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+            <cols>2</cols>
+            <vgap>5</vgap>
+            <hgap>5</hgap>
           </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
-        <object class="sizeritem">
-          <object class="ImageTextToggleButton">
-            <label>amaai</label>
-            <bitmap>../img/btn_64x48.png</bitmap>
-            <hover>../img/btn_64x48_h.png</hover>
-            <selected>../img/btn_64x48_a.png</selected>
-            <fg>#1A1A1A</fg>
-            <style>wxALIGN_CENTRE</style>
-          </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
-        <object class="sizeritem">
-          <object class="ImageTextToggleButton">
-            <label>amaai</label>
-            <bitmap>../img/btn_64x24.png</bitmap>
-            <hover>../img/btn_64x24_h.png</hover>
-            <selected>../img/btn_64x24_a.png</selected>
-            <fg>#1A1A1A</fg>
-            <style>wxALIGN_CENTRE</style>
-          </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
-        </object>
-        <object class="sizeritem">
-          <object class="ImageTextToggleButton">
-            <label>allez</label>
-            <bitmap>../img/btn_64x16.png</bitmap>
-            <hover>../img/btn_64x16_h.png</hover>
-            <selected>../img/btn_64x16_a.png</selected>
-            <fg>#1A1A1A</fg>
-            <style>wxALIGN_CENTRE</style>
-          </object>
-          <flag>wxALL|wxALIGN_CENTRE</flag>
-          <border>10</border>
+          <flag>wxALL</flag>
+          <border>5</border>
         </object>
       </object>
       <fg>#E6E6FA</fg>
-      <bg>#A52A2A</bg>
+      <bg>#4D4D4D</bg>
       <XRCED>
         <assign_var>1</assign_var>
       </XRCED>
