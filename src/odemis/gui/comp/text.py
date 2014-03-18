@@ -580,6 +580,7 @@ def _step_from_range(min_val, max_val):
         msg = "Error calculating step size for range [%s..%s]" % (min_val, max_val)
         logging.exception(msg)
 
+
 class NumberTextCtrl(wx.TextCtrl):
     """ A base text control specifically tailored to contain numerical data
     The main behaviour is that when it has the focus, it just displays the number
@@ -648,7 +649,17 @@ class NumberTextCtrl(wx.TextCtrl):
         if self.number is None:
             str_val = u""
         else:
-            str_val = units.to_string_pretty(self.number)
+            str_val = units.to_string_pretty(self.number, self.accuracy)
+
+            sig = self.accuracy + 2 if self.accuracy else None
+
+            l = len(str_val)
+
+            if sig is not None:
+                ip, dp, fp = str_val.partition('.')
+                fn, fe, ep = fp.partition('e')
+                str_val = u"".join([ip, dp, fn[-sig:], fe, ep])
+
         wx.TextCtrl.ChangeValue(self, str_val)
 
     def _display_pretty(self):

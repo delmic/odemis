@@ -37,6 +37,12 @@ TEST_LST = ["Aap", u"nöot", "noot", "mies", "kees", "vuur", "quantummechnica",
             "Repelsteeltje", "", "XXX", "a", "aa", "aaa", "aaaa",
             "aaaaa", "aaaaaa", "aaaaaaa"]
 
+TEST_FLT = [1234567489.0, 123456748.9, 12345674.89, 1234567.489, 123456.7489, 12345.67489, 1234.567489, 123.4567489, 12.34567489, 1.234567489, 0.1234567489, 0.01234567489, 0.001234567489, 0.0001234567489, 1.234567489e-05, 1.234567489e-06, 1.234567489e-07, 1.234567489e-08, 1.234567489e-09, 1.234567489e-10]
+
+def gen_test_data():
+    data = [1234567489.0 / 10**i for i in range(20)]
+    print data
+
 def suggest(val):
     val = str(val.lower())
     data = [name for name in TEST_LST if name.lower().startswith(val)]
@@ -50,6 +56,38 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
     def test_setting_values(self):
         pass
+        # self.app.test_frame.unit_float.SetValue(val)
+        # test.gui_loop()
+        # test.sleep(3000)
+        # self.app.test_frame.unit_float.SetValue(0.1235635484321321)
+        # test.gui_loop()
+
+    def test_unit_float(self):
+
+        self.app.test_frame.unit_float.unit = u"☠"
+
+        for acc in (None, 1, 2, 4, 8):
+            self.app.test_frame.unit_float.accuracy = acc
+
+            self.app.test_frame.unit_float_label.SetLabel("Sig = %s" % acc)
+
+            for f in TEST_FLT:
+                self.app.test_frame.unit_float.SetValue(f)
+                test.gui_loop(200)
+
+            old_focus = wx.Window.FindFocus()
+            self.app.test_frame.unit_float.SetFocus()
+            test.gui_loop(100)
+
+            for f in TEST_FLT:
+                self.app.test_frame.unit_float.SetValue(f)
+                test.gui_loop(200)
+
+            old_focus.SetFocus()
+            test.gui_loop(100)
+
+
 
 if __name__ == "__main__":
+    # gen_test_data()
     unittest.main()

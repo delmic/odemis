@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import unittest
@@ -41,7 +41,7 @@ class TestUnits(unittest.TestCase):
             o = units.round_significant(*i)
             self.assertEquals(o, eo,
                               u"%f to %d figures = %f should be %f" % (i[0], i[1], o, eo))
-    
+
     def test_round_down_significant(self):
         #         (input) (expected output)
         values = [((1, 1), 1),
@@ -72,7 +72,7 @@ class TestUnits(unittest.TestCase):
             o = units.to_string_si_prefix(*i)
             self.assertEquals(o, eo,
                               u"%f is '%s' while expected '%s'" % (i[0], o, eo))
-            
+
     def test_readable_str(self):
         #         (input) (expected output)
         values = [((1.0, None), "1"),
@@ -96,7 +96,7 @@ class TestUnits(unittest.TestCase):
             self.assertEquals(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
-    def test_readable_str_s(self):
+    def test_readable_time(self):
         #         (input) (expected output)
         values = [((1.0,), "1 second"),
                   ((0,), "0 second"),
@@ -109,9 +109,28 @@ class TestUnits(unittest.TestCase):
             self.assertEquals(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
-        
+    def to_string_pretty(self):
+
+        values = [
+            0.000000041003,
+            4100000000.030,
+            41.3506
+        ]
+
+        for sig in (None, 0, 1, 2, 4, 8):
+            for v in values:
+                print "sig: %s, in: %s, out: %s" % (sig,
+                                                    units.to_string_pretty(v),
+                                                    v)
+
 if __name__ == "__main__":
-    unittest.main()
-    
-    
+    # unittest.main()
+
+    suit = unittest.TestSuite()
+    # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
+    suit.addTest(TestUnits("to_string_pretty"))
+    runner = unittest.TextTestRunner()
+    runner.run(suit)
+
+
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
