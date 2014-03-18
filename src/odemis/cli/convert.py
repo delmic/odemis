@@ -21,13 +21,17 @@ You should have received a copy of the GNU General Public License along with Ode
 # convert --input file-as.hdf5 --output file-as.ome.tiff
 
 from __future__ import division
-from odemis import dataio
+
 import argparse
+from gettext import ngettext
 import logging
 import numpy
+from odemis import dataio
 import odemis
+from odemis.util import spectrum
+import os
 import sys
-from gettext import ngettext
+
 
 logging.getLogger().setLevel(logging.INFO) # use DEBUG for more messages
 
@@ -50,8 +54,7 @@ def open_acq(fn):
     try:
         data = fmt_mng.read_data(fn)
     except Exception:
-        logging.error("Failed to open the file '%s' as %s", fn, fmt_mng.FORMAT)
-        raise
+        raise ValueError("Failed to open the file '%s' as %s", fn, fmt_mng.FORMAT)
 
     if not data:
         logging.warning("Couldn't load any data from file '%s' as %s",
@@ -65,6 +68,28 @@ def open_acq(fn):
         # doesn't matter that much
 
     return data, thumb
+
+def open_ec(fn):
+    """
+    Read a csv file of format "wavelength in nm{TAB}coefficient" into a standard
+    odemis spectrum efficiency DataArray
+    return (list of one DataArray)
+    """
+    try:
+        coef = numpy.loadtxt(fn)
+        # check that the values are probably correct (in particular not in m)
+    except IOError: # file not openable
+        raise
+    except Exception:
+        raise ValueError("File is not in the format wavelength {TAB} coefficient")
+
+    wl = coef[:, 0]
+    if not (all(1000e-9 < wl) and all(wl <= 10000)):
+        raise ValueError("Wavelength must be between 1 and 10000 (nm)")
+
+    da = spectrum.coefficients_to_dataarray(coef)
+
+    return [da]
 
 def save_acq(fn, data, thumbs):
     """
@@ -144,9 +169,13 @@ def main(args):
                         help="show program's version number and exit")
     parser.add_argument("--input", "-i", dest="input",
                         help="name of the input file")
-    # TODO: list supported file formats for input and output
+    parser.add_argument("--effcomp", dest="effcomp",
+                        help="name of a spectrum efficiency compensation table (in CSV format)")
+    fmts = dataio.get_available_formats(os.O_WRONLY)
     parser.add_argument("--output", "-o", dest="output",
-            help="name of the output file. The file format is derived from the extension (TIFF and HDF5 are supported).")
+            help="name of the output file. "
+            "The file format is derived from the extension (%s are supported)." %
+            (" and ".join(fmts)))
 
     parser.add_argument("--minus", "-m", dest="minus", action='append',
             help="name of an acquisition file whose data is subtracted from the input file.")
@@ -164,47 +193,46 @@ def main(args):
         return 0
 
     infn = options.input
+    ecfn = options.effcomp
     outfn = options.output
 
-    if not infn or not outfn:
-        logging.error("--input and --output arguments must be provided.")
-        return 128
+    if not (infn or ecfn) or not outfn:
+        raise ValueError("--input/--effcomp and --output arguments must be provided.")
 
-    try:
+    if infn and ecfn:
+        raise ValueError("--input and --effcomp should not be provided simultaneously.")
+
+    if infn:
         data, thumbs = open_acq(infn)
-    except:
-        logging.exception("Error while opening file %s.", infn)
-        return 127
-    logging.info("File contains %d %s (and %d %s)",
-                 len(data), ngettext("image", "images", len(data)),
-                 len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
+        logging.info("File contains %d %s (and %d %s)",
+                     len(data), ngettext("image", "images", len(data)),
+                     len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
+    elif ecfn:
+        data = open_ec(ecfn)
+        thumbs = []
+        logging.info("File contains %d coefficients", data[0].shape[0])
 
     if options.minus:
         if thumbs:
             logging.info("Dropping thumbnail due to subtraction")
             thumbs = []
         for fn in options.minus:
-            try:
-                sdata, sthumbs = open_acq(fn)
-            except:
-                logging.exception("Error while opening file %s.", fn)
-                return 127
+            sdata, sthumbs = open_acq(fn)
+            data = minus(data, sdata)
 
-            try:
-                data = minus(data, sdata)
-            except:
-                logging.exception("Error while subtracting file %s.", fn)
-                return 127
-
-    try:
-        save_acq(outfn, data, thumbs)
-    except:
-        logging.exception("Error while saving file %s.", outfn)
-        return 127
+    save_acq(outfn, data, thumbs)
 
     logging.info("Successfully generated file %s", outfn)
-    return 0
 
 if __name__ == '__main__':
-    ret = main(sys.argv)
+    try:
+        main(sys.argv)
+    except ValueError as e:
+        logging.error(e)
+        ret = 127
+    except Exception:
+        logging.exception("Error while running the action")
+        ret = 128
+    else:
+        ret = 0
     exit(ret)
