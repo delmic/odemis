@@ -109,26 +109,29 @@ class TestUnits(unittest.TestCase):
             self.assertEquals(o, eo,
                               u"%s is '%s' while expected '%s'" % (i, o, eo))
 
-    def to_string_pretty(self):
+    def test_to_string_pretty(self):
 
         values = [
             0.000000041003,
-            4100000000.030,
-            41.3506
+            0.0051,
+            0.014,
+            0.39
         ]
 
-        for sig in (None, 0, 1, 2, 4, 8):
+        for sig in [None, 2, 4, 6]:#(None, 0, 1, 2, 4, 8):
             for v in values:
-                print "sig: %s, in: %s, out: %s" % (sig,
-                                                    units.to_string_pretty(v),
-                                                    v)
+                print "sig: %s, val: %r, pretty: %s" % (
+                                        sig,
+                                        v,
+                                        units.to_string_pretty(v, sig))
+                # self.assertEqual(v, float(units.to_string_pretty(v)), "oops")
 
 if __name__ == "__main__":
     # unittest.main()
 
     suit = unittest.TestSuite()
     # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
-    suit.addTest(TestUnits("to_string_pretty"))
+    suit.addTest(TestUnits("test_to_string_pretty"))
     runner = unittest.TextTestRunner()
     runner.run(suit)
 
