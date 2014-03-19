@@ -2303,14 +2303,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
             n = 0
 
             # Translate dc_period to a number of pixels
-            pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
-                                    self._sem_stream.dcPeriod.value,
-                                    ccd_time,
-                                    rep)
-            cur_dc_period = pxs_dc_period.next()
+            if self._dc_estimator is not None:
+                pxs_dc_period = self._dc_estimator.estimateCorrectionPeriod(
+                                        self._sem_stream.dcPeriod.value,
+                                        ccd_time,
+                                        rep)
+                cur_dc_period = pxs_dc_period.next()
 
-            # First acquisition of anchor area
-            self._dc_estimator.acquire()
+                # First acquisition of anchor area
+                self._dc_estimator.acquire()
 
             start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
