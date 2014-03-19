@@ -828,6 +828,70 @@ class CameraNoLightStream(CameraStream):
 
         return md
 
+class CameraCountStream(CameraStream):
+    """
+    Special stream dedicated to count the entire data, and represent it over
+    time. 
+    The .image is a one dimension DataArray with the mean of the whole sensor 
+     data over time. The last acquired data is the last value in the array. 
+    """
+    def __init__(self, name, detector, dataflow, emitter):
+        CameraStream.__init__(self, name, detector, dataflow, emitter)
+        self._raw_date = [] # time of each raw acquisition (=count)
+        self.image.value = model.DataArray([]) # start with an empty array
+
+        # time over which to accumulate the data. 0 indicates that only the last
+        # value should be included
+        # TODO: immediately cut window when the value changes
+        self.windowPeriod = model.FloatContinuous(30, range=[0, 1e6], unit="s")
+
+    def _getCount(self, data):
+        """
+        Compute the "count" corresponding to a specific DataArray.
+        Currently, this is the mean.
+        data (DataArray)
+        return (number): the count
+        """
+        # Mean is handy because it avoid very large numbers
+        # TODO: compensate if there is binning?
+        return data.mean()
+
+    def _append(self, count, date):
+        """
+        Adds a new count and updates the window
+        """
+        # delete all old data
+        oldest = date - self.windowPeriod.value
+        first = 0 # first element still part of the window
+        for i, d in enumerate(self._raw_date):
+            if d >= oldest:
+                first = i
+                break
+        self._raw_date = self._raw_date[first:]
+        self.raw = self.raw[first:]
+
+        self._raw_date.append(date)
+        self.raw.append(count)
+
+    @limit_invocation(0.1)
+    def _updateImage(self):
+        # convert the list into a DataArray
+        im = model.DataArray(self.raw)
+        # save the time of each point as ACQ_DATE, unorthodox but should not
+        # cause much problems as the data is so special anyway.
+        im.metadata[model.MD_ACQ_DATE] = self._raw_date
+        self.image.value = im
+
+    def onNewImage(self, dataflow, data):
+        try:
+            date = data.metadata[model.MD_ACQ_DATE]
+        except KeyError:
+            date = time.time()
+        self._append(self._getCount(data), date)
+
+        self._updateImage()
+
+
 class FluoStream(CameraStream):
     """ Stream containing images obtained via epifluorescence.
 
@@ -1049,7 +1113,6 @@ class FluoStream(CameraStream):
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
-
 
 class RepetitionStream(Stream):
     """

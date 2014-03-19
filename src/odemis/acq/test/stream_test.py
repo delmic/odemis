@@ -54,6 +54,7 @@ class FakeEBeam(model.Emitter):
         self.pixelSize = model.VigilantAttribute((1e-9, 1e-9), unit="m", readonly=True)
         self.magnification = model.FloatVA(1000.)
 
+#@skip("simple")
 class StreamTestCase(unittest.TestCase):
     def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
         """
@@ -448,6 +449,48 @@ class SPARCTestCase(unittest.TestCase):
         self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
         self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
 
+    def test_count(self):
+        cs = stream.CameraCountStream("test count", self.spec, self.spec.data, self.ebeam)
+        self.spec.exposureTime.value = 0.1
+        exp = self.spec.exposureTime.value
+        res = self.spec.resolution.value
+        rot = numpy.prod(res) / self.spec.readoutRate.value
+        dur = exp + rot
+        cs.windowPeriod.value = 15 * dur
+
+        # at start, no data => empty window
+        window = cs.image.value
+        self.assertEqual(len(window), 0)
+
+        # acquire for a few seconds
+        cs.should_update.value = True
+        cs.is_active.value = True
+
+        time.sleep(5 * dur)
+        # Should have received at least a few data, and max 5
+        window = cs.image.value
+        logging.debug("%s", window)
+        self.assertTrue(2 <= len(window) <= 5, len(window))
+        self.assertEqual(window.ndim, 1)
+        dates = window.metadata[model.MD_ACQ_DATE]
+        self.assertLess(dates[0], dates[-1])
+        first_date = dates[0]
+
+        time.sleep(15 * dur)
+        # Should have received enough data to fill the window
+        window = cs.image.value
+        logging.debug("%s", window)
+        self.assertTrue(10 <= len(window) <= 16, len(window))
+
+        time.sleep(5 * dur)
+        # Window should stay long enough
+        window = cs.image.value
+        logging.debug("%s", window)
+        self.assertTrue(10 <= len(window) <= 16, len(window))
+        dates = window.metadata[model.MD_ACQ_DATE]
+        self.assertTrue(first_date < dates[0] < dates[-1])
+
+
 class TestStaticStreams(unittest.TestCase):
     """
     Test static streams, which don't need any backend running
@@ -506,12 +549,12 @@ class TestStaticStreams(unittest.TestCase):
 
         logging.info("testing image background correction")
         # test background correction from image
-        dcalib = numpy.ones((512, 1024), dtype=numpy.uint16)
+        dcalib = numpy.ones((1, 1, 1, 512, 1024), dtype=numpy.uint16)
         calib = model.DataArray(dcalib, md)
 
         time.sleep(0.2)
         ars.background.value = calib
-        self.assertTrue(ars.background.value is calib)
+        numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
 
         im2dc = ars.image.value
         # Check it's a RGB DataArray
