@@ -28,6 +28,7 @@ from collections import OrderedDict
 import collections
 import logging
 import math
+import numpy
 from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.gui.comp import overlay
@@ -341,12 +342,14 @@ class SparcAcquisitionTab(Tab):
         # * SEM/Spec: MD stream composed of the SEM CL+Spectrum streams
         # * AR: Repetition stream used to store settings for AR
         # * SEM/AR: MD stream composed of the SEM CL+AR streams
+        # * SpecCount: Count stream for the live intensity of the spectrometer
         # On acquisition, only the SEM and SEM/Spec (or SEM/AR) are explicitly
         # used.
         self._spec_stream = None
         self._sem_spec_stream = None
         self._ar_stream = None
         self._sem_ar_stream = None
+        self._scount_stream = None
 
         acq_view = self.tab_data_model.acquisitionView
         sem_stream = streammod.SEMStream(
@@ -355,7 +358,7 @@ class SparcAcquisitionTab(Tab):
                         main_data.sed.data,
                         main_data.ebeam)
         self._sem_live_stream = sem_stream
-        sem_stream.should_update.value = False
+        sem_stream.should_update.value = True
         acq_view.addStream(sem_stream) # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
@@ -380,6 +383,13 @@ class SparcAcquisitionTab(Tab):
                                                                   semcl_stream,
                                                                   spec_stream)
             acq_view.addStream(self._sem_spec_stream)
+
+            self._scount_stream = streammod.CameraCountStream("Spectrum count",
+                                              main_data.spectrometer,
+                                              main_data.spectrometer.data,
+                                              main_data.ebeam)
+            self._scount_stream.should_update.value = True
+            self._scount_stream.windowPeriod.value = 30 #s
 
         if main_data.ccd:
             ar_stream = streammod.ARStream(
@@ -435,6 +445,7 @@ class SparcAcquisitionTab(Tab):
             main_frame.fp_settings_sparc_angular.Hide()
             acq_view.removeStream(self._sem_spec_stream)
             acq_view.removeStream(self._sem_ar_stream)
+            self._scount_stream.should_update.value = False
         else:
             # only one detector => hide completely the buttons
             main_frame.sparc_button_panel.Hide()
@@ -479,6 +490,45 @@ class SparcAcquisitionTab(Tab):
             self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
             self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
         # AR settings don't have pixel size
+
+        # Connect the spectrograph count stream to the graph
+        if self._scount_stream:
+            self._spec_graph = self._settings_controller.spec_graph
+            self._txt_mean = self._settings_controller.txt_mean
+            self._scount_stream.image.subscribe(self._on_spec_count, init=True)
+
+    @call_after
+    def _on_spec_count(self, scount):
+        """
+        Called when a new spectrometer data comes in (and so the whole intensity
+        window data is updated)
+        scount (DataArray)
+        """
+        if len(scount) > 0:
+            txt = units.readable_str(float(scount[-1]), sig=6)
+            self._txt_mean.SetValue(txt)
+            # fit min/max between 0 and 1
+
+            ndcount = scount.view(numpy.ndarray) # standard NDArray to get scalars
+            vmin, vmax = ndcount.min(), ndcount.max()
+            b = vmax - vmin
+            if b == 0:
+                b = 1
+            disp = (scount - vmin) / b
+
+            # insert 0s at the beginning if the window is not (yet) full
+            dates = scount.metadata[model.MD_ACQ_DATE]
+            dur = dates[-1] - dates[0]
+            if dur == 0: # only one tick?
+                dur = 1 # => make it 1s large
+            exp_dur = self._scount_stream.windowPeriod.value
+            missing_dur = exp_dur - dur
+            nb0s = int(missing_dur * len(scount) / dur)
+            if nb0s > 0:
+                disp = numpy.concatenate([numpy.zeros(nb0s), disp])
+        else:
+            disp = []
+        self._spec_graph.SetContent(disp)
 
     def on_acquisition(self, is_acquiring):
         # Don't change anchor region during acquisition (this can happen
@@ -570,14 +620,16 @@ class SparcAcquisitionTab(Tab):
         Tab.Show(self, show=show)
 
         # Turn on the SEM stream only when displaying this tab
-        if show:
-            self._sem_live_stream.is_active.value = True
-        else:
-            self._sem_live_stream.is_active.value = False
+        self._sem_live_stream.is_active.value = show
+        if self._scount_stream:
+            active = self._scount_stream.should_update.value and show
+            self._scount_stream.is_active.value = active
 
     def terminate(self):
         # ensure we are not acquiring anything
         self._sem_live_stream.is_active.value = False
+        if self._scount_stream:
+            self._scount_stream.is_active.value = False
 
     def onROI(self, roi):
         """
@@ -617,49 +669,70 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
+    def _show_spec(self, show=True):
+        """
+        Show (or hide) the widgets for spectrum acquisition settings
+        It is fine to call it multiple times with the same value, or even if
+        no spectrum acquisition can be done (in which case nothing will happen)
+        show (bool)
+        """
+        if not self._sem_spec_stream:
+            return
+
+        self.main_frame.fp_settings_sparc_spectrum.Show(show)
+        acq_view = self.tab_data_model.acquisitionView
+        if show:
+            acq_view.addStream(self._sem_spec_stream)
+        else:
+            acq_view.removeStream(self._sem_spec_stream)
+
+        # (De)Activate live count stream
+        self._scount_stream.should_update.value = show
+        self._scount_stream.is_active.value = show
+
+    def _show_ar(self, show=True):
+        """
+        Show (or hide) the widgets for AR acquisition settings
+        It is fine to call it multiple times with the same value, or even if
+        no AR acquisition can be done (in which case nothing will happen)
+        show (bool)
+        """
+        if not self._sem_ar_stream:
+            return
+
+        self.main_frame.fp_settings_sparc_angular.Show(show)
+        acq_view = self.tab_data_model.acquisitionView
+        if show:
+            acq_view.addStream(self._sem_ar_stream)
+        else:
+            acq_view.removeStream(self._sem_ar_stream)
+
     def onToggleSpec(self, evt):
         """
         called when the Spectrometer button is toggled
         """
-        acq_view = self.tab_data_model.acquisitionView
-
         btn = evt.GetEventObject()
-        if btn.GetToggle():
-            # TODO: only remove AR if hardware to switch between optical path
-            # is not available (but for now, it's never available)
-            # Remove AR if currently activated
-            self.main_frame.fp_settings_sparc_angular.Hide()
-            acq_view.removeStream(self._sem_ar_stream)
-            self.main_frame.acq_btn_angular.SetToggle(False)
-
-            # Add Spectrometer stream
-            self.main_frame.fp_settings_sparc_spectrum.Show()
-            acq_view.addStream(self._sem_spec_stream)
+        show = btn.GetToggle()
+        # TODO: only remove AR if hardware to switch between optical path
+        # is not available (but for now, it's never available)
+        self._show_ar(False)
+        self.main_frame.acq_btn_angular.SetToggle(False)
+        self._show_spec(show)
+        if show:
             self._spec_stream.roi.value = self._sem_cl_stream.roi.value
-        else:
-            self.main_frame.fp_settings_sparc_spectrum.Hide()
-            acq_view.removeStream(self._sem_spec_stream)
 
     def onToggleAR(self, evt):
         """
         called when the AR button is toggled
         """
-        acq_view = self.tab_data_model.acquisitionView
-
         btn = evt.GetEventObject()
-        if btn.GetToggle():
-            # Remove Spectrometer if currently activated
-            self.main_frame.fp_settings_sparc_spectrum.Hide()
-            acq_view.removeStream(self._sem_spec_stream)
-            self.main_frame.acq_btn_spectrometer.SetToggle(False)
+        show = btn.GetToggle()
+        self._show_spec(False)
+        self.main_frame.acq_btn_spectrometer.SetToggle(False)
 
-            # Add AR stream
-            self.main_frame.fp_settings_sparc_angular.Show()
-            acq_view.addStream(self._sem_ar_stream)
+        self._show_ar(show)
+        if show:
             self._ar_stream.roi.value = self._sem_cl_stream.roi.value
-        else:
-            self.main_frame.fp_settings_sparc_angular.Hide()
-            acq_view.removeStream(self._sem_ar_stream)
 
 class AnalysisTab(Tab):
 

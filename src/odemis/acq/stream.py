@@ -37,8 +37,10 @@ import math
 import numpy
 from odemis.acq import calibration, _futures
 from odemis.acq import drift as acq_drift
+from odemis.acq import find_overlay
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
+import random
 import threading
 import time
 
@@ -46,7 +48,7 @@ import odemis.model as model
 import odemis.util.conversion as conversion
 import odemis.util.img as img
 import odemis.util.units as units
-from odemis.acq import find_overlay
+
 
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
@@ -852,8 +854,11 @@ class CameraCountStream(CameraStream):
         data (DataArray)
         return (number): the count
         """
-        # Mean is handy because it avoid very large numbers
-        # TODO: compensate if there is binning?
+        # DEBUG: return random value, which is more fun than always the same number
+        # return random.uniform(300, 2 ** 15)
+
+        # Mean is handy because it avoid very large numbers and still give
+        # useful info if the CCD is saturated
         return data.mean()
 
     def _append(self, count, date):

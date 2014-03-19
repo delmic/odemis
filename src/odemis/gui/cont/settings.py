@@ -34,11 +34,11 @@ import logging
 import numbers
 from odemis import model
 import odemis.dataio
-import odemis.gui.conf as guiconf
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, \
+    VisualRangeSlider
 from odemis.gui.conf.settingspanel import CONFIG
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
@@ -52,6 +52,7 @@ from wx.lib.pubsub import pub
 
 from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
 import odemis.gui.comp.text as text
+import odemis.gui.conf as guiconf
 import odemis.gui.model as guimod
 import odemis.util.units as utun
 
@@ -869,6 +870,23 @@ class SettingsPanel(object):
 
         self.fold_panel.Parent.Layout()
 
+    def add_widgets(self, *wdg):
+        """
+        Adds a widget at the end of the panel, on the whole width
+        wdg (wxWindow): the widgets to add (max 2)
+        """
+        # if only one widget: span over all the panel width
+        if len(wdg) == 1:
+            span = (1, 2)
+        else:
+            span = wx.DefaultSpan
+
+        for i, w in enumerate(wdg):
+            self._gb_sizer.Add(w, (self.num_entries, i), span=span,
+                               flag=wx.ALL | wx.EXPAND,
+                               border=5)
+        self.num_entries += 1
+
     def add_metadata(self, key, value):
         """
         Adds an entry representing specific metadata. According to the
@@ -1100,8 +1118,6 @@ class SparcSettingsController(SettingsBarController):
                     self._sem_panel
             )
 
-        acq_streams = tab_data.acquisitionView.getStreams()
-
         if main_data.spectrometer:
             self.add_component(
                     "Spectrometer",
@@ -1139,6 +1155,24 @@ class SparcSettingsController(SettingsBarController):
                         "grating",
                         main_data.spectrograph,
                         CONFIG["spectrograph"]["grating"])
+
+            # Add a intensity/time graph
+            # TODO: don't use a VisualRangeSlider, as only the content is used
+            # => We need a simpler widget
+            self.spec_graph = VisualRangeSlider(self._spectrum_panel.panel,
+                                                 size=(-1, 40)
+                                                 )
+            self.spec_graph.SetBackgroundColour("#000000")
+            self._spectrum_panel.add_widgets(self.spec_graph)
+            # the "Mean" value bellow the graph
+            lbl_mean = wx.StaticText(self._spectrum_panel.panel, label="Mean")
+            tooltip_txt = "Average intensity value of the last image"
+            lbl_mean.SetToolTipString(tooltip_txt)
+            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+            self.txt_mean.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            self.txt_mean.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+            self.txt_mean.SetToolTipString(tooltip_txt)
+            self._spectrum_panel.add_widgets(lbl_mean, self.txt_mean)
 
         else:
             parent_frame.fp_settings_sparc_spectrum.Hide()
