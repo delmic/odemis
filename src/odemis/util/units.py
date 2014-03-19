@@ -31,10 +31,10 @@ SI_PREFIXES = {9: u"G",
                6: u"M",
                3: u"k",
                0: u"",
-               - 3: u"m",
-               - 6: u"µ",
-               - 9: u"n",
-               - 12: u"p"}
+               -3: u"m",
+               -6: u"µ",
+               -9: u"n",
+               -12: u"p"}
 
 def round_significant(x, n):
     """
@@ -98,11 +98,13 @@ def to_string_si_prefix(x, sig=None):
     value, prefix = to_si_scale(x)
     return u"%s %s" % (to_string_pretty(value, sig), prefix)
 
-def to_string_pretty(x, sig=None):
-    """
-    Convert a number to a string as int or float as most appropriate
+def to_string_pretty(x, sig=None, unit=None):
+    """ Convert a number to a string as int or float as most appropriate
+
     :param sig: (int) The number of significant decimals
+
     """
+
     if x == 0:
         # don't consider this a float
         return u"0"
@@ -115,9 +117,30 @@ def to_string_pretty(x, sig=None):
         x = int(round(x)) # avoid the .0
 
     if isinstance(x, float):
-        # just a float
-        return u"%r" % x
-    # TODO: if very big or very small, use e-N notation, with N a multiple of 3
+
+        str_val = "%r" % x
+
+        if unit in (None, "", "px", "C", u"°C", "rad", "%"):
+            return str_val
+        else:
+            # Get the scale that a readable (formatted) string would use
+            eo, _ = get_si_scale(x)
+            scale = int(round(math.log(eo, 10)))
+
+            fn, _, ep = str_val.partition('e')
+            ep = int(ep or 0)
+
+            dot_move = ep - scale
+
+            if dot_move:
+                dot_pos = fn.index('.') + dot_move
+                fn = fn.replace(".", "")
+                fn = "".join([fn[:dot_pos], '.', fn[dot_pos:]])
+                # FIXME: clean zeros and trailing dot from fn
+                return u"%se%d" % (fn, scale)
+            else:
+                return str_val
+
 
     return u"%s" % x
 

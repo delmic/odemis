@@ -8,13 +8,13 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
@@ -57,40 +57,42 @@ locale.setlocale(locale.LC_ALL, "")
 
 class ChoiceListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
     """ Choice list used by the SuggestTextCtrl class """
-    def __init__(self, parent, ID= -1, pos=wx.DefaultPosition,
-                 size=wx.DefaultSize, style=0):
-        wx.ListCtrl.__init__(self, parent, ID, pos, size, style)
+
+    def __init__(self, *args, **kwargs):
+        wx.ListCtrl.__init__(self, *args, **kwargs)
         listmix.ListCtrlAutoWidthMixin.__init__(self)
 
 class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
-    def __init__ (self, parent, colNames=None, choices=None,
-                  showHead=True, dropDownClick=True,
-                  colFetch= -1, colSearch=0, hideOnNoMatch=True,
-                  selectCallback=None, entryCallback=None, matchFunction=None,
-                  **therest) :
+    def __init__(self, parent, choices=None, drop_down_click=True,
+                 col_fetch=-1, col_search=0, hide_on_no_match=True,
+                 select_callback=None, entry_callback=None, match_function=None,
+                 **text_kwargs):
         """
         Constructor works just like wx.TextCtrl except you can pass in a
         list of choices.  You can also change the choice list at any time
         by calling SetChoices.
         When a choice is picked, or the user has finished typing, a
         EVT_COMMAND_ENTER is sent.
+
+
         """
-        if 'style' in therest:
-            therest['style'] = wx.TE_PROCESS_ENTER | \
-                               wx.BORDER_NONE | \
-                               therest['style']
+
+        if 'style' in text_kwargs:
+            text_kwargs['style'] = (wx.TE_PROCESS_ENTER |
+                                    wx.BORDER_NONE |
+                                    text_kwargs['style'])
         else:
-            therest['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE
-        wx.TextCtrl.__init__(self, parent, **therest)
+            text_kwargs['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE
+        wx.TextCtrl.__init__(self, parent, **text_kwargs)
 
         #Some variables
-        self._dropDownClick = dropDownClick
+        self._drop_down_click = drop_down_click
         self._choices = choices
         self._lastinsertionpoint = 0
-        self._hideOnNoMatch = hideOnNoMatch
-        self._selectCallback = selectCallback
-        self._entryCallback = entryCallback
-        self._matchFunction = matchFunction
+        self._hide_on_no_match = hide_on_no_match
+        self._select_callback = select_callback
+        self._entry_callback = entry_callback
+        self._match_function = match_function
         self._screenheight = wx.SystemSettings.GetMetric(wx.SYS_SCREEN_Y)
 
         #sort variable needed by listmix
@@ -121,7 +123,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
 
         gp = self
 
-        while gp != None :
+        while gp != None:
             gp.Bind(wx.EVT_MOVE, self.onControlChanged, gp)
             gp.Bind(wx.EVT_SIZE, self.onControlChanged, gp)
             gp = gp.GetParent()
@@ -131,11 +133,12 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.Bind(wx.EVT_KEY_DOWN, self.onKeyDown, self)
 
         #If need drop down on left click
-        if dropDownClick:
-            self.Bind(wx.EVT_LEFT_DOWN , self.onClickToggleDown, self)
-            self.Bind(wx.EVT_LEFT_UP , self.onClickToggleUp, self)
+        if drop_down_click:
+            self.Bind(wx.EVT_LEFT_DOWN, self.onClickToggleDown, self)
+            self.Bind(wx.EVT_LEFT_UP, self.onClickToggleUp, self)
 
-        self.dropdown.Bind(wx.EVT_LISTBOX , self.onListItemSelected, self.dropdownlistbox)
+        self.dropdown.Bind(wx.EVT_LISTBOX, self.onListItemSelected,
+                           self.dropdownlistbox)
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DOWN, self.onListClick)
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DCLICK, self.onListDClick)
         self.dropdownlistbox.Bind(wx.EVT_LIST_COL_CLICK, self.onListColClick)
@@ -173,16 +176,16 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
     def onListColClick(self, evt):
         col = evt.GetColumn()
         #reverse the sort
-        if col == self._colSearch:
+        if col == self._col_search:
             self._ascending = not self._ascending
         self.SortListItems(evt.GetColumn(), ascending=self._ascending)
-        self._colSearch = evt.GetColumn()
+        self._col_search = evt.GetColumn()
         evt.Skip()
 
     def onEnteredText(self, event):
         text = event.GetString()
-        if self._entryCallback:
-            self._entryCallback()
+        if self._entry_callback:
+            self._entry_callback()
         if not text:
             # control is empty; hide dropdown if shown:
             if self.dropdown.IsShown():
@@ -194,9 +197,9 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         choices = self._choices
 
         for numCh, choice in enumerate(choices):
-            if self._matchFunction and self._matchFunction(text, choice):
+            if self._match_function and self._match_function(text, choice):
                 found = True
-            elif choice.lower().startswith(text.lower()) :
+            elif choice.lower().startswith(text.lower()):
                 found = True
             if found:
                 self._showDropDown(True)
@@ -206,12 +209,12 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
                 break
         if not found:
             self.dropdownlistbox.Select(self.dropdownlistbox.GetFirstSelected(), False)
-            if self._hideOnNoMatch:
+            if self._hide_on_no_match:
                 self._showDropDown(False)
         self._listItemVisible()
         event.Skip()
 
-    def onKeyDown(self, event) :
+    def onKeyDown(self, event):
         """ Do some work when the user press on the keys:
             up and down: move the cursor
             left and right: move the search
@@ -224,8 +227,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
                 self._listItemVisible()
             self._showDropDown()
         elif KC == wx.WXK_UP:
-            if sel > 0 :
-                self.dropdownlistbox.Select (sel - 1)
+            if sel > 0:
+                self.dropdownlistbox.Select(sel - 1)
                 self._listItemVisible()
             self._showDropDown()
         elif KC == wx.WXK_RETURN or KC == wx.WXK_NUMPAD_ENTER:
@@ -239,7 +242,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         else:
             event.Skip()
 
-    def onListItemSelected (self, event):
+    def onListItemSelected(self, event):
         self._setValueFromSelected()
         event.Skip()
 
@@ -247,9 +250,9 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._lastinsertionpoint = self.GetInsertionPoint()
         event.Skip()
 
-    def onClickToggleUp(self, event) :
-        if self.GetInsertionPoint() == self._lastinsertionpoint :
-            self._showDropDown (not self.dropdown.IsShown())
+    def onClickToggleUp(self, event):
+        if self.GetInsertionPoint() == self._lastinsertionpoint:
+            self._showDropDown(not self.dropdown.IsShown())
         event.Skip()
 
     def onControlChanged(self, event):
@@ -285,38 +288,38 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self._setListSize()
         # there is only one choice for both search and fetch if setting a
         # single column:
-        self._colSearch = 0
-        self._colFetch = -1
+        self._col_search = 0
+        self._col_fetch = -1
 
     def GetChoices(self):
         return self._choices
 
-    def SetSelectCallback(self, cb=None):
-        self._selectCallback = cb
+    def Setselect_callback(self, cb=None):
+        self._select_callback = cb
 
-    def SetEntryCallback(self, cb=None):
-        self._entryCallback = cb
+    def Setentry_callback(self, cb=None):
+        self._entry_callback = cb
 
-    def SetMatchFunction(self, mf=None):
-        self._matchFunction = mf
+    def Setmatch_function(self, mf=None):
+        self._match_function = mf
 
     #-- Internal methods
-    def _setValueFromSelected(self) :
+    def _setValueFromSelected(self):
         """ Sets the wx.TextCtrl value from the selected wx.ListCtrl item.
         Will do nothing if no item is selected in the wx.ListCtrl.
         """
         sel = self.dropdownlistbox.GetFirstSelected()
         if sel > -1:
-            if self._colFetch != -1:
-                col = self._colFetch
+            if self._col_fetch != -1:
+                col = self._col_fetch
             else:
-                col = self._colSearch
+                col = self._col_search
             itemtext = self.dropdownlistbox.GetItem(sel, col).GetText()
-            if self._selectCallback:
+            if self._select_callback:
                 dd = self.dropdownlistbox
                 values = [dd.GetItem(sel, x).GetText()
                           for x in xrange(dd.GetColumnCount())]
-                self._selectCallback(values)
+                self._select_callback(values)
             self.SetValue(itemtext)
             self.SetToolTip(wx.ToolTip(itemtext))
             self.SetInsertionPointEnd()
@@ -324,30 +327,30 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
             self._showDropDown(False)
             self._send_change_event()
 
-    def _showDropDown(self, show=True) :
+    def _showDropDown(self, show=True):
         """
         Either display the drop down list (show = True) or hide it (show = False).
         """
-        if show :
+        if show:
             size = self.dropdown.GetSize()
             width, height = self . GetSizeTuple()
-            x, y = self . ClientToScreenXY (0, height)
-            if size.GetWidth() != width :
+            x, y = self.ClientToScreenXY(0, height)
+            if size.GetWidth() != width:
                 size.SetWidth(width)
                 self.dropdown.SetSize(size)
                 self.dropdownlistbox.SetSize(self.dropdown.GetClientSize())
-            if y + size.GetHeight() < self._screenheight :
+            if y + size.GetHeight() < self._screenheight:
                 self.dropdown.SetPosition(wx.Point(x, y))
             else:
                 self.dropdown.SetPosition(
                     wx.Point(x, y - height - size.GetHeight()))
         self.dropdown.Show(show)
 
-    def _listItemVisible(self) :
+    def _listItemVisible(self):
         """
         Moves the selected item to the top of the list ensuring it is always visible.
         """
-        toSel = self.dropdownlistbox.GetFirstSelected ()
+        toSel = self.dropdownlistbox.GetFirstSelected()
         if toSel == -1:
             return
         self.dropdownlistbox.EnsureVisible(toSel)
@@ -368,7 +371,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
     def _setListSize(self):
         choices = self._choices
         longest = 0
-        for choice in choices :
+        for choice in choices:
             longest = max(len(choice), longest)
         longest += 3
         itemcount = min(len(choices), 7) + 2
@@ -547,7 +550,7 @@ class NumberValidator(wx.PyValidator):
 
         # find the closest value in choices
         if self.choices:
-            num = min(self.choices, key=lambda x:abs(x - num))
+            num = min(self.choices, key=lambda x: abs(x - num))
 
         # bound the value by min/max
         msg = "Value {} out of range [{}, {}]"
@@ -576,6 +579,7 @@ def _step_from_range(min_val, max_val):
     except ValueError:
         msg = "Error calculating step size for range [%s..%s]" % (min_val, max_val)
         logging.exception(msg)
+
 
 class NumberTextCtrl(wx.TextCtrl):
     """ A base text control specifically tailored to contain numerical data
@@ -645,7 +649,8 @@ class NumberTextCtrl(wx.TextCtrl):
         if self.number is None:
             str_val = u""
         else:
-            str_val = units.to_string_pretty(self.number)
+            str_val = units.to_string_pretty(self.number, self.accuracy, self.unit)
+
         wx.TextCtrl.ChangeValue(self, str_val)
 
     def _display_pretty(self):
@@ -799,7 +804,6 @@ class UnitNumberCtrl(NumberTextCtrl):
         unit (None or string): if None then behave like NumberTextCtrl
         """
         self.unit = kwargs.pop('unit', None)
-
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
     def _display_pretty(self):
@@ -934,4 +938,3 @@ class UnitFloatCtrl(UnitNumberCtrl):
         kwargs['accuracy'] = kwargs.get('accuracy', 3) # decimal places
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
-
