@@ -72,3 +72,25 @@ def get_wavelength_per_pixel(da):
                              % len(pn))
 
     raise KeyError("No MD_WL_* metadata available")
+
+
+def coefficients_to_dataarray(coef):
+    """
+    Convert a spectrum efficiency coefficient array to a DataArray as expected
+    by odemis.acq.calibration
+    coef (numpy array of shape (N,2)): first column is the wavelength in nm, second
+      column is the coefficient (float > 0)
+    returns (DataArray of shape (N,1,1,1,1)): the same data with the wavelength
+     encoded in the metadata, as understood by the rest of Odemis.
+    """
+    n = coef.shape[0]
+
+    # Create the content of the DataArray directly from the second column
+    da = model.DataArray(coef[:, 1])
+    da.shape += (1, 1, 1, 1) # add another 4 dims
+
+    # metadata from the first column, converting from nm to m
+    wl_list = (1e-9 * coef[:, 0]).tolist()
+    da.metadata[model.MD_WL_LIST] = wl_list
+
+    return da

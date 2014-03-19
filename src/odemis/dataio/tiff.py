@@ -1265,7 +1265,11 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
             # Save metadata (before the image)
             for key, val in tags.items():
                 f.SetField(key, val)
-            f.write_image(data[i], write_rgb=write_rgb, compression=compression)
+            if data[i].dtype in [numpy.int64, numpy.uint64]:
+                c = None # libtiff doesn't support compression on these types
+            else:
+                c = compression
+            f.write_image(data[i], write_rgb=write_rgb, compression=c)
 
 def _thumbsFromTIFF(filename):
     """

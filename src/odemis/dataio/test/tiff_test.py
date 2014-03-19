@@ -253,7 +253,7 @@ class TestTiffIO(unittest.TestCase):
         checks that the metadata is saved with every picture
         """
         size = (512, 256, 1)
-        dtype = numpy.dtype("uint16")
+        dtype = numpy.dtype("uint64")
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake hw",
                     model.MD_DESCRIPTION: "test",
