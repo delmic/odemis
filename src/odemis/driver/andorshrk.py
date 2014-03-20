@@ -24,6 +24,7 @@ import math
 from odemis import model
 import odemis
 from odemis.driver import andorcam2
+from odemis.driver.andorcam2 import AndorV2DLL
 from odemis.model._futures import CancellableThreadPoolExecutor
 import os
 import time
@@ -157,7 +158,7 @@ class Shamrock(model.Actuator):
             raise ValueError("Axis of spectrograph cannot be inverted")
 
         if device == "fake":
-            self._dll = FakeShamrockDLL()
+            self._dll = FakeShamrockDLL(parent)
             device = 0
         else:
             self._dll = ShamrockDLL()
@@ -275,7 +276,7 @@ class Shamrock(model.Actuator):
                 # just try again
                 retry += 1
                 logging.info("Failed to set wavelength, will try again")
-                time.sleep(0.1)
+                time.sleep(0.1 * retry)
             else:
                 break
     
@@ -640,7 +641,7 @@ class FakeShamrockDLL(object):
     Fake ShamrockDLL. It basically simulates a spectrograph connected.
     """
 
-    def __init__(self):
+    def __init__(self, parent=None):
         # gratings: l/mm, blaze, home, offset, min wl, max wl
         self._gratings = [(299.9, "300.0", 1000, -200, 0.0, 5003.6),
                           (601.02, "500.0", 10000, 26, 0.0, 1578.95),
@@ -650,7 +651,20 @@ class FakeShamrockDLL(object):
         self._cg = 1 # current grating (1->3)
         self._pw = 0 # pixel width
         self._np = 0 # number of pixels
+
+        # just for simulating the limitation of the iDus
+        self._ccd = None
+        if parent and hasattr(parent, "_detector"):
+            self._ccd = parent._detector
     
+    def _check_hw_access(self):
+        """
+        Simulate hw connection failure if the CCD is acquiring, like the
+        SR303i via the I²C connection of the iDus
+        """
+        if self._ccd and self._ccd.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+            raise ShamrockError(20201, ShamrockDLL.err_code[20201])
+
     def ShamrockInitialize(self, path):
         pass
     
@@ -667,13 +681,15 @@ class FakeShamrockDLL(object):
 #    def ShamrockEepromGetOpticalParams(self, device,
 #                 byref(FocalLength), byref(AngularDeviation), byref(FocalTilt)):
 #        pass
-        
+
     def ShamrockSetGrating(self, device, grating):
+        self._check_hw_access()
         new_g = _val(grating)
         time.sleep(min(1, abs(new_g - self._cg)) * 5) # very bad estimation
         self._cg = new_g
 
     def ShamrockGetGrating(self, device, p_grating):
+        self._check_hw_access()
         grating = _deref(p_grating, c_int)
         grating.value = self._cg
 
@@ -682,6 +698,8 @@ class FakeShamrockDLL(object):
         nogratings.value = len(self._gratings)
 
     def ShamrockWavelengthReset(self, device):
+        self._check_hw_access()
+        time.sleep(abs(self._cw) / 1000)
         self._cw = 0
 
     def ShamrockGetGratingInfo(self, device, grating, 
@@ -693,12 +711,14 @@ class FakeShamrockDLL(object):
         lines.value, s_blaze.value, home.value, offset.value = info
     
     def ShamrockSetWavelength(self, device, wavelength):
+        self._check_hw_access()
         # TODO: raise if outside of the grating range
         new_wl = _val(wavelength)
         time.sleep(abs(self._cw - new_wl) / 1000)
         self._cw = new_wl
     
     def ShamrockGetWavelength(self, device, p_wavelength):
+        self._check_hw_access()
         wavelength = _deref(p_wavelength, c_float)
         wavelength.value = self._cw
     

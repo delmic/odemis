@@ -40,9 +40,9 @@ KWARGS_SIM = dict(name="spectrometer", role="ccd",
               children={"shamrock": KWARGS_SPG_SIM, "andorcam2": KWARGS_CAM_SIM})
 KWARGS = dict(name="spectrometer", role="ccd",
               children={"shamrock": KWARGS_SPG, "andorcam2": KWARGS_CAM})
-#KWARGS = KWARGS_SIM # uncomment to use the simulator
+KWARGS = KWARGS_SIM # uncomment to use the simulator
 
-
+#@skip("simple")
 class TestShamrockStatic(unittest.TestCase):
     def test_fake(self):
         """
@@ -94,12 +94,16 @@ class TestShamrock(unittest.TestCase):
         self._orig_res = self.spectrometer.resolution.value
 
     def tearDown(self):
+        self.spectrometer.data.unsubscribe(self.count_data)
         # put back VAs
         f = self.spectrograph.moveAbs(self._orig_pos)
         self.spectrometer.binning.value = self._orig_binning
         self.spectrometer.resolution.value = self._orig_res
         f.result() # wait for the move to finish
 
+
+
+#    @skip("simple")
     def test_simple(self):
         """
         Just ensures that the device has all the VA it should
@@ -119,6 +123,7 @@ class TestShamrock(unittest.TestCase):
         f.result() # wait for the move to finish
         self.assertGreater(self.spectrograph.position.value["wavelength"], orig_wl)
 
+#    @skip("simple")
     def test_moveabs(self):
         orig_wl = self.spectrograph.position.value["wavelength"]
         new_wl = orig_wl + 1e-9  # 1nm => should be fast
@@ -171,6 +176,7 @@ class TestShamrock(unittest.TestCase):
             f = sp.moveAbs(pos)  # will fail here normally
             f.result()
 
+#    @skip("simple")
     def test_grating(self):
         cw = self.spectrograph.position.value["wavelength"]
         cg = self.spectrograph.position.value["grating"]
@@ -198,6 +204,7 @@ class TestShamrock(unittest.TestCase):
         self.assertEqual(self.spectrograph.position.value["grating"], cg)
         self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
 
+#    @skip("simple")
     def test_sync(self):
         sp = self.spectrograph
         # For moves big enough, sync should always take more time than async
@@ -328,6 +335,32 @@ class TestShamrock(unittest.TestCase):
         self.assertEqual(len(wl_list), data.shape[-1])
 
 
+    def test_acq_and_move(self):
+        # There is a limitation in the iDus hardware which prevents from sending
+        # commands to the SR303i while acquisition is on going. This test checks
+        # that our workaround works.
+
+        exp = 0.1 #s
+        self.spectrometer.exposureTime.value = exp
+
+        # start acquiring endlessly
+        self.count = 0
+        self.spectrometer.data.subscribe(self.count_data)
+        time.sleep(0.5)
+
+        orig_wl = self.spectrograph.position.value["wavelength"]
+        new_wl = orig_wl + 100e-9  # 100nm
+        f = self.spectrograph.moveAbs({'wavelength': new_wl})
+        f.result() # wait for the move to finish
+        self.assertAlmostEqual(self.spectrograph.position.value["wavelength"], new_wl)
+
+        time.sleep(0.5)
+        self.spectrometer.data.unsubscribe(self.count_data)
+
+        self.assertGreater(self.count, 2)
+
+    def count_data(self, df, data):
+        self.count += 1
 
 if __name__ == '__main__':
     unittest.main()
