@@ -9,7 +9,7 @@ This is a script to acquire a set of spectrums via a AR pinhole to recreate
 an entire AR spectral data cube. It doesn't handle the pinhole actuator.
 
 run as:
-./scripts/ar-spectral-ph.py -x 12 -y 15 --spot=0.5,0.6 --drift 10 --anchor=0.1,0.2,0.1,0.2 --output filename.h5
+./scripts/ar_spectral_ph.py -x 12 -y 15 --spot=0.5,0.6 --drift 10 --anchor=0.1,0.2,0.1,0.2 --output filename.h5
 
 -x -y defines the number of images to acquire in X and Y (resolution of the AR)
 --spot defines the position of the ebeam spot (in coordinates between 0->1 of
