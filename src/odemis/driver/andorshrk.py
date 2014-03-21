@@ -131,6 +131,28 @@ class ShamrockDLL(CDLL):
 
 # SHAMROCK_ERRORLENGTH 64
 
+class HwAccessMgr(object):
+    def __init__(self, ccd):
+        """
+        ccd (AndorCam2 or None)
+        """
+        self._ccd = ccd
+
+    def __enter__(self):
+        if self._ccd is None:
+            return
+        self._ccd.request_hw.append(None) # let the acquisition thread know it should release the lock
+        logging.debug("requesting access to hw")
+        self._ccd.hw_lock.acquire()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        returns True if the exception is to be supressed (never)
+        """
+        if self._ccd is None:
+            return
+        self._ccd.request_hw.pop() # hw no more needed
+        self._ccd.hw_lock.release()
 
 class Shamrock(model.Actuator):
     """
@@ -179,6 +201,12 @@ class Shamrock(model.Actuator):
             if path is None or parent is None:
                 raise NotImplementedError("Shamrock without parent a camera is not implemented")
 
+            ccd = None
+            if (parent and hasattr(parent, "_detector") and
+                isinstance(parent._detector, andorcam2.AndorCam2)):
+                ccd = parent._detector
+            self._hw_access = HwAccessMgr(ccd)
+
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
             max_speed = 1000e-9 / 5 # about 1000 nm takes 5s => max speed in m/s
             self.speed = model.MultiSpeedVA(max_speed, range=[max_speed, max_speed], unit="m/s",
@@ -215,6 +243,8 @@ class Shamrock(model.Actuator):
         except Exception:
             self.Close()
             raise
+
+
 
     def Initialize(self):
         """
@@ -266,26 +296,28 @@ class Shamrock(model.Actuator):
 
         # Seems currently the SDK sometimes fail with SHAMROCK_COMMUNICATION_ERROR
         # as in SetWavelength()
-        retry = 0
-        while True:
-            try:
-                self._dll.ShamrockSetGrating(self._device, grating)
-            except ShamrockError as (errno, strerr):
-                if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
-                    raise
-                # just try again
-                retry += 1
-                logging.info("Failed to set wavelength, will try again")
-                time.sleep(0.1 * retry)
-            else:
-                break
+        with self._hw_access:
+            retry = 0
+            while True:
+                try:
+                    self._dll.ShamrockSetGrating(self._device, grating)
+                except ShamrockError as (errno, strerr):
+                    if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                        raise
+                    # just try again
+                    retry += 1
+                    logging.info("Failed to set wavelength, will try again")
+                    time.sleep(0.1 * retry)
+                else:
+                    break
     
     def GetGrating(self):
         """
         return (0<int<=3): current grating
         """
-        grating = c_int()
-        self._dll.ShamrockGetGrating(self._device, byref(grating))
+        with self._hw_access:
+            grating = c_int()
+            self._dll.ShamrockGetGrating(self._device, byref(grating))
         return grating.value
         
     def GetNumberGratings(self):
@@ -301,7 +333,8 @@ class Shamrock(model.Actuator):
         Resets the wavelength to 0 nm.
         """
         # Same as ShamrockGotoZeroOrder()
-        self._dll.ShamrockWavelengthReset(self._device)
+        with self._hw_access:
+            self._dll.ShamrockWavelengthReset(self._device)
         
     #ShamrockAtZeroOrder(self._device, int *atZeroOrder);
 
@@ -341,28 +374,30 @@ class Shamrock(model.Actuator):
         # when changing wavelength by a few additional nm. It _seems_ that it
         # works anyway (but not sure).
         # It seems that retrying a couple of times just works
-        retry = 0
-        while True:
-            try:
-                # set in nm
-                self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
-            except ShamrockError as (errno, strerr):
-                if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
-                    raise
-                # just try again
-                retry += 1
-                logging.info("Failed to set wavelength, will try again")
-                time.sleep(0.1)
-            else:
-                break
+        with self._hw_access:
+            retry = 0
+            while True:
+                try:
+                    # set in nm
+                    self._dll.ShamrockSetWavelength(self._device, c_float(wavelength * 1e9))
+                except ShamrockError as (errno, strerr):
+                    if errno != 20201 or retry >= 5: # SHAMROCK_COMMUNICATION_ERROR
+                        raise
+                    # just try again
+                    retry += 1
+                    logging.info("Failed to set wavelength, will try again")
+                    time.sleep(0.1)
+                else:
+                    break
         
     def GetWavelength(self):
         """
         Gets the current wavelength.
         return (0<=float): wavelength in m
         """
-        wavelength = c_float() # in nm
-        self._dll.ShamrockGetWavelength(self._device, byref(wavelength))
+        with self._hw_access:
+            wavelength = c_float() # in nm
+            self._dll.ShamrockGetWavelength(self._device, byref(wavelength))
         return wavelength.value * 1e-9
         
     def GetWavelengthLimits(self, grating):

@@ -531,6 +531,13 @@ class AndorCam2(model.DigitalCamera):
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
         self.acquire_thread = None
+        # For temporary stopping the acquisition (kludge for the andorshrk
+        # SR303i which cannot communicate during acquisition)
+        self.hw_lock = threading.Lock() # to be held during DRV_ACQUIRING (or shrk communicating)
+        # append None to request for a temporary stop acquisition. Like an
+        # atomic counter, but Python has no atomic counter and lists are atomic.
+        self.request_hw = []
+
         # for synchronized acquisition
         self._got_event = threading.Event()
         self._late_events = collections.deque() # events which haven't been handled yet
@@ -1453,14 +1460,20 @@ class AndorCam2(model.DigitalCamera):
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         Version which keeps acquiring images as frequently as possible
         """
+        has_hw_lock = False # status of the lock
         need_reinit = True
         try:
             while not self.acquire_must_stop.is_set():
+                if self.request_hw:
+                    need_reinit = True # ensure we'll release the hw_lock a bit
                 # need to stop acquisition to update settings
                 if need_reinit or self._need_update_settings():
                     try:
                         if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                             self.atcore.AbortAcquisition()
+                            if has_hw_lock:
+                                self.hw_lock.release()
+                                has_hw_lock = False
                             time.sleep(0.1)
                     except AndorV2Error as (errno, strerr):
                         # it was already aborted
@@ -1474,6 +1487,9 @@ class AndorCam2(model.DigitalCamera):
                     # Seems exposure needs to be re-set after setting acquisition mode
                     self._prev_settings[1] = None # 1 => exposure time
                     self._update_settings()
+                    if not has_hw_lock:
+                        self.hw_lock.acquire()
+                        has_hw_lock = True
                     self.atcore.StartAcquisition()
 
                     size = self._transposeSizeFromUser(self.resolution.value)
@@ -1527,6 +1543,8 @@ class AndorCam2(model.DigitalCamera):
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
+        except:
+            logging.exception("Failure during acquisition")
         finally:
             # ending cleanly
             try:
@@ -1539,6 +1557,9 @@ class AndorCam2(model.DigitalCamera):
                     logging.debug("Acquisition thread closed after giving up")
                     self.acquire_must_stop.clear()
                     raise
+            if has_hw_lock:
+                self.hw_lock.release()
+                has_hw_lock = False
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
             logging.debug("Acquisition thread closed")
@@ -1551,6 +1572,9 @@ class AndorCam2(model.DigitalCamera):
         Version which wait for a synchronized event. Works also if there is no
         event set (but a bit slower than the continuous version).
         """
+        # we don't take the hw_lock because it's too hard to ensure we get it
+        # right, and anyway the acquisition is being aborted between each frame
+        # so the andorshrk might be able to communicate after a couple of retries
         self._ready_for_acq_start = False
         need_reinit = True
         try:
