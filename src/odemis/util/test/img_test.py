@@ -20,12 +20,14 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
+
 import logging
 import numpy
+from odemis import model
+from odemis.util import img
 import time
 import unittest
 
-from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -360,6 +362,44 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertTrue(numpy.all(pixelg <= pixel1))
 
 
+class TestMergeMetadata(unittest.TestCase):
+
+    def test_simple(self):
+        # Try correction is null (ie, identity)
+        md = {model.MD_ROTATION: 0, # °
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m
+              model.MD_POS: (-5e-3, 2e-3), # m
+              model.MD_ROTATION_COR: 0, # °
+              model.MD_PIXEL_SIZE_COR: (1, 1), # ratio
+              model.MD_POS_COR: (0, 0), # m
+              }
+        orig_md = dict(md)
+        img.mergeMetadata(md)
+        for k in [model.MD_ROTATION, model.MD_PIXEL_SIZE, model.MD_POS]:
+            self.assertEqual(orig_md[k], md[k])
+        for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
+            self.assertNotIn(k, md)
+
+        # Try the same but using a separate correction metadata
+        id_cor = {model.MD_ROTATION_COR: 0, # °
+                  model.MD_PIXEL_SIZE_COR: (1, 1), # ratio
+                  model.MD_POS_COR: (0, 0), # m
+                  }
+
+        orig_md = dict(md)
+        img.mergeMetadata(md, id_cor)
+        for k in [model.MD_ROTATION, model.MD_PIXEL_SIZE, model.MD_POS]:
+            self.assertEqual(orig_md[k], md[k])
+        for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
+            self.assertNotIn(k, md)
+
+        # Check that empty correction metadata is same as identity
+        orig_md = dict(md)
+        img.mergeMetadata(md, {})
+        for k in [model.MD_ROTATION, model.MD_PIXEL_SIZE, model.MD_POS]:
+            self.assertEqual(orig_md[k], md[k])
+        for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
+            self.assertNotIn(k, md)
 
 if __name__ == "__main__":
     unittest.main()
