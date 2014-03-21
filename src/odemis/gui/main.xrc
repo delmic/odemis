@@ -647,14 +647,52 @@
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="ToolBar" name="lens_align_tb">
-                      <style>wxHORIZONTAL</style>
+                    <object class="wxPanel" name="pnl_align_controls">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="ToolBar" name="lens_align_tb">
+                            <style>wxHORIZONTAL</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton">
+                            <label>Fine alignment...</label>
+                            <delta>1</delta>
+                            <bitmap>img/btn_128x24.png</bitmap>
+                            <hover>img/btn_128x24_h.png</hover>
+                            <selected>img/btn_128x24_a.png</selected>
+                            <fg>#333333</fg>
+                            <style>wxALIGN_CENTRE</style>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                          <border>4</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGauge" name="gauge_fine_align">
+                            <size>-1,10</size>
+                            <range>100</range>
+                            <value>0</value>
+                            <style>wxGA_SMOOTH</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                          <border>11</border>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
+                      </object>
+                      <fg>#BBBBBB</fg>
+                      <bg>#333333</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
+                    <flag>wxTOP|wxEXPAND</flag>
+                    <border>5</border>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
@@ -2647,6 +2685,18 @@
                       <leftspacing>0</leftspacing>
                       <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
+                      <object class="FoldPanelItem">
+                        
+                        <nocaption>1</nocaption>
+                        <fg>#BBBBBB</fg>
+                        <bg>#333333</bg>
+                        <object class="wxCheckBox" name="chkbox_fine_align">
+                          <label>Fine alignment</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>

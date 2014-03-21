@@ -67,7 +67,9 @@ class xrcfr_main(wx.Frame):
         self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
         self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
+        self.pnl_align_controls = xrc.XRCCTRL(self, "pnl_align_controls")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
+        self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
@@ -186,6 +188,7 @@ class xrcfr_acq(wx.Dialog):
         self.fp_settings_secom_sem = xrc.XRCCTRL(self, "fp_settings_secom_sem")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
+        self.chkbox_fine_align = xrc.XRCCTRL(self, "chkbox_fine_align")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -852,14 +855,52 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="ToolBar" name="lens_align_tb">
-                      <style>wxHORIZONTAL</style>
+                    <object class="wxPanel" name="pnl_align_controls">
+                      <object class="wxBoxSizer">
+                        <object class="sizeritem">
+                          <object class="ToolBar" name="lens_align_tb">
+                            <style>wxHORIZONTAL</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextButton">
+                            <label>Fine alignment...</label>
+                            <delta>1</delta>
+                            <bitmap>img_btn_128x24_png</bitmap>
+                            <hover>img_btn_128x24_h_png</hover>
+                            <selected>img_btn_128x24_a_png</selected>
+                            <fg>#333333</fg>
+                            <style>wxALIGN_CENTRE</style>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                          <border>4</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxGauge" name="gauge_fine_align">
+                            <size>-1,10</size>
+                            <range>100</range>
+                            <value>0</value>
+                            <style>wxGA_SMOOTH</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                          <border>11</border>
+                        </object>
+                        <orient>wxHORIZONTAL</orient>
+                      </object>
+                      <fg>#BBBBBB</fg>
+                      <bg>#333333</bg>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
+                    <flag>wxTOP|wxEXPAND</flag>
+                    <border>5</border>
                   </object>
                   <object class="sizeritem">
                     <object class="SecomViewport" name="vp_align_sem">
@@ -2852,6 +2893,18 @@ def __init_resources():
                       <leftspacing>0</leftspacing>
                       <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
+                      <object class="FoldPanelItem">
+                        
+                        <nocaption>1</nocaption>
+                        <fg>#BBBBBB</fg>
+                        <bg>#333333</bg>
+                        <object class="wxCheckBox" name="chkbox_fine_align">
+                          <label>Fine alignment</label>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                      </object>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
