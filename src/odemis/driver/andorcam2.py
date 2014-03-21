@@ -1455,6 +1455,8 @@ class AndorCam2(model.DigitalCamera):
                 args=(callback,))
         self.acquire_thread.start()
 
+    # TODO: try to simplify this thread, by having it always running, and sending
+    # commands to start/stop (+pause=hw_request) the acquisition.
     def _acquire_thread_continuous(self, callback):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
