@@ -1056,7 +1056,7 @@ class AnalysisTab(Tab):
         """
         Load the data from the AR background file and apply to streams
         return (unicode): the filename as it has been accepted
-        raise ValueError if the file is not correct or calibration cannot be applied 
+        raise ValueError if the file is not correct or calibration cannot be applied
         """
         try:
             if fn == u"":
@@ -1095,7 +1095,7 @@ class AnalysisTab(Tab):
         """
         Load the data from a spectrum calibration file and apply to streams
         return (unicode): the filename as it has been accepted
-        raise ValueError if the file is not correct or calibration cannot be applied 
+        raise ValueError if the file is not correct or calibration cannot be applied
         """
         try:
             if fn == u"":
@@ -1296,16 +1296,20 @@ class LensAlignTab(Tab):
         main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
                                                  self._on_btn_to_center)
 
+        pnl_fine_align = main_frame.pnl_align_controls
+        fa_sizer = pnl_fine_align.GetSizer()
+
         # Hack warning: Move the scale window from the hidden viewport legend
         # to the toolbar.
-        tb_sizer = tb.GetSizer()
-        tb.SetForegroundColour("#BBBBBB")
-        main_frame.vp_align_sem.legend.scale_win.Reparent(tb)
-        tb_sizer.Add(
-            main_frame.vp_align_sem.legend.scale_win,
-            proportion=1,
-            flag=wx.EXPAND | wx.ALIGN_LEFT)
-        tb.Layout()
+        # TEMPORARILY DISABLED
+        # main_frame.vp_align_sem.legend.GetSizer().Detach(
+        #     main_frame.vp_align_sem.legend.scale_win)
+        # main_frame.vp_align_sem.legend.scale_win.Reparent(pnl_fine_align)
+        # fa_sizer.Add(
+        #     main_frame.vp_align_sem.legend.scale_win,
+        #     proportion=0,
+        #     flag=wx.ALIGN_RIGHT)
+        # pnl_fine_align.Layout()
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
