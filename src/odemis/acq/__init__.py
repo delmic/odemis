@@ -134,7 +134,7 @@ def _weight_stream(stream):
         # wavelengths first because there is no chance their emission light
         # affects the other dyes (and which could lead to a little bit of
         # bleaching).
-        ewl_bonus = stream.excitation.value # normally, between 0 and 1
+        ewl_bonus = stream.emission.value # normally, between 0 and 1
         return 100 + ewl_bonus
     elif isinstance(stream, OPTICAL_STREAMS):
         return 90 # any other kind of optical after fluorescence
