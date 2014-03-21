@@ -32,15 +32,16 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq import _futures
-from odemis.acq.stream import FluoStream, OPTICAL_STREAMS, EM_STREAMS, SEMCCDMDStream
+from odemis.acq.stream import FluoStream, OPTICAL_STREAMS, EM_STREAMS, SEMCCDMDStream, \
+    OverlayStream
 from odemis.gui.util import img
 import sys
 import threading
 import time
 
+
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
 # because it's a bit strange dependency.
-
 # This is the "manager" of an acquisition. The basic idea is that you give it
 # a list of streams to acquire, and it will acquire them in the best way in the
 # background. You are in charge of ensuring that no other acquisition is
@@ -126,10 +127,8 @@ def _weight_stream(stream):
     stream (acq.stream.Stream): a stream to weight
     returns (number): priority (the higher the more it should be done first)
     """
-    # SECOM: Optical before SEM to avoid bleaching
     if isinstance(stream, FluoStream):
         # Fluorescence ASAP to avoid bleaching
-
         # If multiple fluorescence acquisitions: prefer the long emission
         # wavelengths first because there is no chance their emission light
         # affects the other dyes (and which could lead to a little bit of
@@ -142,6 +141,8 @@ def _weight_stream(stream):
         return 50 # can be done after any light
     elif isinstance(stream, SEMCCDMDStream):
         return 40 # after standard (=survey) SEM
+    elif isinstance(stream, OverlayStream):
+        return 10 # after everything (especially after SEM and optical)
     else:
         logging.debug("Unexpected stream of type %s", stream.__class__.__name__)
         return 0
@@ -222,6 +223,10 @@ class AcquisitionTask(object):
             # update the time left
             expected_time -= self._streamTimes[s]
             self._future.set_end_time(time.time() + expected_time)
+
+        # TODO: if the stream is OverlayStream, apply the metadata to all the
+        # data from an optical stream. => put the data
+
 
         # return all the raw data
         return raw_images

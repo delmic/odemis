@@ -35,9 +35,6 @@ import odemis.acq.stream as stream
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-path = os.path.dirname(os.path.realpath(__file__))
-os.chdir(path)
-
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
