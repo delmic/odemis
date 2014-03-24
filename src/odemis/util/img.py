@@ -404,9 +404,7 @@ def mergeMetadata(current, correction=None):
     return (dict): updated current metadata, with the *_COR metadata removed if
       it was present.
     """
-    # TODO: don't return anything, to make it clear that the input and output
-    # are the same object?
-    merged = current
+    merged = dict(current)
     if correction is None:
         correction = current
 
@@ -421,9 +419,7 @@ def mergeMetadata(current, correction=None):
         position_cor = correction[model.MD_POS_COR]
         position = current.get(model.MD_POS, (0, 0))
 
-        # FIXME: both X/Y should subtracted. Probably not the case due to Y axis
-        # being opposite direction in physical referencial and pixel referencial?
-        merged[model.MD_POS] = (position[0] + position_cor[0],
+        merged[model.MD_POS] = (position[0] - position_cor[0],
                                 position[1] - position_cor[1])
 
     # There is no default pixel size (though in some case sensor pixel size can
