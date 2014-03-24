@@ -256,7 +256,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     transformation values
     """
     escan_pxs = escan.pixelSize.value
-    logging.debug("PixelSize: %g ", escan_pxs[0])
+    logging.debug("Ebeam pixel size: %g ", escan_pxs[0])
     ((calc_translation_x, calc_translation_y),
              (calc_scaling_x, calc_scaling_y),
                                 calc_rotation) = transformation_values
@@ -264,7 +264,6 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     # Update scaling
     scale = (escan_pxs[0] * calc_scaling_x,
              escan_pxs[1] * calc_scaling_y)
-    logging.debug("Scale: %s", scale)
 
     transform_md = {model.MD_ROTATION_COR: calc_rotation}
 
@@ -281,6 +280,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
         return transform_md
     pixel_size_cor = (scale[0] * ccd.binning.value[0] / pixel_size[0],
                       scale[1] * ccd.binning.value[1] / pixel_size[1])
+    logging.debug("Pixel size correction: %s", pixel_size_cor)
     transform_md[model.MD_PIXEL_SIZE_COR] = pixel_size_cor
 
     return transform_md

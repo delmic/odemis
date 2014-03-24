@@ -35,10 +35,11 @@ logging.getLogger().setLevel(logging.DEBUG)
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
-SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
-SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
+SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml" # 7x7
 
 class TestOverlayStream(unittest.TestCase):
+    backend_was_running = False
+
     @classmethod
     def setUpClass(cls):
 
@@ -49,7 +50,7 @@ class TestOverlayStream(unittest.TestCase):
 
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
-        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
         ret = subprocess.call(cmd)
         if ret != 0:
             logging.error("Failed starting backend with '%s'", cmd)
@@ -59,6 +60,16 @@ class TestOverlayStream(unittest.TestCase):
         cls._escan = model.getComponent(role="e-beam")
         cls._detector = model.getComponent(role="se-detector")
         cls._ccd = model.getComponent(role="ccd")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._core._microscope = None # force reset of the microscope for next connection
+        time.sleep(1) # time to stop
 
     # @unittest.skip("skip")
     def test_overlay_stream(self):
@@ -70,7 +81,7 @@ class TestOverlayStream(unittest.TestCase):
         ovrl = stream.OverlayStream("test overlay", ccd, escan, detector)
 
         ovrl.dwellTime.value = 0.3
-        ovrl.repetition.value = (4, 4)
+        ovrl.repetition.value = (7, 7)
 
         f = ovrl.acquire()
         das = f.result()
