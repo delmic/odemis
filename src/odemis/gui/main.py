@@ -287,17 +287,14 @@ class OdemisGUIApp(wx.App):
     def on_about(self, evt):
 
         info = wx.AboutDialogInfo()
-        info.SetIcon(wx.Icon(
-                        os.path.join(self._module_path(),
-                        "img/icon128.png"),
-                     wx.BITMAP_TYPE_PNG))
+        info.SetIcon(imgdata.catalog['icon128'].GetIcon())
         info.Name = odemis.__shortname__
         info.Version = odemis.__version__
         info.Description = odemis.__fullname__
         info.Copyright = odemis.__copyright__
         info.WebSite = ("http://delmic.com", "delmic.com")
         info.Licence = odemis.__licensetxt__
-        info.Developers = ["Éric Piel", "Rinze de Laat"]
+        info.Developers = odemis.__authors__
         # info.DocWriter = '???'
         # info.Artist = '???'
         # info.Translator = '???'
