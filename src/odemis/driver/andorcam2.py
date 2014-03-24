@@ -29,9 +29,10 @@ import ctypes # for fake AndorV2DLL
 import gc
 import logging
 import numpy
-from odemis import model, util
+from odemis import model, util, dataio
 import odemis
 from odemis.dataio import tiff
+from odemis.util import img
 import os
 import threading
 import time
@@ -369,26 +370,30 @@ class AndorCam2(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, emgains=None, **kwargs):
+    def __init__(self, name, role, device=None, emgains=None, image=None, **kwargs):
         """
         Initialises the device
         device (None or 0<=int or "fake"): number of the device to open, as defined by Andor, cd scan()
           if None, uses the system handle, which allows very limited access to 
-          some information. "fake" will create a fake device
+          some information. "fake" will create a simulated device
         emgains (list of (0<float, 0<float, 1 <= int <=300)): Look-up table for
          the EMCCD real gain. Readout rate, Gain, Real Gain.
+        image (str or None): only useful for simulated device, the path to a file
+          to use as fake image.
         Raise an exception if the device cannot be opened.
         """
         # TODO: add a way to select which camera is to be opened better than
         # device ID as they can be numbered in any order. Maybe (regex on)
         # serial number?
         if device in ["fake", "fakesys"]:
-            self.atcore = FakeAndorV2DLL()
+            self.atcore = FakeAndorV2DLL(image)
             if device == "fake":
                 device = 0
             else:
                 device = None
         else:
+            if image is not None:
+                raise ValueError("'image' argument is not valid for real device")
             self.atcore = AndorV2DLL()
 
         self._andor_capabilities = None # cached value of GetCapabilities()
@@ -1971,7 +1976,12 @@ class FakeAndorV2DLL(object):
     only return simulated values.
     """
 
-    def __init__(self):
+    def __init__(self, image=None):
+        """
+        image (None or str): path to an TIFF/HDF5 file to open as fake image.
+          If the path is relative, it's relative to the directory of this driver
+          If None (or file doesn't exist), a gradient will be generated.
+        """
         self.targetTemperature = -100
         self.status = AndorV2DLL.DRV_IDLE
         self.readmode = AndorV2DLL.RM_IMAGE
@@ -1987,13 +1997,23 @@ class FakeAndorV2DLL(object):
 
         self.pixelSize = (20.0, 20.0) # um
 
-        if True: # Change to True to get an actual image
-            # will be copied when asked for an image
-            self._data = tiff.read_data(os.path.dirname(__file__) + "/andorcam2-fake-clara.tiff")[0]
-            self.shape = self._data.shape[::-1]
-            self.bpp = 16
-            self.maxBinning = (16, 16) # px
+        if image is not None:
+            try:
+                # will be copied when asked for an image
+                # to ensure relative path is from this file
+                os.chdir(os.path.dirname(unicode(__file__)))
+                exporter = dataio.find_fittest_exporter(image)
+                self._data = img.ensure2DImage(exporter.read_data(image)[0])
+                self.shape = self._data.shape[::-1]
+                self.bpp = 16
+                self.maxBinning = (16, 16) # px
+            except Exception:
+                logging.exception("Failed to open file %s, will use gradient", image)
+                self._data = None
         else:
+            self._data = None
+
+        if self._data is None:
             self.shape = (2560, 2048) # px
             self.bpp = 12
             self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
@@ -2288,6 +2308,7 @@ class FakeAndorV2DLL(object):
 
 class FakeAndorCam2(AndorCam2):
     def __init__(self, name, role, device=None, **kwargs):
+        logging.debug("Received arguments: %s", kwargs)
         AndorCam2.__init__(self, name, role, device="fake", **kwargs)
     @staticmethod
     def scan():

@@ -31,10 +31,15 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CLASS = andorcam2.FakeAndorCam2 # use FakeAndorCam2 if you don't have the hardware
+CLASS_SIM = andorcam2.FakeAndorCam2
+CLASS = andorcam2.AndorCam2 # use CLASS_SIM if you don't have the hardware
+
+KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
+                  emgains=[[10e6, 1, 50], [1e6, 1, 150]],
+                  image="andorcam2-fake-clara.tiff")
+#                  image="andorcam2-fake-spots.h5")
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
               emgains=[[10e6, 1, 50], [1e6, 1, 150]])
-
 
 
 #@skip("simple")
@@ -43,7 +48,14 @@ class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     Ensure we always test the fake version at least a bit
     """
     camera_type = andorcam2.FakeAndorCam2
-    camera_kwargs = KWARGS
+    camera_kwargs = KWARGS_SIM
+
+class TestFake(VirtualTestCam, unittest.TestCase):
+    """
+    Ensure we always test the fake version at least a bit
+    """
+    camera_type = CLASS_SIM
+    camera_kwargs = KWARGS_SIM
 
 #@skip("simple")
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):

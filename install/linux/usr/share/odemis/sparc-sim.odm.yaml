@@ -85,7 +85,9 @@ SimSPARC: {
 ARSimCam: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
-    init: {device: 0}
+    init: {device: 0,
+           image: "andorcam2-fake-clara.tiff", # only for simulator
+           }
 }
 
 FakeSpec10: {
@@ -102,7 +104,9 @@ FakeSpec10: {
 SpecSimCam: {
     class: andorcam2.FakeAndorCam2,
     role: sp-ccd,
-    init: {device: 0} # same device number but it will actually be different device
+    init: {device: 0,  # same as ARSimCam but it will actually be different device
+           image: "andorcam2-fake-clara.tiff", # only for simulator
+           }
 }
 
 # Simulated SP-2300i, the spectrograph part of the Spec-10
