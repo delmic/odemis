@@ -22,20 +22,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-import logging
-import os
-import threading
-import sys
-import time
-import operator
-import math
-import numpy
-import shutil
-from odemis import model
-from align import coordinates, transform, images
-from odemis.dataio import hdf5
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import logging
+import math
+import numpy
+from odemis import model
+from odemis.dataio import hdf5
+import operator
+import os
+import threading
+import time
+
+from .align import coordinates, transform, images
+from odemis.acq._futures import executeTask
+
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 _overlay_lock = threading.Lock()
@@ -221,32 +222,12 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     f.task_canceller = _CancelFindOverlay
 
     # Run in separate thread
-    overlay_thread = threading.Thread(target=_executeTask,
+    overlay_thread = threading.Thread(target=executeTask,
                   name="SEM/CCD overlay",
                   args=(f, doFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
 
     overlay_thread.start()
     return f
-
-# Copy from acqmng
-# @staticmethod
-def _executeTask(future, fn, *args, **kwargs):
-    """
-    Executes a task represented by a future.
-    Usually, called as main task of a (separate thread).
-    Based on the standard futures code _WorkItem.run()
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    *args, **kwargs: passed to the fn
-    returns None: when the task is over (or cancelled)
-    """
-    try:
-        result = fn(*args, **kwargs)
-    except BaseException:
-        e = sys.exc_info()[1]
-        future.set_exception(e)
-    else:
-        future.set_result(result)
 
 def _CancelFindOverlay(future):
     """
@@ -274,31 +255,31 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     Returns the transform metadata for the optical image based on the 
     transformation values
     """
-    escan_pixelSize = escan.pixelSize.value
-    logging.debug("PixelSize: %g ", escan_pixelSize[0])
-    ((calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation) = transformation_values
+    escan_pxs = escan.pixelSize.value
+    logging.debug("PixelSize: %g ", escan_pxs[0])
+    ((calc_translation_x, calc_translation_y),
+             (calc_scaling_x, calc_scaling_y),
+                                calc_rotation) = transformation_values
+
+    # Update scaling
+    scale = (escan_pxs[0] * calc_scaling_x,
+             escan_pxs[1] * calc_scaling_y)
+    logging.debug("Scale: %s", scale)
+
+    transform_md = {model.MD_ROTATION_COR: calc_rotation}
+
+    position_cor = (scale[0] * calc_translation_x, # FIXME: - to compensate for Y being opposite direction?
+                    scale[1] * calc_translation_y)
+    logging.debug("Center shift correction: %s", position_cor)
+    transform_md[model.MD_POS_COR] = position_cor
 
     pixel_size = optical_image.metadata.get(model.MD_PIXEL_SIZE, (0, 0))
     if pixel_size == (0, 0):
         logging.warning("No MD_PIXEL_SIZE data available")
-        return []
-
-    # Update scaling
-    scale = (escan_pixelSize[0] * calc_scaling_x,
-             escan_pixelSize[1] * calc_scaling_y)
-
-    logging.debug("Scale: %s", scale)
-
-    logging.debug("Center shift correction: %g %g", scale[0] * calc_translation_x, scale[1] * calc_translation_y)
-
-    rotation_cor = calc_rotation
+        return transform_md
     pixel_size_cor = (scale[0] * ccd.binning.value[0] / pixel_size[0],
                       scale[1] * ccd.binning.value[1] / pixel_size[1])
-                      
-    position_cor = (scale[0] * calc_translation_x,scale[1] * calc_translation_y)
-    transform_md = {model.MD_ROTATION_COR: rotation_cor,
-                    model.MD_PIXEL_SIZE_COR: pixel_size_cor,
-                    model.MD_POS_COR: position_cor}
+    transform_md[model.MD_PIXEL_SIZE_COR] = pixel_size_cor
 
     return transform_md
 
@@ -308,21 +289,20 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     Creates failure report in case we cannot match the coordinates.
     optical_image (2d array): Image from CCD
     repetitions (tuple of ints): The number of CL spots are used
-    dwell_time (float): Time to scan each spot #s
+    dwell_time (float): Time to scan each spot (in s)
     electron_coordinates (list of tuples): Coordinates of e-beam grid
     """
-    if not os.path.exists(os.path.dirname(__file__) + u"/OverlayReport"):
-        os.makedirs(os.path.dirname(__file__) + u"/OverlayReport")
-    hdf5.export("OpticalGrid.h5", optical_image)
-    shutil.move("OpticalGrid.h5", os.path.dirname(__file__) + u"/OverlayReport/")
-    report = open("report.txt", 'w')
+    path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report")
+    if not os.path.exists(path):
+        os.makedirs(path)
+    hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
+    report = open(os.path.join(path, u"report.txt"), 'w')
     report.write("\n****Overlay Failure Report****\n\n"
                  + "\nGrid size:\n" + str(repetitions)
                  + "\n\nMaximum dwell time used:\n" + str(dwell_time)
                  + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
                  + "\n\nThe optical image of the grid can be seen in OpticalGrid.h5\n\n")
     report.close()
-    shutil.move("report.txt", os.path.dirname(__file__) + u"/OverlayReport/")
 
     logging.warning("Failed to find overlay. Please check the failure report in OverlayReport folder.")
 
