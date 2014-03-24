@@ -865,6 +865,8 @@ def __init_resources():
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
+                          <flag>wxRIGHT</flag>
+                          <border>10</border>
                         </object>
                         <object class="sizeritem">
                           <object class="ImageTextButton" name="btn_fine_align">
