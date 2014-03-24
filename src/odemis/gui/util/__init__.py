@@ -226,6 +226,9 @@ def get_picture_folder():
     # last resort: current working directory should always be existing
     return os.getcwd()
 
+def get_installation_folder():
+    import __main__
+    return os.path.dirname(__main__.__file__)
 
 def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
     """Convert formats into wildcards string compatible with wx.FileDialog()
