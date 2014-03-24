@@ -830,9 +830,9 @@ class CameraNoLightStream(CameraStream):
 class CameraCountStream(CameraStream):
     """
     Special stream dedicated to count the entire data, and represent it over
-    time. 
-    The .image is a one dimension DataArray with the mean of the whole sensor 
-     data over time. The last acquired data is the last value in the array. 
+    time.
+    The .image is a one dimension DataArray with the mean of the whole sensor
+     data over time. The last acquired data is the last value in the array.
     """
     def __init__(self, name, detector, dataflow, emitter):
         CameraStream.__init__(self, name, detector, dataflow, emitter)
@@ -852,7 +852,7 @@ class CameraCountStream(CameraStream):
         return (number): the count
         """
         # DEBUG: return random value, which is more fun than always the same number
-        # return random.uniform(300, 2 ** 15)
+        return random.uniform(300, 2 ** 15)
 
         # Mean is handy because it avoid very large numbers and still give
         # useful info if the CCD is saturated
@@ -2733,7 +2733,7 @@ class SEMARMDStream(SEMCCDMDStream):
 OVRL_MAX_DIFF = 1e-06 # m
 
 class OverlayStream(Stream):
-    """ 
+    """
     Fake Stream triggering the fine overlay procedure.
 
     It's basically a wrapper to the find_overlay function.
@@ -2782,7 +2782,7 @@ class OverlayStream(Stream):
     def acquire(self):
         """
         Runs the find overlay procedure
-        returns Future that will have as a result an empty DataArray with 
+        returns Future that will have as a result an empty DataArray with
         the correction metadata
         """
         # Just calls the FindOverlay function and return its future

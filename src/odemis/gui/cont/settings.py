@@ -39,6 +39,7 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, \
     VisualRangeSlider
+import odemis.gui.comp.hist as hist
 from odemis.gui.conf.settingspanel import CONFIG
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
@@ -1159,9 +1160,8 @@ class SparcSettingsController(SettingsBarController):
             # Add a intensity/time graph
             # TODO: don't use a VisualRangeSlider, as only the content is used
             # => We need a simpler widget
-            self.spec_graph = VisualRangeSlider(self._spectrum_panel.panel,
-                                                 size=(-1, 40)
-                                                 )
+            self.spec_graph = hist.Histogram(self._spectrum_panel.panel,
+                                        size=(-1, 40))
             self.spec_graph.SetBackgroundColour("#000000")
             self._spectrum_panel.add_widgets(self.spec_graph)
             # the "Mean" value bellow the graph
