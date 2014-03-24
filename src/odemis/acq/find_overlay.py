@@ -268,7 +268,9 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
 
     transform_md = {model.MD_ROTATION_COR: calc_rotation}
 
-    position_cor = (scale[0] * calc_translation_x, # FIXME: - to compensate for Y being opposite direction?
+    # X axis is same direction in image and physical referentials
+    # Y axis is opposite direction, that's why we don't need a "-"
+    position_cor = (-scale[0] * calc_translation_x,
                     scale[1] * calc_translation_y)
     logging.debug("Center shift correction: %s", position_cor)
     transform_md[model.MD_POS_COR] = position_cor
