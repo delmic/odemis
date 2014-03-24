@@ -26,16 +26,18 @@ import numpy
 import math
 import operator
 import scipy.signal
-import scipy.signal as signal
 import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 import transform
 import logging
 import warnings
+import copy
+from numpy import fft
 from numpy import unravel_index
 from numpy import histogram
 from scipy.spatial import cKDTree
 from itertools import compress
+from odemis import model
 
 MAX_STEPS_NUMBER = 100  # How many steps to perform in coordinates matching
 SHIFT_THRESHOLD = 0.04  # When to still perform the shift (percentage)
@@ -140,27 +142,30 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
                                                 subimage with respect to the overall image
             subimage_size (int): One dimension because it is square
     """
-    image = data
-    scale = optical_scale
+    image = copy.deepcopy(data)
+
+    # Denoise
+    filtered_image = ndimage.median_filter(image, 3)
+
+    # Bold spots
+    filtered_image = _BandPassFilter(filtered_image, 1, optical_scale)
+
+    image = model.DataArray(filtered_image, data.metadata)
+    scale = copy.deepcopy(optical_scale)
     avg_intensity = numpy.average(image)
-    max_intensity = numpy.max(image)
 
-    # Check if cosmic ray affects the avg_intensity
-    if max_intensity > 8 * avg_intensity:
-        spot_factor = 1.3
-    elif max_intensity < 4 * avg_intensity:
-        spot_factor = 1.1
-    else:
-        spot_factor = 1.2
-
+    spot_factor = 10
     step = 1
     sensitivity = 4
+
+    # After filtering based on optical scale there is no need to adjust
+    # filter window size
+    filter_window_size = 8
+
+    # Increase sensitivity until expected number of spots is detected
     while sensitivity <= 100:
         subimage_coordinates = []
         subimages = []
-
-        filter_window_size = scale / 4
-        filter_window_size = sorted((4, filter_window_size, 60))[1]
     
         i_max, j_max = unravel_index(image.argmax(), image.shape)
         i_min, j_min = unravel_index(image.argmin(), image.shape)
@@ -184,7 +189,8 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
         
         (x_center_last, y_center_last) = (-10, -10)
     
-        # Go through these parts and crop the subimages based on the neighborhood_size value
+        # Go through these parts and crop the subimages based on the neighborhood_size
+        # value
         for dy, dx in slices:
             x_center = (dx.start + dx.stop - 1) / 2
             y_center = (dy.start + dy.stop - 1) / 2
@@ -205,7 +211,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 continue
     
-            if (subimage > spot_factor * avg_intensity).sum() < 6:
+            if (subimage > spot_factor * avg_intensity).sum() < 8:
                 continue
             
             # if spots detected too close keep the brightest one
@@ -223,8 +229,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     
         # Take care of outliers
         expected_spots = numpy.prod(number_of_spots)
-        clean_subimages, clean_subimage_coordinates = FilterOutliers(image,
-                                                                     subimages,
+        clean_subimages, clean_subimage_coordinates = FilterOutliers(image, subimages,
                                                                      subimage_coordinates,
                                                                      expected_spots)
         if len(clean_subimages) >= numpy.prod(number_of_spots):
@@ -642,19 +647,19 @@ def _BandPassFilter(image, len_noise, len_object):
 
     # Convolution with the matrix and kernels
     res = image
-    g = signal.convolve(res, gx, 'valid')
+    g = fft.irfft2(fft.rfft2(res) * fft.rfft2(gx, res.shape))
     tmpg = g
-    g = signal.convolve(tmpg, gy, 'valid')
+    g = fft.irfft2(fft.rfft2(tmpg) * fft.rfft2(gy, tmpg.shape))
     tmpres = res
-    res = signal.convolve(tmpres, bx, 'valid')
+    res = fft.irfft2(fft.rfft2(tmpres) * fft.rfft2(bx, tmpres.shape))
     tmpres = res
-    res = signal.convolve(tmpres, by, 'valid')
+    res = fft.irfft2(fft.rfft2(tmpres) * fft.rfft2(by, tmpres.shape))
     tmpg = 0
     tmpres = 0
     arr_res = numpy.zeros((image.shape))
     arr_g = numpy.zeros((image.shape))
-    arr_res[w:-w, w:-w] = res
-    arr_g[w:-w, w:-w] = g
+    arr_res[w:-w, w:-w] = res[2 * w:, 2 * w:]
+    arr_g[w:-w, w:-w] = g[2 * w:, 2 * w:]
 
     res = numpy.maximum(arr_g - arr_res, 0)
     return res
