@@ -53,13 +53,13 @@ SOURCE_TO_BIT_ADDR = { 0: (3, 0x18), # Red
 # The default sources, as found in the documentation, and as the default 
 # Spectra LLE can be bought. Used only by scan().
 # source name -> 99% low, 25% low, centre, 25% high, 99% high in m
-DEFAULT_SOURCES = {"red": (615e-9, 625e-9, 635e-9, 640e-9, 650e-9),
-                   "green": (525e-9, 540e-9, 550e-9, 555e-9, 560e-9),
-                   "cyan": (455e-9, 465e-9, 475e-9, 485e-9, 495e-9),
-                   "UV": (375e-9, 390e-9, 400e-9, 402e-9, 405e-9),
-                   "yellow": (595e-9, 580e-9, 565e-9, 560e-9, 555e-9),
-                   "blue": (420e-9, 430e-9, 437e-9, 445e-9, 455e-9),
-                   "teal": (495e-9, 505e-9, 515e-9, 520e-9, 530e-9),
+DEFAULT_SOURCES = {"red": (615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9),
+                  "green": (525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9),
+                  "cyan": (455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9),
+                  "UV": (375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9),
+                  "yellow": (565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9),
+                  "blue": (420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9),
+                  "teal": (495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9),
            }
 
 class LLE(model.Emitter):
@@ -142,7 +142,7 @@ class LLE(model.Emitter):
         model.Emitter.__init__(self, name, role, **kwargs)
         
         self._shape = ()
-        self._max_power = 100.
+        self._max_power = 0.4 # W (According to doc: ~400mW)
         self.power = model.FloatContinuous(0., (0., self._max_power), unit="W")
 
         # emissions is list of 0 <= floats <= 1.
