@@ -852,7 +852,7 @@ class CameraCountStream(CameraStream):
         return (number): the count
         """
         # DEBUG: return random value, which is more fun than always the same number
-        return random.uniform(300, 2 ** 15)
+#        return random.uniform(300, 2 ** 15)
 
         # Mean is handy because it avoid very large numbers and still give
         # useful info if the CCD is saturated

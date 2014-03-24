@@ -25,7 +25,7 @@ setting column of the user interface.
 
 
 ..NOTE:
-    This module is a prime candiate for a refactoring session!!!
+    This module is a prime candidate for a refactoring session!!!
 
 """
 
@@ -37,8 +37,7 @@ import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, \
-    VisualRangeSlider
+from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 import odemis.gui.comp.hist as hist
 from odemis.gui.conf.settingspanel import CONFIG
 import odemis.gui.util
@@ -54,7 +53,6 @@ from wx.lib.pubsub import pub
 from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
 import odemis.gui.comp.text as text
 import odemis.gui.conf as guiconf
-import odemis.gui.model as guimod
 import odemis.util.units as utun
 
 
@@ -1158,8 +1156,6 @@ class SparcSettingsController(SettingsBarController):
                         CONFIG["spectrograph"]["grating"])
 
             # Add a intensity/time graph
-            # TODO: don't use a VisualRangeSlider, as only the content is used
-            # => We need a simpler widget
             self.spec_graph = hist.Histogram(self._spectrum_panel.panel,
                                         size=(-1, 40))
             self.spec_graph.SetBackgroundColour("#000000")
