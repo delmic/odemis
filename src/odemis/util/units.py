@@ -133,11 +133,15 @@ def to_string_pretty(x, sig=None, unit=None):
             dot_move = ep - scale
 
             if dot_move:
-                dot_pos = fn.index('.') + dot_move
+                dot_pos = fn.index('.')
+                new_dot_pos = dot_pos + dot_move
                 fn = fn.replace(".", "")
-                fn = "".join([fn[:dot_pos], '.', fn[dot_pos:]])
-                # FIXME: clean zeros and trailing dot from fn
-                return u"%se%d" % (fn, scale)
+
+                if new_dot_pos > len(fn):
+                    fn = fn.ljust(new_dot_pos, '0')
+
+                fn = ".".join([fn[:new_dot_pos], fn[new_dot_pos:]])
+                return u"%se%d" % (fn.strip('0').strip('.'), scale)
             else:
                 return str_val
 

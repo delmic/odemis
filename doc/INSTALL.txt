@@ -58,7 +58,7 @@ This is require to support DimensionScales.
 
 sudo apt-get install libhdf5-serial-dev cython
 git clone git://github.com/h5py/h5py.git
-cd h5py/h5py
+cd h5py
 python api_gen.py
 cd ..
 python setup.py build
@@ -241,10 +241,10 @@ and example files.
 To get inspired when starting a new file, you can use "odemis-cli --scan" to
 detect some of the hardware connected.
 
-If you're using an SEM and another detector, it is recommended to first 
+If you're using an SEM and another detector, it is recommended to first
 configure the X/Y axes of the SEM to orient the image identically to the vendor
 software, and then adjust the orientation of the other detectors.
-  
+
 
 = Auto start =
 To avoid entering the password when starting and stopping the backend, sudo is used.

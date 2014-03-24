@@ -658,7 +658,7 @@
                           </object>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton">
+                          <object class="ImageTextButton" name="btn_fine_align">
                             <label>Fine alignment...</label>
                             <delta>1</delta>
                             <bitmap>img/btn_128x24.png</bitmap>
@@ -666,6 +666,9 @@
                             <selected>img/btn_128x24_a.png</selected>
                             <fg>#333333</fg>
                             <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxTOP|wxLEFT|wxRIGHT</flag>
                           <border>4</border>
@@ -2686,7 +2689,6 @@
                       <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
                       <object class="FoldPanelItem">
-                        
                         <nocaption>1</nocaption>
                         <fg>#BBBBBB</fg>
                         <bg>#333333</bg>

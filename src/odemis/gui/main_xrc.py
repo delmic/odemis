@@ -69,6 +69,7 @@ class xrcfr_main(wx.Frame):
         self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
         self.pnl_align_controls = xrc.XRCCTRL(self, "pnl_align_controls")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
+        self.btn_fine_align = xrc.XRCCTRL(self, "btn_fine_align")
         self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
@@ -866,7 +867,7 @@ def __init_resources():
                           </object>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton">
+                          <object class="ImageTextButton" name="btn_fine_align">
                             <label>Fine alignment...</label>
                             <delta>1</delta>
                             <bitmap>img_btn_128x24_png</bitmap>
@@ -874,6 +875,9 @@ def __init_resources():
                             <selected>img_btn_128x24_a_png</selected>
                             <fg>#333333</fg>
                             <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                           </object>
                           <flag>wxTOP|wxLEFT|wxRIGHT</flag>
                           <border>4</border>
@@ -2894,7 +2898,6 @@ def __init_resources():
                       <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
                       <object class="FoldPanelItem">
-                        
                         <nocaption>1</nocaption>
                         <fg>#BBBBBB</fg>
                         <bg>#333333</bg>

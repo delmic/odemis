@@ -115,25 +115,31 @@ class TestUnits(unittest.TestCase):
             0.000000041003,
             0.0051,
             0.014,
-            0.39
+            0.39,
+            0.230234543545,
         ]
 
-        for sig in [None, 2, 4, 6]:#(None, 0, 1, 2, 4, 8):
+        for sig in [2, 4, 6]:#(None, 0, 1, 2, 4, 8):
             for v in values:
-                print "sig: %s, val: %r, pretty: %s" % (
-                                        sig,
-                                        v,
-                                        units.to_string_pretty(v, sig))
-                # self.assertEqual(v, float(units.to_string_pretty(v)), "oops")
+                self.assertEqual(
+                    units.round_significant(v, sig),
+                    float(units.to_string_pretty(v, sig, "s"))
+                    )
+
+                # print "sig: %s, val: %r, round: %s, pretty: %s" % (
+                #                         sig,
+                #                         v,
+                #                         units.round_significant(v, sig),
+                #                         units.to_string_pretty(v, sig, "s"))
 
 if __name__ == "__main__":
-    # unittest.main()
+    unittest.main()
 
-    suit = unittest.TestSuite()
-    # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
-    suit.addTest(TestUnits("test_to_string_pretty"))
-    runner = unittest.TextTestRunner()
-    runner.run(suit)
+    # suit = unittest.TestSuite()
+    # # suit.addTest(PlotCanvasTestCase("test_plot_canvas"))
+    # suit.addTest(TestUnits("test_to_string_pretty"))
+    # runner = unittest.TextTestRunner()
+    # runner.run(suit)
 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
