@@ -33,8 +33,9 @@ from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
+from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
-from odemis.gui.conf import get_general_conf, get_acqui_conf
+from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
@@ -1296,20 +1297,16 @@ class LensAlignTab(Tab):
         main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
                                                  self._on_btn_to_center)
 
+        # Fine alignment panel
+
         pnl_fine_align = main_frame.pnl_align_controls
         fa_sizer = pnl_fine_align.GetSizer()
 
-        # Hack warning: Move the scale window from the hidden viewport legend
-        # to the toolbar.
-        # TEMPORARILY DISABLED
-        # main_frame.vp_align_sem.legend.GetSizer().Detach(
-        #     main_frame.vp_align_sem.legend.scale_win)
-        # main_frame.vp_align_sem.legend.scale_win.Reparent(pnl_fine_align)
-        # fa_sizer.Add(
-        #     main_frame.vp_align_sem.legend.scale_win,
-        #     proportion=0,
-        #     flag=wx.ALIGN_RIGHT)
-        # pnl_fine_align.Layout()
+        scale_win = ScaleWindow(pnl_fine_align)
+        self._sem_view.mpp.subscribe(scale_win.SetMPP, init=True)
+        fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
+
+        fa_sizer.Layout()
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 

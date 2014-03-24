@@ -244,7 +244,7 @@ class ScaleWindow(BufferedWindow):
         dc.SetPen(pen)
 
         # main line
-        lines = [(0, main_line_y , length, main_line_y)]
+        lines = [(0, main_line_y, length, main_line_y)]
         # nods at each end
         lines += [(0, main_line_y - nod, 0, main_line_y)]
         lines += [(length, main_line_y - nod, length, main_line_y)]
