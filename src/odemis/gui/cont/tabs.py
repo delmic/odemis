@@ -41,7 +41,7 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
-from odemis.gui.util import formats_to_wildcards, \
+from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
     call_after, align
 from odemis.util import units
 import os.path
@@ -49,6 +49,9 @@ import pkg_resources
 import scipy.misc
 import weakref
 import wx
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
+from wx import html  #pylint: disable=W0611
 
 import odemis.acq.stream as streammod
 import odemis.gui.cont.streams as streamcont
@@ -1307,6 +1310,9 @@ class LensAlignTab(Tab):
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
 
         fa_sizer.Layout()
+
+        path = os.path.join(get_installation_folder(), "doc/alignment.html")
+        main_frame.html_alignment.LoadPage(path)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 

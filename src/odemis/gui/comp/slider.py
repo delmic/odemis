@@ -654,6 +654,10 @@ class VisualRangeSlider(BaseSlider):
     it contains is a 2-tuple and it also has  a SetContent() method to display
     data in the background of the control.
 
+    FIXME: The drawing of the background uses the same routine as the
+    comp.hist.Histogram class. Make this class use that code (through multiple
+        inheritance?)
+
     """
 
     sel_alpha = 0.5 # %
@@ -929,7 +933,6 @@ class VisualRangeSlider(BaseSlider):
             self.mode = self._hover(self.drag_start_x)
             self.SetFocus()
 
-
     def OnLeftUp(self, event):
         if self.Enabled and self.HasCapture():
             self.ReleaseMouse()
@@ -937,7 +940,6 @@ class VisualRangeSlider(BaseSlider):
             self.drag_start_pv = None
             self.mode = None
             self._send_scroll_event()
-
 
     def _draw_content(self, ctx, width, height):
         # logging.debug("Plotting content background")

@@ -59,6 +59,7 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_pb = xrc.XRCCTRL(self, "lens_align_btn_pb")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
+        self.html_alignment = xrc.XRCCTRL(self, "html_alignment")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
@@ -208,7 +209,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxBoxSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxHtmlWindow" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -683,6 +684,23 @@ def __init_resources():
                     </object>
                     <flag>wxALL|wxEXPAND</flag>
                     <border>10</border>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxHtmlWindow" name="html_alignment">
+                      <size>-1,700</size>
+                      <fg>#BBBBBB</fg>
+                      <bg>#333333</bg>
+                      <style>wxHW_NO_SELECTION</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>24</border>
                   </object>
                 </object>
                 <size>300,-1</size>
