@@ -34,7 +34,7 @@ from odemis import model
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, OPTICAL_STREAMS, EM_STREAMS, SEMCCDMDStream, \
     OverlayStream
-from odemis.gui.util import img
+from odemis.util import img
 import sys
 import threading
 import time
@@ -188,7 +188,7 @@ class AcquisitionTask(object):
                        args=(upd_period,))
         timer.start()
 
-        raw_images = []
+        raw_images = {} # stream -> list of raw images
         for s in self._streams:
             # Get the future of the acquisition, depending on the Stream type
             if hasattr(s, "acquire"):
@@ -212,13 +212,7 @@ class AcquisitionTask(object):
 
             # Wait for the acquisition to be finished.
             # Will pass down exceptions, included in case it's cancelled
-            data = f.result()
-
-            # add the stream name to the image if nothing yet
-            for d in data:
-                if not model.MD_DESCRIPTION in d.metadata:
-                    d.metadata[model.MD_DESCRIPTION] = s.name.value
-            raw_images.extend(data)
+            raw_images[s] = f.result()
 
             # update the time left
             expected_time -= self._streamTimes[s]
@@ -226,11 +220,45 @@ class AcquisitionTask(object):
 
         # TODO: if the stream is OverlayStream, apply the metadata to all the
         # data from an optical stream. => put the data
+        self._adjust_metadata(raw_images)
 
+        # return all the raw data as one large array
+        ret = []
+        for v in raw_images.values():
+            ret.extend(v)
+        return ret
 
-        # return all the raw data
-        return raw_images
+    def _adjust_metadata(self, raw_data):
+        """
+        Update/adjust the metadata of the raw data received based on global 
+        information.
+        raw_data (dict Stream -> list of DataArray): the raw data for each stream.
+          The raw data is directly updated, and even removed if necessary.
+        """
+        # Update the pos/pxs/rot metadata from the fine overlay measure.
+        # The correction metadata is in the metadata of the only raw data of
+        # the OverlayStream.
+        cor_md = None
+        for s, data in raw_data.items():
+            if isinstance(s, OverlayStream):
+                if cor_md:
+                    logging.warning("Multiple OverlayStreams found")
+                cor_md = data[0].metadata
+                del raw_data[s] # remove the stream from final raw data
 
+        # Even if no overlay stream was present, it's worthy to update the
+        # metadata as it might contain correction metadata from basic alignment.
+        for s, data in raw_data.items():
+            if isinstance(s, OPTICAL_STREAMS):
+                for d in data:
+                    img.mergeMetadata(d.metadata, cor_md)
+
+        # add the stream name to the image if nothing yet
+        for s, data in raw_data.items():
+            for d in data:
+                if not model.MD_DESCRIPTION in d.metadata:
+                    d.metadata[model.MD_DESCRIPTION] = s.name.value
+        
     def _on_progress_update(self, f, past, left):
         """
         Called when the current future has made a progress (and so it should

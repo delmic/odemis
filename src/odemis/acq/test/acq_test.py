@@ -261,7 +261,7 @@ class SPARCTestCase(unittest.TestCase):
         self.past = None
         self.left = None
         self.updates = 0
-        self.done = False
+        self.done = 0
 
         # Run acquisition
         start = time.time()
@@ -280,11 +280,11 @@ class SPARCTestCase(unittest.TestCase):
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
         self.assertEqual(self.left, 0)
-        self.assertTrue(self.done)
+        self.assertEqual(self.done, 1)
         self.assertTrue(not f.cancelled())
 
     def on_done(self, future):
-        self.done = True
+        self.done += 1
 
     def on_progress_update(self, future, past, left):
         self.past = past

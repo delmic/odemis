@@ -20,15 +20,17 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 import logging
-from odemis import model
+from odemis import model, acq
 from odemis.acq import stream
 from odemis.util import driver
 import os
 import subprocess
 import time
 import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -57,9 +59,11 @@ class TestOverlayStream(unittest.TestCase):
         time.sleep(1) # time to start
 
         # find components by their role
-        cls._escan = model.getComponent(role="e-beam")
-        cls._detector = model.getComponent(role="se-detector")
-        cls._ccd = model.getComponent(role="ccd")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.light_filter = model.getComponent(role="filter")
 
     @classmethod
     def tearDownClass(cls):
@@ -71,14 +75,14 @@ class TestOverlayStream(unittest.TestCase):
         model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
     # @unittest.skip("skip")
     def test_overlay_stream(self):
-        escan = self._escan
-        detector = self._detector
-        ccd = self._ccd
-        
         # Create the stream
-        ovrl = stream.OverlayStream("test overlay", ccd, escan, detector)
+        ovrl = stream.OverlayStream("test overlay", self.ccd, self.ebeam, self.sed)
 
         ovrl.dwellTime.value = 0.3
         ovrl.repetition.value = (7, 7)
@@ -94,6 +98,75 @@ class TestOverlayStream(unittest.TestCase):
         time.sleep(1)
         f.cancel()
         self.assertTrue(f.cancelled())
+
+    def test_acq_fine_align(self):
+        """
+        try acquisition with SEM + Optical + overlay streams
+        """
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        # SEM settings are via the current hardware settings
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        fs1 = stream.FluoStream("test orange", self.ccd, self.ccd.data,
+                                self.light, self.light_filter)
+        fs1.excitation.value = fs1.excitation.range[0] + 5e-9
+        fs1.emission.value = fs1.emission.range[0] + 5e-9
+        fs2 = stream.FluoStream("test blue", self.ccd, self.ccd.data,
+                                self.light, self.light_filter)
+        fs2.excitation.value = fs2.excitation.range[1] - 5e-9
+        fs2.emission.value = fs2.emission.range[1] - 5e-9
+        self.ccd.exposureTime.value = 0.1 # s
+
+        ovrl = stream.OverlayStream("overlay", self.ccd, self.ebeam, self.sed)
+        ovrl.dwellTime.value = 0.3
+        ovrl.repetition.value = (7, 7)
+
+        streams = [sems, fs1, fs2, ovrl]
+        est_time = acq.estimateTime(streams)
+
+        sum_est_time = sum(s.estimateAcquisitionTime() for s in streams)
+        self.assertGreaterEqual(est_time, sum_est_time)
+
+        # prepare callbacks
+        self.past = None
+        self.left = None
+        self.updates = 0
+        self.done = 0
+
+        # Run acquisition
+        start = time.time()
+        f = acq.acquire(streams)
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        data = f.result()
+        dur = time.time() - start
+        self.assertGreater(dur, est_time / 2) # Estimated time shouldn't be too small
+
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertEqual(len(data), len(streams) - 1)
+
+        # No overlay correction metadata anywhere (it has all been merged)
+        for d in data:
+            for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
+                self.assertNotIn(k, d.metadata)
+
+#        thumb = acq.computeThumbnail(st, f)
+#        self.assertIsInstance(thumb, model.DataArray)
+
+        self.assertGreaterEqual(self.updates, 1) # at least one update at end
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.done, 1)
+        self.assertTrue(not f.cancelled())
+
+    def on_done(self, future):
+        self.done += 1
+
+    def on_progress_update(self, future, past, left):
+        self.past = past
+        self.left = left
+        self.updates += 1
 
 if __name__ == "__main__":
     unittest.main()
