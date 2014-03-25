@@ -401,6 +401,19 @@ class TestMergeMetadata(unittest.TestCase):
         for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
             self.assertNotIn(k, md)
 
+        # Check that providing a metadata without correction data doesn't change
+        # anything
+        simpl_md = {model.MD_ROTATION: 90, # °
+                    model.MD_PIXEL_SIZE: (17e-8, 17e-8), # m
+                    model.MD_POS: (5e-3, 2e-3), # m
+                    }
+        orig_md = dict(simpl_md)
+        img.mergeMetadata(simpl_md)
+        for k in [model.MD_ROTATION, model.MD_PIXEL_SIZE, model.MD_POS]:
+            self.assertEqual(orig_md[k], simpl_md[k])
+        for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
+            self.assertNotIn(k, simpl_md)
+
 if __name__ == "__main__":
     unittest.main()
 
