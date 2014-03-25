@@ -702,7 +702,7 @@ def __init_resources():
                       <size>-1,700</size>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>
-                      <style>wxHW_NO_SELECTION</style>
+                      <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
