@@ -459,7 +459,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
         self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.select_color = conversion.hex_to_frgba(
-                                    gui.FOREGROUND_COLOUR_HIGHLIGHT, 0.5)
+                                    gui.FG_COLOUR_HIGHLIGHT, 0.5)
         self.enabled = False
 
     # Event handlers
@@ -705,9 +705,9 @@ class PointsOverlay(WorldOverlay):
 
         # Appearance
         self.point_colour = conversion.hex_to_frgb(
-                                        gui.FOREGROUND_COLOUR_HIGHLIGHT)
+                                        gui.FG_COLOUR_HIGHLIGHT)
         self.select_colour = conversion.hex_to_frgba(
-                                        gui.FOREGROUND_COLOUR_EDIT, 0.5)
+                                        gui.FG_COLOUR_EDIT, 0.5)
         self.dot_colour = (0, 0, 0, 0.1)
         # The float radius of the dots to draw
         self.dot_size = MIN_DOT_RADIUS

@@ -40,6 +40,8 @@ from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
+from odemis.gui.util import formats_to_wildcards
+from odemis.dataio import get_available_formats
 from odemis.util import units
 from odemis.gui.comp.popup import Message
 import os
@@ -89,42 +91,92 @@ class SnapshotController(object):
     def start_snapshot_viewport(self, event):
         """ Wrapper to run snapshot_viewport in a separate thread."""
         # Find out the current tab
-        tab = self._main_data_model.tab.value
-        thread = threading.Thread(target=self.snapshot_viewport, args=(tab,))
-        thread.start()
+        tab, filepath, exporter = self._get_snapshot_info(dialog=False)
+        if None not in (tab, filepath, exporter):
+            thread = threading.Thread(target=self.snapshot_viewport,
+                                      args=(tab, filepath, exporter))
+            thread.start()
 
     def start_snapshot_as_viewport(self, event):
         """ Wrapper to run snapshot_viewport in a separate thread."""
         # Find out the current tab
-        tab = self._main_data_model.tab.value
-        thread = threading.Thread(target=self.snapshot_viewport,
-                                  args=(tab, True))
-        thread.start()
+        tab, filepath, exporter = self._get_snapshot_info(dialog=True)
+        if None not in (tab, filepath, exporter):
+            thread = threading.Thread(target=self.snapshot_viewport,
+                                      args=(tab, filepath, exporter))
+            thread.start()
 
-    def snapshot_viewport(self, tab, dialog=False):
+    def _get_snapshot_info(self, dialog=False):
+        config = conf.get_acqui_conf()
+
+        tab, filepath, exporter = self._main_data_model.tab.value, None, None
+
+        if dialog:
+            format_info = get_available_formats()
+            wildcards, formats = formats_to_wildcards(format_info)
+            # The default file name should be empty because otherwise the
+            # dialog will add an extension that won't change when the user
+            # selects a different file type in the dialog.
+            dlg = wx.FileDialog(self._main_frame,
+                                "Save Snapshot",
+                                config.last_path,
+                                "",
+                                wildcard=wildcards,
+                                style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
+
+            # Select the last format used
+            try:
+                idx = formats.index(config.last_format)
+            except ValueError:
+                idx = 0
+            dlg.SetFilterIndex(idx)
+
+            if dlg.ShowModal() == wx.ID_OK:
+                path = dlg.GetPath()
+                fmt = formats[dlg.GetFilterIndex()]
+                extension = format_info[fmt][0]
+
+                # Prevent double extensions when an old file is selected
+                filepath, _ = os.path.splitext(path)
+                filepath = filepath + extension
+
+                config.last_path = os.path.dirname(path)
+                config.last_format = fmt
+                config.last_extension = extension
+                config.write()
+                exporter = dataio.get_exporter(config.last_format)
+
+            dlg.Destroy()
+        else:
+            extension = config.last_extension
+            dirname = get_picture_folder()
+            basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
+            filepath = os.path.join(dirname, basename + extension)
+            exporter = dataio.get_exporter(config.last_format)
+
+            if os.path.exists(filepath):
+                msg = "File '%s' already exists, cancelling snapshot"
+                logging.warning(msg, filepath)
+                tab, filepath, exporter = None, None, None
+
+        return tab, filepath, exporter
+
+    def snapshot_viewport(self, tab, filepath, exporter):
         """ Save a snapshot of the raw image from the focused view to the
         filesystem.
-        tab (Tab): the current tab to save the snapshot from
-        The name of the file follows the scheme date-time.tiff (e.g.,
-        20120808-154812.tiff) and is located in the user's picture directory.
+
+        :param tab: (Tab) the current tab to save the snapshot from
+        :param filepath: (str) full path to the destinatino file
+        :param exporter: (func) exporter to use for writing the file
+
+        When no dialog is shown, the name of the file will follow the scheme
+        `date`-`time`.tiff (e.g., 20120808-154812.tiff) and it will be saved
+        in the user's picture directory.
+
         """
+
         try:
             tab_data_model = tab.tab_data_model
-
-            # TODO: allow user to chose the file format in preferences
-            config = conf.get_acqui_conf()
-            exporter = dataio.get_exporter(config.last_format)
-            extention = config.last_extension
-
-            # filename
-            # always the "Pictures" user folder
-            dirname = get_picture_folder() # TODO: use last path?
-            basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
-            filename = os.path.join(dirname, basename + extention)
-            if os.path.exists(filename):
-                msg = "File '%s' for snapshot already exists, cancelling snapshot"
-                logging.warning(msg, filename)
-                return
 
             # get currently focused view
             view = tab_data_model.focussedView.value
@@ -169,12 +221,13 @@ class SnapshotController(object):
                 raw_images.extend(data)
 
             # record everything to a file
-            exporter.export(filename, raw_images, thumbnail)
+            exporter.export(filepath, raw_images, thumbnail)
 
-            m = Message(self._main_frame)
-            wx.CallAfter(m.show_message, "Snapshot saved")
+            wx.CallAfter(Message.show_message, self._main_frame,
+                                               "Snapshot saved",
+                                               filepath)
 
-            logging.info("Snapshot saved as file '%s'.", filename)
+            logging.info("Snapshot saved as file '%s'.", filepath)
         except Exception:
             logging.exception("Failed to save snapshot")
 
