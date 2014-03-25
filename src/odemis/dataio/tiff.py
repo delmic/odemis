@@ -1035,9 +1035,9 @@ def _addImageElement(root, das, ifd, rois):
             if model.MD_READOUT_TIME in da.metadata:
                 ror = (1 / da.metadata[model.MD_READOUT_TIME]) / 1e6 # MHz
                 attrib["ReadOutRate"] = "%.15f" % ror
-            if model.MD_EBEAM_ENERGY in da.metadata:
+            if model.MD_EBEAM_VOLTAGE in da.metadata:
                 # Schema only mentions PMT, but we use it for the e-beam too
-                attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_ENERGY] # V
+                attrib["Voltage"] = "%.15f" % da.metadata[model.MD_EBEAM_VOLTAGE] # V
 
             if attrib:
                 # detector of the group has the same id as first IFD of the group

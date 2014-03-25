@@ -700,7 +700,7 @@ def _add_image_metadata(group, images):
         gp["PolePosition"] = pp
         _h5svi_set_state(gp["PolePosition"], st_pp)
 
-    # TODO: model.MD_EBEAM_ENERGY, model.MD_EBEAM_SPOT_DIAM
+    # TODO: model.MD_EBEAM_VOLTAGE, model.MD_EBEAM_SPOT_DIAM
 
 def _add_svi_info(group):
     """

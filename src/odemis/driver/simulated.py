@@ -61,46 +61,6 @@ class Light(model.Emitter):
             logging.info("Light is on")
 
 
-class EBeam(model.Emitter):
-    """
-    Simulated electron beam (typical of SEM/TEM). Just provide the vigilant 
-    attributes for now.
-    """
-    def __init__(self, name, role, **kwargs):
-        model.Emitter.__init__(self, name, role, **kwargs)
-        
-        self.shape = (2048, 2048) # maximum resolution
-        
-        self.resolution = model.ResolutionVA(self.shape, [(1, 1), self.shape], 
-                                             setter=self.setResolution)
-        
-        self.dwellTime = model.FloatContinuous(1.0, [1e-9, 10], unit="s")
-        self.energy = model.FloatEnumerated(0, set([0, 10e3, 20e3, 30e3]), unit="eV",
-                                           setter=self.setEnergy)
-        self.spotSize = model.FloatEnumerated(1e-9, set([1e-9, 1.5e-9, 2e-9, 2.5e-9, 3e-9]), unit=u"m", # ~1nm
-                                           setter=self.setSpotSize)
-    
-    def getMetadata(self):
-        metadata = {model.MD_DWELL_TIME: self.dwellTime.value,
-                    model.MD_EBEAM_ENERGY: self.energy.value,
-                    model.MD_EBEAM_SPOT_DIAM: self.spotSize.value}
-        return metadata
-    
-    def setEnergy(self, value):
-        if value == 0:
-            logging.info("E-beam is off")
-        else:
-            logging.info("E-beam is on, voltage: %d eV", value)
-        return value
-    
-    def setResolution(self, value):
-        logging.info("E-beam scanning now area of %r", value)
-        return value
-    
-    def setSpotSize(self, value):
-        logging.info("E-beam spot size is now %d m", value)
-        return value
-
 class Stage(model.Actuator):
     """
     Simulated stage component. Just pretends to be able to move all around.

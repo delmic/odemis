@@ -68,7 +68,8 @@ MD_FILTER_NAME = "Filter name" # str, product name of the light filter
 # TODO: might need to merge DWELL_TIME and EXP_TIME into INTEGRATION_TIME: the time each pixel receive energy
 # + SCANNED_DIMENSIONS: list of dimensions which were scanned instead of being acquired simultaneously
 MD_DWELL_TIME = "Pixel dwell time" # s (float), time the electron beam spends per pixel
-MD_EBEAM_ENERGY = "Electron beam energy" # eV (float), energy of the electron beam TODO: in SI, ie, Joules?
+MD_EBEAM_VOLTAGE = "Electron beam acceleration voltage" # V (float), voltage used to accelerate the electron beam
+MD_EBEAM_CURRENT = "Electron beam probe current" # A (float), current of the electron beam probe (typically, the spot diameter is linearly proportional)
 MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter" # m (float), approximate diameter of the electron beam spot (typically function of the current)
 MD_WL_POLYNOMIAL = "Wavelength polynomial" # m, m/px, m/px²... (list of float), polynomial to convert from a pixel number of a spectrum to the wavelength
 MD_WL_LIST = "Wavelength list" # m... (list of float), wavelength for each pixel. The list is the same length as the C data
