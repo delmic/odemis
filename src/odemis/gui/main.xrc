@@ -4,9 +4,16 @@
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
-        <object class="wxMenuItem" name="menu_item_qacquire">
+        <object class="wxMenuItem" name="menu_item_snapshot">
           <label>Save Snapshot</label>
           <accel>Ctrl+P</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_snapshot_as">
+          <label>Save Snapshot as...</label>
+          <accel>Ctrl+Shift+P</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -484,7 +491,7 @@
                       <size>-1,700</size>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>
-                      <style>wxHW_NO_SELECTION</style>
+                      <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>

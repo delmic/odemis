@@ -41,6 +41,7 @@ from odemis.gui.util import img, get_picture_folder, call_after, \
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
 from odemis.util import units
+from odemis.gui.comp.popup import Message
 import os
 import re
 import subprocess
@@ -53,39 +54,54 @@ from odemis.acq.stream import UNDEFINED_ROI
 
 
 class SnapshotController(object):
-    """ controller to handle snapshot acquisition in a
-    "global" context. In particular, it needs to be aware of which tab/view
-    is currently focused.
+    """ Controller to handle snapshot acquisition in a 'global' context.
+
+    In particular, it needs to be aware of which tab/view is currently focused.
+
     """
+
     def __init__(self, main_data, main_frame):
         """
         main_data (MainGUIData): the representation of the microscope GUI
         main_frame: (wx.Frame): the whole GUI frame
         """
+
         self._main_data_model = main_data
         self._main_frame = main_frame
         self._anim_thread = None # for snapshot animation
 
-        # For snapshot animation find the names of the active (=connected) screens
-        # it's slow, so do it only at init (=expect not to change screen during
-        # acquisition)
+        # For snapshot animation find the names of the active (=connected)
+        # screens it's slow, so do it only at init (=expect not to change screen
+        # during acquisition)
         self._outputs = self.get_display_outputs()
 
         # Link snapshot menu to snapshot action
         wx.EVT_MENU(self._main_frame,
-            self._main_frame.menu_item_qacquire.GetId(),
+            self._main_frame.menu_item_snapshot.GetId(),
             self.start_snapshot_viewport)
+
+        wx.EVT_MENU(self._main_frame,
+            self._main_frame.menu_item_snapshot_as.GetId(),
+            self.start_snapshot_as_viewport)
 
         # TODO: disable the menu if no focused view/no stream
 
     def start_snapshot_viewport(self, event):
-        """Wrapper to run snapshot_viewport in a separate thread."""
+        """ Wrapper to run snapshot_viewport in a separate thread."""
         # Find out the current tab
         tab = self._main_data_model.tab.value
         thread = threading.Thread(target=self.snapshot_viewport, args=(tab,))
         thread.start()
 
-    def snapshot_viewport(self, tab):
+    def start_snapshot_as_viewport(self, event):
+        """ Wrapper to run snapshot_viewport in a separate thread."""
+        # Find out the current tab
+        tab = self._main_data_model.tab.value
+        thread = threading.Thread(target=self.snapshot_viewport,
+                                  args=(tab, True))
+        thread.start()
+
+    def snapshot_viewport(self, tab, dialog=False):
         """ Save a snapshot of the raw image from the focused view to the
         filesystem.
         tab (Tab): the current tab to save the snapshot from
@@ -154,6 +170,10 @@ class SnapshotController(object):
 
             # record everything to a file
             exporter.export(filename, raw_images, thumbnail)
+
+            m = Message(self._main_frame)
+            wx.CallAfter(m.show_message, "Snapshot saved")
+
             logging.info("Snapshot saved as file '%s'.", filename)
         except Exception:
             logging.exception("Failed to save snapshot")

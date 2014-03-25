@@ -736,7 +736,7 @@ class StreamPanel(wx.PyPanel):
     # ===== For brightness/contrast
 
     def _has_bc(self, stream):
-        return (hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange"))
+        return hasattr(stream, "auto_bc") and hasattr(stream, "intensityRange")
 
     def _add_bc_controls(self):
         """ Add the widgets related to brightness/contrast
