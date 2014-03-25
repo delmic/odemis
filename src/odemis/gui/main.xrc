@@ -4,9 +4,16 @@
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
-        <object class="wxMenuItem" name="menu_item_qacquire">
+        <object class="wxMenuItem" name="menu_item_snapshot">
           <label>Save Snapshot</label>
           <accel>Ctrl+P</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_snapshot_as">
+          <label>Save Snapshot as...</label>
+          <accel>Ctrl+Shift+P</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

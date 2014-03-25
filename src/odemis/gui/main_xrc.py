@@ -36,7 +36,8 @@ class xrcfr_main(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
-        self.menu_item_qacquire = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_qacquire"))
+        self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))
+        self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
@@ -214,9 +215,16 @@ def __init_resources():
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
-        <object class="wxMenuItem" name="menu_item_qacquire">
+        <object class="wxMenuItem" name="menu_item_snapshot">
           <label>Save Snapshot</label>
           <accel>Ctrl+P</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_snapshot_as">
+          <label>Save Snapshot as...</label>
+          <accel>Ctrl+Shift+P</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
