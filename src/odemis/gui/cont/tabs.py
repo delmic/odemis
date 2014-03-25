@@ -509,10 +509,15 @@ class SparcAcquisitionTab(Tab):
         scount (DataArray)
         """
         if len(scount) > 0:
-            txt = units.readable_str(float(scount[-1]), sig=6)
+            # Indicate the raw value
+            v = scount[-1]
+            if v < 1:
+                txt = units.readable_str(float(scount[-1]), sig=6)
+            else:
+                txt = "%d" % round(v) # to make it clear what is small/big
             self._txt_mean.SetValue(txt)
-            # fit min/max between 0 and 1
 
+            # fit min/max between 0 and 1
             ndcount = scount.view(numpy.ndarray) # standard NDArray to get scalars
             vmin, vmax = ndcount.min(), ndcount.max()
             b = vmax - vmin
