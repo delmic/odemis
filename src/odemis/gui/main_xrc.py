@@ -72,6 +72,7 @@ class xrcfr_main(wx.Frame):
         self.pnl_align_controls = xrc.XRCCTRL(self, "pnl_align_controls")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.btn_fine_align = xrc.XRCCTRL(self, "btn_fine_align")
+        self.lbl_fine_align = xrc.XRCCTRL(self, "lbl_fine_align")
         self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
@@ -210,7 +211,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxHtmlWindow" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -911,8 +912,21 @@ def __init_resources():
                           <border>4</border>
                         </object>
                         <object class="sizeritem">
+                          <object class="wxStaticText" name="lbl_fine_align">
+                            <label>Message!</label>
+                            <hidden>1</hidden>
+                            <style>wxALIGN_CENTRE</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                          <border>11</border>
+                          <minsize>100,-1</minsize>
+                        </object>
+                        <object class="sizeritem">
                           <object class="wxGauge" name="gauge_fine_align">
-                            <size>-1,10</size>
+                            <size>100,10</size>
                             <range>100</range>
                             <value>0</value>
                             <style>wxGA_SMOOTH</style>

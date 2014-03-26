@@ -143,9 +143,9 @@ class SettingEntry(object):
             return
 
         if active:
-            self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_HIGHLIGHT)
+            self.label.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
         else:
-            self.label.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+            self.label.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
 
 
 class SettingsPanel(object):
@@ -169,8 +169,8 @@ class SettingsPanel(object):
         self.panel = wx.Panel(self.fold_panel)
 
 
-        self.panel.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
-        self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+        self.panel.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+        self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
 
         self.highlight_change = highlight_change
 
@@ -179,8 +179,8 @@ class SettingsPanel(object):
 
         self._gb_sizer.Add(wx.StaticText(self.panel, -1, default_msg), (0, 1))
 
-        self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-        self.panel.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR)
+        self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+        self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
 
         self.panel.SetSizer(self._main_sizer)
         self._main_sizer.Add(self._gb_sizer,
@@ -351,14 +351,14 @@ class SettingsPanel(object):
 
         if value and not selectable:
             value_ctrl = wx.StaticText(self.panel, label=unicode(value))
-            value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
             self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                                flag=wx.ALL, border=5)
         elif value and selectable:
             value_ctrl = wx.TextCtrl(self.panel, value=unicode(value),
                                      style=wx.BORDER_NONE | wx.TE_READONLY)
-            value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-            value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+            value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+            value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
             self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                                flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                                border=5)
@@ -388,8 +388,8 @@ class SettingsPanel(object):
                                  clear_label=clearlabel,
                                  clear_btn=(clearlabel != None),
                                  default_dir=config.last_path)
-        value_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+        value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
 
         self._gb_sizer.Add(value_ctrl,
                            (self.num_entries, 1),
@@ -500,8 +500,8 @@ class SettingsPanel(object):
         elif control_type == odemis.gui.CONTROL_TEXT:
             # TODO: should be a free entry text, like combobox
             new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
-            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-            new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+            new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+            new_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
 
             val = vigil_attr.value # only format if it's a number
             if (isinstance(val, (int, long, float)) or
@@ -558,7 +558,7 @@ class SettingsPanel(object):
                                             min_val=min_val,
                                             max_val=max_val,
                                             choices=choices)
-            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
             vac = VigilantAttributeConnector(vigil_attr,
@@ -579,7 +579,7 @@ class SettingsPanel(object):
                                           max_val=max_val,
                                           choices=choices,
                                           accuracy=conf.get('accuracy', 5))
-            new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+            new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
             new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
 
             vac = VigilantAttributeConnector(vigil_attr,
@@ -732,8 +732,8 @@ class SettingsPanel(object):
     def _create_label(self, panel, vigil_attr, unit):
         # Read only value
         new_ctrl = wx.TextCtrl(panel, style=wx.BORDER_NONE | wx.TE_READONLY)
-        new_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-        new_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+        new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+        new_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
 
         val = vigil_attr.value # only format if it's a number
         if (isinstance(val, (int, long, float)) or
@@ -1165,8 +1165,8 @@ class SparcSettingsController(SettingsBarController):
             tooltip_txt = "Average intensity value of the last image"
             lbl_mean.SetToolTipString(tooltip_txt)
             self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
-            self.txt_mean.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
-            self.txt_mean.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+            self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+            self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
             self.txt_mean.SetToolTipString(tooltip_txt)
             self._spectrum_panel.add_widgets(lbl_mean, self.txt_mean)
 

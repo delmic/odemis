@@ -3,15 +3,16 @@
 # Colour definitions
 
 # Background colours
-BACKGROUND_COLOUR = "#333333"           # Default dark background
-STREAM_BACKGROUND_COLOUR = "#4D4D4D"    # Stream panel background
+BG_COLOUR_MAIN = "#333333"           # Default dark background
+BG_COLOUR_STREAM = "#4D4D4D"    # Stream panel background
+BG_COLOUR_NOTIFY = "#FFF3A2"
 
 # Foreground (i.e text) colours
-FOREGROUND_COLOUR = "#DDDDDD"           # Default foreground colour
-FOREGROUND_COLOUR_DIS = "#777777"       # Disabled foreground colour
-FOREGROUND_COLOUR_EDIT = "#2FA7D4"      # Edit colour
-FOREGROUND_COLOUR_2ND = "#53D8AD"       # Secundary edit colour
-FOREGROUND_COLOUR_HIGHLIGHT = "#FFA300" # Highlight colour
+FG_COLOUR_MAIN = "#DDDDDD"           # Default foreground colour
+FG_COLOUR_DIS = "#777777"       # Disabled foreground colour
+FG_COLOUR_EDIT = "#2FA7D4"      # Edit colour
+FG_COLOUR_2ND = "#53D8AD"       # Secundary edit colour
+FG_COLOUR_HIGHLIGHT = "#FFA300" # Highlight colour
 
 # Border colours for the viewports
 BORDER_COLOUR_FOCUS = "#127BA6"
@@ -21,8 +22,8 @@ BORDER_COLOUR_UNFOCUS = "#000000"
 ALERT_COLOUR = "#DD3939"
 
 # Colours for overlay selection selection boxes
-SELECTION_COLOUR = FOREGROUND_COLOUR_EDIT
-SELECTION_COLOUR_2ND = FOREGROUND_COLOUR_2ND
+SELECTION_COLOUR = FG_COLOUR_EDIT
+SELECTION_COLOUR_2ND = FG_COLOUR_2ND
 
 
 # END Colour definitions

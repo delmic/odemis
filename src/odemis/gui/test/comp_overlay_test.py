@@ -68,7 +68,7 @@ class OverlayTestCase(test.GuiTestCase):
                 size = 10 + i * 3
                 ol.add_label(msg.format("with" if f else "without") ,
                              font_size=size, pos=(0, y), flip=f,
-                             colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                             colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
                 test.gui_loop(50)
 
             ol.clear()
@@ -82,33 +82,33 @@ class OverlayTestCase(test.GuiTestCase):
 
         ol.add_label("TextViewOverlay left",
                      pos=(ol.view_width / 2, 10),
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("TextViewOverlay right",
                      pos=(ol.view_width / 2, 26),
                      align=wx.ALIGN_RIGHT,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("TextViewOverlay center",
                      pos=(ol.view_width / 2, 42),
                      align=wx.ALIGN_CENTER_HORIZONTAL,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("|",
                      pos=(ol.view_width / 2, 58),
                      align=wx.ALIGN_CENTER_HORIZONTAL,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         ol.add_label("|",
                      pos=(ol.view_width / 2, 74),
                      align=wx.ALIGN_CENTER_HORIZONTAL,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         ol.add_label("Relative to the center",
                      pos=(ol.view_width / 2, 90),
                      align=wx.ALIGN_CENTER_HORIZONTAL,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         # Example on how a right aligned label can be kept on the right on resize
@@ -123,40 +123,40 @@ class OverlayTestCase(test.GuiTestCase):
         ol.add_label("top left",
                      pos=(0, 0),
                      align=wx.ALIGN_LEFT,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("top right",
                      pos=(ol.view_width, 0),
                      align=wx.ALIGN_RIGHT,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("bottom left",
                      pos=(0, ol.view_height),
                      align=wx.ALIGN_BOTTOM,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("bottom right",
                      pos=(ol.view_width, ol.view_height),
                      align=wx.ALIGN_RIGHT|wx.ALIGN_BOTTOM,
                      flip=False,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("SHOULD NOT BE SEEN!",
                      pos=(ol.view_width, ol.view_height / 2),
                      align=wx.ALIGN_LEFT,
                      flip=False,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         ol.add_label("Visible because of flip",
                      pos=(ol.view_width, ol.view_height / 2),
                      align=wx.ALIGN_LEFT,
                      flip=True,
-                     colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                     colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
 
@@ -174,7 +174,7 @@ class OverlayTestCase(test.GuiTestCase):
                           font_size=20,
                           deg=0,
                           flip=False,
-                          colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                          colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
 
         sl = ol.add_label(u"█ you should only see red",
@@ -200,7 +200,7 @@ class OverlayTestCase(test.GuiTestCase):
                           font_size=20,
                           deg=0,
                           flip=False,
-                          colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                          colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
 
         tr = ol.add_label(u"rotate right █",
                           pos=(200, 50),
@@ -208,7 +208,7 @@ class OverlayTestCase(test.GuiTestCase):
                           align=wx.ALIGN_RIGHT,
                           deg=0,
                           flip=False,
-                          colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                          colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
 
         tc = ol.add_label(u"rotate center █",
                           pos=(200, 75),
@@ -216,7 +216,7 @@ class OverlayTestCase(test.GuiTestCase):
                           align=wx.ALIGN_CENTRE_HORIZONTAL,
                           deg=0,
                           flip=False,
-                          colour=hex_to_frgb(gui.FOREGROUND_COLOUR_EDIT))
+                          colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
 
         test.gui_loop(1000)
 

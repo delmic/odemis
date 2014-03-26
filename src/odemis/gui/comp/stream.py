@@ -33,8 +33,8 @@ import logging
 import math
 import numpy
 from odemis import acq
-from odemis.gui import FOREGROUND_COLOUR_EDIT, FOREGROUND_COLOUR, \
-    BACKGROUND_COLOUR, STREAM_BACKGROUND_COLOUR, FOREGROUND_COLOUR_DIS
+from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
+    BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
@@ -150,7 +150,7 @@ class Expander(wx.PyControl):
                                     id= -1,
                                     value=stream.name.value)
             self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
-            self._label_ctrl.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._label_ctrl.SetForegroundColour(FG_COLOUR_EDIT)
             self._label_ctrl.Bind(wx.EVT_COMMAND_ENTER, self._on_label_change)
         else:
             # Static name
@@ -409,8 +409,8 @@ class StreamPanel(wx.PyPanel):
 
         # Appearance
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
-        self.SetBackgroundColour(STREAM_BACKGROUND_COLOUR)
-        self.SetForegroundColour(FOREGROUND_COLOUR)
+        self.SetBackgroundColour(BG_COLOUR_STREAM)
+        self.SetForegroundColour(FG_COLOUR_MAIN)
 
         # State
         self._collapsed = True
@@ -462,8 +462,8 @@ class StreamPanel(wx.PyPanel):
         self._expander._btn_vis.Bind(wx.EVT_BUTTON, self.on_visibility_btn)
 
         # ====== Build panel controls
-        self._panel.SetBackgroundColour(BACKGROUND_COLOUR)
-        self._panel.SetForegroundColour(FOREGROUND_COLOUR)
+        self._panel.SetBackgroundColour(BG_COLOUR_MAIN)
+        self._panel.SetForegroundColour(FG_COLOUR_MAIN)
         self._panel.SetFont(self.GetFont())
 
 
@@ -688,7 +688,7 @@ class StreamPanel(wx.PyPanel):
 #                                          key_inc=True,
 #                                          step=1,
 #                                          style=wx.NO_BORDER)
-#        self._txt_accum.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+#        self._txt_accum.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
 #        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
 #
 #        self._gbs.Add(self._txt_accum, (self.row_count, 1),
@@ -716,7 +716,7 @@ class StreamPanel(wx.PyPanel):
 #                                                         wx.EXPAND,
 #                                                    choices=choices)
 #
-#        self._cmb_interp.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+#        self._cmb_interp.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
 #        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
 #        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
 #                                          pushButtonBg=False)
@@ -836,8 +836,8 @@ class StreamPanel(wx.PyPanel):
                     min_val=0,
                     max_val=100,
                     unit='%')
-        self._txt_lowi.SetBackgroundColour(BACKGROUND_COLOUR)
-        self._txt_lowi.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
+        self._txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_lowi.SetToolTipString(tooltip_txt)
         def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
             lv = ctrl.GetValue() / 100
@@ -863,8 +863,8 @@ class StreamPanel(wx.PyPanel):
                     min_val=0,
                     max_val=100,
                     unit='%')
-        self._txt_highi.SetBackgroundColour(BACKGROUND_COLOUR)
-        self._txt_highi.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
+        self._txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_highi.SetToolTipString(tooltip_txt)
         def get_highi(va=self.stream.intensityRange, ctrl=self._txt_highi):
             lv = va.value[0]
@@ -959,7 +959,7 @@ class StreamPanel(wx.PyPanel):
             self._txt_excitation = wx.TextCtrl(self._panel,
                        value="%d nm" % round(self.stream.excitation.value * 1e9),
                        style=wx.BORDER_NONE | wx.TE_READONLY)
-            self._txt_excitation.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+            self._txt_excitation.SetForegroundColour(FG_COLOUR_DIS)
         else:
             min_val = int(math.ceil(self.stream.excitation.range[0] * 1e9))
             max_val = int(self.stream.excitation.range[1] * 1e9)
@@ -974,14 +974,14 @@ class StreamPanel(wx.PyPanel):
                     max_val=max_val,
                     unit='nm')
 
-            self._txt_excitation.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._txt_excitation.SetForegroundColour(FG_COLOUR_EDIT)
             self._vac_excitation = VigilantAttributeConnector(
                   self.stream.excitation, self._txt_excitation,
                   va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
                   ctrl_2_va=self._excitation_2_va, # to convert from nm
                   events=wx.EVT_COMMAND_ENTER)
 
-        self._txt_excitation.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._txt_excitation.SetBackgroundColour(BG_COLOUR_MAIN)
 
         self._gbs.Add(self._txt_excitation, (self.row_count, 1),
                       flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
@@ -1011,7 +1011,7 @@ class StreamPanel(wx.PyPanel):
             self._txt_emission = wx.TextCtrl(self._panel,
                        value="%d nm" % round(self.stream.emission.value * 1e9),
                        style=wx.BORDER_NONE | wx.TE_READONLY)
-            self._txt_emission.SetForegroundColour(FOREGROUND_COLOUR_DIS)
+            self._txt_emission.SetForegroundColour(FG_COLOUR_DIS)
         else:
             min_val = int(math.ceil(self.stream.emission.range[0] * 1e9))
             max_val = int(self.stream.emission.range[1] * 1e9)
@@ -1026,14 +1026,14 @@ class StreamPanel(wx.PyPanel):
                     max_val=max_val,
                     unit='nm')
 
-            self._txt_emission.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+            self._txt_emission.SetForegroundColour(FG_COLOUR_EDIT)
             self._vac_emission = VigilantAttributeConnector(
                   self.stream.emission, self._txt_emission,
                   va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
                   ctrl_2_va=self._emission_2_va, # to convert from nm
                   events=wx.EVT_COMMAND_ENTER)
 
-        self._txt_emission.SetBackgroundColour(BACKGROUND_COLOUR)
+        self._txt_emission.SetBackgroundColour(BG_COLOUR_MAIN)
 
         self._gbs.Add(self._txt_emission, (self.row_count, 1),
                       flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
@@ -1214,8 +1214,8 @@ class StreamPanel(wx.PyPanel):
                     min_val=wl_rng[0],
                     max_val=wl_rng[1],
                     unit=self.stream.spectrumBandwidth.unit) # m or px
-        self._txt_scenter.SetBackgroundColour(BACKGROUND_COLOUR)
-        self._txt_scenter.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_scenter.SetBackgroundColour(BG_COLOUR_MAIN)
+        self._txt_scenter.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_scenter.SetToolTipString(tooltip_txt)
 
         def get_center(va=self.stream.spectrumBandwidth, ctrl=self._txt_scenter):
@@ -1254,8 +1254,8 @@ class StreamPanel(wx.PyPanel):
                     min_val=0,
                     max_val=(wl_rng[1] - wl_rng[0]),
                     unit=self.stream.spectrumBandwidth.unit)
-        self._txt_sbw.SetBackgroundColour(BACKGROUND_COLOUR)
-        self._txt_sbw.SetForegroundColour(FOREGROUND_COLOUR_EDIT)
+        self._txt_sbw.SetBackgroundColour(BG_COLOUR_MAIN)
+        self._txt_sbw.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_sbw.SetToolTipString(tooltip_txt)
 
         def get_bandwidth(va=self.stream.spectrumBandwidth, ctrl=self._txt_sbw):

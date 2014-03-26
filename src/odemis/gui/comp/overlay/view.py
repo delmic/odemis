@@ -114,7 +114,7 @@ class StreamIconOverlay(ViewOverlay):
         self.play = 0 # opacity of the play icon
 
         self.colour = conversion.hex_to_frgba(
-                                        gui.FOREGROUND_COLOUR_HIGHLIGHT,
+                                        gui.FG_COLOUR_HIGHLIGHT,
                                         self.opacity)
 
     def hide_pause(self, hidden=True):
@@ -165,7 +165,7 @@ class StreamIconOverlay(ViewOverlay):
         ctx.set_line_width(1)
         ctx.set_source_rgba(
             *conversion.hex_to_frgba(
-                gui.FOREGROUND_COLOUR_HIGHLIGHT, self.play))
+                gui.FG_COLOUR_HIGHLIGHT, self.play))
 
         ctx.move_to(x, y)
 
@@ -700,7 +700,7 @@ class PolarOverlay(ViewOverlay):
         self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.colour_highlight = conversion.hex_to_frgb(
-                                            gui.FOREGROUND_COLOUR_HIGHLIGHT)
+                                            gui.FG_COLOUR_HIGHLIGHT)
         self.intensity_label = self.add_label(
                                     "", align=wx.ALIGN_CENTER_HORIZONTAL,
                                     colour=self.colour_highlight)

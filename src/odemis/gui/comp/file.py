@@ -39,7 +39,7 @@ FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
 class FileBrowser(wx.Panel):
     """
-    Widget that displays a file name and allows to change it by selecting a 
+    Widget that displays a file name and allows to change it by selecting a
     different file.
     It will generate a EVT_FILE_SELECT when the file changes.
     Note that like most of the wx widgets, SetValue does not generate an event.
@@ -80,8 +80,8 @@ class FileBrowser(wx.Panel):
 
         self.text_ctrl = wx.TextCtrl(self,
                             style=wx.BORDER_NONE|wx.TE_READONLY)
-        self.text_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
-        self.text_ctrl.SetBackgroundColour(odemis.gui.BACKGROUND_COLOUR)
+        self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        self.text_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
         self.text_ctrl.Bind(wx.EVT_TEXT, self.on_changed)
 
         box.Add(self.text_ctrl, 1)
@@ -132,7 +132,7 @@ class FileBrowser(wx.Panel):
                 self.text_ctrl.SetForegroundColour(odemis.gui.ALERT_COLOUR)
             else:
                 self.text_ctrl.SetForegroundColour(
-                                            odemis.gui.FOREGROUND_COLOUR_EDIT)
+                                            odemis.gui.FG_COLOUR_EDIT)
 
             self.text_ctrl.SetValue(self.file_path)
 
@@ -144,7 +144,7 @@ class FileBrowser(wx.Panel):
             logging.debug("Clearing file control")
 
             self.file_path = None
-            self.text_ctrl.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_DIS)
+            self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
 
             self.text_ctrl.SetValue(self.label)
 

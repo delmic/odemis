@@ -8,18 +8,19 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
-Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
-PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+
 # Everything related to high-level image acquisition on the microscope.
 
 
@@ -52,16 +53,21 @@ import time
 # stopped while already running, and reports from time to time progress on its
 # execution.
 def acquire(streams):
+    """ Start an acquisition task for the given streams.
+
+    It will decide in which order the stream must be acquired.
+
+    ..Note:
+        It is highly recommended to not have any other acquisition going on.
+
+    :param streams: [Stream] the streams to acquire
+    :return: (ProgressiveFuture) an object that represents the task, allow to
+        know how much time before it is over and to cancel it. It also permits
+        to receive the result of the task, which is:
+        (list of model.DataArray): the raw acquisition data
+
     """
-    Starts an acquisition task for the given streams. It will decide in which
-      order the stream must be acquired.
-      Note: it is highly recommended to not have any other acquisition going on.
-    streams (list of Stream): the streams to acquire
-    returns (ProgressiveFuture): an object that represents the task, allow to
-      know how much time before it is over and to cancel it. It also permits to
-      receive the result of the task, which is:
-      (list of model.DataArray): the raw acquisition data
-    """
+
     # create a future
     future = model.ProgressiveFuture()
 

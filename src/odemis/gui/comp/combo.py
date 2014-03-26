@@ -55,7 +55,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         # SetMargins allow the left margin to be set to 0, but the top
         # margin won't move and stays at the default -1.
         self.SetMargins(0, 0)
-        self.SetForegroundColour(odemis.gui.FOREGROUND_COLOUR_EDIT)
+        self.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
 

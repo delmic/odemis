@@ -23,6 +23,8 @@
 
 import wx
 
+from odemis.gui import BG_COLOUR_NOTIFY
+
 class Message(wx.PopupTransientWindow):
     """ Display short messages and warning to the user """
 
@@ -32,7 +34,7 @@ class Message(wx.PopupTransientWindow):
         self.message = ""
 
         self.panel = wx.Panel(self)
-        self.panel.SetBackgroundColour("#FFF3A2")
+        self.panel.SetBackgroundColour(BG_COLOUR_NOTIFY)
 
         self.title_txt = wx.StaticText(self.panel, -1,)
         font = wx.Font(16, wx.FONTFAMILY_DEFAULT,
@@ -51,9 +53,18 @@ class Message(wx.PopupTransientWindow):
         self.sizer.Add(self.message_txt, 0, wx.RIGHT|wx.BOTTOM|wx.LEFT, 16)
         self.panel.SetSizer(self.sizer)
 
-    def show_message(self, title, message=None, timeout=None):
+    @classmethod
+    def show_message(cls, parent, title,
+                     message=None, timeout=None, bgcolour=BG_COLOUR_NOTIFY):
+        mo = Message(parent)
+        mo._show_message(title, message, timeout, bgcolour)
+
+    def _show_message(self, title, message, timeout, bgcolour):
+
+        self.panel.SetBackgroundColour(bgcolour)
 
         self.title_txt.SetLabel(title)
+
         if message:
             self.message_txt.SetLabel(message)
             self.message_txt.Show()
@@ -71,4 +82,4 @@ class Message(wx.PopupTransientWindow):
         self.Position(pos, (0, 0))
 
         self.Popup()
-        wx.FutureCall(timeout or 2000, self.Dismiss)
+        wx.FutureCall(timeout or 1500, self.Dismiss)

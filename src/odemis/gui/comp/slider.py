@@ -543,7 +543,7 @@ class NumberSlider(Slider):
                                     unit=unit,
                                     accuracy=accuracy)
 
-        self.linked_field.SetForegroundColour(gui.FOREGROUND_COLOUR_EDIT)
+        self.linked_field.SetForegroundColour(gui.FG_COLOUR_EDIT)
         self.linked_field.SetBackgroundColour(parent.GetBackgroundColour())
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
@@ -963,7 +963,7 @@ class VisualRangeSlider(BaseSlider):
         ctx.fill()
         if self.Enabled:
             # draw the "edit" bars on each side
-            ctx.set_source_rgba(*hex_to_frgba(gui.FOREGROUND_COLOUR_EDIT, 0.8))
+            ctx.set_source_rgba(*hex_to_frgba(gui.FG_COLOUR_EDIT, 0.8))
             self._draw_line(ctx, left, height, left, 0)
             self._draw_line(ctx, right, height, right, 0)
 
