@@ -351,7 +351,9 @@ class Stream(object):
         """
         # check to avoid running it if there is already one running
         if self._running_upd_img:
-            logging.debug("Dropping image conversion to RGB, as the previous one is still running")
+            # Commented to prevent log flooding
+            # logging.debug(("Dropping image conversion to RGB, as the previous "
+            #                "one is still running"))
             return
         if not self.raw:
             return
@@ -363,8 +365,10 @@ class Stream(object):
             rgbim = img.DataArray2RGB(data, irange, tint)
             rgbim.flags.writeable = False
             if model.MD_ACQ_DATE in data.metadata:
-                logging.debug("Computed RGB projection %g s after acquisition",
-                               time.time() - data.metadata[model.MD_ACQ_DATE])
+                pass
+                # Commented to prevent log flooding
+                # logging.debug("Computed RGB projection %g s after acquisition",
+                #                time.time() - data.metadata[model.MD_ACQ_DATE])
             self.image.value = model.DataArray(rgbim, self._find_metadata(data))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
@@ -437,8 +441,10 @@ class Stream(object):
         # overlapped)
 
         if model.MD_ACQ_DATE in data.metadata:
-            logging.debug("Receive raw %g s after acquisition",
-                           time.time() - data.metadata[model.MD_ACQ_DATE])
+            pass
+            # Commented out to prevent log flooding
+            # logging.debug("Receive raw %g s after acquisition",
+            #                time.time() - data.metadata[model.MD_ACQ_DATE])
 
         old_irange = self._irange
         if not self.raw:
@@ -450,7 +456,8 @@ class Stream(object):
         # Depth can change at each image (depends on hardware settings)
         self._updateIRange()
         if old_irange != self._irange:
-            logging.debug("Updating irange to %s", self._irange)
+            # Commented out to prevent log flooding
+            # logging.debug("Updating irange to %s", self._irange)
             # This ensures there's always a valid histogram
             self._updateHistogram()
         else:
