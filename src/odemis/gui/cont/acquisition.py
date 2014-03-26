@@ -86,7 +86,25 @@ class SnapshotController(object):
             self._main_frame.menu_item_snapshot_as.GetId(),
             self.start_snapshot_as_viewport)
 
-        # TODO: disable the menu if no focused view/no stream
+        self._main_data_model.tab.subscribe(self.on_tab_change, init=True)
+
+    def on_tab_change(self, tab):
+        """ Subscribe to the foccusedView VA of the current tab """
+        tab.tab_data_model.focussedView.subscribe(self.on_focussed_view_change,
+                                                  init=True)
+
+    def on_focussed_view_change(self, focussed_view):
+        """ Enable Snapshot menu items if a view is focussed and has streams """
+
+        if focussed_view:
+            if (hasattr(focussed_view, 'stream_tree') and
+                    len(focussed_view.stream_tree) > 0):
+                self._main_frame.menu_item_snapshot.Enable(True)
+                self._main_frame.menu_item_snapshot_as.Enable(True)
+                return
+
+        self._main_frame.menu_item_snapshot.Enable(False)
+        self._main_frame.menu_item_snapshot_as.Enable(False)
 
     def start_snapshot_viewport(self, event):
         """ Wrapper to run snapshot_viewport in a separate thread."""
