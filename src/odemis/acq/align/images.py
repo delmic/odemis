@@ -156,38 +156,14 @@ def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
 
     bound = ((repetitions[0] - 1) * scale[0]) / 2, ((repetitions[1] - 1) * scale[1]) / 2
 
-    for i in xfrange(-bound[0], bound[0] + 1, scale[0]):
-        for j in xfrange(-bound[1], bound[1] + 1, scale[1]):
-            # Compute electron coordinates based on scale and repetitions
-            electron_coordinates.append((i * repetitions[1] / (repetitions[1] - 1),
-                                         j * repetitions[1] / (repetitions[1] - 1)))
+    # Compute electron coordinates based on scale and repetitions
+    for i in range(repetitions[0]):
+        for j in range(repetitions[1]):
+            electron_coordinates.append(((-bound[0] + i * scale[0]), #* repetitions[0] / (repetitions[0] - 1),
+                                         (-bound[1] + j * scale[1]) #* repetitions[1] / (repetitions[1] - 1)
+                                         ))
 
     return ccd.data._optical_image, electron_coordinates, scale
-
-def xfrange(start, stop, step):
-    while start < stop:
-        yield start
-        start += step
-
-# Copy from acqmng
-# @staticmethod
-def _executeTask(future, fn, *args, **kwargs):
-    """
-    Executes a task represented by a future.
-    Usually, called as main task of a (separate thread).
-    Based on the standard futures code _WorkItem.run()
-    future (Future): future that is used to represent the task
-    fn (callable): function to call for running the future
-    *args, **kwargs: passed to the fn
-    returns None: when the task is over (or cancelled)
-    """
-    try:
-        result = fn(*args, **kwargs)
-    except BaseException:
-        e = sys.exc_info()[1]
-        future.set_exception(e)
-    else:
-        future.set_result(result)
 
 def _CancelAcquisition(future):
     """
