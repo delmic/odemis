@@ -126,7 +126,7 @@ class Scanner(model.Emitter):
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
         # via calibration. We assume that image is square, i.e., VFW = HFW
-        self._hfw_nomag = 0.25  # m
+        self._hfw_nomag = 0.2752  # m
 
         # Allow the user to modify the value, to copy it from the SEM software
         mag = 1e3  # pretty random value which could be real
@@ -283,7 +283,7 @@ class Detector(model.Detector):
     of the SEM. It sets up a Dataflow and notifies it every time that an SEM image 
     is captured.
     """
-    def __init__(self, name, role, parent, drift_period=None, **kwargs):
+    def __init__(self, name, role, parent, channel, **kwargs):
         """
         Note: parent should have a child "scanner" already initialised
         """
@@ -291,8 +291,9 @@ class Detector(model.Detector):
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
 
         # select detector and enable channel
-        self.parent._device.DtSelect(0, 0)
-        self.parent._device.DtEnable(0, 1, 8)
+        self._channel = channel
+        self.parent._device.DtSelect(self._channel, 0)
+        self.parent._device.DtEnable(self._channel, 1, 8)
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
         self.parent._device.SetWaitFlags(0x09)
