@@ -121,6 +121,10 @@ def computeThumbnail(streamTree, acqTask):
     # it actually has a renderer (.image)
     streams = sorted(streamTree.getStreams(), key=_weight_stream,
                                reverse=True)
+    if not streams:
+        logging.warning("No stream found in the stream tree")
+        return None
+
     iim = streams[0].image.value
     # add some basic info to the image
     iim.metadata[model.MD_DESCRIPTION] = "Composited image preview"

@@ -30,7 +30,7 @@ import logging
 import math
 import numpy
 from odemis import dataio, model
-from odemis.acq import calibration
+from odemis.acq import calibration, find_overlay
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
@@ -42,16 +42,16 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
-    call_after, align
+    call_after, align, call_after_wrapper
 from odemis.util import units
 import os.path
 import pkg_resources
 import scipy.misc
 import weakref
-import wx
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 from wx import html  #pylint: disable=W0611
+import wx
 
 import odemis.acq.stream as streammod
 import odemis.gui.cont.streams as streamcont
@@ -1306,16 +1306,19 @@ class LensAlignTab(Tab):
                                                  self._on_btn_to_center)
 
         # Fine alignment panel
-
         pnl_fine_align = main_frame.pnl_align_controls
         fa_sizer = pnl_fine_align.GetSizer()
-
         scale_win = ScaleWindow(pnl_fine_align)
-        self._sem_view.mpp.subscribe(scale_win.SetMPP, init=True)
+        self._sem_view.mpp.subscribe(call_after_wrapper(scale_win.SetMPP),
+                                     init=True)
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
-
         fa_sizer.Layout()
+        main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
 
+        # Make sure to reset the correction metadata if lens move
+        main_data.aligner.position.subscribe(self._on_aligner_pos)
+
+        # Documentation text on the left panel
         path = os.path.join(get_installation_folder(), "doc/alignment.html")
         main_frame.html_alignment.LoadPage(path)
 
@@ -1357,13 +1360,14 @@ class LensAlignTab(Tab):
 
         if tool != guimod.TOOL_SPOT:
             self._sem_stream.spot.value = False
-
+            self.main_frame.btn_fine_align.Enable(False)
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
             self.main_frame.lens_align_btn_to_center.Show(True)
             self.main_frame.lens_align_lbl_approc_center.Show(True)
         elif tool == guimod.TOOL_SPOT:
+            self.main_frame.btn_fine_align.Enable(True)
             self._sem_stream.spot.value = True
             # TODO: until the settings are directly connected to the hardware,
             # we need to disable/freeze the SEM settings in spot mode.
@@ -1382,6 +1386,75 @@ class LensAlignTab(Tab):
 
         self._update_to_center()
 
+    # Fine alignment functions
+    OVRL_MAX_DIFF = 1e-06 # m
+#    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
+    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
+    def _on_fine_align(self, event):
+        """
+        Called when the "Fine alignment" button is clicked
+        """
+        main_data = self.tab_data_model.main
+        # TODO: save the current exposure time of the CCD for use by the acquisition window
+        f = find_overlay.FindOverlay(self.OVRL_REPETITION,
+                                     main_data.ccd.exposureTime.value,
+                                     self.OVRL_MAX_DIFF,
+                                     main_data.ebeam,
+                                     main_data.ccd,
+                                     main_data.sed)
+        
+        # Set up progress bar
+        self.main_frame.lbl_fine_align.Hide()
+        self.main_frame.gauge_fine_align.Show()
+        self.main_frame.gauge_fine_align.Value = 0
+        fa_sizer = self.main_frame.pnl_align_controls.GetSizer()
+        fa_sizer.Layout()
+        # TODO: this future doesn't update automatically, need to regularly
+        # move the progress bar (and get rid of the trick in the acq mng)
+        f.add_update_callback(self._on_fa_upd)
+        
+        f.add_done_callback(self._on_fa_done)
+    
+    def _on_fa_upd(self, future, past, left):
+        """
+        Callback called during the acquisition to update on its progress
+        past (float): number of s already past
+        left (float): estimated number of s left
+        """
+        if future.done():
+            # progress bar and text is handled by _on_fa_done
+            return
+        
+        logging.debug("updating the progress bar to %f/%f", past, past + left)
+        self.main_frame.gauge_fine_align.Range = 100 * (past + left)
+        self.main_frame.gauge_fine_align.Value = 100 * past
+        
+    def _on_fa_done(self, future):
+        try:
+            trans_val, cor_md = future.result()
+            # The magic: save the correction metadata straight into the CCD
+            self.tab_data_model.main.ccd.updateMetadata(cor_md)
+        except Exception:
+            logging.exception("Failed to run the fine alignment, a report "
+                              "should be available in ~/odemis-overlay-report.")
+            self.main_frame.lbl_fine_align.SetLabel("Failed")
+        else:
+            self.main_frame.lbl_fine_align.SetLabel("Successful")
+
+        self.main_frame.lbl_fine_align.Show()
+        self.main_frame.gauge_fine_align.Hide()
+        fa_sizer = self.main_frame.pnl_align_controls.GetSizer()
+        fa_sizer.Layout()
+
+    def _on_aligner_pos(self, pos):
+        """
+        Called when the position of the lens is changed
+        """
+        # This means that the translation correction information from fine
+        # alignment is not correct anymore, so reset it.
+        self.tab_data_model.main.ccd.updateMetadata({model.MD_POS_COR: (0, 0)})
+
+    # "Move to center" functions
     @call_after
     def _update_to_center(self):
         # Enable a special "move to SEM center" button iif:
@@ -1406,7 +1479,6 @@ class LensAlignTab(Tab):
         lbl_ctrl.SetLabel(lbl)
         lbl_ctrl.Wrap(lbl_ctrl.Size[0])
         self.main_frame.Layout()
-
 
     def _on_btn_to_center(self, event):
         """
