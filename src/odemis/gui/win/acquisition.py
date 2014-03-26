@@ -25,6 +25,7 @@ import copy
 import logging
 import math
 from odemis import acq, model, dataio
+from odemis.acq import stream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont.settings import SecomSettingsController
@@ -324,6 +325,16 @@ class AcquisitionDialog(xrcfr_acq):
 
         # start acquisition + connect events to callback
         streams = self._tab_data_model.focussedView.value.getStreams()
+
+        # Add an overlay stream if the fine alignment check box is checked
+        if self.chkbox_fine_align.GetValue():
+            # TODO: create it once per window, and use it also for time estimation
+            main_data = self._tab_data_model.main
+            ovrls = stream.OverlayStream("fine alignment", main_data.ccd,
+                                         main_data.ebeam, main_data.sed)
+            ovrls.dwellTime.value = 0.1 # FIXME: use the CCD exposure time of the alignment tab. Config?
+            streams.add(ovrls)
+
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
         self.acq_future.add_update_callback(self.on_acquisition_upd)
