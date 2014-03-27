@@ -649,8 +649,9 @@ class NumberTextCtrl(wx.TextCtrl):
         if self.number is None:
             str_val = u""
         else:
-            str_val = units.to_string_pretty(self.number, self.accuracy, self.unit)
-
+            str_val = units.to_string_pretty(self.number,
+                                             self.accuracy,
+                                             self.unit) #pylint: disable=E1101
         wx.TextCtrl.ChangeValue(self, str_val)
 
     def _display_pretty(self):
@@ -867,7 +868,8 @@ class IntegerTextCtrl(NumberTextCtrl):
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
-
+    def SetValue(self, val): #pylint: disable=W0221
+        NumberTextCtrl.SetValue(self, int(val))
 
 class UnitIntegerCtrl(UnitNumberCtrl):
     """ This class represents a text control which is capable of formatting
@@ -892,6 +894,8 @@ class UnitIntegerCtrl(UnitNumberCtrl):
 
         UnitNumberCtrl.__init__(self, *args, **kwargs)
 
+    def SetValue(self, val): #pylint: disable=W0221
+        UnitNumberCtrl.SetValue(self, int(val))
 
 #########################################
 # Float controls

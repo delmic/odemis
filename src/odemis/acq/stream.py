@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+
 :created: 22 Feb 2013
 :author: Rinze de Laat
 :copyright: © 2013 Rinze de Laat, Delmic
@@ -142,7 +143,7 @@ class Stream(object):
         # min/max ratio of the whole intensity level which are mapped to
         # black/white. The .histogram always has
         # the first value mapped to 0 and last value mapped to 1.
-        self.intensityRange = model.TupleContinuous((0, 1),
+        self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
                                                     cls=(int, long, float))
 
@@ -297,13 +298,17 @@ class Stream(object):
 
             # Also update the intensityRanges if auto BC
             edges = self.histogram._edges
-            rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
-            self.intensityRange.value = tuple(rrange)
+            # rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
+            # self.intensityRange.value = tuple(rrange)
+            self.intensityRange.range = ((edges[0], edges[0]),
+                                         (edges[1], edges[1]))
+            self.intensityRange.value = tuple(irange)
         else:
             # just convert from the user-defined (as ratio) to actual values
-            rrange = sorted(self.intensityRange.value)
-            edges = self.histogram._edges
-            irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+            # rrange = sorted(self.intensityRange.value)
+            # edges = self.histogram._edges
+            # irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+            irange = sorted(self.intensityRange.value)
 
         return irange
 
@@ -350,7 +355,9 @@ class Stream(object):
         """
         # check to avoid running it if there is already one running
         if self._running_upd_img:
-            logging.debug("Dropping image conversion to RGB, as the previous one is still running")
+            # Commented to prevent log flooding
+            # logging.debug(("Dropping image conversion to RGB, as the previous "
+            #                "one is still running"))
             return
         if not self.raw:
             return
@@ -361,9 +368,10 @@ class Stream(object):
             irange = self._getDisplayIRange()
             rgbim = img.DataArray2RGB(data, irange, tint)
             rgbim.flags.writeable = False
-            if model.MD_ACQ_DATE in data.metadata:
-                logging.debug("Computed RGB projection %g s after acquisition",
-                               time.time() - data.metadata[model.MD_ACQ_DATE])
+            # # Commented to prevent log flooding
+            # if model.MD_ACQ_DATE in data.metadata:
+            #     logging.debug("Computed RGB projection %g s after acquisition",
+            #                    time.time() - data.metadata[model.MD_ACQ_DATE])
             self.image.value = model.DataArray(rgbim, self._find_metadata(data.metadata))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
@@ -436,8 +444,10 @@ class Stream(object):
         # overlapped)
 
         if model.MD_ACQ_DATE in data.metadata:
-            logging.debug("Receive raw %g s after acquisition",
-                           time.time() - data.metadata[model.MD_ACQ_DATE])
+            pass
+            # Commented out to prevent log flooding
+            # logging.debug("Receive raw %g s after acquisition",
+            #                time.time() - data.metadata[model.MD_ACQ_DATE])
 
         old_irange = self._irange
         if not self.raw:
@@ -449,7 +459,8 @@ class Stream(object):
         # Depth can change at each image (depends on hardware settings)
         self._updateIRange()
         if old_irange != self._irange:
-            logging.debug("Updating irange to %s", self._irange)
+            # Commented out to prevent log flooding
+            # logging.debug("Updating irange to %s", self._irange)
             # This ensures there's always a valid histogram
             self._updateHistogram()
         else:
