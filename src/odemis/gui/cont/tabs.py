@@ -1394,7 +1394,9 @@ class LensAlignTab(Tab):
         """
         Called when the "Fine alignment" button is clicked
         """
+        self._ccd_stream.is_active.value = False
         main_data = self.tab_data_model.main
+        logging.debug("Starting overlay procedure")
         # TODO: save the current exposure time of the CCD for use by the acquisition window
         f = find_overlay.FindOverlay(self.OVRL_REPETITION,
                                      main_data.ccd.exposureTime.value,
@@ -1402,6 +1404,7 @@ class LensAlignTab(Tab):
                                      main_data.ebeam,
                                      main_data.ccd,
                                      main_data.sed)
+        logging.debug("Overlay procedure is running...")
         
         # Set up progress bar
         self.main_frame.lbl_fine_align.Hide()
@@ -1430,6 +1433,7 @@ class LensAlignTab(Tab):
         self.main_frame.gauge_fine_align.Value = 100 * past
         
     def _on_fa_done(self, future):
+        logging.debug("End of overlay procedure")
         try:
             trans_val, cor_md = future.result()
             # The magic: save the correction metadata straight into the CCD
@@ -1440,6 +1444,7 @@ class LensAlignTab(Tab):
             self.main_frame.lbl_fine_align.SetLabel("Failed")
         else:
             self.main_frame.lbl_fine_align.SetLabel("Successful")
+        self._ccd_stream.is_active.value = True
 
         self.main_frame.lbl_fine_align.Show()
         self.main_frame.gauge_fine_align.Hide()

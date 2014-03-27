@@ -121,7 +121,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
         # Find the centers of the spots
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
-        logging.debug("Finding spot centers...")
+        logging.debug("Finding spot centers with %d subimages...", len(subimages))
         spot_coordinates = coordinates.FindCenterCoordinates(subimages)
 
         # Reconstruct the optical coordinates
@@ -168,7 +168,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
     else:
         # DEBUG: might go away in production code
         # Make failure report
-        # _MakeReport(optical_image, repetitions, scan_dwell_time, electron_coordinates)
+        _MakeReport(optical_image, repetitions, scan_dwell_time, electron_coordinates)
         with _overlay_lock:
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
