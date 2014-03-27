@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from . import _core
@@ -132,7 +132,7 @@ class DataFlowBase(object):
     """
     This is an abstract class that must be extended by each detector which
     wants to provide a dataflow.
-    extend: subscribe() and unsubcribe() to start stop generating data. 
+    extend: subscribe() and unsubcribe() to start stop generating data.
             Each time a new data is available it should call notify(DataArray)
     extend: get() to synchronously return the next DataArray available
     """
@@ -148,8 +148,8 @@ class DataFlowBase(object):
 
     def subscribe(self, listener):
         """
-        Register a callback function to be called when the ActiveValue is 
-        listener (function): callback function which takes as arguments 
+        Register a callback function to be called when the ActiveValue is
+        listener (function): callback function which takes as arguments
            dataflow (this object) and data (the new data array)
         """
         # TODO update rate argument to indicate how often we need an update?
@@ -224,7 +224,7 @@ class DataFlow(DataFlowBase):
     def __init__(self, max_discard=100): # XXX max_discard=100
         """
         max_discard (int): mount of messages that can be discarded in a row if
-                            a new one is already available. 0 to keep (notify) 
+                            a new one is already available. 0 to keep (notify)
                             all the messages (dangerous if callback is slower
                             than the generator).
         """
@@ -267,7 +267,7 @@ class DataFlow(DataFlowBase):
 
     def _register(self, daemon):
         """
-        Get the dataflow ready to be shared. It gets registered to the Pyro 
+        Get the dataflow ready to be shared. It gets registered to the Pyro
         daemon and over 0MQ. It should be called only once. Note that you have
         to call this method to register a dataflow, a simple daemon.register(df)
         is not enough.
@@ -395,7 +395,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         """
         uri : see Proxy
         max_discard (int): amount of messages that can be discarded in a row if
-                            a new one is already available. 0 to keep (notify) 
+                            a new one is already available. 0 to keep (notify)
                             all the messages (dangerous if callback is slower
                             than the generator).
         Note: there is no reason to create a proxy explicitly!
@@ -559,8 +559,8 @@ class SubscribeProxyThread(threading.Thread):
                         discarded < self.max_discard):
                         discarded += 1
                         continue
-                    if discarded:
-                        logging.debug("had discarded %d arrays", discarded)
+                    # if discarded:
+                    #     logging.debug("had discarded %d arrays", discarded)
                     discarded = 0
                     # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
                     array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
@@ -591,7 +591,7 @@ def unregister_dataflows(self):
 
 def dump_dataflows(self):
     """
-    return the names and value of all the DataFlows added to an object 
+    return the names and value of all the DataFlows added to an object
     (component). If a dataflow is not registered yet, it is registered.
     self (Component): the object (instance of a class). It must already be
                       registered to a Pyro daemon.
@@ -651,7 +651,7 @@ class Event(EventBase):
         """
         obj (object): any object
         returns (object): if obj is a pyroProxy of an object handled by the same
-          Pyro daemon as this component is handled, returns the actual object, 
+          Pyro daemon as this component is handled, returns the actual object,
           otherwise, returns obj
         """
         if not isinstance(obj, Pyro4.core.Proxy):
@@ -729,7 +729,7 @@ def unregister_events(self):
 
 def dump_events(self):
     """
-    return the names and value of all the Events added to an object 
+    return the names and value of all the Events added to an object
     (component). If an Event is not registered yet, it is registered.
     self (Component): the object (instance of a class). It must already be
                       registered to a Pyro daemon.

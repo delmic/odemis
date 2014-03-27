@@ -743,17 +743,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         fps = 1 / dur
         self._fps_label.text = "%.3g fps" % fps
 
-        if latest > 0:
-            logging.debug("Drew canvas %g s after acquisition (took %g s).",
-                           time.time() - self._latest, dur)
+        # if latest > 0:
+        #     logging.debug("Drew canvas %g s after acquisition (took %g s).",
+        #                    time.time() - self._latest, dur)
 
     # DEBUG only
     def on_paint(self, evt):
         canvas.DraggableCanvas.on_paint(self, evt)
 
-        if hasattr(self, "_latest") and self._latest > 0:
-            logging.debug("Painted canvas %g s after acquisition",
-                           time.time() - self._latest)
+        # if hasattr(self, "_latest") and self._latest > 0:
+        #     logging.debug("Painted canvas %g s after acquisition",
+        #                    time.time() - self._latest)
 
 
 class SecomCanvas(DblMicroscopeCanvas):
@@ -929,7 +929,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         sem_stream = tab_data.semStream
         if sem_stream is None:
             raise KeyError("SEM CL stream not set, required for the SPARC acquisition")
-        
+
         self._roa = sem_stream.roi
         # TODO: simplify, and expect dcRegion to be there
         if hasattr(sem_stream, "dcRegion"):
@@ -1010,7 +1010,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             else:
                 # TODO: set the rect of the active_overlay to None, then do the
                 # normal _update*. This would avoid redundancy
-                # Simple click => delete ROI 
+                # Simple click => delete ROI
                 if self.current_mode == MODE_SPARC_SELECT:
                     if self._roa:
                         self._roa.value = UNDEFINED_ROI
@@ -1105,7 +1105,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
     def _convertROIPhysToRatio(self, phys_rect):
         """
         Convert and truncate the ROI in physical coordinates to the coordinates
-         relative to the SEM FoV 
+         relative to the SEM FoV
         phys_rect (None or 4 floats): physical position of the tl and br points
         return (4 floats): tlbr positions relative to the FoV
         """

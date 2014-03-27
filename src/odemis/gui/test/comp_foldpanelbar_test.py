@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #===============================================================================
 
 from odemis.gui import test, comp
-import logging
 import odemis.gui.test as test
 import unittest
 import wx
@@ -33,6 +32,8 @@ import wx
 # logging.getLogger().setLevel(logging.DEBUG)
 
 FPB_SPACING = 0
+
+test.goto_manual()
 
 class FoldPanelBarTestCase(test.GuiTestCase):
 

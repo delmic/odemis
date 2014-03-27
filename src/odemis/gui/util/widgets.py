@@ -71,7 +71,9 @@ class VigilantAttributeConnector(object):
 
     At the end of the constructor, the value of the VA is assigned to the
     control!
+
     """
+
     def __init__(self, va, ctrl, va_2_ctrl=None, ctrl_2_va=None, events=None):
         """
         va (VigilantAttribute): the VA to connect with
@@ -88,6 +90,7 @@ class VigilantAttributeConnector(object):
         """
         self.vigilattr = va
         self.ctrl = ctrl
+
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
         self.va_2_ctrl = dead_object_wrapper(

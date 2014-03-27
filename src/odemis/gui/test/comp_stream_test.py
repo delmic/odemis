@@ -33,7 +33,6 @@ import odemis.acq.stream as stream_mod
 import odemis.gui.test as test
 import odemis.model as model
 
-
 test.goto_manual()
 
 class FakeBrightfieldStream(stream_mod.BrightfieldStream):
@@ -43,6 +42,8 @@ class FakeBrightfieldStream(stream_mod.BrightfieldStream):
 
     def __init__(self, name):
         Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        self.histogram._edges = (0, 0)
+        self._calibrated = None
 
     def _updateImage(self, tint=(255, 255, 255)):
         pass
@@ -58,6 +59,8 @@ class FakeSEMStream(stream_mod.SEMStream):
 
     def __init__(self, name):
         Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        self.histogram._edges = (0, 0)
+        self._calibrated = None
 
     def _updateImage(self, tint=(255, 255, 255)):
         pass
@@ -71,7 +74,9 @@ class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
     """
 
     def __init__(self, name):
+        self._calibrated = None
         Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        self.histogram._edges = (0, 0)
 
         minb, maxb = 0, 1 # unknown/unused
         pixel_width = 0.01
@@ -115,6 +120,9 @@ class FakeFluoStream(stream_mod.FluoStream):
                                 unit="m")
         defaultTint = conversion.wave2rgb(self.emission.value)
         self.tint = model.VigilantAttribute(defaultTint, unit="RGB")
+
+        self.histogram._edges = (0, 0)
+        self._calibrated = None
 
     def _updateImage(self, tint=(255, 255, 255)):  #pylint: disable=W0221
         pass

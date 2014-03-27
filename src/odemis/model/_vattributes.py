@@ -736,6 +736,9 @@ class Continuous(object):
         if hasattr(self, "value"):
             if not isinstance(self.value, collections.Iterable):
                 value = (self.value,)
+            else:
+                value = self.value
+
             if (any([v < mn for v, mn in zip(value, start)]) or
                 any([v > mx for v, mx in zip(value, end)])):
                 msg = "Current value '%s' is outside of the range %s→%s."

@@ -132,7 +132,7 @@ def to_string_pretty(x, sig=None, unit=None):
 
             dot_move = ep - scale
 
-            if dot_move:
+            if dot_move and '.' in fn:
                 dot_pos = fn.index('.')
                 new_dot_pos = dot_pos + dot_move
                 fn = fn.replace(".", "")

@@ -73,18 +73,18 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 
             for f in TEST_FLT:
                 self.app.test_frame.unit_float.SetValue(f)
-                test.gui_loop(200)
+                test.gui_loop()
 
             old_focus = wx.Window.FindFocus()
             self.app.test_frame.unit_float.SetFocus()
-            test.gui_loop(100)
+            test.gui_loop()
 
             for f in TEST_FLT:
                 self.app.test_frame.unit_float.SetValue(f)
-                test.gui_loop(200)
+                test.gui_loop()
 
             old_focus.SetFocus()
-            test.gui_loop(100)
+            test.gui_loop()
 
 
 

@@ -37,7 +37,8 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
     BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
-from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, UnitFloatCtrl
+from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
+    UnitFloatCtrl, IntegerTextCtrl
 from odemis.gui.util import call_after, wxlimit_invocation
 from odemis.gui.util.widgets import VigilantAttributeConnector
 import wx.lib.newevent
@@ -147,7 +148,7 @@ class Expander(wx.PyControl):
         if options & OPT_NAME_EDIT:
             self._label_ctrl = SuggestTextCtrl(
                                     self,
-                                    id= -1,
+                                    id=-1,
                                     value=stream.name.value)
             self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
             self._label_ctrl.SetForegroundColour(FG_COLOUR_EDIT)
@@ -675,59 +676,59 @@ class StreamPanel(wx.PyPanel):
 
         # TODO: add when function implemented (and should be dependent on the
         # Stream VAs)
-#        # ====== Fourth row, accumulation label, text field and value
-#
-#        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
-#        self._gbs.Add(lbl_accum, (self.row_count, 0),
-#                      flag=wx.ALL, border=5)
-#
-#        self._txt_accum = IntegerTextCtrl(self._panel,
-#                                          size=(-1, 14),
-#                                          value=1,
-#                                          min_val=1,
-#                                          key_inc=True,
-#                                          step=1,
-#                                          style=wx.NO_BORDER)
-#        self._txt_accum.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-#        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
-#
-#        self._gbs.Add(self._txt_accum, (self.row_count, 1),
-#                                        flag=wx.EXPAND | wx.ALL,
-#                                        border=5)
-#
-#        self.row_count += 1
-#
-#        # ====== Fifth row, interpolation label, text field and value
-#
-#        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
-#        self._gbs.Add(lbl_interp, (self.row_count, 0),
-#                      flag=wx.ALL, border=5)
-#
-#        choices = ["None", "Linear", "Cubic"]
-#        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
-#                                                   - 1,
-#                                                   value=choices[0],
-#                                                   pos=(0, 0),
-#                                                   size=(100, 16),
-#                                                   style=wx.NO_BORDER |
-#                                                         wx.CB_DROPDOWN |
-#                                                         wx.TE_PROCESS_ENTER |
-#                                                         wx.CB_READONLY |
-#                                                         wx.EXPAND,
-#                                                    choices=choices)
-#
-#        self._cmb_interp.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-#        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
-#        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
-#                                          pushButtonBg=False)
-#
-#
-#        self._gbs.Add(self._cmb_interp, (self.row_count, 1),
-#                                         flag=wx.EXPAND | wx.ALL,
-#                                         border=5,
-#                                         span=(1, 2))
-#
-#        self.row_count += 1
+        # # ====== Fourth row, accumulation label, text field and value
+
+        # lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
+        # self._gbs.Add(lbl_accum, (self.row_count, 0),
+        #               flag=wx.ALL, border=5)
+
+        # self._txt_accum = IntegerTextCtrl(self._panel,
+        #                                   size=(-1, 14),
+        #                                   value=1,
+        #                                   min_val=1,
+        #                                   key_inc=True,
+        #                                   step=1,
+        #                                   style=wx.NO_BORDER)
+        # self._txt_accum.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        # self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
+
+        # self._gbs.Add(self._txt_accum, (self.row_count, 1),
+        #                                 flag=wx.EXPAND | wx.ALL,
+        #                                 border=5)
+
+        # self.row_count += 1
+
+        # # ====== Fifth row, interpolation label, text field and value
+
+        # lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
+        # self._gbs.Add(lbl_interp, (self.row_count, 0),
+        #               flag=wx.ALL, border=5)
+
+        # choices = ["None", "Linear", "Cubic"]
+        # self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
+        #                                            - 1,
+        #                                            value=choices[0],
+        #                                            pos=(0, 0),
+        #                                            size=(100, 16),
+        #                                            style=wx.NO_BORDER |
+        #                                                  wx.CB_DROPDOWN |
+        #                                                  wx.TE_PROCESS_ENTER |
+        #                                                  wx.CB_READONLY |
+        #                                                  wx.EXPAND,
+        #                                             choices=choices)
+
+        # self._cmb_interp.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        # self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
+        # self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
+        #                                   pushButtonBg=False)
+
+
+        # self._gbs.Add(self._cmb_interp, (self.row_count, 1),
+        #                                  flag=wx.EXPAND | wx.ALL,
+        #                                  border=5,
+        #                                  span=(1, 2))
+
+        # self.row_count += 1
 
     def to_locked_mode(self):
         self.to_static_mode()
@@ -778,6 +779,8 @@ class StreamPanel(wx.PyPanel):
                                     scale="cubic",
                                     accuracy=2)
 
+        hist_min, hist_max = self.stream.histogram._edges
+
         self._sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
                                                "in auto brightness and contrast")
         self._vac_bc_outliers = VigilantAttributeConnector(
@@ -801,15 +804,17 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         # ====== Second row, histogram
-        ir_rng = (self.stream.intensityRange.range[0][0],
-                  self.stream.intensityRange.range[1][1])
+        # ir_rng = (self.stream.intensityRange.range[0][0],
+        #           self.stream.intensityRange.range[1][1])
+
         self._sld_hist = VisualRangeSlider(
                                 self._panel,
                                 size=(-1, 40),
                                 value=self.stream.intensityRange.value,
-                                min_val=ir_rng[0],
-                                max_val=ir_rng[1],
+                                min_val=hist_min,
+                                max_val=hist_max,
         )
+
         self._sld_hist.SetBackgroundColour("#000000")
         self._vac_hist = VigilantAttributeConnector(
                                 self.stream.intensityRange,
@@ -824,61 +829,63 @@ class StreamPanel(wx.PyPanel):
                       border=5)
         self.row_count += 1
 
-        # ====== Third row, text fields for intensity (ratios)
+        # ====== Third row, text fields for intensity
 
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
         tooltip_txt = "Value mapped to black"
         lbl_lowi.SetToolTipString(tooltip_txt)
-        self._txt_lowi = UnitFloatCtrl(self._panel, -1,
-                    self.stream.intensityRange.value[0] * 100,
-                    style=wx.NO_BORDER,
-                    size=(-1, 14),
-                    min_val=0,
-                    max_val=100,
-                    unit='%')
+
+        self._txt_lowi = IntegerTextCtrl(self._panel, -1,
+                                        self.stream.intensityRange.value[0],
+                                        style=wx.NO_BORDER,
+                                        size=(-1, 14),
+                                        min_val=hist_min,
+                                        max_val=hist_max)
         self._txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
         self._txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_lowi.SetToolTipString(tooltip_txt)
+
         def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
-            lv = ctrl.GetValue() / 100
+            lv = ctrl.GetValue()
             hv = va.value[1]
             # clamp low range to max high range
             if hv < lv:
                 lv = hv
-                ctrl.SetValue(lv * 100)
+                ctrl.SetValue(lv)
             return lv, hv
+
         self._vac_lowi = VigilantAttributeConnector(self.stream.intensityRange,
                           self._txt_lowi,
-                          lambda r: self._txt_lowi.SetValue(r[0] * 100),
-                          get_lowi,
+                          va_2_ctrl=lambda r: self._txt_lowi.SetValue(r[0]),
+                          ctrl_2_va=get_lowi,
                           events=wx.EVT_COMMAND_ENTER)
 
         lbl_highi = wx.StaticText(self._panel, -1, "High")
         tooltip_txt = "Value mapped to white"
         lbl_highi.SetToolTipString(tooltip_txt)
-        self._txt_highi = UnitFloatCtrl(self._panel, -1,
-                    self.stream.intensityRange.value[1] * 100,
-                    style=wx.NO_BORDER,
-                    size=(-1, 14),
-                    min_val=0,
-                    max_val=100,
-                    unit='%')
+        self._txt_highi = IntegerTextCtrl(self._panel, -1,
+                                        self.stream.intensityRange.value[1],
+                                        style=wx.NO_BORDER,
+                                        size=(-1, 14),
+                                        min_val=hist_min,
+                                        max_val=hist_max)
         self._txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
         self._txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_highi.SetToolTipString(tooltip_txt)
+
         def get_highi(va=self.stream.intensityRange, ctrl=self._txt_highi):
             lv = va.value[0]
-            hv = ctrl.GetValue() / 100
+            hv = ctrl.GetValue()
             # clamp high range to at least low range
             if hv < lv:
                 hv = lv
-                ctrl.SetValue(hv * 100)
+                ctrl.SetValue(hv)
             return lv, hv
 
         self._vac_highi = VigilantAttributeConnector(self.stream.intensityRange,
                           self._txt_highi,
-                          lambda r: self._txt_highi.SetValue(r[1] * 100),
-                          get_highi,
+                          va_2_ctrl=lambda r: self._txt_highi.SetValue(r[1]),
+                          ctrl_2_va=get_highi,
                           events=wx.EVT_COMMAND_ENTER)
 
         lh_sz = wx.BoxSizer(wx.HORIZONTAL)
