@@ -148,7 +148,7 @@ class Expander(wx.PyControl):
         if options & OPT_NAME_EDIT:
             self._label_ctrl = SuggestTextCtrl(
                                     self,
-                                    id= -1,
+                                    id=-1,
                                     value=stream.name.value)
             self._label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
             self._label_ctrl.SetForegroundColour(FG_COLOUR_EDIT)
@@ -676,59 +676,59 @@ class StreamPanel(wx.PyPanel):
 
         # TODO: add when function implemented (and should be dependent on the
         # Stream VAs)
-#        # ====== Fourth row, accumulation label, text field and value
-#
-#        lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
-#        self._gbs.Add(lbl_accum, (self.row_count, 0),
-#                      flag=wx.ALL, border=5)
-#
-#        self._txt_accum = IntegerTextCtrl(self._panel,
-#                                          size=(-1, 14),
-#                                          value=1,
-#                                          min_val=1,
-#                                          key_inc=True,
-#                                          step=1,
-#                                          style=wx.NO_BORDER)
-#        self._txt_accum.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-#        self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
-#
-#        self._gbs.Add(self._txt_accum, (self.row_count, 1),
-#                                        flag=wx.EXPAND | wx.ALL,
-#                                        border=5)
-#
-#        self.row_count += 1
-#
-#        # ====== Fifth row, interpolation label, text field and value
-#
-#        lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
-#        self._gbs.Add(lbl_interp, (self.row_count, 0),
-#                      flag=wx.ALL, border=5)
-#
-#        choices = ["None", "Linear", "Cubic"]
-#        self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
-#                                                   - 1,
-#                                                   value=choices[0],
-#                                                   pos=(0, 0),
-#                                                   size=(100, 16),
-#                                                   style=wx.NO_BORDER |
-#                                                         wx.CB_DROPDOWN |
-#                                                         wx.TE_PROCESS_ENTER |
-#                                                         wx.CB_READONLY |
-#                                                         wx.EXPAND,
-#                                                    choices=choices)
-#
-#        self._cmb_interp.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-#        self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
-#        self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
-#                                          pushButtonBg=False)
-#
-#
-#        self._gbs.Add(self._cmb_interp, (self.row_count, 1),
-#                                         flag=wx.EXPAND | wx.ALL,
-#                                         border=5,
-#                                         span=(1, 2))
-#
-#        self.row_count += 1
+        # # ====== Fourth row, accumulation label, text field and value
+
+        # lbl_accum = wx.StaticText(self._panel, -1, "Accumulation")
+        # self._gbs.Add(lbl_accum, (self.row_count, 0),
+        #               flag=wx.ALL, border=5)
+
+        # self._txt_accum = IntegerTextCtrl(self._panel,
+        #                                   size=(-1, 14),
+        #                                   value=1,
+        #                                   min_val=1,
+        #                                   key_inc=True,
+        #                                   step=1,
+        #                                   style=wx.NO_BORDER)
+        # self._txt_accum.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        # self._txt_accum.SetBackgroundColour(self._panel.GetBackgroundColour())
+
+        # self._gbs.Add(self._txt_accum, (self.row_count, 1),
+        #                                 flag=wx.EXPAND | wx.ALL,
+        #                                 border=5)
+
+        # self.row_count += 1
+
+        # # ====== Fifth row, interpolation label, text field and value
+
+        # lbl_interp = wx.StaticText(self._panel, -1, "Interpolation")
+        # self._gbs.Add(lbl_interp, (self.row_count, 0),
+        #               flag=wx.ALL, border=5)
+
+        # choices = ["None", "Linear", "Cubic"]
+        # self._cmb_interp = wx.combo.OwnerDrawnComboBox(self._panel,
+        #                                            - 1,
+        #                                            value=choices[0],
+        #                                            pos=(0, 0),
+        #                                            size=(100, 16),
+        #                                            style=wx.NO_BORDER |
+        #                                                  wx.CB_DROPDOWN |
+        #                                                  wx.TE_PROCESS_ENTER |
+        #                                                  wx.CB_READONLY |
+        #                                                  wx.EXPAND,
+        #                                             choices=choices)
+
+        # self._cmb_interp.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        # self._cmb_interp.SetBackgroundColour(self._panel.GetBackgroundColour())
+        # self._cmb_interp.SetButtonBitmaps(img.getbtn_downBitmap(),
+        #                                   pushButtonBg=False)
+
+
+        # self._gbs.Add(self._cmb_interp, (self.row_count, 1),
+        #                                  flag=wx.EXPAND | wx.ALL,
+        #                                  border=5,
+        #                                  span=(1, 2))
+
+        # self.row_count += 1
 
     def to_locked_mode(self):
         self.to_static_mode()
