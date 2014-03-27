@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+
 :created: 22 Feb 2013
 :author: Rinze de Laat
 :copyright: © 2013 Rinze de Laat, Delmic
@@ -142,7 +143,7 @@ class Stream(object):
         # min/max ratio of the whole intensity level which are mapped to
         # black/white. The .histogram always has
         # the first value mapped to 0 and last value mapped to 1.
-        self.intensityRange = model.TupleContinuous((0, 1),
+        self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
                                                     cls=(int, long, float))
 
@@ -297,13 +298,17 @@ class Stream(object):
 
             # Also update the intensityRanges if auto BC
             edges = self.histogram._edges
-            rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
-            self.intensityRange.value = tuple(rrange)
+            # rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
+            # self.intensityRange.value = tuple(rrange)
+            self.intensityRange.range = ((edges[0], edges[0]),
+                                         (edges[1], edges[1]))
+            self.intensityRange.value = tuple(irange)
         else:
             # just convert from the user-defined (as ratio) to actual values
-            rrange = sorted(self.intensityRange.value)
-            edges = self.histogram._edges
-            irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+            # rrange = sorted(self.intensityRange.value)
+            # edges = self.histogram._edges
+            # irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+            irange = sorted(self.intensityRange.value)
 
         return irange
 
