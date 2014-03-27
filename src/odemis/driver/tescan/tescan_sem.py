@@ -34,6 +34,7 @@ import weakref
 import time
 from odemis.driver.tescan import sem
 import Image
+import re
 
 
 class TescanSEM(model.HwComponent):
@@ -63,8 +64,6 @@ class TescanSEM(model.HwComponent):
 
         # we can read some parameter
         print('wd: ', self._device.GetWD())
-
-        print ("currents: ", self._device.EnumPCIndexes())
 
         # tuple is returned if the function has more output arguments
         print('stage position: ', self._device.StgGetPosition())
@@ -193,10 +192,11 @@ class Scanner(model.Emitter):
         self.parent._device.ScSetBlanker(0, 2)
 
 
-        # 0 turns off the e-beam, 1 turns it on
-        pc_choices = set([0, 1])
-        self._probeCurrent = max(pc_choices)  # Just in case more choises are added
-        self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="",
+        # Enumerated float with respect to the PC indexes of Tescan API
+        pc_choices = set(self.GetProbeCurrents())
+        self._list_currents = sorted(pc_choices, reverse=True)
+        self._probeCurrent = min(pc_choices)
+        self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
                                   setter=self.setPC)
 
 
@@ -230,11 +230,29 @@ class Scanner(model.Emitter):
         currents = self.probeCurrent.choices
 
         self._probeCurrent = util.find_closest(value, currents)
-        if self._power == 0:
-            self.parent._device.HVBeamOff()
-        else:
-            self.parent._device.HVBeamOn()
-        return self._power
+        self._indexCurrent = util.index_closest(value, self._list_currents)
+
+        # Set the corresponding current index to Tescan SEM
+        print "CURRENT"
+        print self._list_currents
+        print self._probeCurrent
+        print self._indexCurrent
+        self.parent._device.SetPCContinual(self._indexCurrent + 1)
+
+        return self._probeCurrent
+
+    def GetProbeCurrents(self):
+        """
+        return (list of float): probe current values ordered by index
+        """
+        currents = []
+        pcs = self.parent._device.EnumPCIndexes()
+        cur = re.findall(r'\=(.*?)\n', pcs)
+        for i in enumerate(cur):
+            # picoamps to amps
+            currents.append(float(i[1]) * 1e-12)
+        print currents
+        return currents
 
     def _onScale(self, s):
         self._updatePixelSize()
