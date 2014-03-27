@@ -22,11 +22,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from concurrent import futures
 import logging
 import time
+import os
 import unittest
+import subprocess
 
+from odemis.util import driver
 from odemis import model
 from odemis.acq import find_overlay
 
+logging.basicConfig(format=" - %(levelname)s \t%(message)s")
+logging.getLogger().setLevel(logging.DEBUG)
+_frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
+logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
+
+ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"  # 7x7
 logging.getLogger().setLevel(logging.DEBUG)
 
 
@@ -34,32 +46,53 @@ class TestOverlay(unittest.TestCase):
     """
     Test Overlay functions
     """
-    def setUp(self):
-        self._escan = None
-        self._detector = None
-        self._ccd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                self._escan = c
-            elif c.role == "se-detector":
-                self._detector = c
-            elif c.role == "ccd":
-                self._ccd = c
-        if not all([self._escan, self._detector, self._ccd]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+    backend_was_running = False
 
-        # self._overlay = find_overlay.Overlay()
+    @classmethod
+    def setUpClass(cls):
+
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1)  # time to start
+
+        # find components by their role
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.light_filter = model.getComponent(role="filter")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._core._microscope = None  # force reset of the microscope for next connection
+        time.sleep(1)  # time to stop
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
 
     #@unittest.skip("skip")
     def test_find_overlay(self):
         """
         Test FindOverlay
         """
-        escan = self._escan
-        detector = self._detector
-        ccd = self._ccd
+        escan = self.ebeam
+        detector = self.sed
+        ccd = self.ccd
 
         f = find_overlay.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
 
@@ -70,9 +103,9 @@ class TestOverlay(unittest.TestCase):
         """
         Test FindOverlay failure due to low maximum allowed difference
         """
-        escan = self._escan
-        detector = self._detector
-        ccd = self._ccd
+        escan = self.ebeam
+        detector = self.sed
+        ccd = self.ccd
 
         f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
 
@@ -83,9 +116,9 @@ class TestOverlay(unittest.TestCase):
         """
         Test FindOverlay cancellation
         """
-        escan = self._escan
-        detector = self._detector
-        ccd = self._ccd
+        escan = self.ebeam
+        detector = self.sed
+        ccd = self.ccd
 
         f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
         time.sleep(0.04)  # Cancel almost after the half grid is scanned
@@ -94,6 +127,14 @@ class TestOverlay(unittest.TestCase):
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
         self.assertRaises(futures.CancelledError, f.result)
+        
+    def on_done(self, future):
+        self.done += 1
+
+    def on_progress_update(self, future, past, left):
+        self.past = past
+        self.left = left
+        self.updates += 1
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(TestOverlay)

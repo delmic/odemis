@@ -44,3 +44,5 @@ class TestTransformationParams(unittest.TestCase):
 
     # TODO: Calculate optical coordinates given the electron coordinates and translation, rotation and scale values
     #        and test.
+if __name__ == '__main__':
+    unittest.main()

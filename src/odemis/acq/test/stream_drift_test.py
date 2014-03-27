@@ -23,9 +23,11 @@ This file is part of Odemis.
 
 import logging
 from odemis import model
+from odemis.util import driver
 import os
 import time
 import unittest
+import subprocess
 
 from odemis.acq import stream
 
@@ -37,34 +39,56 @@ logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 logging.getLogger().setLevel(logging.DEBUG)
 
 class TestDriftStream(unittest.TestCase):
-    def setUp(self):
-        self._escan = None
-        self._detector = None
-        self._ccd = None
-        # find components by their role
-        for c in model.getComponents():
-            if c.role == "e-beam":
-                self._escan = c
-            elif c.role == "se-detector":
-                self._detector = c
-            elif c.role == "ccd":
-                self._ccd = c
-        if not all([self._escan, self._detector]):
-            logging.error("Failed to find all the components")
-            raise KeyError("Not all components found")
+    backend_was_running = False
 
+    @classmethod
+    def setUpClass(cls):
+
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1)  # time to start
+
+        # find components by their role
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.light_filter = model.getComponent(role="filter")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._core._microscope = None  # force reset of the microscope for next connection
+        time.sleep(1)  # time to stop
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
 
     # @unittest.skip("skip")
     def test_drift_stream(self):
-        escan = self._escan
-        detector = self._detector
-        ccd = self._ccd
+        escan = self.ebeam
+        detector = self.sed
+        ccd = self.ccd
         
         # Create the stream
         sems = stream.SEMStream("test sem", detector, detector.data, escan)
@@ -80,7 +104,7 @@ class TestDriftStream(unittest.TestCase):
         escan.dwellTime.value = 1e-02
 
         ars.roi.value = (0.4, 0.4, 0.6, 0.6)
-        ars.repetition.value = (20, 20)
+        ars.repetition.value = (5, 5)
 
         start = time.time()
         f = sas.acquire()
@@ -88,6 +112,14 @@ class TestDriftStream(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+
+    def on_done(self, future):
+        self.done += 1
+
+    def on_progress_update(self, future, past, left):
+        self.past = past
+        self.left = left
+        self.updates += 1
 
 if __name__ == "__main__":
     unittest.main()

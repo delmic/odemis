@@ -45,4 +45,7 @@ class TestGuessAnchorRegion(unittest.TestCase):
         roi = dc_region.GuessAnchorRegion(self.data[0], (0, 0, 0.87, 0.95))
         numpy.testing.assert_equal(roi, (0.86923076923076925, 0.74281609195402298, 0.9653846153846154, 0.81465517241379315))
 
+if __name__ == '__main__':
+    unittest.main()
+
 
