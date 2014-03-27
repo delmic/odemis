@@ -332,7 +332,7 @@ class AcquisitionDialog(xrcfr_acq):
             main_data = self._tab_data_model.main
             ovrls = stream.OverlayStream("fine alignment", main_data.ccd,
                                          main_data.ebeam, main_data.sed)
-            ovrls.dwellTime.value = 0.1 # FIXME: use the CCD exposure time of the alignment tab. Config?
+            ovrls.dwellTime.value = main_data.fineAlignDwellTime
             streams.add(ovrls)
 
         # It should never be possible to reach here with no streams

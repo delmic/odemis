@@ -1315,6 +1315,10 @@ class LensAlignTab(Tab):
         fa_sizer.Layout()
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
 
+        # update the fine alignment dwell time when CCD settings change
+        main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
+        main_data.ccd.binning.subscribe(self._update_fa_dt)
+
         # Make sure to reset the correction metadata if lens move
         main_data.aligner.position.subscribe(self._on_aligner_pos)
 
@@ -1387,6 +1391,24 @@ class LensAlignTab(Tab):
         self._update_to_center()
 
     # Fine alignment functions
+
+    def _update_fa_dt(self, unused=None):
+        """
+        Called when the fine alignment dwell time must be recomputed (because
+        the CCD exposure time or binning has changed. It will only be updated
+        if the SPOT mode is active (otherwise the user might be setting for
+        different purpose.
+        """
+        if self.tab_data_model.tool.value != guimod.TOOL_SPOT:
+            return
+
+        # dwell time is the based on the exposure time for the spot, as this is
+        # the best clue on what works with the sample.
+        main_data = self.tab_data_model.main
+        binning = main_data.ccd.binning.value
+        dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
+        main_data.fineAlignDwellTime.value = dt
+
     OVRL_MAX_DIFF = 10e-6 # m
 #    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
     OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
@@ -1398,20 +1420,10 @@ class LensAlignTab(Tab):
         self._ccd_stream.is_active.value = False
         self._sem_stream.is_active.value = False
 
-        # dwell time is the based on the exposure time for the spot, as this is
-        # the best clue on what works with the sample.
-        # TODO: save the current exposure time of the CCD for use by the acquisition window
-        # Or provide an attribute to access it. The difficulty is to know what
-        # to do if the user has not done this calibration or any spot mode and wants
-        # to run the fine alignment in acquisition => use last exp/binning from spot
-        # and fallback to 0.1 s?
         main_data = self.tab_data_model.main
-        binning = main_data.ccd.binning.value
-        dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
-
         logging.debug("Starting overlay procedure")
         f = find_overlay.FindOverlay(self.OVRL_REPETITION,
-                                     dt,
+                                     main_data.fineAlignDwellTime.value,
                                      self.OVRL_MAX_DIFF,
                                      main_data.ebeam,
                                      main_data.ccd,
@@ -1432,6 +1444,7 @@ class LensAlignTab(Tab):
         
         f.add_done_callback(self._on_fa_done)
     
+    @call_after
     def _on_fa_upd(self, future, past, left):
         """
         Callback called during the acquisition to update on its progress
@@ -1446,6 +1459,7 @@ class LensAlignTab(Tab):
         self.main_frame.gauge_fine_align.Range = 100 * (past + left)
         self.main_frame.gauge_fine_align.Value = 100 * past
         
+    @call_after
     def _on_fa_done(self, future):
         logging.debug("End of overlay procedure")
         try:

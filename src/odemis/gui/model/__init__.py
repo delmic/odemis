@@ -182,6 +182,11 @@ class MainGUIData(object):
             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
             self.specState.subscribe(self.onSpecState)
 
+        # Used when doing fine alignment, based on the value used by the user
+        # when doing manual alignment. 0.1s is not too bad value if the user
+        # hasn't specified anything (yet).
+        self.fineAlignDwellTime = model.FloatContinuous(0.1, range=[1e-9, 100],
+                                                        unit="s")
 
         # TODO: should we put also the configuration related stuff?
         # Like path/file format
