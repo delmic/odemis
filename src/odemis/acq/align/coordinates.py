@@ -148,7 +148,9 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
     filtered_image = ndimage.median_filter(image, 3)
 
     # Bold spots
-    filtered_image = _BandPassFilter(filtered_image, 1, optical_scale)
+    # Third parameter must be a length in pixels somewhat larger than a typical
+    # spot
+    filtered_image = _BandPassFilter(filtered_image, 1, 20)
 
     image = model.DataArray(filtered_image, data.metadata)
     scale = copy.deepcopy(optical_scale)
@@ -195,12 +197,6 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             x_center = (dx.start + dx.stop - 1) / 2
             y_center = (dy.start + dy.stop - 1) / 2
 
-            if x_center >= image.shape[1] - scale \
-                or y_center >= image.shape[0] - scale \
-                or x_center <= scale \
-                or y_center <= scale:
-                continue
-
             # Make sure we don't detect spots on the top of each other
             tab = tuple(map(operator.sub, (x_center_last, y_center_last),
                             (x_center, y_center)))
@@ -211,7 +207,7 @@ def DivideInNeighborhoods(data, number_of_spots, optical_scale):
             if subimage.shape[0] == 0 or subimage.shape[1] == 0:
                 continue
     
-            if (subimage > spot_factor * avg_intensity).sum() < 8:
+            if (subimage > spot_factor * avg_intensity).sum() < 6:
                 continue
             
             # if spots detected too close keep the brightest one
