@@ -1387,24 +1387,38 @@ class LensAlignTab(Tab):
         self._update_to_center()
 
     # Fine alignment functions
-    OVRL_MAX_DIFF = 1e-06 # m
+    OVRL_MAX_DIFF = 10e-6 # m
 #    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
     OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
     def _on_fine_align(self, event):
         """
         Called when the "Fine alignment" button is clicked
         """
+        # make sure to not disturb the acquisition
         self._ccd_stream.is_active.value = False
-        main_data = self.tab_data_model.main
-        logging.debug("Starting overlay procedure")
+        self._sem_stream.is_active.value = False
+
+        # dwell time is the based on the exposure time for the spot, as this is
+        # the best clue on what works with the sample.
         # TODO: save the current exposure time of the CCD for use by the acquisition window
+        # Or provide an attribute to access it. The difficulty is to know what
+        # to do if the user has not done this calibration or any spot mode and wants
+        # to run the fine alignment in acquisition => use last exp/binning from spot
+        # and fallback to 0.1 s?
+        main_data = self.tab_data_model.main
+        binning = main_data.ccd.binning.value
+        dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
+
+        logging.debug("Starting overlay procedure")
         f = find_overlay.FindOverlay(self.OVRL_REPETITION,
-                                     main_data.ccd.exposureTime.value,
+                                     dt,
                                      self.OVRL_MAX_DIFF,
                                      main_data.ebeam,
                                      main_data.ccd,
                                      main_data.sed)
         logging.debug("Overlay procedure is running...")
+        #FIXME: it seems the procedure is blocking the GUI (even if it's running
+        # in a separate thread)
         
         # Set up progress bar
         self.main_frame.lbl_fine_align.Hide()
@@ -1444,7 +1458,10 @@ class LensAlignTab(Tab):
             self.main_frame.lbl_fine_align.SetLabel("Failed")
         else:
             self.main_frame.lbl_fine_align.SetLabel("Successful")
-        self._ccd_stream.is_active.value = True
+
+        # restart standard acquisition (only if tab still displayed)
+        self._sem_stream.is_active.value = self._sem_stream.should_update.value
+        self._ccd_stream.is_active.value = self._ccd_stream.should_update.value
 
         self.main_frame.lbl_fine_align.Show()
         self.main_frame.gauge_fine_align.Hide()
