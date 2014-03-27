@@ -64,6 +64,8 @@ class TescanSEM(model.HwComponent):
         # we can read some parameter
         print('wd: ', self._device.GetWD())
 
+        print ("currents: ", self._device.EnumPCIndexes())
+
         # tuple is returned if the function has more output arguments
         print('stage position: ', self._device.StgGetPosition())
 
@@ -130,6 +132,7 @@ class Scanner(model.Emitter):
 
         # Allow the user to modify the value, to copy it from the SEM software
         mag = 1e3  # pretty random value which could be real
+        # Field of view in Tescan is set in mm
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
         self.magnification.subscribe(self._onMagnification)
@@ -174,6 +177,29 @@ class Scanner(model.Emitter):
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
+        # Range is according to min and max voltages accepted by Tescan API
+        volt = self.parent._device.HVGetVoltage()
+        self.accelVoltage = model.FloatContinuous(volt, (200, 35000), unit="V")
+        self.accelVoltage.subscribe(self._onVoltage)
+
+        # 0 turns off the e-beam, 1 turns it on
+        power_choices = set([0, 1])
+        self._power = max(power_choices)  # Just in case more choises are added
+        self.parent._device.HVBeamOn()
+        self.power = model.IntEnumerated(self._power, power_choices, unit="",
+                                  setter=self.setPower)
+
+        # Blanker is automatically enabled when no scanning takes place
+        self.parent._device.ScSetBlanker(0, 2)
+
+
+        # 0 turns off the e-beam, 1 turns it on
+        pc_choices = set([0, 1])
+        self._probeCurrent = max(pc_choices)  # Just in case more choises are added
+        self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="",
+                                  setter=self.setPC)
+
+
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
@@ -184,6 +210,31 @@ class Scanner(model.Emitter):
         # HFW to mm to comply with Tescan API
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self._updatePixelSize()
+
+    def _onVoltage(self, volt):
+        print "VOLT"
+        print volt
+        self.parent._device.HVSetVoltage(volt)
+
+    def setPower(self, value):
+        powers = self.power.choices
+
+        self._power = util.find_closest(value, powers)
+        if self._power == 0:
+            self.parent._device.HVBeamOff()
+        else:
+            self.parent._device.HVBeamOn()
+        return self._power
+
+    def setPC(self, value):
+        currents = self.probeCurrent.choices
+
+        self._probeCurrent = util.find_closest(value, currents)
+        if self._power == 0:
+            self.parent._device.HVBeamOff()
+        else:
+            self.parent._device.HVBeamOn()
+        return self._power
 
     def _onScale(self, s):
         self._updatePixelSize()
