@@ -113,7 +113,7 @@ Spectra: {
 }
 
 "OLStage": {
-    class: simulated.Stage,
+    class: tescan.tescan_sem.Stage,
     role: stage,
     init: {axes: [x, y]},
     affects: ["Andor SimCam", "EBeam ExtXY"],

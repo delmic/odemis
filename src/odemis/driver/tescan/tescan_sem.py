@@ -27,6 +27,7 @@ import numpy
 from odemis import model, util
 from odemis.dataio import hdf5
 from odemis.util import img
+from odemis.model import isasync
 import os.path
 import threading
 import time
@@ -530,3 +531,107 @@ class SEMDataFlow(model.DataFlow):
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
 
+class Stage(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    moving the Tescan stage and updating the position. 
+    """
+    def __init__(self, name, role, axes, ranges=None, **kwargs):
+        """
+        axes (set of string): names of the axes
+        """
+#        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
+        assert len(axes) > 0
+        if ranges is None:
+            ranges = {}
+
+        axes_def = {}
+        self._position = {}
+        init_speed = {}
+        for a in axes:
+            rng = ranges.get(a, [-0.1, 0.1])
+            axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
+            # start at the centre
+            self._position[a] = (rng[0] + rng[1]) / 2
+            init_speed[a] = 10.0  # we are super fast!
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
+
+        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        shift = self._applyInversionRel(shift)
+        time_start = time.time()
+        maxtime = 0
+        for axis, change in shift.items():
+            print axis
+            print change
+            print self.speed.value[axis]
+            if not axis in shift:
+                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+            self._position[axis] += change
+            if (self._position[axis] < self.axes[axis].range[0] or
+                self._position[axis] > self.axes[axis].range[1]):
+                logging.warning("moving axis %s to %f, outside of range %r",
+                                axis, self._position[axis], self.axes[axis].range)
+            else:
+                logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+
+#         self.parent._device.StgMove(self.speed.value["x"] * 1e03,
+#                                     self.speed.value["y"] * 1e03, 0,
+#                                     0, 0)
+
+        # Perform move through Tescan API
+        # Position from m to mm and inverted
+        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
+                                    - self._position["y"] * 1e03, 0,
+                                    0, 0)
+
+
+        time_end = time_start + maxtime
+        self._updatePosition()
+        # TODO queue the move and pretend the position is changed only after the given time
+        return model.InstantaneousFuture()
+
+    @isasync
+    def moveAbs(self, pos):
+        pos = self._applyInversionAbs(pos)
+        time_start = time.time()
+        maxtime = 0
+        for axis, new_pos in pos.items():
+            if not axis in pos:
+                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+            change = self._position[axis] - new_pos
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+
+        # Perform move through Tescan API
+        # Position from m to mm and inverted
+        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
+                            - self._position["y"] * 1e03, 0,
+                            0, 0)
+        # TODO stop add this move
+        time_end = time_start + maxtime
+        self._updatePosition()
+        return model.InstantaneousFuture()
+
+    def stop(self, axes=None):
+        # TODO empty the queue for the given axes
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        return
