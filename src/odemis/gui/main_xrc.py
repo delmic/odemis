@@ -700,6 +700,7 @@ def __init_resources():
                   </object>
                   <object class="sizeritem">
                     <object class="wxHtmlWindow" name="html_alignment">
+                      <size>-1,700</size>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>
                       <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>

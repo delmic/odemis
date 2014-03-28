@@ -1324,11 +1324,12 @@ class LensAlignTab(Tab):
 
         # Documentation text on the left panel
         path = os.path.join(get_installation_folder(), "doc/alignment.html")
+        main_frame.html_alignment.SetBorders(0) # sizer already give us borders
         main_frame.html_alignment.LoadPage(path)
 
+        # Trick to allow easy html editing: double click to reload
         def reload_page(evt):
             evt.GetEventObject().LoadPage(path)
-
         main_frame.html_alignment.Bind(wx.EVT_LEFT_DCLICK, reload_page)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
