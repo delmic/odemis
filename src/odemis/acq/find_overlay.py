@@ -274,12 +274,13 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     logging.debug("Center shift correction: %s", position_cor)
     transform_md[model.MD_POS_COR] = position_cor
 
-    pixel_size = optical_image.metadata.get(model.MD_PIXEL_SIZE, (0, 0))
-    if pixel_size == (0, 0):
+    try:
+        pixel_size = optical_image.metadata[model.MD_PIXEL_SIZE]
+    except KeyError:
         logging.warning("No MD_PIXEL_SIZE data available")
         return transform_md
-    pixel_size_cor = (scale[0] * ccd.binning.value[0] / pixel_size[0],
-                      scale[1] * ccd.binning.value[1] / pixel_size[1])
+    pixel_size_cor = (scale[0] / pixel_size[0],
+                      scale[1] / pixel_size[1])
     logging.debug("Pixel size correction: %s", pixel_size_cor)
     transform_md[model.MD_PIXEL_SIZE_COR] = pixel_size_cor
 
