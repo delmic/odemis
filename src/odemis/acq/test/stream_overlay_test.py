@@ -29,6 +29,7 @@ from odemis.util import driver
 import os
 import subprocess
 import time
+import odemis
 import unittest
 
 
@@ -36,7 +37,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml" # 7x7
 
 class TestOverlayStream(unittest.TestCase):

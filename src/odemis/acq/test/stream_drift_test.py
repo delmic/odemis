@@ -25,6 +25,7 @@ import logging
 from odemis import model
 from odemis.util import driver
 import os
+import odemis
 import time
 import unittest
 import subprocess
@@ -39,7 +40,7 @@ logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 logging.getLogger().setLevel(logging.DEBUG)

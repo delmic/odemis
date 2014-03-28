@@ -28,6 +28,7 @@ import subprocess
 
 from odemis.util import driver
 from odemis import model
+import odemis
 from odemis.acq import find_overlay
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
@@ -37,9 +38,9 @@ logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+logging.debug("Config path = %s", CONFIG_PATH)
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml"  # 7x7
-logging.getLogger().setLevel(logging.DEBUG)
 
 
 class TestOverlay(unittest.TestCase):
@@ -96,9 +97,9 @@ class TestOverlay(unittest.TestCase):
 
         f = find_overlay.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
 
-        self.assertRaises(ValueError, f.result)
+        t, md = f.result()
 
-    @unittest.skip("skip")
+#     @unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
@@ -109,9 +110,10 @@ class TestOverlay(unittest.TestCase):
 
         f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
 
-        self.assertRaises(ValueError, f.result)
+        with self.assertRaises(ValueError):
+            f.result()
 
-    @unittest.skip("skip")
+#     @unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation
@@ -126,7 +128,8 @@ class TestOverlay(unittest.TestCase):
         f.cancel()
         self.assertTrue(f.cancelled())
         self.assertTrue(f.done())
-        self.assertRaises(futures.CancelledError, f.result)
+        with self.assertRaises(futures.CancelledError):
+            f.result()
         
     def on_done(self, future):
         self.done += 1
