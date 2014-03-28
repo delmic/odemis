@@ -1233,7 +1233,7 @@ class LensAlignTab(Tab):
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
                 (main_frame.vp_align_ccd,  # focused view
-                 {"name": "Optical",
+                 {"name": "Optical CL",
                   "stage": self._stage_ab,
                   "focus1": main_data.focus,
                   "stream_classes": (streammod.CameraNoLightStream,),
@@ -1269,22 +1269,20 @@ class LensAlignTab(Tab):
         self.tab_data_model.dicho_seq.subscribe(self._onDichoSeq, init=True)
 
         # create CCD stream
-        ccd_stream = streammod.CameraNoLightStream("Optical",
+        ccd_stream = streammod.CameraNoLightStream("Optical CL",
                                      main_data.ccd,
                                      main_data.ccd.data,
                                      main_data.light,
                                      position=self._stage_ab.position)
         self.tab_data_model.streams.value.append(ccd_stream)
         self._ccd_stream = ccd_stream
-        ccd_view = main_frame.vp_align_ccd.microscope_view
-        ccd_view.addStream(ccd_stream)
+        self._ccd_view = main_frame.vp_align_ccd.microscope_view
+        self._ccd_view.addStream(ccd_stream)
         # create CCD stream panel entry
         stream_bar = self.main_frame.pnl_secom_align_streams
         ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
         stream_bar.add_stream(ccd_spe, True)
         ccd_spe.flatten() # removes the expander header
-        # Fit CCD image to screen
-        self._ccd_view = ccd_view
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowedModes = set([guimod.TOOL_NONE])
 
@@ -1418,7 +1416,7 @@ class LensAlignTab(Tab):
         main_data = self.tab_data_model.main
         binning = main_data.ccd.binning.value
         dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
-        main_data.fineAlignDwellTime.clip(dt)
+        main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
     OVRL_MAX_DIFF = 10e-6 # m
 #    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast

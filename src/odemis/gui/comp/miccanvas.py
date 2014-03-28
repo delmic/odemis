@@ -118,7 +118,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # coordinates. Currently, the only difference is that Y in going up in
         # physical coordinates and down in world coordinates.
 
-        self._previous_size = None
+        self._previous_size = self.ClientSize
 
         self.cursor = wx.STANDARD_CURSOR
 
@@ -186,7 +186,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Listen to stage pos, so that all views move together when the
             # stage moves.
             self.microscope_view.stage_pos.subscribe(self._onStagePos)
-        self.microscope_view.view_pos.subscribe(self._onViewPos, init=True)
+        self.microscope_view.view_pos.subscribe(self._onViewPos)
+        # Update new position immediately, so that fit_to_content() directly
+        # gets the correct center
+        world_pos = self.physical_to_world_pos(self.microscope_view.view_pos.value)
+        self._calc_bg_offset(world_pos)
+        self.requested_world_pos = world_pos
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
@@ -505,9 +510,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # this will indirectly call _onMPP(), but not have any additional effect
         if self.microscope_view:
             new_mpp = self.mpwu / self.scale
-            rng_mpp = self.microscope_view.mpp.range
-            new_mpp = max(rng_mpp[0], min(new_mpp, rng_mpp[1]))
-            self.microscope_view.mpp.value = new_mpp
+            self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
     def _onMPP(self, mpp):
         """ Called when the view.mpp is updated
@@ -519,12 +522,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         new_size = event.Size
 
         # Update the mpp, so that the same width is displayed
-        if self._previous_size and self.microscope_view:
+        if self.microscope_view:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
-            rng_mpp = self.microscope_view.mpp.range
-            new_mpp = max(rng_mpp[0], min(new_mpp, rng_mpp[1]))
-            self.microscope_view.mpp.value = new_mpp
+            self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
         super(DblMicroscopeCanvas, self).on_size(event)
         self._previous_size = new_size

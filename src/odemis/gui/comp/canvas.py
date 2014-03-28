@@ -1242,6 +1242,9 @@ class DraggableCanvas(BitmapCanvas):
                 self.ClientSize.y + self.default_margin * 2)
 
     def _calc_bg_offset(self, world_pos):
+        # FIXME: doesn't seem to work: the background checker moves after dragging
+        # Probably should be computed everytime background is displayed, based on the fact that
+        # the pattern top-left is displayed at 0,0
         bg_offset = ((self.requested_world_pos[0] - world_pos[0]) % 40,
                      (self.requested_world_pos[1] - world_pos[1]) % 40)
         self.bg_offset = (
@@ -1374,7 +1377,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # if no recenter, increase bbox so that its center is the current center
         if not recenter:
-            c = self.buffer_center_world_pos
+            c = self.requested_world_pos # think ahead, use the next center pos
             hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
             hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
             bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
