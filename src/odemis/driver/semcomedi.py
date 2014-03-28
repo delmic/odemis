@@ -2233,10 +2233,11 @@ class Scanner(model.Emitter):
             width = lim[1] - lim[0]
             ratio = (shape[i] * scale[i]) / area_shape[i]
             assert ratio <= 1 # cannot be bigger than the whole area
+            # center_comp is to ensure the point scanned of each pixel is at the
+            # center of the area of each pixel
+            center_comp = (shape[i] - 1) / shape[i]
+            roi_hwidth = ((width * ratio) / 2) * center_comp
             pxv = width / area_shape[i] # V/px
-            # pxv/2 is to ensure the point scanned of each pixel is at the center
-            # of the area of each pixel
-            roi_hwidth = (width * ratio - pxv) / 2
             shift = translation[i] * pxv
             roi_lim = (center + shift - roi_hwidth,
                        center + shift + roi_hwidth)
