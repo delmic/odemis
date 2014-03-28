@@ -717,7 +717,7 @@ class Continuous(object):
         return self._get_range()
 
     def _set_range(self, new_range):
-        """ Set the range after performing some basic contraint checks
+        """ Set the range after performing some basic constraint checks
         """
 
         # Range should always have 2 elements
