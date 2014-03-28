@@ -1309,8 +1309,8 @@ class LensAlignTab(Tab):
         pnl_fine_align = main_frame.pnl_align_controls
         fa_sizer = pnl_fine_align.GetSizer()
         scale_win = ScaleWindow(pnl_fine_align)
-        self._sem_view.mpp.subscribe(call_after_wrapper(scale_win.SetMPP),
-                                     init=True)
+        self._on_mpp = call_after_wrapper(scale_win.SetMPP) # need to keep ref
+        self._sem_view.mpp.subscribe(self._on_mpp, init=True)
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
         fa_sizer.Layout()
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
