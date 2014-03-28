@@ -1315,10 +1315,6 @@ class LensAlignTab(Tab):
         fa_sizer.Layout()
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
 
-        # update the fine alignment dwell time when CCD settings change
-        main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
-        main_data.ccd.binning.subscribe(self._update_fa_dt)
-
         # Make sure to reset the correction metadata if lens move
         main_data.aligner.position.subscribe(self._on_aligner_pos)
 
@@ -1343,6 +1339,15 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = show
         self._ccd_stream.should_update.value = show
         self._ccd_stream.is_active.value = show
+
+        main_data = self.tab_data_model.main
+        # update the fine alignment dwell time when CCD settings change
+        if show:
+            main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
+            main_data.ccd.binning.subscribe(self._update_fa_dt)
+        else:
+            main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
+            main_data.ccd.binning.unsubscribe(self._update_fa_dt)
 
         # TODO: save and restore SEM state (for now, it does nothing anyway)
         # Turn on (or off) SEM
@@ -1413,7 +1418,7 @@ class LensAlignTab(Tab):
         main_data = self.tab_data_model.main
         binning = main_data.ccd.binning.value
         dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
-        main_data.fineAlignDwellTime.value = dt
+        main_data.fineAlignDwellTime.clip(dt)
 
     OVRL_MAX_DIFF = 10e-6 # m
 #    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
@@ -1427,6 +1432,11 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = False
 
         main_data = self.tab_data_model.main
+        # Don't update when CCD exposure time is changed by find_overlay
+        # (wouldn't be needed if the VAs where on the stream itself)
+        main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
+        main_data.ccd.binning.unsubscribe(self._update_fa_dt)
+
         logging.debug("Starting overlay procedure")
         f = find_overlay.FindOverlay(self.OVRL_REPETITION,
                                      main_data.fineAlignDwellTime.value,
@@ -1473,7 +1483,7 @@ class LensAlignTab(Tab):
             # The magic: save the correction metadata straight into the CCD
             self.tab_data_model.main.ccd.updateMetadata(cor_md)
         except Exception:
-            logging.exception("Failed to run the fine alignment, a report "
+            logging.warning("Failed to run the fine alignment, a report "
                               "should be available in ~/odemis-overlay-report.")
             self.main_frame.lbl_fine_align.SetLabel("Failed")
         else:
@@ -1482,6 +1492,9 @@ class LensAlignTab(Tab):
         # restart standard acquisition (only if tab still displayed)
         self._sem_stream.is_active.value = self._sem_stream.should_update.value
         self._ccd_stream.is_active.value = self._ccd_stream.should_update.value
+        main_data = self.tab_data_model.main
+        main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
+        main_data.ccd.binning.subscribe(self._update_fa_dt)
 
         self.main_frame.lbl_fine_align.Show()
         self.main_frame.gauge_fine_align.Hide()

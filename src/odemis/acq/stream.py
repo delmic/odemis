@@ -771,8 +771,6 @@ class CameraStream(Stream):
         # Override the standard method to use the correction metadata
         # TODO: just always use the correction metadata for all the streams?
         md = dict(md)  # duplicate to not modify the original metadata
-        if model.MD_POS_COR in md:
-            logging.debug("Applying position correction of %s m", md[model.MD_POS_COR])
         img.mergeMetadata(md)
         return super(CameraStream, self)._find_metadata(md)
 
