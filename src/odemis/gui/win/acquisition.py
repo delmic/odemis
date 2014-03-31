@@ -40,6 +40,7 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
+from odemis.acq.stream import EM_STREAMS, OPTICAL_STREAMS
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -88,8 +89,24 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.stream_controller = StreamController(self._tab_data_model,
                                                   self.pnl_secom_streams)
-        # The streams currently displayed are the one
+        # The streams currently displayed are the one visible
         self.add_all_streams(orig_view.getStreams())
+
+        # If it could be possible to do fine alignment, allow the user to choose
+        if self._can_fine_align(self._tab_data_model.streams.value):
+            self.chkbox_fine_align.Show()
+            # Set to True to make it the default, but will be automatically
+            # disabled later if the current visible streams don't allow it.
+            self.chkbox_fine_align.Value = True
+            main_data = self._tab_data_model.main
+            self._ovrl_stream = stream.OverlayStream("fine alignment", main_data.ccd,
+                                         main_data.ebeam, main_data.sed)
+            self._ovrl_stream.dwellTime.value = main_data.fineAlignDwellTime.value
+        else:
+            self.chkbox_fine_align.Show(False)
+            self.chkbox_fine_align.Value = False
+
+        self._prev_fine_align = self.chkbox_fine_align.Value
 
         # make sure the view displays the same thing as the one we are
         # duplicating
@@ -107,6 +124,8 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.cmb_presets.Bind(wx.EVT_COMBOBOX, self.on_preset)
         self.Bind(wx.EVT_CLOSE, self.on_close)
+        # on_streams_changed is compatible because it doesn't use the args
+        self.chkbox_fine_align.Bind(wx.EVT_CHECKBOX, self.on_streams_changed)
 
         self.on_preset(None) # will force setting the current preset
 
@@ -182,12 +201,44 @@ class AcquisitionDialog(xrcfr_acq):
 
         raise KeyError()
 
+    def _can_fine_align(self, streams):
+        """
+        Return True if with the given streams it would make sense to fine align
+        streams (iterable of Stream)
+        return (bool): True if at least a SEM and an optical stream are present
+        """
+        # check for a SEM stream
+        for s in streams:
+            if isinstance(s, EM_STREAMS):
+                break
+        else:
+            return False
+
+        # check for an optical stream
+        for s in streams:
+            if isinstance(s, OPTICAL_STREAMS):
+                break
+        else:
+            return False
+
+        return True
+
     @call_after
     def update_setting_display(self):
         # if gauge was left over from an error => now hide it
         if self.gauge_acq.IsShown():
             self.gauge_acq.Hide()
             self.Layout()
+
+        # Enable/disable Fine alignment check box
+        streams = self._tab_data_model.focussedView.value.getStreams()
+        can_fa = self._can_fine_align(streams)
+        if self.chkbox_fine_align.Enabled:
+            self._prev_fine_align = self.chkbox_fine_align.Value
+        self.chkbox_fine_align.Enable(can_fa)
+        # Uncheck if disabled, otherwise put same as previous value
+        self.chkbox_fine_align.Value = (can_fa and self._prev_fine_align)
+
 
         self.update_acquisition_time()
 
@@ -218,6 +269,8 @@ class AcquisitionDialog(xrcfr_acq):
     def update_acquisition_time(self):
         streams = self._tab_data_model.focussedView.value.getStreams()
         if streams:
+            if self.chkbox_fine_align.Value:
+                streams.add(self._ovrl_stream)
             acq_time = acq.estimateTime(streams)
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
@@ -318,9 +371,8 @@ class AcquisitionDialog(xrcfr_acq):
         view = self._tab_data_model.focussedView.value
         view.lastUpdate.unsubscribe(self.on_streams_changed)
 
-        # the range of the progress bar was already set in
-        # update_acquisition_time()
-        self.gauge_acq.Value = 0
+        # TODO: freeze all the settings so that it's not possible to change anything
+
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
 
@@ -328,13 +380,8 @@ class AcquisitionDialog(xrcfr_acq):
         streams = self._tab_data_model.focussedView.value.getStreams()
 
         # Add an overlay stream if the fine alignment check box is checked
-        if self.chkbox_fine_align.GetValue():
-            # TODO: create it once per window, and use it also for time estimation
-            main_data = self._tab_data_model.main
-            ovrls = stream.OverlayStream("fine alignment", main_data.ccd,
-                                         main_data.ebeam, main_data.sed)
-            ovrls.dwellTime.value = main_data.fineAlignDwellTime
-            streams.add(ovrls)
+        if self.chkbox_fine_align.Value:
+            streams.add(self._ovrl_stream)
 
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
@@ -372,8 +419,6 @@ class AcquisitionDialog(xrcfr_acq):
 
         try:
             data = future.result(1) # timeout is just for safety
-            # make sure the progress bar is at 100%
-            self.gauge_acq.Value = self.gauge_acq.Range
         except CancelledError:
             # put back to original state:
             # re-enable the acquire button
