@@ -490,3 +490,9 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    # suit = unittest.TestSuite()
+    # suit.addTest(FoldPanelBarTestCase("test_zflatten"))
+
+    # runner = unittest.TextTestRunner()
+    # runner.run(suit)

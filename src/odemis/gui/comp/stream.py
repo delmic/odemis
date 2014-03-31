@@ -531,12 +531,13 @@ class StreamPanel(wx.PyPanel):
         if not self._collapsed:
             # move & resize the container window
             yoffset = self._sz.GetSize().GetHeight()
-            self._panel.SetDimensions(0, yoffset, oursz.x, oursz.y - yoffset)
-
-            # this is very important to make the pane window layout show
-            # correctly
-            self._panel.Show()
-            self._panel.Layout()
+            if oursz.y - yoffset > 0:
+                self._panel.SetDimensions(0, yoffset,
+                                          oursz.x, oursz.y - yoffset)
+                # this is very important to make the pane window layout show
+                # correctly
+                self._panel.Show()
+                self._panel.Layout()
 
         return True
 
@@ -1515,7 +1516,6 @@ class StreamBar(wx.Panel):
                               border=self.DEFAULT_BORDER)
 
         spanel.Bind(EVT_STREAM_REMOVE, self.on_stream_remove)
-
         spanel.Layout()
 
         # hide the stream if the current view is not compatible
