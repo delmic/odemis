@@ -1427,9 +1427,10 @@ class LensAlignTab(Tab):
         dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
+# TODO: move it to acquisition controller
     OVRL_MAX_DIFF = 10e-6 # m
-#    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
-    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
+    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
+#    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
     def _on_fine_align(self, event):
         """
         Called when the "Fine alignment" button is clicked
@@ -1479,6 +1480,10 @@ class LensAlignTab(Tab):
             self.main_frame.lbl_fine_align.SetLabel("Failed")
         else:
             self.main_frame.lbl_fine_align.SetLabel("Successful")
+            # Temporary info until the GUI can actually rotate the images
+            if model.MD_ROTATION_COR in cor_md:
+                logging.warning("Rotation needed of %f° will not be displayed",
+                                cor_md[model.MD_ROTATION_COR])
 
         # As the CCD image might have different pixel size, force to fit
         self.main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
