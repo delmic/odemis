@@ -39,15 +39,15 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     UnitFloatCtrl, IntegerTextCtrl
-from odemis.gui.util import call_after, wxlimit_invocation
+from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.util.conversion import wave2rgb
 import wx.lib.newevent
 from wx.lib.pubsub import pub
 
 import odemis.gui.comp.buttons as buttons
 import odemis.gui.img.data as img
 import odemis.gui.model.dye as dye
-from odemis.util.conversion import wave2rgb
 
 
 stream_remove_event, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
@@ -929,7 +929,7 @@ class StreamPanel(wx.PyPanel):
         else:
             norm_hist = []
 
-        wx.CallAfter(self._sld_hist.SetContent, norm_hist)
+        wx.CallAfter(dead_object_wrapper(self._sld_hist.SetContent), norm_hist)
 
     # ====== For the dyes
     def _has_dye(self, stream):
@@ -1336,7 +1336,7 @@ class StreamPanel(wx.PyPanel):
             coef = 1
 
         gspec = (gspec - base) * coef
-        wx.CallAfter(self._sld_spec.SetContent, gspec.tolist())
+        wx.CallAfter(dead_object_wrapper(self._sld_spec.SetContent), gspec.tolist())
 
 
 class StreamBar(wx.Panel):
