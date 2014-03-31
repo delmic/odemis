@@ -704,9 +704,11 @@ class Continuous(object):
 
     def __init__(self, range):
         """
-        range (2-tuple)
+        :param range: (2-tuple)
         """
         self._set_range(range)
+        # Indicates whether clipping should occur when the range is changed
+        self.clip_on_range = False
 
     def _get_range(self):
         return self._range
@@ -732,17 +734,28 @@ class Continuous(object):
         if any([mn > mx for mn, mx in zip(start, end)]):
             raise TypeError("Range min %s should be smaller than max %s."
                                    % (str(start), str(end)))
-        #pylint: disable=E1101
+
+        #pylint: disable=E1101,E0203
         if hasattr(self, "value"):
             if not isinstance(self.value, collections.Iterable):
                 value = (self.value,)
             else:
                 value = self.value
 
-            if (any([v < mn for v, mn in zip(value, start)]) or
-                any([v > mx for v, mx in zip(value, end)])):
-                msg = "Current value '%s' is outside of the range %s→%s."
-                raise IndexError(msg % (value, start, end))
+            if self.clip_on_range:
+                # If the range is changed and the current value is outside of
+                # this new range, the value will be adjused so it falls within
+                # this new range.
+
+                self._range = tuple(new_range)
+                self.value = self.clip(self.value)
+                return
+            else:
+                if (any([v < mn for v, mn in zip(value, start)]) or
+                    any([v > mx for v, mx in zip(value, end)])):
+
+                    msg = "Current value '%s' is outside of the range %s→%s."
+                    raise IndexError(msg % (value, start, end))
 
         self._range = tuple(new_range)
 
@@ -765,7 +778,11 @@ class Continuous(object):
             clipped = []
             for v, min_v, max_v in zip(val, self.min, self.max):
                 clipped.append(max(min(v, max_v), min_v))
-            return tuple(clipped)
+
+            if isinstance(self.value, tuple):
+                return tuple(clipped)
+
+            return clipped
         else:
             return max(min(val, self.max), self.min)
 
