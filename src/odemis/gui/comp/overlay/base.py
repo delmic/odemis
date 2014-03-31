@@ -176,7 +176,7 @@ class Overlay(object):
         # plots them at an angle. We compensate for that by increasing the size
         # by 1 point in that case, so the size visually resembles that of
         # straight text.
-        if l.deg not in (0.0, 180.0):
+        if l.deg not in (0.0, 180.0, None):
             ctx.set_font_size(l.font_size + 1)
         else:
             ctx.set_font_size(l.font_size)

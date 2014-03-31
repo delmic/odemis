@@ -66,7 +66,7 @@ class OverlayTestCase(test.GuiTestCase):
             for i in range(10):
                 y += 12 + size
                 size = 10 + i * 3
-                ol.add_label(msg.format("with" if f else "without") ,
+                ol.add_label(msg.format("with" if f else "without"),
                              font_size=size, pos=(0, y), flip=f,
                              colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
                 test.gui_loop(50)
@@ -182,7 +182,6 @@ class OverlayTestCase(test.GuiTestCase):
                           font_size=20,
                           colour=(1, 0, 0),
                           align=wx.ALIGN_LEFT)
-
         test.gui_loop(100)
         self.assertEqual(rl.render_pos, sl.render_pos)
 
@@ -398,7 +397,7 @@ class OverlayTestCase(test.GuiTestCase):
 
 
 if __name__ == "__main__":
-    # unittest.main()
+    unittest.main()
 
     suit = unittest.TestSuite()
     # suit.addTest(OverlayTestCase("test_text_view_overlay_size"))
@@ -406,11 +405,11 @@ if __name__ == "__main__":
     # suit.addTest(OverlayTestCase("test_text_view_overlay_rotate"))
     # suit.addTest(OverlayTestCase("test_polar_overlay"))
     # suit.addTest(OverlayTestCase("test_points_select_overlay"))
-    suit.addTest(OverlayTestCase("test_pixel_select_overlay"))
+    # suit.addTest(OverlayTestCase("test_pixel_select_overlay"))
     # suit.addTest(OverlayTestCase("test_view_select_overlay"))
     # suit.addTest(OverlayTestCase("test_roa_select_overlay"))
     # suit.addTest(OverlayTestCase("test_dichotomy_overlay"))
     # suit.addTest(OverlayTestCase("test_spot_mode_overlay"))
 
-    runner = unittest.TextTestRunner()
-    runner.run(suit)
+    # runner = unittest.TextTestRunner()
+    # runner.run(suit)
