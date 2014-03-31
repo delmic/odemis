@@ -43,6 +43,7 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
     call_after, align, call_after_wrapper
+from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -1317,6 +1318,7 @@ class LensAlignTab(Tab):
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
         fa_sizer.Layout()
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._faf_connector = None
 
         # Make sure to reset the correction metadata if lens move
         main_data.aligner.position.subscribe(self._on_aligner_pos)
@@ -1348,9 +1350,11 @@ class LensAlignTab(Tab):
         if show:
             main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
             main_data.ccd.binning.subscribe(self._update_fa_dt)
+            self.tab_data_model.tool.subscribe(self._update_fa_dt)
         else:
             main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
             main_data.ccd.binning.unsubscribe(self._update_fa_dt)
+            self.tab_data_model.tool.unsubscribe(self._update_fa_dt)
 
         # TODO: save and restore SEM state (for now, it does nothing anyway)
         # Turn on (or off) SEM
@@ -1435,6 +1439,7 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = False
 
         main_data = self.tab_data_model.main
+        # TODO: disable every control
         main_data.is_acquiring.value = True
         # Don't update when CCD exposure time is changed by find_overlay
         # (wouldn't be needed if the VAs where on the stream itself)
@@ -1449,8 +1454,6 @@ class LensAlignTab(Tab):
                                      main_data.ccd,
                                      main_data.sed)
         logging.debug("Overlay procedure is running...")
-        #FIXME: it seems the procedure is blocking the GUI (even if it's running
-        # in a separate thread)
         
         # Set up progress bar
         self.main_frame.lbl_fine_align.Hide()
@@ -1458,26 +1461,10 @@ class LensAlignTab(Tab):
         self.main_frame.gauge_fine_align.Value = 0
         fa_sizer = self.main_frame.pnl_align_controls.GetSizer()
         fa_sizer.Layout()
-        # TODO: this future doesn't update automatically, need to regularly
-        # move the progress bar (and get rid of the trick in the acq mng)
-        f.add_update_callback(self._on_fa_upd)
+        self._faf_connector = ProgessiveFutureConnector(f,
+                                            self.main_frame.gauge_fine_align)
         
         f.add_done_callback(self._on_fa_done)
-    
-    @call_after
-    def _on_fa_upd(self, future, past, left):
-        """
-        Callback called during the acquisition to update on its progress
-        past (float): number of s already past
-        left (float): estimated number of s left
-        """
-        if future.done():
-            # progress bar and text is handled by _on_fa_done
-            return
-        
-        logging.debug("updating the progress bar to %f/%f", past, past + left)
-        self.main_frame.gauge_fine_align.Range = 100 * (past + left)
-        self.main_frame.gauge_fine_align.Value = 100 * past
         
     @call_after
     def _on_fa_done(self, future):
@@ -1492,6 +1479,9 @@ class LensAlignTab(Tab):
             self.main_frame.lbl_fine_align.SetLabel("Failed")
         else:
             self.main_frame.lbl_fine_align.SetLabel("Successful")
+
+        # As the CCD image might have different pixel size, force to fit
+        self.main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
 
         # restart standard acquisition (only if tab still displayed)
         self._sem_stream.is_active.value = self._sem_stream.should_update.value
