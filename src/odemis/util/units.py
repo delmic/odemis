@@ -36,6 +36,9 @@ SI_PREFIXES = {9: u"G",
                -9: u"n",
                -12: u"p"}
 
+# The following units should ignore SI formatting
+IGNORE_UNITS = (None, "", "px", "C", u"°C", "rad", "%", "nm")
+
 def round_significant(x, n):
     """
     Round a number to n significant figures
@@ -120,7 +123,7 @@ def to_string_pretty(x, sig=None, unit=None):
 
         str_val = "%r" % x
 
-        if unit in (None, "", "px", "C", u"°C", "rad", "%"):
+        if unit in IGNORE_UNITS:
             return str_val
         else:
             # Get the scale that a readable (formatted) string would use
@@ -165,7 +168,7 @@ def readable_str(value, unit=None, sig=None):
     if value is None:
         return ""
 
-    if unit in (None, "", "px", "C", u"°C", "rad", "%"):
+    if unit in IGNORE_UNITS:
         # don't put SI scaling prefix
         if unit in (None, ""):
             sunit = u""
