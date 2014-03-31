@@ -543,7 +543,7 @@ class SparcAcquisitionTab(Tab):
     def on_acquisition(self, is_acquiring):
         # Disable spectrometer count stream during acquisition
         if self._scount_stream:
-            active = self._scount_stream.should_update.value and is_acquiring
+            active = self._scount_stream.should_update.value and (not is_acquiring)
             self._scount_stream.is_active.value = active
 
         # Don't change anchor region during acquisition (this can happen
