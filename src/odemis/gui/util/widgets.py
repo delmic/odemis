@@ -21,10 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis.gui.util import call_after_wrapper, call_after, dead_object_wrapper
 import collections
 import logging
-
+import math
+from odemis.gui.util import call_after_wrapper, call_after, dead_object_wrapper
+from odemis.util import units
 import wx
 
 
@@ -237,3 +238,101 @@ class AxisConnector(object):
             self.ctrl.Unbind(event, self._on_value_change)
         self.comp.position.unsubscribe(self._on_pos_change)
 
+
+class ProgessiveFutureConnector(object):
+    """
+    Connects a progressive future to a progress bar
+    """
+    def __init__(self, future, bar, label=None):
+        """
+        Update a gauge widget, based on the progress reported by the 
+        ProgressiveFuture.
+        future (ProgressiveFuture)
+        bar (gauge): the progress bar widget
+        label (TextLabel or None): if given, will also update a the text with 
+          the time left.
+        Note: when the future is complete (done), the progress bar will be set 
+        to 100%, but the text will not be updated. 
+        """
+        self._future = future
+        self._bar = bar
+        self._label = label
+        
+        # Will contain the info of the future as soon as we get it.
+        self._past = None
+        self._left = None
+        self._prev_left = None
+        
+        # a repeating timer, always called in the GUI thread
+        self._timer = wx.PyTimer(self._update_progress)
+        self._timer.Start(250.0) # 4 Hz
+        
+        # Set the progress bar to 0
+        bar.Range = 100
+        bar.Value = 0
+
+        future.add_update_callback(self._on_progress)
+        future.add_done_callback(self._on_done)
+    
+    def _on_progress(self, future, past, left):
+        """
+        Callback called during the acquisition to update on its progress
+        past (float): number of s already past
+        left (float): estimated number of s left
+        """
+        self._past, self._left = past, left
+       
+    @call_after
+    def _on_done(self, future):
+        """
+        Called when it's over
+        """
+        self._timer.Stop()
+        if not future.cancelled():
+            self._bar.Range = 100
+            self._bar.Value = 100
+    
+    def _update_progress(self):
+        past, left = self._past, self._left
+        self._prev_left, prev_left = left, self._prev_left
+        
+        # progress bar: past / past+left
+        can_update = True
+        try:
+            ratio = past / (past + left)
+            # Don't update gauge if ratio reduces
+            prev_ratio = self._bar.Value / self._bar.Range
+            logging.debug("current ratio %g, old ratio %g", ratio * 100, prev_ratio * 100)
+            if (prev_left is not None and
+                prev_ratio - 0.1 < ratio < prev_ratio):
+                can_update = False
+        except ZeroDivisionError:
+            pass
+
+        if can_update:
+            logging.debug("updating the progress bar to %f/%f", past, past + left)
+            self._bar.Range = 100 * (past + left)
+            self._bar.Value = 100 * past
+
+        if self._label is None:
+            return
+        
+        if self._future.done():
+            # make really sure we don't update the text after the future is over
+            return
+        
+        # Time left
+        left = math.ceil(left) # pessimistic
+        # Avoid back and forth estimation => don't increase unless really huge (> 5s)
+        if (prev_left is not None and 0 < left - prev_left < 5):
+            logging.debug("No updating progress bar as new estimation is %g s "
+                          "while the previous was only %g s",
+                          left, prev_left)
+            return
+
+        if left > 2:
+            lbl_txt = "%s left." % units.readable_time(left)
+            self._label.SetLabel(lbl_txt)
+        else:
+            # don't be too precise
+            self._label.SetLabel("a few seconds left.")

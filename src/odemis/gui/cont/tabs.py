@@ -540,6 +540,11 @@ class SparcAcquisitionTab(Tab):
         self._spec_graph.SetContent(disp)
 
     def on_acquisition(self, is_acquiring):
+        # Disable spectrometer count stream during acquisition
+        if self._scount_stream:
+            active = self._scount_stream.should_update.value and is_acquiring
+            self._scount_stream.is_active.value = active
+
         # Don't change anchor region during acquisition (this can happen
         # because the dwell time VA is directly attached to the hardware,
         # instead of actually being the dwell time of the sem survey stream)
@@ -1088,7 +1093,7 @@ class AnalysisTab(Tab):
                 strm.background.value = cdata
 
         except Exception, err: #pylint: disable=W0703
-            logging.exception("Problem loading file")
+#            logging.exception("Problem loading file")
             msg = "File '%s' not suitable as angular resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1430,6 +1435,7 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = False
 
         main_data = self.tab_data_model.main
+        main_data.is_acquiring.value = True
         # Don't update when CCD exposure time is changed by find_overlay
         # (wouldn't be needed if the VAs where on the stream itself)
         main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
@@ -1493,6 +1499,7 @@ class LensAlignTab(Tab):
         main_data = self.tab_data_model.main
         main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
         main_data.ccd.binning.subscribe(self._update_fa_dt)
+        main_data.is_acquiring.value = False
 
         self.main_frame.lbl_fine_align.Show()
         self.main_frame.gauge_fine_align.Hide()
