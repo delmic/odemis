@@ -31,7 +31,6 @@ import logging
 import numpy
 from odemis import model, util, dataio
 import odemis
-from odemis.dataio import tiff
 from odemis.util import img
 import os
 import threading
@@ -1929,9 +1928,10 @@ class AndorCam2DataFlow(model.DataFlow):
             self.max_discard = self._prev_max_discard
         else:
             # report problem if the acquisition was started without expecting synchronization
-            assert (not comp.acquire_thread or
-                    not comp.acquire_thread.isAlive() or
-                    comp.acquire_must_stop.is_set())
+            if (comp.acquire_thread and comp.acquire_thread.isAlive() and not
+                comp.acquire_must_stop.is_set()):
+                logging.debug("Requested synchronisation with must stop = %s", comp.acquire_must_stop)
+                raise ValueError("Cannot set synchronization while unsynchronised acquisition is active")
 
         self._sync_event = event
         if self._sync_event:
