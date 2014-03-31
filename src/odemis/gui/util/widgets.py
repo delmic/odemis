@@ -26,6 +26,7 @@ import logging
 import math
 from odemis.gui.util import call_after_wrapper, call_after, dead_object_wrapper
 from odemis.util import units
+import time
 import wx
 
 
@@ -259,8 +260,8 @@ class ProgessiveFutureConnector(object):
         self._label = label
         
         # Will contain the info of the future as soon as we get it.
-        self._past = None
-        self._left = None
+        self._start = None
+        self._end = None
         self._prev_left = None
         
         # a repeating timer, always called in the GUI thread
@@ -280,7 +281,9 @@ class ProgessiveFutureConnector(object):
         past (float): number of s already past
         left (float): estimated number of s left
         """
-        self._past, self._left = past, left
+        now = time.time()
+        self._start = now - past
+        self._end = now + left
        
     @call_after
     def _on_done(self, future):
@@ -293,7 +296,12 @@ class ProgessiveFutureConnector(object):
             self._bar.Value = 100
     
     def _update_progress(self):
-        past, left = self._past, self._left
+        if self._start is None: # no info yet
+            return
+
+        now = time.time()
+        past = now - self._start
+        left = max(0, self._end - now)
         self._prev_left, prev_left = left, self._prev_left
         
         # progress bar: past / past+left
