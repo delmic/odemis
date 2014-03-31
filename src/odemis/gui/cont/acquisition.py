@@ -521,7 +521,6 @@ class SparcAcquiController(object):
         else:
             streams = self._tab_data_model.acquisitionView.getStreams()
             acq_time = acq.estimateTime(streams)
-            self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistic
             txt = "Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -672,9 +671,6 @@ class SparcAcquiController(object):
             logging.exception("Acquisition failed")
             self._reset_acquisition_gui("Acquisition failed.")
             return
-
-        # make sure the progress bar is at 100%
-        self.gauge_acq.Value = self.gauge_acq.Range
 
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")

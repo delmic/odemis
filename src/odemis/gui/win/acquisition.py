@@ -32,6 +32,7 @@ from odemis.gui.cont.settings import SecomSettingsController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.main_xrc import xrcfr_acq
 from odemis.gui.util import call_after, formats_to_wildcards
+from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.util import units
 import os.path
 import time
@@ -62,6 +63,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # a ProgressiveFuture if the acquisition is going on
         self.acq_future = None
+        self._acq_future_connector = None
 
         # duplicate the interface, but with only one view
         self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
@@ -217,7 +219,6 @@ class AcquisitionDialog(xrcfr_acq):
         streams = self._tab_data_model.focussedView.value.getStreams()
         if streams:
             acq_time = acq.estimateTime(streams)
-            self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -337,7 +338,9 @@ class AcquisitionDialog(xrcfr_acq):
 
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
-        self.acq_future.add_update_callback(self.on_acquisition_upd)
+        self._acq_future_connector = ProgessiveFutureConnector(self.acq_future,
+                                                               self.gauge_acq,
+                                                               self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
@@ -407,34 +410,8 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.lbl_acqestimate.SetLabel("Acquisition completed.")
 
-        # change the "cancel" button to "close"
+        # We don't allow to acquire anymore => change button name
         self.btn_cancel.SetLabel("Close")
-
-    @call_after
-    def on_acquisition_upd(self, future, past, left):
-        """
-        Callback called during the acquisition to update on its progress
-        past (float): number of s already past
-        left (float): estimated number of s left
-        """
-        # TODO: need to share code with gui.acquisition
-
-        if future.done():
-            # progress bar and text is handled by on_acquisition_done
-            return
-
-        # progress bar: past / past+left
-        logging.debug("updating the progress bar to %f/%f", past, past + left)
-        self.gauge_acq.Range = 100 * (past + left)
-        self.gauge_acq.Value = 100 * past
-
-        left = math.ceil(left) # pessimistic
-        if left > 2:
-            lbl_txt = "%s left." % units.readable_time(left)
-            self.lbl_acqestimate.SetLabel(lbl_txt)
-        else:
-            # don't be too precise
-            self.lbl_acqestimate.SetLabel("a few seconds left.")
 
 def ShowAcquisitionFileDialog(parent, filename):
     """
