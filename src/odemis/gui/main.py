@@ -261,6 +261,8 @@ class OdemisGUIApp(wx.App):
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
             logging.debug("Frame will be displayed soon")
+
+
         except Exception:  #pylint: disable=W0703
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
@@ -479,6 +481,19 @@ def main(args):
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
     log.init_logger(loglev)
+
+    if 'linux' in sys.platform:
+        # Set WM_CLASS on linux, needed to get connected to the right icon.
+        try:
+            # Also possible via Xlib, but more complicated
+            import gtk
+            # Must be done before the first window is displayed
+            name = "Odemis"
+            if options.standalone:
+                name += "-standalone"
+            gtk.gdk.set_program_class(name)
+        except Exception:
+            logging.info("Failed to set WM_CLASS")
 
     # Create application
     app = OdemisGUIApp(standalone=options.standalone)
