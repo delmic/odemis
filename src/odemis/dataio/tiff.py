@@ -28,6 +28,7 @@ import numpy
 from numpy.polynomial import polynomial
 from odemis import model
 import odemis
+from odemis.util import spectrum
 import re
 import sys
 import time
@@ -953,20 +954,12 @@ def _addImageElement(root, das, ifd, rois):
     # http://trac.openmicroscopy.org.uk/ome/ticket/7355 mentions spectrum can
     # be stored as a fake Filter with the CutIn/CutOut wavelengths, but that's
     # not so pretty.
-    if model.MD_WL_POLYNOMIAL in globalMD:
-        # we store it by computing the actual values of each channel
-        pn = globalMD[model.MD_WL_POLYNOMIAL]
-        l = gshape[0]
-        npn = polynomial.Polynomial(pn, domain=[0, l - 1], window=[0, l - 1])
-        wl_list = npn.linspace(l)[1]
-    elif model.MD_WL_LIST in globalMD:
-        wl_list = globalMD[model.MD_WL_LIST]
-        if len(wl_list) != da.shape[0]:
-            logging.warning("WL_LIST metadata has length of %d, while expected "
-                            "%d, skipping it", len(wl_list), da.shape[0])
-            wl_list = None
-    else:
-        wl_list = None
+    wl_list = None
+    if set(globalMD.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}:
+        try:
+            wl_list = spectrum.get_wavelength_per_pixel(da0)
+        except Exception:
+            logging.warning("Spectrum metadata is insufficient to be saved")
 
     subid = 0
     for da in das:

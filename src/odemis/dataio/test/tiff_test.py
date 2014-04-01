@@ -246,7 +246,81 @@ class TestTiffIO(unittest.TestCase):
         im.seek(i + 1)
         self.assertEqual(im.size, size)
         self.assertEqual(im.getpixel((1,1)), 0)
-            
+
+
+    def testExportNoWL(self):
+        """
+        Check it's possible to export/import a spectrum with missing wavelength
+        info
+        """
+        dtype = numpy.dtype("uint16")
+        size3d = (512, 256, 220) # X, Y, C
+        size = (512, 256)
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: "bad spec",
+                    model.MD_DESCRIPTION: "test3d",
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 1), # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_WL_POLYNOMIAL: [0], # m, m/px: missing polynomial
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    model.MD_EXP_TIME: 1.2, #s
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                    model.MD_HW_NAME: u"", # check empty unicode strings
+                    model.MD_DESCRIPTION: u"tÉst", # tiff doesn't support É (but XML does)
+                    model.MD_ACQ_DATE: time.time(),
+                    model.MD_BPP: 12,
+                    model.MD_BINNING: (1, 2), # px, px
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    model.MD_EXP_TIME: 1.2, #s
+                    model.MD_IN_WL: (500e-9, 520e-9), #m
+                    }]
+        ldata = []
+        # 3D data generation (+ metadata): gradient along the wavelength
+        data3d = numpy.empty(size3d[::-1], dtype=dtype)
+        end = 2 ** metadata[0][model.MD_BPP]
+        step = end // size3d[2]
+        lin = numpy.arange(0, end, step, dtype=dtype)[:size3d[2]]
+        lin.shape = (size3d[2], 1, 1) # to be able to copy it on the first dim
+        data3d[:] = lin
+        # introduce Time and Z dimension to state the 3rd dim is channel
+        data3d = data3d[:, numpy.newaxis, numpy.newaxis, :, :]
+        ldata.append(model.DataArray(data3d, metadata[0]))
+
+        # an additional 2D data, for the sake of it
+        ldata.append(model.DataArray(numpy.zeros(size[::-1], dtype), metadata[1]))
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            md = metadata[i]
+            self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
+            numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
+            numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
+            self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
+            self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
+            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+
+            if model.MD_WL_POLYNOMIAL in md:
+                pn = md[model.MD_WL_POLYNOMIAL]
+                # either identical, or nothing at all
+                if model.MD_WL_POLYNOMIAL in im.metadata:
+                    numpy.testing.assert_allclose(im.metadata[model.MD_WL_POLYNOMIAL], pn)
+                else:
+                    self.assertNotIn(model.MD_WL_LIST, im.metadata)
+
+
 #    @skip("simple")
     def testMetadata(self):
         """
