@@ -67,7 +67,7 @@ def get_wavelength_per_pixel(da):
                                         window=[0, da.shape[0] - 1])
             return npn.linspace(da.shape[0])[1]
         else:
-            # a polynomial or 0 or 1 value is useless
+            # a polynomial of 0 or 1 value is useless
             raise ValueError("Wavelength polynomial has only %d degree"
                              % len(pn))
 
