@@ -3,7 +3,7 @@ SimSPARC: {
     class: Microscope,
     role: sparc,
     emitters: ["EBeam ExtXY", "AR Lens"],
-    detectors: ["SED ExtXY", "ARSimCam", "FakeSpec10"],
+    detectors: ["SED ExtXY", "ARSimCam", "AndorSpec"],
     actuators: ["MirrorMover"],
 }
 
@@ -63,7 +63,7 @@ SimSPARC: {
     # Internal child of Quanta ExtXY, so no class
     role: e-beam,
     init: {},
-    affects: ["SED ExtXY", SpecSimCam, ARSimCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", AndorSpec, ARSimCam] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
@@ -83,46 +83,74 @@ SimSPARC: {
 }
 
 ARSimCam: {
-    class: andorcam2.FakeAndorCam2,
+    class: andorcam2.AndorCam2,
     role: ccd,
-    init: {device: 0,
-           image: "andorcam2-fake-clara.tiff", # only for simulator
-           }
-}
-
-FakeSpec10: {
-    class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
-    children: {detector: "SpecSimCam",
-               spectrograph: "FakeSP2300i"
-              },
-    properties: {
-        binning: [4, 16],
+    init: {
+       device: "fake",
+       image: "andorcam2-fake-clara.tiff", # only for simulator
     },
 }
 
-SpecSimCam: {
-    class: andorcam2.FakeAndorCam2,
-    role: sp-ccd,
-    init: {device: 0,  # same as ARSimCam but it will actually be different device
-           image: "andorcam2-fake-clara.tiff", # only for simulator
-           }
+#FakeSpec10: {
+#    class: spectrometer.CompositedSpectrometer,
+#    role: spectrometer,
+#    children: {detector: "SpecSimCam",
+#               spectrograph: "FakeSP2300i"
+#              },
+#    properties: {
+#        binning: [4, 16],
+#    },
+#}
+#
+#SpecSimCam: {
+#    class: andorcam2.FakeAndorCam2,
+#    role: sp-ccd,
+#    init: {device: 0,  # same as ARSimCam but it will actually be different device
+#           image: "andorcam2-fake-clara.tiff", # only for simulator
+#           }
+#}
+#
+## Simulated SP-2300i, the spectrograph part of the Spec-10
+#FakeSP2300i: {
+#    class: spectrapro.FakeSpectraPro,
+#    role: spectrograph,
+#    affects: [SpecSimCam],
+#    init: {
+#        port: "/dev/ttySP",
+#    },
+#}
+
+# Andor iDus 406 + Shamrock SR303i
+AndorSpec: {
+    class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
+    role: spectrometer,
+    children: {andorcam2: "iDus", shamrock: "SR303i"},
+    properties: {
+        #binning: [4, 256],
+    },
 }
 
-# Simulated SP-2300i, the spectrograph part of the Spec-10
-FakeSP2300i: {
-    class: spectrapro.FakeSpectraPro,
-    role: spectrograph,
-    affects: [SpecSimCam],
+iDus: {
+    # no class, as it's instantiated by AndorSpec
+    role: sp-ccd,
     init: {
-        port: "/dev/ttySP",
+       device: "fake",
+       image: "andorcam2-fake-clara.tiff", # only for simulator
+    },
+}
+
+SR303i: {
+    # no class, as it's instantiated by AndorSpec
+    role: spectrograph,
+    init: {
+        device: "fake",
     },
 }
 
 MirrorMover: {
     class: simulated.Stage,
     role: mirror,
-    affects: [SpecSimCam, ARSimCam],
+    affects: [AndorSpec, ARSimCam],
     init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
     properties: {
         speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
