@@ -90,13 +90,30 @@ class TescanSEM(model.HwComponent):
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._scanner)
 
-        # create the scanner child
+        # create the detector child
         try:
             kwargs = children["detector0"]
         except (KeyError, TypeError):
             raise KeyError("TescanSEM was not given a 'detector' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._detector)
+
+        # create the stage child
+        try:
+            kwargs = children["stage"]
+        except (KeyError, TypeError):
+            raise KeyError("TescanSEM was not given a 'stage' child")
+
+        self._stage = Stage(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._stage)
+
+        # create the scanner child
+        try:
+            kwargs = children["focus"]
+        except (KeyError, TypeError):
+            raise KeyError("TescanSEM was not given a 'focus' child")
+        self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._focus)
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -206,15 +223,11 @@ class Scanner(model.Emitter):
         self.parent.updateMetadata(md)
 
     def _onMagnification(self, mag):
-        print "MAG"
-        print mag
         # HFW to mm to comply with Tescan API
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self._updatePixelSize()
 
     def _onVoltage(self, volt):
-        print "VOLT"
-        print volt
         self.parent._device.HVSetVoltage(volt)
 
     def setPower(self, value):
@@ -234,10 +247,6 @@ class Scanner(model.Emitter):
         self._indexCurrent = util.index_closest(value, self._list_currents)
 
         # Set the corresponding current index to Tescan SEM
-        print "CURRENT"
-        print self._list_currents
-        print self._probeCurrent
-        print self._indexCurrent
         self.parent._device.SetPCContinual(self._indexCurrent + 1)
 
         return self._probeCurrent
@@ -252,7 +261,6 @@ class Scanner(model.Emitter):
         for i in enumerate(cur):
             # picoamps to amps
             currents.append(float(i[1]) * 1e-12)
-        print currents
         return currents
 
     def _onScale(self, s):
@@ -363,7 +371,7 @@ class Detector(model.Detector):
         # select detector and enable channel
         self._channel = channel
         self.parent._device.DtSelect(self._channel, 0)
-        self.parent._device.DtEnable(self._channel, 1, 8)
+        self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
         self.parent._device.SetWaitFlags(0x09)
@@ -381,7 +389,9 @@ class Detector(model.Detector):
         # The shape is just one point, the depth
 #         idt = numpy.iinfo(str)
 #         data_depth = idt.max - idt.min + 1
-#         self._shape = (data_depth,)  # only one point
+        self._shape = (2 ** 16,)  # only one point
+        print "SHAPE!!!"
+        print self._shape
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
@@ -536,7 +546,7 @@ class Stage(model.Actuator):
     This is an extension of the model.Actuator class. It provides functions for
     moving the Tescan stage and updating the position. 
     """
-    def __init__(self, name, role, axes, ranges=None, **kwargs):
+    def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
         """
         axes (set of string): names of the axes
         """
@@ -555,8 +565,122 @@ class Stage(model.Actuator):
             self._position[a] = (rng[0] + rng[1]) / 2
             init_speed[a] = 10.0  # we are super fast!
 
-        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+        x, y, z, rot, tilt = parent._device.StgGetPosition()
+        self._position["x"] = -x * 1e-03
+        self._position["y"] = -y * 1e-03
+        self._position["z"] = -z * 1e-03
 
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
+
+        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+
+        # First calibrate
+#         self.parent._device.StgCalibrate()
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        # TODO add limits to position change
+        shift = self._applyInversionRel(shift)
+        time_start = time.time()
+        maxtime = 0
+        for axis, change in shift.items():
+            print axis
+            print change
+            print self.speed.value[axis]
+            if not axis in shift:
+                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+            self._position[axis] += change
+            if (self._position[axis] < self.axes[axis].range[0] or
+                self._position[axis] > self.axes[axis].range[1]):
+                logging.warning("moving axis %s to %f, outside of range %r",
+                                axis, self._position[axis], self.axes[axis].range)
+            else:
+                logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+
+#         self.parent._device.StgMove(self.speed.value["x"] * 1e03,
+#                                     self.speed.value["y"] * 1e03, 0,
+#                                     0, 0)
+
+        # Perform move through Tescan API
+        # Position from m to mm and inverted
+        print "NEW POS!"
+        print -self._position["x"], -self._position["y"]
+        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
+                                    - self._position["y"] * 1e03, 0,
+                                    0, 0)
+
+        time_end = time_start + maxtime
+        self._updatePosition()
+        # TODO queue the move and pretend the position is changed only after the given time
+        return model.InstantaneousFuture()
+
+    @isasync
+    def moveAbs(self, pos):
+        pos = self._applyInversionAbs(pos)
+        time_start = time.time()
+        maxtime = 0
+        for axis, new_pos in pos.items():
+            if not axis in pos:
+                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+            change = self._position[axis] - new_pos
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+
+        # Perform move through Tescan API
+        # Position from m to mm and inverted
+        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
+                            - self._position["y"] * 1e03, 0,
+                            0, 0)
+        # TODO stop add this move
+        time_end = time_start + maxtime
+        self._updatePosition()
+        return model.InstantaneousFuture()
+
+    def stop(self, axes=None):
+        # TODO empty the queue for the given axes
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        return
+
+class EbeamFocus(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    adjusting the ebeam focus by changing the working distance i.e. the distance 
+    between the end of the objective and the surface of the observed specimen 
+    """
+    def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
+        assert len(axes) > 0
+        if ranges is None:
+            ranges = {}
+
+        axes_def = {}
+        self._position = {}
+        init_speed = {}
+
+        # Just z axis
+        a = axes[0]
+        rng = ranges.get(a, [-0.1, 0.1])
+        axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
+
+        # start at the centre
+        self._position[a] = parent._device.GetWD()
+        init_speed[a] = 10.0  # we are super fast!
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
@@ -592,16 +716,10 @@ class Stage(model.Actuator):
                 logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
-#         self.parent._device.StgMove(self.speed.value["x"] * 1e03,
-#                                     self.speed.value["y"] * 1e03, 0,
-#                                     0, 0)
 
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
-                                    - self._position["y"] * 1e03, 0,
-                                    0, 0)
-
+        self.parent._device.SetWD(self._position["z"] * 1e03)
 
         time_end = time_start + maxtime
         self._updatePosition()
@@ -623,9 +741,8 @@ class Stage(model.Actuator):
 
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
-                            - self._position["y"] * 1e03, 0,
-                            0, 0)
+        self.parent._device.SetWD(self._position["z"] * 1e03)
+
         # TODO stop add this move
         time_end = time_start + maxtime
         self._updatePosition()
