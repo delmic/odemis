@@ -1307,7 +1307,12 @@ class AnalysisSettingsController(SettingsBarController):
                 fn = self.setter_ar_file(fn)
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
+                # Put back old file name
+                self._arfile_ctrl.SetValue(self.tab_data.ar_cal.value)
                 return
+            except Exception:
+                self._arfile_ctrl.SetValue(self.tab_data.ar_cal.value)
+                raise
 
         self.tab_data.ar_cal.value = fn
 
@@ -1320,7 +1325,12 @@ class AnalysisSettingsController(SettingsBarController):
                 fn = self.setter_spec_file(fn)
             except ValueError:
                 logging.debug(u"Setter refused the file '%s'", fn)
+                # Put back old file name
+                self._specfile_ctrl.SetValue(self.tab_data.spec_cal.value)
                 return
+            except Exception:
+                self._specfile_ctrl.SetValue(self.tab_data.spec_cal.value)
+                raise
 
         self.tab_data.spec_cal.value = fn
 
