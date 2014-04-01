@@ -485,6 +485,10 @@ class Shamrock(model.Actuator):
         """
         return (list of floats): pixel number -> wavelength in m
         """
+        # If wavelength is 0, report empty list to indicate it makes no sense
+        if self.position.value["wavelength"] == 0:
+            return []
+
         ccd = self.parent
         # TODO: allow to override these values by ones passed as arguments?
         npixels = ccd.resolution.value[0]
