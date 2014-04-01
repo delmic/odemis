@@ -487,7 +487,7 @@ class Shamrock(model.Actuator):
         """
         ccd = self.parent
         # TODO: allow to override these values by ones passed as arguments?
-        npixels = ccd.shape[0]
+        npixels = ccd.resolution.value[0]
         self.SetNumberPixels(npixels)
         self.SetPixelWidth(ccd.pixelSize.value[0] * ccd.binning.value[0])
         return self.GetCalibration(npixels)

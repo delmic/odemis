@@ -324,6 +324,7 @@ class TestShamrock(unittest.TestCase):
         wl_list = data.metadata[model.MD_WL_LIST]
         self.assertEqual(len(wl_list), data.shape[-1])
 
+        self.spectrometer.binning.value = (4, 1)
         begin = time.time()
         data = self.spectrometer.data.get()
         duration = time.time() - begin
