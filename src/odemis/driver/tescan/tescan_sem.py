@@ -464,6 +464,11 @@ class Detector(model.Detector):
             list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
             sem_img = numpy.reshape(list_str, (res[0], res[1]))
 
+            # To make sure that we are updated with moves performed via
+            # Tescan sw we get the current position
+            x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+            self.parent._stage.updatePosition(x, y, z)
+
             # we must stop the scanning even after single scan
             self.parent._device.ScStopScan()
 
@@ -590,12 +595,21 @@ class Stage(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
+    def updatePosition(self, x, y, z):
+        """
+        update the position from external components
+        """
+        self._position["x"] = -x * 1e-03
+        self._position["y"] = -y * 1e-03
+        self._position["z"] = -z * 1e-03
+
     @isasync
     def moveRel(self, shift):
         # TODO add limits to position change
         shift = self._applyInversionRel(shift)
         time_start = time.time()
         maxtime = 0
+
         for axis, change in shift.items():
             print axis
             print change
@@ -603,6 +617,7 @@ class Stage(model.Actuator):
             if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
+
             if (self._position[axis] < self.axes[axis].range[0] or
                 self._position[axis] > self.axes[axis].range[1]):
                 logging.warning("moving axis %s to %f, outside of range %r",
@@ -617,7 +632,7 @@ class Stage(model.Actuator):
 
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        print "NEW POS!"
+        # print self.parent._device.TcpGetSWVersion()
         print -self._position["x"], -self._position["y"]
         self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
                                     - self._position["y"] * 1e03, 0,
@@ -633,6 +648,7 @@ class Stage(model.Actuator):
         pos = self._applyInversionAbs(pos)
         time_start = time.time()
         maxtime = 0
+
         for axis, new_pos in pos.items():
             if not axis in pos:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
@@ -707,6 +723,9 @@ class EbeamFocus(model.Actuator):
             print self.speed.value[axis]
             if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
+
+            # TODO GetWD to stay updated to changes made via Tescan sw
+
             self._position[axis] += change
             if (self._position[axis] < self.axes[axis].range[0] or
                 self._position[axis] > self.axes[axis].range[1]):
