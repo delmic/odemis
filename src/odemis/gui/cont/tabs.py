@@ -43,6 +43,7 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
     call_after, align, call_after_wrapper
+from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -540,6 +541,11 @@ class SparcAcquisitionTab(Tab):
         self._spec_graph.SetContent(disp)
 
     def on_acquisition(self, is_acquiring):
+        # Disable spectrometer count stream during acquisition
+        if self._scount_stream:
+            active = self._scount_stream.should_update.value and (not is_acquiring)
+            self._scount_stream.is_active.value = active
+
         # Don't change anchor region during acquisition (this can happen
         # because the dwell time VA is directly attached to the hardware,
         # instead of actually being the dwell time of the sem survey stream)
@@ -1088,7 +1094,7 @@ class AnalysisTab(Tab):
                 strm.background.value = cdata
 
         except Exception, err: #pylint: disable=W0703
-            logging.exception("Problem loading file")
+#            logging.exception("Problem loading file")
             msg = "File '%s' not suitable as angular resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1312,6 +1318,7 @@ class LensAlignTab(Tab):
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
         fa_sizer.Layout()
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._faf_connector = None
 
         # Make sure to reset the correction metadata if lens move
         main_data.aligner.position.subscribe(self._on_aligner_pos)
@@ -1343,9 +1350,11 @@ class LensAlignTab(Tab):
         if show:
             main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
             main_data.ccd.binning.subscribe(self._update_fa_dt)
+            self.tab_data_model.tool.subscribe(self._update_fa_dt)
         else:
             main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
             main_data.ccd.binning.unsubscribe(self._update_fa_dt)
+            self.tab_data_model.tool.unsubscribe(self._update_fa_dt)
 
         # TODO: save and restore SEM state (for now, it does nothing anyway)
         # Turn on (or off) SEM
@@ -1418,9 +1427,10 @@ class LensAlignTab(Tab):
         dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
+# TODO: move it to acquisition controller
     OVRL_MAX_DIFF = 10e-6 # m
-#    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
-    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
+    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
+#    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
     def _on_fine_align(self, event):
         """
         Called when the "Fine alignment" button is clicked
@@ -1430,6 +1440,8 @@ class LensAlignTab(Tab):
         self._sem_stream.is_active.value = False
 
         main_data = self.tab_data_model.main
+        # TODO: disable every control
+        main_data.is_acquiring.value = True
         # Don't update when CCD exposure time is changed by find_overlay
         # (wouldn't be needed if the VAs where on the stream itself)
         main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
@@ -1443,8 +1455,6 @@ class LensAlignTab(Tab):
                                      main_data.ccd,
                                      main_data.sed)
         logging.debug("Overlay procedure is running...")
-        #FIXME: it seems the procedure is blocking the GUI (even if it's running
-        # in a separate thread)
         
         # Set up progress bar
         self.main_frame.lbl_fine_align.Hide()
@@ -1452,26 +1462,10 @@ class LensAlignTab(Tab):
         self.main_frame.gauge_fine_align.Value = 0
         fa_sizer = self.main_frame.pnl_align_controls.GetSizer()
         fa_sizer.Layout()
-        # TODO: this future doesn't update automatically, need to regularly
-        # move the progress bar (and get rid of the trick in the acq mng)
-        f.add_update_callback(self._on_fa_upd)
+        self._faf_connector = ProgessiveFutureConnector(f,
+                                            self.main_frame.gauge_fine_align)
         
         f.add_done_callback(self._on_fa_done)
-    
-    @call_after
-    def _on_fa_upd(self, future, past, left):
-        """
-        Callback called during the acquisition to update on its progress
-        past (float): number of s already past
-        left (float): estimated number of s left
-        """
-        if future.done():
-            # progress bar and text is handled by _on_fa_done
-            return
-        
-        logging.debug("updating the progress bar to %f/%f", past, past + left)
-        self.main_frame.gauge_fine_align.Range = 100 * (past + left)
-        self.main_frame.gauge_fine_align.Value = 100 * past
         
     @call_after
     def _on_fa_done(self, future):
@@ -1486,6 +1480,13 @@ class LensAlignTab(Tab):
             self.main_frame.lbl_fine_align.SetLabel("Failed")
         else:
             self.main_frame.lbl_fine_align.SetLabel("Successful")
+            # Temporary info until the GUI can actually rotate the images
+            if model.MD_ROTATION_COR in cor_md:
+                logging.warning("Rotation needed of %f° will not be displayed",
+                                cor_md[model.MD_ROTATION_COR])
+
+        # As the CCD image might have different pixel size, force to fit
+        self.main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
 
         # restart standard acquisition (only if tab still displayed)
         self._sem_stream.is_active.value = self._sem_stream.should_update.value
@@ -1493,6 +1494,7 @@ class LensAlignTab(Tab):
         main_data = self.tab_data_model.main
         main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
         main_data.ccd.binning.subscribe(self._update_fa_dt)
+        main_data.is_acquiring.value = False
 
         self.main_frame.lbl_fine_align.Show()
         self.main_frame.gauge_fine_align.Hide()

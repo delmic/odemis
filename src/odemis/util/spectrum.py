@@ -56,7 +56,8 @@ def get_wavelength_per_pixel(da):
         if len(wl) == da.shape[0]:
             return wl
         else:
-            logging.warning("MD_WL_LIST is not the same length as the data")
+            raise ValueError("Wavelength metadata (MD_WL_LIST) is not the same "
+                             "length as the data")
 
     if model.MD_WL_POLYNOMIAL in da.metadata:
         pn = da.metadata[model.MD_WL_POLYNOMIAL]
@@ -67,7 +68,7 @@ def get_wavelength_per_pixel(da):
                                         window=[0, da.shape[0] - 1])
             return npn.linspace(da.shape[0])[1]
         else:
-            # a polynomial or 0 or 1 value is useless
+            # a polynomial of 0 or 1 value is useless
             raise ValueError("Wavelength polynomial has only %d degree"
                              % len(pn))
 
@@ -83,8 +84,6 @@ def coefficients_to_dataarray(coef):
     returns (DataArray of shape (N,1,1,1,1)): the same data with the wavelength
      encoded in the metadata, as understood by the rest of Odemis.
     """
-    n = coef.shape[0]
-
     # Create the content of the DataArray directly from the second column
     da = model.DataArray(coef[:, 1])
     da.shape += (1, 1, 1, 1) # add another 4 dims

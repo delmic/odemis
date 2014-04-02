@@ -34,16 +34,17 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
+from odemis.acq.stream import UNDEFINED_ROI
+from odemis.dataio import get_available_formats
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
+from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
+from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, \
     ShowAcquisitionFileDialog
-from odemis.gui.util import formats_to_wildcards
-from odemis.dataio import get_available_formats
 from odemis.util import units
-from odemis.gui.comp.popup import Message
 import os
 import re
 import subprocess
@@ -52,7 +53,7 @@ import time
 import wx
 from wx.lib.pubsub import pub
 
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.gui.comp.popup import Message
 
 
 class SnapshotController(object):
@@ -439,9 +440,9 @@ class SparcAcquiController(object):
         self.btn_change_file = self._main_frame.btn_sparc_change_file
         self.btn_cancel = self._main_frame.btn_sparc_cancel
         self.acq_future = None
-        self._prev_left = None
         self.gauge_acq = self._main_frame.gauge_sparc_acq
         self.lbl_acqestimate = self._main_frame.lbl_sparc_acq_estimate
+        self._acq_future_connector = None
 
         # TODO: share an executor with the whole GUI.
         self._executor = futures.ThreadPoolExecutor(max_workers=2)
@@ -520,7 +521,6 @@ class SparcAcquiController(object):
         else:
             streams = self._tab_data_model.acquisitionView.getStreams()
             acq_time = acq.estimateTime(streams)
-            self.gauge_acq.Range = 100 * acq_time
             acq_time = math.ceil(acq_time) # round a bit pessimistic
             txt = "Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -606,10 +606,6 @@ class SparcAcquiController(object):
         self.btn_acquire.Disable()
         self.btn_cancel.Enable()
 
-        # the range of the progress bar was already set in
-        # update_acquisition_time()
-        self._prev_left = None
-        self.gauge_acq.Value = 0
         self.gauge_acq.Show()
         self.btn_cancel.Show()
 
@@ -622,7 +618,9 @@ class SparcAcquiController(object):
         streams = self._tab_data_model.acquisitionView.getStreams()
 
         self.acq_future = acq.acquire(streams)
-        self.acq_future.add_update_callback(self.on_acquisition_upd)
+        self._acq_future_connector = ProgessiveFutureConnector(self.acq_future,
+                                                               self.gauge_acq,
+                                                               self.lbl_acqestimate)
         self.acq_future.add_done_callback(self.on_acquisition_done)
 
     def on_cancel(self, evt):
@@ -635,7 +633,7 @@ class SparcAcquiController(object):
             return
 
         self.acq_future.cancel()
-        self._main_data_model.is_acquiring.value = False
+#        self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by on_acquisition_done()
 
     def _export_to_file(self, acq_future):
@@ -674,62 +672,11 @@ class SparcAcquiController(object):
             self._reset_acquisition_gui("Acquisition failed.")
             return
 
-        # make sure the progress bar is at 100%
-        self.gauge_acq.Value = self.gauge_acq.Range
-
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
         # on big acquisitions, it can take ~20s
         sf = self._executor.submit(self._export_to_file, future)
         sf.add_done_callback(self.on_file_export_done)
-
-    @call_after
-    def on_acquisition_upd(self, future, past, left):
-        """
-        Callback called during the acquisition to update on its progress
-        past (float): number of s already past
-        left (float): estimated number of s left
-        """
-        if future.done():
-            # progress bar and text is handled by on_acquisition_done
-            return
-
-        # progress bar: past / past+left
-        can_update = True
-        try:
-            ratio = past / (past + left)
-            # Don't update gauge if ratio reduces
-            prev_ratio = self.gauge_acq.Value / self.gauge_acq.Range
-            logging.debug("current ratio %g, old ratio %g", ratio * 100, prev_ratio * 100)
-            if (self._prev_left is not None and
-                prev_ratio - 0.1 < ratio < prev_ratio):
-                can_update = False
-        except ZeroDivisionError:
-            pass
-
-        if can_update:
-            logging.debug("updating the progress bar to %f/%f", past, past + left)
-            self.gauge_acq.Range = 100 * (past + left)
-            self.gauge_acq.Value = 100 * past
-
-        # Time left
-        left = math.ceil(left) # pessimistic
-        # Avoid back and forth estimation => don't increase unless really huge (> 5s)
-        if (self._prev_left is not None and
-            0 < left - self._prev_left < 5):
-            logging.debug("No updating progress bar as new estimation is %g s "
-                          "while the previous was only %g s",
-                          left, self._prev_left)
-            return
-
-        self._prev_left = left
-
-        if left > 2:
-            lbl_txt = "%s left." % units.readable_time(left)
-            self.lbl_acqestimate.SetLabel(lbl_txt)
-        else:
-            # don't be too precise
-            self.lbl_acqestimate.SetLabel("a few seconds left.")
 
     @call_after
     def on_file_export_done(self, future):

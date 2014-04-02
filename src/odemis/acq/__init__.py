@@ -190,14 +190,6 @@ class AcquisitionTask(object):
         # when setting its state to running.
         self._future.set_end_time(time.time() + expected_time)
 
-        # This is a little trick to force the future to give updates even if
-        # the estimation is the same
-        upd_period = max(0.1, min(expected_time / 100, 10))
-        timer = threading.Thread(target=self._future_time_upd,
-                       name="Acquisition timer update",
-                       args=(upd_period,))
-        timer.start()
-
         raw_images = {} # stream -> list of raw images
         for s in self._streams:
             # Get the future of the acquisition, depending on the Stream type
@@ -284,18 +276,6 @@ class AcquisitionTask(object):
             time_left += self._streamTimes[s]
 
         self._future.set_end_time(now + time_left)
-
-    def _future_time_upd(self, period):
-        """
-        Force the future to give a progress update at a given periodicity
-        period (float): period in s
-        Note: it automatically finishes when the future is done
-        """
-        logging.debug("starting thread update")
-        while not self._future.done():
-            logging.debug("updating the future")
-            self._future._invoke_upd_callbacks()
-            time.sleep(period)
 
     def cancel(self, future):
         """

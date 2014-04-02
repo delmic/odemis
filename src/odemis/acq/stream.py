@@ -1815,7 +1815,8 @@ class StaticSpectrumStream(StaticStream):
         # TODO: allow to pass the calibration data as argument to avoid
         # recomputing the data just after init?
         # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
-        self.efficiencyCompensation = model.VigilantAttribute(None)
+        self.efficiencyCompensation = model.VigilantAttribute(None,
+                                                      setter=self._setEffComp)
 
         # low/high values of the spectrum displayed
         self.spectrumBandwidth = model.TupleContinuous(
@@ -2008,28 +2009,38 @@ class StaticSpectrumStream(StaticStream):
             logging.exception("Updating %s image", self.__class__.__name__)
 
 
-    def _onEffComp(self, calib_data):
+    def _setEffComp(self, calib_data):
         """
-        called when the efficiency compensation is changed
+        Setter of the spectrum efficiency compensation
+        raises ValueError if it's impossible to apply it (eg, no wavelength info)
         """
         data = self.raw[0]
 
         # We don't have problems of rerunning this when the data is updated,
         # as the data is static.
-        if calib_data is None:
-            self._calibrated = data
-        elif not (set(data.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
-            # don't try if there is no wavelength info (in px)
-            self._calibrated = data
-        else:
+        self._calibrated = data
+        if calib_data is not None:
+            if not (set(data.metadata.keys()) &
+                    {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+                raise ValueError("Spectrum data contains no wavelength information")
+
             try:
                 self._calibrated = calibration.compensate_spectrum_efficiency(
                                                                     data,
                                                                     calib_data)
+            except ValueError:
+                logging.info("Failed to apply spectrum efficiency compensation")
+                raise
             except Exception:
-                logging.exception(
-                    "Failed to apply the spectrum efficiency compensation")
-                self._calibrated = data
+                logging.exception("Failed to apply spectrum efficiency compensation")
+                raise
+
+        return calib_data
+
+    def _onEffComp(self, calib_data):
+        """
+        called when the efficiency compensation is changed
+        """
 
         # histogram will change as the pixel intensity is different
         self._updateIRange()

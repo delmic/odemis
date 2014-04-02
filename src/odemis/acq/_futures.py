@@ -119,8 +119,9 @@ class SimpleStreamFuture(futures.Future):
         # TODO: timeout exception if too long (> 10 x estimated time)
         # wait until one image acquired or cancelled
         self._acq_over.wait()
-        if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
-            raise CancelledError()
+        with self._condition:
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                raise CancelledError()
 
         return self._stream.raw # the acquisition data
 

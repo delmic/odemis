@@ -193,10 +193,9 @@ class ProgressiveFuture(futures.Future):
         with self._condition:
             if self._state not in [CANCELLED, FINISHED]:
                 self._upd_callbacks.append(fn)
-                return
-        # it's already over
-        self._report_update(fn)
 
+        # Immediately report the current known information (even if finished)
+        self._report_update(fn)
 
     def cancel(self):
         """Cancel the future if possible.
