@@ -306,10 +306,8 @@ class Stream(object):
                                           self.histogram._edges,
                                           self.auto_bc_outliers.value / 100)
 
-            # Also update the intensityRanges if auto BC
-            #edges = self.histogram._edges
-            # rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
-            # self.intensityRange.value = tuple(rrange)
+            mn, mx = self.histogram._edges  #pylint: disable=W0633
+            self.intensityRange.range = ((mn, mn), (mx, mx))
             self.intensityRange.value = tuple(irange)
         else:
             # just convert from the user-defined (as ratio) to actual values
