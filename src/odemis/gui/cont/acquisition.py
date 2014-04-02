@@ -243,8 +243,7 @@ class SnapshotController(object):
             exporter.export(filepath, raw_images, thumbnail)
 
             wx.CallAfter(Message.show_message, self._main_frame,
-                                               "Snapshot saved",
-                                               filepath)
+                                               "Snapshot saved")
 
             logging.info("Snapshot saved as file '%s'.", filepath)
         except Exception:
