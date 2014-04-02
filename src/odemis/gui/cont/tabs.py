@@ -376,6 +376,8 @@ class SparcAcquisitionTab(Tab):
         self._sem_cl_stream = semcl_stream
         self.tab_data_model.semStream = semcl_stream
 
+        vas_settings = [] # VAs that can affect the acquisition time
+
         if main_data.spectrometer:
             spec_stream = streammod.SpectrumStream(
                                         "Spectrum",
@@ -383,6 +385,7 @@ class SparcAcquisitionTab(Tab):
                                         main_data.spectrometer.data,
                                         main_data.ebeam)
             spec_stream.roi.subscribe(self.onSpecROI)
+            vas_settings.append(spec_stream.repetition)
             self._spec_stream = spec_stream
             self._sem_spec_stream = streammod.SEMSpectrumMDStream("SEM Spectrum",
                                                                   semcl_stream,
@@ -403,6 +406,7 @@ class SparcAcquisitionTab(Tab):
                                 main_data.ccd.data,
                                 main_data.ebeam)
             ar_stream.roi.subscribe(self.onARROI)
+            vas_settings.append(ar_stream.repetition)
             self._ar_stream = ar_stream
             self._sem_ar_stream = streammod.SEMARMDStream("SEM AR",
                                                           semcl_stream,
@@ -419,6 +423,7 @@ class SparcAcquisitionTab(Tab):
 
         # drift correction is disabled until a roi is selected
         semcl_stream.dcRegion.value = streammod.UNDEFINED_ROI
+        vas_settings.append(semcl_stream.dcRegion)
         # Set anchor region dwell time to the same value as the SEM survey
         main_data.ebeam.dwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
@@ -438,8 +443,8 @@ class SparcAcquisitionTab(Tab):
         self._settings_controller = settings.SparcSettingsController(
                                         self.main_frame,
                                         self.tab_data_model,
-                                        spec_stream=spec_stream,
-                                        ar_stream=ar_stream
+                                        spec_stream=self._spec_stream,
+                                        ar_stream=self._ar_stream
                                     )
         # Bind the Spectrometer/Angle resolved buttons to add/remove the
         # streams. Both from the setting panels and the acquisition view.
@@ -463,9 +468,7 @@ class SparcAcquisitionTab(Tab):
                                             self.main_frame,
                                             self.settings_controller,
                                             semcl_stream.roi,
-                                            [semcl_stream.dcRegion,
-                                             ar_stream.repetition,
-                                             spec_stream.repetition]
+                                            vas_settings,
                                        )
 
         # Repetition visualisation
