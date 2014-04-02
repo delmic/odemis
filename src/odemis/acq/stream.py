@@ -129,7 +129,6 @@ class Stream(object):
                                          cls=(int, long, float))
 
         self._irange = None
-        self._updateIRange()
 
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
@@ -146,6 +145,12 @@ class Stream(object):
         self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
                                                     cls=(int, long, float))
+
+        self._updateIRange()
+
+        # Make it so that the value gets clipped when its rane is updated and
+        # the value is outside of it.
+        self.intensityRange.clip_on_range = True
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
@@ -283,6 +288,11 @@ class Stream(object):
             except (AttributeError, IndexError, ValueError):
                 irange = None
 
+        if irange:
+            # This Vigilant attribute will clip its own value if it is out of
+            # range
+            self.intensityRange.range = ((irange[0], irange[0]),
+                                         (irange[1], irange[1]))
         self._irange = irange
 
     def _getDisplayIRange(self):
@@ -297,11 +307,9 @@ class Stream(object):
                                           self.auto_bc_outliers.value / 100)
 
             # Also update the intensityRanges if auto BC
-            edges = self.histogram._edges
+            #edges = self.histogram._edges
             # rrange = [(v - edges[0]) / (edges[1] - edges[0]) for v in irange]
             # self.intensityRange.value = tuple(rrange)
-            self.intensityRange.range = ((edges[0], edges[0]),
-                                         (edges[1], edges[1]))
             self.intensityRange.value = tuple(irange)
         else:
             # just convert from the user-defined (as ratio) to actual values

@@ -780,8 +780,6 @@ class StreamPanel(wx.PyPanel):
                                     scale="cubic",
                                     accuracy=2)
 
-        hist_min, hist_max = self.stream.histogram._edges
-
         self._sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
                                                "in auto brightness and contrast")
         self._vac_bc_outliers = VigilantAttributeConnector(
@@ -805,6 +803,9 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         # ====== Second row, histogram
+        hist_min = self.stream.intensityRange.range[0][0]
+        hist_max = self.stream.intensityRange.range[1][1]
+
         # ir_rng = (self.stream.intensityRange.range[0][0],
         #           self.stream.intensityRange.range[1][1])
 
@@ -821,7 +822,6 @@ class StreamPanel(wx.PyPanel):
                                 self.stream.intensityRange,
                                 self._sld_hist,
                                 events=wx.EVT_SLIDER)
-        self.stream.histogram.subscribe(self._onHistogram, init=True)
 
         # span is 2, because emission/excitation have 2 controls
         self._gbs.Add(self._sld_hist, pos=(self.row_count, 0),
@@ -889,6 +889,10 @@ class StreamPanel(wx.PyPanel):
                           ctrl_2_va=get_highi,
                           events=wx.EVT_COMMAND_ENTER)
 
+        self.stream.histogram.subscribe(self._onHistogram, init=True)
+        # self.stream.intensityRange.subscribe(update_range)
+
+
         lh_sz = wx.BoxSizer(wx.HORIZONTAL)
         lh_sz.Add(lbl_lowi, 0,
                   flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
@@ -928,6 +932,19 @@ class StreamPanel(wx.PyPanel):
             norm_hist = norm_hist.tolist()
         else:
             norm_hist = []
+
+        hist_min = self.stream.intensityRange.range[0][0]
+        hist_max = self.stream.intensityRange.range[1][1]
+
+        self._sld_hist.SetRange(hist_min, hist_max)
+
+        self._txt_lowi.min_value = hist_min
+        self._txt_lowi.max_value = hist_max
+        self._txt_lowi.SetValue(self.stream.intensityRange.value[0])
+
+        self._txt_highi.min_value = hist_min
+        self._txt_highi.max_value = hist_max
+        self._txt_highi.SetValue(self.stream.intensityRange.value[1])
 
         wx.CallAfter(self._sld_hist.SetContent, norm_hist)
 
@@ -1156,7 +1173,7 @@ class StreamPanel(wx.PyPanel):
         """
         return True if the stream looks like a stream with wavelength
         """
-        return (hasattr(stream, "spectrumBandwidth"))
+        return hasattr(stream, "spectrumBandwidth")
                 #and hasattr(stream, "fitToRGB")
 
     def _add_wl_controls(self):
@@ -1356,15 +1373,16 @@ class StreamBar(wx.Panel):
     DEFAULT_BORDER = 2
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
-    STREAM_ORDER = [acq.stream.SEMStream,
-                    acq.stream.StaticSEMStream,
-                    acq.stream.BrightfieldStream,
-                    acq.stream.CameraNoLightStream,
-                    acq.stream.StaticStream,
-                    acq.stream.FluoStream,
-                    acq.stream.SpectrumStream,
-                    acq.stream.ARStream,
-                    ]
+    STREAM_ORDER = [
+                acq.stream.SEMStream,
+                acq.stream.StaticSEMStream,
+                acq.stream.BrightfieldStream,
+                acq.stream.CameraNoLightStream,
+                acq.stream.StaticStream,
+                acq.stream.FluoStream,
+                acq.stream.SpectrumStream,
+                acq.stream.ARStream,
+    ]
 
 
     def __init__(self, *args, **kwargs):
