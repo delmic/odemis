@@ -2193,6 +2193,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                     end=est_start + self.estimateAcquisitionTime())
         self._current_future = f
         self._acq_state = RUNNING # TODO: move to per acquisition
+        # for progress time estimation
+        self._prog_n = 0
+        self._prog_sum = 0
 
         # Pick the right acquisition method
         # DEBUG: for now driver-synchronised is too unstable and slow (due to
@@ -2224,17 +2227,26 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
         pass
 
-    def _updateProgress(self, future, start, ratio):
+    def _updateProgress(self, future, dur, tot, bonus=0):
         """
-        update end time of future
+        update end time of future by indicating the time for one new pixel
         future (ProgressiveFuture): future to update
-        start (float): start time
-        ratio (0<=float<=1): progress ratio
+        dur (float): time it took to do this acquisition
+        tot (0<int): number of acquisitions
+        bonus (0<float): additional time needed (for drift correction)
         """
-        now = time.time()
-        tot_time = (now - start) / ratio
+        self._prog_n += 1
+
+        # Trick: we don't count the first frame because it's often
+        # much slower and so messes up the estimation
+        if self._prog_n == 1:
+            return
+
+        self._prog_sum += dur
+        ratio = (tot - self._prog_n) / (self._prog_n - 1)
+        left = self._prog_sum * ratio
         # add some overhead for the end of the acquisition
-        future.set_end_time(start + tot_time + 0.1)
+        future.set_end_time(time.time() + left + bonus + 0.1)
 
     def _ssCancelAcquisition(self, future):
         with self._acq_lock:
@@ -2348,11 +2360,14 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                         ccd_time,
                                         rep)
                 cur_dc_period = pxs_dc_period.next()
+                dc_acq_time = self._dc_estimator.estimateAcquisitionTime()
 
                 # First acquisition of anchor area
                 self._dc_estimator.acquire()
+            else:
+                dc_acq_time = 0
+                cur_dc_period = tot_num
 
-            start_time = time.time()
             for i in numpy.ndindex(*rep[::-1]): # last dim (X) iterates first
                 self._emitter.translation.value = (spot_pos[i[::-1]][0],
                                                    spot_pos[i[::-1]][1])
@@ -2396,12 +2411,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 ccd_buf.append(ccd_data)
 
                 n += 1
-                # Trick: we don't count the first frame because it's often
-                # much slower and so messes up the estimation
-                if n == 1:
-                    start_time = time.time()
-                else:
-                    self._updateProgress(future, start_time, (n - 1) / (tot_num - 1))
+                # guess how many drift anchors to acquire
+                n_anchor = (tot_num - n) // cur_dc_period
+                anchor_time = n_anchor * dc_acq_time
+                self._updateProgress(future, time.time() - start, tot_num, anchor_time)
 
                 # Check if it is time for drift correction
                 if self._dc_estimator is not None and n >= cur_dc_period:
@@ -2664,12 +2677,10 @@ class SEMCCDMDStream(MultipleDetectorStream):
         # the data array subscribers must be fast, so the real processing
         # takes place later
         self._acq_ccd_buf.append(data)
-        # TODO: update the estimated time based on how long it takes per pixel
-        # in reality
 
         self._acq_ccd_n += 1
-        ratio = self._acq_ccd_n / self._acq_ccd_tot
-        self._updateProgress(self._current_future, self._acq_start, ratio)
+        # FIXME: update to new interface of updateProgress()
+#        self._updateProgress(self._current_future, time.time() - self._prev_acq_start, self._acq_ccd_tot)
         if self._acq_ccd_n >= self._acq_ccd_tot:
             # unsubscribe to stop immediately
             df.unsubscribe(self._dsOnCCDImage)
