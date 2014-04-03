@@ -668,7 +668,7 @@ class SparcAcquisitionTab(Tab):
         called when the Spectrometer roi is changed
         """
         # only copy ROI if the stream is activated
-        if self._spec_stream in self.tab_data_model.acquisitionView.getStreams():
+        if self._sem_spec_stream in self.tab_data_model.acquisitionView.getStreams():
             # unsubscribe to be sure it won't call us back directly
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi

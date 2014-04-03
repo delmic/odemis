@@ -64,6 +64,16 @@ class StreamTestCase(unittest.TestCase):
             self.assertAlmostEqual(f, s, places=places, msg=msg, delta=delta)
 
 
+    def _check_square_pixel(self, st):
+        rep = st.repetition.value
+        roi = st.roi.value
+        if roi == stream.UNDEFINED_ROI:
+            return
+        width = roi[2] - roi[0], roi[3] - roi[1]
+
+        ratio = [n / r for n, r in zip(rep, width)]
+        self.assertAlmostEqual(ratio[0], ratio[1], msg="rep = %s, roi = %s" % (rep, roi))
+
     def test_roi_rep_pxs_links(self):
         """
         Test the connections between .roi, .pixelSize and .repetition of a 
@@ -79,6 +89,9 @@ class StreamTestCase(unittest.TestCase):
         ss.repetition.value = (100, 100)
         self.assertEqual(ss.repetition.value, (100, 100))
         self.assertEqual(ss.roi.value, stream.UNDEFINED_ROI)
+
+        # in any cases, a pixel is always square
+        self._check_square_pixel(ss)
 
         # for any value set in ROI, the new ROI value respects:
         # ROI = pixelSize * repetition / phy_size
@@ -100,6 +113,7 @@ class StreamTestCase(unittest.TestCase):
             self.assertTrue(new_roi[0] >= 0 and new_roi[1] >= 0 and
                             new_roi[2] <= 1 and new_roi[3] <= 1,
                             "with roi = %s => %s" % (roi, new_roi))
+            self._check_square_pixel(ss)
 
         ss.pixelSize.value = ss.pixelSize.range[0] # needed to get the finest grain
         ss.roi.value = (0.3, 0.65, 0.5, 0.9)
@@ -108,22 +122,26 @@ class StreamTestCase(unittest.TestCase):
         rep[0] //= 2
         ss.repetition.value = rep
         self.assertEqual(ss.repetition.value[0], rep[0])
+        self._check_square_pixel(ss)
         rep = list(ss.repetition.value)
         rep[1] //= 2
         ss.repetition.value = rep
         self.assertEqual(ss.repetition.value[1], rep[1])
+        self._check_square_pixel(ss)
 
         # Changing 2 repetition dimensions at once respects at least one
         rep = [rep[0] * 2, int(round(rep[1] * 1.4))]
         ss.repetition.value = rep
         new_rep = list(ss.repetition.value)
         self.assertTrue(rep[0] == new_rep[0] or rep[1] == new_rep[1])
+        self._check_square_pixel(ss)
 
         # 1x1 repetition leads to a square ROI
         ss.repetition.value = (1, 1)
         new_roi = ss.roi.value
         roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
         self.assertAlmostEqual(roi_size[0], roi_size[1])
+        self._check_square_pixel(ss)
 
         ss.pixelSize.value = ss.pixelSize.range[0]
         ss.roi.value = (0, 0, 1, 1)
@@ -131,6 +149,7 @@ class StreamTestCase(unittest.TestCase):
         ss.pixelSize.value = ss.pixelSize.range[0]
         self.assertAlmostEqual(ss.pixelSize.value, max(ebeam.pixelSize.value))
         self.assertEqual(tuple(ss.repetition.value), ebeam.shape)
+        self._check_square_pixel(ss)
 
 
         # TODO: changing pixel size to a huge number leads to a 1x1 repetition
@@ -142,6 +161,7 @@ class StreamTestCase(unittest.TestCase):
         new_rep = (5, 6)
         ss.repetition.value = new_rep
         self.assertAlmostEqual(new_rep, ss.repetition.value)
+        self._check_square_pixel(ss)
 
         # Changing the SEM magnification updates the pixel size (iff the
         # magnification cannot be automatically linked to the actual SEM
@@ -158,6 +178,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertAlmostEqual(mag_ratio, 1 / pxs_ratio)
         self.assertEqual(old_rep, ss.repetition.value)
         self.assertEqual(old_roi, ss.roi.value)
+        self._check_square_pixel(ss)
 
 #@skip("faster")
 class SPARCTestCase(unittest.TestCase):
@@ -491,6 +512,7 @@ class SPARCTestCase(unittest.TestCase):
         self.assertTrue(first_date < dates[0] < dates[-1])
 
 
+#@skip("faster")
 class TestStaticStreams(unittest.TestCase):
     """
     Test static streams, which don't need any backend running
