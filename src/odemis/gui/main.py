@@ -480,6 +480,22 @@ def main(args):
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
     log.init_logger(loglev)
 
+    if 'linux' in sys.platform:
+        # Set WM_CLASS on linux, needed to get connected to the right icon.
+        # wxPython doesn't do it, see http://trac.wxwidgets.org/ticket/12778
+        try:
+            # Also possible via Xlib, but more complicated
+            import gtk
+            # without it, it will crash cf https://groups.google.com/forum/#!topic/wxpython-users/KO_hmLxeDKA
+            gtk.remove_log_handlers()
+            # Must be done before the first window is displayed
+            name = "Odemis"
+            if options.standalone:
+                name += "-standalone"
+            gtk.gdk.set_program_class(name)
+        except Exception:
+            logging.info("Failed to set WM_CLASS")
+
     # Create application
     app = OdemisGUIApp(standalone=options.standalone)
     # Change exception hook so unexpected exception
