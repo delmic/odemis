@@ -224,6 +224,7 @@ class Scanner(model.Emitter):
 
     def _onMagnification(self, mag):
         # HFW to mm to comply with Tescan API
+        print self._hfw_nomag * 1e03 / mag
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self._updatePixelSize()
 
@@ -387,11 +388,7 @@ class Detector(model.Detector):
         self._acquisition_must_stop = threading.Event()
 
         # The shape is just one point, the depth
-#         idt = numpy.iinfo(str)
-#         data_depth = idt.max - idt.min + 1
         self._shape = (2 ** 16,)  # only one point
-        print "SHAPE!!!"
-        print self._shape
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
@@ -441,11 +438,6 @@ class Detector(model.Detector):
             trans = self.parent._scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
-        #     x, y, z, rot, tilt = m.StgGetPosition()
-        #     print x, y, z, rot, tilt
-        #     m.StgMoveTo(x, y, z, 0, tilt)
-            # start single frame acquisition at speed 3
-            # self.parent._device.ScSetSpeed(1)
             shape = (2048, 2048)
             center = ((res[0] / 2), (res[1] / 2))
             l = center[0] + pxs_pos[1] - (res[1] / 2)
@@ -458,7 +450,6 @@ class Detector(model.Detector):
                                     b, 1, self.parent._scanner.dwellTime.value)
 
             print l, t, r, b
-            print res
             # fetch the image (blocking operation), string is returned
             img_str = self.parent._device.FetchImage(0, res[0] * res[1])
             list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
@@ -471,19 +462,6 @@ class Detector(model.Detector):
 
             # we must stop the scanning even after single scan
             self.parent._device.ScStopScan()
-
-            # save it in a file (only here the 'Image' library is required)
-            # img = Image.fromstring("L", (res[0], res[1]), img_str)
-            # img.save('python_image.png')
-            # print "ready!"
-
-#             shape = self.fake_img.shape
-#             # Simulate drift
-#             center = ((shape[0] / 2) - self.current_drift, (shape[1] / 2) + self.current_drift)
-#
-#             sim_img = self.fake_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2):scale[0],
-#                                     center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2):scale[1]]
-
             # update fake output metadata
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
@@ -571,9 +549,7 @@ class Stage(model.Actuator):
             init_speed[a] = 10.0  # we are super fast!
 
         x, y, z, rot, tilt = parent._device.StgGetPosition()
-        self._position["x"] = -x * 1e-03
-        self._position["y"] = -y * 1e-03
-        self._position["z"] = -z * 1e-03
+        self.updatePosition(x, y, z)
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
@@ -609,6 +585,7 @@ class Stage(model.Actuator):
         shift = self._applyInversionRel(shift)
         time_start = time.time()
         maxtime = 0
+        # result = self.parent._device.Connect('192.168.92.91', 8300)
 
         for axis, change in shift.items():
             print axis
@@ -635,7 +612,8 @@ class Stage(model.Actuator):
         # print self.parent._device.TcpGetSWVersion()
         print -self._position["x"], -self._position["y"]
         self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
-                                    - self._position["y"] * 1e03, 0,
+                                    - self._position["y"] * 1e03,
+                                    - self._position["z"] * 1e03,
                                     0, 0)
 
         time_end = time_start + maxtime
@@ -660,7 +638,8 @@ class Stage(model.Actuator):
         # Perform move through Tescan API
         # Position from m to mm and inverted
         self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
-                            - self._position["y"] * 1e03, 0,
+                            - self._position["y"] * 1e03,
+                            - self._position["z"] * 1e03,
                             0, 0)
         # TODO stop add this move
         time_end = time_start + maxtime
