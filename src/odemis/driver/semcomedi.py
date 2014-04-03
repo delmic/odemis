@@ -1248,8 +1248,9 @@ class SEMComedi(model.HwComponent):
           callbacks.
         Note: to be run in a separate thread
         """
+        last_gc = 0
+        nfailures = 0
         try:
-            nfailures = 0
             while not self._acquisition_must_stop.is_set():
                 # get the channels to acquire
                 with self._acquisition_data_lock:
@@ -1329,9 +1330,10 @@ class SEMComedi(model.HwComponent):
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
-                gc.collect()
-
-        except:
+                if time.time() - last_gc > 2: # Costly, so not too often
+                    gc.collect() # TODO: if scan is long enough, during scan
+                    last_gc = time.time()
+        except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
             try:
