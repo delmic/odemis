@@ -26,9 +26,9 @@ SPARC-AMOLF: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[2.7, -2.7], [-3.5, 3.5]],  # V
-        park: [5, -5],  # V
-        settle_time: 100.e-6, # s
+        limits: [[2.7, -2.7], [-3.7, 3.7]],  # V
+        park: [4, -4],  # V (higher voltage causes strong beam shift)
+        settle_time: 150.e-6, # s
         hfw_nomag: 0.1067, # m
     },
     properties: {
