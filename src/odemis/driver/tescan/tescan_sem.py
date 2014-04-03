@@ -224,7 +224,7 @@ class Scanner(model.Emitter):
 
     def _onMagnification(self, mag):
         # HFW to mm to comply with Tescan API
-        print self._hfw_nomag * 1e03 / mag
+        print self._hfw_nomag / mag
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self._updatePixelSize()
 
@@ -444,6 +444,7 @@ class Detector(model.Detector):
             t = center[1] + pxs_pos[0] - (res[0] / 2)
             r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
             b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
+            self.parent._device.ProgressShow("Prog", "Acq", 1, 1, 0, 100)
             self.parent._device.ScScanXY(0, res[0], res[1], l,
                                     t,
                                     r,
@@ -683,6 +684,25 @@ class EbeamFocus(model.Actuator):
 
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
+    def _updatePixelSize(self):
+        """
+        Update the pixel size using the working distance
+        """
+        scanner = self.parent._scanner
+        mag = self._position["z"] / scanner._hfw_nomag
+        self.parent._metadata[model.MD_LENS_MAG] = mag
+
+        pxs = (scanner._hfw_nomag / (scanner._shape[0] * mag),
+               scanner._hfw_nomag / (scanner._shape[1] * mag))
+
+        # it's read-only, so we change it only via _value
+        scanner.pixelSize._value = pxs
+        scanner.pixelSize.notify(pxs)
+
+        # If scaled up, the pixels are bigger
+        pxs_scaled = (pxs[0] * scanner.scale.value[0], pxs[1] * scanner.scale.value[1])
+        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+
     def _updatePosition(self):
         """
         update the position VA
@@ -721,6 +741,7 @@ class EbeamFocus(model.Actuator):
 
         time_end = time_start + maxtime
         self._updatePosition()
+        self._updatePixelSize()
         # TODO queue the move and pretend the position is changed only after the given time
         return model.InstantaneousFuture()
 
@@ -744,6 +765,7 @@ class EbeamFocus(model.Actuator):
         # TODO stop add this move
         time_end = time_start + maxtime
         self._updatePosition()
+        self._updatePixelSize()
         return model.InstantaneousFuture()
 
     def stop(self, axes=None):
