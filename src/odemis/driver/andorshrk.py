@@ -423,7 +423,7 @@ class Shamrock(model.Actuator):
         """
         npixels (0<int): number of pixels on the sensor. It's actually the 
         length of the list that is being returned.
-        return (list of floats of length npixels)
+        return (list of floats of length npixels): wavelength in m
         """
         assert 0< npixels
         # TODO: this is pretty slow, and could be optimised either by using a 
@@ -431,7 +431,7 @@ class Shamrock(model.Actuator):
         # allocate one array at the init, and reuse it.
         CalibrationValues = (c_float * npixels)()
         self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
-        return [v for v in CalibrationValues]
+        return [v * 1e-9 for v in CalibrationValues]
 
     def SetPixelWidth(self, width):
         """
@@ -494,6 +494,8 @@ class Shamrock(model.Actuator):
         npixels = ccd.resolution.value[0]
         self.SetNumberPixels(npixels)
         self.SetPixelWidth(ccd.pixelSize.value[0] * ccd.binning.value[0])
+        # TODO: can GetCalibration() return several values identical? eg, 0's if
+        # cw is near 0 nm? If so, something should be done, as GUI hates that...
         return self.GetCalibration(npixels)
         
     @isasync
@@ -771,7 +773,7 @@ class FakeShamrockDLL(object):
     
     def ShamrockGetCalibration(self, device, calibval, npixels):
         center = (self._np - 1) / 2 # pixel containing center wl
-        px_wl = self._pw / 10 # in nm
+        px_wl = self._pw / 50 # in nm
         minwl = self._gratings[self._cg - 1][4]
         for i in range(npixels):
             # return stupid values (that look slightly correct)
