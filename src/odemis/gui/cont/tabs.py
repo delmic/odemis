@@ -33,6 +33,7 @@ from odemis import dataio, model
 from odemis.acq import calibration, find_overlay
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
+from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
@@ -883,6 +884,7 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return
 
+
         # Detect the format to use
         fn = dialog.GetPath()
         logging.debug("Current file set to %s", fn)
@@ -900,6 +902,14 @@ class AnalysisTab(Tab):
                 logging.warning("Couldn't guess format from filename '%s',"
                                 " will use %s.", fn, fmt)
 
+        Message.show_message(self.main_frame, "Opening file")
+        self.main_frame.Refresh()
+        self.main_frame.Update()
+
+        wx.CallAfter(self.load_data, fmt, fn)
+
+
+    def load_data(self, fmt, fn):
         converter = dataio.get_exporter(fmt)
         try:
             data = converter.read_data(fn)
@@ -1458,7 +1468,7 @@ class LensAlignTab(Tab):
                                      main_data.ccd,
                                      main_data.sed)
         logging.debug("Overlay procedure is running...")
-        
+
         # Set up progress bar
         self.main_frame.lbl_fine_align.Hide()
         self.main_frame.gauge_fine_align.Show()
@@ -1467,9 +1477,9 @@ class LensAlignTab(Tab):
         fa_sizer.Layout()
         self._faf_connector = ProgessiveFutureConnector(f,
                                             self.main_frame.gauge_fine_align)
-        
+
         f.add_done_callback(self._on_fa_done)
-        
+
     @call_after
     def _on_fa_done(self, future):
         logging.debug("End of overlay procedure")

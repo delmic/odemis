@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
@@ -199,7 +199,7 @@ class AndorV2DLL(CDLL):
     @staticmethod
     def at_errcheck(result, func, args):
         """
-        Analyse the return value of a call and raise an exception in case of 
+        Analyse the return value of a call and raise an exception in case of
         error.
         Follows the ctypes.errcheck callback convention
         """
@@ -362,10 +362,10 @@ class AndorCam2(model.DigitalCamera):
     Represents one Andor camera and provides all the basic interfaces typical of
     a CCD/CMOS camera.
     This implementation is for the Andor SDK v2.
-    
-    It offers mostly a couple of VigilantAttributes to modify the settings, and a 
+
+    It offers mostly a couple of VigilantAttributes to modify the settings, and a
     DataFlow to get one or several images from the camera.
-    
+
     It also provide low-level methods corresponding to the SDK functions.
     """
 
@@ -373,7 +373,7 @@ class AndorCam2(model.DigitalCamera):
         """
         Initialises the device
         device (None or 0<=int or "fake"): number of the device to open, as defined by Andor, cd scan()
-          if None, uses the system handle, which allows very limited access to 
+          if None, uses the system handle, which allows very limited access to
           some information. "fake" will create a simulated device
         emgains (list of (0<float, 0<float, 1 <= int <=300)): Look-up table for
          the EMCCD real gain. Readout rate, Gain, Real Gain.
@@ -467,14 +467,14 @@ class AndorCam2(model.DigitalCamera):
         self._image_rect = (1, resolution[0], 1, resolution[1])
         # need to be before binning, as it is modified when changing binning
         self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
-                        [self._transposeSizeToUser((1, 1)), 
+                        [self._transposeSizeToUser((1, 1)),
                          self._transposeSizeToUser(resolution)],
                          setter=self._setResolution)
         self._setResolution(self._transposeSizeToUser(resolution))
 
         maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
         self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                             [self._transposeSizeToUser((1, 1)), 
+                             [self._transposeSizeToUser((1, 1)),
                               self._transposeSizeToUser(maxbin)],
                                           setter=self._setBinning)
 
@@ -601,7 +601,7 @@ class AndorCam2(model.DigitalCamera):
             # Clara : 20, 20 gives horrible results. Default for Andor Solis: 10, 0
             # Apparently, if there is no shutter, it should be 0, 0
             self.atcore.SetShutter(1, 0, 0, 0) # mode 0 = auto
-        
+
         self.atcore.SetTriggerMode(0) # 0 = internal
 
         # For "Run Til Abort".
@@ -801,7 +801,7 @@ class AndorCam2(model.DigitalCamera):
     def GetEMGainRange(self):
         """
         Can only be called on cameras which have the GETFUNCTION_EMCCDGAIN feature
-        returns (int, int): min, max EMCCD gain  
+        returns (int, int): min, max EMCCD gain
         """
         low, high = c_int(), c_int()
         self.atcore.GetEMGainRange(byref(low), byref(high))
@@ -810,7 +810,7 @@ class AndorCam2(model.DigitalCamera):
     def GetEMCCDGain(self):
         """
         Can only be called on cameras which have the GETFUNCTION_EMCCDGAIN feature
-        returns (int): current EMCCD gain  
+        returns (int): current EMCCD gain
         """
         gain = c_int()
         self.atcore.GetEMCCDGain(byref(gain))
@@ -826,7 +826,7 @@ class AndorCam2(model.DigitalCamera):
 
     def GetVersionInfo(self):
         """
-        return (2-tuple string, string): the driver and sdk info 
+        return (2-tuple string, string): the driver and sdk info
         """
         sdk_str = create_string_buffer(80) # that should always fit!
         self.atcore.GetVersionInfo(AndorV2DLL.AT_SDKVersion, sdk_str,
@@ -889,7 +889,7 @@ class AndorCam2(model.DigitalCamera):
 
     def SetPreAmpGain(self, gain):
         """
-        set the pre-amp-gain 
+        set the pre-amp-gain
         gain (float): wished gain (multiplication, no unit), should be a correct value
         return (float): the actual gain set
         """
@@ -969,7 +969,7 @@ class AndorCam2(model.DigitalCamera):
         # TODO: use numpy array to avoid conversion to python
         data = (c_ubyte * ldata)()
         self.atcore.I2CBurstRead(c_ubyte(i2caddr), ldata, byref(data))
-        
+
         pydata = [d for d in data] # Not needed?
         return pydata
 
@@ -1180,7 +1180,7 @@ class AndorCam2(model.DigitalCamera):
         """
         Check the size is correct (it should) and store it ready for SetImage
         size (2-tuple int): Width and height of the image. It will be centred
-         on the captor. It depends on the binning, so the same region has a size 
+         on the captor. It depends on the binning, so the same region has a size
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
         """
@@ -1215,7 +1215,7 @@ class AndorCam2(model.DigitalCamera):
     def resolutionFitter(self, size_req):
         """
         Finds a resolution allowed by the camera which fits best the requested
-          resolution. 
+          resolution.
         size_req (2-tuple of int): resolution requested
         returns (2-tuple of int): resolution which fits the camera. It is equal
          or bigger than the requested resolution
@@ -1912,7 +1912,7 @@ class AndorCam2DataFlow(model.DataFlow):
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
         Behaviour is unspecified if the acquisition is already running.
-        event (model.Event or None): event to synchronize with. Use None to 
+        event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronize only with one Event at a time.
         """
@@ -2168,6 +2168,7 @@ class FakeAndorV2DLL(object):
     def GetBitDepth(self, channel, p_bpp):
         # only one channel
         bpp = _deref(p_bpp, c_int)
+        # bpp.value = [12, 16][self.hsspeed] # For testing
         bpp.value = self.bpp
 
     def GetNumberPreAmpGains(self, p_nb):

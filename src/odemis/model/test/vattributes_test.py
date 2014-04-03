@@ -160,7 +160,7 @@ class VigilantAttributeTest(unittest.TestCase):
 
         # Insert and remove item
         prop.value.insert(1, 66) # +1
-        self.assertEqual(prop.value, [1, 66,  4])
+        self.assertEqual(prop.value, [1, 66, 4])
         prop.value.remove(66) # +1
         self.assertEqual(prop.value, [1, 4])
 
@@ -192,10 +192,10 @@ class VigilantAttributeTest(unittest.TestCase):
         self.assertEqual(prop.value, [0, 2, 3, 5])
         prop.value.reverse() # +1
         self.assertEqual(prop.value, [5, 3, 2, 0])
-#
-#        pl = pickle.dumps(prop.value, pickle.HIGHEST_PROTOCOL)
-#        unpl = pickle.loads(pl)
-#        self.assertEqual(unpl, prop.value)
+
+        # pl = pickle.dumps(prop.value, pickle.HIGHEST_PROTOCOL)
+        # unpl = pickle.loads(pl)
+        # self.assertEqual(unpl, prop.value)
 
         try:
             prop.value = 45
@@ -227,8 +227,17 @@ class VigilantAttributeTest(unittest.TestCase):
             pass # as it should be
 
         try:
-            prop.range = [-4.0, 1]
+            prop.range = [-4.0, 1.0]
             self.fail("Assigning range not containing current value should not be allowed.")
+        except IndexError:
+            pass # as it should be
+
+        try:
+            prop.clip_on_range = True
+            self.assertEqual(prop.value, 3.0, "Value should not have changed yet")
+            prop.range = [-4.0, 1.0]
+            self.assertEqual(prop.value, 1.0, "Value should have been clipped")
+            prop.clip_on_range = False
         except IndexError:
             pass # as it should be
 
@@ -240,7 +249,7 @@ class VigilantAttributeTest(unittest.TestCase):
 
         prop.unsubscribe(self.callback_test_notify)
 
-        self.assertTrue(self.called == 1)
+        self.assertTrue(self.called == 2)
 
     def test_enumerated(self):
         prop = model.StringEnumerated("a", set(["a", "c", "bfds"]))

@@ -649,8 +649,13 @@ class NumberTextCtrl(wx.TextCtrl):
         if self.number is None:
             str_val = u""
         else:
+            if hasattr(self, 'unit'):
+                unit = self.unit  #pylint: disable=E1101
+            else:
+                unit = None
             str_val = units.to_string_pretty(self.number,
-                                             self.accuracy) #pylint: disable=E1101
+                                             self.accuracy,
+                                             unit)
         wx.TextCtrl.ChangeValue(self, str_val)
 
     def _display_pretty(self):

@@ -77,16 +77,16 @@ class xrcfr_main(wx.Frame):
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
-        self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
         self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
-        self.lbl_secom_view_tl = xrc.XRCCTRL(self, "lbl_secom_view_tl")
+        self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
         self.btn_secom_view_tl = xrc.XRCCTRL(self, "btn_secom_view_tl")
-        self.lbl_secom_view_tr = xrc.XRCCTRL(self, "lbl_secom_view_tr")
+        self.lbl_secom_view_tl = xrc.XRCCTRL(self, "lbl_secom_view_tl")
         self.btn_secom_view_tr = xrc.XRCCTRL(self, "btn_secom_view_tr")
-        self.lbl_secom_view_bl = xrc.XRCCTRL(self, "lbl_secom_view_bl")
+        self.lbl_secom_view_tr = xrc.XRCCTRL(self, "lbl_secom_view_tr")
         self.btn_secom_view_bl = xrc.XRCCTRL(self, "btn_secom_view_bl")
-        self.lbl_secom_view_br = xrc.XRCCTRL(self, "lbl_secom_view_br")
+        self.lbl_secom_view_bl = xrc.XRCCTRL(self, "lbl_secom_view_bl")
         self.btn_secom_view_br = xrc.XRCCTRL(self, "btn_secom_view_br")
+        self.lbl_secom_view_br = xrc.XRCCTRL(self, "lbl_secom_view_br")
         self.vp_secom_tl = xrc.XRCCTRL(self, "vp_secom_tl")
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
@@ -1000,17 +1000,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxFlexGridSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_all">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
+                    <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_all">
                           <bitmap>img_preview_block_png</bitmap>
@@ -1020,18 +1010,18 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxRIGHT</flag>
-                        <border>5</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_tl">
+                        <object class="wxStaticText" name="lbl_secom_view_all">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_tl">
@@ -1042,16 +1032,19 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxTOP|wxALIGN_RIGHT</flag>
+                        <border>4</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_tr">
+                        <object class="wxStaticText" name="lbl_secom_view_tl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_tr">
@@ -1062,16 +1055,19 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxTOP|wxALIGN_RIGHT</flag>
+                        <border>4</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_bl">
+                        <object class="wxStaticText" name="lbl_secom_view_tr">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_bl">
@@ -1082,16 +1078,19 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxTOP|wxALIGN_RIGHT</flag>
+                        <border>4</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_br">
+                        <object class="wxStaticText" name="lbl_secom_view_bl">
                           <label>view</label>
                           <fg>#BFBFBF</fg>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_br">
@@ -1102,17 +1101,21 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxTOP|wxALIGN_RIGHT</flag>
+                        <border>4</border>
                       </object>
-                      <cols>2</cols>
-                      <rows>5</rows>
-                      <vgap>20</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>0</growablecols>
-                      <growablerows>0</growablerows>
-                      <growablerows>1</growablerows>
-                      <growablerows>2</growablerows>
-                      <growablerows>3</growablerows>
-                      <growablerows>4</growablerows>
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_secom_view_br">
+                          <label>view</label>
+                          <fg>#BFBFBF</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
                     </object>
                     <option>0</option>
                     <flag>wxBOTTOM|wxEXPAND</flag>
@@ -3587,35 +3590,52 @@ X\x8b\xcc\xe1\x9b5\xf3\x02l\xa7\xf0U\x81\x17T\xbe\xf0\x91\xb9\xf0\xdd\xd2\
     img_preview_block_png = '''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00`\x00\x00\x00P\x08\x06\x00\x00\x00\xe6\
-\xe2p\x95\x00\x00\x00\x8eIDATx\xda\xed\xd1Q\x09\x000\x0cC\xc1R\xff\xee"\
-\xa8\xf5\xb0\xc1\xf6s\x0fb \xd7I\xc6\xceW\x97u\xe9k\x00\x00\x00\x10\x00\
-\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\x00\x00\x10\
-\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\x00\x00\
-\x10\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\x00\
-\x00\x10\x00\x00\x02\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x00\
-\x00\x17\x00\x00 \x00\x00\x04\x00\x80\x00\x00\x10\x00\x00\x02\x00@oZ\xce\
-\xf6\x160)\xf0\xae\x8e\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x90\x00\x00\x00x\x08\x06\x00\x00\x00\x1d\
+Q{W\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\x00\
+\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\
+\x00\x07tIME\x07\xde\x04\x02\x0e\x27\x1a\x96P\xdf\xa1\x00\x00\x00\xf1ID\
+ATx\xda\xed\xd21\x15\x00 \x0cCA\x8a\x9f\xf8\x17RA \xa1\x03#w{\x96\xbc_\xdd\
+}\x16\xdfJR/\xfb\xedB\x04\x84\x80\x10\x10\x02\x02\x01! \x04\x84\x80@@\x08\
+\x08\x01! \x10\x10\x02B@\x08\x08\x04\x84\x80\x10\x10\x02B@  \x04\x84\x80\
+\x10\x10\x08\x08\x01! \x04\x04\x02B@\x08\x08\x01\x81\x80\x10\x10\x02B@\x08\
+\x08\x04\x84\x80\x10\x10\x02\x02\x01! \x04\x84\x80@@\x08\x08\x01! \x10\x10\
+\x02B@\x08\x08\x04\x84\x80\x10\x10\x02B@  \x04\x84\x80\x10\x10\x08\x08\x01\
+! \x04\x04\x02B@\x08\x08\x01\x81\x80\x10\x10\x02B@\x08\x08\x04\x84\x80\x10\
+\x10\x02\x02\x01! \x04\x84\x80@@\x08\x08\x01! \x10\x10\x02B@\x08\x08\x01\
+\x81\x80\x10\x10\x02B@  \x04\x84\x80\x10\x10\x08\x08\x01! \x04\x04\x02B\
+@\x08\x08\x01\x81\x80\x10\x10\x02B@\x08\x08\x04\x84\x80\x10\x10\x02\x82\
+\xd9\x05\xe3\x80\x04\xf0U\xf8\xa8\xd3\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     img_preview_block_a_png = '''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00`\x00\x00\x00P\x08\x06\x00\x00\x00\xe6\
-\xe2p\x95\x00\x00\x01<IDATx\xda\xed\xdb\xdd*Da\x14\xc7\xe191\x18\x1f\xf9\
-l$I\x89\xa4\xdc\xff=h"IS\xb2%IJ\x92$Ib5g2G\xd4\xfe;x\xa6~7\xb0\x9e\x83\xbd\
-\xe7}\xd7\xee4M\xf3\xa9\xdf\xd7\xf9\xeb\xcf\x10\x01\x00\x10\x00\x00\x02\
-\x00@\x00\x00\x08\x00\x00\x01\x00 \x00\x00\x04\x00\x80\x00\x00\x10\x00\x00\
-\x02\x00@c;\x00\x90\xed\xa3\xda\x07\x90G\xd8\x03\x90\xed\xad\xda\x02\x90\
-G\xd8\x04\x90\xed\xa5Z\x03\x90\xed\xb9\xea\x03\xc8#\xac\x02\xc8\xf6P-\x02\
-\xc8v_-\x00\xc8vS\xcd\x02\xc8v]\xcd\x00\xc8vU\xf5\x00d\x1bVS\x00\xb2\x9d\
-U\x93\x00\xb2\x9dV]\x00\xd9\x0e\x01d;\x02\x90kPM\x00\xc8t<\x1a\xbe\x87p\
-\xa4\x93\xd1\xc3\xd7kh\xa4\xf3o\xff\x01\x00\xb4\xdaE5\xed("\xd3\xe5\x8f\
-#\x08\x00\xadu[\xcd9\x8e\xcetW\xcd\xbb\x90\xc9\xf4X-\xb9\x92\xcc\x0d\xd9\
-\xa5|\xa6\xa7j\xc5ZJ\xa6\xd7j\xddbVn\xf8\x1bV\x133\xbdW\xdb\x96ss\xc3\xdf\
-\xb1\x9e\x9ek\xd7\x07\x1a>Q\x02\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\
-\x00\x00\x00\x00\x00\x00\x00\xf8g\x00_\x10\x11\xcd,\xcc\xe0)R\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x90\x00\x00\x00x\x08\x06\x00\x00\x00\x1d\
+Q{W\x00\x00\x00\x06bKGD\x00\xff\x00\xff\x00\xff\xa0\xbd\xa7\x93\x00\x00\
+\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\x9a\x9c\x18\x00\x00\
+\x00\x07tIME\x07\xde\x04\x02\x0e.;\x0b\xfbt\xb6\x00\x00\x02\x10IDATx\xda\
+\xed\xd7\xcdK\x96A\x14\xc6\xe1\xdb\x88
+sQQ\x14D\x1fp\x12\xcc\xac\x16-\xa4\xff\xbf\xad`e_\xda\xa1M\x14AE\x18\x94\
+\xa4`\x9b7\x10I}}\x1e\xa8\x85\xd7\xb5\x9c\x99\xb3\x19~\x0c\xccLw\xef\x86\
+\x13\xab\xaaf\xc6\xcc\x9fr\x85\x08\x08\x01! \x04\x04\x02B@\x08\x08\x01\x81\
+\x80\x10\x10\x02B@  \x04\x84\x80\x10\x10\x08\x08\x01! \x04\x84\x80@@\x08\
+\x08\x01! \x10\x10\x02B@\x08\x08\x04\x84\x80\x10\x10\x02\x02\x01! \x04\x84\
+\x80\x10\x10\x08\x08\x01! \x04\x04\x02B@\xfc\x0b\xdd}_@\x8c\xb1\xda\xdd\
+\x8b\x02bL\x03\xcf\xbb{A@\x8c\x89\xe8iw\xdf\x16\x10C\x9dI\xf2\xa6\xbbo
+\x881\x11\xbd\xea\xeek\x02b\xa8\xd9$\x1b\xdd}U@\x0c5\x97\xe4mw_\x11\x10\
+c"z\xdd\xdd\x17\x05\xc4P\x97\x92\xacw\xf7\x05\x011\xd4\xe5$k\xdd=\x27 \x86\
+\xba\x9e\xe4ew\x9f\x17\x10C\xddH\xf2\xa2\xbbg\x05\xc4P\xb7\x92\xact\xf7\
+9\x011\xd4\xc2$\xa2\xb3I2\xd3\xdd\xbb\xee\x84\x01\xd6\x92<\xf2\x021\xd4\
+R\x92\x27\x02b\x8c\xd3\x02b\xa8\x95$\xcb\x02b\x88\xd5$\x8f\xabj[@\x1c\xd7\
+\xb3$\xcbU\xb5\xed\x1b\xcfqmL\xe2\xf9\xf5gA@L\xab\x93<\xac\xaa\xad\xbd\x8b\
+\x02b\x1a\xef\x92<\xa8\xaa\x9f\xfb7\x04\xc4Q>N^\x9e\x1f\xdb\x14\x10\x87\
+\xf9\x94d\xa1\xaa\xbe\x1ft@@\x1c\xe4[\x92\xc5\xaa\xda<\xec\x90\x808(\x9e\
+;U\xf5\xf5\xa8\x83\x02b\xbf\xcd$\xf3U\xf5e\x9a\xc3\x02b\xaf\xad$w\xab\xea\
+\xf3\xb4\x03\x02bo<\xf3U\xf5\xe18C\x02"Iv\x92,U\xd5\xfb\xe3\x0e
+\x88\x9d\xc9o\xab\x87\x0c\x0b\x88{U\xb51tX@\x27\\U\xad\x8f\x99\x17\x10\
+\x11\x10\x02B@\x08\x08\x04\x84\x80\x10\x10\x02\x02\x01! \x04\x84\x80@@\x08\
+\x08\x01! \x10\x10\x02B@\x08\x08\x01\x81\x80\x10\x10\x02B@  \x04\x84\x80\
+\x10\x10\x08\x08\x01! \x04\x04\x02B@\x08\x08\x01! \x10\x10\xff\xc5o;\xf9\
+d\xf9\xf3\xc3\x84\x99\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     img_btn_press_png = '''\
 \x89PNG\x0d
