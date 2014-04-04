@@ -666,7 +666,7 @@ class NumberTextCtrl(wx.TextCtrl):
         if self.number is None:
             str_val = u""
         else:
-            str_val = units.readable_str(self.number)
+            str_val = units.readable_str(self.number, sig=self.accuracy)
         wx.TextCtrl.ChangeValue(self, str_val)
 
     def GetValue(self): #pylint: disable=W0221
