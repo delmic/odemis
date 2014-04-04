@@ -35,6 +35,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import math
+import numbers
 import numpy
 from odemis.acq import calibration, _futures
 from odemis.acq import drift as acq_drift
@@ -145,7 +146,8 @@ class Stream(object):
         # black/white. Its range is ._irange (will be updated by _updateIRange)
         self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
-                                                    cls=(int, long, float))
+                                                    cls=(int, long, float),
+                                                    setter=self._setIntensityRange)
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
@@ -386,6 +388,15 @@ class Stream(object):
     def _onOutliers(self, outliers):
         if self.auto_bc.value == True:
             self._updateImage()
+
+    def _setIntensityRange(self, irange):
+        # Not much to do, but force int if the data is int
+        if self._irange and isinstance(self._irange[1], numbers.Integral):
+            if not all(isinstance(v, numbers.Integral) for v in irange):
+                # Round down/up
+                irange = int(irange[0]), int(round(irange[1]))
+
+        return irange
 
     def _onIntensityRange(self, irange):
         # If auto_bc is active, it updates intensities (from _updateImage()),

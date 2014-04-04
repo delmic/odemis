@@ -654,7 +654,7 @@ class NumberTextCtrl(wx.TextCtrl):
             else:
                 unit = None
             str_val = units.to_string_pretty(self.number,
-                                             self.accuracy,
+                                             self.accuracy + 1,
                                              unit)
         wx.TextCtrl.ChangeValue(self, str_val)
 
@@ -869,7 +869,10 @@ class IntegerTextCtrl(NumberTextCtrl):
         min_val = kwargs.pop('min_val', None)
         max_val = kwargs.pop('max_val', None)
         choices = kwargs.pop('choices', None)
+
         kwargs['validator'] = IntegerValidator(min_val, max_val, choices)
+        kwargs['step'] = kwargs.get('step', 1)
+
         NumberTextCtrl.__init__(self, *args, **kwargs)
 
     def SetValue(self, val): #pylint: disable=W0221

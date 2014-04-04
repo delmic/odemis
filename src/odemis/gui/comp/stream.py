@@ -38,7 +38,7 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
-    UnitFloatCtrl, IntegerTextCtrl
+    UnitFloatCtrl, IntegerTextCtrl, FloatTextCtrl
 from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper, \
     ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -832,17 +832,22 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
         # ====== Third row, text fields for intensity
+        # Low/ High values are in raw data. So it's typically uint, but could
+        # be float for some weird cases. So we make them float, with high
+        # accuracy to avoid rounding.
 
         lbl_lowi = wx.StaticText(self._panel, -1, "Low")
         tooltip_txt = "Value mapped to black"
         lbl_lowi.SetToolTipString(tooltip_txt)
 
-        self._txt_lowi = IntegerTextCtrl(self._panel, -1,
+        self._txt_lowi = FloatTextCtrl(self._panel, -1,
                                         self.stream.intensityRange.value[0],
                                         style=wx.NO_BORDER,
                                         size=(-1, 14),
                                         min_val=hist_min,
-                                        max_val=hist_max)
+                                        max_val=hist_max,
+                                        step=1,
+                                        accuracy=6)
         self._txt_lowi.SetBackgroundColour(BG_COLOUR_MAIN)
         self._txt_lowi.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_lowi.SetToolTipString(tooltip_txt)
@@ -865,12 +870,14 @@ class StreamPanel(wx.PyPanel):
         lbl_highi = wx.StaticText(self._panel, -1, "High")
         tooltip_txt = "Value mapped to white"
         lbl_highi.SetToolTipString(tooltip_txt)
-        self._txt_highi = IntegerTextCtrl(self._panel, -1,
+        self._txt_highi = FloatTextCtrl(self._panel, -1,
                                         self.stream.intensityRange.value[1],
                                         style=wx.NO_BORDER,
                                         size=(-1, 14),
                                         min_val=hist_min,
-                                        max_val=hist_max)
+                                        max_val=hist_max,
+                                        step=1,
+                                        accuracy=6)
         self._txt_highi.SetBackgroundColour(BG_COLOUR_MAIN)
         self._txt_highi.SetForegroundColour(FG_COLOUR_EDIT)
         self._txt_highi.SetToolTipString(tooltip_txt)
@@ -932,11 +939,8 @@ class StreamPanel(wx.PyPanel):
 
         # Setting the values should not be necessary as the value should have
         # already been updated via the VA update
-        self._txt_lowi.min_value = drange[0]
-        self._txt_lowi.max_value = drange[1]
-
-        self._txt_highi.min_value = drange[0]
-        self._txt_highi.max_value = drange[1]
+        self._txt_lowi.SetValueRange(drange[0], drange[1])
+        self._txt_highi.SetValueRange(drange[0], drange[1])
 
     def _onHistogram(self, hist):
         # TODO: don't update when folded: it's useless => unsubscribe
