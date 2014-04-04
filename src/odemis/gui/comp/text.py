@@ -653,8 +653,12 @@ class NumberTextCtrl(wx.TextCtrl):
                 unit = self.unit  #pylint: disable=E1101
             else:
                 unit = None
+            if self.accuracy is None:
+                accuracy = None
+            else:
+                accuracy = self.accuracy + 1
             str_val = units.to_string_pretty(self.number,
-                                             self.accuracy + 1,
+                                             accuracy,
                                              unit)
         wx.TextCtrl.ChangeValue(self, str_val)
 
