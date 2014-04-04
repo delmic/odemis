@@ -589,10 +589,10 @@ class BitmapCanvas(BufferedCanvas):
 
         self.margins = (0, 0)
 
-    def set_images(self, images):
+    def set_images(self, im_args):
         """ Set (or update)  image
 
-        images (list of tuple): Each element is either None or:
+        im_args (list of tuple): Each element is either None or:
             im, w_pos, scale, keepalpha:
             im (wx.Image): the image
             w_pos (2-tuple of float): position of the center of the image (in world
@@ -608,16 +608,17 @@ class BitmapCanvas(BufferedCanvas):
         # * keepalpha not needed => just use alpha iff the image has it
         # * allow to indicate just one image has changed (and so the rest
         #   doesn't need to be recomputed)
-        self.images = []
-        for args in images:
+        images = []
+        for args in im_args:
             if args is None:
-                self.images.append(None)
+                images.append(None)
             else:
                 im, w_pos, scale, keepalpha = args
                 im._dc_center = w_pos
                 im._dc_scale = scale
                 im._dc_keepalpha = keepalpha
-                self.images.append(im)
+                images.append(im)
+        self.images = images
 
     def draw(self):
         """ Redraw the buffer with the images and overlays
@@ -639,7 +640,7 @@ class BitmapCanvas(BufferedCanvas):
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
-        self._draw_merged_images(self._dc_buffer, self.images, self.merge_ratio)
+        self._draw_merged_images(self._dc_buffer, list(self.images), self.merge_ratio)
 
         self._dc_buffer.SetDeviceOriginPoint((0, 0))
 
