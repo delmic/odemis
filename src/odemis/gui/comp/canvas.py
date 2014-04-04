@@ -640,7 +640,7 @@ class BitmapCanvas(BufferedCanvas):
         # we do not use the UserScale of the DC here because it would lead
         # to scaling computation twice when the image has a scale != 1. In
         # addition, as coordinates are int, there is rounding error on zooming.
-        self._draw_merged_images(self._dc_buffer, list(self.images), self.merge_ratio)
+        self._draw_merged_images(self._dc_buffer, self.images, self.merge_ratio)
 
         self._dc_buffer.SetDeviceOriginPoint((0, 0))
 
