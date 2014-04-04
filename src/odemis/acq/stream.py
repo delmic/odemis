@@ -128,7 +128,9 @@ class Stream(object):
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
-        self._irange = None
+        # TODO: rename _irange to _drange? That should avoid confusion with
+        # intensityRange
+        self._irange = None # min/max data range
 
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
@@ -140,32 +142,29 @@ class Stream(object):
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
-        # black/white. The .histogram always has
-        # the first value mapped to 0 and last value mapped to 1.
+        # black/white. Its range is ._irange (will be updated by _updateIRange)
         self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
                                                     cls=(int, long, float))
-
-        self._updateIRange()
-
-        # Make it so that the value gets clipped when its rane is updated and
+        # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
+        self._updateIRange()
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
         self.histogram = model.VigilantAttribute(numpy.ndarray(0), readonly=True)
         self.histogram._full_hist = numpy.ndarray(0) # for finding the outliers
-        self.histogram._edges = self._irange # TODO: needed?
+        self.histogram._edges = None
 
         self.auto_bc.subscribe(self._onAutoBC)
-        self.auto_bc_outliers.subscribe(self._onOutliers) # FIXME
+        self.auto_bc_outliers.subscribe(self._onOutliers)
         self.intensityRange.subscribe(self._onIntensityRange)
         self._ht_needs_recompute = threading.Event()
-        self._htread = threading.Thread(target=self._histogram_thread,
+        self._hthread = threading.Thread(target=self._histogram_thread,
                                         name="Histogram computation")
-        self._htread.daemon = True
-        self._htread.start()
+        self._hthread.daemon = True
+        self._hthread.start()
 
         # self.histogram.subscribe(self._onHistogram) # FIXME -> update outliers and then image
 
@@ -289,8 +288,7 @@ class Stream(object):
                 irange = None
 
         if irange:
-            # This Vigilant attribute will clip its own value if it is out of
-            # range
+            # This VA will clip its own value if it is out of range
             self.intensityRange.range = ((irange[0], irange[0]),
                                          (irange[1], irange[1]))
         self._irange = irange
@@ -302,18 +300,15 @@ class Stream(object):
         """
         if self.auto_bc.value:
             # The histogram might be slightly old, but not too much
+            # The main thing to pay attention is that the data range is identical
+            if self.histogram._edges != self._irange:
+                self._updateHistogram()
             irange = img.findOptimalRange(self.histogram._full_hist,
                                           self.histogram._edges,
                                           self.auto_bc_outliers.value / 100)
-
-            mn, mx = self.histogram._edges  #pylint: disable=W0633
-            self.intensityRange.range = ((mn, mn), (mx, mx))
             self.intensityRange.value = tuple(irange)
         else:
-            # just convert from the user-defined (as ratio) to actual values
-            # rrange = sorted(self.intensityRange.value)
-            # edges = self.histogram._edges
-            # irange = [edges[0] + (edges[1] - edges[0]) * v for v in rrange]
+            # just use the values requested by the user
             irange = sorted(self.intensityRange.value)
 
         return irange
@@ -361,9 +356,8 @@ class Stream(object):
         """
         # check to avoid running it if there is already one running
         if self._running_upd_img:
-            # Commented to prevent log flooding
-            # logging.debug(("Dropping image conversion to RGB, as the previous "
-            #                "one is still running"))
+            logging.debug(("Dropping image conversion to RGB, as the previous "
+                           "one is still running"))
             return
         if not self.raw:
             return
@@ -440,6 +434,9 @@ class Stream(object):
             self._updateHistogram()
             tend = time.time()
 
+            # TODO: if histogram is "quite" different from previous one:
+            # self._updateImage()
+
             # sleep at as much, to ensure we are not using too much CPU
             tsleep = max(0.2, tend - tstart) # max 5 Hz
             time.sleep(tsleep)
@@ -458,18 +455,13 @@ class Stream(object):
         old_irange = self._irange
         if not self.raw:
             self.raw.append(data)
-            old_irange = None # will force histogram creation
         else:
             self.raw[0] = data
 
         # Depth can change at each image (depends on hardware settings)
         self._updateIRange()
-        if old_irange != self._irange:
-            # Commented out to prevent log flooding
-            # logging.debug("Updating irange to %s", self._irange)
-            # This ensures there's always a valid histogram
-            self._updateHistogram()
-        else:
+        if old_irange == self._irange:
+            # If different range, it will be immediately recomputed
             self._shouldUpdateHistogram()
 
         self._updateImage()

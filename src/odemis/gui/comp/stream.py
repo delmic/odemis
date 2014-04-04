@@ -39,7 +39,8 @@ from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
     UnitFloatCtrl, IntegerTextCtrl
-from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper
+from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper, \
+    ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.util.conversion import wave2rgb
 import wx.lib.newevent
@@ -847,11 +848,11 @@ class StreamPanel(wx.PyPanel):
         self._txt_lowi.SetToolTipString(tooltip_txt)
 
         def get_lowi(va=self.stream.intensityRange, ctrl=self._txt_lowi):
-            lv = ctrl.GetValue()
+            req_lv = ctrl.GetValue()
             hv = va.value[1]
             # clamp low range to max high range
-            if hv < lv:
-                lv = hv
+            lv = max(va.range[0][0], min(req_lv, hv, va.range[1][0]))
+            if lv != req_lv:
                 ctrl.SetValue(lv)
             return lv, hv
 
@@ -876,10 +877,10 @@ class StreamPanel(wx.PyPanel):
 
         def get_highi(va=self.stream.intensityRange, ctrl=self._txt_highi):
             lv = va.value[0]
-            hv = ctrl.GetValue()
+            req_hv = ctrl.GetValue()
             # clamp high range to at least low range
-            if hv < lv:
-                hv = lv
+            hv = max(lv, va.range[0][1], min(req_hv, va.range[1][1]))
+            if hv != req_hv:
                 ctrl.SetValue(hv)
             return lv, hv
 
@@ -889,6 +890,8 @@ class StreamPanel(wx.PyPanel):
                           ctrl_2_va=get_highi,
                           events=wx.EVT_COMMAND_ENTER)
 
+        self._prev_drange = (self.stream.intensityRange.range[0][0],
+                             self.stream.intensityRange.range[1][1])
         self.stream.histogram.subscribe(self._onHistogram, init=True)
         # self.stream.intensityRange.subscribe(update_range)
 
@@ -922,6 +925,19 @@ class StreamPanel(wx.PyPanel):
         self._txt_lowi.Enable(not enabled)
         self._txt_highi.Enable(not enabled)
 
+    @call_after
+    @ignore_dead
+    def _update_drange(self, drange):
+        self._sld_hist.SetRange(drange[0], drange[1])
+
+        # Setting the values should not be necessary as the value should have
+        # already been updated via the VA update
+        self._txt_lowi.min_value = drange[0]
+        self._txt_lowi.max_value = drange[1]
+
+        self._txt_highi.min_value = drange[0]
+        self._txt_highi.max_value = drange[1]
+
     def _onHistogram(self, hist):
         # TODO: don't update when folded: it's useless => unsubscribe
         # hist is a ndarray of ints, content is a list of values between 0 and 1
@@ -933,18 +949,11 @@ class StreamPanel(wx.PyPanel):
         else:
             norm_hist = []
 
-        hist_min = self.stream.intensityRange.range[0][0]
-        hist_max = self.stream.intensityRange.range[1][1]
-
-        self._sld_hist.SetRange(hist_min, hist_max)
-
-        self._txt_lowi.min_value = hist_min
-        self._txt_lowi.max_value = hist_max
-        self._txt_lowi.SetValue(self.stream.intensityRange.value[0])
-
-        self._txt_highi.min_value = hist_min
-        self._txt_highi.max_value = hist_max
-        self._txt_highi.SetValue(self.stream.intensityRange.value[1])
+        drange = (self.stream.intensityRange.range[0][0],
+                  self.stream.intensityRange.range[1][1])
+        if drange != self._prev_drange:
+            self._prev_drange = drange
+            self._update_drange(drange)
 
         wx.CallAfter(dead_object_wrapper(self._sld_hist.SetContent), norm_hist)
 
