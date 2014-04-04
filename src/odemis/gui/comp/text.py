@@ -657,9 +657,7 @@ class NumberTextCtrl(wx.TextCtrl):
                 accuracy = None
             else:
                 accuracy = self.accuracy + 1
-            str_val = units.to_string_pretty(self.number,
-                                             accuracy,
-                                             unit)
+            str_val = units.to_string_pretty(self.number, accuracy, unit)
         wx.TextCtrl.ChangeValue(self, str_val)
 
     def _display_pretty(self):
