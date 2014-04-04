@@ -744,7 +744,7 @@ class Continuous(object):
 
             if self.clip_on_range:
                 # If the range is changed and the current value is outside of
-                # this new range, the value will be adjused so it falls within
+                # this new range, the value will be adjusted so it falls within
                 # this new range.
 
                 self._range = tuple(new_range)
