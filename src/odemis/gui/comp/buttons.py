@@ -763,7 +763,7 @@ class ViewButton(ImageTextToggleButton):
         self.pointer_offset = 16
 
         # The border that will be kept clear.
-        self.overlay_border = 5
+        self.overlay_border = 2
 
         self.overlay_width = None
         self.overlay_height = None

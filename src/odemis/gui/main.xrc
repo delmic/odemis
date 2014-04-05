@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxFlexGridSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -790,6 +790,24 @@
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_all">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_all">
                           <bitmap>img/preview_block.png</bitmap>
                           <hover>img/preview_block_a.png</hover>
@@ -798,15 +816,23 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_all">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_tl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -820,16 +846,23 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_tl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_tr">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -843,16 +876,23 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_tr">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_bl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -866,16 +906,23 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_bl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_br">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -889,25 +936,13 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_br">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>18</border>
-                      </object>
                     </object>
                     <option>0</option>
                     <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>50</border>
+                    <border>44</border>
                   </object>
                 </object>
                 <size>200,-1</size>
@@ -2221,16 +2256,24 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxFlexGridSizer">
+                    <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_all">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_all">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_all">
@@ -2241,18 +2284,26 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxRIGHT</flag>
-                        <border>5</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_tl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_tl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_tl">
@@ -2263,16 +2314,26 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_tr">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_tr">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_tr">
@@ -2283,16 +2344,26 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_bl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_bl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_bl">
@@ -2303,16 +2374,26 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_br">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_br">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_br">
@@ -2323,22 +2404,15 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
-                      <cols>2</cols>
-                      <rows>5</rows>
-                      <vgap>20</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>0</growablecols>
-                      <growablerows>0</growablerows>
-                      <growablerows>1</growablerows>
-                      <growablerows>2</growablerows>
-                      <growablerows>3</growablerows>
-                      <growablerows>4</growablerows>
+                      <orient>wxVERTICAL</orient>
                     </object>
                     <option>0</option>
                     <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>50</border>
+                    <border>44</border>
                   </object>
+                  
                   <orient>wxVERTICAL</orient>
                 </object>
                 <size>200,-1</size>

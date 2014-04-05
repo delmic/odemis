@@ -77,16 +77,16 @@ class xrcfr_main(wx.Frame):
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
-        self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
-        self.btn_secom_view_tl = xrc.XRCCTRL(self, "btn_secom_view_tl")
+        self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
         self.lbl_secom_view_tl = xrc.XRCCTRL(self, "lbl_secom_view_tl")
-        self.btn_secom_view_tr = xrc.XRCCTRL(self, "btn_secom_view_tr")
+        self.btn_secom_view_tl = xrc.XRCCTRL(self, "btn_secom_view_tl")
         self.lbl_secom_view_tr = xrc.XRCCTRL(self, "lbl_secom_view_tr")
-        self.btn_secom_view_bl = xrc.XRCCTRL(self, "btn_secom_view_bl")
+        self.btn_secom_view_tr = xrc.XRCCTRL(self, "btn_secom_view_tr")
         self.lbl_secom_view_bl = xrc.XRCCTRL(self, "lbl_secom_view_bl")
-        self.btn_secom_view_br = xrc.XRCCTRL(self, "btn_secom_view_br")
+        self.btn_secom_view_bl = xrc.XRCCTRL(self, "btn_secom_view_bl")
         self.lbl_secom_view_br = xrc.XRCCTRL(self, "lbl_secom_view_br")
+        self.btn_secom_view_br = xrc.XRCCTRL(self, "btn_secom_view_br")
         self.vp_secom_tl = xrc.XRCCTRL(self, "vp_secom_tl")
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
@@ -211,7 +211,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxStaticText" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxFlexGridSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -1002,6 +1002,24 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_all">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
                         <object class="ViewButton" name="btn_secom_view_all">
                           <bitmap>img_preview_block_png</bitmap>
                           <hover>img_preview_block_a_png</hover>
@@ -1010,15 +1028,23 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_all">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_tl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -1032,16 +1058,23 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_tl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_tr">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -1055,16 +1088,23 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_tr">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_bl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -1078,16 +1118,23 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_bl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_view_br">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT</flag>
                         <border>18</border>
@@ -1101,25 +1148,13 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
-                        <border>4</border>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
                       <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_secom_view_br">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                        <border>18</border>
-                      </object>
                     </object>
                     <option>0</option>
                     <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>50</border>
+                    <border>44</border>
                   </object>
                 </object>
                 <size>200,-1</size>
@@ -2433,16 +2468,24 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxFlexGridSizer">
+                    <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_all">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_all">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_all">
@@ -2453,18 +2496,26 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxRIGHT</flag>
-                        <border>5</border>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_tl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_tl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_tl">
@@ -2475,16 +2526,26 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_tr">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_tr">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_tr">
@@ -2495,16 +2556,26 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_bl">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_bl">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_bl">
@@ -2515,16 +2586,26 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_sparc_view_br">
-                          <label>view</label>
-                          <fg>#BFBFBF</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_sparc_view_br">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP|wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
                         </object>
-                        <flag>wxALIGN_RIGHT</flag>
+                        <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
                       </object>
                       <object class="sizeritem">
                         <object class="ViewButton" name="btn_sparc_view_br">
@@ -2535,22 +2616,15 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
+                        <flag>wxALIGN_RIGHT</flag>
                       </object>
-                      <cols>2</cols>
-                      <rows>5</rows>
-                      <vgap>20</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>0</growablecols>
-                      <growablerows>0</growablerows>
-                      <growablerows>1</growablerows>
-                      <growablerows>2</growablerows>
-                      <growablerows>3</growablerows>
-                      <growablerows>4</growablerows>
+                      <orient>wxVERTICAL</orient>
                     </object>
                     <option>0</option>
                     <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>50</border>
+                    <border>44</border>
                   </object>
+                  
                   <orient>wxVERTICAL</orient>
                 </object>
                 <size>200,-1</size>
