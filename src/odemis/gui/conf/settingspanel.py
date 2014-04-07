@@ -40,7 +40,6 @@ def _resolution_from_range(comp, va, conf):
     """ Construct a list of resolutions depending on range values """
 
     cur_val = va.value
-
     if len(cur_val) != 2:
         logging.warning("Got a resolution not of length 2: %s", cur_val)
         return [cur_val]
