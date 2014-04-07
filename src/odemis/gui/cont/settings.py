@@ -28,6 +28,7 @@ setting column of the user interface.
     This module is a prime candidate for a refactoring session!!!
 
 """
+from __future__ import division
 
 import collections
 import logging
@@ -1136,7 +1137,7 @@ class SparcSettingsController(SettingsBarController):
                                             spec_stream.repetition,
                                             None,  #component
                                             CONFIG["streamspec"]["repetition"])
-                spec_stream.roi.subscribe(self.on_spec_roi)
+                spec_stream.repetition.subscribe(self.on_spec_rep)
 
                 self.spec_pxs_ent = self._spectrum_panel.add_value(
                                             "pixelSize",
@@ -1191,7 +1192,7 @@ class SparcSettingsController(SettingsBarController):
                                         None,  #component
                                         CONFIG["streamar"]["repetition"])
 
-                ar_stream.roi.subscribe(self.on_ar_roi)
+                ar_stream.repetition.subscribe(self.on_ar_rep)
 
             else:
                 logging.warning("AR camera available, but no AR stream provided")
@@ -1199,35 +1200,31 @@ class SparcSettingsController(SettingsBarController):
         else:
             parent_frame.fp_settings_sparc_angular.Hide()
 
-    def on_spec_roi(self, roi):
-        self._on_roi(roi, self.spectro_rep_ent.va, self.spectro_rep_ent.ctrl)
+    def on_spec_rep(self, rep):
+        self._on_rep(rep, self.spectro_rep_ent.va, self.spectro_rep_ent.ctrl)
 
-    def on_ar_roi(self, roi):
-        self._on_roi(roi, self.angular_rep_ent.va, self.angular_rep_ent.ctrl)
+    def on_ar_rep(self, rep):
+        self._on_rep(rep, self.angular_rep_ent.va, self.angular_rep_ent.ctrl)
 
-    def _on_roi(self, roi, rep_va, rep_ctrl):
-        """ Recalculate the repitition presets according to the ROI ratio """
+    def _on_rep(self, rep, rep_va, rep_ctrl):
+        """ Recalculate the repetition presets according to the ROI ratio """
+        ratio = rep[1] / rep[0]
 
-        l, t, r, b = roi
-        if r - l != 0:
-            ratio = abs(b - t) / abs(r - l)
+        # TODO: also add values below/above the current repetition
 
-            # Get the boundaries for clipping
-            range_h_min = rep_va.range[0][0]
-            range_h_max = rep_va.range[1][1]
+        # Get the boundaries for clipping
+        range_h_min = rep_va.range[0][0]
+        range_h_max = rep_va.range[1][1]
 
-            for i, _ in enumerate(rep_ctrl.GetItems()):
-                choice = rep_ctrl.GetClientData(i)
-                if choice != (1, 1):
-                    new_height = int(choice[0] * ratio)
+        for i, _ in enumerate(rep_ctrl.GetItems()):
+            choice = rep_ctrl.GetClientData(i)
+            if choice != (1, 1):
+                new_height = int(round(choice[0] * ratio))
+                new_height = max(range_h_min, min(new_height, range_h_max))
+                choice = (choice[0], new_height)
 
-                    if range_h_min <= new_height <= range_h_max:
-                        choice = (choice[0], new_height)
-                    else:
-                        choice = (choice[0], range_h_max)
-
-                    rep_ctrl.Insert(u"%spx x %spx" % choice, i, choice)
-                    rep_ctrl.Delete(i + 1)
+                rep_ctrl.Insert(u"%s x %s px" % choice, i, choice)
+                rep_ctrl.Delete(i + 1)
 
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
