@@ -730,6 +730,10 @@ class SettingsPanel(object):
         return ne
 
     def _create_label(self, panel, vigil_attr, unit):
+        """ Create a read-only TextCtrl connected to the given va
+
+        :return: The newly created control and its vig
+        """
         # Read only value
         new_ctrl = wx.TextCtrl(panel, style=wx.BORDER_NONE | wx.TE_READONLY)
         new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
@@ -746,7 +750,7 @@ class SettingsPanel(object):
             format_value = None
         vac = VigilantAttributeConnector(vigil_attr,
                                          new_ctrl,
-                                         format_value)
+                                         va_2_ctrl=format_value)
 
         return new_ctrl, vac
 

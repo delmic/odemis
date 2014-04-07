@@ -95,8 +95,8 @@ class VigilantAttributeConnector(object):
 
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
-        self.va_2_ctrl = dead_object_wrapper(
-                            call_after_wrapper(va_2_ctrl or ctrl.SetValue))
+        self.va_2_ctrl = call_after_wrapper(
+                            dead_object_wrapper(va_2_ctrl or ctrl.SetValue))
         self.ctrl_2_va = ctrl_2_va or ctrl.GetValue
         if events is None:
             self.change_events = ()
@@ -246,35 +246,35 @@ class ProgessiveFutureConnector(object):
     """
     def __init__(self, future, bar, label=None):
         """
-        Update a gauge widget, based on the progress reported by the 
+        Update a gauge widget, based on the progress reported by the
         ProgressiveFuture.
         future (ProgressiveFuture)
         bar (gauge): the progress bar widget
-        label (TextLabel or None): if given, will also update a the text with 
+        label (TextLabel or None): if given, will also update a the text with
           the time left.
-        Note: when the future is complete (done), the progress bar will be set 
-        to 100%, but the text will not be updated. 
+        Note: when the future is complete (done), the progress bar will be set
+        to 100%, but the text will not be updated.
         """
         self._future = future
         self._bar = bar
         self._label = label
-        
+
         # Will contain the info of the future as soon as we get it.
         self._start = None
         self._end = None
         self._prev_left = None
-        
+
         # a repeating timer, always called in the GUI thread
         self._timer = wx.PyTimer(self._update_progress)
         self._timer.Start(250.0) # 4 Hz
-        
+
         # Set the progress bar to 0
         bar.Range = 100
         bar.Value = 0
 
         future.add_update_callback(self._on_progress)
         future.add_done_callback(self._on_done)
-    
+
     def _on_progress(self, future, past, left):
         """
         Callback called during the acquisition to update on its progress
@@ -284,7 +284,7 @@ class ProgessiveFutureConnector(object):
         now = time.time()
         self._start = now - past
         self._end = now + left
-       
+
     @call_after
     def _on_done(self, future):
         """
@@ -294,7 +294,7 @@ class ProgessiveFutureConnector(object):
         if not future.cancelled():
             self._bar.Range = 100
             self._bar.Value = 100
-    
+
     def _update_progress(self):
         if self._start is None: # no info yet
             return
@@ -303,7 +303,7 @@ class ProgessiveFutureConnector(object):
         past = now - self._start
         left = max(0, self._end - now)
         self._prev_left, prev_left = left, self._prev_left
-        
+
         # progress bar: past / past+left
         can_update = True
         try:
@@ -324,11 +324,11 @@ class ProgessiveFutureConnector(object):
 
         if self._label is None:
             return
-        
+
         if self._future.done():
             # make really sure we don't update the text after the future is over
             return
-        
+
         # Time left
         left = math.ceil(left) # pessimistic
         # Avoid back and forth estimation => don't increase unless really huge (> 5s)
