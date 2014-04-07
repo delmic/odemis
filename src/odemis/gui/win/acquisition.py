@@ -70,14 +70,14 @@ class AcquisitionDialog(xrcfr_acq):
         self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
 
         # Create a new settings controller for the acquisition dialog
-        self.settings_controller = SecomSettingsController(self,
+        self._settings_controller = SecomSettingsController(self,
                                                        self._tab_data_model,
                                                        highlight_change=True)
         # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
         self._preset_values = {} # dict string -> dict (SettingEntries -> value)
-        orig_entries = self.settings_controller.entries
+        orig_entries = self._settings_controller.entries
         self._orig_settings = preset_as_is(orig_entries) # to detect changes
         for n, preset in presets.items():
             self._preset_values[n] = preset(orig_entries)
@@ -361,6 +361,17 @@ class AcquisitionDialog(xrcfr_acq):
 
         self.Destroy()
 
+    def _pause_settings(self):
+        """
+        Pause the settings of the GUI and save the values for restoring them later
+        """
+        self._settings_controller.pause()
+        self._settings_controller.enable(False)
+
+    def _resume_settings(self):
+        self._settings_controller.resume()
+        self._settings_controller.enable(True)
+
     def on_acquire(self, evt):
         """
         Start the acquisition (really)
@@ -372,6 +383,7 @@ class AcquisitionDialog(xrcfr_acq):
         view.lastUpdate.unsubscribe(self.on_streams_changed)
 
         # TODO: freeze all the settings so that it's not possible to change anything
+        self._pause_settings()
 
         self.gauge_acq.Show()
         self.Layout() # to put the gauge at the right place
@@ -379,7 +391,7 @@ class AcquisitionDialog(xrcfr_acq):
         # start acquisition + connect events to callback
         streams = self._tab_data_model.focussedView.value.getStreams()
 
-        # Add an overlay stream if the fine alignment check box is checked
+        # Add the overlay stream if the fine alignment check box is checked
         if self.chkbox_fine_align.Value:
             streams.add(self._ovrl_stream)
 
@@ -412,6 +424,7 @@ class AcquisitionDialog(xrcfr_acq):
         """
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
+        self._resume_settings()
 
         # reenable estimation time updates
         view = self._tab_data_model.focussedView.value
