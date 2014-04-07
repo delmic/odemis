@@ -17,7 +17,7 @@ Vcs-Git: git://github.com/delmic/odemis.git
 Vcs-Browser: https://github.com/delmic/odemis
 
 Package: odemis
-Architecture: all
+Architecture: any
 Depends: python (>= 2.7.1),
          python-wxgtk2.9,
          python-pkg-resources,

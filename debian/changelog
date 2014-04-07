@@ -1,3 +1,24 @@
+odemis (1.6-1ubuntu1) precise; urgency=low
+
+  * New version: 1.6
+  * Main new features:
+    * Fine alignment (SECOM)
+    * Drift correction (SPARC)
+    * Support for the Andor SR303i spectrometer (requires latest Andor SDK2)
+    * Angular resolved background image subtraction (SPARC)
+    * Spectrum efficiency correction (SPARC)
+    * Graph of intensity over time in spectrum settings (SPARC)
+    * Simulated SEM with drift
+    * Option to save current gallery image under a new name/format
+    * Odemis-viewer: new launcher to view previous acquisitions without a microscope connected
+  * Main bug fixed and improvements:
+    * Reduced latency in displaying (large) live images
+    * Do not start optical microscope with maximum light power (SECOM)
+    * During acqusition, schedule fluo streams with long emission wl first (SECOM)
+    * Many small GUI improvements
+    * Udev rules are now placed in /lib instead of /etc
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 07 Apr 2014 15:37:23 +0200
+
 odemis (1.5-1ubuntu1) precise; urgency=low
 
   * New version: 1.5
