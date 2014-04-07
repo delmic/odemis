@@ -34,10 +34,12 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
+from odemis.acq import find_overlay
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
+from odemis.gui.comp.canvas import CAN_MOVE, CAN_FOCUS
 from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
@@ -54,6 +56,7 @@ import wx
 from wx.lib.pubsub import pub
 
 from odemis.gui.comp.popup import Message
+import odemis.gui.model as guimod
 
 
 class SnapshotController(object):
@@ -406,8 +409,8 @@ class SparcAcquiController(object):
 
     def __init__(self, tab_data, main_frame, settings_controller, roa, vas):
         """
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
+        main_frame: (wx.Frame): the frame which contains the 4 viewports
         settings_controller (SettingsController)
         roa (VA): VA of the ROA
         vas (list of VAs): all the VAs which might affect acquisition (time)
@@ -696,3 +699,149 @@ class SparcAcquiController(object):
         # display in the analysis tab
         self._show_acquisition(data, open(filename))
         self._reset_acquisition_gui()
+
+
+class FineAlignController(object):
+    """
+    Takes care of the fine alignment button and process on the SECOM lens
+    alignment tab.
+    Not an "acquisition" process per-se but actually very similar, the main
+    difference being that the result is not saved as a file, but sent to the 
+    CCD (for calibration).
+    
+    Note: It needs the VA .fineAlignDwellTime on the main GUI data (contains 
+      the time to expose each spot to the ebeam).
+    """
+
+    def __init__(self, tab_data, main_frame, settings_controller):
+        """
+        tab_data (MicroscopyGUIData): the representation of the microscope GUI
+        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        settings_controller (SettingController)
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._main_frame = main_frame
+        self._settings_controller = settings_controller
+
+        main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._faf_connector = None
+
+        # Make sure to reset the correction metadata if lens move
+        self._main_data_model.aligner.position.subscribe(self._on_aligner_pos)
+
+        self._tab_data_model.tool.subscribe(self._onTool, init=True)
+
+    @call_after
+    def _onTool(self, tool):
+        """
+        Called when the tool (mode) is changed
+        """
+        # Only allow fine alignment when spot mode is on (so that the exposure
+        # time has /some chances/ to represent the needed dwell time)
+        self._main_frame.btn_fine_align.Enable(tool == guimod.TOOL_SPOT)
+
+    def _pause(self):
+        """
+        Pause the settings and the streams of the GUI
+        """
+        # save the original settings
+        self._settings_controller.enable(False)
+        self._settings_controller.pause()
+
+        # TODO: disable every control (eg. toolbar, actuator buttons)
+        self._main_frame.btn_fine_align.Enable(False)
+
+        # make sure to not disturb the acquisition
+        for s in self._tab_data_model.streams.value:
+            s.is_active.value = False
+
+        # Prevent moving the stages
+        for c in [self._main_frame.vp_align_ccd.canvas,
+                  self._main_frame.vp_align_sem.canvas]:
+            c.abilities -= set([CAN_MOVE, CAN_FOCUS])
+
+    def _resume(self):
+        self._settings_controller.resume()
+        self._settings_controller.enable(True)
+
+        self._main_frame.btn_fine_align.Enable(True)
+
+        # Restart the streams (which were being played)
+        for s in self._tab_data_model.streams.value:
+            s.is_active.value = s.should_update.value
+
+        # Allow moving the stages
+        for c in [self._main_frame.vp_align_ccd.canvas,
+                  self._main_frame.vp_align_sem.canvas]:
+            c.abilities |= set([CAN_MOVE, CAN_FOCUS])
+
+
+    OVRL_MAX_DIFF = 1e-6 # m
+    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
+#    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
+    def _on_fine_align(self, event):
+        """
+        Called when the "Fine alignment" button is clicked
+        """
+        self._pause()
+        main_data = self._main_data_model
+        main_data.is_acquiring.value = True
+
+        logging.debug("Starting overlay procedure")
+        f = find_overlay.FindOverlay(self.OVRL_REPETITION,
+                                     main_data.fineAlignDwellTime.value,
+                                     self.OVRL_MAX_DIFF,
+                                     main_data.ebeam,
+                                     main_data.ccd,
+                                     main_data.sed)
+        logging.debug("Overlay procedure is running...")
+
+        # Set up progress bar
+        self._main_frame.lbl_fine_align.Hide()
+        self._main_frame.gauge_fine_align.Show()
+        self._main_frame.gauge_fine_align.Value = 0
+        fa_sizer = self._main_frame.pnl_align_controls.GetSizer()
+        fa_sizer.Layout()
+        self._faf_connector = ProgessiveFutureConnector(f,
+                                            self._main_frame.gauge_fine_align)
+
+        f.add_done_callback(self._on_fa_done)
+
+    @call_after
+    def _on_fa_done(self, future):
+        logging.debug("End of overlay procedure")
+        main_data = self._main_data_model
+        try:
+            trans_val, cor_md = future.result()
+            # The magic: save the correction metadata straight into the CCD
+            main_data.ccd.updateMetadata(cor_md)
+        except Exception:
+            logging.warning("Failed to run the fine alignment, a report "
+                            "should be available in ~/odemis-overlay-report.")
+            self._main_frame.lbl_fine_align.SetLabel("Failed")
+        else:
+            self._main_frame.lbl_fine_align.SetLabel("Successful")
+            # Temporary info until the GUI can actually rotate the images
+            if model.MD_ROTATION_COR in cor_md:
+                logging.warning("Rotation needed of %f° will not be displayed",
+                                cor_md[model.MD_ROTATION_COR])
+
+        # As the CCD image might have different pixel size, force to fit
+        self._main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
+
+        main_data.is_acquiring.value = False
+        self._resume()
+
+        self._main_frame.lbl_fine_align.Show()
+        self._main_frame.gauge_fine_align.Hide()
+        fa_sizer = self._main_frame.pnl_align_controls.GetSizer()
+        fa_sizer.Layout()
+
+    def _on_aligner_pos(self, pos):
+        """
+        Called when the position of the lens is changed
+        """
+        # This means that the translation correction information from fine
+        # alignment is not correct anymore, so reset it.
+        self._tab_data_model.main.ccd.updateMetadata({model.MD_POS_COR: (0, 0)})

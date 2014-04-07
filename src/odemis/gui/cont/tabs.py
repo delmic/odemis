@@ -30,21 +30,19 @@ import logging
 import math
 import numpy
 from odemis import dataio, model
-from odemis.acq import calibration, find_overlay
+from odemis.acq import calibration
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
-from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
-    SparcAcquiController
+    SparcAcquiController, FineAlignController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
     call_after, align, call_after_wrapper
-from odemis.gui.util.widgets import ProgessiveFutureConnector
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -56,6 +54,7 @@ from wx import html  #pylint: disable=W0611
 import wx
 
 import odemis.acq.stream as streammod
+from odemis.gui.comp.popup import Message
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
@@ -1330,11 +1329,9 @@ class LensAlignTab(Tab):
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
         fa_sizer.Layout()
-        main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
-        self._faf_connector = None
-
-        # Make sure to reset the correction metadata if lens move
-        main_data.aligner.position.subscribe(self._on_aligner_pos)
+        self._fa_controller = FineAlignController(self.tab_data_model,
+                                                  main_frame,
+                                                  self._settings_controller)
 
         # Documentation text on the left panel
         path = os.path.join(get_installation_folder(), "doc/alignment.html")
@@ -1353,21 +1350,18 @@ class LensAlignTab(Tab):
 
         # Turn on/off the streams as the tab is displayed.
         # Also directly modify is_active, as there is no stream scheduler
-        self._sem_stream.should_update.value = show
-        self._sem_stream.is_active.value = show
-        self._ccd_stream.should_update.value = show
-        self._ccd_stream.is_active.value = show
+        for s in self.tab_data_model.streams.value:
+            s.should_update.value = show
+            s.is_active.value = show
 
-        main_data = self.tab_data_model.main
         # update the fine alignment dwell time when CCD settings change
+        main_data = self.tab_data_model.main
         if show:
-            main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
-            main_data.ccd.binning.subscribe(self._update_fa_dt)
-            self.tab_data_model.tool.subscribe(self._update_fa_dt)
+            # as we excepted no acquisition when changing tab, it will always
+            # lead to subscriptions to VA
+            main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
         else:
-            main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
-            main_data.ccd.binning.unsubscribe(self._update_fa_dt)
-            self.tab_data_model.tool.unsubscribe(self._update_fa_dt)
+            main_data.is_acquiring.unsubscribe(self._on_acquisition)
 
         # TODO: save and restore SEM state (for now, it does nothing anyway)
         # Turn on (or off) SEM
@@ -1378,8 +1372,8 @@ class LensAlignTab(Tab):
     def terminate(self):
         super(LensAlignTab, self).terminate()
         # make sure the streams are stopped
-        self._sem_stream.is_active.value = False
-        self._ccd_stream.is_active.value = False
+        for s in self.tab_data_model.streams.value:
+            s.is_active.value = False
 
     @call_after
     def _onTool(self, tool):
@@ -1395,14 +1389,12 @@ class LensAlignTab(Tab):
 
         if tool != guimod.TOOL_SPOT:
             self._sem_stream.spot.value = False
-            self.main_frame.btn_fine_align.Enable(False)
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
             self.main_frame.lens_align_btn_to_center.Show(True)
             self.main_frame.lens_align_lbl_approc_center.Show(True)
         elif tool == guimod.TOOL_SPOT:
-            self.main_frame.btn_fine_align.Enable(True)
             self._sem_stream.spot.value = True
             # TODO: until the settings are directly connected to the hardware,
             # we need to disable/freeze the SEM settings in spot mode.
@@ -1421,7 +1413,26 @@ class LensAlignTab(Tab):
 
         self._update_to_center()
 
-    # Fine alignment functions
+    def _on_acquisition(self, is_acquiring):
+        # A bit tricky because (in theory), could happen in any tab
+        self._subscribe_for_fa_dt(not is_acquiring)
+        
+    def _subscribe_for_fa_dt(self, subscribe=True):
+        # Make sure that we don't update fineAlignDwellTime unless:
+        # * The tab is shown
+        # * Acquisition is not going on
+        # * Spot tool is selected
+        # (wouldn't be needed if the VAs where on the stream itself)
+
+        ccd = self.tab_data_model.main.ccd
+        if subscribe:
+            ccd.exposureTime.subscribe(self._update_fa_dt)
+            ccd.binning.subscribe(self._update_fa_dt)
+            self.tab_data_model.tool.subscribe(self._update_fa_dt)
+        else:
+            ccd.exposureTime.unsubscribe(self._update_fa_dt)
+            ccd.binning.unsubscribe(self._update_fa_dt)
+            self.tab_data_model.tool.unsubscribe(self._update_fa_dt)
 
     def _update_fa_dt(self, unused=None):
         """
@@ -1440,87 +1451,6 @@ class LensAlignTab(Tab):
         dt = main_data.ccd.exposureTime.value * numpy.prod(binning)
         main_data.fineAlignDwellTime.value = main_data.fineAlignDwellTime.clip(dt)
 
-# TODO: move it to acquisition controller
-    OVRL_MAX_DIFF = 10e-6 # m
-    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
-#    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
-    def _on_fine_align(self, event):
-        """
-        Called when the "Fine alignment" button is clicked
-        """
-        # make sure to not disturb the acquisition
-        self._ccd_stream.is_active.value = False
-        self._sem_stream.is_active.value = False
-
-        main_data = self.tab_data_model.main
-        # TODO: disable every control
-        main_data.is_acquiring.value = True
-        # Don't update when CCD exposure time is changed by find_overlay
-        # (wouldn't be needed if the VAs where on the stream itself)
-        main_data.ccd.exposureTime.unsubscribe(self._update_fa_dt)
-        main_data.ccd.binning.unsubscribe(self._update_fa_dt)
-
-        logging.debug("Starting overlay procedure")
-        f = find_overlay.FindOverlay(self.OVRL_REPETITION,
-                                     main_data.fineAlignDwellTime.value,
-                                     self.OVRL_MAX_DIFF,
-                                     main_data.ebeam,
-                                     main_data.ccd,
-                                     main_data.sed)
-        logging.debug("Overlay procedure is running...")
-
-        # Set up progress bar
-        self.main_frame.lbl_fine_align.Hide()
-        self.main_frame.gauge_fine_align.Show()
-        self.main_frame.gauge_fine_align.Value = 0
-        fa_sizer = self.main_frame.pnl_align_controls.GetSizer()
-        fa_sizer.Layout()
-        self._faf_connector = ProgessiveFutureConnector(f,
-                                            self.main_frame.gauge_fine_align)
-
-        f.add_done_callback(self._on_fa_done)
-
-    @call_after
-    def _on_fa_done(self, future):
-        logging.debug("End of overlay procedure")
-        try:
-            trans_val, cor_md = future.result()
-            # The magic: save the correction metadata straight into the CCD
-            self.tab_data_model.main.ccd.updateMetadata(cor_md)
-        except Exception:
-            logging.warning("Failed to run the fine alignment, a report "
-                              "should be available in ~/odemis-overlay-report.")
-            self.main_frame.lbl_fine_align.SetLabel("Failed")
-        else:
-            self.main_frame.lbl_fine_align.SetLabel("Successful")
-            # Temporary info until the GUI can actually rotate the images
-            if model.MD_ROTATION_COR in cor_md:
-                logging.warning("Rotation needed of %f° will not be displayed",
-                                cor_md[model.MD_ROTATION_COR])
-
-        # As the CCD image might have different pixel size, force to fit
-        self.main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
-
-        # restart standard acquisition (only if tab still displayed)
-        self._sem_stream.is_active.value = self._sem_stream.should_update.value
-        self._ccd_stream.is_active.value = self._ccd_stream.should_update.value
-        main_data = self.tab_data_model.main
-        main_data.ccd.exposureTime.subscribe(self._update_fa_dt)
-        main_data.ccd.binning.subscribe(self._update_fa_dt)
-        main_data.is_acquiring.value = False
-
-        self.main_frame.lbl_fine_align.Show()
-        self.main_frame.gauge_fine_align.Hide()
-        fa_sizer = self.main_frame.pnl_align_controls.GetSizer()
-        fa_sizer.Layout()
-
-    def _on_aligner_pos(self, pos):
-        """
-        Called when the position of the lens is changed
-        """
-        # This means that the translation correction information from fine
-        # alignment is not correct anymore, so reset it.
-        self.tab_data_model.main.ccd.updateMetadata({model.MD_POS_COR: (0, 0)})
 
     # "Move to center" functions
     @call_after

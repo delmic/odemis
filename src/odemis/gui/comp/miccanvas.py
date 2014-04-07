@@ -733,16 +733,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # Hook to update the FPS value
     def draw(self):
-        if hasattr(self, "_latest"):
-            latest = self._latest
-        else:
-            latest = 0
+#        if hasattr(self, "_latest"):
+#            latest = self._latest
+#        else:
+#            latest = 0
 
         t_start = time.time()
         super(DblMicroscopeCanvas, self).draw()
         dur = time.time() - t_start
         fps = 1 / dur
-        self._fps_label.text = "%.3g fps" % fps
+        self._fps_label.text = u"%s fps" % units.readable_str(fps, sig=4)
 
         # if latest > 0:
         #     logging.debug("Drew canvas %g s after acquisition (took %g s).",
