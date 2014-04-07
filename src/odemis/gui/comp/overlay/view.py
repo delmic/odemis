@@ -313,9 +313,9 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
             self.position_label.pos = start_pos
             # FIXME: label text is always empty... what's the point of displaying it?
-#            self.text = "kaas"
+            # self.text = "kaas"
 
-            self._write_label(ctx, self.position_label)
+            # self._write_label(ctx, self.position_label)
 
 
 HORIZONTAL = 1
