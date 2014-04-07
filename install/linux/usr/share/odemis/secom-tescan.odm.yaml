@@ -2,8 +2,8 @@ SimSECOM: {
     class: Microscope,
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
-    detectors: ["Andor SimCam", "SED ExtXY"],
-    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", "Ebeam-focus actuator"],
+    detectors: ["Andor SimCam", "SED ExtXY", "ChamberCam"],
+    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", "Ebeam-focus actuator", "ChamberPressure"],
 }
 
 #Light: {
@@ -45,7 +45,7 @@ Spectra: {
     init: {},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY",
-               stage: "OLStage", focus: "Ebeam-focus actuator"}
+               stage: "OLStage", focus: "Ebeam-focus actuator", camera: "ChamberCam", pressure: "ChamberPressure"}
 }
 
 "EBeam ExtXY": {
@@ -128,6 +128,23 @@ Spectra: {
     affects: ["Andor SimCam", "EBeam ExtXY"],
     properties: {
         speed: {x: 0.1, y: 0.1} #m/s
+    }
+}
+
+"ChamberCam": {
+    role: camera,
+    init: {
+    },
+    properties: {
+    }
+}
+
+"ChamberPressure": {
+    role: pressure,
+    init: {axes: [z]},
+    affects: ["Andor SimCam", "EBeam ExtXY"],
+    properties: {
+        speed: {z: 0.1} #m/s
     }
 }
 

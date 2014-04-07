@@ -107,13 +107,29 @@ class TescanSEM(model.HwComponent):
         self._stage = Stage(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._stage)
 
-        # create the scanner child
+        # create the focus child
         try:
             kwargs = children["focus"]
         except (KeyError, TypeError):
             raise KeyError("TescanSEM was not given a 'focus' child")
         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._focus)
+
+        # create the camera child
+        try:
+            kwargs = children["camera"]
+        except (KeyError, TypeError):
+            raise KeyError("TescanSEM was not given a 'camera' child")
+        self._camera = ChamberView(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._camera)
+
+        # create the pressure child
+        try:
+            kwargs = children["pressure"]
+        except (KeyError, TypeError):
+            raise KeyError("TescanSEM was not given a 'pressure' child")
+        self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._pressure)
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -224,7 +240,6 @@ class Scanner(model.Emitter):
 
     def _onMagnification(self, mag):
         # HFW to mm to comply with Tescan API
-        print self._hfw_nomag / mag
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self._updatePixelSize()
 
@@ -444,13 +459,13 @@ class Detector(model.Detector):
             t = center[1] + pxs_pos[0] - (res[0] / 2)
             r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
             b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
-            self.parent._device.ProgressShow("Prog", "Acq", 1, 1, 0, 100)
+
             self.parent._device.ScScanXY(0, res[0], res[1], l,
                                     t,
                                     r,
                                     b, 1, self.parent._scanner.dwellTime.value)
 
-            print l, t, r, b
+            # print self.parent._device.GUIGetScanning()
             # fetch the image (blocking operation), string is returned
             img_str = self.parent._device.FetchImage(0, res[0] * res[1])
             list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
@@ -482,9 +497,7 @@ class Detector(model.Detector):
                 dwelltime = self.parent._scanner.dwellTime.value
                 resolution = self.parent._scanner.resolution.value
                 duration = numpy.prod(resolution) * dwelltime
-                print "TATA"
                 callback(self._acquire_image())
-                print "TOTO"
         except:
             logging.exception("Unexpected failure during image acquisition")
         finally:
@@ -589,9 +602,6 @@ class Stage(model.Actuator):
         # result = self.parent._device.Connect('192.168.92.91', 8300)
 
         for axis, change in shift.items():
-            print axis
-            print change
-            print self.speed.value[axis]
             if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
@@ -611,12 +621,10 @@ class Stage(model.Actuator):
         # Perform move through Tescan API
         # Position from m to mm and inverted
         # print self.parent._device.TcpGetSWVersion()
-        print -self._position["x"], -self._position["y"]
         self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
                                     - self._position["y"] * 1e03,
                                     - self._position["z"] * 1e03,
                                     0, 0)
-
         time_end = time_start + maxtime
         self._updatePosition()
         # TODO queue the move and pretend the position is changed only after the given time
@@ -669,7 +677,7 @@ class EbeamFocus(model.Actuator):
 
         # Just z axis
         a = axes[0]
-        rng = ranges.get(a, [-0.1, 0.1])
+        rng = ranges.get(a, [0, 270 * 1e-03])
         axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
 
         # start at the centre
@@ -717,14 +725,10 @@ class EbeamFocus(model.Actuator):
         time_start = time.time()
         maxtime = 0
         for axis, change in shift.items():
-            print axis
-            print change
-            print self.speed.value[axis]
             if not axis in shift:
                 raise ValueError("Axis '%s' doesn't exist." % str(axis))
 
             # TODO GetWD to stay updated to changes made via Tescan sw
-
             self._position[axis] += change
             if (self._position[axis] < self.axes[axis].range[0] or
                 self._position[axis] > self.axes[axis].range[1]):
@@ -733,7 +737,6 @@ class EbeamFocus(model.Actuator):
             else:
                 logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-
 
         # Perform move through Tescan API
         # Position from m to mm and inverted
@@ -766,6 +769,242 @@ class EbeamFocus(model.Actuator):
         time_end = time_start + maxtime
         self._updatePosition()
         self._updatePixelSize()
+        return model.InstantaneousFuture()
+
+    def stop(self, axes=None):
+        # TODO empty the queue for the given axes
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        return
+
+class ChamberView(model.DigitalCamera):
+    """
+    Represents one chamber camera - chamberscope. Provides video consisted of
+    static images sent in regular intervals.
+    This implementation is for the Tescan.
+    """
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Initialises the device.
+        Raise an exception if the device cannot be opened.
+        """
+        model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
+        self.parent._device.CameraEnable(0, 0.05, 5, 0)
+
+        self._shape = (2 ** 8,)
+
+        self.acquisition_lock = threading.Lock()
+        self.acquire_must_stop = threading.Event()
+        self.acquire_thread = None
+
+        self.data = ChamberDataFlow(self)
+
+        logging.debug("Camera component ready to use.")
+
+    def Shutdown(self):
+        self.parent._device.CameraDisable()
+
+    def GetStatus(self):
+        """
+        return int: chamber camera status, 0 - off, 1 - on
+        """
+        status = self.parent._device.CameraGetStatus(0)
+        return status[0]
+
+    def start_flow(self, callback):
+        """
+        Set up the chamber camera and start acquiring images.
+        callback (callable (DataArray) no return):
+         function called for each image acquired
+        """
+        # if there is a very quick unsubscribe(), subscribe(), the previous
+        # thread might still be running
+        self.wait_stopped_flow()  # no-op is the thread is not running
+        self.acquisition_lock.acquire()
+
+        assert(self.GetStatus() == 1)  # Just to be sure
+
+        target = self._acquire_thread_continuous
+        self.acquire_thread = threading.Thread(target=target,
+                name="chamber camera acquire flow thread",
+                args=(callback,))
+        self.acquire_thread.start()
+
+    def _acquire_thread_continuous(self, callback):
+        """
+        The core of the acquisition thread. Runs until acquire_must_stop is set.
+        """
+        try:
+            while not self.acquire_must_stop.is_set():
+                width, height, img_str = self.parent._device.FetchCameraImage(0)
+                list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
+                sem_img = numpy.reshape(list_str, (width, height))
+                array = model.DataArray(sem_img)
+                # first we wait ourselves the typical time (which might be very long)
+                # while detecting requests for stop
+                if self.acquire_must_stop.wait(5000):
+                    break
+
+                callback(self._transposeDAToUser(array))
+
+        except:
+            logging.exception("Failure during acquisition")
+        finally:
+            self.acquisition_lock.release()
+            logging.debug("Acquisition thread closed")
+            self.acquire_must_stop.clear()
+
+    def wait_stopped_flow(self):
+        """
+        Waits until the end acquisition of a flow of images. Calling from the
+         acquisition callback is not permitted (it would cause a dead-lock).
+        """
+        # "if" is to not wait if it's already finished
+        if self.acquire_must_stop.is_set():
+            self.acquire_thread.join(10)  # 10s timeout for safety
+            if self.acquire_thread.isAlive():
+                raise OSError("Failed to stop the acquisition thread")
+            # ensure it's not set, even if the thread died prematurately
+            self.acquire_must_stop.clear()
+
+    def terminate(self):
+        """
+        Must be called at the end of the usage
+        """
+        self.Shutdown()
+
+class ChamberDataFlow(model.DataFlow):
+    def __init__(self, camera):
+        """
+        camera: chamber camera instance ready to acquire images
+        """
+        model.DataFlow.__init__(self)
+        self.component = weakref.ref(camera)
+
+    def start_generate(self):
+        comp = self.component()
+        if comp is None:
+            return
+        comp.start_flow(self.notify)
+
+    def stop_generate(self):
+        comp = self.component()
+        if comp is None:
+            return
+        comp.req_stop_flow()
+
+class ChamberPressure(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    adjusting the chamber pressure. It actually allows the user to evacuate or
+    vent the chamber and get the current pressure of it.
+    """
+    def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
+        assert len(axes) > 0
+        if ranges is None:
+            ranges = {}
+
+        axes_def = {}
+        self._position = {}
+        init_speed = {}
+
+        # Just z axis
+        a = axes[0]
+        # 1 for evacuated, 0 for vented chamber
+        _dict = dict([('vented', 0), ('pumped', 1)])
+        axes_def[a] = model.Axis(unit="", range=_dict, speed=[0., 10.])
+
+        # VA that retains the current chamber pressure
+        pressure = parent._device.VacGetPressure(0)
+        self.chamberPressure = model.FloatContinuous(pressure, (1e-04, 1e+06), unit="Pa")
+
+        # Check if we are currently pumped or vented
+        if pressure < 1:
+            self._position[a] = 1
+        else:
+            self._position[a] = 0
+            
+        init_speed[a] = 10.0  # we are super fast!
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="", readonly=True)
+
+        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        shift = self._applyInversionRel(shift)
+        time_start = time.time()
+        maxtime = 0
+        for axis, change in shift.items():
+            if not axis in shift:
+                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+
+            self._position[axis] += change
+            if (self._position[axis] < self.axes[axis].range[0] or
+                self._position[axis] > self.axes[axis].range[1]):
+                logging.warning("moving axis %s to %f, outside of range %r",
+                                axis, self._position[axis], self.axes[axis].range)
+            else:
+                logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+
+        # Make sure we update with the initial and final chamber pressure
+        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+        if self._position["z"] == 1:
+            self.parent._device.VacPump()
+        else:
+            self.parent._device.VacVent()
+        # TODO add timeout
+        while not self.parent._device.VacGetStatus() == 0:
+            # Update chamber pressure until pumping/venting process is done
+            self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+
+        time_end = time_start + maxtime
+        # Update only once we are in the required state
+        self._updatePosition()
+        # TODO queue the move and pretend the position is changed only after the given time
+        return model.InstantaneousFuture()
+
+    @isasync
+    def moveAbs(self, pos):
+        pos = self._applyInversionAbs(pos)
+        time_start = time.time()
+        maxtime = 0
+        for axis, new_pos in pos.items():
+            if not axis in pos:
+                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+            change = self._position[axis] - new_pos
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
+
+        # Make sure we update with the initial and final chamber pressure
+        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+        if self._position["z"] == 1:
+            self.parent._device.VacPump()
+        else:
+            self.parent._device.VacVent()
+        # TODO add timeout
+        while not self.parent._device.VacGetStatus() == 0:
+            # Update chamber pressure until pumping/venting process is done
+            self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+
+        # TODO stop add this move
+        time_end = time_start + maxtime
+        self._updatePosition()
         return model.InstantaneousFuture()
 
     def stop(self, axes=None):
