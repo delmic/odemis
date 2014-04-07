@@ -116,7 +116,8 @@ class VigilantAttributeConnector(object):
             logging.debug("Assign value %s to vigilant attribute", value)
             self.vigilattr.value = value
         except (ValueError, TypeError, IndexError), exc:
-            logging.error("Illegal value: %s", exc)
+            logging.warn("Illegal value: %s", exc)
+            self.va_2_ctrl(self.vigilattr.value)
         finally:
             evt.Skip()
 

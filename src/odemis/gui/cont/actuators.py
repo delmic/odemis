@@ -16,6 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.comp.combo import ComboBox
 import logging
 import wx
 
@@ -23,44 +24,46 @@ import wx
 
 # Known good key bindings
 # WXK -> (args for tab_data_model.step())
-kb_secom = {
-            wx.WXK_LEFT: ("x", -1),
-            wx.WXK_RIGHT: ("x", 1),
-            wx.WXK_DOWN: ("y", -1),
-            wx.WXK_UP: ("y", 1),
-            wx.WXK_PAGEDOWN: ("z", -1),
-            wx.WXK_PAGEUP: ("z", 1),
-            wx.WXK_NUMPAD_HOME: ("b", -1),
-            wx.WXK_NUMPAD_PAGEDOWN: ("b", 1),
-            wx.WXK_NUMPAD_END: ("a", -1),
-            wx.WXK_NUMPAD_PAGEUP: ("a", 1),
-            # same but with NumLock
-            wx.WXK_NUMPAD7: ("b", -1),
-            wx.WXK_NUMPAD3: ("b", 1),
-            wx.WXK_NUMPAD1: ("a", -1),
-            wx.WXK_NUMPAD9: ("a", 1),
-            }
-kb_sparc = {
-            wx.WXK_LEFT: ("x", -1), # so that image goes in same direction
-            wx.WXK_RIGHT: ("x", 1),
-            wx.WXK_DOWN: ("y", 1),
-            wx.WXK_UP: ("y", -1),
-            wx.WXK_PAGEDOWN: ("z", -1),
-            wx.WXK_PAGEUP: ("z", 1),
-            wx.WXK_NUMPAD_LEFT: ("rz", -1),
-            wx.WXK_NUMPAD_RIGHT: ("rz", 1),
-            wx.WXK_NUMPAD_DOWN: ("ry", 1),
-            wx.WXK_NUMPAD_UP: ("ry", -1),
-            # same but with NumLock
-            wx.WXK_NUMPAD4: ("rz", -1),
-            wx.WXK_NUMPAD6: ("rz", 1),
-            wx.WXK_NUMPAD2: ("ry", 1),
-            wx.WXK_NUMPAD8: ("ry", -1),
-            }
+KB_SECOM = {
+        wx.WXK_LEFT: ("x", -1),
+        wx.WXK_RIGHT: ("x", 1),
+        wx.WXK_DOWN: ("y", -1),
+        wx.WXK_UP: ("y", 1),
+        wx.WXK_PAGEDOWN: ("z", -1),
+        wx.WXK_PAGEUP: ("z", 1),
+        wx.WXK_NUMPAD_HOME: ("b", -1),
+        wx.WXK_NUMPAD_PAGEDOWN: ("b", 1),
+        wx.WXK_NUMPAD_END: ("a", -1),
+        wx.WXK_NUMPAD_PAGEUP: ("a", 1),
+        # same but with NumLock
+        wx.WXK_NUMPAD7: ("b", -1),
+        wx.WXK_NUMPAD3: ("b", 1),
+        wx.WXK_NUMPAD1: ("a", -1),
+        wx.WXK_NUMPAD9: ("a", 1),
+}
 
-key_bindings = {"sparc": kb_sparc,
-                "secom": kb_secom,
-                }
+KB_SPARC = {
+        wx.WXK_LEFT: ("x", -1), # so that image goes in same direction
+        wx.WXK_RIGHT: ("x", 1),
+        wx.WXK_DOWN: ("y", 1),
+        wx.WXK_UP: ("y", -1),
+        wx.WXK_PAGEDOWN: ("z", -1),
+        wx.WXK_PAGEUP: ("z", 1),
+        wx.WXK_NUMPAD_LEFT: ("rz", -1),
+        wx.WXK_NUMPAD_RIGHT: ("rz", 1),
+        wx.WXK_NUMPAD_DOWN: ("ry", 1),
+        wx.WXK_NUMPAD_UP: ("ry", -1),
+        # same but with NumLock
+        wx.WXK_NUMPAD4: ("rz", -1),
+        wx.WXK_NUMPAD6: ("rz", 1),
+        wx.WXK_NUMPAD2: ("ry", 1),
+        wx.WXK_NUMPAD8: ("ry", -1),
+}
+
+KEY_BINDINGS = {
+            "sparc": KB_SPARC,
+            "secom": KB_SECOM,
+}
 
 class ActuatorController(object):
     """ This controller manages the buttons to manually move the actuators.
@@ -73,7 +76,7 @@ class ActuatorController(object):
 
         tab_data (ActuatorGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
-        tab_prefix (string): common prefix of the names of the buttons 
+        tab_prefix (string): common prefix of the names of the buttons
         """
         self._tab_data_model = tab_data
         self._main_frame = main_frame
@@ -121,7 +124,7 @@ class ActuatorController(object):
         """
         role = self._tab_data_model.main.role
         try:
-            self.key_bindings = key_bindings[role]
+            self.key_bindings = KEY_BINDINGS[role]
         except KeyError:
             logging.warning("No known key binding for microscope %s", role)
             return
@@ -146,7 +149,7 @@ class ActuatorController(object):
             # check the focus is not on some children that'll handle the key
             focusedWin = wx.Window.FindFocus()
             # TODO: need to check for more widget types?
-            if not isinstance(focusedWin, wx.TextCtrl):
+            if not isinstance(focusedWin, (wx.TextCtrl, ComboBox)):
                 axis, size = self.key_bindings[key]
                 if event.ShiftDown():
                     size /= 10
