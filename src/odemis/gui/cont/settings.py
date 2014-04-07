@@ -1132,6 +1132,7 @@ class SparcSettingsController(SettingsBarController):
                                             spec_stream.repetition,
                                             None,  #component
                                             CONFIG["streamspec"]["repetition"])
+                spec_stream.roi.subscribe(self.on_spec_roi)
 
                 self.spec_pxs_ent = self._spectrum_panel.add_value(
                                             "pixelSize",
@@ -1139,7 +1140,8 @@ class SparcSettingsController(SettingsBarController):
                                             None,  #component
                                             CONFIG["streamspec"]["pixelSize"])
             else:
-                logging.warning("Spectrometer available, but no spectrum stream provided")
+                logging.warning("Spectrometer available, but no spectrum "
+                                "stream provided")
 
 
             # Add spectrograph control if available
@@ -1184,11 +1186,44 @@ class SparcSettingsController(SettingsBarController):
                                         ar_stream.repetition,
                                         None,  #component
                                         CONFIG["streamar"]["repetition"])
+
+                ar_stream.roi.subscribe(self.on_ar_roi)
+
             else:
                 logging.warning("AR camera available, but no AR stream provided")
 
         else:
             parent_frame.fp_settings_sparc_angular.Hide()
+
+    def on_spec_roi(self, roi):
+        self._on_roi(roi, self.spectro_rep_ent.va, self.spectro_rep_ent.ctrl)
+
+    def on_ar_roi(self, roi):
+        self._on_roi(roi, self.angular_rep_ent.va, self.angular_rep_ent.ctrl)
+
+    def _on_roi(self, roi, rep_va, rep_ctrl):
+        """ Recalculate the repitition presets according to the ROI ratio """
+
+        l, t, r, b = roi
+        if r - l != 0:
+            ratio = abs(b - t) / abs(r - l)
+
+            # Get the boundaries for clipping
+            range_h_min = rep_va.range[0][0]
+            range_h_max = rep_va.range[1][1]
+
+            for i, _ in enumerate(rep_ctrl.GetItems()):
+                choice = rep_ctrl.GetClientData(i)
+                if choice != (1, 1):
+                    new_height = int(choice[0] * ratio)
+
+                    if range_h_min <= new_height <= range_h_max:
+                        choice = (choice[0], new_height)
+                    else:
+                        choice = (choice[0], range_h_max)
+
+                    rep_ctrl.Insert(u"%spx x %spx" % choice, i, choice)
+                    rep_ctrl.Delete(i + 1)
 
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """

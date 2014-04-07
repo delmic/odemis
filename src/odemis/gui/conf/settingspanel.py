@@ -45,7 +45,7 @@ def _resolution_from_range(comp, va, conf):
         return [cur_val]
 
     try:
-        choices = set([cur_val])
+        choices = set([cur_val, (1, 1)])
         num_pixels = cur_val[0] * cur_val[1]
         res = va.range[1] # start with max resolution
 

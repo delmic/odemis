@@ -673,17 +673,6 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
-            # l, t, r, b = roi
-            # if r - l != 0:
-            #     ratio = abs(b - t) / abs(r - l)
-            #     res_ctrl = self._settings_controller.spectro_rep_ent.ctrl
-            #     for i, _ in enumerate(res_ctrl.GetItems()):
-            #         client_data = res_ctrl.GetClientData(i)
-            #         client_data = (client_data[0], int(client_data[0] * ratio))
-
-            #         res_ctrl.Insert(u"%spx x %spx" % client_data, i, client_data)
-            #         res_ctrl.Delete(i + 1)
-
     def onARROI(self, roi):
         """
         called when the Angle Resolved roi is changed
@@ -697,17 +686,6 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.unsubscribe(self.onROI)
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
-
-            # l, t, r, b = roi
-            # if r - l != 0:
-            #     ratio = abs(b - t) / abs(r - l)
-            #     res_ctrl = self._settings_controller.angular_rep_ent.ctrl
-            #     for i, _ in enumerate(res_ctrl.GetItems()):
-            #         client_data = res_ctrl.GetClientData(i)
-            #         client_data = (client_data[0], int(client_data[0] * ratio))
-
-            #         res_ctrl.Insert(u"%spx x %spx" % client_data, i, client_data)
-            #         res_ctrl.Delete(i + 1)
 
     def _show_spec(self, show=True):
         """

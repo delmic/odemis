@@ -189,23 +189,22 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.rectangle(*rect)
             ctx.stroke()
 
-
             # Label
+
             if (self.dragging or self.edit) and self.cnvs.microscope_view:
                 w, h = self.cnvs.selection_to_real_size(
                                             self.w_start_pos,
                                             self.w_end_pos
                 )
-
                 w = units.readable_str(w, 'm', sig=2)
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
                 pos = (b_pos[2] + 10, b_pos[3] + 5)
 
-                self.position_label.text = size_lbl
                 self.position_label.pos = pos
-                self._write_label(ctx, self.position_label)
+                self.position_label.text = size_lbl
+                self._write_labels(ctx)
 
 
 FILL_NONE = 0
@@ -250,9 +249,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self._repetition = val
         self._bmp = None
 
-    def _drawGrid(self, dc_buffer):
+    def _draw_points(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-        self._write_labels(ctx)
         # Calculate the offset of the center of the buffer relative to the
         # top left op the buffer
         offset = tuple(v // 2 for v in self.cnvs._bmp_buffer_size)
@@ -350,9 +348,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     wx.Point(int(start_x), int(start_y)),
                     useMask=True)
 
-    def _drawPoints(self, dc_buffer):
+    def _draw_grid(self, dc_buffer):
         ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-        self._write_labels(ctx)
         # Calculate the offset of the center of the buffer relative to the
         # top left op the buffer
         offset = tuple(v // 2 for v in self.cnvs._bmp_buffer_size)
@@ -418,14 +415,19 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
 
     def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
-        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
 
-        if (self.w_start_pos and self.w_end_pos and not 0 in self.repetition):
+        edit_cache = self.edit
+        if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
             if self.fill == FILL_POINT:
-                self._drawGrid(dc_buffer)
+                self._draw_points(dc_buffer)
+                self.edit = True
             elif self.fill == FILL_GRID:
-                self._drawPoints(dc_buffer)
+                self._draw_grid(dc_buffer)
+                self.edit = True
             # if FILL_NONE => nothing to do
+
+        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
+        self.edit = edit_cache
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
