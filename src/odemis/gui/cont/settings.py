@@ -965,6 +965,9 @@ class SettingsBarController(object):
         self._tab_data_model = tab_data
         self.settings_panels = []
 
+        # TODO: see if we need to listen to main.is_acquiring, and automatically
+        # pause + enable. For now, it's done by the acquisition controllers,
+        # and it avoids pausing the settings controllers from other tabs.
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
@@ -1093,8 +1096,6 @@ class SparcSettingsController(SettingsBarController):
         super(SparcSettingsController, self).__init__(tab_data,
                                                       highlight_change)
         main_data = tab_data.main
-
-        main_data.is_acquiring.subscribe(self.on_acquisition)
 
         self._sem_panel = SemSettingsPanel(
                                     parent_frame.fp_settings_sparc_sem,
@@ -1227,9 +1228,6 @@ class SparcSettingsController(SettingsBarController):
 
                     rep_ctrl.Insert(u"%spx x %spx" % choice, i, choice)
                     rep_ctrl.Delete(i + 1)
-
-    def on_acquisition(self, is_acquiring):
-        self.enable(not is_acquiring)
 
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """

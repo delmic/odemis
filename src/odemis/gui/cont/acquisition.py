@@ -377,6 +377,7 @@ class SecomAcquiController(object):
         main_settings_controller = secom_live_tab.settings_controller
         orig_settings = preset_as_is(main_settings_controller.entries)
         main_settings_controller.pause()
+        main_settings_controller.enable(False)
         # TODO: also pause the MicroscopeViews
 
         # pause all the live acquisitions
@@ -396,6 +397,7 @@ class SecomAcquiController(object):
 
             acqmng.apply_preset(orig_settings)
             main_settings_controller.resume()
+            main_settings_controller.enable(True)
 
             # Make sure that the acquisition button is enabled again.
             self._main_frame.btn_secom_acquire.Enable()
@@ -537,8 +539,7 @@ class SparcAcquiController(object):
         # save the original settings
         self._orig_settings = preset_as_is(self._settings_controller.entries)
         self._settings_controller.pause()
-
-        # FIXME: it doesn't seem to the freeze the settings
+        self._settings_controller.enable(False)
 
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
@@ -559,6 +560,7 @@ class SparcAcquiController(object):
 
         acqmng.apply_preset(self._orig_settings)
         self._settings_controller.resume()
+        self._settings_controller.enable(True)
 
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_sparc_acquire.Enable()
