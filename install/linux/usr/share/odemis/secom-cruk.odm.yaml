@@ -52,10 +52,10 @@ Spectra: {
         # Use channels and limits to ensure the image has the same orientation
         # as in the SEM software.
         channels: [0, 1],
-        limits: [[-3.5, 3.5], [-3.95, 3.95]],  # V
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
         settle_time: 5.e-6, # s
-        hfw_nomag: 0.276, # m
-        # Some small rotation might be needed in the SEM software
+        hfw_nomag: 0.25, # m
     },
     properties: {
         scale: [8, 8], # (ratio), start with a pretty fast scan

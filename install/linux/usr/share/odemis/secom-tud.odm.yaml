@@ -46,7 +46,6 @@ Spectra: {
         park: [-5, -5], # V
         settle_time: 5.e-6, # s
         hfw_nomag: 0.25, # m
-        # Add 1° rotation in the SEM software
     },
     properties: {
         scale: [8, 8], # (ratio), start with a pretty fast scan
