@@ -276,8 +276,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             #FIXME: cursor handled by .enable()
             # self.cursor = wx.StockCursor(wx.CURSOR_HAND)
             self.dicho_overlay.enable(True)
+            # FIXME: the right way would be to let the overlay say it wants
+            # all the move-related events... and then it'd eat these events
             self.abilities.remove(canvas.CAN_MOVE)
-
         elif tool == guimodel.TOOL_SPOT:
             self.current_mode = tool
             # the only thing the view does is to indicate the mode
