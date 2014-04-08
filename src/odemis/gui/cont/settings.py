@@ -1210,21 +1210,33 @@ class SparcSettingsController(SettingsBarController):
         """ Recalculate the repetition presets according to the ROI ratio """
         ratio = rep[1] / rep[0]
 
-        # TODO: also add values below/above the current repetition
+        # Create the entries:
+        choices = [(1, 1)] # 1 x 1 should always be there
+        
+        # Add a couple values below/above the current repetition
+        for m in [1/4, 1/2, 1, 2, 4, 10]:
+            x = int(round(rep[0] * m))
+            y = int(round(x * ratio))
+            choices.append((x, y))
 
-        # Get the boundaries for clipping
-        range_h_min = rep_va.range[0][0]
-        range_h_max = rep_va.range[1][1]
+        # remove non-possible ones
+        cchoices = []
+        for c in choices:
+            # TODO: it's actually further restricted by the current size of
+            # the ROI (and the minimum size of the pixelSize), so some of the
+            # big repetitions might actually not be valid. It's not a big
+            # problem as the VA setter will silently limit the repetition
+            if (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
+                rep_va.range[0][1] <= c[1] <= rep_va.range[1][1]):
+                cchoices.append(c)
 
-        for i, _ in enumerate(rep_ctrl.GetItems()):
-            choice = rep_ctrl.GetClientData(i)
-            if choice != (1, 1):
-                new_height = int(round(choice[0] * ratio))
-                new_height = max(range_h_min, min(new_height, range_h_max))
-                choice = (choice[0], new_height)
+        # remove duplicates and sort
+        choices = sorted(set(cchoices))
 
-                rep_ctrl.Insert(u"%s x %s px" % choice, i, choice)
-                rep_ctrl.Delete(i + 1)
+        # replace the old list with this new version
+        rep_ctrl.Clear()
+        for c in choices:
+            rep_ctrl.Append(u"%s x %s px" % c, c)
 
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
