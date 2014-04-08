@@ -221,6 +221,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: send a .enable/.disable to overlay when becoming the active one
         if self.current_mode == MODE_SECOM_DICHO:
             self.dicho_overlay.enable(False)
+            self.abilities.add(canvas.CAN_MOVE)
         elif self.current_mode == guimodel.TOOL_SPOT:
             self._showSpotMode(False)
 
@@ -275,6 +276,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             #FIXME: cursor handled by .enable()
             # self.cursor = wx.StockCursor(wx.CURSOR_HAND)
             self.dicho_overlay.enable(True)
+            self.abilities.remove(canvas.CAN_MOVE)
+
         elif tool == guimodel.TOOL_SPOT:
             self.current_mode = tool
             # the only thing the view does is to indicate the mode
