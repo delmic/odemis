@@ -113,6 +113,12 @@ class DevxX(object):
             line = b""
             char = self._serial.read() # empty if timeout
             while char and char != "\r":
+                # FIXME: it seems that flushing the input doesn't work. It's
+                # still possible to receives 0's at the beginning.
+                # This is a kludge to workaround that
+                if not line and char == "\x00":
+                    char = ""
+                
                 # normal char
                 line += char
                 char = self._serial.read()
