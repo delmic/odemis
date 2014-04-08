@@ -9,8 +9,8 @@ Build-Depends: debhelper (>= 9),
                texlive-full,
                inkscape,
                cython,
-               python (>= 2.7.1),
-               python-all
+               python-numpy,
+               python-all-dev (>= 2.7.1)
 X-Python-Version: >= 2.7
 Homepage: http://www.delmic.com
 Vcs-Git: git://github.com/delmic/odemis.git
@@ -37,6 +37,7 @@ Depends: python (>= 2.7.1),
          python-pyro4-delmic,
          cgroup-bin,
          odemis-doc,
+         ${shlibs:Depends},
          ${misc:Depends},
          ${python:Depends},
          ${sphinxdoc:Depends}
