@@ -1220,18 +1220,17 @@ class SparcSettingsController(SettingsBarController):
             choices.append((x, y))
 
         # remove non-possible ones
-        cchoices = []
-        for c in choices:
+        def is_compatible(c):
             # TODO: it's actually further restricted by the current size of
             # the ROI (and the minimum size of the pixelSize), so some of the
             # big repetitions might actually not be valid. It's not a big
             # problem as the VA setter will silently limit the repetition
-            if (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
-                rep_va.range[0][1] <= c[1] <= rep_va.range[1][1]):
-                cchoices.append(c)
+            return (rep_va.range[0][0] <= c[0] <= rep_va.range[1][0] and
+                    rep_va.range[0][1] <= c[1] <= rep_va.range[1][1])
+        choices = [c for c in choices if is_compatible(c)]
 
         # remove duplicates and sort
-        choices = sorted(set(cchoices))
+        choices = sorted(set(choices))
 
         # replace the old list with this new version
         rep_ctrl.Clear()
