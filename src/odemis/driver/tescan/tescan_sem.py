@@ -31,6 +31,7 @@ from odemis.model import isasync
 import os.path
 import threading
 import time
+from random import randint
 import weakref
 import time
 from odemis.driver.tescan import sem
@@ -209,6 +210,7 @@ class Scanner(model.Emitter):
                                               readonly=True)
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
+        self.dwellTime.subscribe(self._onDwellTime)
 
         # Range is according to min and max voltages accepted by Tescan API
         volt = self.parent._device.HVGetVoltage()
@@ -223,8 +225,8 @@ class Scanner(model.Emitter):
                                   setter=self.setPower)
 
         # Blanker is automatically enabled when no scanning takes place
-        self.parent._device.ScSetBlanker(0, 2)
-
+        # TODO it may cause time overhead, check on testing
+        # self.parent._device.ScSetBlanker(0, 2)
 
         # Enumerated float with respect to the PC indexes of Tescan API
         pc_choices = set(self.GetProbeCurrents())
@@ -242,6 +244,11 @@ class Scanner(model.Emitter):
         # HFW to mm to comply with Tescan API
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
         self._updatePixelSize()
+
+    def _onDwellTime(self, dt):
+        # TODO interrupt current scanning when dwell time is changed
+        # ScStopScan does not work this way
+        pass
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
@@ -390,7 +397,7 @@ class Detector(model.Detector):
         self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
-        self.parent._device.SetWaitFlags(0x09)
+        self.parent._device.SetWaitFlags(0x08 or 0x09)
 
         # adjust brigtness and contrast, read back the result
         self.parent._device.DtAutoSignal(0)
@@ -453,19 +460,21 @@ class Detector(model.Detector):
             trans = self.parent._scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
-            shape = (2048, 2048)
             center = ((res[0] / 2), (res[1] / 2))
             l = center[0] + pxs_pos[1] - (res[1] / 2)
             t = center[1] + pxs_pos[0] - (res[0] / 2)
             r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
             b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
 
+            # TODO add ProgressShow() to prevent scanning via the server
+            self.parent._device.ProgressShow("Odemis scanning",
+                            "Odemis scanning in progress, image acquisition is not allowed",
+                            0, 1, 0, 100)
             self.parent._device.ScScanXY(0, res[0], res[1], l,
                                     t,
                                     r,
-                                    b, 1, self.parent._scanner.dwellTime.value)
+                                    b, 1, self.parent._scanner.dwellTime.value * 1e09)
 
-            # print self.parent._device.GUIGetScanning()
             # fetch the image (blocking operation), string is returned
             img_str = self.parent._device.FetchImage(0, res[0] * res[1])
             list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
@@ -575,7 +584,7 @@ class Stage(model.Actuator):
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
         # First calibrate
-#         self.parent._device.StgCalibrate()
+        self.parent._device.StgCalibrate()
 
     def _updatePosition(self):
         """
@@ -917,8 +926,8 @@ class ChamberPressure(model.Actuator):
         pressure = parent._device.VacGetPressure(0)
         self.chamberPressure = model.FloatContinuous(pressure, (1e-04, 1e+06), unit="Pa")
 
-        # Check if we are currently pumped or vented
-        if pressure < 1:
+        # Try to decide if we are currently pumped or vented
+        if parent._device.VacGetStatus() == 0 and pressure < 1:
             self._position[a] = 1
         else:
             self._position[a] = 0
