@@ -295,9 +295,9 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     dwell_time (float): Time to scan each spot (in s)
     electron_coordinates (list of tuples): Coordinates of e-beam grid
     """
-    path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report")
-    if not os.path.exists(path):
-        os.makedirs(path)
+    path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report",
+                        time.strftime(u"%Y%m%d-%H%M%S"))
+    os.makedirs(path)
     hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
     report = open(os.path.join(path, u"report.txt"), 'w')
     report.write("\n****Overlay Failure Report****\n\n"
@@ -307,5 +307,6 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
                  + "\n\nThe optical image of the grid can be seen in OpticalGrid.h5\n\n")
     report.close()
 
-    logging.warning("Failed to find overlay. Please check the failure report in OverlayReport folder.")
+    logging.warning("Failed to find overlay. Please check the failure report in %s.",
+                    path)
 
