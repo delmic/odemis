@@ -34,16 +34,17 @@ Typical detectors found in a microscope can be of the following roles:
 
 Typical actuators found can be of the following roles:
 
-  * stage
-  * focus
-  * mirror
+  * stage: it can have 3 axes: x, y, and z
+  * focus: Changes the lens distance to the sample. Must have "z" axis.
+  * ebeam-focus: Changes the focus of the e-beam. Must have "z" axis.
+  * mirror: To move the mirror of the SPARC, can have four axes: x, y, rz (yaw), ry (pitch)
   * align: alignment actuator for the SECOM microscope. 
     It must have two axes: a and b.
+  * filter: It must have a "band" axis.
   * spectrograph: See the spectrometer
 
 Typical emitters can be of the following roles:
   * light
-  * filter
   * lens
   * e-beam: Scanner of the SEM.
 
