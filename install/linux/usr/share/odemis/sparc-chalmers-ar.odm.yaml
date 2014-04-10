@@ -57,7 +57,7 @@ SPARC-AR: {
 }
 
 
-# PIXIS via USB
+# Zyla/CL
 ARCam: {
     class: andorcam3.AndorCam3,
     role: ccd,

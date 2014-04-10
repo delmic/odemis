@@ -10,7 +10,7 @@ Spectra: {
     class: lle.LLE,
     role: light,
     init: {
-        port: "/dev/ttyLLE",
+        port: "/dev/ttyFTDI*",
         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
         # Values are quite approximate (only centre is pretty sure)
         sources: {"cyan": [465.e-9, 475.e-9, 485.e-9, 495.e-9, 505.e-9],
@@ -26,7 +26,7 @@ Spectra: {
 #    class: omicronxx.MultixX,
 #    role: light,
 #    init: {
-#        ports: "/dev/ttyOXX*",
+#        ports: "/dev/ttyFTDI*",
 #        },
 #    affects: [Clara],
 #}
