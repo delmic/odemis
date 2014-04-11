@@ -154,13 +154,14 @@ def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
 
     electron_coordinates = []
 
-    bound = ((repetitions[0] - 1) * scale[0]) / 2, ((repetitions[1] - 1) * scale[1]) / 2
+    bound = (((repetitions[0] - 1) * scale[0]) / 2,
+             ((repetitions[1] - 1) * scale[1]) / 2)
 
     # Compute electron coordinates based on scale and repetitions
     for i in range(repetitions[0]):
         for j in range(repetitions[1]):
-            electron_coordinates.append(((-bound[0] + i * scale[0]), #* repetitions[0] / (repetitions[0] - 1),
-                                         (-bound[1] + j * scale[1]) #* repetitions[1] / (repetitions[1] - 1)
+            electron_coordinates.append((-bound[0] + i * scale[0],
+                                         - bound[1] + j * scale[1]
                                          ))
 
     return ccd.data._optical_image, electron_coordinates, scale
