@@ -45,6 +45,7 @@ from odemis.util import driver, units
 import os
 import sys
 
+logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
 class Acquirer(object):
     def __init__(self, dt, roi, pxs):
@@ -83,7 +84,7 @@ class Acquirer(object):
         raises AttributeError in case no SEM is found
         """
         try:
-            pos = self.stage.posision.value
+            pos = self.stage.position.value
             sem_center = (pos["x"], pos["y"])
         except KeyError:
             # no info, not problem => just relative to the center of the SEM
@@ -105,7 +106,7 @@ class Acquirer(object):
         roi (4 floats): ltrb positions relative to the FoV
         return (4 floats): physical ltrb positions
         """
-        sem_rect = self.get_sem_fov
+        sem_rect = self.get_sem_fov()
 
         # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
         phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
@@ -211,8 +212,7 @@ class Acquirer(object):
                (X, Y) in SEM referential for each spot to be scanned.
         """
         # position is expressed in pixels, within the .translation ranges
-        rngs = self.ebeam.translation.range
-        full_width = [rngs[1][0] - rngs[0][0], rngs[1][1] - rngs[0][1]]
+        full_width = self.ebeam.shape[0:2]
         sem_pxs = self.ebeam.pixelSize.value
         scale = (pxs / sem_pxs[0], pxs / sem_pxs[1]) # it's ok to have something a bit < 1
         
@@ -239,7 +239,7 @@ class Acquirer(object):
         
         # Compute positions based on scale and repetition
         pos = numpy.ndarray((rep[1], rep[0], 2)) # Y, X, 2
-        for i in numpy.ndindex(rep):
+        for i in numpy.ndindex(rep[1], rep[0]):
             pos[i] = [lt[0] + i[1] * scale[0], lt[1] + i[0] * scale[1]]
 
         return pos
@@ -251,7 +251,7 @@ class Acquirer(object):
         return (number): the SED acquisition during this bleaching 
         """
         # position the ebeam
-        self.ebeam.translation = pos
+        self.ebeam.translation.value = pos
         
         # .get() has an advantage over subscribe + unsubscribe to ensure the
         # ebeam stays at the spot (almost) just the requested dwell time
@@ -275,7 +275,7 @@ class Acquirer(object):
         # compensate for cosmic rays)
         
         # Turn on the light
-        # TODO: allow to use less power
+        # TODO: allow user to specify power (instead of using the maximum)
         self.light.power.value = self.light.power.range[1]
         
         # Acquire an image of the fluorescence
@@ -289,7 +289,9 @@ class Acquirer(object):
         # a DataArray of one value)
         # TODO: divide by physical area size, in order to have normalised values
         # between acquisitions?
-        intensity = data.view(numpy.ndarray).mean() 
+#        pxs = data.metadata[model.MD_PIXEL_SIZE]
+#        area = numpy.prod(data.shape) * numpy.prod(pxs) # m²
+        intensity = data.view(numpy.ndarray).mean()
         return intensity
 
 
@@ -330,7 +332,7 @@ class Acquirer(object):
         center = ((phys_roi[0] + phys_roi[2]) / 2,
                   (phys_roi[1] + phys_roi[3]) / 2)
         md = {model.MD_POS: center,
-              model.MD_PIXEL_SIZE: pxs}
+              model.MD_PIXEL_SIZE: (pxs, pxs)}
         
         return model.DataArray(arr, md)
 
@@ -344,7 +346,7 @@ class Acquirer(object):
         num_spots = numpy.prod(shape)
         sem_time = self.dt * num_spots
         
-        res = self.ccd.resolutions.value
+        res = self.ccd.resolution.value
         ro_time = numpy.prod(res) / self.ccd.readoutRate.value
         ccd_time = (self.ccd.exposureTime.value + ro_time) * num_spots
         
@@ -374,7 +376,7 @@ class Acquirer(object):
         try:
             spots = self.calc_xy_pos(self.roi, self.pxs)
             shape = spots.shape[0:2]
-            logging.info("Will scan %d x %d pixels.", shape[0], shape[1])
+            logging.info("Will scan %d x %d pixels.", shape[1], shape[0])
             
             ccd_roi = self.sem_roi_to_ccd(self.roi)
             self.configure_ccd(ccd_roi)
@@ -382,7 +384,7 @@ class Acquirer(object):
             
             dur = self.estimate_acq_time(shape)
             logging.info("Estimated acquisition time: %s",
-                         units.readable_time(dur))
+                         units.readable_time(round(dur)))
             
             # TODO: acquire a "Optical survey" image?
 
@@ -391,9 +393,9 @@ class Acquirer(object):
             # start with the original fluorescence count (no bleaching)
             ccd_data = [self.get_fluo_count()]
             try:
-                for i, pos in enumerate(spots):
-                    logging.info("Acquiring pixel %s", i)
-                    sem_data.append(self.bleach_spot(pos))
+                for i in numpy.ndindex(*shape):
+                    logging.info("Acquiring pixel %d,%d", i[1], i[0])
+                    sem_data.append(self.bleach_spot(spots[i].tolist()))
                     ccd_data.append(self.get_fluo_count())
                 
                 # TODO: acquire a "SEM survey" image ?
@@ -406,7 +408,7 @@ class Acquirer(object):
                 
                 # compute the diff
                 ccd_data = numpy.array(ccd_data) # force to be one big array
-                ccd_diff = ccd_data[0:-2] - ccd_data[1:-1]
+                ccd_diff = ccd_data[0:-1] - ccd_data[1:]
                 ccd_final = self.assemble_spots(shape, ccd_diff, self.roi, self.pxs)
                 ccd_final.metadata[model.MD_DESCRIPTION] = "Light diff"
                 
