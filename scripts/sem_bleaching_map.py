@@ -37,15 +37,18 @@ odemis-cli --set-attr "Spectra" emissions "0,0,1,0"
 from __future__ import division
 
 import argparse
+import copy
 import logging
 import math
 import numpy
-from odemis import model, dataio
+from odemis import model, dataio, util
 from odemis.util import driver, units
+from odemis.util import img
 import os
 import sys
 
-logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
+
+logging.getLogger().setLevel(logging.DEBUG) # put "DEBUG" level for more messages
 
 class Acquirer(object):
     def __init__(self, dt, roi, pxs):
@@ -81,23 +84,48 @@ class Acquirer(object):
         Returns the (theoretical) scanning area of the SEM. Works even if the
         SEM has not sent any image yet.
         returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
-        raises AttributeError in case no SEM is found
         """
         try:
             pos = self.stage.position.value
-            sem_center = (pos["x"], pos["y"])
+            center = (pos["x"], pos["y"])
         except KeyError:
             # no info, not problem => just relative to the center of the SEM
-            sem_center = (0, 0)
-        
+            center = (0, 0)
+
         sem_width = (self.ebeam.shape[0] * self.ebeam.pixelSize.value[0],
                      self.ebeam.shape[1] * self.ebeam.pixelSize.value[1])
-        sem_rect = [sem_center[0] - sem_width[0] / 2, # left
-                    sem_center[1] - sem_width[1] / 2, # top
-                    sem_center[0] + sem_width[0] / 2, # right
-                    sem_center[1] + sem_width[1] / 2] # bottom
+        sem_rect = [center[0] - sem_width[0] / 2, # left
+                    center[1] - sem_width[1] / 2, # top
+                    center[0] + sem_width[0] / 2, # right
+                    center[1] + sem_width[1] / 2] # bottom
+        # TODO: handle rotation?
 
         return sem_rect
+
+    def get_ccd_fov(self):
+        """
+        Returns the (theoretical) field of view of the CCD.
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, b, r)
+        """
+        # The only way to get the right info is to look at what metadata the
+        # images will get
+        md = copy.copy(self.ccd.getMetadata())
+        img.mergeMetadata(md) # apply correction info from fine alignment
+
+        shape = self.ccd.shape[0:2]
+        pxs = md[model.MD_PIXEL_SIZE]
+        # compensate for binning
+        binning = self.ccd.binning.value
+        pxs = [p / b for p, b in zip(pxs, binning)]
+        center = md.get(model.MD_POS, (0, 0))
+
+        width = (shape[0] * pxs[0], shape[1] * pxs[1])
+        phys_rect = [center[0] - width[0] / 2, # left
+                     center[1] - width[1] / 2, # top
+                     center[0] + width[0] / 2, # right
+                     center[1] + width[1] / 2] # bottom
+
+        return phys_rect
 
     def convert_roi_ratio_to_phys(self, roi):
         """
@@ -107,14 +135,56 @@ class Acquirer(object):
         return (4 floats): physical ltrb positions
         """
         sem_rect = self.get_sem_fov()
+        logging.debug("SEM FoV = %s", sem_rect)
+        phys_width = (sem_rect[2] - sem_rect[0],
+                      sem_rect[3] - sem_rect[1])
 
         # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        phys_rect = (sem_rect[0] + roi[0] * (sem_rect[2] - sem_rect[0]),
-                     sem_rect[1] + (1 - roi[3]) * (sem_rect[3] - sem_rect[1]),
-                     sem_rect[0] + roi[2] * (sem_rect[2] - sem_rect[0]),
-                     sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
+        phys_rect = (sem_rect[0] + roi[0] * phys_width[0],
+                     sem_rect[1] + (1 - roi[3]) * phys_width[1],
+                     sem_rect[0] + roi[2] * phys_width[0],
+                     sem_rect[1] + (1 - roi[1]) * phys_width[1]
+                     )
 
         return phys_rect
+
+    def convert_roi_phys_to_ccd(self, roi):
+        """
+        Convert the ROI in physical coordinates into a CCD ROI (in pixels)
+        roi (4 floats): ltrb positions in m
+        return (4 ints or None): ltrb positions in pixels, or 
+        """
+        ccd_rect = self.get_ccd_fov()
+        logging.debug("CCD FoV = %s", ccd_rect)
+        phys_width = (ccd_rect[2] - ccd_rect[0],
+                      ccd_rect[3] - ccd_rect[1])
+
+        # convert to a proportional ROI
+        proi = ((roi[0] - ccd_rect[0]) / phys_width[0],
+                (roi[1] - ccd_rect[1]) / phys_width[1],
+                (roi[2] - ccd_rect[0]) / phys_width[0],
+                (roi[3] - ccd_rect[1]) / phys_width[1],
+                )
+        # ensure it's in ltbr order
+        proi = util.normalize_rect(proi)
+
+        # convert to pixel values, rounding to slightly bigger area
+        shape = self.ccd.shape[0:2]
+        pxroi = (int(proi[0] * shape[0]),
+                 int(proi[1] * shape[1]),
+                 int(math.ceil(proi[2] * shape[0])),
+                 int(math.ceil(proi[3] * shape[1])),
+                 )
+
+        # Limit the ROI to the one visible in the FoV
+        trunc_roi = util.rect_intersect(pxroi, (0, 0) + shape)
+        if trunc_roi is None:
+            return None
+        if trunc_roi != pxroi:
+            logging.warning("CCD FoV doesn't cover the whole ROI, it would need "
+                            "a ROI of %s in CCD referential.", pxroi)
+
+        return trunc_roi
 
     def sem_roi_to_ccd(self, roi):
         """
@@ -125,13 +195,15 @@ class Acquirer(object):
         """
         # convert ROI to physical position
         phys_rect = self.convert_roi_ratio_to_phys(roi)
+        logging.info("ROI defined at %s m", phys_rect)
 
         # convert physical position to CCD
-        ccd_sh = self.ccd.shape[0:2]
-        # TODO: how? use calibration metadata? Rotation?
-
-        # FIXME: for now we just return the whole CCD
-        ccd_roi = (0, 0) + ccd_sh
+        ccd_roi = self.convert_roi_phys_to_ccd(phys_rect)
+        if ccd_roi is None:
+            logging.error("Failed to find the ROI on the CCD, will use the whole CCD")
+            ccd_roi = (0, 0) + self.ccd.shape[0:2]
+        else:
+            logging.info("Will use the CCD ROI %s", ccd_roi)
 
         return ccd_roi
 
@@ -159,9 +231,9 @@ class Acquirer(object):
         # CCD resolution is automatically updated to fit
         self.ccd.binning.value = self.ccd.binning.clip(res)
 
-        # FIXME: it's a bit tricky to have the binning set automatically, while
-        # the exposure time is fixed.
-        logging.debug("CCD res = %s, binning = %s",
+        # FIXME: it's a bit tricky for the user to have the binning set
+        # automatically, while the exposure time is fixed.
+        logging.info("CCD res = %s, binning = %s",
                       self.ccd.resolution.value,
                       self.ccd.binning.value)
         
@@ -217,21 +289,21 @@ class Acquirer(object):
         scale = (pxs / sem_pxs[0], pxs / sem_pxs[1]) # it's ok to have something a bit < 1
         
         rel_width = [roi[2] - roi[0], roi[3] - roi[1]]
-        rel_center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
+#         rel_center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
         
         px_width = [full_width[0] * rel_width[0], full_width[1] * rel_width[1]]
-        px_center = [full_width[0] * rel_center[0], full_width[1] * rel_center[1]]
+#         px_center = [full_width[0] * rel_center[0], full_width[1] * rel_center[1]]
         
         # number of points to scan 
         rep = [int(max(1, px_width[0] / scale[0])),
                int(max(1, px_width[1] / scale[1]))]  
         
         # There is not necessarily an exact number of pixels fitting in the ROI,
-        # so need to update the width and center it.
+        # so need to update the width.
         px_width = [rep[0] * scale[0], rep[1] * scale[1]]
         # + scale/2 is to put the spot at the center of each pixel
-        lt = [px_center[0] - px_width[0] / 2 + scale[0] / 2,
-              px_center[1] - px_width[1] / 2 + scale[1] / 2]
+        lt = [-px_width[0] / 2 + scale[0] / 2,
+              - px_width[1] / 2 + scale[1] / 2]
         
         # Note: currently the semcomedi driver doesn't allow to move to the very
         # border, so any roi must be at least > 0.5  and below < rngs - 0.5,
@@ -239,6 +311,7 @@ class Acquirer(object):
         
         # Compute positions based on scale and repetition
         pos = numpy.ndarray((rep[1], rep[0], 2)) # Y, X, 2
+        # TODO: this is slow, use numpy.linspace (cf semcomedi)
         for i in numpy.ndindex(rep[1], rep[0]):
             pos[i] = [lt[0] + i[1] * scale[0], lt[1] + i[0] * scale[1]]
 
@@ -255,8 +328,7 @@ class Acquirer(object):
         
         # .get() has an advantage over subscribe + unsubscribe to ensure the
         # ebeam stays at the spot (almost) just the requested dwell time
-        # FIXME: this is not ensured, and it might take up to a 1s from time to
-        # time!
+        # TODO: check in semcomedi that it really never happens.
         data = self.sed.data.get()
         
         if data.shape != (1, 1):
@@ -295,10 +367,6 @@ class Acquirer(object):
         return intensity
 
 
-#    def scan_line_per_spot(self):
-#        # scans one line, spot per spot, returning a SED line and CCD light diff line
-#        pass
-#
 #    def scan_line(self):
 #        # scans one line, in one go, and returns a SED line and an (average) CCD light diff line
 #        pass
@@ -393,12 +461,13 @@ class Acquirer(object):
             # start with the original fluorescence count (no bleaching)
             ccd_data = [self.get_fluo_count()]
             try:
+                # TODO: support drift correction (cf ar_spectral_ph)
                 for i in numpy.ndindex(*shape):
                     logging.info("Acquiring pixel %d,%d", i[1], i[0])
                     sem_data.append(self.bleach_spot(spots[i].tolist()))
                     ccd_data.append(self.get_fluo_count())
                 
-                # TODO: acquire a "SEM survey" image ?
+                # TODO: acquire a "SEM survey" image?
                  
                 # Reconstruct the complete images
                 logging.info("Reconstructing final images")
