@@ -479,6 +479,8 @@ class Acquirer(object):
                 ccd_data = numpy.array(ccd_data) # force to be one big array
                 ccd_diff = ccd_data[0:-1] - ccd_data[1:]
                 ccd_final = self.assemble_spots(shape, ccd_diff, self.roi, self.pxs)
+                ccd_md = self.ccd.getMetadata()
+                ccd_final.metadata[model.MD_IN_WL] = ccd_md[model.MD_IN_WL]
                 ccd_final.metadata[model.MD_DESCRIPTION] = "Light diff"
                 
                 ccd_data = model.DataArray(ccd_data)
