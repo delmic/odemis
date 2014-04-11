@@ -1330,7 +1330,8 @@ class SEMComedi(model.HwComponent):
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
-                if time.time() - last_gc > 2: # Costly, so not too often
+                if (not self._acquisition_must_stop.is_set()
+                    and time.time() - last_gc > 2): # Costly, so not too often
                     gc.collect() # TODO: if scan is long enough, during scan
                     last_gc = time.time()
         except Exception:
@@ -1343,6 +1344,7 @@ class SEMComedi(model.HwComponent):
                 pass
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
+            gc.collect()
 
     def terminate(self):
         """
