@@ -131,13 +131,6 @@ class TestOverlay(unittest.TestCase):
         with self.assertRaises(futures.CancelledError):
             f.result()
         
-    def on_done(self, future):
-        self.done += 1
-
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
-        self.updates += 1
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(TestOverlay)
