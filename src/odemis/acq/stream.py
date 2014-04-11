@@ -308,7 +308,9 @@ class Stream(object):
             irange = img.findOptimalRange(self.histogram._full_hist,
                                           self.histogram._edges,
                                           self.auto_bc_outliers.value / 100)
-            self.intensityRange.value = tuple(irange)
+            # clip is needed for some corner cases with floats
+            irange = self.intensityRange.clip(irange)
+            self.intensityRange.value = irange
         else:
             # just use the values requested by the user
             irange = sorted(self.intensityRange.value)
