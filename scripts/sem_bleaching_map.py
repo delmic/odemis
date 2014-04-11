@@ -48,7 +48,7 @@ import os
 import sys
 
 
-logging.getLogger().setLevel(logging.DEBUG) # put "DEBUG" level for more messages
+logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
 class Acquirer(object):
     def __init__(self, dt, roi, pxs):
