@@ -441,7 +441,6 @@ class AnalysisGUIData(MicroscopyGUIData):
         self._conf.write()
 
 
-# TODO: use it for FirstStep too
 class ActuatorGUIData(MicroscopyGUIData):
     """
     Represent an interface used to move the actuators of a microscope. It might

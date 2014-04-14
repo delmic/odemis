@@ -36,14 +36,6 @@ Driver
     _gen/odemis.driver*
 
 
-FirstStep
------------------------
-.. toctree::
-    :glob:
-
-    _gen/odemis.firststep*
-
-
 Graphical User Interface
 ------------------------
 .. toctree::

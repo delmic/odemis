@@ -40,17 +40,6 @@ def odemis_get_resources():
             odemis.gui.main_xrc.__res.InsertHandler(handler_klass())
     return odemis.gui.main_xrc.__res
 
-def odemis_get_firststep_resources():
-
-    import odemis.firststep.main_xrc
-
-    if odemis.firststep.main_xrc.__res == None:
-        from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
-        odemis.firststep.main_xrc.__init_resources()
-        for handler_klass in HANDLER_CLASS_LIST:
-            odemis.firststep.main_xrc.__res.InsertHandler(handler_klass())
-    return odemis.firststep.main_xrc.__res
-
 def odemis_get_test_resources():
     """ This function provides access to the XML handlers needed by
         the test  GUI.
