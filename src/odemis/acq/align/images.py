@@ -29,162 +29,197 @@ import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.util import TimeoutError
-import sys
 import threading
 import time
 
 
-_acq_lock = threading.Lock()
-_ccd_done = threading.Event()
-
-
 def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
     """
-    Wrapper for DoScanGrid. It provides the ability to check the progress of scan procedure 
+    Wrapper for GridScanner. It provides the ability to check the progress of scan procedure 
     or even cancel it.
     repetitions (tuple of ints): The number of CL spots are used
-    dwell_time (float): Time to scan each spot #s
+    dwell_time (float): Time to scan each spot (in s)
     escan (model.Emitter): The e-beam scanner
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
-    returns (model.ProgressiveFuture):    Progress of DoScanGrid
+    returns (model.ProgressiveFuture): Progress of GridScanner
     """
-    # Create ProgressiveFuture and update its state to RUNNING
+    # Create scanner and ProgressiveFuture
+    scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateAcqTime(dwell_time, repetitions))
-    f._acq_state = RUNNING
+                                end=est_start + scanner.estimateAcqTime())
 
-    # Task to run
-    doScanGrid = _DoAcquisition
-    f.task_canceller = _CancelAcquisition
+    f.task_canceller = scanner.CancelAcquisition
 
     # Run in separate thread
     scan_thread = threading.Thread(target=_futures.executeTask,
                   name="Scan grid",
-                  args=(f, doScanGrid, f, repetitions, dwell_time, escan, ccd, detector))
+                  args=(f, scanner.DoAcquisition, f))
 
     scan_thread.start()
     return f
 
-def _discard_data(df, data):
-    """
-    Does nothing, just discard the SEM data received (for spot mode)
-    """
-    pass
 
-def _ssOnCCDImage(df, data):
-    """
-    Receives the CCD data
-    """
-    #data.unsubscribe(_ssOnCCDImage)
-    df._optical_image = data
-    df.unsubscribe(_ssOnCCDImage)
-    _optical_image = data
-    _ccd_done.set()
-    logging.debug("Got CCD image!")
-    
-def _DoAcquisition(future, repetitions, dwell_time, escan, ccd, detector):
-    """
-    Uses the e-beam to scan the rectangular grid consisted of the given number 
-    of spots and acquires the corresponding CCD image
-    future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    repetitions (tuple of ints): The number of CL spots are used
-    dwell_time (float): Time to scan each spot #s
-    escan (model.Emitter): The e-beam scanner
-    ccd (model.DigitalCamera): The CCD
-    detector (model.Detector): The electron detector
-    returns (model.DataArray): 2D array containing the intensity of each pixel in 
-                                the spotted optical image
-            (List of tuples):  Coordinates of spots in electron image
-            (Tuple of floats):    Scaling of electron image
-    """
-    _ccd_done.clear()
+class GridScanner(object):
+    def __init__(self, repetitions, dwell_time, escan, ccd, detector):
+        self.repetitions = repetitions
+        self.dwell_time = dwell_time
+        self.escan = escan
+        self.ccd = ccd
+        self.detector = detector
 
-    # Scanner setup (order matters)
-    scale = [(escan.resolution.range[1][0]) / repetitions[0],
-             (escan.resolution.range[1][1]) / repetitions[1]]
-    escan.scale.value = scale
-    escan.resolution.value = repetitions
-    escan.translation.value = (0, 0)
+        self._acq_state = FINISHED
+        self._acq_lock = threading.Lock()
+        self._ccd_done = threading.Event()
+        self._optical_image = None
 
-    # use the smallest dwell time: avoids CCD/SEM synchronization problems
-    min_sem_dt = escan.dwellTime.range[0]
-    sem_dt = max(min_sem_dt, dwell_time / 10)
-    escan.dwellTime.value = sem_dt
-    # For safety, ensure the exposure time is at least twice the time for a whole scan
-    if dwell_time < 2 * sem_dt:
-        dwell_time = 2 * sem_dt
-        logging.info("Increasing dwell time to %g s to avoid synchronization problems",
-                      dwell_time)
+        self._hw_settings = ()
 
-    # CCD setup
-    binning = (1, 1)
-    ccd.binning.value = binning
-    ccd.resolution.value = (ccd.shape[0] // binning[0],
-                            ccd.shape[1] // binning[1])
-    et = numpy.prod(repetitions) * dwell_time
-    ccd.exposureTime.value = et  # s
-    readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
-    tot_time = et + readout + 0.05
+    def estimateAcqTime(self):
+        """
+        Estimates scan procedure duration
+        """
+        return self.dwell_time * numpy.prod(self.repetitions) + 0.1  # s
 
-    try:
-        if future._acq_state == CANCELLED:
-            raise CancelledError()
-        detector.data.subscribe(_discard_data)
-        ccd.data.subscribe(_ssOnCCDImage)
+    def _save_hw_settings(self):
+        scale = self.escan.scale.value
+        sem_res = self.escan.resolution.value
+        trans = self.escan.translation.value
+        dt = self.escan.dwellTime.value
 
-        logging.debug("Scanning spot grid...")
+        binning = self.ccd.binning.value
+        ccd_res = self.ccd.resolution.value
+        et = self.ccd.exposureTime.value
 
-        # Wait for CCD to capture the image
-        if not _ccd_done.wait(2 * tot_time + 4):
-            raise TimeoutError("Acquisition of CCD timed out")
+        self._hw_settings = (sem_res, scale, trans, dt, binning, ccd_res, et)
 
-        with _acq_lock:
-            if future._acq_state == CANCELLED:
-                detector.data.unsubscribe(_discard_data)
-                ccd.data.unsubscribe(_ssOnCCDImage)
+    def _restore_hw_settings(self):
+        sem_res, scale, trans, dt, binning, ccd_res, et = self._hw_settings
+
+        # order matters!
+        self.escan.scale.value = scale
+        self.escan.resolution.value = sem_res
+        self.escan.translation.value = trans
+        self.escan.dwellTime.value = dt
+
+        self.ccd.binning.value = binning
+        self.ccd.resolution.value = ccd_res
+        self.ccd.exposureTime.value = et
+
+    def _discard_data(self, df, data):
+        """
+        Does nothing, just discard the SEM data received (for spot mode)
+        """
+        pass
+
+    def _ssOnCCDImage(self, df, data):
+        """
+        Receives the CCD data
+        """
+        df.unsubscribe(self._ssOnCCDImage)
+        self._optical_image = data
+        self._ccd_done.set()
+        logging.debug("Got CCD image!")
+
+    def DoAcquisition(self, future):
+        """
+        Uses the e-beam to scan the rectangular grid consisted of the given number 
+        of spots and acquires the corresponding CCD image
+        future (model.ProgressiveFuture): Progressive future provided by the wrapper
+        repetitions (tuple of ints): The number of CL spots are used
+        dwell_time (float): Time to scan each spot #s
+        escan (model.Emitter): The e-beam scanner
+        ccd (model.DigitalCamera): The CCD
+        detector (model.Detector): The electron detector
+        returns (model.DataArray): 2D array containing the intensity of each pixel in 
+                                    the spotted optical image
+                (List of tuples):  Coordinates of spots in electron image
+                (Tuple of floats):    Scaling of electron image
+        """
+        self._save_hw_settings()
+        self._acq_state = RUNNING
+        self._ccd_done.clear()
+
+        escan = self.escan
+        ccd = self.ccd
+        detector = self.detector
+        rep = self.repetitions
+        dwell_time = self.dwell_time
+
+        # Scanner setup (order matters)
+        scale = [(escan.resolution.range[1][0]) / rep[0],
+                 (escan.resolution.range[1][1]) / rep[1]]
+        escan.scale.value = scale
+        escan.resolution.value = rep
+        escan.translation.value = (0, 0)
+
+        # Scan at least 10 times, to avoids CCD/SEM synchronization problems
+        sem_dt = escan.dwellTime.clip(dwell_time / 10)
+        escan.dwellTime.value = sem_dt
+        # For safety, ensure the exposure time is at least twice the time for a whole scan
+        if dwell_time < 2 * sem_dt:
+            dwell_time = 2 * sem_dt
+            logging.info("Increasing dwell time to %g s to avoid synchronization problems",
+                          dwell_time)
+
+        # CCD setup
+        ccd.binning.value = (1, 1)
+        ccd.resolution.value = ccd.shape[0:2]
+        et = numpy.prod(rep) * dwell_time
+        ccd.exposureTime.value = et  # s
+        readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
+        tot_time = et + readout + 0.05
+
+        try:
+            if self._acq_state == CANCELLED:
                 raise CancelledError()
-            logging.debug("Scan done.")
-            future._acq_state = FINISHED
+            detector.data.subscribe(self._discard_data)
+            ccd.data.subscribe(self._ssOnCCDImage)
 
-    finally:
-        detector.data.unsubscribe(_discard_data)
-        ccd.data.unsubscribe(_ssOnCCDImage)
+            logging.debug("Scanning spot grid...")
 
-    electron_coordinates = []
+            # Wait for CCD to capture the image
+            if not self._ccd_done.wait(2 * tot_time + 4):
+                raise TimeoutError("Acquisition of CCD timed out")
 
-    bound = (((repetitions[0] - 1) * scale[0]) / 2,
-             ((repetitions[1] - 1) * scale[1]) / 2)
+            with self._acq_lock:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                logging.debug("Scan done.")
+                self._acq_state = FINISHED
+        finally:
+            detector.data.unsubscribe(self._discard_data)
+            ccd.data.unsubscribe(self._ssOnCCDImage)
+            self._restore_hw_settings()
 
-    # Compute electron coordinates based on scale and repetitions
-    for i in range(repetitions[0]):
-        for j in range(repetitions[1]):
-            electron_coordinates.append((-bound[0] + i * scale[0],
-                                         - bound[1] + j * scale[1]
-                                         ))
+        electron_coordinates = []
 
-    return ccd.data._optical_image, electron_coordinates, scale
+        bound = (((rep[0] - 1) * scale[0]) / 2,
+                 ((rep[1] - 1) * scale[1]) / 2)
 
-def _CancelAcquisition(future):
-    """
-    Canceller of _DoAcquisition task.
-    """    
-    logging.debug("Cancelling scan...")
+        # Compute electron coordinates based on scale and repetitions
+        for i in range(rep[0]):
+            for j in range(rep[1]):
+                electron_coordinates.append((-bound[0] + i * scale[0],
+                                             - bound[1] + j * scale[1]
+                                             ))
+
+        return self._optical_image, electron_coordinates, scale
+
+    def CancelAcquisition(self, future):
+        """
+        Canceller of DoAcquisition task.
+        """
+        logging.debug("Cancelling scan...")
+
+        with self._acq_lock:
+            if self._acq_state == FINISHED:
+                logging.debug("Scan already finished.")
+                return False
+            self._acq_state = CANCELLED
+            self._ccd_done.set()
+            logging.debug("Scan cancelled.")
     
-    with _acq_lock:
-        if future._acq_state == FINISHED:
-            logging.debug("Scan already finished.")
-            return False
-        future._acq_state = CANCELLED
-        _ccd_done.set()
-        logging.debug("Scan cancelled.")
-
-    return True
-
-def estimateAcqTime(dwell_time, repetitions):
-    """
-    Estimates scan procedure duration
-    """
-    return dwell_time * repetitions[0] * repetitions[1] + 0.1  # s
+        return True
 
