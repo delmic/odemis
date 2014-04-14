@@ -1,3 +1,10 @@
+odemis (1.6.1-1ubuntu1) precise; urgency=low
+
+  * Fix dependency on opencv
+  * Package gui.doc HTML file
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 14 Apr 2014 17:31:41 +0200
+
 odemis (1.6-1ubuntu1) precise; urgency=low
 
   * New version: 1.6
