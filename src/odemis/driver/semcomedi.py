@@ -1945,6 +1945,7 @@ class Scanner(model.Emitter):
                 raise ValueError("Data range between %g and %g V is too high for hardware." %
                                  (data_lim[0], data_lim[1]))
 
+        # Can't blank the beam, but at least, put it somewhere far away
         if park is None:
             park = limits[0][0], limits[1][0]
         else:
@@ -1955,7 +1956,6 @@ class Scanner(model.Emitter):
                 except comedi.ComediError:
                     raise ValueError("Park voltage %g V is too high for hardware." %
                                      (park[i],))
-        self._park = park[1], park[0]
 
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
@@ -2031,6 +2031,7 @@ class Scanner(model.Emitter):
         # the beam settling time or when put to rest.
         self.newPosition = model.Event()
 
+        self._resting_data = self._get_point_data((park[1], park[0]))
         self._prev_settings = [None, None, None, None] # resolution, scale, translation, margin
         self._scan_array = None # last scan array computed
 
@@ -2151,7 +2152,7 @@ class Scanner(model.Emitter):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def get_resting_point_data(self):
+    def _get_point_data(self, pos):
         """
         Returns all the data needed to set the beam to a nice resting position
         returns: array (1D numpy.ndarray), channels (list of int), ranges (list of int):
@@ -2159,8 +2160,6 @@ class Scanner(model.Emitter):
             channels: the output channels to use
             ranges: the range index of each output channel
         """
-        # Can't blank the beam, but at least, put it somewhere far away
-        pos = self._park
         ranges = []
         for i, channel in enumerate(self._channels):
             best_range = comedi.find_range(self.parent._device,
@@ -2173,6 +2172,16 @@ class Scanner(model.Emitter):
                                             self._channels, ranges,
                                             numpy.array(pos, dtype=numpy.double))
         return rpos, self._channels, ranges
+
+    def get_resting_point_data(self):
+        """
+        Returns all the data needed to set the beam to a nice resting position
+        returns: array (1D numpy.ndarray), channels (list of int), ranges (list of int):
+            array is 2 raw values (X and Y positions)
+            channels: the output channels to use
+            ranges: the range index of each output channel
+        """
+        return self._resting_data
 
     def get_scan_data(self):
         """
