@@ -142,7 +142,6 @@ def DivideInNeighborhoods(data, number_of_spots, scale):
     returns subimages (List of DataArrays): One subimage per spot
             subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
-            subimage_size (int): One dimension because it is square
     """
     # Denoise
     filtered_image = ndimage.median_filter(data, 3)
