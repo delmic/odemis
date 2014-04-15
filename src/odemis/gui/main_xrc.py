@@ -913,8 +913,7 @@ def __init_resources():
                         </object>
                         <object class="sizeritem">
                           <object class="wxStaticText" name="lbl_fine_align">
-                            <label>Message!</label>
-                            <hidden>1</hidden>
+                            <label></label>
                             <style>wxALIGN_CENTRE</style>
                             <XRCED>
                               <assign_var>1</assign_var>
@@ -926,6 +925,7 @@ def __init_resources():
                         </object>
                         <object class="sizeritem">
                           <object class="wxGauge" name="gauge_fine_align">
+                            <hidden>1</hidden>
                             <size>100,10</size>
                             <range>100</range>
                             <value>0</value>

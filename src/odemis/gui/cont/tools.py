@@ -261,8 +261,12 @@ class ToolBar(wx.Panel):
     def enable_button(self, tool_id, enable):
         self._buttons[tool_id].Enable(enable)
 
-    def enable(self, enabled):
-        """ TODO: make a cleverer version that stores the curent state when
-        a first disable is called?"""
+    def enable(self, enabled=True):
+        """
+        Enable (or disable all the buttons of the toolbar
+        enabled (bool): If True, will enable the buttons
+        """
+        # TODO: make a cleverer version that stores the current state when
+        # a first disable is called?
         for _, btn in self._buttons.items():
             btn.Enable(enabled)
