@@ -29,7 +29,7 @@ import collections
 import logging
 from odemis import gui, model
 from odemis.gui.comp import miccanvas
-from odemis.gui.comp.canvas import CAN_MOVE, CAN_FOCUS
+from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
@@ -391,7 +391,7 @@ class SecomViewport(MicroscopeViewport):
 
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
-        self._orig_abilities = self.canvas.abilities & set([CAN_MOVE, CAN_FOCUS])
+        self._orig_abilities = self.canvas.abilities & set([CAN_DRAG, CAN_FOCUS])
         self._microscope_view.stream_tree.should_update.subscribe(
                                                         self.hide_pause,
                                                         init=True
@@ -405,7 +405,7 @@ class SecomViewport(MicroscopeViewport):
             if is_playing:
                 self.canvas.abilities |= self._orig_abilities
             else:
-                self.canvas.abilities -= set([CAN_MOVE, CAN_FOCUS])
+                self.canvas.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
     def _checkMergeSliderDisplay(self):
         # Overridden to avoid displaying merge slide if only SEM or only Optical

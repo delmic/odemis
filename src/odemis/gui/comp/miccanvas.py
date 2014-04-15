@@ -29,7 +29,7 @@ import numpy
 from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
@@ -221,7 +221,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: send a .enable/.disable to overlay when becoming the active one
         if self.current_mode == MODE_SECOM_DICHO:
             self.dicho_overlay.enable(False)
-            self.abilities.add(canvas.CAN_MOVE)
+            self.abilities.add(canvas.CAN_DRAG)
         elif self.current_mode == guimodel.TOOL_SPOT:
             self._showSpotMode(False)
 
@@ -278,7 +278,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.dicho_overlay.enable(True)
             # FIXME: the right way would be to let the overlay say it wants
             # all the move-related events... and then it'd eat these events
-            self.abilities.remove(canvas.CAN_MOVE)
+            self.abilities.remove(canvas.CAN_DRAG)
         elif tool == guimodel.TOOL_SPOT:
             self.current_mode = tool
             # the only thing the view does is to indicate the mode
@@ -1236,7 +1236,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
-        self.abilities -= set([CAN_ZOOM, CAN_MOVE])
+        self.abilities -= set([CAN_ZOOM, CAN_DRAG])
 
         self._goal_im_ref = None
         self._goal_wim = None
@@ -1454,7 +1454,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = None
         self._tab_data_model = None
-        self.abilities -= set([CAN_MOVE, CAN_FOCUS])
+        self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
         self.backgroundBrush = wx.SOLID # background is always black
 

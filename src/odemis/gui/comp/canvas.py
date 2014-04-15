@@ -1,159 +1,171 @@
 # -*- coding: utf-8 -*-
 
 """
-Created on 2 Feb 2012
 
-@author: Éric Piel
+:created: 2 Feb 2012
+:author: Éric Piel, Rinze de Laat
+:copyright: © 2012 Delmic
 
-Copyright © 2012 Éric Piel, Delmic
+..license::
+    This file is part of Odemis.
 
-This file is part of Odemis.
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+    FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+    details.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
-
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
-
-
-
-Canvas Rendering Pipeline
--------------------------
-
-** Attributes of interest:
-
-* Prefixes:
-    0,0 at top left
-    v_<name>: in view coordinates = pixels
-    b_<name>: in buffer coordinates = pixels
-    w_<name>: in world coordinates
-
-    Carthesian coordinates
-    p_<name>: in physical coordinates
-
-* buffer_center_world_pos: The center of the buffer in world coordinates.
-When the user moves or drags the view, the buffer is recentered around a new
-set of world coordinates.
-
-* _dc_buffer: The buffer into which is drawn. Its size is typically the size
-of the view window, with an added margin all around it.
-
-* requested_world_pos: The requested new center of the buffer in world
-coordinates, which is set from recenter_buffer, a method called whenever
-a drag action is complete or when the view is otherwise
-changed.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 
-** Method calls:
+Canvas Module
+=============
 
-* request_drawing_update
+This module contains canvas classes that can be used to display graphical data
+on screen. These canvasses are not directly related to hardware components. The
+canvas subclasses that are, can be found in the miccanvas module.
+
+
+Key concepts
+------------
+
+Coordinate systems
+~~~~~~~~~~~~~~~~~~
+
+view:
+    The visible rectangle of graphical data within the GUI with coordinates and
+    size expressed in integer pixel values. The top left pixel is considered the
+    origin 0,0 with left and down being the positive directions.
+
+    Attributes related to the view have the prefix `v_`
+
+buffer:
+    The internal bitmap that contains all generated graphical data, that can be
+    copied to the view as needed. The size of the buffer is at least as big as
+    that of that of the view. Size and coordinates are expressed in integer
+    pixel values. The top left pixel is considered the
+    origin 0,0 with left and down being the positive directions.
+
+    Attributes related to the view have the prefix `b_`
+
+world:
+    This coordinate system has its origin 0.0,0.0 and it's the starting point of
+    the microscope's operation. From this origin, the microscope can move up,
+    down, left and right. Left and down are considered the positive directions.
+
+    World coordinates are expressed using float numbers.
+
+    Attributes related to the world coordinate system have the prefix `b_`.
+
+physical:
+    Basically the same as the world coordinate system, with the exception that
+    *up* is the positive direction, instead of down.
+
+    Because only this minor difference exists between the systems, that will
+    most likely be merge into one in the future.
+
+    Attributes related to the physical coordinate sytem have the prefix `p_`
+
+
+BufferedCanvas
+~~~~~~~~~~~~~~
+
+This canvas class is an abstract base class on which all after canvasses used
+by Odemis are based. It uses an internal bitmap as a buffer from which graphical
+data is displayed on the screen.
+
+The canvas starts off at the origin of the world coordinate system with the
+buffer's center aligned with this origin. If the view is moved, the center of
+this buffer is realigned with a different world coordinate. The current world
+position of the center of the buffer is stored in the `w_buffer_center`
+attribute.
+
+Graphical data is drawn using the following sequence of method calls:
+
+* request_drawing_update()
+
     This method triggers the on_draw_timer handler, but only if time delay
-    criteria are met, so drawing doesn't happen too often or too infrequently.
+    criteria are met, so drawing doesn't happen too often. This can of course be
+    by-passed by calling `update_drawing` directly.
 
-    * on_draw_timer
+    * on_draw_timer()
 
-        Simply calls the next function.
+        Handles a timer event (of the timer started by `request_drawing_update`)
 
-        * update_drawing
+        * update_drawing()
 
-            Update buffer_center_world_pos to requested_world_pos.
+            * draw()
 
-            * Draw
+                * _draw_background()
 
-                Move the origin to the _dc_buffer from the top left to its
-                center.
+                * Set the device origin to the center of the buffer
 
                 * _draw_merged_images
 
-                    Draw the background using
+                   * for all but last image:
+                        * _draw_image()
+                            * _rescale_image()
+                            * memset_object() (For opacity)
+                            * Draw the image to the _dc_buffer
 
-                    * _draw_background
+                    * for last image:
+                        * _draw_image()
+                            * _rescale_image()
+                            * memset_object() (For opacity)
+                            * Draw the image to the _dc_buffer
 
-                    Draw each image in the stack using...
+                * Restore device origin to the top left
 
-                    * _draw_image
-
-                        Rescales the image using...
-
-                        * _rescale_image
-
-                        Set image opacity using...
-
-                        * memset_object
-
-                        Draw the image to the _dc_buffer
-
-                Reset the origin to the top left (0, 0)
-
-            Refresh/Update
-
-
-DrawTimer is set by request_drawing_update
-
-Data and graphical orientations
--------------------------------
-
-View:
-    The 0,0 origin is at the top left and left and down are the positive
-    directions.
-Buffer:
-    The 0,0 origin is at the top left and left and down are the positive
-    directions.
-World:
-    The 0,0 origin is in the center (usually) and left and down are the positive
-    directions.
-Physical:
-    The 0,0 origin is in the center (usually) and left and up are the positive
-    directions.
+            * Refresh/Update canvas
 
 """
-from __future__ import division
-from abc import ABCMeta, abstractmethod
 
+from __future__ import division
+
+import cairo
 import collections
 import ctypes
 import logging
 import math
+import odemis.gui.img.data as imgdata
 import os
-
-import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
-from decorator import decorator
 
+from abc import ABCMeta, abstractmethod
+from decorator import decorator
 from odemis.util.conversion import wxcol_to_frgb
-import odemis.gui.img.data as imgdata
 
 #pylint: disable=E1002
 
-# For the abilities
-CAN_MOVE = 1 # allows moving the view position
-CAN_FOCUS = 2 # allows changing the focus
-CAN_ZOOM = 3 # allows changing the scale
+# Special abilities that a canvas might possess
+CAN_DRAG = 1    # Content can be dragged
+CAN_FOCUS = 2   # Can adjust focus
+CAN_ZOOM = 4    # Can adjust scale
 
 @decorator
 def ignore_if_disabled(f, self, *args, **kwargs):
-    """ This method decorator only runs the method if the instance is 'enabled'
-    """
+    """ Prevent the given method from executing if the instance is 'disabled'"""
     if self.Enabled:
         return f(self, *args, **kwargs)
 
 class BufferedCanvas(wx.Panel):
+    """ Abstract base class for buffered canvasses that display graphical data
+
+    :ivar abilities: Set of special features that the Canvas supports
+
     """
-    Public attributes:
-    .abilities (set of CAN_*): features/restrictions allowed to be performed
-    """
+
     __metaclass__ = ABCMeta
 
     def __init__(self, *args, **kwargs):
         # Set default style
         kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
-        super(BufferedCanvas, self).__init__( *args, **kwargs)
+        super(BufferedCanvas, self).__init__(*args, **kwargs)
 
         # Set of features/restrictions dynamically changeable
         self.abilities = set() # filled by CAN_*
@@ -173,7 +185,7 @@ class BufferedCanvas(wx.Panel):
         # Buffer device context
         self._dc_buffer = wx.MemoryDC()
         # Center of the buffer in world coordinates
-        self.buffer_center_world_pos = (0, 0)
+        self.w_buffer_center = (0, 0)
         # wx.Bitmap that will always contain the image to be displayed
         self._bmp_buffer = None
         # very small first, so that for sure it'll be resized with on_size
@@ -321,13 +333,12 @@ class BufferedCanvas(wx.Panel):
 
         Ensures that the buffer still fits in the view and recenter the view.
         """
-        # Essure the buffer is always at least as big as the window
+        # Ensure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
         if (min_size[0] > self._bmp_buffer_size[0] or
             min_size[1] > self._bmp_buffer_size[1]):
             logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(min_size)
-            #self.request_drawing_update()
             self.update_drawing()
         else:
             # logging.debug("Buffer size didn't change, refreshing...")
@@ -632,9 +643,8 @@ class BitmapCanvas(BufferedCanvas):
 
         # set and reset the origin here because Blit in onPaint gets "confused"
         # with values > 2048
-        # centred on self.buffer_center_world_pos
+        # centred on self.w_buffer_center
         origin_pos = tuple(d // 2 for d in self._bmp_buffer_size)
-
         self._dc_buffer.SetDeviceOriginPoint(origin_pos)
 
         # we do not use the UserScale of the DC here because it would lead
@@ -647,7 +657,7 @@ class BitmapCanvas(BufferedCanvas):
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.world_overlays:
-            o.Draw(self._dc_buffer, self.buffer_center_world_pos, self.scale)
+            o.Draw(self._dc_buffer, self.w_buffer_center, self.scale)
 
     def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
         """ Draw the two images on the buffer DC, centred around their
@@ -774,7 +784,6 @@ class BitmapCanvas(BufferedCanvas):
 
         # The buffer area the image would occupy (top, left, width, height)
         buff_rect = self._get_image_buffer_rect(dc_buffer, im, scale, center)
-
         # Combine the zoom and image scales.
         total_scale = scale * self.scale
 
@@ -905,7 +914,7 @@ class BitmapCanvas(BufferedCanvas):
     def world_to_buffer(self, pos, offset=None): #pylint: disable=W0221
         return super(BitmapCanvas, self).world_to_buffer_pos(
             pos,
-            self.buffer_center_world_pos,
+            self.w_buffer_center,
             self.scale,
             offset
         )
@@ -913,7 +922,7 @@ class BitmapCanvas(BufferedCanvas):
     def buffer_to_world(self, pos, offset=None): #pylint: disable=W0221
         return super(BitmapCanvas, self).buffer_to_world_pos(
             pos,
-            self.buffer_center_world_pos,
+            self.w_buffer_center,
             self.scale,
             offset
         )
@@ -921,7 +930,7 @@ class BitmapCanvas(BufferedCanvas):
     def view_to_world(self, pos, offset=None): #pylint: disable=W0221
         return super(BitmapCanvas, self).view_to_world_pos(
             pos,
-            self.buffer_center_world_pos,
+            self.w_buffer_center,
             self.margins,
             self.scale,
             offset)
@@ -929,7 +938,7 @@ class BitmapCanvas(BufferedCanvas):
     def world_to_view(self, pos, offset=None):  #pylint: disable=W0221
         return super(BitmapCanvas, self).world_to_view_pos(
             pos,
-            self.buffer_center_world_pos,
+            self.w_buffer_center,
             self.margins,
             self.scale,
             offset)
@@ -984,7 +993,7 @@ class DraggableCanvas(BitmapCanvas):
     def __init__(self, *args, **kwargs):
         super(DraggableCanvas, self).__init__(*args, **kwargs)
 
-        self.abilities |= set([CAN_MOVE, CAN_FOCUS])
+        self.abilities |= set([CAN_DRAG, CAN_FOCUS])
 
         # When resizing, margin to put around the current size
         # TODO: Maybe make the margin related to the canvas size?
@@ -993,7 +1002,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # the position the view is asking to the next buffer recomputation
         # in buffer-coordinates: = 1px at scale = 1
-        self.requested_world_pos = self.buffer_center_world_pos
+        self.requested_world_pos = self.w_buffer_center
 
         self._ldragging = False
 
@@ -1040,7 +1049,7 @@ class DraggableCanvas(BitmapCanvas):
     def on_left_down(self, evt): #pylint: disable=W0221
         """ Start a dragging procedure """
         # Ignore the click if we're aleady dragging
-        if CAN_MOVE in self.abilities and not self._rdragging:
+        if CAN_DRAG in self.abilities and not self._rdragging:
             cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
 
             # Fixme: only go to drag mode if the mouse moves before a mouse up?
@@ -1066,11 +1075,11 @@ class DraggableCanvas(BitmapCanvas):
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
             new_pos = (
-                self.buffer_center_world_pos[0] - self.drag_shift[0] / self.scale,
-                self.buffer_center_world_pos[1] - self.drag_shift[1] / self.scale
+                self.w_buffer_center[0] - self.drag_shift[0] / self.scale,
+                self.w_buffer_center[1] - self.drag_shift[1] / self.scale
             )
             self.recenter_buffer(new_pos)
-            # Update the drawing, since buffer_center_world_pos need to be
+            # Update the drawing, since w_buffer_center need to be
             # updates
             self.update_drawing()
 
@@ -1098,7 +1107,7 @@ class DraggableCanvas(BitmapCanvas):
 
     def on_dbl_click(self, evt):
         """ Recenter the view around the point that was double clicked """
-        if CAN_MOVE in self.abilities:
+        if CAN_DRAG in self.abilities:
             v_pos = evt.GetPositionTuple()
             v_center = (self.ClientSize.x // 2, self.ClientSize.y // 2)
             shift = (v_center[0] - v_pos[0], v_center[1] - v_pos[1])
@@ -1109,8 +1118,8 @@ class DraggableCanvas(BitmapCanvas):
             self.Refresh()
 
             # recompute the view
-            new_pos = (self.buffer_center_world_pos[0] - shift[0] / self.scale,
-                       self.buffer_center_world_pos[1] - shift[1] / self.scale)
+            new_pos = (self.w_buffer_center[0] - shift[0] / self.scale,
+                       self.w_buffer_center[1] - shift[1] / self.scale)
             self.recenter_buffer(new_pos)
 
             logging.debug("Double click at %s", new_pos)
@@ -1125,7 +1134,7 @@ class DraggableCanvas(BitmapCanvas):
 
             # Limit the amount of pixels that the canvas can be dragged
             self.drag_shift = (
-                min(max(drag_shift[0], -self.margins[0]), self.margins[0] ),
+                min(max(drag_shift[0], -self.margins[0]), self.margins[0]),
                 min(max(drag_shift[1], -self.margins[1]), self.margins[1])
             )
 
@@ -1190,7 +1199,7 @@ class DraggableCanvas(BitmapCanvas):
     def on_char(self, evt):
         key = evt.GetKeyCode()
 
-        if CAN_MOVE in self.abilities:
+        if CAN_DRAG in self.abilities:
             change = 100 # about a 10th of the screen
             if evt.ShiftDown():
                 change //= 8 # softer
@@ -1286,16 +1295,16 @@ class DraggableCanvas(BitmapCanvas):
     def update_drawing(self):
         """ Redraws everything (that is viewed in the buffer)
         """
-        prev_world_pos = self.buffer_center_world_pos
+        prev_world_pos = self.w_buffer_center
 
-        self.buffer_center_world_pos = self.requested_world_pos
+        self.w_buffer_center = self.requested_world_pos
 
         self.draw()
 
         # Calculate the amount the view has shifted in pixels
         shift_view = (
-            (self.buffer_center_world_pos[0] - prev_world_pos[0]) * self.scale,
-            (self.buffer_center_world_pos[1] - prev_world_pos[1]) * self.scale,
+            (self.w_buffer_center[0] - prev_world_pos[0]) * self.scale,
+            (self.w_buffer_center[1] - prev_world_pos[1]) * self.scale,
         )
 
         # Adjust the dragging attributes according to the change in
@@ -1328,8 +1337,8 @@ class DraggableCanvas(BitmapCanvas):
         :param shift: (int, int) delta in buffer coordinates (pixels)
         """
         self.recenter_buffer(
-            (self.buffer_center_world_pos[0] - (shift[0] / self.scale),
-             self.buffer_center_world_pos[1] - (shift[1] / self.scale))
+            (self.w_buffer_center[0] - (shift[0] / self.scale),
+             self.w_buffer_center[1] - (shift[1] / self.scale))
         )
 
     # END View manipulation
@@ -1358,7 +1367,6 @@ class DraggableCanvas(BitmapCanvas):
         """
         # TODO: take into account the dragging. For now we skip it (should be
         # unlikely to happen anyway)
-
         # find bounding box of all the content
         bbox = [None, None, None, None] # ltrb in wu
         for im in self.images:
