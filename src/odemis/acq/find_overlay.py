@@ -146,11 +146,13 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates)
             raise ValueError("Overlay failure")
 
-        # TODO: update progress of the future
 
         # Calculate transformation parameters
         if future._find_overlay_state == CANCELLED:
             raise CancelledError()
+
+        # We are almost done... about 1 s left
+        future.set_end_time(time.time() + 1)
 
         logging.debug("Calculating transformation...")
         ret = transform.CalculateTransform(known_ec, known_oc)
@@ -159,11 +161,12 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             raise CancelledError()
         logging.debug("Calculating transform metadata...")
 
-        # TODO: in the metadata, also put MD_DWELL_TIME, as information about
-        # the dwell time that worked
         transform_data = _transformMetadata(optical_image, ret, escan, ccd)
         if transform_data == []:
             raise ValueError('Metadata is missing')
+
+        # Also indicate which dwell time eventually worked
+        transform_data[model.MD_DWELL_TIME] = dwell_time
     
         logging.debug("Overlay done.")
         return ret, transform_data
