@@ -55,7 +55,7 @@ class Message(wx.PopupTransientWindow):
 
     @classmethod
     def show_message(cls, parent, title,
-                     message=None, timeout=None, bgcolour=BG_COLOUR_NOTIFY):
+                     message=None, timeout=1.5, bgcolour=BG_COLOUR_NOTIFY):
         mo = Message(parent)
         mo._show_message(title, message, timeout, bgcolour)
 
@@ -82,4 +82,4 @@ class Message(wx.PopupTransientWindow):
         self.Position(pos, (0, 0))
 
         self.Popup()
-        wx.FutureCall(timeout or 1500, self.Dismiss)
+        wx.FutureCall(timeout * 1000, self.Dismiss)
