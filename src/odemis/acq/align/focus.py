@@ -29,7 +29,7 @@ from scipy import signal
 _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
 
-MAX_STEPS_NUMBER = 50  # Max steps to perform autofocus
+MAX_STEPS_NUMBER = 3  # Max steps to perform autofocus
 
 def MeasureFocus(image):
     """
@@ -47,22 +47,20 @@ def MeasureFocus(image):
     return Fm
 
 
-def AutoFocus(ccd, escan, focus):
+def AutoFocus(ccd, focus):
     """
     Initially sets proper binning and exposure time. Then, iteratively acquires 
     an optical image, measures its focus level and adjusts the optical focus with 
-    respect to the focus level. This process is applied for a maximum number of 
-    steps or until adjustments on optical focus have no effect on focus level.
+    respect to the focus level. 
     ccd (model.DigitalCamera): The CCD
-    escan (model.Emitter): The e-beam scanner
     focus (model.CombinedActuator): The optical focus
     returns (float):    Focus position #m
     """
-    #Determine focus direction
+    # Determine focus direction
     step = 15e-6
     image = ccd.data.get()
     fm_cur = MeasureFocus(image)
-    f = focus.moveRel(step)
+    f = focus.moveRel({"z": step})
     f.result()
     image = ccd.data.get()
     fm_test = MeasureFocus(image)
@@ -74,39 +72,39 @@ def AutoFocus(ccd, escan, focus):
     # Move the lens in the correct direction until focus measure is decreased
     step = 5e-6
     fm_old, fm_new = fm_test, fm_test
+    steps = 0
     while fm_old <= fm_new:
+        if steps >= MAX_STEPS_NUMBER:
+            break
         fm_old = fm_new
-        f = focus.moveRel(sign * step)
+        f = focus.moveRel({"z":sign * step})
         f.result()
         image = ccd.data.get()
         fm_new = MeasureFocus(image)
-    focus.moveRel(-sign * step)
+        steps += 1
+        print steps
+        print fm_new
+    focus.moveRel({"z":-sign * step})
     f.result()
 
     # Perform binary search in the interval containing the last two lens
     # positions
     step = step / 2
-    f = focus.moveRel(sign * step)
+    f = focus.moveRel({"z":sign * step})
     f.result()
-    while step >= 0.5:
+    while step >= 0.5e-6:
         step = step / 2
         image = ccd.data.get()
         fm_new = MeasureFocus(image)
         if fm_new < fm_old:
             sign = -sign
-            f = focus.moveRel(sign * step)
+            f = focus.moveRel({"z":sign * step})
         else:
-            f = focus.moveRel(sign * step)
+            f = focus.moveRel({"z":sign * step})
         f.result()
         fm_old = fm_new
+        print step
+        print fm_new
 
-
-#     # Perform search of smaller step in the interval starting from the last
-#     # position
-#     while fm_old <= fm_new:
-#         fm_old = fm_new
-#         f = focus.moveRel(sign * 0.1e-06)
-#         f.result
-#         fm_new = MeasureFocus(image)
-#     focus.moveRel(-sign * 0.1e-06)
+    return focus.position.value
 

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Created on 11 Apr 2014
+Created on 15 Apr 2014
 
 @author: Kimon Tsitsikas
 
@@ -23,32 +23,30 @@ import logging
 import numpy
 import unittest
 from odemis.dataio import hdf5
-from odemis.acq.align import settings
-from scipy import ndimage
-from odemis import model
-from odemis.acq.align import transform
+from odemis.acq.align import spot
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-class TestSettingsAdjustment(unittest.TestCase):
+class TestSpotAlignment(unittest.TestCase):
     """
-    Test settings functions
+    Test spot alignment functions
     """
-    def test_measure_focus(self):
+    def test_find_spot(self):
         """
-        Test MeasureFocus
+        Test FindSpot
         """
-        grid_data = hdf5.read_data("grid_10x10.h5")
-        C, T, Z, Y, X = grid_data[0].shape
-        grid_data[0].shape = Y, X
-        input = grid_data[0]
+        data = hdf5.read_data("grid_10x10.h5")
+        C, T, Z, Y, X = data[0].shape
+        data[0].shape = Y, X
+        input = data[0]
+        avg = numpy.mean(input)
+        input[0:251, :].fill(avg)
+        input[290:, : ].fill(avg)
+        input[:, 0:329].fill(avg)
+        input[:, 374:].fill(avg)
         
-        prev_res = settings.MeasureFocus(input)
-        for i in range(1, 10, 1):
-            input = ndimage.gaussian_filter(input, sigma=i)
-            res = settings.MeasureFocus(input)
-            self.assertGreater(prev_res, res)
-            prev_res = res
+        res = spot.FindSpot(input)
+        self.assertAlmostEqual(res, (351.68593111619668, 272.68443611130562), 3)
 
 
 if __name__ == '__main__':
