@@ -85,14 +85,23 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
 
-            # Distance between spots in the optical image (in optical pixels)
-            optical_dist = escan.pixelSize.value[0] * electron_scale[0] / optical_image.metadata[model.MD_PIXEL_SIZE][0]
+            # Check if ScanGrid gave one image or list of images
+            if type(optical_image) is list:
+                subimages = optical_image
+                subimage_coordinates = []
+                for img in subimages:
+                    subimage_coordinates.append((img.shape[0] / 2, img.shape[1] / 2))
+                print subimages, subimage_coordinates
+            else:
+                # Distance between spots in the optical image (in optical pixels)
+                optical_dist = escan.pixelSize.value[0] * electron_scale[0] / optical_image.metadata[model.MD_PIXEL_SIZE][0]
 
-            # Isolate spots
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
-            logging.debug("Isolating spots...")
-            subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
+                # Isolate spots
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+                logging.debug("Isolating spots...")
+                subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
+
             if not subimages:
                 raise ValueError("Overlay failure")
 
@@ -101,6 +110,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
                 raise CancelledError()
             logging.debug("Finding spot centers with %d subimages...", len(subimages))
             spot_coordinates = coordinates.FindCenterCoordinates(subimages)
+            print spot_coordinates
 
             # Reconstruct the optical coordinates
             if future._find_overlay_state == CANCELLED:
