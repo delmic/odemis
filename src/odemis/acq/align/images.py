@@ -29,8 +29,11 @@ import numpy
 from odemis import model
 from odemis.acq import _futures
 from odemis.util import TimeoutError
+from odemis.util import img
 import threading
+import math
 import time
+import copy
 
 
 def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
@@ -73,6 +76,7 @@ class GridScanner(object):
         self._acq_lock = threading.Lock()
         self._ccd_done = threading.Event()
         self._optical_image = None
+        self._spot_images = []
 
         self._hw_settings = ()
 
@@ -122,6 +126,15 @@ class GridScanner(object):
         self._ccd_done.set()
         logging.debug("Got CCD image!")
 
+    def _ssOnSpotImage(self, df, data):
+        """
+        Receives the Spot image data
+        """
+        df.unsubscribe(self._ssOnSpotImage)
+        self._spot_images.append(data)
+        self._ccd_done.set()
+        logging.debug("Got Spot image!")
+
     def DoAcquisition(self, future):
         """
         Uses the e-beam to scan the rectangular grid consisted of the given number 
@@ -147,54 +160,28 @@ class GridScanner(object):
         rep = self.repetitions
         dwell_time = self.dwell_time
 
+        # Estimate the area of SEM and Optical FoV
+        ccd_area = self.get_ccd_area()
+        sem_area = self.get_sem_area()
+
+        # If the SEM FoV > Optical FoV * 0.8 then apply a ratio over the area scanned
+        ratio = 1
+        req_area = ccd_area * 0.8
+        if sem_area > req_area:
+            ratio = math.sqrt(req_area / sem_area)
+        
         # Scanner setup (order matters)
         scale = [(escan.resolution.range[1][0]) / rep[0],
                  (escan.resolution.range[1][1]) / rep[1]]
-        escan.scale.value = scale
-        escan.resolution.value = rep
-        escan.translation.value = (0, 0)
 
-        # Scan at least 10 times, to avoids CCD/SEM synchronization problems
-        sem_dt = escan.dwellTime.clip(dwell_time / 10)
-        escan.dwellTime.value = sem_dt
-        # For safety, ensure the exposure time is at least twice the time for a whole scan
-        if dwell_time < 2 * sem_dt:
-            dwell_time = 2 * sem_dt
-            logging.info("Increasing dwell time to %g s to avoid synchronization problems",
-                          dwell_time)
-
-        # CCD setup
-        ccd.binning.value = (1, 1)
-        ccd.resolution.value = ccd.shape[0:2]
-        et = numpy.prod(rep) * dwell_time
-        ccd.exposureTime.value = et  # s
-        readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
-        tot_time = et + readout + 0.05
-
-        try:
-            if self._acq_state == CANCELLED:
-                raise CancelledError()
-            detector.data.subscribe(self._discard_data)
-            ccd.data.subscribe(self._ssOnCCDImage)
-
-            logging.debug("Scanning spot grid...")
-
-            # Wait for CCD to capture the image
-            if not self._ccd_done.wait(2 * tot_time + 4):
-                raise TimeoutError("Acquisition of CCD timed out")
-
-            with self._acq_lock:
-                if self._acq_state == CANCELLED:
-                    raise CancelledError()
-                logging.debug("Scan done.")
-                self._acq_state = FINISHED
-        finally:
-            detector.data.unsubscribe(self._discard_data)
-            ccd.data.unsubscribe(self._ssOnCCDImage)
-            self._restore_hw_settings()
-
+        # Apply ratio
+        scale = (scale[0] * ratio, scale[1] * ratio)
+        if (scale[0] < 1) or (scale[1] < 1):
+            scale = (1, 1)
+            logging.warning("SEM field of view is too big. Scale set to %s.",
+                            scale)
+            
         electron_coordinates = []
-
         bound = (((rep[0] - 1) * scale[0]) / 2,
                  ((rep[1] - 1) * scale[1]) / 2)
 
@@ -204,6 +191,99 @@ class GridScanner(object):
                 electron_coordinates.append((-bound[0] + i * scale[0],
                                              - bound[1] + j * scale[1]
                                              ))
+
+        # If the distance between e-beam spots is below 1µm, use the “one image
+        # per spot” procedure, else perform standard grid scan
+        spot_dist = (scale[0] * escan.pixelSize.value[0],
+                     scale[1] * escan.pixelSize.value[1])
+        if (spot_dist[0] < 1e-06) or (spot_dist[1] < 1e-06):
+            escan.scale.value = (1, 1)
+            escan.resolution.value = (1, 1)
+
+            sem_dt = 2 * dwell_time
+            escan.dwellTime.value = sem_dt
+
+            # CCD setup
+            ccd.binning.value = (1, 1)
+            ccd.resolution.value = ccd.shape[0:2]
+            et = dwell_time
+            ccd.exposureTime.value = et  # s
+            readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
+            tot_time = et + readout + 0.05
+            
+            logging.debug("Scanning spot grid with image per spot procedure...")
+
+            try:
+                for spot in electron_coordinates:
+                    self._ccd_done.clear()
+                    escan.translation.value = spot
+                    logging.debug("Scanning spot %s", escan.translation.value)
+                    try:
+                        if self._acq_state == CANCELLED:
+                            raise CancelledError()
+                        detector.data.subscribe(self._discard_data)
+                        ccd.data.subscribe(self._ssOnSpotImage)
+        
+                        # Wait for CCD to capture the image
+                        if not self._ccd_done.wait(2 * tot_time + 4):
+                            raise TimeoutError("Acquisition of CCD timed out")
+        
+                    finally:
+                        detector.data.unsubscribe(self._discard_data)
+                        ccd.data.unsubscribe(self._ssOnSpotImage)
+                with self._acq_lock:
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+                    logging.debug("Scan done.")
+                    self._acq_state = FINISHED
+            finally:
+                self._restore_hw_settings()
+
+            return self._spot_images, electron_coordinates, scale
+
+        else:     
+            escan.scale.value = scale
+            escan.resolution.value = rep
+            escan.translation.value = (0, 0)
+    
+            # Scan at least 10 times, to avoids CCD/SEM synchronization problems
+            sem_dt = escan.dwellTime.clip(dwell_time / 10)
+            escan.dwellTime.value = sem_dt
+            # For safety, ensure the exposure time is at least twice the time for a whole scan
+            if dwell_time < 2 * sem_dt:
+                dwell_time = 2 * sem_dt
+                logging.info("Increasing dwell time to %g s to avoid synchronization problems",
+                              dwell_time)
+    
+            # CCD setup
+            ccd.binning.value = (1, 1)
+            ccd.resolution.value = ccd.shape[0:2]
+            et = numpy.prod(rep) * dwell_time
+            ccd.exposureTime.value = et  # s
+            readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
+            tot_time = et + readout + 0.05
+    
+            try:
+                if self._acq_state == CANCELLED:
+                    raise CancelledError()
+                detector.data.subscribe(self._discard_data)
+                ccd.data.subscribe(self._ssOnCCDImage)
+    
+                logging.debug("Scanning spot grid...")
+    
+                # Wait for CCD to capture the image
+                if not self._ccd_done.wait(2 * tot_time + 4):
+                    raise TimeoutError("Acquisition of CCD timed out")
+    
+                with self._acq_lock:
+                    if self._acq_state == CANCELLED:
+                        raise CancelledError()
+                    logging.debug("Scan done.")
+                    self._acq_state = FINISHED
+            finally:
+                detector.data.unsubscribe(self._discard_data)
+                ccd.data.unsubscribe(self._ssOnCCDImage)
+                self._restore_hw_settings()
 
         return self._optical_image, electron_coordinates, scale
 
@@ -223,3 +303,38 @@ class GridScanner(object):
     
         return True
 
+    def get_ccd_area(self):
+        """
+        Returns the area of the FoV of the CCD.
+        returns (float): FoV area # m^2
+        """
+        # The only way to get the right info is to look at what metadata the
+        # images will get
+        md = copy.copy(self.ccd.getMetadata())
+        img.mergeMetadata(md)  # apply correction info from fine alignment
+
+        shape = self.ccd.shape[0:2]
+        pxs = md[model.MD_PIXEL_SIZE]
+        # compensate for binning
+        binning = self.ccd.binning.value
+        pxs = [p / b for p, b in zip(pxs, binning)]
+        center = md.get(model.MD_POS, (0, 0))
+
+        width = (shape[0] * pxs[0], shape[1] * pxs[1])
+        area = numpy.prod(width)
+
+        return area
+    
+    def get_sem_area(self):
+        """
+        Returns the area of the FoV of the SEM.
+        returns (float): FoV area # m^2
+        """
+        center = (0, 0)
+
+        sem_width = (self.escan.shape[0] * self.escan.pixelSize.value[0],
+                     self.escan.shape[1] * self.escan.pixelSize.value[1])
+
+        area = numpy.prod(sem_width)
+
+        return area
