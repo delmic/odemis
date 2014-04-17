@@ -2016,10 +2016,8 @@ class FakeAndorV2DLL(object):
         if self._data is None:
             self.shape = (2560, 2048) # px
             self.bpp = 12
-            self._data = numpy.empty((self.shape[1], self.shape[0]), dtype=numpy.uint16)
-            end = 2 ** self.bpp
-            step = end / self.shape[0]
-            self._data[:] = numpy.arange(0, end, step)[0:self.shape[0]].astype(numpy.uint16)
+            self._data = numpy.empty(self.shape[::-1], dtype=numpy.uint16)
+            self._data[:] = numpy.linspace(0, 2 ** self.bpp - 1, self.shape[0])
             self.maxBinning = (64, 64) # px
 
         self.roi = (1, self.shape[0], 1, self.shape[1]) # h0, hlast, v0, vlast, starting from 1
