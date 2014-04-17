@@ -768,7 +768,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         # TODO: once the StreamTrees can render fully, reactivate the background
         # pattern
-        self.backgroundBrush = wx.SOLID
+        self.background_brush = wx.SOLID
 
 
     # Special version which put the SEM images first, as with the current
@@ -1456,7 +1456,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
         self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        self.backgroundBrush = wx.SOLID # background is always black
+        self.background_brush = wx.SOLID # background is always black
 
         ## Overlays
 

@@ -61,6 +61,8 @@ world:
 
     Attributes related to the world coordinate system have the prefix `b_`.
 
+    The relation between world and buffer is determined by `scale`.
+
 physical:
     Basically the same as the world coordinate system, with the exception that
     *up* is the positive direction, instead of down.
@@ -139,6 +141,7 @@ import wx.lib.wxcairo as wxcairo
 from abc import ABCMeta, abstractmethod
 from decorator import decorator
 from odemis.util.conversion import wxcol_to_frgb
+from profilehooks import profile
 
 #pylint: disable=E1002
 
@@ -152,6 +155,7 @@ def ignore_if_disabled(f, self, *args, **kwargs):
     """ Prevent the given method from executing if the instance is 'disabled'"""
     if self.Enabled:
         return f(self, *args, **kwargs)
+
 
 class BufferedCanvas(wx.Panel):
     """ Abstract base class for buffered canvasses that display graphical data
@@ -191,7 +195,8 @@ class BufferedCanvas(wx.Panel):
         # very small first, so that for sure it'll be resized with on_size
         self._bmp_buffer_size = (1, 1)
 
-        self.backgroundBrush = wx.CROSS_HATCH # wx.SOLID for a plain background
+        self.background_brush = wx.CROSS_HATCH
+
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
             # Linux...
@@ -205,6 +210,7 @@ class BufferedCanvas(wx.Panel):
         # self.resize_buffer(self.get_minimum_buffer_size())
 
         # This attribute is used to store the current mouse cursor type
+        # TODO: Change to a stack?
         self.previous_cursor = None
 
         # Event Biding
@@ -229,20 +235,19 @@ class BufferedCanvas(wx.Panel):
 
         # END Event Biding
 
-        # timer to give a delay before redrawing so we wait to see if there are
-        # several events waiting
+        # Timer used to set a maximum of frames per second
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
+    ############ Event Handlers ############
 
-    # Event processing
+    def _on_mouse_down(self, cursor=None):
+        """ Perform actions common to both left and right mouse button down
 
-    def _on_down(self, cursor=None):
-        """ General method for any mouse buttons being pressed
-
-        .. Note:: A bug prevents the cursor from changing in Ubuntu after the
+        .. note:: A bug prevents the cursor from changing in Ubuntu after the
             mouse is captured.
 
         """
+
         if cursor:
             self.previous_cursor = self.GetCursor()
             self.SetCursor(cursor)
@@ -252,11 +257,14 @@ class BufferedCanvas(wx.Panel):
 
         self.SetFocus()
 
-    def _on_up(self):
-        """ General method for any mouse button release
-        .. Note:: A bug prevents the cursor from changing in Ubuntu after the
+    def _on_mouse_up(self):
+        """ Perform actions common to both left and right mouse button up
+
+        .. note:: A bug prevents the cursor from changing in Ubuntu after the
             mouse is captured.
+
         """
+
         if self.HasCapture():
             self.ReleaseMouse()
             self.SetCursor(self.previous_cursor or wx.NullCursor)
@@ -264,60 +272,59 @@ class BufferedCanvas(wx.Panel):
     @ignore_if_disabled
     def on_left_down(self, evt, cursor=None):
         """ Standard left mouse button down processor """
-        self._on_down(cursor)
-        self._call_event_on_overlay('on_left_down', evt)
+        self._on_mouse_down(cursor)
+        self._pass_event_to_active_overlay('on_left_down', evt)
 
     @ignore_if_disabled
     def on_left_up(self, evt):
         """ Standard left mouse button release processor """
-        self._on_up()
-        self._call_event_on_overlay('on_left_up', evt)
+        self._on_mouse_up()
+        self._pass_event_to_active_overlay('on_left_up', evt)
 
     @ignore_if_disabled
     def on_right_down(self, evt, cursor=None):
         """ Standard right mouse button release processor """
-        self._on_down(cursor)
-        self._call_event_on_overlay('on_right_down', evt)
+        self._on_mouse_down(cursor)
+        self._pass_event_to_active_overlay('on_right_down', evt)
 
     @ignore_if_disabled
     def on_right_up(self, evt):
         """ Standard right mouse button release processor """
-        self._on_up()
-        self._call_event_on_overlay('on_right_up', evt)
+        self._on_mouse_up()
+        self._pass_event_to_active_overlay('on_right_up', evt)
 
     @ignore_if_disabled
     def on_dbl_click(self, evt):
         """ Standard left mouse button double click processor """
-        self._call_event_on_overlay('on_dbl_click', evt)
+        self._pass_event_to_active_overlay('on_dbl_click', evt)
 
     @ignore_if_disabled
     def on_motion(self, evt):
         """ Standard mouse motion processor """
-        self._call_event_on_overlay('on_motion', evt)
+        self._pass_event_to_active_overlay('on_motion', evt)
 
     @ignore_if_disabled
     def on_wheel(self, evt):
         """ Standard mouse wheel processor """
-        self._call_event_on_overlay('on_wheel', evt)
+        self._pass_event_to_active_overlay('on_wheel', evt)
 
     def on_enter(self, evt):
         """ Standard mouse enter processor """
-        self._call_event_on_overlay('on_enter', evt)
+        self._pass_event_to_active_overlay('on_enter', evt)
 
     def on_leave(self, evt):
         """ Standard mouse leave processor """
-        self._call_event_on_overlay('on_leave', evt)
+        self._pass_event_to_active_overlay('on_leave', evt)
 
     @ignore_if_disabled
     def on_char(self, evt):
         """ Standard key stroke processor """
-        self._call_event_on_overlay('on_char', evt)
+        self._pass_event_to_active_overlay('on_char', evt)
 
     @ignore_if_disabled
     def on_paint(self, evt):
-        """ Standard on paint handler """
+        """ Copy the buffer to the screen (i.e. the device context) """
         dc_view = wx.PaintDC(self)
-
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
                     (0, 0),             # destination point
@@ -325,27 +332,26 @@ class BufferedCanvas(wx.Panel):
                     self._dc_buffer,    # source
                     (0, 0)              # source point
         )
-
         self._draw_view_overlays(dc_view)
 
     def on_size(self, evt):
-        """ Standard size change handler
+        """ Handle size events
 
         Ensures that the buffer still fits in the view and recenter the view.
         """
         # Ensure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
-        if (min_size[0] > self._bmp_buffer_size[0] or
-            min_size[1] > self._bmp_buffer_size[1]):
+        if min_size != self._bmp_buffer_size:
             logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(min_size)
             self.update_drawing()
         else:
             # logging.debug("Buffer size didn't change, refreshing...")
+            # eraseBackground=False prevenst flicker
             self.Refresh(eraseBackground=False)
 
         # any displayed overlay might need to redraw itself
-        self._call_event_all_overlays('on_size', evt)
+        self._pass_event_to_all_overlays('on_size', evt)
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """
@@ -353,25 +359,24 @@ class BufferedCanvas(wx.Panel):
         # logging.debug("Drawing timer in thread %s", thread_name)
         self.update_drawing()
 
-    def _call_event_on_overlay(self, name, evt):
-        """Call an event handler with name 'name' on the active overlay """
+    def _pass_event_to_active_overlay(self, evt_name, evt):
+        """ Call an event handler with name 'evt_name' on the active overlay """
         if self.active_overlay:
             if isinstance(self.active_overlay, collections.Iterable):
                 for ol in self.active_overlay:
-                    getattr(ol, name)(evt)
+                    getattr(ol, evt_name)(evt)
             else:
-                getattr(self.active_overlay, name)(evt)
+                getattr(self.active_overlay, evt_name)(evt)
 
-    def _call_event_all_overlays(self, name, evt):
-        """Call an event handler with name 'name' on all the overlays """
+    def _pass_event_to_all_overlays(self, evt_name, evt):
+        """ Call an event handler with name 'evt_name' on all the overlays """
 
         for ol in self.view_overlays:
-            getattr(ol, name)(evt)
+            getattr(ol, evt_name)(evt)
         for ol in self.world_overlays:
-            getattr(ol, name)(evt)
+            getattr(ol, evt_name)(evt)
 
-    # END Event processing
-
+    ############ END Event Handlers ############
 
     # Buffer and drawing methods
 
@@ -380,16 +385,17 @@ class BufferedCanvas(wx.Panel):
         return self.ClientSize.x, self.ClientSize.y
 
     def get_half_buffer_size(self):
+        """ Return half the size of the current buffer """
         return tuple(v // 2 for v in self._bmp_buffer_size)
 
     def resize_buffer(self, size):
-        """ Resizes the bitmap buffer to the given size
+        """ Resize the bitmap buffer to the given size
 
         :param size: (2-tuple int) The new size
+
         """
         logging.debug("Resizing buffer size to %s", size)
-        # Make new offscreen bitmap: this bitmap will always have the
-        # current drawing in it
+        # Make new offscreen bitmap
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size
 
@@ -412,7 +418,7 @@ class BufferedCanvas(wx.Panel):
             self.draw_timer.Start(delay * 1000.0, oneShot=True)
 
     def update_drawing(self):
-        """ Redraw everything in the buffer and display it """
+        """ Redraw the buffer and display it """
         self.draw()
         # eraseBackground doesn't seem to matter, but just in case...
         self.Refresh(eraseBackground=False)
@@ -423,12 +429,13 @@ class BufferedCanvas(wx.Panel):
     @abstractmethod
     def draw(self):
         """ Create an image within the buffer device context (`_dc_buffer`) """
-        pass
+        raise NotImplementedError
 
     def _draw_background(self):
         """ Draw checkered background """
+
         # Only support wx.SOLID, and anything else is checkered
-        if self.backgroundBrush == wx.SOLID:
+        if self.background_brush == wx.SOLID:
             return
 
         ctx = wxcairo.ContextFromDC(self._dc_buffer)
@@ -458,25 +465,24 @@ class BufferedCanvas(wx.Panel):
         for vo in self.view_overlays:
             vo.Draw(dc)
 
-
-    # Position conversion
+    ############ Position conversion ############
 
     @classmethod
     def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=None):
-        """ Converts a position from world coordinates to buffer coordinates
+        """ Convert a position in world coordinates into buffer coordinates
 
-        :param w_pos: (2-tuple float) the coordinates in the world
+        :param w_pos: (float, float) the coordinates in the world
         :param w_buff_center: the center of the buffer in world coordinates
         :param scale: how much zoomed is the buffer compared to the world.
             I.e.: with scale 2, 100px of the world are displayed using 50 buffer
             px. (The world is zoomed out with a scale > 1)
-        :param offset (int, int): The offset can be used to move the buffer
-            origin back to its original position. See `buffer_to_world_pos` for
-            more details.
+        :param offset (int, int): The offset from the top left origin of the
+            buffer to its center. Correction is necessary because the
+            calculations are done in relation to the buffer's center.
         :return: (int or float, int or float)
         """
         b_pos = ((w_pos[0] - w_buff_center[0]) * scale,
-                    (w_pos[1] - w_buff_center[1]) * scale)
+                 (w_pos[1] - w_buff_center[1]) * scale)
         if offset:
             return (b_pos[0] + offset[0], b_pos[1] + offset[1])
         else:
@@ -491,11 +497,9 @@ class BufferedCanvas(wx.Panel):
         :param scale: how much zoomed is the buffer compared to the world.
             I.e.: with scale 2, 100px of the buffer contain 50 world pixels.
             (The world is zoomed in with a scale > 1
-        :param offset (int, int): The offset can be used to align the origin of
-            the buffer with that of the world. E.g. to align 0,0 (top left) of
-            the buffer with the origin of the world (which is at the center),
-            one would set the offset to half the width and height of the buffer
-            itself.
+        :param offset (int, int): The offset from the top left origin of the
+            buffer to its center. Correction is necessary because the
+            calculations are done in relation to the buffer's center.
         :return: (float, float)
 
         """
@@ -574,7 +578,9 @@ class BufferedCanvas(wx.Panel):
                 margins
         )
 
-    # END Position conversion
+    ############ END Position conversion ############
+
+    # Utility methods
 
     def clip_to_viewport(self, pos):
         """ Clip the given tuple of 2 floats to the current view size """
@@ -721,6 +727,7 @@ class BitmapCanvas(BufferedCanvas):
                 keepalpha=im._dc_keepalpha
             )
 
+    # @profile
     def _draw_image(self, dc_buffer, im, center,
                     opacity=1.0, scale=1.0, keepalpha=False):
         """ Draws one image with the given scale and opacity on the dc_buffer.
@@ -1142,7 +1149,7 @@ class DraggableCanvas(BitmapCanvas):
             # maybe there was a good reason to use update_drawing instead?
             # Eric will know the answer for sure!
             # self.update_drawing()
-            self.request_drawing_update()
+            # self.request_drawing_update()
             self.Refresh()
 
         elif self._rdragging:
@@ -1653,7 +1660,7 @@ class PlotCanvas(BufferedCanvas):
             min_size[1] > self._bmp_buffer_size[1]):
             self.resize_buffer(min_size)
 
-        self._call_event_on_overlay('on_size', evt)
+        self._pass_event_to_active_overlay('on_size', evt)
         self.update_drawing()
 
     def draw(self):
