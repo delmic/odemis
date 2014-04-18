@@ -27,6 +27,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import logging
 import numpy
 from odemis import model
+from odemis import util
 from odemis.acq import _futures
 from odemis.util import TimeoutError
 from odemis.util import img
@@ -34,34 +35,6 @@ import threading
 import math
 import time
 import copy
-
-
-def ScanGrid(repetitions, dwell_time, escan, ccd, detector):
-    """
-    Wrapper for GridScanner. It provides the ability to check the progress of scan procedure 
-    or even cancel it.
-    repetitions (tuple of ints): The number of CL spots are used
-    dwell_time (float): Time to scan each spot (in s)
-    escan (model.Emitter): The e-beam scanner
-    ccd (model.DigitalCamera): The CCD
-    detector (model.Detector): The electron detector
-    returns (model.ProgressiveFuture): Progress of GridScanner
-    """
-    # Create scanner and ProgressiveFuture
-    scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
-    est_start = time.time() + 0.1
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + scanner.estimateAcqTime())
-
-    f.task_canceller = scanner.CancelAcquisition
-
-    # Run in separate thread
-    scan_thread = threading.Thread(target=_futures.executeTask,
-                  name="Scan grid",
-                  args=(f, scanner.DoAcquisition, f))
-
-    scan_thread.start()
-    return f
 
 
 class GridScanner(object):
@@ -121,7 +94,6 @@ class GridScanner(object):
         """
         Receives the CCD data
         """
-        df.unsubscribe(self._ssOnCCDImage)
         self._optical_image = data
         self._ccd_done.set()
         logging.debug("Got CCD image!")
@@ -130,16 +102,14 @@ class GridScanner(object):
         """
         Receives the Spot image data
         """
-        df.unsubscribe(self._ssOnSpotImage)
         self._spot_images.append(data)
         self._ccd_done.set()
         logging.debug("Got Spot image!")
 
-    def DoAcquisition(self, future):
+    def DoAcquisition(self):
         """
         Uses the e-beam to scan the rectangular grid consisted of the given number 
         of spots and acquires the corresponding CCD image
-        future (model.ProgressiveFuture): Progressive future provided by the wrapper
         repetitions (tuple of ints): The number of CL spots are used
         dwell_time (float): Time to scan each spot #s
         escan (model.Emitter): The e-beam scanner
@@ -161,8 +131,10 @@ class GridScanner(object):
         dwell_time = self.dwell_time
 
         # Estimate the area of SEM and Optical FoV
-        ccd_area = self.get_ccd_area()
-        sem_area = self.get_sem_area()
+        ccd_fov = self.get_ccd_fov()
+        sem_fov = self.get_sem_fov()
+        ccd_area = (ccd_fov[2] - ccd_fov[0]) * (ccd_fov[3] - ccd_fov[1])
+        sem_area = (sem_fov[2] - sem_fov[0]) * (sem_fov[3] - sem_fov[1])
 
         # If the SEM FoV > Optical FoV * 0.8 then apply a ratio over the area scanned
         ratio = 1
@@ -196,16 +168,27 @@ class GridScanner(object):
         # per spot” procedure, else perform standard grid scan
         spot_dist = (scale[0] * escan.pixelSize.value[0],
                      scale[1] * escan.pixelSize.value[1])
+
         if (spot_dist[0] < 1e-06) or (spot_dist[1] < 1e-06):
             escan.scale.value = (1, 1)
             escan.resolution.value = (1, 1)
 
+            # Set dt large enough so we unsubscribe before we even get an SEM
+            # image (just to discard it) and start a second scan which would
+            # cost in time.
             sem_dt = 2 * dwell_time
             escan.dwellTime.value = sem_dt
 
             # CCD setup
-            ccd.binning.value = (1, 1)
-            ccd.resolution.value = ccd.shape[0:2]
+            sem_shape = (escan.resolution.range[1][0],
+                           escan.resolution.range[1][1])
+            sem_roi = ((electron_coordinates[0][0] + (sem_shape[0] / 2)) / sem_shape[0],
+                       (electron_coordinates[0][1] + (sem_shape[1] / 2)) / sem_shape[1],
+                       (electron_coordinates[-1][0] + (sem_shape[0] / 2)) / sem_shape[0],
+                       (electron_coordinates[-1][1] + (sem_shape[1] / 2)) / sem_shape[1])
+            ccd_roi = self.sem_roi_to_ccd(sem_roi)
+            self.configure_ccd(ccd_roi)
+
             et = dwell_time
             ccd.exposureTime.value = et  # s
             readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
@@ -223,7 +206,7 @@ class GridScanner(object):
                             raise CancelledError()
                         detector.data.subscribe(self._discard_data)
                         ccd.data.subscribe(self._ssOnSpotImage)
-        
+
                         # Wait for CCD to capture the image
                         if not self._ccd_done.wait(2 * tot_time + 4):
                             raise TimeoutError("Acquisition of CCD timed out")
@@ -262,19 +245,19 @@ class GridScanner(object):
             ccd.exposureTime.value = et  # s
             readout = numpy.prod(ccd.resolution.value) / ccd.readoutRate.value
             tot_time = et + readout + 0.05
-    
+
             try:
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
+
                 detector.data.subscribe(self._discard_data)
                 ccd.data.subscribe(self._ssOnCCDImage)
-    
                 logging.debug("Scanning spot grid...")
-    
+
                 # Wait for CCD to capture the image
                 if not self._ccd_done.wait(2 * tot_time + 4):
                     raise TimeoutError("Acquisition of CCD timed out")
-    
+
                 with self._acq_lock:
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
@@ -287,7 +270,7 @@ class GridScanner(object):
 
         return self._optical_image, electron_coordinates, scale
 
-    def CancelAcquisition(self, future):
+    def CancelAcquisition(self):
         """
         Canceller of DoAcquisition task.
         """
@@ -303,10 +286,26 @@ class GridScanner(object):
     
         return True
 
-    def get_ccd_area(self):
+    def get_sem_fov(self):
         """
-        Returns the area of the FoV of the CCD.
-        returns (float): FoV area # m^2
+        Returns the (theoretical) scanning area of the SEM. Works even if the
+        SEM has not sent any image yet.
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
+        """
+        sem_width = (self.escan.shape[0] * self.escan.pixelSize.value[0],
+                     self.escan.shape[1] * self.escan.pixelSize.value[1])
+        sem_rect = [-sem_width[0] / 2,  # left
+                    - sem_width[1] / 2,  # top
+                    sem_width[0] / 2,  # right
+                    sem_width[1] / 2]  # bottom
+        # TODO: handle rotation?
+
+        return sem_rect
+
+    def get_ccd_fov(self):
+        """
+        Returns the (theoretical) field of view of the CCD.
+        returns (tuple of 4 floats): position in physical coordinates m (l, t, r, b)
         """
         # The only way to get the right info is to look at what metadata the
         # images will get
@@ -318,23 +317,127 @@ class GridScanner(object):
         # compensate for binning
         binning = self.ccd.binning.value
         pxs = [p / b for p, b in zip(pxs, binning)]
-        center = md.get(model.MD_POS, (0, 0))
 
         width = (shape[0] * pxs[0], shape[1] * pxs[1])
-        area = numpy.prod(width)
+        phys_rect = [-width[0] / 2,  # left
+                     - width[1] / 2,  # top
+                     width[0] / 2,  # right
+                     width[1] / 2]  # bottom
 
-        return area
-    
-    def get_sem_area(self):
+        return phys_rect
+
+    def sem_roi_to_ccd(self, roi):
         """
-        Returns the area of the FoV of the SEM.
-        returns (float): FoV area # m^2
+        Converts a ROI defined in the SEM referential a ratio of FoV to a ROI
+        which should cover the same physical area in the optical FoV.
+        roi (0<=4 floats<=1): ltrb of the ROI
+        return (0<=4 int): ltrb pixels on the CCD, when binning == 1
         """
-        center = (0, 0)
+        # convert ROI to physical position
+        phys_rect = self.convert_roi_ratio_to_phys(roi)
+        logging.info("ROI defined at %s m", phys_rect)
 
-        sem_width = (self.escan.shape[0] * self.escan.pixelSize.value[0],
-                     self.escan.shape[1] * self.escan.pixelSize.value[1])
+        # convert physical position to CCD
+        ccd_roi = self.convert_roi_phys_to_ccd(phys_rect)
+        if ccd_roi is None:
+            logging.error("Failed to find the ROI on the CCD, will use the whole CCD")
+            ccd_roi = (0, 0) + self.ccd.shape[0:2]
+        else:
+            logging.info("Will use the CCD ROI %s", ccd_roi)
 
-        area = numpy.prod(sem_width)
+        return ccd_roi
 
-        return area
+    def convert_roi_ratio_to_phys(self, roi):
+        """
+        Convert the ROI in relative coordinates (to the SEM FoV) into physical
+         coordinates
+        roi (4 floats): ltrb positions relative to the FoV
+        return (4 floats): physical ltrb positions
+        """
+        sem_rect = self.get_sem_fov()
+        logging.debug("SEM FoV = %s", sem_rect)
+        phys_width = (sem_rect[2] - sem_rect[0],
+                      sem_rect[3] - sem_rect[1])
+
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        phys_rect = (sem_rect[0] + roi[0] * phys_width[0],
+                     sem_rect[1] + (1 - roi[3]) * phys_width[1],
+                     sem_rect[0] + roi[2] * phys_width[0],
+                     sem_rect[1] + (1 - roi[1]) * phys_width[1]
+                     )
+
+        # We add a margin of 3µm which is an approximation of the spot
+        # diameter in 30kv
+        phys_rect = (phys_rect[0] - 3e-06,
+                     phys_rect[1] - 3e-06,
+                     phys_rect[2] + 3e-06,
+                     phys_rect[3] + 3e-06)
+
+        return phys_rect
+
+    def convert_roi_phys_to_ccd(self, roi):
+        """
+        Convert the ROI in physical coordinates into a CCD ROI (in pixels)
+        roi (4 floats): ltrb positions in m
+        return (4 ints or None): ltrb positions in pixels, or 
+        """
+        ccd_rect = self.get_ccd_fov()
+        logging.debug("CCD FoV = %s", ccd_rect)
+        phys_width = (ccd_rect[2] - ccd_rect[0],
+                      ccd_rect[3] - ccd_rect[1])
+
+        # convert to a proportional ROI
+        proi = ((roi[0] - ccd_rect[0]) / phys_width[0],
+                (roi[1] - ccd_rect[1]) / phys_width[1],
+                (roi[2] - ccd_rect[0]) / phys_width[0],
+                (roi[3] - ccd_rect[1]) / phys_width[1],
+                )
+        # ensure it's in ltrb order
+        proi = util.normalize_rect(proi)
+
+        # convert to pixel values, rounding to slightly bigger area
+        shape = self.ccd.shape[0:2]
+        pxroi = (int(proi[0] * shape[0]),
+                 int(proi[1] * shape[1]),
+                 int(math.ceil(proi[2] * shape[0])),
+                 int(math.ceil(proi[3] * shape[1])),
+                 )
+
+        # Limit the ROI to the one visible in the FoV
+        trunc_roi = util.rect_intersect(pxroi, (0, 0) + shape)
+        if trunc_roi is None:
+            return None
+        if trunc_roi != pxroi:
+            logging.warning("CCD FoV doesn't cover the whole ROI, it would need "
+                            "a ROI of %s in CCD referential.", pxroi)
+
+        return trunc_roi
+
+    def configure_ccd(self, roi):
+        """
+        Configure the CCD resolution and binning to have the minimum acquisition
+        region that fit in the given ROI and with the maximum binning possible.
+        roi (0<=4 int): ltrb pixels on the CCD, when binning == 1
+        """
+        # As translation is not possible, the acquisition region must be
+        # centered. => Compute the minimal centered rectangle that includes the
+        # roi.
+        center = [s / 2 for s in self.ccd.shape[0:2]]
+        hwidth = (max(abs(roi[0] - center[0]), abs(roi[2] - center[0])),
+                  max(abs(roi[1] - center[1]), abs(roi[3] - center[1])))
+
+        res = [int(math.ceil(w * 2)) for w in hwidth]
+        # Add margin to computed resolution. This is because a) each spot is
+        # about 1 or 2 µm and approx. 10-20 pixels big b) we assume that the
+        # image is centered but this is not exactly the case
+        res = (res[0] + 50, res[1] + 50)
+
+        self.ccd.binning.value = (1, 1)
+        self.ccd.resolution.value = res
+
+        # FIXME: it's a bit tricky for the user to have the binning set
+        # automatically, while the exposure time is fixed.
+        logging.info("CCD res = %s, binning = %s",
+                      self.ccd.resolution.value,
+                      self.ccd.binning.value)
+
