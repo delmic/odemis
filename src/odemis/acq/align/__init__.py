@@ -1,0 +1,73 @@
+# -*- coding: utf-8 -*-
+"""
+Created on 18 April 2014
+
+@author: Kimon Tsitsikas
+
+Copyright © 2013-2014 Éric Piel & Kimon Tsitsikas, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the
+terms  of the GNU General Public License version 2 as published by the Free
+Software  Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY;  without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR  PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+"""
+
+from __future__ import division
+
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
+import logging
+import threading
+import time
+from odemis.acq._futures import executeTask
+from odemis import model
+#
+from .images import GridScanner
+from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverlay
+
+
+def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
+    """
+    Wrapper for DoFindOverlay. It provides the ability to check the progress of overlay procedure 
+    or even cancel it.
+    repetitions (tuple of ints): The number of CL spots are used
+    dwell_time (float): Time to scan each spot #s
+    max_allowed_diff (float): Maximum allowed difference in electron coordinates #m
+    escan (model.Emitter): The e-beam scanner
+    ccd (model.DigitalCamera): The CCD
+    detector (model.Detector): The electron detector
+    returns (model.ProgressiveFuture):    Progress of DoFindOverlay, whose result() will return:
+            translation (Tuple of 2 floats), 
+            scaling (Float), 
+            rotation (Float): Transformation parameters
+            transform_data : Transform metadata
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateOverlayTime(dwell_time, repetitions))
+    f._find_overlay_state = RUNNING
+    f._overlay_lock = threading.Lock()
+
+    # Task to run
+    doFindOverlay = _DoFindOverlay
+    f.task_canceller = _CancelFindOverlay
+
+    # Create scanner for scan grid
+    f._scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
+
+    # Run in separate thread
+    overlay_thread = threading.Thread(target=executeTask,
+                  name="SEM/CCD overlay",
+                  args=(f, doFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
+
+    overlay_thread.start()
+    return f
