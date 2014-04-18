@@ -28,12 +28,10 @@ import logging
 import numpy
 from odemis import model
 from odemis import util
-from odemis.acq import _futures
 from odemis.util import TimeoutError
 from odemis.util import img
 import threading
 import math
-import time
 import copy
 
 
