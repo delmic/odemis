@@ -39,7 +39,7 @@ import numbers
 import numpy
 from odemis.acq import calibration, _futures
 from odemis.acq import drift as acq_drift
-from odemis.acq import find_overlay
+from odemis.acq import align
 from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, MD_DESCRIPTION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
 import random
@@ -2843,7 +2843,7 @@ class OverlayStream(Stream):
 
         returns (float): approximate time in seconds that overlay will take
         """
-        return find_overlay.estimateOverlayTime(self.dwellTime.value,
+        return align.find_overlay.estimateOverlayTime(self.dwellTime.value,
                                                 self.repetition.value)
 
     def acquire(self):
@@ -2853,7 +2853,7 @@ class OverlayStream(Stream):
         the correction metadata
         """
         # Just calls the FindOverlay function and return its future
-        ovrl_future = find_overlay.FindOverlay(self.repetition.value,
+        ovrl_future = align.FindOverlay(self.repetition.value,
                                                         self.dwellTime.value,
                                                         OVRL_MAX_DIFF,
                                                         self._emitter,
