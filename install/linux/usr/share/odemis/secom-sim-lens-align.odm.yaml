@@ -83,7 +83,7 @@ Spectra: {
         limits: [[0, 5], [0, 5]],  # V
         park: [-5, -5], # V
         settle_time: 10.e-6, # s
-        hfw_nomag: 10.e-3, # m
+        hfw_nomag: 0.25, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
