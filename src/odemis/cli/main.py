@@ -35,6 +35,7 @@ from odemis.util.driver import reproduceTypedValue, BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
 import odemis.util.driver
 import sys
+import threading
 import time
 
 
@@ -723,7 +724,7 @@ def main(args):
             return 127
         try:
             return scan()
-        except:
+        except Exception:
             logging.exception("Unexpected error while performing scan.")
             return 127
 
@@ -740,11 +741,12 @@ def main(args):
             return kill_backend()
 
         logging.debug("Executing the actions")
-        odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
 
         if options.list:
             return list_components(pretty=not options.machine)
         elif options.listprop is not None:
+            # Speed up is only worthy if many VAs are accessed
+            odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
             return list_properties(options.listprop, pretty=not options.machine)
         elif options.setattr is not None:
             for c, a, v in options.setattr:
@@ -793,6 +795,7 @@ def main(args):
 
 if __name__ == '__main__':
     ret = main(sys.argv)
+    logging.debug("Threads still running: %s", threading.enumerate())
     exit(ret)
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
