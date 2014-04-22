@@ -49,9 +49,8 @@ def MeasureFocus(image):
 
 def AutoFocus(ccd, focus):
     """
-    Initially sets proper binning and exposure time. Then, iteratively acquires 
-    an optical image, measures its focus level and adjusts the optical focus with 
-    respect to the focus level. 
+    Iteratively acquires an optical image, measures its focus level and adjusts 
+    the optical focus with respect to the focus level. 
     ccd (model.DigitalCamera): The CCD
     focus (model.CombinedActuator): The optical focus
     returns (float):    Focus position #m
@@ -82,8 +81,6 @@ def AutoFocus(ccd, focus):
         image = ccd.data.get()
         fm_new = MeasureFocus(image)
         steps += 1
-        print steps
-        print fm_new
     focus.moveRel({"z":-sign * step})
     f.result()
 
@@ -103,8 +100,6 @@ def AutoFocus(ccd, focus):
             f = focus.moveRel({"z":sign * step})
         f.result()
         fm_old = fm_new
-        print step
-        print fm_new
 
     return focus.position.value
 
