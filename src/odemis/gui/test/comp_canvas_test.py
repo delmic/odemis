@@ -88,7 +88,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.mmodel = FakeMicroscopeModel()
         self.view = self.mmodel.focussedView.value
         self.canvas = miccanvas.DblMicroscopeCanvas(self.frame)
-        self.canvas.backgroundBrush = wx.SOLID # no special background
+        self.canvas.background_brush = wx.SOLID # no special background
         self.canvas.setView(self.view, self.mmodel)
 
         self.frame.SetSize((400, 400))
