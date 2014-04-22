@@ -32,6 +32,7 @@ from odemis import model
 #
 from .images import GridScanner
 from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverlay
+from .spot import estimateAlignmentTime, _DoAlignSpot, _CancelAlignSpot
 
 
 def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -70,4 +71,35 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
                   args=(f, doFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
 
     overlay_thread.start()
+    return f
+
+
+def AlignSpot(ccd, stage, escan, focus):
+    """
+    Wrapper for DoAlignSpot. It provides the ability to check the progress of
+    spot mode procedure or even cancel it.
+    ccd (model.DigitalCamera): The CCD
+    stage (model.CombinedActuator): The stage
+    escan (model.Emitter): The e-beam scanner
+    focus (model.CombinedActuator): The optical focus
+    returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
+                                         whose result() will return:
+            result (boolean) : True if spot is at the center
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateAlignmentTime())
+    f._spot_alignment_state = RUNNING
+
+    # Task to run
+    doAlignSpot = _DoAlignSpot
+    f.task_canceller = _CancelAlignSpot
+
+    # Run in separate thread
+    alignment_thread = threading.Thread(target=executeTask,
+                  name="Spot alignment",
+                  args=(f, doAlignSpot, f, ccd, stage, escan, focus))
+
+    alignment_thread.start()
     return f

@@ -29,7 +29,9 @@ import coordinates
 import math
 import logging
 import operator
+from Pyro4.core import isasync
 from odemis import model
+from . import autofocus
 
 _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
@@ -63,7 +65,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     if future._spot_alignment_state == CANCELLED:
         raise CancelledError()
     logging.debug("Autofocusing...")
-    lens_pos = focus.AutoFocus(ccd, focus)
+    lens_pos = AutoSpotFocus(ccd, escan, focus)
 
     if future._spot_alignment_state == CANCELLED:
         raise CancelledError()
@@ -125,7 +127,9 @@ def AutoSpotFocus(ccd, escan, focus):
     focus (model.CombinedActuator): The optical focus
     returns (float):    Focus position #m
     """
-    pass
+    ccd.binning.value = (1, 1)
+    lens_pos = autofocus.AutoFocus(ccd, focus)
+    return lens_pos
 
 
 def CenterSpot(ccd, escan, stage):
@@ -143,7 +147,6 @@ def CenterSpot(ccd, escan, stage):
                         children={"aligner": stage},
                         axes=["b", "a"],
                         angle=135)
-
     image = ccd.data.get()
 
     # Center of optical image
@@ -162,18 +165,15 @@ def CenterSpot(ccd, escan, stage):
     # * 1 µm (because that's the best resolution of our actuators)
     err_mrg = max(2 * ccd.pixelSize.value[0], 1e-06)  # m
     steps = 0
-    
+
     # Stop once spot is found on the center of the optical image
     while dist > err_mrg:
         # Or once max number of steps is reached
         if steps >= MAX_STEPS_NUMBER:
             break
 
-        # Calculate vector from current position to spot found
-        cur_pos = stage_ab.position
-        move = [a - b for a, b in zip(tab, cur_pos)]
         # Move to the found spot
-        f = stage.moveRel(move)
+        f = stage_ab.moveRel({"x":tab[0], "y":tab[1]})
         f.result()
 
         image = ccd.data.get()
