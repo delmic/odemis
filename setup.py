@@ -82,6 +82,7 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-gui',
                'install/linux/usr/bin/odemis-start',
                'install/linux/usr/bin/odemis-stop',
+               'install/linux/usr/bin/odemis-cycle',
                ]
 else:
     data_files = []
