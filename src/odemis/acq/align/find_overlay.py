@@ -22,8 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
 import math
 import numpy
@@ -31,13 +30,13 @@ from odemis import model
 from odemis.dataio import hdf5
 import os
 import time
-import coordinates, transform
+from . import coordinates, transform
 
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 
-
-def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
+def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
+                   ccd, detector):
     """
     Scans a spots grid using the e-beam and captures the CCD image, isolates the 
     spots in the CCD image and finds the coordinates of their centers, matches the 
@@ -58,8 +57,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             rotation (Float): Transformation parameters
             transform_data : Transformation metadata
     raises:    
-            CancelledError() if cancelled
-            ValueError
+            CancelledError if cancelled
+            ValueError if procedure failed 
     """
     logging.debug("Starting Overlay...")
 
@@ -72,8 +71,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
 
             # Update progress of the future (it may be the second trial)
             future.set_end_time(time.time() +
-                               estimateOverlayTime(future._scanner.dwell_time,
-                                                   repetitions))
+                                estimateOverlayTime(future._scanner.dwell_time,
+                                                    repetitions))
 
             # Wait for ScanGrid to finish
             optical_image, electron_coordinates, electron_scale = future._scanner.DoAcquisition()
