@@ -29,7 +29,7 @@ import subprocess
 from odemis.util import driver
 from odemis import model
 import odemis
-from odemis.acq import find_overlay
+from odemis.acq import align
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -86,7 +86,7 @@ class TestOverlay(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
-    #@unittest.skip("skip")
+    # @unittest.skip("skip")
     def test_find_overlay(self):
         """
         Test FindOverlay
@@ -95,11 +95,11 @@ class TestOverlay(unittest.TestCase):
         detector = self.sed
         ccd = self.ccd
 
-        f = find_overlay.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
+        f = align.FindOverlay((7, 7), 0.1, 1e-06, escan, ccd, detector)
 
         t, md = f.result()
 
-#     @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
@@ -108,12 +108,12 @@ class TestOverlay(unittest.TestCase):
         detector = self.sed
         ccd = self.ccd
 
-        f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
+        f = align.FindOverlay((9, 9), 1e-06, 1e-08, escan, ccd, detector)
 
         with self.assertRaises(ValueError):
             f.result()
 
-#     @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation
@@ -122,7 +122,7 @@ class TestOverlay(unittest.TestCase):
         detector = self.sed
         ccd = self.ccd
 
-        f = find_overlay.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
+        f = align.FindOverlay((9, 9), 1e-06, 1e-07, escan, ccd, detector)
         time.sleep(0.04)  # Cancel almost after the half grid is scanned
 
         f.cancel()

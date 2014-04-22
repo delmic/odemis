@@ -34,7 +34,7 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
-from odemis.acq import find_overlay
+from odemis.acq import align
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 from odemis.gui import conf, acqmng
@@ -715,8 +715,8 @@ class FineAlignController(object):
       the time to expose each spot to the ebeam).
     """
 
-    OVRL_MAX_DIFF = 1e-6 # m
-    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
+    OVRL_MAX_DIFF = 1e-06  # m
+    OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
 #     OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
 
     def __init__(self, tab_data, main_frame, settings_controller):
@@ -760,7 +760,7 @@ class FineAlignController(object):
         """
         if self._tab_data_model.tool.value == guimod.TOOL_SPOT:
             dt = self._main_data_model.fineAlignDwellTime.value
-            t = find_overlay.estimateOverlayTime(dt, self.OVRL_REPETITION)
+            t = align.find_overlay.estimateOverlayTime(dt, self.OVRL_REPETITION)
             t = math.ceil(t) # round a bit pessimistic
             txt = u"~ %s" % units.readable_time(t, full=False)
         else:
@@ -822,7 +822,7 @@ class FineAlignController(object):
         main_data.is_acquiring.value = True
 
         logging.debug("Starting overlay procedure")
-        f = find_overlay.FindOverlay(self.OVRL_REPETITION,
+        f = align.FindOverlay(self.OVRL_REPETITION,
                                      main_data.fineAlignDwellTime.value,
                                      self.OVRL_MAX_DIFF,
                                      main_data.ebeam,

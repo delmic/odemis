@@ -22,25 +22,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
 import math
 import numpy
 from odemis import model
 from odemis.dataio import hdf5
 import os
-import threading
 import time
-
-from .align import coordinates, transform, images
-from odemis.acq._futures import executeTask
+from . import coordinates, transform
 
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
 
-
-def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
+def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
+                   ccd, detector):
     """
     Scans a spots grid using the e-beam and captures the CCD image, isolates the 
     spots in the CCD image and finds the coordinates of their centers, matches the 
@@ -61,8 +57,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             rotation (Float): Transformation parameters
             transform_data : Transformation metadata
     raises:    
-            CancelledError() if cancelled
-            ValueError
+            CancelledError if cancelled
+            ValueError if procedure failed 
     """
     logging.debug("Starting Overlay...")
 
@@ -73,26 +69,40 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
 
-            # TODO: update progress of the future
-
-            # TODO: handle case where SEM FoV is bigger than CCD FoV => scan in subarea
-
-            # TODO: simplify, by directly calling GridScanner
-            future._future_scan = images.ScanGrid(repetitions, dwell_time, escan, ccd, detector)
+            # Update progress of the future (it may be the second trial)
+            future.set_end_time(time.time() +
+                                estimateOverlayTime(future._scanner.dwell_time,
+                                                    repetitions))
 
             # Wait for ScanGrid to finish
-            optical_image, electron_coordinates, electron_scale = future._future_scan.result()
+            optical_image, electron_coordinates, electron_scale = future._scanner.DoAcquisition()
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
 
-            # Distance between spots in the optical image (in optical pixels)
-            optical_dist = escan.pixelSize.value[0] * electron_scale[0] / optical_image.metadata[model.MD_PIXEL_SIZE][0]
+            # Update remaining time to 6secs (hardcoded estimation)
+            future.set_end_time(time.time() + 6)
 
-            # Isolate spots
-            if future._find_overlay_state == CANCELLED:
-                raise CancelledError()
+            # Check if ScanGrid gave one image or list of images
+            # If it is a list, follow the "one image per spot" procedure
             logging.debug("Isolating spots...")
-            subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
+            if isinstance(optical_image, list):
+                opt_img_shape = optical_image[0].shape
+                subimages = []
+                subimage_coordinates = []
+                for img in optical_image:
+                    subspots, subspot_coordinates = coordinates.DivideInNeighborhoods(img, (1, 1), img.shape[0] / 2)
+                    subimages.append(subspots[0])
+                    subimage_coordinates.append(subspot_coordinates[0])
+            else:
+                # Distance between spots in the optical image (in optical pixels)
+                optical_dist = escan.pixelSize.value[0] * electron_scale[0] / optical_image.metadata[model.MD_PIXEL_SIZE][0]
+                opt_img_shape = optical_image.shape
+
+                # Isolate spots
+                if future._find_overlay_state == CANCELLED:
+                    raise CancelledError()
+                subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(optical_image, repetitions, optical_dist)
+
             if not subimages:
                 raise ValueError("Overlay failure")
 
@@ -106,7 +116,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
             optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-            opt_offset = (optical_image.shape[1] / 2, optical_image.shape[0] / 2)
+
+            opt_offset = (opt_img_shape[1] / 2, opt_img_shape[0] / 2)
 
             optical_coordinates = [(x - opt_offset[0], y - opt_offset[1]) for x, y in optical_coordinates]
 
@@ -129,8 +140,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
             # Match the electron to optical coordinates
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
-            logging.debug("Matching coordinates...")
 
+            logging.debug("Matching coordinates...")
             known_ec, known_oc = coordinates.MatchCoordinates(optical_coordinates,
                                                          electron_coordinates,
                                                          scale,
@@ -139,8 +150,8 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
                 break
             else:
                 if trial < MAX_TRIALS_NUMBER - 1:
-                    dwell_time = dwell_time * 1.2 + 0.1
-                    logging.warning("Trying with dwell time = %g s...", dwell_time)
+                    future._scanner.dwell_time = future._scanner.dwell_time * 1.2 + 0.1
+                    logging.warning("Trying with dwell time = %g s...", future._scanner.dwell_time)
         else:
             # Make failure report
             _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates)
@@ -176,42 +187,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan, ccd
                 raise CancelledError()
             future._find_overlay_state = FINISHED
 
-
-def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
-    """
-    Wrapper for DoFindOverlay. It provides the ability to check the progress of overlay procedure 
-    or even cancel it.
-    repetitions (tuple of ints): The number of CL spots are used
-    dwell_time (float): Time to scan each spot #s
-    max_allowed_diff (float): Maximum allowed difference in electron coordinates #m
-    escan (model.Emitter): The e-beam scanner
-    ccd (model.DigitalCamera): The CCD
-    detector (model.Detector): The electron detector
-    returns (model.ProgressiveFuture):    Progress of DoFindOverlay, whose result() will return:
-            translation (Tuple of 2 floats), 
-            scaling (Float), 
-            rotation (Float): Transformation parameters
-            transform_data : Transform metadata
-    """
-    # Create ProgressiveFuture and update its state to RUNNING
-    est_start = time.time() + 0.1
-    f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateOverlayTime(dwell_time, repetitions))
-    f._find_overlay_state = RUNNING
-    f._overlay_lock = threading.Lock()
-
-    # Task to run
-    doFindOverlay = _DoFindOverlay
-    f.task_canceller = _CancelFindOverlay
-
-    # Run in separate thread
-    overlay_thread = threading.Thread(target=executeTask,
-                  name="SEM/CCD overlay",
-                  args=(f, doFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
-
-    overlay_thread.start()
-    return f
-
 def _CancelFindOverlay(future):
     """
     Canceller of _DoFindOverlay task.
@@ -222,7 +197,7 @@ def _CancelFindOverlay(future):
         if future._find_overlay_state == FINISHED:
             return False
         future._find_overlay_state = CANCELLED
-        future._future_scan.cancel()
+        future._scanner.CancelAcquisition()
         logging.debug("Overlay cancelled.")
 
     return True
