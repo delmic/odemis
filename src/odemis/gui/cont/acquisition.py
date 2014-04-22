@@ -243,7 +243,8 @@ class SnapshotController(object):
                 raw_images.extend(data)
 
             Message.show_message(self._main_frame,
-                                 "Snapshot saved in %s" % (filepath,)
+                                 "Snapshot saved in %s" % (filepath,),
+                                 timeout=3
                                  )
             # record everything to a file
             exporter.export(filepath, raw_images, thumbnail)
@@ -330,7 +331,7 @@ class SnapshotController(object):
             return
         # to simplify, we don't use the XRANDR API, but just call xrandr command
         # we need to build a whole line with all the outputs, like:
-        # xrandr --output VGA1 --brigthness 2 --output LVDS1 --brigthness 2
+        # xrandr --output VGA1 --brightness 2 --output LVDS1 --brightness 2
         args = ["xrandr"]
         for o in outputs:
             args += ["--output", o, "--brightness", "%f" % brightness]
