@@ -59,6 +59,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     """
     init_binning = ccd.binning.value
     init_et = ccd.exposureTime.value
+    init_scale = escan.scale.value
+    init_res = escan.resolution.value
 
     logging.debug("Starting Spot alignment...")
 
@@ -75,6 +77,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     if result == False:
         ccd.binning.value = init_binning
         ccd.exposureTime.value = init_et
+        escan.scale.value = init_scale
+        escan.resolution.value = init_res
         raise IOError('Spot alignment failure')
 
     return result
@@ -127,7 +131,13 @@ def AutoSpotFocus(ccd, escan, focus):
     focus (model.CombinedActuator): The optical focus
     returns (float):    Focus position #m
     """
+    # TODO adjust binning
     ccd.binning.value = (1, 1)
+
+    # Set to spot mode
+    escan.scale.value = (1, 1)
+    escan.resolution.value = (1, 1)
+
     lens_pos = autofocus.AutoFocus(ccd, focus)
     return lens_pos
 
