@@ -29,6 +29,7 @@ import coordinates
 import math
 import logging
 import operator
+import time
 from Pyro4.core import isasync
 from odemis import model
 from . import autofocus
@@ -37,6 +38,7 @@ _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
 
 MAX_STEPS_NUMBER = 3  # Max steps to perform alignment
+FOV_MARGIN = 50  # pixelss
 
 _alignment_lock = threading.Lock()
 
@@ -59,8 +61,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     """
     init_binning = ccd.binning.value
     init_et = ccd.exposureTime.value
+    init_cres = ccd.resolution.value
     init_scale = escan.scale.value
-    init_res = escan.resolution.value
+    init_eres = escan.resolution.value
 
     logging.debug("Starting Spot alignment...")
 
@@ -68,6 +71,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         raise CancelledError()
     logging.debug("Autofocusing...")
     lens_pos = AutoSpotFocus(ccd, escan, focus)
+    if lens_pos is None:
+        raise IOError('Spot alignment failure')
 
     if future._spot_alignment_state == CANCELLED:
         raise CancelledError()
@@ -79,7 +84,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     ccd.binning.value = init_binning
     ccd.exposureTime.value = init_et
     escan.scale.value = init_scale
-    escan.resolution.value = init_res
+    escan.resolution.value = init_eres
+    ccd.resolution.value = init_cres
 
     return dist
 
@@ -139,6 +145,21 @@ def AutoSpotFocus(ccd, escan, focus):
     # Set to spot mode
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
+
+    # Limitate the ccd FoV to just contain the spot, in order to save some time
+    # on AutoFocus process
+    image = ccd.data.get()
+    center_pxs = ((image.shape[0] / 2),
+                 (image.shape[1] / 2))
+    spot_pxs = FindSpot(image)
+    if spot_pxs is None:
+        return None
+    tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
+    max_dim = int(max(abs(tab_pxs[0]), abs(tab_pxs[1])))
+    range_x = (ccd.resolution.range[0][0], ccd.resolution.range[1][0])
+    range_y = (ccd.resolution.range[0][1], ccd.resolution.range[1][1])
+    ccd.resolution.value = (sorted((range_x[0], 2 * max_dim + FOV_MARGIN, range_x[1]))[1],
+                            sorted((range_y[0], 2 * max_dim + FOV_MARGIN, range_y[1]))[1])
 
     # Focus
     lens_pos = autofocus.AutoFocus(ccd, focus)
