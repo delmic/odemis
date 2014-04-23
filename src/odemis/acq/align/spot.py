@@ -52,7 +52,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     stage (model.CombinedActuator): The stage
     escan (model.Emitter): The e-beam scanner
     focus (model.CombinedActuator): The optical focus
-    returns result (boolean) : True if spot is at the center
+    returns (float):    Final distance to the center #m 
     raises:    
             CancelledError() if cancelled
             ValueError
@@ -72,16 +72,16 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     if future._spot_alignment_state == CANCELLED:
         raise CancelledError()
     logging.debug("Aligning spot...")
-    result = CenterSpot(ccd, escan, stage)
-
-    if result == False:
-        ccd.binning.value = init_binning
-        ccd.exposureTime.value = init_et
-        escan.scale.value = init_scale
-        escan.resolution.value = init_res
+    dist = CenterSpot(ccd, escan, stage)
+    if dist is None:
         raise IOError('Spot alignment failure')
 
-    return result
+    ccd.binning.value = init_binning
+    ccd.exposureTime.value = init_et
+    escan.scale.value = init_scale
+    escan.resolution.value = init_res
+
+    return dist
 
 
 def _CancelAlignSpot(future):
@@ -117,6 +117,8 @@ def FindSpot(image):
     returns (tuple of floats):    The spot center coordinates
     """
     subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), image.shape[0] / 2)
+    if subimages == []:
+        return None
     spot_coordinates = coordinates.FindCenterCoordinates(subimages)
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
     return optical_coordinates[0]
@@ -138,6 +140,7 @@ def AutoSpotFocus(ccd, escan, focus):
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
 
+    # Focus
     lens_pos = autofocus.AutoFocus(ccd, focus)
     return lens_pos
 
@@ -151,7 +154,7 @@ def CenterSpot(ccd, escan, stage):
     ccd (model.DigitalCamera): The CCD
     escan (model.Emitter): The e-beam scanner
     stage (model.CombinedActuator): The stage
-    returns (boolean):    True if spot is at the center 
+    returns (float):    Final distance to the center #m 
     """
     stage_ab = InclinedStage("converter-ab", "stage",
                         children={"aligner": stage},
@@ -166,6 +169,8 @@ def CenterSpot(ccd, escan, stage):
 
     # Coordinates of found spot
     spot_pxs = FindSpot(image)
+    if spot_pxs is None:
+        return None
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
     tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
     dist = math.hypot(*tab)
@@ -188,6 +193,8 @@ def CenterSpot(ccd, escan, stage):
 
         image = ccd.data.get()
         spot_pxs = FindSpot(image)
+        if spot_pxs is None:
+            return None
         tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
         tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
         dist = math.hypot(*tab)

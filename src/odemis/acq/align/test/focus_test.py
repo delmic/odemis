@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import unittest
 from odemis.dataio import hdf5
-from odemis.acq.align import settings
+from odemis.acq.align import autofocus
 from scipy import ndimage
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -40,10 +40,10 @@ class TestSettingsAdjustment(unittest.TestCase):
         grid_data[0].shape = Y, X
         input = grid_data[0]
         
-        prev_res = settings.MeasureFocus(input)
+        prev_res = autofocus.MeasureFocus(input)
         for i in range(1, 10, 1):
             input = ndimage.gaussian_filter(input, sigma=i)
-            res = settings.MeasureFocus(input)
+            res = autofocus.MeasureFocus(input)
             self.assertGreater(prev_res, res)
             prev_res = res
 
