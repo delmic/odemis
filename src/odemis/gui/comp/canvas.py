@@ -67,7 +67,7 @@ physical:
     Basically the same as the world coordinate system, with the exception that
     *up* is the positive direction, instead of down.
 
-    Because only this minor difference exists between the systems, that will
+    Because only this minor difference exists between the systems, they will
     most likely be merge into one in the future.
 
     Attributes related to the physical coordinate sytem have the prefix `p_`
@@ -431,14 +431,13 @@ class BufferedCanvas(wx.Panel):
         """ Create an image within the buffer device context (`_dc_buffer`) """
         raise NotImplementedError
 
-    def _draw_background(self):
+    def _draw_background(self, ctx):
         """ Draw checkered background """
 
         # Only support wx.SOLID, and anything else is checkered
         if self.background_brush == wx.SOLID:
             return
 
-        ctx = wxcairo.ContextFromDC(self._dc_buffer)
         surface = wxcairo.ImageSurfaceFromBitmap(imgdata.getcanvasbgBitmap())
 
         surface.set_device_offset(self.bg_offset[0], self.bg_offset[1])
@@ -631,9 +630,11 @@ class BitmapCanvas(BufferedCanvas):
                 images.append(None)
             else:
                 im, w_pos, scale, keepalpha = args
-                im._dc_center = w_pos
-                im._dc_scale = scale
-                im._dc_keepalpha = keepalpha
+                im.metadata['dc_center'] = w_pos
+                im.metadata['dc_scale'] = scale
+                im.metadata['width'] = im.shape[1]
+                im.metadata['height'] = im.shape[0]
+                im.metadata['dc_keepalpha'] = keepalpha
                 images.append(im)
         self.images = images
 
@@ -643,29 +644,29 @@ class BitmapCanvas(BufferedCanvas):
         Overlays must have a `Draw(dc_buffer, shift, scale)` method.
         """
 
+        # TODO: Do we need clear here? Or can we just handling 'clearing' in
+        # the _draw_background method?
         self._dc_buffer.Clear()
 
-        self._draw_background()
+        # At this point, we create a Cairo Context to which we will draw.
+        # Since we will pass this context around to various methods, we will
+        # reset its transformation matrix in between various calls to prevent
+        # unexpected behaviour.
+        ctx = wxcairo.ContextFromDC(self._dc_buffer)
 
-        # set and reset the origin here because Blit in onPaint gets "confused"
-        # with values > 2048
-        # centred on self.w_buffer_center
-        origin_pos = tuple(d // 2 for d in self._bmp_buffer_size)
-        self._dc_buffer.SetDeviceOriginPoint(origin_pos)
+        self._draw_background(ctx)
+        ctx.identity_matrix()
 
-        # we do not use the UserScale of the DC here because it would lead
-        # to scaling computation twice when the image has a scale != 1. In
-        # addition, as coordinates are int, there is rounding error on zooming.
-        self._draw_merged_images(self._dc_buffer, self.images, self.merge_ratio)
-
-        self._dc_buffer.SetDeviceOriginPoint((0, 0))
+        self._draw_merged_images(ctx)
+        ctx.identity_matrix()
 
         # Each overlay draws itself
         # Remember that the device context being passed belongs to the *buffer*
         for o in self.world_overlays:
-            o.Draw(self._dc_buffer, self.w_buffer_center, self.scale)
+            o.Draw(ctx, self.w_buffer_center, self.scale)
+            ctx.identity_matrix()
 
-    def _draw_merged_images(self, dc_buffer, images, mergeratio=0.5):
+    def _draw_merged_images(self, ctx):
         """ Draw the two images on the buffer DC, centred around their
         _dc_center, with their own scale and an opacity of "mergeratio" for im1.
 
@@ -690,7 +691,7 @@ class BitmapCanvas(BufferedCanvas):
 
         """
 
-        if not images or images == [None]:
+        if not self.images or self.images == [None]:
             return
 
         # The idea:
@@ -699,36 +700,36 @@ class BitmapCanvas(BufferedCanvas):
         # * display the last image (SEM => expected smaller), with the given
         #   mergeratio (or 1 if it's the only one)
 
-        first_ims = [im for im in images[:-1] if im is not None]
+        first_ims = [im for im in self.images[:-1] if im is not None]
         nb_firsts = len(first_ims)
 
         for i, im in enumerate(first_ims):
             r = 1.0 - i / nb_firsts # display as if they are averages
             self._draw_image(
-                dc_buffer,
+                ctx,
                 im,
-                im._dc_center,
+                im.metadata['dc_center'],
                 r,
-                scale=im._dc_scale,
-                keepalpha=im._dc_keepalpha
+                scale=im.metadata['dc_scale'],
+                keepalpha=im.metadata['dc_keepalpha']
             )
 
-        for im in images[-1:]: # the last image (or nothing)
+        for im in self.images[-1:]: # the last image (or nothing)
             if im is None:
                 continue
             if nb_firsts == 0:
                 mergeratio = 1.0 # no transparency if it's alone
             self._draw_image(
-                dc_buffer,
+                ctx,
                 im,
-                im._dc_center,
-                mergeratio,
-                scale=im._dc_scale,
-                keepalpha=im._dc_keepalpha
+                im.metadata['dc_center'],
+                self.merge_ratio,
+                scale=im.metadata['dc_scale'],
+                keepalpha=im.metadata['dc_keepalpha']
             )
 
     # @profile
-    def _draw_image(self, dc_buffer, im, center,
+    def _draw_image(self, ctx, im, center,
                     opacity=1.0, scale=1.0, keepalpha=False):
         """ Draws one image with the given scale and opacity on the dc_buffer.
 
@@ -746,31 +747,53 @@ class BitmapCanvas(BufferedCanvas):
         if opacity <= 0.0:
             return
 
-        imscaled, tl = self._rescale_image(dc_buffer, im, scale, center)
-        # TODO: keep the result cached, and reuse it until image is changed
-        # or buffer has moved/scaled
+        b_img_center = self.world_to_buffer(center)
+        b_origin_pos = tuple(d // 2 for d in self._bmp_buffer_size)
 
-        if not imscaled:
-            return
+        # imgsurface = wxcairo.ImageSurfaceFromBitmap(wx.BitmapFromImage(im))
+
+        height, width, _ = im.shape
+        # format = cairo.FORMAT_ARGB32
+        format = cairo.FORMAT_RGB24
+
+        # Note: Stride calculation is done automatically when no stride
+        # parameter is provided.
+        stride = cairo.ImageSurface.format_stride_for_width(format, width)
+        # In Cairo a surface is a target that it can render to. Here we're going
+        # to use it as the source for a pattern
+        imgsurface = cairo.ImageSurface.create_for_data(im, format,
+                                                        width, height, stride)
+        # In Cairo a pattern is the 'paint' that it uses to draw
+        surfpat = cairo.SurfacePattern(imgsurface)
+        # Set the filter, so we get low quality but fast scaling
+        surfpat.set_filter(cairo.FILTER_FAST)
+
+        # The Context matrix, translates from user space to device space
+
+        # Move the top left origin to the center of the surface, so it will
+        # be positioned by its center
+        imgsurface.set_device_offset(imgsurface.get_width() // 2,
+                                     imgsurface.get_height() // 2)
+
+        # Translate to the center of the buffer, our starting position
+        ctx.translate(b_origin_pos[0], b_origin_pos[1])
+        # Translate to where the center of the image should go, relative to
+        # the center of the buffer
+        ctx.translate(b_img_center[0], b_img_center[1])
+        ctx.scale(scale, scale)
+        # We probably cannot use the following method, because we need to
+        # set the filter used for scaling
+        # ctx.set_source_surface(imgsurface)
+        ctx.set_source(surfpat)
 
         if opacity < 1.0:
-            if not imscaled.HasAlpha():
-                # TODO: better have a pre-made alphabuffer, that we set with .SetAlphaBuffer
-                imscaled.InitAlpha() # it's a different buffer so useless to do it in numpy
-                if keepalpha:
-                    logging.warning("adding alpha, with keepalpha")
-            if keepalpha:
-                # slow, as it does a multiplication for each pixel
-                imscaled = imscaled.AdjustChannels(1.0, 1.0, 1.0, opacity)
-            else:
-                # TODO: Check if we could speed up by caching the alphabuffer
-                abuf = imscaled.GetAlphaBuffer()
-                self.memset_object(abuf, int(255 * opacity))
+            ctx.paint_with_alpha(opacity)
+        else:
+            ctx.paint()
 
-        # TODO: the conversion from Image to Bitmap should be done only once,
-        # after all the images are merged
-        # tl = int(round(tl[0])), int(round(tl[1]))
-        dc_buffer.DrawBitmapPoint(wx.BitmapFromImage(imscaled), tl)
+        # Reset the transformation matrix
+        ctx.identity_matrix()
+
 
     # TODO: see if with Numpy it's faster (~less memory copy),
     # cf http://wiki.wxpython.org/WorkingWithImages

@@ -128,9 +128,7 @@ class StreamIconOverlay(ViewOverlay):
             self.play = 1.0
         wx.CallAfter(self.cnvs.Refresh)
 
-    def Draw(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-
+    def Draw(self, ctx):
         if self.pause:
             self._draw_pause(ctx)
         elif self.play:
@@ -221,7 +219,7 @@ class FocusOverlay(ViewOverlay):
 
         self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
 
-    def Draw(self, dc):
+    def Draw(self, ctx):
         """
         Draws the crosshair
         dc (wx.DC)
@@ -229,7 +227,6 @@ class FocusOverlay(ViewOverlay):
         # TODO: handle displaying the focus 0 (horizontally)
 
         if self.shifts[1]:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
             ctx.set_line_width(10)
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
@@ -278,7 +275,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
         self.position_label = self.add_label("")
 
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.v_start_pos and self.v_end_pos:
             #pylint: disable=E1103
@@ -289,8 +286,6 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             #                                                start_pos[1],
             #                                                end_pos[0],
             #                                                end_pos[1] )
-
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
             rect = (start_pos[0] + 0.5,
                     start_pos[1] + 0.5,
@@ -399,9 +394,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
         self.label = label
 
-    def Draw(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-
+    def Draw(self, ctx):
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3,])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -629,11 +622,9 @@ class DichotomyOverlay(ViewOverlay):
         return x, y, w, h
 
 
-    def Draw(self, dc):
+    def Draw(self, ctx):
 
         if self.enabled:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
             ctx.set_source_rgba(*self.colour)
             ctx.set_line_width(2)
             ctx.set_dash([2,])
@@ -931,9 +922,7 @@ class PolarOverlay(ViewOverlay):
 
         self._calculate_display()
 
-    def Draw(self, dc):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
+    def Draw(self, ctx):
         ### Draw angle lines ###
 
         ctx.set_line_width(2.5)

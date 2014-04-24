@@ -588,7 +588,7 @@ class ViewOverlay(Overlay):  #pylint: disable=R0921
     dragging doesn't affects that). """
 
     @abstractmethod
-    def Draw(self, dc):
+    def Draw(self, ctx):
         pass
 
 
@@ -597,5 +597,5 @@ class WorldOverlay(Overlay):  #pylint: disable=R0921
     It's updated only every time the entire buffer is redrawn."""
 
     @abstractmethod
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
         pass

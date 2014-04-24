@@ -160,7 +160,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_end_pos = w_pos[2:4]
             self._calc_view_pos()
 
-    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
             offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
@@ -168,8 +168,6 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                      self.cnvs.world_to_buffer(self.w_end_pos, offset))
             b_pos = util.normalize_rect(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
-
-            ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
 
             #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
             rect = (b_pos[0] + 0.5, b_pos[1] + 0.5,
@@ -414,19 +412,19 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
             ctx.stroke()
 
 
-    def Draw(self, dc_buffer, shift=(0, 0), scale=1.0):
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         edit_cache = self.edit
         if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
             if self.fill == FILL_POINT:
-                self._draw_points(dc_buffer)
+                self._draw_points(ctx)
                 self.edit = True
             elif self.fill == FILL_GRID:
-                self._draw_grid(dc_buffer)
+                self._draw_grid(ctx)
                 self.edit = True
             # if FILL_NONE => nothing to do
 
-        super(RepetitionSelectOverlay, self).Draw(dc_buffer, shift, scale)
+        super(RepetitionSelectOverlay, self).Draw(ctx, shift, scale)
         self.edit = edit_cache
 
 
@@ -655,10 +653,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         return b_top_left + b_width
 
     # @profile
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
-
-        ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
         if self.enabled:
 
             if (self._pixel_pos and
@@ -826,12 +821,10 @@ class PointsOverlay(WorldOverlay):
 
         self.min_dist = min_dist / 2.0 # get radius
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if not self.choices or not self.enabled:
             return
-
-        ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
         if self.b_hover_box:
             b_l, b_t, b_r, b_b = self.b_hover_box

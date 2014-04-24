@@ -347,10 +347,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             except ValueError:
                 pass # it was already not displayed
 
-    def _getOrderedImages(self):
-        """
-        return the list of images to display, in order from lowest to topest
-         (last to draw)
+    def _get_ordered_images(self):
+        """ Return the list of images to display, ordered bottom to top (=last
+        to draw)
         """
         st = self.microscope_view.stream_tree
         images = st.getImages()
@@ -368,7 +367,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Temporary function to convert the StreamTree to a list of images as
         the canvas currently expects.
         """
-        images = self._getOrderedImages()
+
+        images = self._get_ordered_images()
 
         # add the images in order
         ims = []
@@ -379,14 +379,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
 
-            # convert to wxImage
-            wim = img.NDImage2wxImage(rgbim)
+            rgba_im = img.NDImage2wxImage(rgbim)
             keepalpha = (rgbim.shape[2] == 4)
-
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
 
-            ims.append((wim, pos, scale, keepalpha))
+            ims.append((rgba_im, pos, scale, keepalpha))
         self.set_images(ims)
 
         # For debug only:
@@ -774,7 +772,7 @@ class SecomCanvas(DblMicroscopeCanvas):
     # Special version which put the SEM images first, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed
     # together last
-    def _getOrderedImages(self):
+    def _get_ordered_images(self):
         """
         return the list of images to display, in order from lowest to topest
          (last to draw)
