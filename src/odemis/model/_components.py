@@ -591,6 +591,8 @@ class Actuator(HwComponent):
             raise ValueError("Actuator %s has non-existing inverted axes: %s." %
                              (name, ", ".join(non_existing)))
         for an, a in axes.items():
+            # FIXME: an enumerated axis could be inverted if the choices are
+            # sortable.
             if hasattr(a, "choices") and an in inverted:
                 raise ValueError("Axis %s of actuator %s cannot be inverted." %
                                  (an, name))
