@@ -259,11 +259,7 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report",
                         time.strftime(u"%Y%m%d-%H%M%S"))
     os.makedirs(path)
-    if isinstance(optical_image, list): 
-        hdf5.export(os.path.join(path, u"OpticalGrid.h5"), model.DataArray(optical_image))
-    else:
-        hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
-
+    hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
     report = open(os.path.join(path, u"report.txt"), 'w')
     report.write("\n****Overlay Failure Report****\n\n"
                  + "\nGrid size:\n" + str(repetitions)
