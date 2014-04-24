@@ -51,8 +51,8 @@ class APTMessage(object):
         """
         mid (int): Message ID
         """
-        assert 1 <= id <= 0xffff
-        self.id = id
+        assert 1 <= mid <= 0xffff
+        self.id = mid
 
 class APTSet(APTMessage):
     """
@@ -110,6 +110,8 @@ STA_RVS_JOG = 0x0080
 # All MFFxxx have serial number starting with 37
 SN_PREFIX_MFF = "37"
 
+POS_UP = 0
+POS_DOWN = math.radians(90)
 
 class MFF(model.Actuator):
     """
@@ -128,7 +130,7 @@ class MFF(model.Actuator):
         if sn is not None:
             if not sn.startswith(SN_PREFIX_MFF) or len(sn) != 8:
                 logging.warning("Serial number '%s' is unexpected for a MFF "
-                                " device (should be 8 digits starting with %s).",
+                                "device (should be 8 digits starting with %s).",
                                 sn, SN_PREFIX_MFF)
             self._port = self._getSerialPort(sn)
         else:
@@ -148,22 +150,22 @@ class MFF(model.Actuator):
         # TODO: have the standard inverted Actuator functions work on enumerated
         # use a different format than the standard Actuator
         if inverted and axis in inverted:
-            self._pos_to_jog = {0: 2,
-                                math.radians(90): 1}
-            self._status_to_pos = {STA_RVS_HLS: 0,
-                                   STA_FWD_HLS: math.radians(90),
+            self._pos_to_jog = {POS_UP: 2,
+                                POS_DOWN: 1}
+            self._status_to_pos = {STA_RVS_HLS: POS_UP,
+                                   STA_FWD_HLS: POS_DOWN,
                                    # For moving ones, we report old position
-                                   STA_FWD_MOT: 0,
-                                   STA_RVS_MOT: math.radians(90),
+                                   STA_FWD_MOT: POS_UP,
+                                   STA_RVS_MOT: POS_DOWN,
                                    }
         else:
-            self._pos_to_jog = {0: 2,
-                                math.radians(90): 1}
-            self._status_to_pos = {STA_FWD_HLS: 0,
-                                   STA_RVS_HLS: math.radians(90),
+            self._pos_to_jog = {POS_UP: 2,
+                                POS_DOWN: 1}
+            self._status_to_pos = {STA_FWD_HLS: POS_UP,
+                                   STA_RVS_HLS: POS_DOWN,
                                    # For moving ones, we report old position
-                                   STA_RVS_MOT: 0,
-                                   STA_FWD_MOT: math.radians(90),
+                                   STA_RVS_MOT: POS_UP,
+                                   STA_FWD_MOT: POS_DOWN,
                                    }
 
         # TODO: add support for speed
@@ -257,7 +259,7 @@ class MFF(model.Actuator):
                 if timeout is not None:
                     left = time.time() - start + timeout
                     if left <= 0:
-                        raise IOError("No message %d received in time", msg.id)
+                        raise IOError("No message %d received in time" % msg.id)
                 else:
                     left = None
 
@@ -446,7 +448,7 @@ class MFF(model.Actuator):
                 if snp == sn:
                     break
             else:
-                raise ValueError("No USB device with S/N %s", sn)
+                raise ValueError("No USB device with S/N %s" % sn)
 
             # Deduce the tty:
             # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
@@ -454,7 +456,7 @@ class MFF(model.Actuator):
             usb_num = os.path.basename(sys_path)
             tty_paths = glob.glob("%s/%s/ttyUSB?*" % (sys_path, usb_num + ":1.0"))
             if not tty_paths:
-                raise ValueError("Failed to find tty for device with S/N %s", sn)
+                raise ValueError("Failed to find tty for device with S/N %s" % sn)
             tty = os.path.basename(tty_paths[0])
 
             # Convert to /dev
