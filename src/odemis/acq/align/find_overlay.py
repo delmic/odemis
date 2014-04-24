@@ -231,9 +231,12 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
                     scale[1] * calc_translation_y)
     logging.debug("Center shift correction: %s", position_cor)
     transform_md[model.MD_POS_COR] = position_cor
-
+    if isinstance(optical_image, list):
+        opt_img_pxs = optical_image[0]
+    else:
+        opt_img_pxs = optical_image
     try:
-        pixel_size = optical_image.metadata[model.MD_PIXEL_SIZE]
+        pixel_size = opt_img_pxs.metadata[model.MD_PIXEL_SIZE]
     except KeyError:
         logging.warning("No MD_PIXEL_SIZE data available")
         return transform_md
@@ -256,7 +259,11 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     path = os.path.join(os.path.expanduser(u"~"), u"odemis-overlay-report",
                         time.strftime(u"%Y%m%d-%H%M%S"))
     os.makedirs(path)
-    hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
+    if isinstance(optical_image, list): 
+        hdf5.export(os.path.join(path, u"OpticalGrid.h5"), model.DataArray(optical_image))
+    else:
+        hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
+
     report = open(os.path.join(path, u"report.txt"), 'w')
     report.write("\n****Overlay Failure Report****\n\n"
                  + "\nGrid size:\n" + str(repetitions)
