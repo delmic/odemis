@@ -141,7 +141,7 @@ def AutoSpotFocus(ccd, escan, focus):
     """
     # TODO adjust binning and exposure time
     ccd.binning.value = (1, 1)
-    ccd.exposureTime.value = 650e-03
+    ccd.exposureTime.value = 850e-03
 
     # Set to spot mode
     escan.scale.value = (1, 1)
