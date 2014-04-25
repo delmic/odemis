@@ -29,7 +29,7 @@ from scipy import signal
 _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
 
-MAX_STEPS_NUMBER = 3  # Max steps to perform autofocus
+MAX_STEPS_NUMBER = 50  # Max steps to perform autofocus
 
 def MeasureFocus(image):
     """
@@ -56,7 +56,7 @@ def AutoFocus(ccd, focus):
     returns (float):    Focus position #m
     """
     # Determine focus direction
-    step = 15e-6
+    step = 60e-6
     image = ccd.data.get()
     fm_cur = MeasureFocus(image)
     f = focus.moveRel({"z": step})
@@ -69,7 +69,7 @@ def AutoFocus(ccd, focus):
         sign = 1
     
     # Move the lens in the correct direction until focus measure is decreased
-    step = 5e-6
+    step = 50e-6
     fm_old, fm_new = fm_test, fm_test
     steps = 0
     while fm_old <= fm_new:
@@ -101,5 +101,5 @@ def AutoFocus(ccd, focus):
         f.result()
         fm_old = fm_new
 
-    return focus.position.value
+    return focus.position.value.get('z')
 

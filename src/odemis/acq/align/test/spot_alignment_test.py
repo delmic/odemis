@@ -101,7 +101,6 @@ class TestAlignment(unittest.TestCase):
         f = align.AlignSpot(ccd, stage, escan, focus)
 
         dist = f.result()
-        print dist
 
     @unittest.skip("skip")
     def test_spot_alignment_cancelled(self):
@@ -121,14 +120,6 @@ class TestAlignment(unittest.TestCase):
         self.assertTrue(f.done())
         with self.assertRaises(futures.CancelledError):
             f.result()
-        
-    def on_done(self, future):
-        self.done += 1
-
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
-        self.updates += 1
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(TestAlignment)

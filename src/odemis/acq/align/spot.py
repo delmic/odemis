@@ -37,7 +37,7 @@ from . import autofocus
 _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
 
-MAX_STEPS_NUMBER = 3  # Max steps to perform alignment
+MAX_STEPS_NUMBER = 20  # Max steps to perform alignment
 FOV_MARGIN = 50  # pixelss
 
 _alignment_lock = threading.Lock()
@@ -139,8 +139,9 @@ def AutoSpotFocus(ccd, escan, focus):
     focus (model.CombinedActuator): The optical focus
     returns (float):    Focus position #m
     """
-    # TODO adjust binning
+    # TODO adjust binning and exposure time
     ccd.binning.value = (1, 1)
+    ccd.exposureTime.value = 650e-03
 
     # Set to spot mode
     escan.scale.value = (1, 1)
