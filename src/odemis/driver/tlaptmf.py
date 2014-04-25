@@ -18,10 +18,13 @@ You should have received a copy of the GNU General Public License along with Ode
 # Driver for the Thorlabs "MFF10X" motorised filter flipper mounts. It uses the APT
 # protocol (over serial/USB).
 # Most of the protocol is documented in APT_Communications_Protocol_Rev_9.pdf
+# http://www.thorlabs.co.uk/software/apt/APT_Communications_Protocol_Rev_9.pdf
 # (provided by Thorlabs on request). This protocol allows to manage a very wide
 # variety of devices.
+
 # For now, we have a simple implementation of APT directly here, but if more
 # devices are to be supported, it should be move to a APT library layer.
+# cf pyAPT: https://github.com/freespace/pyAPT
 # The typical way distinguish Thorlabs devices is to indicate the serial number
 # of the device (which is clearly physically written on it too). This can be
 # then easily compared with the USB attribute cf /sys/bus/usb/devices/*/serial
@@ -76,6 +79,9 @@ class APTReq(APTMessage):
 # Messages
 MOD_IDENTIFY = APTSet(0x0223)
 HW_REQ_INFO = APTReq(0x0005, 0x0006)
+HW_START_UPDATEMSGS = APTSet(0x0011)
+HW_STOP_UPDATEMSGS = APTSet(0x0012)
+HW_NO_FLASH_PROGRAMMING = APTSet(0x0018) # Or 0x0017???
 MOT_MOVE_JOG = APTSet(0x046a)
 MOT_MOVE_STOP = APTSet(0x0465)
 MOT_SUSPEND_ENDOFMOVEMSGS = APTSet(0x046b)
@@ -105,7 +111,9 @@ STA_FWD_MOT = 0x0010
 STA_RVS_MOT = 0x0020
 STA_FWD_JOG = 0x0040
 STA_RVS_JOG = 0x0080
+STA_CHA_ENB = 0x80000000
 
+STA_IN_MOTION = (STA_FWD_MOT | STA_RVS_MOT | STA_FWD_JOG | STA_RVS_JOG)
 
 # All MFFxxx have serial number starting with 37
 SN_PREFIX_MFF = "37"
@@ -139,10 +147,18 @@ class MFF(model.Actuator):
         self._serial = self._openSerialPort(self._port)
         self._ser_access = threading.Lock()
 
+        # Ensure we don't receive anything
+        self.SendMessage(HW_STOP_UPDATEMSGS)
+        self._serial.flushInput()
+
+        # Documentation says it should be done first, though it doesn't seem
+        # required
+        self.SendMessage(HW_NO_FLASH_PROGRAMMING)
+
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        sn, model, typ, fmv, notes, hwv, state, nc = self.GetInfo()
-        self._hwVersion = "%s v%d (firmware %d)" % (model, hwv, fmv)
+        sn, modl, typ, fmv, notes, hwv, state, nc = self.GetInfo()
+        self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
 
         # will take care of executing axis move asynchronously
         self._executor = ThreadPoolExecutor(max_workers=1) # one task at a time
@@ -153,20 +169,12 @@ class MFF(model.Actuator):
             self._pos_to_jog = {POS_UP: 2,
                                 POS_DOWN: 1}
             self._status_to_pos = {STA_RVS_HLS: POS_UP,
-                                   STA_FWD_HLS: POS_DOWN,
-                                   # For moving ones, we report old position
-                                   STA_FWD_MOT: POS_UP,
-                                   STA_RVS_MOT: POS_DOWN,
-                                   }
+                                   STA_FWD_HLS: POS_DOWN}
         else:
-            self._pos_to_jog = {POS_UP: 2,
-                                POS_DOWN: 1}
+            self._pos_to_jog = {POS_UP: 1,
+                                POS_DOWN: 2}
             self._status_to_pos = {STA_FWD_HLS: POS_UP,
-                                   STA_RVS_HLS: POS_DOWN,
-                                   # For moving ones, we report old position
-                                   STA_RVS_MOT: POS_UP,
-                                   STA_FWD_MOT: POS_DOWN,
-                                   }
+                                   STA_RVS_HLS: POS_DOWN}
 
         # TODO: add support for speed
         axes = {axis: model.Axis(unit="rad",
@@ -177,21 +185,19 @@ class MFF(model.Actuator):
         self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
 
+        # It'd be nice to know when a move is over, but it seems the MFF10x
+        # never report ends of move.
+        # self.SendMessage(MOT_RESUME_ENDOFMOVEMSGS)
 
-        # TODO: either disable continuous status updates, or regularly check for
-        # them and update the position (nice in case the user changes the
-        # position directly via the hardware button)
-        # cf MOT_SUSPEND_ENDOFMOVEMSGS
+        # If we need constant status updates, then, we'll need to answer them
+        # with MOT_ACK_DCSTATUSUPDATE at least once per second.
+        # For now we don't track the current device status, so it's easy.
+        # When requesting update messages, messages are sent at ~10Hz, even if
+        # no change has happened.
+        # self.SendMessage(HW_START_UPDATEMSGS) # Causes a lot of messages
 
-        # TODO: ping?
-        # From the documentation (it doesn't sound actually so bad, if the
-        # automatic status updates are not needed):
-        # If using the USB port, this message called “server alive” must be sent
-        # by the server to the controller at least once a second or the
-        # controller will stop responding after ~50 commands.
-
-        # TODO: make sure the led never turns on during normal operation
-        # cf MOT_SET_AVMODES?
+        # We should make sure that the led is always off, but apparently, it's
+        # always off without doing anything (cf MOT_SET_AVMODES)
 
     def terminate(self):
         if self._executor:
@@ -228,7 +234,7 @@ class MFF(model.Actuator):
         else: # long message
             com = struct.pack("<HHBB", msg.id, len(data), dest, 1) + data
 
-        logging.debug("Sending: '%s'", ", ".join("%02d" % ord(c) for c in com))
+        logging.debug("Sending: '%s'", ", ".join("%02X" % ord(c) for c in com))
         with self._ser_access:
             self._serial.write(com)
 
@@ -241,7 +247,7 @@ class MFF(model.Actuator):
                     rid, res = self._ReadMessage()
                     if rid == msg.rid:
                         return res
-                    logging.debug("Skipping unexpected message %d", rid)
+                    logging.debug("Skipping unexpected message %X", rid)
 
     def WaitMessage(self, msg, timeout=None):
         """
@@ -266,7 +272,7 @@ class MFF(model.Actuator):
                 mid, res = self._ReadMessage(timeout=left)
                 if mid == msg.id:
                     return res
-                logging.debug("Skipping unexpected message %d", mid)
+                logging.debug("Skipping unexpected message %X", mid)
 
     def _ReadMessage(self, timeout=None):
         """
@@ -297,7 +303,7 @@ class MFF(model.Actuator):
 
         mid = struct.unpack("<H", msg[0:2])[0]
         if not (ord(msg[4]) & 0x80): # short message
-            logging.debug("Received: '%s'", ", ".join("%02d" % ord(c) for c in msg))
+            logging.debug("Received: '%s'", ", ".join("%02X" % ord(c) for c in msg))
             return mid, msg[2:4]
 
         # long message
@@ -309,7 +315,7 @@ class MFF(model.Actuator):
 
             msg += char
 
-        logging.debug("Received: '%s'", ", ".join("%02d" % ord(c) for c in msg))
+        logging.debug("Received: '%s'", ", ".join("%02X" % ord(c) for c in msg))
         return mid, msg[6:]
 
     # Low level functions
@@ -319,7 +325,7 @@ class MFF(model.Actuator):
             serial number (int)
             model number (str)
             type (int)
-            firmware version (int): each byte is a revision number
+            firmware version (str)
             notes (str)
             hardware version (int)
             hardware state (int)
@@ -327,10 +333,17 @@ class MFF(model.Actuator):
         """
         res = self.SendMessage(HW_REQ_INFO)
         # Expects 0x54 bytes
-        values = struct.unpack('<I8sHI48s12sHHH', res)
-        sn, model, typ, fmv, notes, empty, hwv, state, nc = values
+        values = struct.unpack('<I8sHI48s12xHHH', res)
+        sn, modl, typ, fmv, notes, hwv, state, nc = values
 
-        return sn, model, typ, fmv, notes, hwv, state, nc
+        # remove trailing 0's
+        modl = modl.rstrip("\x00")
+        notes = notes.rstrip("\x00")
+
+        # Convert firmware version to a string
+        fmvs = "%d.%d.%d" % (fmv & 0xff0000 >> 16, fmv & 0xff00 >> 8, fmv & 0xff)
+
+        return sn, modl, typ, fmvs, notes, hwv, state, nc
 
     def MoveJog(self, pos):
         """
@@ -338,7 +351,8 @@ class MFF(model.Actuator):
         pos (int): 1 or 2
         """
         assert pos in [1, 2]
-        self.SendMessage(MOT_MOVE_JOG, p1=pos)
+        # p1 is chan ident, always 1
+        self.SendMessage(MOT_MOVE_JOG, p1=1, p2=pos)
 
     def GetStatus(self):
         """
@@ -351,6 +365,7 @@ class MFF(model.Actuator):
         c, pos, enccount, status = struct.unpack('<HiiI', res)
 
         return pos, status
+    
 
     # high-level methods (interface)
     def _updatePosition(self):
@@ -372,6 +387,25 @@ class MFF(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
+
+    def _waitNoMotion(self, timeout=None):
+        """
+        Block as long as the controller reports motion
+        timeout (0 < float): maximum time to wait for the end of the motion
+        """
+        start = time.time()
+
+        # Read until end of motion
+        while True:
+            _, status = self.GetStatus()
+            if not (status & STA_IN_MOTION):
+                return
+
+            if timeout is not None and (time.time() > start + timeout):
+                raise IOError("Device still in motion after %g s", timeout)
+
+            # Give it a small break
+            time.sleep(0.05) # 20Hz
 
     @isasync
     def moveRel(self, shift):
@@ -400,7 +434,7 @@ class MFF(model.Actuator):
     def _doMovePos(self, pos):
         jogp = self._pos_to_jog[pos]
         self.MoveJog(jogp)
-        self.WaitMessage(MOT_MOVE_COMPLETED, timeout=10)
+        self._waitNoMotion(10) # by default, a move lasts ~0.5 s
         self._updatePosition()
 
     @staticmethod
@@ -506,8 +540,8 @@ class MFF(model.Actuator):
                 # open and try to communicate
                 try:
                     dev = cls(name="test", role="test", port=port)
-                    _, model, typ, fmv, notes, hwv, state, nc = dev.GetInfo()
-                    found.append((model, {"sn": snp, "axis": "rz"}))
+                    _, modl, typ, fmv, notes, hwv, state, nc = dev.GetInfo()
+                    found.append((modl, {"sn": snp, "axis": "rz"}))
                 except Exception:
                     pass
         else:

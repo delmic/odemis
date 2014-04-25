@@ -44,7 +44,7 @@ class TestStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print "opening", name
             sem = CLASS(name, "switch", **kwargs)
             self.assertTrue(sem.selfTest(), "self test failed.")
 
@@ -54,7 +54,7 @@ class TestStatic(unittest.TestCase):
         """
         dev = CLASS(**KWARGS)
 
-        self.assertGreater(len(dev.axes["rz"].choices), 0)
+        self.assertGreater(len(dev.axes["r"].choices), 0)
 
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
@@ -116,6 +116,7 @@ class TestMFF(unittest.TestCase):
         cur_pos = self.dev.position.value
         axis = cur_pos.keys()[0]
         apos = cur_pos[axis]
+        logging.info("Device is currently at position %s", apos)
 
         # don't change position
         f = self.dev.moveAbs({axis: apos})
@@ -127,10 +128,12 @@ class TestMFF(unittest.TestCase):
         axis_def = self.dev.axes[axis]
         for p in axis_def.choices:
             if p != apos:
+                logging.info("Testing move to position %s", p)
                 f = self.dev.moveAbs({axis: p})
                 f.result()
                 self.assertEqual(self.dev.position.value[axis], p)
-        else:
+
+        if self.dev.position.value[axis] == apos:
             self.fail("Failed to find a position different from %d" % apos)
 
 
