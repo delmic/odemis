@@ -1443,10 +1443,13 @@ class AndorCam3(model.DigitalCamera):
         
         cameras = []
         for i in range(dc):
-            camera.Open(i)
-            name = camera.getModelName()
-            cameras.append((name, {"device": i}))
-            camera.Close()
+            try:
+                camera.Open(i)
+                name = camera.getModelName()
+                cameras.append((name, {"device": i}))
+                camera.Close()
+            except Exception:
+                logging.exception("Failed to access device %d", i)
             
         camera.handle = system_handle # for the terminate() to work fine
         return cameras
