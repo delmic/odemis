@@ -122,11 +122,12 @@ ARCam: {
 # Thorlabs MFF102 holding the mirror to select AR or spectrometer
 # The convention for the position is:
 # 0° (1)  -> AR
-# 90° (2) -> spectrometer 
+# 90° (2) -> spectrometer
 "MFFSelector": {
     class: tlaptmf.MFF,
     role: ar-spec-selector,
     init: {port: "/dev/fake", # for simulator
+           #sn: "37848720",
            axis: "rx",
     },
     affects: ["ARCam", "AndorSpec"]  
