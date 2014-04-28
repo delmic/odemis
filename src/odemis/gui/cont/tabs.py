@@ -451,11 +451,20 @@ class SparcAcquisitionTab(Tab):
         if self._ar_stream and self._spec_stream:
             main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
             main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
-            main_frame.fp_settings_sparc_spectrum.Hide()
-            main_frame.fp_settings_sparc_angular.Hide()
-            acq_view.removeStream(self._sem_spec_stream)
-            acq_view.removeStream(self._sem_ar_stream)
-            self._scount_stream.should_update.value = False
+            if main_data.ar_spec_sel:
+                # use the current position to select the default instrument
+                if main_data.ar_spec_sel.position.value["rx"] == 0: # AR on
+                    self.main_frame.acq_btn_angular.SetToggle(True)
+                    self._show_spec(False)
+                else: # Spec on
+                    self.main_frame.acq_btn_spectrometer.SetToggle(True)
+                    self._scount_stream.should_update.value = True
+                    self._show_ar(False)
+                # Show() will take care of setting the lenses
+            else:
+                # disable everything
+                self._show_ar(False)
+                self._show_spec(False)
         else:
             # only one detector => hide completely the buttons
             main_frame.sparc_button_panel.Hide()
@@ -642,6 +651,10 @@ class SparcAcquisitionTab(Tab):
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
+        
+        if show:
+            self._set_lenses()
+        # don't put switches back when hiding, to avoid unnecessary moves
 
     def terminate(self):
         # ensure we are not acquiring anything
@@ -687,6 +700,27 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
+    def _set_lenses(self):
+        """
+        Set the lenses ready (as defined by the current stream)
+        """
+        # Enable the lens and put the mirror to the right position
+        streams = self.tab_data_model.acquisitionView.getStreams()
+        if self._sem_ar_stream in streams: # AR on
+            ar_spec_pos = 0
+        elif self._sem_spec_stream in streams: # Spec on
+            ar_spec_pos = math.radians(90)
+        else: # no stream => nothing to do (yet)
+            return
+
+        if self.tab_data_model.main.lens_switch:
+            # convention is: 90° == on (lens)
+            self.tab_data_model.main.lens_switch.moveAbs({"rx": math.radians(90)})
+
+        if self.tab_data_model.main.ar_spec_sel:
+            # convention is: 90° == on (mirror) == spectrometer
+            self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": ar_spec_pos})
+
     def _show_spec(self, show=True):
         """
         Show (or hide) the widgets for spectrum acquisition settings
@@ -708,6 +742,10 @@ class SparcAcquisitionTab(Tab):
         self._scount_stream.should_update.value = show
         self._scount_stream.is_active.value = show
 
+        if show:
+            self._set_lenses()
+        # don't put switches back when hiding, to avoid unnecessary moves
+
     def _show_ar(self, show=True):
         """
         Show (or hide) the widgets for AR acquisition settings
@@ -725,6 +763,10 @@ class SparcAcquisitionTab(Tab):
         else:
             acq_view.removeStream(self._sem_ar_stream)
 
+        if show:
+            self._set_lenses()
+        # don't put switches back when hiding, to avoid unnecessary moves
+
     def onToggleSpec(self, evt):
         """
         called when the Spectrometer button is toggled
@@ -735,6 +777,7 @@ class SparcAcquisitionTab(Tab):
         # is not available (but for now, it's never available)
         self._show_ar(False)
         self.main_frame.acq_btn_angular.SetToggle(False)
+
         self._show_spec(show)
         if show:
             self._spec_stream.roi.value = self._sem_cl_stream.roi.value
@@ -1698,6 +1741,16 @@ class MirrorAlignTab(Tab):
             self._ccd_stream.is_active.value = show
         if self._sem_stream:
             self._sem_stream.is_active.value = show
+        
+        # If there is an actuator, disable the lens
+        if show:
+            if self.tab_data_model.main.lens_switch:
+                # convention is: 0 rad == off (no lens)
+                self.tab_data_model.main.lens_switch.moveAbs({"rx": 0})
+            if self.tab_data_model.main.ar_spec_sel:
+                # convention is: 0 rad == off (no mirror) == AR
+                self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": 0})
+            # don't put it back when hiding, to avoid unnessary moves
 
     def terminate(self):
         if self._ccd_stream:
