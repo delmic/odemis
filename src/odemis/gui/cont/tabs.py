@@ -453,6 +453,8 @@ class SparcAcquisitionTab(Tab):
             main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
             if main_data.ar_spec_sel:
                 # use the current position to select the default instrument
+                # TODO: or just don't select anything, as if the GUI was closed
+                # in the alignment tab, it will always end up in AR.
                 if main_data.ar_spec_sel.position.value["rx"] == 0: # AR on
                     self.main_frame.acq_btn_angular.SetToggle(True)
                     self._show_spec(False)
@@ -553,6 +555,9 @@ class SparcAcquisitionTab(Tab):
         self._spec_graph.SetContent(disp)
 
     def on_acquisition(self, is_acquiring):
+        # We don't call set_lenses() now, so that if the user thinks he's more
+        # clever he can change the switches manually beforehand (and it's faster).
+
         # Disable spectrometer count stream during acquisition
         if self._scount_stream:
             active = self._scount_stream.should_update.value and (not is_acquiring)
@@ -1751,6 +1756,7 @@ class MirrorAlignTab(Tab):
                 # convention is: 0 rad == off (no mirror) == AR
                 self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": 0})
             # don't put it back when hiding, to avoid unnessary moves
+        # TODO: change filter too (to an empty position "pass through"?
 
     def terminate(self):
         if self._ccd_stream:
