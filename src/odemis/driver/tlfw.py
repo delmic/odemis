@@ -52,7 +52,7 @@ class FW102c(model.Actuator):
         port (string): name of the serial port to connect to. Can be a pattern,
          in which case, all the ports fitting the pattern will be tried, and the
          first one which looks like an FW102C will be used.
-        bands (dict 1<=int<=12 -> 2-tuple of floats > 0):
+        bands (dict 1<=int<=12 -> 2-tuple of floats > 0 or str):
           filter position -> lower and higher bound of the wavelength (m) of the
           light which goes _through_. If it's a list, it implies that the filter
           is multi-band.
@@ -74,7 +74,12 @@ class FW102c(model.Actuator):
                 if not 1 <= pos <= self._maxpos:
                     raise ValueError("Filter position should be between 1 and "
                                      "%d, but got %d." % (self._maxpos, pos))
-                self._checkBand(band)
+                # To support "weird" filter, we accept strings
+                if isinstance(band, basestring):
+                    if not band.strip():
+                        raise ValueError("Name of filter %d is empty" % pos)
+                else:
+                    self._checkBand(band)
         except Exception:
             logging.exception("Failed to parse bands %s", bands)
             raise
