@@ -19,7 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from concurrent import futures
 import logging
 import time
 import os
@@ -34,7 +33,6 @@ from odemis.dataio import hdf5
 import odemis
 from odemis.acq.align import autofocus
 from scipy import ndimage
-from odemis.acq import align
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)

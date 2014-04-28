@@ -28,8 +28,6 @@ import threading
 import coordinates
 import math
 import logging
-import operator
-import time
 from Pyro4.core import isasync
 from odemis import model
 from . import autofocus
@@ -200,7 +198,7 @@ def CenterSpot(ccd, escan, stage):
     # Epsilon distance below which the lens is considered centered. The worse of:
     # * 2 pixels (because the CCD resolution cannot give us better)
     # * 1 µm (because that's the best resolution of our actuators)
-    err_mrg = max(2 * ccd.pixelSize.value[0], 1e-06)  # m
+    err_mrg = max(2 * pixelSize[0], 1e-06)  # m
     steps = 0
 
     # Stop once spot is found on the center of the optical image
@@ -210,7 +208,7 @@ def CenterSpot(ccd, escan, stage):
             break
 
         # Move to the found spot
-        f = stage_ab.moveRel({"x":tab[0], "y":tab[1]})
+        f = stage_ab.moveRel({"x":tab[1], "y":tab[0]})
         f.result()
 
         image = ccd.data.get()
