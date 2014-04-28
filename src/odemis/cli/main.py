@@ -347,14 +347,37 @@ def set_attr(comp_name, attr_name, str_val):
         logging.error("'%s' is not a vigilant attribute of component '%s'", attr_name, comp_name)
         return 129
 
+    # Sometimes the current value is a (valid) subtype which do not allow all
+    # possible values (eg: a int for a FloatContinuous). So try also with range
+    # and choices
+    val_try = [attr.value]
     try:
-        new_val = reproduceTypedValue(attr.value, str_val)
-    except TypeError:
-        logging.error("'%s' is of unsupported type %r", attr_name, type(attr.value))
-        return 127
-    except ValueError:
-        logging.error("Impossible to convert '%s' to a %r", str_val, type(attr.value))
-        return 127
+        for v in attr.range:
+            val_try.insert(0, v)
+    except (AttributeError, model.NotApplicableError):
+        pass
+    try:
+        for v in attr.choices:
+            val_try.insert(0, v)
+    except (AttributeError, model.NotApplicableError):
+        pass
+
+    for v in val_try[:-1]: # try all but last silently
+        try:
+            new_val = reproduceTypedValue(v, str_val)
+            break # it's all fine
+        except (TypeError, ValueError):
+            logging.debug("Failed to convert %s to a %r, will try again",
+                          str_val, type(v))
+    else: # try last one and report the error
+        try:
+            new_val = reproduceTypedValue(val_try[-1], str_val)
+        except TypeError:
+            logging.error("'%s' is of unsupported type %r", attr_name, type(val_try[-1]))
+            return 127
+        except ValueError:
+            logging.error("Impossible to convert '%s' to a %r", str_val, type(val_try[-1]))
+            return 127
 
     # Special case for floats, due to rounding error, it's very hard to put the
     # exact value if it's an enumerated VA. So just pick the closest one in this
