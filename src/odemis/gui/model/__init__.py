@@ -98,7 +98,7 @@ class MainGUIData(object):
         self.aligner = None # actuator to align ebeam/ccd
         self.mirror = None # actuator to change the mirror position (on SPARC)
         self.light = None
-        self.light_filter = None # emission light filter for fluorescence micro.
+        self.light_filter = None # emission light filter for SECOM/output filter for SPARC
         self.lens = None
         self.ebeam = None
         self.sed = None # secondary electron detector

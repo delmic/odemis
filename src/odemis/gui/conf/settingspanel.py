@@ -127,12 +127,12 @@ def _binning_firstd_only(comp, va, conf):
 #   role of component
 #       vigilant attribute name
 #           label
-#              control_type (CONTROL_NONE to hide it)
-#              range
-#              choices
-#              scale
-#              type
-#              format
+#           control_type (CONTROL_NONE to hide it)
+#           range
+#           choices
+#           scale
+#           type
+#           format
 #
 # Any value can be replaced with a function, to allow for dynamic values which
 # can be depending on the backend configuration.
@@ -292,6 +292,14 @@ CONFIG = {
         },
         "grating": # that select the bandwidth observed
         {
+            "control_type": odemis.gui.CONTROL_COMBO,
+        },
+    },
+    "filter": # For the SPARC
+    {
+        "band": # to select the filter used
+        {
+            "label": "Filter",
             "control_type": odemis.gui.CONTROL_COMBO,
         },
     },
