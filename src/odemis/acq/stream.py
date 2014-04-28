@@ -780,7 +780,7 @@ class CameraStream(Stream):
         """
         # Just change the intensity of each wavelengths, so that the power is
         # recorded.
-        emissions = [0] * len(self._emitter.emissions.value)
+        emissions = [0.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = emissions
 
         # TODO: might need to be more clever to avoid turning off and on the
@@ -825,7 +825,7 @@ class BrightfieldStream(CameraStream):
         # Turn on all the sources? Does this always mean white?
         # At least we should set a warning if the final emission range is quite
         # different from the normal white spectrum
-        em = [1] * len(self._emitter.emissions.value)
+        em = [1.] * len(self._emitter.emissions.value)
         self._emitter.emissions.value = em
 
 class CameraNoLightStream(CameraStream):
@@ -1133,8 +1133,8 @@ class FluoStream(CameraStream):
 
         # create an emissions with only one source active, which best matches
         # the excitation wavelength
-        emissions = [0] * len(spectra)
-        emissions[i] = 1
+        emissions = [0.] * len(spectra)
+        emissions[i] = 1.
         self._emitter.emissions.value = emissions
 
         # TODO: read back self._emitter.emissions.value to get the actual value
