@@ -29,10 +29,10 @@ logging.getLogger().setLevel(logging.DEBUG)
 SN = "37848720" # put the serial number written on the component to test
 SN_SIM = "37000001"
 
-# CLASS_SIM = tlaptmf.FakeMFF
-CLASS = tlaptmf.MFF # use CLASS_SIM if no hardware present
-KWARGS = dict(name="test", role="switch", sn=SN, axis="r", inverted=["r"])
-KWARGS_SIM = dict(name="test", role="switch", sn=SN_SIM, axis="r", inverted=["r"])
+CLASS = tlaptmf.MFF
+KWARGS_SIM = dict(name="test", role="switch", port="/dev/fake", axis="r", inverted=["r"])
+KWARGS = KWARGS_SIM
+# KWARGS = dict(name="test", role="switch", sn=SN, axis="r", inverted=["r"])
 
 # @skip("simple")
 class TestStatic(unittest.TestCase):
@@ -87,7 +87,7 @@ class TestStatic(unittest.TestCase):
         """
         Just makes sure we don't (completely) break FakeMFF after an update
         """
-        dev = CLASS_SIM(**KWARGS_SIM)
+        dev = CLASS(**KWARGS_SIM)
 
         self.assertGreater(len(dev.axes["rz"].choices), 0)
         for p, b in dev.axes["rz"].choices.items():

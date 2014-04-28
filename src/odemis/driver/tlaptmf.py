@@ -210,7 +210,7 @@ class MFF(model.Actuator):
                 self._serial.close()
                 self._serial = None
 
-    def SendMessage(self, msg, dest=0x50, p1=None, p2=None, data=None):
+    def SendMessage(self, msg, dest=0x50, src=1, p1=None, p2=None, data=None):
         """
         Send a message to a device and possibility wait for its response
         msg (APTSet or APTReq): the message definition
@@ -230,9 +230,9 @@ class MFF(model.Actuator):
         if data is None: # short message
             p1 = p1 or 0
             p2 = p2 or 0
-            com = struct.pack("<HBBBB", msg.id, p1, p2, dest, 1)
+            com = struct.pack("<HBBBB", msg.id, p1, p2, dest, src)
         else: # long message
-            com = struct.pack("<HHBB", msg.id, len(data), dest, 1) + data
+            com = struct.pack("<HHBB", msg.id, len(data), dest | 0x80, src) + data
 
         logging.debug("Sending: '%s'", ", ".join("%02X" % ord(c) for c in com))
         with self._ser_access:
@@ -249,6 +249,7 @@ class MFF(model.Actuator):
                         return res
                     logging.debug("Skipping unexpected message %X", rid)
 
+    # Note: unused
     def WaitMessage(self, msg, timeout=None):
         """
         Wait until a specified message is received
@@ -272,6 +273,8 @@ class MFF(model.Actuator):
                 mid, res = self._ReadMessage(timeout=left)
                 if mid == msg.id:
                     return res
+                # TODO: instead of discarding the message, it could go into a
+                # queue, to be handled later
                 logging.debug("Skipping unexpected message %X", mid)
 
     def _ReadMessage(self, timeout=None):
@@ -341,7 +344,9 @@ class MFF(model.Actuator):
         notes = notes.rstrip("\x00")
 
         # Convert firmware version to a string
-        fmvs = "%d.%d.%d" % (fmv & 0xff0000 >> 16, fmv & 0xff00 >> 8, fmv & 0xff)
+        fmvs = "%d.%d.%d" % ((fmv & 0xff0000) >> 16,
+                             (fmv & 0xff00) >> 8,
+                             fmv & 0xff)
 
         return sn, modl, typ, fmvs, notes, hwv, state, nc
 
@@ -444,6 +449,10 @@ class MFF(model.Actuator):
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
         return (serial): the opened serial port
         """
+        # For debugging purpose
+        if port == "/dev/fake":
+            return MFF102Simulator(timeout=1)
+
         ser = serial.Serial(
             port=port,
             baudrate=115200,
@@ -549,3 +558,154 @@ class MFF(model.Actuator):
             raise NotImplementedError("OS not yet supported")
 
         return found
+
+
+class MFF102Simulator(object):
+    """
+    Simulates a MFF102 (+ serial port). Only used for testing.
+    Same interface as the serial port
+    """
+    def __init__(self, timeout=0, *args, **kwargs):
+        # we don't care about the actual parameters but timeout
+        self.timeout = timeout
+        self._output_buf = "" # what the commands sends back to the "host computer"
+        self._input_buf = "" # what we receive from the "host computer"
+
+        # internal values
+        self._state = {"jog": 1, # 1 or 2
+                       }
+        self._end_motion = 0 # time at which the current motion end(ed)
+        self._add = 0x50 # the address of this device
+        self._sn = 37000001
+        self._model = "MPP002"
+        self._fmv = 0x020304
+        self._hwv = 2
+        self._nchans = 1
+
+    def write(self, data):
+        self._input_buf += data
+
+        self._parseMessages() # will update _input_buf
+
+    def read(self, size=1):
+        ret = self._output_buf[:size]
+        self._output_buf = self._output_buf[len(ret):]
+
+        if len(ret) < size:
+            # simulate timeout
+            time.sleep(self.timeout)
+        return ret
+
+    def flush(self):
+        pass
+
+    def flushInput(self):
+        self._output_buf = ""
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _parseMessages(self):
+        """
+        Parse as many messages available in the buffer
+        """
+        while len(self._input_buf) >= 6:
+            # Similar to MFF._ReadMessage()
+            # read the first (required) 6 bytes
+            msg = self._input_buf[0:7]
+
+            if ord(msg[4]) & 0x80: # long message
+                length = struct.unpack("<H", msg[2:4])[0]
+                if len(self._input_buf) < 6 + length:
+                    return # not yet all the message received
+                msg += self._input_buf[6:6 + length + 1]
+
+            # remove the bytes we've just read
+            self._input_buf = self._input_buf[len(msg):]
+            
+            self._processMessage(msg)
+
+    def _createMessage(self, mid, dest=0x1, src=0x50, p1=None, p2=None, data=None):
+        """
+        msg (APTSet or APTReq): the message definition
+        dest (0<int): the destination ID (always 0x50 if directly over USB)
+        p1 (None or 0<=int<=255): param1 (passed as byte2)
+        p2 (None or 0<=int<=255): param2 (passed as byte3)
+        data (None or bytes): data to be send further. Cannot be mixed with p1
+          and p2
+        return (bytes): full message
+        """
+        # create the message
+        if data is None: # short message
+            p1 = p1 or 0
+            p2 = p2 or 0
+            msg = struct.pack("<HBBBB", mid, p1, p2, dest, src)
+        else: # long message
+            msg = struct.pack("<HHBB", mid, len(data), dest | 0x80, src) + data
+
+        return msg
+
+    def _processMessage(self, msg):
+        """
+        process the msg, and put the result in the output buffer
+        msg (str): raw message (including header)
+        """
+        logging.debug("Simulator received: '%s'", ", ".join("%02X" % ord(c) for c in msg))
+
+        mid = struct.unpack("<H", msg[0:2])[0]
+        dest = ord(msg[4]) & 0x7f
+        if dest != self._add:
+            logging.debug("Simulator (add = %X) skipping message for %X",
+                          self._add, dest)
+            return
+        src = ord(msg[5]) & 0x7f
+        
+        res = None
+        try:
+            if mid == HW_REQ_INFO.id:
+                data = struct.pack('<I8sHI48s12xHHH', self._sn, self._model, 2,
+                                   self._fmv, "APT Fake Filter Flipper",
+                                   self._hwv, 0, self._nchans)
+                res = self._createMessage(HW_REQ_INFO.rid, src, self._add, data=data)
+            elif mid == HW_STOP_UPDATEMSGS.id:
+                # good, because we don't support update messages ;-)
+                pass
+            elif mid == HW_START_UPDATEMSGS.id:
+                logging.warning("Simulator doesn't support updates messages")
+                pass
+            elif mid == HW_NO_FLASH_PROGRAMMING.id:
+                # nothing to do
+                pass
+            elif mid == MOT_REQ_STATUSUPDATE.id:
+                # compute status from the state
+                if self._end_motion < time.time(): # stopped
+                    jog_to_sta = {1: STA_FWD_HLS,
+                                  2: STA_RVS_HLS}
+                    status = jog_to_sta[self._state["jog"]]
+                else: # moving
+                    # that's what the hardware reports when jog moves!
+                    status = STA_FWD_MOT
+                status |= STA_CHA_ENB
+                data = struct.pack('<HiiI', 1, 0, 0, status)
+                res = self._createMessage(MOT_REQ_STATUSUPDATE.rid,
+                                          src, self._add, data=data)
+            elif mid == MOT_MOVE_JOG.id:
+                chan, jog = struct.unpack('BB', msg[2:4])
+                if chan != 1:
+                    raise ValueError("Channel = %d" % chan)
+                if not jog in [1, 2]:
+                    raise ValueError("jog = %d" % jog)
+                # simulate a move
+                self._state["jog"] = jog
+                self._end_motion = time.time() + 1 # 1s move
+                # no output
+            else:
+                logging.warning("Message '%X' unknown", mid)
+        except Exception:
+            logging.exception("Simulator failed on message %X", mid)
+
+        # add the response end
+        if res is not None:
+            self._output_buf += res
