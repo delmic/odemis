@@ -467,46 +467,50 @@ class BufferedCanvas(wx.Panel):
     ############ Position conversion ############
 
     @classmethod
-    def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=None):
+    def world_to_buffer_pos(cls, w_pos, w_buff_center, scale, offset=(0, 0)):
         """ Convert a position in world coordinates into buffer coordinates
+
+        The value calculated is relative to the buffer center, which is regarded
+        as the 0,0 origin.
+
+        The offset can be used to move the origin. E.g. an offset of half the
+        buffer size, will translate the origin to the top left corner of buffer.
+
+        ..Note:
+            This method does not check if the given world position actually
+            falls within the buffer.
 
         :param w_pos: (float, float) the coordinates in the world
         :param w_buff_center: the center of the buffer in world coordinates
-        :param scale: how much zoomed is the buffer compared to the world.
-            I.e.: with scale 2, 100px of the world are displayed using 50 buffer
-            px. (The world is zoomed out with a scale > 1)
-        :param offset (int, int): The offset from the top left origin of the
-            buffer to its center. Correction is necessary because the
-            calculations are done in relation to the buffer's center.
+        :param scale: the scale of the world compared to the buffer.
+            I.e.: with scale 2, 100px of world data are displayed using 200px
+            of buffer space. (The world is zoomed in with a scale > 1)
+        :param offset (int, int): the returned value is translated using the
+            offset
         :return: (int or float, int or float)
+
         """
-        b_pos = ((w_pos[0] - w_buff_center[0]) * scale,
-                 (w_pos[1] - w_buff_center[1]) * scale)
-        if offset:
-            return (b_pos[0] + offset[0], b_pos[1] + offset[1])
-        else:
-            return b_pos
+
+        return ((w_pos[0] - w_buff_center[0]) * scale + offset[0],
+                (w_pos[1] - w_buff_center[1]) * scale + offset[1])
 
     @classmethod
     def buffer_to_world_pos(cls, b_pos, w_buffer_center, scale, offset=None):
-        """ Converts a position from buffer coordinates to world coordinates
+        """ Convert a position from buffer coordinates into world coordinates
 
         :param b_pos: (int, int) the buffer coordinates
         :param w_buffer_center: the center of the buffer in world coordinates
-        :param scale: how much zoomed is the buffer compared to the world.
-            I.e.: with scale 2, 100px of the buffer contain 50 world pixels.
-            (The world is zoomed in with a scale > 1
-        :param offset (int, int): The offset from the top left origin of the
-            buffer to its center. Correction is necessary because the
-            calculations are done in relation to the buffer's center.
+        :param scale: the scale of the world compared to the buffer.
+            I.e.: with scale 2, 100px of world data are displayed using 200px
+            of buffer space. (The world is zoomed in with a scale > 1)
+        :param offset (int, int): the returned value is translated using the
+            offset
         :return: (float, float)
 
         """
-        if offset:
-            b_pos = (b_pos[0] - offset[0], b_pos[1] - offset[1])
 
-        return (w_buffer_center[0] + (b_pos[0] / scale),
-                w_buffer_center[1] + (b_pos[1] / scale))
+        return (w_buffer_center[0] + (b_pos[0] - offset[0]) / scale,
+                w_buffer_center[1] + (b_pos[1] - offset[1]) / scale)
 
     # View <-> Buffer
     @classmethod
@@ -710,7 +714,7 @@ class BitmapCanvas(BufferedCanvas):
                 im,
                 im.metadata['dc_center'],
                 r,
-                scale=im.metadata['dc_scale'],
+                im_scale=im.metadata['dc_scale'],
                 keepalpha=im.metadata['dc_keepalpha']
             )
 
@@ -724,44 +728,82 @@ class BitmapCanvas(BufferedCanvas):
                 im,
                 im.metadata['dc_center'],
                 self.merge_ratio,
-                scale=im.metadata['dc_scale'],
+                im_scale=im.metadata['dc_scale'],
                 keepalpha=im.metadata['dc_keepalpha']
             )
 
     # @profile
-    def _draw_image(self, ctx, im, center,
-                    opacity=1.0, scale=1.0, keepalpha=False):
-        """ Draws one image with the given scale and opacity on the dc_buffer.
+    def _draw_image(self, ctx, im_data, w_im_center,
+                    opacity=1.0, im_scale=1.0, keepalpha=False):
+        """ Draw the given image to the Cairo context
 
-        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+        The buffer is considered to have it's 0,0 origin at the top left
 
-        :param dc_buffer: (wx.DC) Device context to draw on
-        :param im: (wx.Image) Image to draw
-        :param center: (2-tuple float)
+        :param ctx: (cairo.Context) Cario context to draw on
+        :param im_data: (wx.Image) Image to draw
+        :param w_im_center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
-        :param scale: (float)
+        :param im_scale: (float)
         :param keepalpha: (boolean) if True, will use a slow method to apply
                opacity that keeps the alpha channel information.
         """
 
+        # Fully transparent image does not need to be drawn
         if opacity <= 0.0:
+            logging.debug("Skipping draw: image fully transparent")
             return
 
-        b_img_center = self.world_to_buffer(center)
-        b_origin_pos = tuple(d // 2 for d in self._bmp_buffer_size)
+        # Determine the rectangle the image would occupy in the buffer
+        b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, w_im_center)
+        # Round to integer values, so we can do 'clean' intersection
+        # b_im_rect = tuple(int(b) for b in b_im_rect)
+        logging.debug("Image on buffer (%s, %s, %s, %s)", *b_im_rect)
 
-        # imgsurface = wxcairo.ImageSurfaceFromBitmap(wx.BitmapFromImage(im))
+        # To small to see, so no need to draw
+        if b_im_rect[2] < 1 or b_im_rect[3] < 1:
+            logging.debug("Skipping draw: too small")
+            return
 
-        height, width, _ = im.shape
+        # Get the intersection with the actual buffer
+        buffer_rect = (0, 0) + self._bmp_buffer_size
+        intersection = wx.IntersectRect(buffer_rect, b_im_rect)
+
+        # No intersection means nothing to draw
+        if not intersection:
+            logging.debug("Skipping draw: no intersection with buffer")
+            return
+
+        logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
+
+        # # Make clipping a bit smarter: if very little data is trimmed, it's
+        # # better to scale the entire image than to create a slightly smaller one
+        # # first.
+        # if b_im_rect[2] > intersection[2] or b_im_rect[3] > intersection[3]:
+        #     logging.debug("Clipping image data...")
+        #     b_im_x, b_im_y = b_im_rect[:2]
+        #     clip_x = max(intersection[0] - b_im_x, 0)
+        #     clip_y = max(intersection[1] - b_im_y, 0)
+        #     clip_w, clip_h = intersection[-2:]
+        #     logging.debug("New rectangle: (%s, %s, %s, %s)",
+        #                   clip_x, clip_y, clip_w, clip_h)
+        #     im_data = im_data[clip_x:(clip_x + clip_w), clip_x:(clip_y + clip_h)].copy()
+        #     print self._calc_buffer_rect_img_data(intersection, im_data, im_scale, w_im_center)
+
+        b_img_center = self.world_to_buffer(w_im_center)
+        b_w, b_h = self._bmp_buffer_size
+        b_origin_pos = (b_w // 2, b_h // 2)
+
         # format = cairo.FORMAT_ARGB32
-        format = cairo.FORMAT_RGB24
+        format = cairo.FORMAT_ARGB32
+        height, width, _ = im_data.shape
+        logging.debug("Image data shape is %s", im_data.shape)
 
         # Note: Stride calculation is done automatically when no stride
         # parameter is provided.
         stride = cairo.ImageSurface.format_stride_for_width(format, width)
         # In Cairo a surface is a target that it can render to. Here we're going
         # to use it as the source for a pattern
-        imgsurface = cairo.ImageSurface.create_for_data(im, format,
+        imgsurface = cairo.ImageSurface.create_for_data(im_data, format,
                                                         width, height, stride)
         # In Cairo a pattern is the 'paint' that it uses to draw
         surfpat = cairo.SurfacePattern(imgsurface)
@@ -772,15 +814,16 @@ class BitmapCanvas(BufferedCanvas):
 
         # Move the top left origin to the center of the surface, so it will
         # be positioned by its center
-        imgsurface.set_device_offset(imgsurface.get_width() // 2,
-                                     imgsurface.get_height() // 2)
+        # imgsurface.set_device_offset(imgsurface.get_width() // 2,
+        #                              imgsurface.get_height() // 2)
 
         # Translate to the center of the buffer, our starting position
-        ctx.translate(b_origin_pos[0], b_origin_pos[1])
+        ctx.translate(*b_im_rect[:2])
         # Translate to where the center of the image should go, relative to
         # the center of the buffer
-        ctx.translate(b_img_center[0], b_img_center[1])
-        ctx.scale(scale, scale)
+        # ctx.translate(b_img_center[0], b_img_center[1])
+        total_scale = im_scale * self.scale
+        ctx.scale(total_scale, total_scale)
         # We probably cannot use the following method, because we need to
         # set the filter used for scaling
         # ctx.set_source_surface(imgsurface)
@@ -813,7 +856,7 @@ class BitmapCanvas(BufferedCanvas):
         """
 
         # The buffer area the image would occupy (top, left, width, height)
-        buff_rect = self._get_image_buffer_rect(dc_buffer, im, scale, center)
+        buff_rect = self._calc_img_buffer_rect(im, scale, center)
         # Combine the zoom and image scales.
         total_scale = scale * self.scale
 
@@ -901,30 +944,53 @@ class BitmapCanvas(BufferedCanvas):
 
         return (ret, tl)
 
-    def _get_image_buffer_rect(self, dc_buffer, im, scale, center):
-        """ Computes the rectangle containing the image in buffer coordinates.
+    def _calc_img_buffer_rect(self, im_data, im_scale, w_im_center):
+        """ Computes the rectangle containing the image in buffer coordinates
 
-        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
+        The (top, left) value are relative to the 0,0 top left of the buffer.
 
-        :return: (float, float, float, float) top-left and size
+        :return: (float, float, float, float) top, left, widht, height
         """
+
         # There are two scales:
         # * the scale of the image (dependent on the size of what the image
         #   represent)
         # * the scale of the buffer (dependent on how much the user zoomed in)
 
-        size = im.GetSize()
-        actual_size = size[0] * scale, size[1] * scale
+        # Scale the image
+        scaled_im_size = tuple(d * im_scale for d in im_data.shape[0:2])
 
-        tl_unscaled = (center[0] - (actual_size[0] / 2),
-                       center[1] - (actual_size[1] / 2))
-        tl = self.world_to_buffer(tl_unscaled)
+        # Calculate the top left
+        w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
+                     w_im_center[1] - (scaled_im_size[1] / 2))
 
-        # scale according to zoom
-        final_size = (actual_size[0] * self.scale,
-                      actual_size[1] * self.scale)
+        # Translate to buffer coordinates (remember, buffer is world + scale)
+        b_topleft = self.world_to_buffer(w_topleft, self.get_half_buffer_size())
 
-        return tl + final_size
+        # Adjust the size to the buffer scale (on top of the earlier image
+        # scale)
+        final_size = (scaled_im_size[0] * self.scale,
+                      scaled_im_size[1] * self.scale)
+
+        return b_topleft + final_size
+
+    def _calc_buffer_rect_img_data(self, b_rect, im_data, im_scale, w_im_center):
+        """
+        """
+
+        b_topleft = b_rect[:2]
+        b_w, b_h = b_rect[-2:]
+
+        w_topleft = self.buffer_to_world(b_topleft, self.get_half_buffer_size())
+
+        scaled_im_size = (2 * (w_im_center[0] - w_topleft[0]),
+                          2 * (w_im_center[1] - w_topleft[1]))
+
+        im_size = tuple(int(d / im_scale) for d in scaled_im_size)
+
+        print b_w, b_h, self.scale
+        print (int(b_w / self.scale),
+               int(b_h / self.scale))
 
 
     @staticmethod
@@ -941,7 +1007,7 @@ class BitmapCanvas(BufferedCanvas):
 
     # Position conversion
 
-    def world_to_buffer(self, pos, offset=None): #pylint: disable=W0221
+    def world_to_buffer(self, pos, offset=(0, 0)): #pylint: disable=W0221
         return super(BitmapCanvas, self).world_to_buffer_pos(
             pos,
             self.w_buffer_center,
@@ -949,7 +1015,7 @@ class BitmapCanvas(BufferedCanvas):
             offset
         )
 
-    def buffer_to_world(self, pos, offset=None): #pylint: disable=W0221
+    def buffer_to_world(self, pos, offset=(0, 0)): #pylint: disable=W0221
         return super(BitmapCanvas, self).buffer_to_world_pos(
             pos,
             self.w_buffer_center,

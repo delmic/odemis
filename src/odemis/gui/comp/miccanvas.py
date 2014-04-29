@@ -153,7 +153,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for
         # details
-        assert(self.microscope_view is None)
+        assert(self.microscope_view is None)  #pylint: disable=C0325
 
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
@@ -735,10 +735,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # Hook to update the FPS value
     def draw(self):
-#        if hasattr(self, "_latest"):
-#            latest = self._latest
-#        else:
-#            latest = 0
+        # if hasattr(self, "_latest"):
+        #     latest = self._latest
+        # else:
+        #     latest = 0
 
         t_start = time.time()
         super(DblMicroscopeCanvas, self).draw()
