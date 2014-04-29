@@ -30,6 +30,8 @@ import math
 import logging
 from Pyro4.core import isasync
 from odemis import model
+from scipy import ndimage
+from odemis.dataio import hdf5
 from . import autofocus
 
 _acq_lock = threading.Lock()
@@ -137,17 +139,24 @@ def AutoSpotFocus(ccd, escan, focus):
     focus (model.CombinedActuator): The optical focus
     returns (float):    Focus position #m
     """
-    # TODO adjust binning and exposure time
+    # TODO adjust binning 
     ccd.binning.value = (1, 1)
-    ccd.exposureTime.value = 850e-03
+    ccd.exposureTime.value = 650e-03
 
     # Set to spot mode
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
 
+    # Estimate noise and adjust exposure time based on "Rose criterion"
+    image = ccd.data.get()
+    snr = (ndimage.mean(image) / ndimage.standard_deviation(image))
+    while (snr < 5 and ccd.exposureTime.value < 1500e-03):
+        ccd.exposureTime.value = ccd.exposureTime.value + 150e-03
+        image = ccd.data.get()
+        snr = (ndimage.mean(image) / ndimage.standard_deviation(image))
+
     # Limitate the ccd FoV to just contain the spot, in order to save some time
     # on AutoFocus process
-    image = ccd.data.get()
     center_pxs = ((image.shape[0] / 2),
                  (image.shape[1] / 2))
     spot_pxs = FindSpot(image)
