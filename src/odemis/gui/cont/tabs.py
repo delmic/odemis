@@ -1677,6 +1677,11 @@ class MirrorAlignTab(Tab):
         else:
             self._sem_stream = None
 
+        # Save the current filter
+        if main_data.light_filter:
+            self._prev_filter = main_data.light_filter.position.value["band"]
+            self._move_filter_f = model.InstantaneousFuture() # "fake" move
+
         self._settings_controller = settings.SparcAlignSettingsController(
                                         self.main_frame,
                                         self.tab_data_model,
@@ -1748,15 +1753,37 @@ class MirrorAlignTab(Tab):
             self._sem_stream.is_active.value = show
         
         # If there is an actuator, disable the lens
+        main_data = self.tab_data_model.main
         if show:
-            if self.tab_data_model.main.lens_switch:
+            if main_data.lens_switch:
                 # convention is: 0 rad == off (no lens)
-                self.tab_data_model.main.lens_switch.moveAbs({"rx": 0})
-            if self.tab_data_model.main.ar_spec_sel:
+                main_data.lens_switch.moveAbs({"rx": 0})
+            if main_data.ar_spec_sel:
                 # convention is: 0 rad == off (no mirror) == AR
-                self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": 0})
-            # don't put it back when hiding, to avoid unnessary moves
-        # TODO: change filter too (to an empty position "pass through"?
+                main_data.ar_spec_sel.moveAbs({"rx": 0})
+            
+            # pick a filter which is pass-through (=empty)
+            if main_data.light_filter:
+                fltr = main_data.light_filter
+                # find the right filter
+                for p, d in fltr.axes["band"].choices.items():
+                    if d == "pass-through":
+                        if self._move_filter_f.done():
+                            # Don't save if it's not yet in the previous value
+                            # (can happen when quickly switching between tabs)
+                            self._prev_filter = fltr.position.value["band"]
+                        fltr.moveAbs({"band": p})
+                        break
+                else:
+                    logging.info("Failed to find pass-through filter")
+        else:
+            # don't put it back lenses when hiding, to avoid unnessary moves
+            if main_data.light_filter:
+                # If the user has just started to change the filter it won't be
+                # recorded... not sure how to avoid it easily, so for now we'll
+                # accept this little drawback.
+                f = main_data.light_filter.moveAbs({"band": self._prev_filter})
+                self._move_filter_f = f
 
     def terminate(self):
         if self._ccd_stream:
