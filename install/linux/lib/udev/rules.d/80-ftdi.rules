@@ -16,3 +16,9 @@
 # => add a symlink ttyFTDIxx with the same number as the ttyUSBxx file
 SUBSYSTEMS=="usb", ATTRS{idProduct}=="6001", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", SYMLINK="ttyFTDI%n", GROUP="odemis"
 
+# The Thorlabs APT devices have their own product ID.
+# For these devices, no need to create special links, as they are detected via 
+# serial numbers. However, we just need to ensure they are accessible to the 
+# odemis group.
+SUBSYSTEMS=="usb", ATTRS{idProduct}=="faf0", ATTRS{idVendor}=="0403", KERNEL=="ttyUSB[0-9]*", GROUP="odemis"
+
