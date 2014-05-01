@@ -72,6 +72,23 @@ physical:
 
     Attributes related to the physical coordinate sytem have the prefix `p_`
 
+Scales
+~~~~~~
+
+While rendering, the canvas has to take into account two different scales:
+
+Image scale:
+    The image scale is the ratio between 'meters per pixel' and 'meters per
+    world unit' (mpp / mpwu), which expresses the number of 'world units' per
+    'pixel' of image data (wupp). The higher this value, the larger the picture
+    will seem.
+
+Canvas scale:
+    The canvas scale is the ratio between 'meters per world unit' and 'meters
+    per pixel' (mpwu / mpp), which expresses the number of 'pixels' per 'world
+    unit' to use to display data (ppwu). The higher the number, the more pixel
+    that are used to display the data.
+
 
 BufferedCanvas
 ~~~~~~~~~~~~~~
@@ -82,7 +99,7 @@ data is displayed on the screen.
 
 The canvas starts off at the origin of the world coordinate system with the
 buffer's center aligned with this origin. If the view is moved, the center of
-this buffer is realigned with a different world coordinate. The current world
+this buffer is realigned with this new world coordinate. The current world
 position of the center of the buffer is stored in the `w_buffer_center`
 attribute.
 
@@ -740,7 +757,7 @@ class BitmapCanvas(BufferedCanvas):
         The buffer is considered to have it's 0,0 origin at the top left
 
         :param ctx: (cairo.Context) Cario context to draw on
-        :param im_data: (wx.Image) Image to draw
+        :param im_data: (DataArray) Image to draw
         :param w_im_center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
         :param im_scale: (float)
@@ -755,9 +772,7 @@ class BitmapCanvas(BufferedCanvas):
 
         # Determine the rectangle the image would occupy in the buffer
         b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, w_im_center)
-        # Round to integer values, so we can do 'clean' intersection
-        # b_im_rect = tuple(int(b) for b in b_im_rect)
-        logging.debug("Image on buffer (%s, %s, %s, %s)", *b_im_rect)
+        logging.debug("Image on buffer %s", b_im_rect)
 
         # To small to see, so no need to draw
         if b_im_rect[2] < 1 or b_im_rect[3] < 1:
@@ -775,35 +790,41 @@ class BitmapCanvas(BufferedCanvas):
 
         logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
 
-        # # Make clipping a bit smarter: if very little data is trimmed, it's
-        # # better to scale the entire image than to create a slightly smaller one
-        # # first.
-        # if b_im_rect[2] > intersection[2] or b_im_rect[3] > intersection[3]:
-        #     logging.debug("Clipping image data...")
-        #     b_im_x, b_im_y = b_im_rect[:2]
-        #     clip_x = max(intersection[0] - b_im_x, 0)
-        #     clip_y = max(intersection[1] - b_im_y, 0)
-        #     clip_w, clip_h = intersection[-2:]
-        #     logging.debug("New rectangle: (%s, %s, %s, %s)",
-        #                   clip_x, clip_y, clip_w, clip_h)
-        #     im_data = im_data[clip_x:(clip_x + clip_w), clip_x:(clip_y + clip_h)].copy()
-        #     print self._calc_buffer_rect_img_data(intersection, im_data, im_scale, w_im_center)
+        # Combine the image scale and the buffer scale
+        total_scale = im_scale * self.scale
+        logging.error("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
-        b_img_center = self.world_to_buffer(w_im_center)
-        b_w, b_h = self._bmp_buffer_size
-        b_origin_pos = (b_w // 2, b_h // 2)
+        if total_scale == 1.0:
+            logging.debug("No scaling required")
+        elif total_scale < 1.0:
+            logging.debug("Down scaling required")
+        elif total_scale > 1.0:
+            logging.debug("Up scaling required")
 
-        # format = cairo.FORMAT_ARGB32
-        format = cairo.FORMAT_ARGB32
+            # Make clipping a bit smarter: if very little data is trimmed, it's
+            # better to scale the entire image than to create a slightly smaller one
+            # first.
+            if (b_im_rect[2] > intersection[2] * 1.1 or
+                b_im_rect[3] > intersection[3] * 1.1):
+
+                #im_data = im_data[clip_x:(clip_x + clip_w), clip_x:(clip_y + clip_h)].copy()
+                im_data = self._calc_buffer_rect_img_data(intersection, b_im_rect,
+                                                im_data, total_scale)
+
+
+        # Render the image data to the context
+
+        # im_format = cairo.FORMAT_ARGB32
+        im_format = cairo.FORMAT_ARGB32
         height, width, _ = im_data.shape
         logging.debug("Image data shape is %s", im_data.shape)
 
         # Note: Stride calculation is done automatically when no stride
         # parameter is provided.
-        stride = cairo.ImageSurface.format_stride_for_width(format, width)
+        stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
         # In Cairo a surface is a target that it can render to. Here we're going
         # to use it as the source for a pattern
-        imgsurface = cairo.ImageSurface.create_for_data(im_data, format,
+        imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format,
                                                         width, height, stride)
         # In Cairo a pattern is the 'paint' that it uses to draw
         surfpat = cairo.SurfacePattern(imgsurface)
@@ -812,20 +833,12 @@ class BitmapCanvas(BufferedCanvas):
 
         # The Context matrix, translates from user space to device space
 
-        # Move the top left origin to the center of the surface, so it will
-        # be positioned by its center
-        # imgsurface.set_device_offset(imgsurface.get_width() // 2,
-        #                              imgsurface.get_height() // 2)
-
-        # Translate to the center of the buffer, our starting position
+        # Translate to the top left position of the image data
         ctx.translate(*b_im_rect[:2])
-        # Translate to where the center of the image should go, relative to
-        # the center of the buffer
-        # ctx.translate(b_img_center[0], b_img_center[1])
-        total_scale = im_scale * self.scale
+        # Apply total scale
         ctx.scale(total_scale, total_scale)
         # We probably cannot use the following method, because we need to
-        # set the filter used for scaling
+        # set the filter used for scaling. Using set_source instead
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
 
@@ -945,11 +958,11 @@ class BitmapCanvas(BufferedCanvas):
         return (ret, tl)
 
     def _calc_img_buffer_rect(self, im_data, im_scale, w_im_center):
-        """ Computes the rectangle containing the image in buffer coordinates
+        """ Compute the rectangle containing the image in buffer coordinates
 
         The (top, left) value are relative to the 0,0 top left of the buffer.
 
-        :return: (float, float, float, float) top, left, widht, height
+        :return: (float, float, float, float) top, left, width, height
         """
 
         # There are two scales:
@@ -958,7 +971,8 @@ class BitmapCanvas(BufferedCanvas):
         # * the scale of the buffer (dependent on how much the user zoomed in)
 
         # Scale the image
-        scaled_im_size = tuple(d * im_scale for d in im_data.shape[0:2])
+        im_h, im_w = im_data.shape[:2]
+        scaled_im_size = (im_w * im_scale, im_h * im_scale)
 
         # Calculate the top left
         w_topleft = (w_im_center[0] - (scaled_im_size[0] / 2),
@@ -966,7 +980,6 @@ class BitmapCanvas(BufferedCanvas):
 
         # Translate to buffer coordinates (remember, buffer is world + scale)
         b_topleft = self.world_to_buffer(w_topleft, self.get_half_buffer_size())
-
         # Adjust the size to the buffer scale (on top of the earlier image
         # scale)
         final_size = (scaled_im_size[0] * self.scale,
@@ -974,23 +987,70 @@ class BitmapCanvas(BufferedCanvas):
 
         return b_topleft + final_size
 
-    def _calc_buffer_rect_img_data(self, b_rect, im_data, im_scale, w_im_center):
+    def _calc_buffer_rect_img_data(self, b_intersect, b_im_rect, im_data, tot_scale):
+        """ Calculate the image rectangle that corresponds to the buffer rectangle
         """
-        """
 
-        b_topleft = b_rect[:2]
-        b_w, b_h = b_rect[-2:]
+        im_h, im_w = im_data.shape[:2]
 
-        w_topleft = self.buffer_to_world(b_topleft, self.get_half_buffer_size())
+        # No need to get sub images from small image data
+        # if im_h <= 4 or im_w <= 4:
+        #     logging.debug("Image too small to intersect...")
+        #     return im_data
 
-        scaled_im_size = (2 * (w_im_center[0] - w_topleft[0]),
-                          2 * (w_im_center[1] - w_topleft[1]))
+        # where is this intersection in the original image?
+        unsc_rect = ((b_intersect[0] - b_im_rect[0]) / tot_scale,
+                     (b_intersect[1] - b_im_rect[1]) / tot_scale,
+                      b_intersect[2] / tot_scale,
+                      b_intersect[3] / tot_scale)
 
-        im_size = tuple(int(d / im_scale) for d in scaled_im_size)
+        # Note that width and length must be "double rounded" to account
+        # for the round down of the origin and round up of the bottom left
+        unsc_rnd_rect = [
+                int(unsc_rect[0]), # rounding down
+                int(unsc_rect[1]),
+                math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
+                math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
+        ]
 
-        print b_w, b_h, self.scale
-        print (int(b_w / self.scale),
-               int(b_h / self.scale))
+        # Make sure that the rectangle fits inside the image
+        if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > im_w or
+            unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
+            # sometimes floating errors + rounding leads to one pixel too
+            # much => just crop. pylint: disable=C0325
+            assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
+            assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
+            unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]
+            unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]
+
+        # b_topleft = b_intersect[:2]
+        # b_w, b_h = b_intersect[-2:]
+
+        # w_topleft = self.buffer_to_world(b_topleft, self.get_half_buffer_size())
+        # w_topleft = tuple(int(int(d) / im_scale) for d in w_topleft)
+
+        # scaled_im_size = (b_w / self.scale, b_h / self.scale)
+
+        # im_size = tuple(int(d / im_scale) for d in scaled_im_size)
+
+        logging.error("My guess: %s", unsc_rnd_rect)
+
+        sub_im_x, sub_im_y = unsc_rnd_rect[:2]
+        sub_im_w, sub_im_h = unsc_rnd_rect[-2:]
+        sub_im_w = max(sub_im_w, 2)
+        sub_im_h = max(sub_im_h, 2)
+
+        print "%s:%s, %s:%s" % (sub_im_y, sub_im_y + sub_im_h, sub_im_x, sub_im_x + sub_im_w)
+        im_data = im_data[sub_im_y:sub_im_y + sub_im_h, sub_im_x:sub_im_x + sub_im_w].copy()
+        print im_data
+        return im_data
+
+        # unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
+        #                  (goal_rect[1] - buff_rect[1]) / total_scale,
+        #                   goal_rect[2] / total_scale,
+        #                   goal_rect[3] / total_scale)
+
+        # print unsc_rect
 
 
     @staticmethod

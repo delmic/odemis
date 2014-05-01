@@ -523,7 +523,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def on_size(self, event):
         new_size = event.Size
 
-        # Update the mpp, so that the same width is displayed
+        # Update the mpp, so that the same data is displayed (Meaning that)
         if self.microscope_view:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
@@ -534,8 +534,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     @microscope_view_check
     def Zoom(self, inc, block_on_zero=False):
-        """
-        Zoom by the given factor
+        """ Zoom by the given factor
+
         inc (float): scale the current view by 2^inc
         block_on_zero (boolean): if True, and the zoom goes from software
           downscaling to software upscaling, it will stop at no software scaling
