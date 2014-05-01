@@ -3,6 +3,7 @@ import Image
 import base64
 import urllib2
 import os
+import time
 phenom = Client("http://localhost:8888?om", location="http://localhost:8888", username="SummitTAD", password="SummitTADSummitTAD")
 # password not need when accessing from localhost?
 # In case you don't want to download the whole wsdl first:
@@ -10,9 +11,36 @@ phenom = Client("http://localhost:8888?om", location="http://localhost:8888", us
 # phenom = Client("file://" + urllib2.quote(wsdlp), location="http://localhost:8888")
 status = phenom.service.GetDoorStatus()
 print status
+range = phenom.service.GetSEMHFWRange()
+print range
+
 imagingDevice = phenom.factory.create('ns0:imagingDevice')
+scanParams = phenom.factory.create('ns0:scanParams')
+detectorMode = phenom.factory.create('ns0:detector')
+navAlgorithm = phenom.factory.create('ns0:navigationAlgorithm')
 phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)  # or NAVCAMIMDEV
-result = phenom.service.SEMGetLiveImageCopy(1)
+# scanParams = ((50, 50), 1)
+detectorMode = 'SEM-DETECTOR-MODE-ALL'
+print navAlgorithm
+nalg = 'NAVIGATION-RAW'
+scanParams.detector = detectorMode
+scanParams.resolution.width = 1
+scanParams.resolution.height = 1
+scanParams.nrOfFrames = 1
+scanParams.HDR = False
+scanParams.center.x = 0
+scanParams.center.y = 0
+scanParams.scale = 1
+
+resp = phenom.service.MoveTo((-0.008, -0.008), nalg)
+# print resp
+print phenom.service.GetStageModeAndPosition()
+# print scanParams
+start = time.time()
+result = phenom.service.SEMAcquireImageCopy(scanParams)
+end = time.time() - start
+# print result
+print end
 # result = phenom.service.NavCamGetLiveImageCopy(1)
 size = result.image.descriptor.width, result.image.descriptor.height
 image = Image.frombuffer('L', size, base64.b64decode(result.image.buffer[0]), 'raw', "L", 0, 1)
