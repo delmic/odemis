@@ -43,31 +43,29 @@ class TescanSEM(model.HwComponent):
     metadata. 
     '''
 
-    def __init__(self, name, role, children, daemon=None, **kwargs):
+    def __init__(self, name, role, children, host, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
-            Known children are "scanner" and "detector"
-            They will be provided back in the .children roattribute
+            Known children are "scanner", "detector", "stage", "focus", "camera"
+            and "pressure". They will be provided back in the .children roattribute
+        host (string): ip address of the SEM server 
         Raise an exception if the device cannot be opened
         '''
-        # TODO update the doc ^
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         self._device = sem.Sem()
-        # you can change the 'localhost' string and provide another SEM address
-        # FIXME: should be a parameter "host" (or a better name?)
-        result = self._device.Connect('192.168.92.91', 8300)
+        result = self._device.Connect(host, 8300)
 
         if result < 0:
-            print("Error: unable to connect")
+            logging.warning("Unable to connect to SEM server.")
             return
 
         # set the Probe Current - this is equivalent to BI in SEM Generation 3
         self._device.SetPCIndex(10)
 
-        # important: stop the scanning before we start scanning or before automatic procedures,
-        # even before we configure the detectors
+        # important: stop the scanning before we start scanning or before automatic
+        # procedures, even before we configure the detectors
         self._device.ScStopScan()
 
         self._metadata = {model.MD_HW_NAME: "TescanSEM"}
@@ -131,8 +129,6 @@ class TescanSEM(model.HwComponent):
         but the component shouldn't be used afterwards.
         """
         # finish
-        # FIXME: does it fail if it's called multiple times?
-        # If so, put _device to None and check to do it only once
         self._device.Disconnect()
 
 class Scanner(model.Emitter):
@@ -151,23 +147,26 @@ class Scanner(model.Emitter):
 
         self._shape = (2048, 2048)
 
-        # Distance between borders if magnification = 1.
-        # FIXME: add a comment how we got this value
-        self._hfw_nomag = 0.2752  # m
+        # This is the field of view when in Tescan Software magnification = 100
+        # and working distance = 0,27 m (maximum WD of Mira TC). When working
+        # distance is changed (for example when we focus) magnification mention
+        # in odemis and Tescan software are expected to be different.
+        self._hfw_nomag = 0.195565  # m
 
-        # Allow the user to modify the value, to copy it from the SEM software
-        mag = 1e3  # pretty random value which could be real
-        # FIXME: why is it OK to put a random value? Can we put the current value?
+        # Get current field of view and compute magnification
+        fov = self.parent._device.GetViewField() * 1e-03
+        self._mag = self._hfw_nomag / fov
+
         # Field of view in Tescan is set in mm
-        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
+        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / self._mag)
         # FIXME: isn't there a way to find out the range of the magnification?
-        self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
-        self.magnification.subscribe(self._onMagnification)
+        self.magnification = model.FloatContinuous(self._mag, range=[1, 1e9], unit="",
+                                                   setter=self._setMagnification)
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[1] * mag))
+        pxs = (self._hfw_nomag / (self._shape[0] * self._mag),
+               self._hfw_nomag / (self._shape[1] * self._mag))
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
@@ -217,7 +216,7 @@ class Scanner(model.Emitter):
         self._power = max(power_choices)  # Just in case more choises are added
         self.parent._device.HVBeamOn() # FIXME: better start with power off, even better, don't change state
         self.power = model.IntEnumerated(self._power, power_choices, unit="",
-                                  setter=self.setPower)
+                                  setter=self._setPower)
 
         # Blanker is automatically enabled when no scanning takes place
         # TODO it may cause time overhead, check on testing => If so put some
@@ -229,17 +228,27 @@ class Scanner(model.Emitter):
         pc_choices = set(self._list_currents)
         self._probeCurrent = min(pc_choices) # FIXME: can we use the current one?
         self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
-                                  setter=self.setPC)
+                                  setter=self._setPC)
 
 
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def _onMagnification(self, mag):
+    def _setMagnification(self, value):
         # HFW to mm to comply with Tescan API
-        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
+        fov_mag = self._hfw_nomag / value
+        self.parent._device.SetViewField(fov_mag * 1e03)
+        # Check if the fov calculated based on magnification is out of bounds. If
+        # so reset the magnification with respect to the fov set in the Tescan
+        # side
+        fov_set = self.parent._device.GetViewField() * 1e-03
+        if fov_mag != fov_set:
+            self._mag = self._hfw_nomag / fov_set
+        else:
+            self._mag = value
         self._updatePixelSize()
+        return self._mag
 
     def _onDwellTime(self, dt):
         # TODO interrupt current scanning when dwell time is changed
@@ -251,7 +260,7 @@ class Scanner(model.Emitter):
 
     # FIXME: need some logic on the name of the methods.
     # One possibility: everything internal (= pretty much everything) has this style: _doSomething()
-    def setPower(self, value):
+    def _setPower(self, value):
         powers = self.power.choices
         # TODO: what happens if the power is turned off during acquisition?
         # If the acquisition keeps going on (and return garbage data) => fine
@@ -265,7 +274,7 @@ class Scanner(model.Emitter):
             self.parent._device.HVBeamOn()
         return self._power
 
-    def setPC(self, value):
+    def _setPC(self, value):
         currents = self.probeCurrent.choices
 
         self._probeCurrent = util.find_closest(value, currents)

@@ -42,9 +42,9 @@ Spectra: {
 "SEM ExtXY": {
     class: tescan.tescan_sem.TescanSEM,
     role: none,
-    init: {},
+    init: {host: "192.168.92.91"},
     # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY",
+    children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
                stage: "OLStage", focus: "Ebeam-focus actuator", camera: "ChamberCam", pressure: "ChamberPressure"}
 }
 
@@ -144,7 +144,6 @@ Spectra: {
     init: {axes: [z]},
     affects: ["Andor SimCam", "EBeam ExtXY"],
     properties: {
-        speed: {z: 0.1} #m/s
     }
 }
 
