@@ -25,19 +25,16 @@ import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.dataio import hdf5
-from odemis.util import img
 from odemis.model import isasync
-import os.path
 import threading
 import time
-from random import randint
 import weakref
-import time
 from odemis.driver.tescan import sem
-import Image
 import re
-
+# FIXME: move tescan python wrapper to a separate project, and package it.
+# Probably best to assume we cannot make it public.
+# In particular, it's really not ok here because it doesn't seem to be GPLv2 or
+# a compatible license.
 
 class TescanSEM(model.HwComponent):
     '''
@@ -53,25 +50,18 @@ class TescanSEM(model.HwComponent):
             They will be provided back in the .children roattribute
         Raise an exception if the device cannot be opened
         '''
+        # TODO update the doc ^
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         self._device = sem.Sem()
-        # you can change the 'localhost' string and provide another SEM addres
+        # you can change the 'localhost' string and provide another SEM address
+        # FIXME: should be a parameter "host" (or a better name?)
         result = self._device.Connect('192.168.92.91', 8300)
 
         if result < 0:
             print("Error: unable to connect")
             return
-
-        # we can read some parameter
-        print('wd: ', self._device.GetWD())
-
-        # tuple is returned if the function has more output arguments
-        print('stage position: ', self._device.StgGetPosition())
-
-        # let us take a look at the detector configuration
-        print(self._device.DtEnumDetectors())
 
         # set the Probe Current - this is equivalent to BI in SEM Generation 3
         self._device.SetPCIndex(10)
@@ -93,7 +83,7 @@ class TescanSEM(model.HwComponent):
 
         # create the detector child
         try:
-            kwargs = children["detector0"]
+            kwargs = children["detector"]
         except (KeyError, TypeError):
             raise KeyError("TescanSEM was not given a 'detector' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
@@ -138,9 +128,11 @@ class TescanSEM(model.HwComponent):
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
-        but the component shouldn't be used afterward.
+        but the component shouldn't be used afterwards.
         """
         # finish
+        # FIXME: does it fail if it's called multiple times?
+        # If so, put _device to None and check to do it only once
         self._device.Disconnect()
 
 class Scanner(model.Emitter):
@@ -159,15 +151,16 @@ class Scanner(model.Emitter):
 
         self._shape = (2048, 2048)
 
-        # next two values are just to determine the pixel size
-        # Distance between borders if magnification = 1. It should be found out
-        # via calibration. We assume that image is square, i.e., VFW = HFW
+        # Distance between borders if magnification = 1.
+        # FIXME: add a comment how we got this value
         self._hfw_nomag = 0.2752  # m
 
         # Allow the user to modify the value, to copy it from the SEM software
         mag = 1e3  # pretty random value which could be real
+        # FIXME: why is it OK to put a random value? Can we put the current value?
         # Field of view in Tescan is set in mm
         self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
+        # FIXME: isn't there a way to find out the range of the magnification?
         self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
         self.magnification.subscribe(self._onMagnification)
 
@@ -206,6 +199,7 @@ class Scanner(model.Emitter):
 
         # (float) in rad => rotation of the image compared to the original axes
         # TODO: for now it's readonly because no rotation is supported
+        # FIXME: how hard is it to support rotation in Tesscan?
         self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
                                               readonly=True)
 
@@ -213,6 +207,7 @@ class Scanner(model.Emitter):
         self.dwellTime.subscribe(self._onDwellTime)
 
         # Range is according to min and max voltages accepted by Tescan API
+        # FIXME: isn't there a way to get the ranges dynamically?
         volt = self.parent._device.HVGetVoltage()
         self.accelVoltage = model.FloatContinuous(volt, (200, 35000), unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
@@ -220,18 +215,19 @@ class Scanner(model.Emitter):
         # 0 turns off the e-beam, 1 turns it on
         power_choices = set([0, 1])
         self._power = max(power_choices)  # Just in case more choises are added
-        self.parent._device.HVBeamOn()
+        self.parent._device.HVBeamOn() # FIXME: better start with power off, even better, don't change state
         self.power = model.IntEnumerated(self._power, power_choices, unit="",
                                   setter=self.setPower)
 
         # Blanker is automatically enabled when no scanning takes place
-        # TODO it may cause time overhead, check on testing
+        # TODO it may cause time overhead, check on testing => If so put some
+        # small timeout (~ a few seconds) before blanking the beam.
         # self.parent._device.ScSetBlanker(0, 2)
 
         # Enumerated float with respect to the PC indexes of Tescan API
-        pc_choices = set(self.GetProbeCurrents())
-        self._list_currents = sorted(pc_choices, reverse=True)
-        self._probeCurrent = min(pc_choices)
+        self._list_currents = self.GetProbeCurrents() # TODO: check it works :-D
+        pc_choices = set(self._list_currents)
+        self._probeCurrent = min(pc_choices) # FIXME: can we use the current one?
         self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
                                   setter=self.setPC)
 
@@ -253,8 +249,14 @@ class Scanner(model.Emitter):
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
 
+    # FIXME: need some logic on the name of the methods.
+    # One possibility: everything internal (= pretty much everything) has this style: _doSomething()
     def setPower(self, value):
         powers = self.power.choices
+        # TODO: what happens if the power is turned off during acquisition?
+        # If the acquisition keeps going on (and return garbage data) => fine
+        # If the acqusition never finishes and block => stop the current acquisition
+        # (or wait until it's over), and then restart it when the power goes on)
 
         self._power = util.find_closest(value, powers)
         if self._power == 0:
@@ -399,8 +401,11 @@ class Detector(model.Detector):
         # see the docs for details
         self.parent._device.SetWaitFlags(0x08 or 0x09)
 
-        # adjust brigtness and contrast, read back the result
+        # adjust brightness and contrast, read back the result
+        # TODO: why doing it only now? It probably needs to be done "once in a
+        # while" or we never need it in 16 bits?
         self.parent._device.DtAutoSignal(0)
+        # FIXME: not print. either logging.debug, or nothing
         print('gain/black: ', self.parent._device.DtGetGainBlack(0))
 
         self.data = SEMDataFlow(self, parent)
@@ -446,7 +451,6 @@ class Detector(model.Detector):
         Acquires the SEM image based on the translation, resolution and
         current drift.
         """
-        metadata = dict(self.parent._metadata)
 
         with self._acquisition_init_lock:
             pxs = self.parent._scanner.pixelSize.value  # m/px
@@ -456,43 +460,51 @@ class Detector(model.Detector):
             res = (self.parent._scanner.resolution.value[0],
                    self.parent._scanner.resolution.value[1])
 
-            phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = self.parent._scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
-
-            center = ((res[0] / 2), (res[1] / 2))
-            l = center[0] + pxs_pos[1] - (res[1] / 2)
-            t = center[1] + pxs_pos[0] - (res[0] / 2)
-            r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
-            b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
-
-            # TODO add ProgressShow() to prevent scanning via the server
-            self.parent._device.ProgressShow("Odemis scanning",
-                            "Odemis scanning in progress, image acquisition is not allowed",
-                            0, 1, 0, 100)
-            self.parent._device.ScScanXY(0, res[0], res[1], l,
-                                    t,
-                                    r,
-                                    b, 1, self.parent._scanner.dwellTime.value * 1e09)
-
-            # fetch the image (blocking operation), string is returned
-            img_str = self.parent._device.FetchImage(0, res[0] * res[1])
-            list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
-            sem_img = numpy.reshape(list_str, (res[0], res[1]))
-
+            # FIXME: Make it just one function of the stage, and maybe if the
+            # position is frequently updated, not even needed?
             # To make sure that we are updated with moves performed via
-            # Tescan sw we get the current position
+            # Tescan so we get the current position
             x, y, z, rot, tilt = self.parent._device.StgGetPosition()
             self.parent._stage.updatePosition(x, y, z)
 
-            # we must stop the scanning even after single scan
-            self.parent._device.ScStopScan()
-            # update fake output metadata
+            metadata = dict(self.parent._metadata)
+            phy_pos = metadata.get(model.MD_POS, (0, 0))
+            trans = self.parent._scanner.pixelToPhy(pxs_pos)
+            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+            # update metadata
+            # TODO: need to use getMetadata() => so we get other
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+
+            center = (res[0] / 2, res[1] / 2)
+            l = center[0] + pxs_pos[1] - (res[1] / 2)
+            t = center[1] + pxs_pos[0] - (res[0] / 2)
+            r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
+            b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
+
+            # Prevent scanning via the standard UI (as it prevents us from
+            # getting the acquisition result), and tell the user why.
+            self.parent._device.ProgressShow("Odemis scanning",
+                        "Odemis scanning in progress, pause Odemis acquisition "
+                        "to access this interface.",
+                        0, 1, 0, 100)
+            self.parent._device.ScScanXY(0, res[0], res[1],
+                                 l, t, r, b, 1,
+                                 self.parent._scanner.dwellTime.value * 1e9)
+
+            # fetch the image (blocking operation), string is returned
+            img_str = self.parent._device.FetchImage(0, res[0] * res[1])
+            # FIXME: We need 16 bits! FetchImage must be fixed if necessary
+            sem_img = numpy.frombuffer(img_str, dtype=numpy.uint8)
+            sem_img.shape = res # FIXME: Why not res[::-1] ? numpy has dimensions inverted
+
+
+            # we must stop the scanning even after single scan
+            self.parent._device.ScStopScan()
+
             return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
@@ -503,11 +515,13 @@ class Detector(model.Detector):
         """
         try:
             while not self._acquisition_must_stop.is_set():
+                # TODO: what are these 3 lines for?
                 dwelltime = self.parent._scanner.dwellTime.value
                 resolution = self.parent._scanner.resolution.value
                 duration = numpy.prod(resolution) * dwelltime
                 callback(self._acquire_image())
-        except:
+                # TODO: no need for garbage collection? Is the memory usage always fine?
+        except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
             logging.debug("Acquisition thread closed")
@@ -556,7 +570,8 @@ class Stage(model.Actuator):
         """
         axes (set of string): names of the axes
         """
-#        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
+        # FIXME: the names of the axes should be fixed (x, y, z), so don't accept
+        # "axes"
         assert len(axes) > 0
         if ranges is None:
             ranges = {}
@@ -565,12 +580,13 @@ class Stage(model.Actuator):
         self._position = {}
         init_speed = {}
         for a in axes:
+            # TODO: doesn't the API provide the range information? If so, use it
             rng = ranges.get(a, [-0.1, 0.1])
             axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
-            # start at the centre
-            self._position[a] = (rng[0] + rng[1]) / 2
             init_speed[a] = 10.0  # we are super fast!
 
+        # TODO: if the axes rot and tilt are easy to access, we could provide
+        # them too (as rz, rx)
         x, y, z, rot, tilt = parent._device.StgGetPosition()
         self.updatePosition(x, y, z)
 
@@ -581,6 +597,8 @@ class Stage(model.Actuator):
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
 
+        # FIXME: if we don't support speed => don't provide it, otherwise, really
+        # change the speed
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
         # First calibrate
@@ -594,21 +612,21 @@ class Stage(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
+    # FIXME: don't have 2 functions with the same name!
+    # => call this one _setPosition ?
     def updatePosition(self, x, y, z):
         """
         update the position from external components
         """
-        self._position["x"] = -x * 1e-03
-        self._position["y"] = -y * 1e-03
-        self._position["z"] = -z * 1e-03
+        self._position["x"] = -x * 1e-3
+        self._position["y"] = -y * 1e-3
+        self._position["z"] = -z * 1e-3
 
     @isasync
     def moveRel(self, shift):
         # TODO add limits to position change
         shift = self._applyInversionRel(shift)
-        time_start = time.time()
         maxtime = 0
-        # result = self.parent._device.Connect('192.168.92.91', 8300)
 
         for axis, change in shift.items():
             if not axis in shift:
@@ -627,16 +645,21 @@ class Stage(model.Actuator):
 #                                     self.speed.value["y"] * 1e03, 0,
 #                                     0, 0)
 
+        # FIXME: move this code to a separate function, and return a Future
+        # cf tlaptfm for example. Also, better to use StgMove, or update
+        # _position, once executing the code.
+
         # Perform move through Tescan API
         # Position from m to mm and inverted
         # print self.parent._device.TcpGetSWVersion()
-        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
-                                    - self._position["y"] * 1e03,
-                                    - self._position["z"] * 1e03,
+        self.parent._device.StgMoveTo(-self._position["x"] * 1e3,
+                                    - self._position["y"] * 1e3,
+                                    - self._position["z"] * 1e3,
                                     0, 0)
-        time_end = time_start + maxtime
-        self._updatePosition()
-        # TODO queue the move and pretend the position is changed only after the given time
+        self._updatePosition() # TODO: possibly, during the move, update the
+        # position regularly (~ 5Hz)
+
+
         return model.InstantaneousFuture()
 
     @isasync
@@ -653,19 +676,19 @@ class Stage(model.Actuator):
             logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
+        # FIXME: move to a future
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        self.parent._device.StgMoveTo(-self._position["x"] * 1e03,
-                            - self._position["y"] * 1e03,
-                            - self._position["z"] * 1e03,
+        self.parent._device.StgMoveTo(-self._position["x"] * 1e3,
+                            - self._position["y"] * 1e3,
+                            - self._position["z"] * 1e3,
                             0, 0)
-        # TODO stop add this move
-        time_end = time_start + maxtime
         self._updatePosition()
         return model.InstantaneousFuture()
 
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
+        # FIXME: STOP for real!
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
         return
 
@@ -686,11 +709,15 @@ class EbeamFocus(model.Actuator):
 
         # Just z axis
         a = axes[0]
-        rng = ranges.get(a, [0, 270 * 1e-03])
+        # TODO: possible to get the range via the API? Otherwise, explain where
+        # does these value come from? Probably the highest point is 0, and lowest
+        # is -270 mm (according to axis
+        rng = ranges.get(a, [0, 270e-3])
         axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
 
         # start at the centre
         self._position[a] = parent._device.GetWD()
+        # FIXME: if we don't support speed => don't provide it
         init_speed[a] = 10.0  # we are super fast!
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
@@ -705,6 +732,8 @@ class EbeamFocus(model.Actuator):
         """
         Update the pixel size using the working distance
         """
+        # FIXME: merge with _scanner._updatePixelSize()? Or explain how come
+        # the two methods don't step on each other toes...
         scanner = self.parent._scanner
         mag = self._position["z"] / scanner._hfw_nomag
         self.parent._metadata[model.MD_LENS_MAG] = mag
@@ -782,6 +811,8 @@ class EbeamFocus(model.Actuator):
 
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
+        # FIXME: if not possible to stop, just put a logging.warning that it will not be
+        # stopped, and empty the futures queue.
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
         return
 
@@ -797,9 +828,11 @@ class ChamberView(model.DigitalCamera):
         Raise an exception if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
-        self.parent._device.CameraEnable(0, 0.05, 5, 0)
+        # FIXME: does enabling the camera has any drawback(eg: light on?), if
+        # so, it should be enabled only when acquiring.
+        self.parent._device.CameraEnable(0, 0.05, 5, 0) # TODO: what are these values?
 
-        self._shape = (2 ** 8,)
+        self._shape = (2 ** 8,) # FIXME: only one point?? Should be the max X, Y + depth
 
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
@@ -816,7 +849,7 @@ class ChamberView(model.DigitalCamera):
         """
         return int: chamber camera status, 0 - off, 1 - on
         """
-        status = self.parent._device.CameraGetStatus(0)
+        status = self.parent._device.CameraGetStatus(0) # TODO: what is 0?
         return status[0]
 
     def start_flow(self, callback):
@@ -845,12 +878,12 @@ class ChamberView(model.DigitalCamera):
         try:
             while not self.acquire_must_stop.is_set():
                 width, height, img_str = self.parent._device.FetchCameraImage(0)
-                list_str = numpy.fromstring(img_str, dtype=numpy.uint8)
-                sem_img = numpy.reshape(list_str, (width, height))
+                sem_img = numpy.frombuffer(img_str, dtype=numpy.uint8)
+                sem_img.shape = (width, height) # FIXME: why not height, width?
                 array = model.DataArray(sem_img)
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
-                if self.acquire_must_stop.wait(5000):
+                if self.acquire_must_stop.wait(5000): # FIXME: why 5000s?!
                     break
 
                 callback(self._transposeDAToUser(array))
@@ -908,23 +941,25 @@ class ChamberPressure(model.Actuator):
     vent the chamber and get the current pressure of it.
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
-        assert len(axes) > 0
+        # TODO: fix the axis name to "pressure"
+
         if ranges is None:
             ranges = {}
 
         axes_def = {}
         self._position = {}
-        init_speed = {}
 
         # Just z axis
         a = axes[0]
         # 1 for evacuated, 0 for vented chamber
+        # FIXME: axis choices is like : {0: 'vented', 1:'pumped'}
         _dict = dict([('vented', 0), ('pumped', 1)])
         axes_def[a] = model.Axis(unit="", range=_dict, speed=[0., 10.])
 
         # VA that retains the current chamber pressure
         pressure = parent._device.VacGetPressure(0)
-        self.chamberPressure = model.FloatContinuous(pressure, (1e-04, 1e+06), unit="Pa")
+        # TODO: is it possible to get the range from
+        self.chamberPressure = model.FloatContinuous(pressure, (1e-4, 1e6), unit="Pa")
 
         # Try to decide if we are currently pumped or vented
         if parent._device.VacGetStatus() == 0 and pressure < 1:
@@ -932,15 +967,11 @@ class ChamberPressure(model.Actuator):
         else:
             self._position[a] = 0
             
-        init_speed[a] = 10.0  # we are super fast!
-
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        # RO, as to modify it the client must use .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="", readonly=True)
-
-        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
     def _updatePosition(self):
         """
@@ -952,6 +983,8 @@ class ChamberPressure(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
+        # FIXME: for enumerated axis, moveRel should report a warning, and call
+        # moveAbs
         shift = self._applyInversionRel(shift)
         time_start = time.time()
         maxtime = 0
@@ -999,6 +1032,7 @@ class ChamberPressure(model.Actuator):
             logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
+        # FIXME: move to separate code and call via future
         # Make sure we update with the initial and final chamber pressure
         self.chamberPressure.value = self.parent._device.VacGetPressure(0)
         if self._position["z"] == 1:
@@ -1018,5 +1052,7 @@ class ChamberPressure(model.Actuator):
 
     def stop(self, axes=None):
         # TODO empty the queue for the given axes
+        # FIXME: can the procedure be stopped? Probably? Maybe just a matter of
+        # requesting the previous pressure?
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
         return
