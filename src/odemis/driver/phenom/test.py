@@ -4,7 +4,9 @@ import base64
 import urllib2
 import os
 import time
-phenom = Client("http://localhost:8888?om", location="http://localhost:8888", username="SummitTAD", password="SummitTADSummitTAD")
+# phenom = Client("http://10.42.0.53:8888?om", location="http://10.42.0.53:8888", username="SummitTAD", password="SummitTADSummitTAD")
+phenom = Client("http://Phenom-MVE0206151080.local:8888?om", location="http://Phenom-MVE0206151080.local:8888", username="Phenom_MVE0206151080", password="MVE0206151080")
+
 # password not need when accessing from localhost?
 # In case you don't want to download the whole wsdl first:
 # wsdlp = os.path.abspath("./WebServiceG3/Phenom.wsdl")
