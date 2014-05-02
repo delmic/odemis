@@ -21,18 +21,17 @@ navAlgorithm = phenom.factory.create('ns0:navigationAlgorithm')
 phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)  # or NAVCAMIMDEV
 # scanParams = ((50, 50), 1)
 detectorMode = 'SEM-DETECTOR-MODE-ALL'
-print navAlgorithm
 nalg = 'NAVIGATION-RAW'
 scanParams.detector = detectorMode
-scanParams.resolution.width = 1
-scanParams.resolution.height = 1
+scanParams.resolution.width = 250
+scanParams.resolution.height = 250
 scanParams.nrOfFrames = 1
 scanParams.HDR = False
 scanParams.center.x = 0
 scanParams.center.y = 0
 scanParams.scale = 1
 
-resp = phenom.service.MoveTo((-0.008, -0.008), nalg)
+# resp = phenom.service.MoveTo((-0.008, -0.008), nalg)
 # print resp
 print phenom.service.GetStageModeAndPosition()
 # print scanParams
