@@ -29,7 +29,7 @@ from odemis.model import isasync
 import threading
 import time
 import weakref
-from odemis.driver.tescan import sem
+from tescan import sem
 import re
 # FIXME: move tescan python wrapper to a separate project, and package it.
 # Probably best to assume we cannot make it public.
@@ -58,8 +58,7 @@ class TescanSEM(model.HwComponent):
         result = self._device.Connect(host, 8300)
 
         if result < 0:
-            logging.warning("Unable to connect to SEM server.")
-            return
+            raise IOError()
 
         # set the Probe Current - this is equivalent to BI in SEM Generation 3
         self._device.SetPCIndex(10)
@@ -155,18 +154,20 @@ class Scanner(model.Emitter):
 
         # Get current field of view and compute magnification
         fov = self.parent._device.GetViewField() * 1e-03
-        self._mag = self._hfw_nomag / fov
+        mag = self._hfw_nomag / fov
 
         # Field of view in Tescan is set in mm
-        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / self._mag)
-        # FIXME: isn't there a way to find out the range of the magnification?
-        self.magnification = model.FloatContinuous(self._mag, range=[1, 1e9], unit="",
-                                                   setter=self._setMagnification)
+        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
+        self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
+
+        # FIXME: isn't there a way to find out the range of the horizontalFOV?
+        self.horizontalFOV = model.FloatContinuous(fov, range=[196e-9, 25586e-6], unit="m",
+                                                   setter=self._setHorizontalFOV)
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
-        pxs = (self._hfw_nomag / (self._shape[0] * self._mag),
-               self._hfw_nomag / (self._shape[1] * self._mag))
+        pxs = (self._hfw_nomag / (self._shape[0] * mag),
+               self._hfw_nomag / (self._shape[1] * mag))
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
@@ -235,20 +236,23 @@ class Scanner(model.Emitter):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def _setMagnification(self, value):
-        # HFW to mm to comply with Tescan API
-        fov_mag = self._hfw_nomag / value
-        self.parent._device.SetViewField(fov_mag * 1e03)
-        # Check if the fov calculated based on magnification is out of bounds. If
-        # so reset the magnification with respect to the fov set in the Tescan
-        # side
-        fov_set = self.parent._device.GetViewField() * 1e-03
-        if fov_mag != fov_set:
-            self._mag = self._hfw_nomag / fov_set
-        else:
-            self._mag = value
+    def _setHorizontalFOV(self, value):
+        # FOV to mm to comply with Tescan API
+        self.parent._device.SetViewField(value * 1e03)
+
+        # Update current magnification
+        self._updateMagnification()
+
+        # TODO Check out of range
+        return value
+
+    def _updateMagnification(self):
+
+        # it's read-only, so we change it only via _value
+        mag = self._hfw_nomag / self.horizontalFOV.value
+        self.magnification._value = mag
+        self.magnification.notify(mag)
         self._updatePixelSize()
-        return self._mag
 
     def _onDwellTime(self, dt):
         # TODO interrupt current scanning when dwell time is changed
@@ -405,7 +409,7 @@ class Detector(model.Detector):
         # select detector and enable channel
         self._channel = channel
         self.parent._device.DtSelect(self._channel, 0)
-        self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
+        self.parent._device.DtEnable(self._channel, 1, 8)  # 16 bits
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
         self.parent._device.SetWaitFlags(0x08 or 0x09)
