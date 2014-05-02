@@ -157,6 +157,8 @@ import wx.lib.wxcairo as wxcairo
 
 from abc import ABCMeta, abstractmethod
 from decorator import decorator
+import numpy
+from odemis.model import DataArray
 from odemis.util.conversion import wxcol_to_frgb
 from profilehooks import profile
 
@@ -349,7 +351,8 @@ class BufferedCanvas(wx.Panel):
                     self._dc_buffer,    # source
                     (0, 0)              # source point
         )
-        self._draw_view_overlays(dc_view)
+        ctx = wxcairo.ContextFromDC(dc_view)
+        self._draw_view_overlays(ctx)
 
     def on_size(self, evt):
         """ Handle size events
@@ -404,6 +407,10 @@ class BufferedCanvas(wx.Panel):
     def get_half_buffer_size(self):
         """ Return half the size of the current buffer """
         return tuple(v // 2 for v in self._bmp_buffer_size)
+
+    def get_half_view_size(self):
+        """ Return half the size of the current view """
+        return (self.ClientSize.x // 2, self.ClientSize.y // 2)
 
     def resize_buffer(self, size):
         """ Resize the bitmap buffer to the given size
@@ -473,13 +480,14 @@ class BufferedCanvas(wx.Panel):
 
     # END Buffer and drawing methods
 
-    def _draw_view_overlays(self, dc):
-        """ Draws all the view overlays on the DC dc (wx.DC)"""
+    def _draw_view_overlays(self, ctx):
+        """ Draws all the view overlays on the ctx Cairo context"""
         # center the coordinates
-        dc.SetDeviceOrigin(self.ClientSize.x // 2, self.ClientSize.y // 2)
+        # dc.SetDeviceOrigin(self.ClientSize.x // 2, self.ClientSize.y // 2)
+        # ctx.translate(self.ClientSize.x // 2, self.ClientSize.y // 2)
         # TODO: Add filtering for *enabled overlays
         for vo in self.view_overlays:
-            vo.Draw(dc)
+            vo.Draw(ctx)
 
     ############ Position conversion ############
 
@@ -651,6 +659,10 @@ class BitmapCanvas(BufferedCanvas):
                 images.append(None)
             else:
                 im, w_pos, scale, keepalpha = args
+
+                if im.shape[-1] != 4:
+                    raise ValueError("Unsupporeted colour depth!")
+
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
                 im.metadata['width'] = im.shape[1]
@@ -792,7 +804,7 @@ class BitmapCanvas(BufferedCanvas):
 
         # Combine the image scale and the buffer scale
         total_scale = im_scale * self.scale
-        logging.error("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
+        logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         if total_scale == 1.0:
             logging.debug("No scaling required")
@@ -814,8 +826,8 @@ class BitmapCanvas(BufferedCanvas):
 
         # Render the image data to the context
 
-        # im_format = cairo.FORMAT_ARGB32
         im_format = cairo.FORMAT_ARGB32
+        # im_format = cairo.FORMAT_RGB24
         height, width, _ = im_data.shape
         logging.debug("Image data shape is %s", im_data.shape)
 
@@ -1395,7 +1407,8 @@ class DraggableCanvas(BitmapCanvas):
         )
 
         # Remember that the device context of the view port is passed!
-        self._draw_view_overlays(dc_view)
+        ctx = wxcairo.ContextFromDC(dc_view)
+        self._draw_view_overlays(ctx)
 
     # END Event processing
 
@@ -1831,11 +1844,11 @@ class PlotCanvas(BufferedCanvas):
             ctx = wxcairo.ContextFromDC(dc)
             self._plot_data(ctx)
 
-    def _draw_view_overlays(self, dc):
-        """ Draws all the view overlays on the DC dc (wx.DC)"""
+    def _draw_view_overlays(self, ctx):
+        """ Draws all the view overlays on the ctx Cairo context"""
         # coordinates are at the center
         for o in self.view_overlays:
-            o.Draw(dc)
+            o.Draw(ctx)
 
     def _plot_data(self, ctx):
         """ Plot the current `_data` to the given context """

@@ -3,12 +3,12 @@
 # Colour definitions
 
 # Background colours
-BG_COLOUR_MAIN = "#333333"           # Default dark background
+BG_COLOUR_MAIN = "#333333"      # Default dark background
 BG_COLOUR_STREAM = "#4D4D4D"    # Stream panel background
 BG_COLOUR_NOTIFY = "#FFF3A2"
 
 # Foreground (i.e text) colours
-FG_COLOUR_MAIN = "#DDDDDD"           # Default foreground colour
+FG_COLOUR_MAIN = "#DDDDDD"      # Default foreground colour
 FG_COLOUR_DIS = "#777777"       # Disabled foreground colour
 FG_COLOUR_EDIT = "#2FA7D4"      # Edit colour
 FG_COLOUR_2ND = "#53D8AD"       # Secundary edit colour

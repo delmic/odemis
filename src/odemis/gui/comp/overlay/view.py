@@ -45,9 +45,8 @@ class TextViewOverlay(ViewOverlay):
         super(TextViewOverlay, self).__init__(cnvs)
         self.vpos = vpos
 
-    def Draw(self, dc):
+    def Draw(self, ctx):
         if self.labels:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
             self._write_labels(ctx)
 
 class CrossHairOverlay(ViewOverlay):
@@ -56,29 +55,37 @@ class CrossHairOverlay(ViewOverlay):
                  center=(0, 0)):
         super(CrossHairOverlay, self).__init__(cnvs)
 
-        self.pen = wx.Pen(colour)
+        self.colour = conversion.hex_to_frgba(colour)
         self.size = size
         self.center = center
 
-    def Draw(self, dc):
-        """
-        Draws the crosshair
-        dc (wx.DC)
-        """
-        center = self.center
+    def Draw(self, ctx):
+        """ Draw a cross hair to the ctx Cairo context """
+
+        ctx.save()
+
+        center = self.cnvs.get_half_view_size()
+
         tl = (center[0] - self.size, center[1] - self.size)
         br = (center[0] + self.size, center[1] + self.size)
 
-        # Draw black contrast cross first
-        pen = wx.Pen(wx.BLACK)
-        dc.SetPen(pen)
-        dc.DrawLine(tl[0] + 1, center[1] + 1, br[0] + 1, center[1] + 1)
-        dc.DrawLine(center[0] + 1, tl[1] + 1, center[0] + 1, br[1] + 1)
+        ctx.set_line_width(1)
 
-        dc.SetPen(self.pen)
-        dc.DrawLine(tl[0], center[1], br[0], center[1])
-        dc.DrawLine(center[0], tl[1], center[0], br[1])
+        ctx.set_source_rgba(0, 0, 0, 0.9)
+        ctx.move_to(tl[0] + 1.5, center[1] + 1.5)
+        ctx.line_to(br[0] + 1.5, center[1] + 1.5)
+        ctx.move_to(center[0] + 1.5, tl[1] + 1.5)
+        ctx.line_to(center[0] + 1.5, br[1] + 1.5)
+        ctx.stroke()
 
+        ctx.set_source_rgba(*self.colour)
+        ctx.move_to(tl[0] + 0.5, center[1] + 0.5)
+        ctx.line_to(br[0] + 0.5, center[1] + 0.5)
+        ctx.move_to(center[0] + 0.5, tl[1] + 0.5)
+        ctx.line_to(center[0] + 0.5, br[1] + 0.5)
+        ctx.stroke()
+
+        ctx.restore()
 
 class SpotModeOverlay(ViewOverlay):
     """ This overlay displays a circle marker in the center of
@@ -93,13 +100,15 @@ class SpotModeOverlay(ViewOverlay):
                                marker_size.GetHeight() // 2 - 1)
         self.center = (0, 0)
 
-    def Draw(self, dc_buffer):
-        dc_buffer.DrawBitmapPoint(
-            self.marker_bmp,
-            wx.Point(
-                self.center[0] - self._marker_offset[0],
-                self.center[1] - self._marker_offset[1]),
-            useMask=False)
+    def Draw(self, ctx):
+        pass
+        # raise NotImplementedError
+        # dc_buffer.DrawBitmapPoint(
+        #     self.marker_bmp,
+        #     wx.Point(
+        #         self.center[0] - self._marker_offset[0],
+        #         self.center[1] - self._marker_offset[1]),
+        #     useMask=False)
 
 
 class StreamIconOverlay(ViewOverlay):

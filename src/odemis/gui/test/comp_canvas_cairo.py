@@ -189,6 +189,9 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # old_canvas = DraggableCanvas(self.panel)
         mmodel = test.FakeMicroscopeModel()
+        mpp = FloatContinuous(10e-6, range=(1e-3, 1), unit="m/px")
+        mmodel.focussedView.value.mpp = mpp
+
         view = mmodel.focussedView.value
         canvas = miccanvas.DblMicroscopeCanvas(self.panel)
 
@@ -224,7 +227,72 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         canvas.update_drawing()
         test.gui_loop(100)
 
-    def test_calc_img_buffer_rect(self):
+    def test_reshape(self):
+
+        self.app.test_frame.SetSize((500, 500))
+        self.app.test_frame.Center()
+        self.app.test_frame.Layout()
+
+        # old_canvas = DraggableCanvas(self.panel)
+        mmodel = test.FakeMicroscopeModel()
+        mpp = FloatContinuous(10e-6, range=(1e-3, 1), unit="m/px")
+        mmodel.focussedView.value.mpp = mpp
+
+        view = mmodel.focussedView.value
+        canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        shape = (5, 5, 3)
+        rgb = numpy.empty(shape, dtype=numpy.uint8)
+        rgb[::2, ...] = [
+                    [255, 0, 0],
+                    [0, 255, 0],
+                    [255, 255, 0],
+                    [255, 0, 255],
+                    [0, 0, 255]
+                ][:shape[1]]
+        rgb[1::2, ...] = [
+                    [127, 0, 0],
+                    [0, 127, 0],
+                    [127, 127, 0],
+                    [127, 0, 127],
+                    [0, 0, 127]
+                ][:shape[1]]
+        darray = DataArray(rgb)
+
+        canvas.setView(view, mmodel)
+        self.add_control(canvas, flags=wx.EXPAND, proportion=1)
+        test.gui_loop()
+        # Set the mpp again, because the on_size handler will have recalculated it
+        view.mpp.value = 1
+
+        images = [(darray, (0.0, 0.0), 2, True)]
+        canvas.set_images(images)
+        canvas.scale = 1
+        canvas.update_drawing()
+
+        shape = (5, 5, 4)
+        rgb = numpy.empty(shape, dtype=numpy.uint8)
+        rgb[::2, ...] = [
+                    [255, 0, 0, 255],
+                    [0, 255, 0, 255],
+                    [255, 255, 0, 255],
+                    [255, 0, 255, 255],
+                    [0, 0, 255, 255]
+                ][:shape[1]]
+        rgb[1::2, ...] = [
+                    [127, 0, 0, 255],
+                    [0, 127, 0, 255],
+                    [127, 127, 0, 255],
+                    [127, 0, 127, 255],
+                    [0, 0, 127, 255]
+                ][:shape[1]]
+
+        rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
+        reshaped_array = DataArray(rgb)
+
+        self.assertTrue((reshaped_array == canvas.images[0]).all())
+
+    def xtest_calc_img_buffer_rect(self):
         self.app.test_frame.SetSize((200, 200))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
