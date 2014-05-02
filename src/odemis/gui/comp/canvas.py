@@ -1045,16 +1045,16 @@ class BitmapCanvas(BufferedCanvas):
 
         # im_size = tuple(int(d / im_scale) for d in scaled_im_size)
 
-        logging.error("My guess: %s", unsc_rnd_rect)
+        # logging.error("My guess: %s", unsc_rnd_rect)
 
         sub_im_x, sub_im_y = unsc_rnd_rect[:2]
         sub_im_w, sub_im_h = unsc_rnd_rect[-2:]
         sub_im_w = max(sub_im_w, 2)
         sub_im_h = max(sub_im_h, 2)
 
-        print "%s:%s, %s:%s" % (sub_im_y, sub_im_y + sub_im_h, sub_im_x, sub_im_x + sub_im_w)
+        # print "%s:%s, %s:%s" % (sub_im_y, sub_im_y + sub_im_h, sub_im_x, sub_im_x + sub_im_w)
         im_data = im_data[sub_im_y:sub_im_y + sub_im_h, sub_im_x:sub_im_x + sub_im_w].copy()
-        print im_data
+        # print im_data
         return im_data
 
         # unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
@@ -1541,8 +1541,9 @@ class DraggableCanvas(BitmapCanvas):
         for im in self.images:
             if im is None:
                 continue
-            w, h = im.Width * im._dc_scale, im.Height * im._dc_scale
-            c = im._dc_center
+            im_scale = im.metadata['dc_scale']
+            w, h = im.shape[1] * im_scale, im.shape[0] * im_scale
+            c = im.metadata['dc_center']
             bbox_im = [c[0] - w / 2, c[1] - h / 2, c[0] + w / 2, c[1] + h / 2]
             if bbox[0] is None:
                 bbox = bbox_im
