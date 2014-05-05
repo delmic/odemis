@@ -19,17 +19,21 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+
+# Provides various components which are actually not connected to a physical one.
+# It's mostly for replacing components which are present but not controlled by
+# software, or for testing.
+
 from __future__ import division
-from odemis.model import isasync
-from odemis import model
+
+
 import logging
+from odemis import model
+from odemis.model import isasync
+from odemis.model._futures import CancellableThreadPoolExecutor
+import random
 import time
 
-"""
-Provides various components which are actually not connected to a physical one.
-It's mostly for replacing components which are present but not controlled by
-software, or for testing.
-"""
 
 class Light(model.Emitter):
     """
@@ -69,7 +73,6 @@ class Stage(model.Actuator):
         """
         axes (set of string): names of the axes
         """
-#        assert ("axes" not in kwargs) and ("ranges" not in kwargs)
         assert len(axes) > 0
         if ranges is None:
             ranges = {}
@@ -104,7 +107,6 @@ class Stage(model.Actuator):
     @isasync
     def moveRel(self, shift):
         shift = self._applyInversionRel(shift)
-        time_start = time.time()
         maxtime = 0
         for axis, change in shift.items():
             if not axis in shift:
@@ -118,7 +120,6 @@ class Stage(model.Actuator):
                 logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
         
-        time_end = time_start + maxtime
         self._updatePosition()
         # TODO queue the move and pretend the position is changed only after the given time
         return model.InstantaneousFuture()
@@ -126,7 +127,6 @@ class Stage(model.Actuator):
     @isasync
     def moveAbs(self, pos):
         pos = self._applyInversionAbs(pos)
-        time_start = time.time()
         maxtime = 0
         for axis, new_pos in pos.items():
             if not axis in pos:
@@ -136,15 +136,123 @@ class Stage(model.Actuator):
             logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
          
-        # TODO stop add this move
-        time_end = time_start + maxtime
+        # TODO queue the move
         self._updatePosition()
         return model.InstantaneousFuture()
     
     def stop(self, axes=None):
-        # TODO empty the queue for the given axes
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
-        return
 
+
+PRESSURE_VENTED = 100e3 # Pa
+PRESSURE_PUMPED = 5e3 # Pa
+class Chamber(model.Actuator):
+    """
+    Simulated chamber component. Just pretends to be able to change pressure
+    """
+    def __init__(self, name, role, **kwargs):
+        """
+        Initialises the component
+        """
+        # TODO: or just provide .targetPressure (like .targetTemperature) ?
+        # Or maybe provide .targetPosition: position that would be reached if
+        # all the requested move were instantly applied?
+        # TODO: support multiple pressures (low vacuum, high vacuum)
+        axes = {"pressure": model.Axis(unit="Pa", 
+                                       choices={PRESSURE_VENTED: "vented",
+                                                PRESSURE_PUMPED: "vacuum"})}
+        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+        # For simulating moves
+        self._position = PRESSURE_PUMPED # last official position
+        self._goal = PRESSURE_PUMPED
+        self._time_goal = 0 # time the goal was/will be reached
+        self._time_start = 0 # time the move started
+        
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    {"pressure": self._position},
+                                    unit="Pa", readonly=True)
+        # Almost the same as position, but gives the current position
+        self.pressure = model.VigilantAttribute(self._position,
+                                    unit="Pa", readonly=True)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _updatePosition(self):
+        """
+        update the position VA and .pressure VA
+        """
+        # Compute the current pressure
+        now = time.time()
+        if self._time_goal < now: # done
+            # goal ±5%
+            pos = self._goal * random.uniform(0.95, 1.05)
+        else:
+            # TODO make it logarithmic
+            ratio = (now - self._time_start) / (self._time_goal - self._time_start)
+            pos = self._position + (self._goal - self._position) * ratio
+        
+        # it's read-only, so we change it via _value
+        self.pressure._value = pos
+        self.pressure.notify(pos)
+
+        # .position contains the last known/valid position
+        # it's read-only, so we change it via _value
+        self.position._value = {"pressure": self._position}
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        # TODO: have this the default implementation
+        logging.warning("Shouldn't change pressure via .moveRel")
+
+        # convert into an absolute move
+        pos = {}
+        for a, v in shift.items:
+            pos[a] = self.position.value[a] + v
+
+        return self.moveAbs(pos)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+
+        # TODO: we need a common _checkMoveAbsInput()
+        for axis, new_pos in pos.items():
+            if axis in self.axes:
+                if not new_pos in self.axes[axis].choices:
+                    raise ValueError("Axis '%s' does allow position %s." % (axis, new_pos))
+            else:
+                raise ValueError("Axis '%s' doesn't exist." % (axis,))
+
+        return self._executor.submit(self._changePressure, pos["pressure"])
+
+    def _changePressure(self, p):
+        """
+        Synchronous change of the pressure
+        p (float): target pressure
+        """
+        # TODO: allow to cancel during the change
+        now = time.time()
+        duration = 5 # s
+        self._time_start = now
+        self._time_goal = now + duration # s
+        self._goal = p
+
+        time.sleep(duration)
+        self._position = p
+        self._updatePosition()
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+        logging.warning("Stopped pressure change")
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
