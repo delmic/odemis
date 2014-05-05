@@ -31,10 +31,6 @@ import time
 import weakref
 from tescan import sem
 import re
-# FIXME: move tescan python wrapper to a separate project, and package it.
-# Probably best to assume we cannot make it public.
-# In particular, it's really not ok here because it doesn't seem to be GPLv2 or
-# a compatible license.
 
 class TescanSEM(model.HwComponent):
     '''
@@ -163,6 +159,7 @@ class Scanner(model.Emitter):
         # FIXME: isn't there a way to find out the range of the horizontalFOV?
         self.horizontalFOV = model.FloatContinuous(fov, range=[196e-9, 25586e-6], unit="m",
                                                    setter=self._setHorizontalFOV)
+        self.horizontalFOV.subscribe(self._onHorizontalFOV)  # to update metadata
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -236,14 +233,17 @@ class Scanner(model.Emitter):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
+    def _onHorizontalFOV(self, s):
+        # Update current pixelSize and magnification
+        self._updatePixelSize()
+        self._updateMagnification()
+
     def _setHorizontalFOV(self, value):
         # FOV to mm to comply with Tescan API
         self.parent._device.SetViewField(value * 1e03)
 
-        # Update current magnification
-        self._updateMagnification()
-
         # TODO Check out of range
+        print self.parent._device.GetViewField()
         return value
 
     def _updateMagnification(self):
@@ -252,7 +252,6 @@ class Scanner(model.Emitter):
         mag = self._hfw_nomag / self.horizontalFOV.value
         self.magnification._value = mag
         self.magnification.notify(mag)
-        self._updatePixelSize()
 
     def _onDwellTime(self, dt):
         # TODO interrupt current scanning when dwell time is changed
@@ -262,8 +261,6 @@ class Scanner(model.Emitter):
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
 
-    # FIXME: need some logic on the name of the methods.
-    # One possibility: everything internal (= pretty much everything) has this style: _doSomething()
     def _setPower(self, value):
         powers = self.power.choices
         # TODO: what happens if the power is turned off during acquisition?
@@ -308,11 +305,10 @@ class Scanner(model.Emitter):
         """
         Update the pixel size using the scale, HFWNoMag and magnification
         """
-        mag = self.magnification.value
-        self.parent._metadata[model.MD_LENS_MAG] = mag
+        fov = self.horizontalFOV.value
 
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[1] * mag))
+        pxs = (fov / self._shape[0],
+               fov / self._shape[1])
 
         # it's read-only, so we change it only via _value
         self.pixelSize._value = pxs
