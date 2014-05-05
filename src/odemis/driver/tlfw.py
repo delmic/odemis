@@ -19,11 +19,11 @@ from __future__ import division
 
 from Pyro4.core import isasync
 import collections
-from concurrent.futures.thread import ThreadPoolExecutor
 import glob
 import logging
 from odemis import model
 import odemis
+from odemis.model._futures import CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
 import re
@@ -92,7 +92,7 @@ class FW102c(model.Actuator):
         self._hwVersion = self._idn
 
         # will take care of executing axis move asynchronously
-        self._executor = ThreadPoolExecutor(max_workers=1) # one task at a time
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
         self._speed = self.GetSpeed()
 
@@ -369,7 +369,7 @@ class FW102c(model.Actuator):
     @isasync
     def moveAbs(self, pos):
         for axis, val in pos.items():
-            if axis == "band":
+            if axis in self._axes:
                 if val not in self._axes[axis].choices:
                     raise ValueError("Unsupported position %s" % pos)
             else:
@@ -382,7 +382,7 @@ class FW102c(model.Actuator):
             return model.InstantaneousFuture()
     
     def stop(self, axes=None):
-        pass # TODO cancel all the futures not yet executed. cf SpectraPro
+        self._executor.cancel()
 
     def selfTest(self):
         """

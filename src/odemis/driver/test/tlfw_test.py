@@ -29,7 +29,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyFTDI*" #"/dev/ttyUSB0"
 
-CLASS = tlfw.FW102c # use FakeFW102C if no hardware present
+CLASS = tlfw.FakeFW102c # use FakeFW102c if no hardware present
 KWARGS = {"name": "test", "role": "filter", "port": PORT,
           "bands": {1: (100e-9, 150e-9),
                    2: (200e-9, 250e-9),

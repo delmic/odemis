@@ -32,12 +32,12 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from Pyro4.core import isasync
-from concurrent.futures.thread import ThreadPoolExecutor
 import glob
 import logging
 import math
 from odemis import model
 import odemis
+from odemis.model._futures import CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
 import serial
@@ -161,7 +161,7 @@ class MFF(model.Actuator):
         self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
 
         # will take care of executing axis move asynchronously
-        self._executor = ThreadPoolExecutor(max_workers=1) # one task at a time
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
         # TODO: have the standard inverted Actuator functions work on enumerated
         # use a different format than the standard Actuator
@@ -434,7 +434,7 @@ class MFF(model.Actuator):
             return model.InstantaneousFuture()
 
     def stop(self, axes=None):
-        pass # TODO cancel all the futures not yet executed. cf SpectraPro
+        self._executor.cancel()
 
     def _doMovePos(self, pos):
         jogp = self._pos_to_jog[pos]
