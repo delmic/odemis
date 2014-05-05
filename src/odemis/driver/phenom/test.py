@@ -5,7 +5,7 @@ import urllib2
 import os
 import time
 # phenom = Client("http://10.42.0.53:8888?om", location="http://10.42.0.53:8888", username="SummitTAD", password="SummitTADSummitTAD")
-phenom = Client("http://Phenom-MVE0206151080.local:8888?om", location="http://Phenom-MVE0206151080.local:8888", username="Phenom_MVE0206151080", password="MVE0206151080")
+phenom = Client("http://Phenom-MVE0206151080.local:8888?om", location="http://Phenom-MVE0206151080.local:8888", username="delmic", password="6526AM9688B1")
 
 # password not need when accessing from localhost?
 # In case you don't want to download the whole wsdl first:
@@ -25,17 +25,18 @@ phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)  # or NAVCAMIMDEV
 detectorMode = 'SEM-DETECTOR-MODE-ALL'
 nalg = 'NAVIGATION-RAW'
 scanParams.detector = detectorMode
-scanParams.resolution.width = 250
-scanParams.resolution.height = 250
-scanParams.nrOfFrames = 1
+# Some resolutions are not allowed e.g. 250 doesnt work, 256 does
+scanParams.resolution.width = 512
+scanParams.resolution.height = 512
+scanParams.nrOfFrames = 200
 scanParams.HDR = False
 scanParams.center.x = 0
 scanParams.center.y = 0
 scanParams.scale = 1
 
-# resp = phenom.service.MoveTo((-0.008, -0.008), nalg)
+resp = phenom.service.MoveBy((0.001, 0.001), nalg)
 # print resp
-print phenom.service.GetStageModeAndPosition()
+# print phenom.service.GetStageModeAndPosition()
 # print scanParams
 start = time.time()
 result = phenom.service.SEMAcquireImageCopy(scanParams)
