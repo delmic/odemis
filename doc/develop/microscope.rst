@@ -42,12 +42,13 @@ Typical emitters can be of the following roles:
 
 Typical actuators found can be of the following roles:
 
-  * stage: it can have 3 axes: x, y, and z
+  * stage: it can have 3 linear axes ("x", "y", and "z"), and 3 rotational axes
+    ("rx", "ry", and "rz")
   * focus: Changes the lens distance to the sample. Must have "z" axis.
   * ebeam-focus: Changes the focus of the e-beam. Must have "z" axis.
   * mirror: To move the mirror of the SPARC, can have four axes: x, y, rz (yaw), ry (pitch)
   * align: alignment actuator for the SECOM microscope. 
-    It must have two axes: a and b.
+    It must have two axes: "a" and "b".
   * filter: Emission filter on the fluorescence microscope or the filter on the 
     optical path of the SPARC. It must have a "band" axis.
   * spectrograph: See the spectrometer
