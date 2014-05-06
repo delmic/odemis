@@ -108,7 +108,7 @@ class TestSP(unittest.TestCase):
         Check that you cannot move more than allowed
         """
         # wrong axis
-        with self.assertRaises(LookupError):
+        with self.assertRaises(ValueError):
             pos = {"boo": 0}
             f = self.sp.moveAbs(pos)
             f.result()

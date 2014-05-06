@@ -106,16 +106,18 @@ class Stage(model.Actuator):
         
     @isasync
     def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
         shift = self._applyInversionRel(shift)
+
         maxtime = 0
         for axis, change in shift.items():
-            if not axis in shift:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
-            if (self._position[axis] < self.axes[axis].range[0] or
-                self._position[axis] > self.axes[axis].range[1]):
+            rng = self.axes[axis].range
+            if not rng[0] < self._position[axis] < rng[1]:
                 logging.warning("moving axis %s to %f, outside of range %r", 
-                                axis, self._position[axis], self.axes[axis].range)
+                                axis, self._position[axis], rng)
             else: 
                 logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
@@ -126,11 +128,13 @@ class Stage(model.Actuator):
         
     @isasync
     def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
+
         maxtime = 0
         for axis, new_pos in pos.items():
-            if not axis in pos:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
             change = self._position[axis] - new_pos
             self._position[axis] = new_pos
             logging.info("moving axis %s to %f", axis, self._position[axis])
@@ -210,8 +214,7 @@ class Chamber(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
-        # TODO: have this the default implementation
-        logging.warning("Shouldn't change pressure via .moveRel")
+        self._checkMoveRel(shift)
 
         # convert into an absolute move
         pos = {}
@@ -224,15 +227,7 @@ class Chamber(model.Actuator):
     def moveAbs(self, pos):
         if not pos:
             return model.InstantaneousFuture()
-
-        # TODO: we need a common _checkMoveAbsInput()
-        for axis, new_pos in pos.items():
-            if axis in self.axes:
-                if not new_pos in self.axes[axis].choices:
-                    raise ValueError("Axis '%s' does allow position %s." % (axis, new_pos))
-            else:
-                raise ValueError("Axis '%s' doesn't exist." % (axis,))
-
+        self._checkMoveAbs(pos)
         return self._executor.submit(self._changePressure, pos["pressure"])
 
     def _changePressure(self, p):

@@ -262,6 +262,14 @@ class ChamberTest(unittest.TestCase):
             f1.result() # might not raise CancelledError, if the operation is not cancellable
             f2.result()
 
+    def test_wrong_moveAbs(self):
+        # wrong axis
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs({"ba":-2})
+
+        # wrong position
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs({"pressure":-5})
 
 if __name__ == "__main__":
     unittest.main()

@@ -414,24 +414,19 @@ class MFF(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
-        logging.warning("Relative move is not advised for enumerated axes")
-        # TODO move to the +N next position?
         if not shift:
             return model.InstantaneousFuture()
-        else:
-            raise NotImplementedError("Relative move on enumerated axis not supported")
+        self._checkMoveRel(shift)
+        # TODO move to the +N next position? (and modulo number of axes)
+        raise NotImplementedError("Relative move on enumerated axis not supported")
 
     @isasync
     def moveAbs(self, pos):
-        for axis, val in pos.items():
-            if axis in self.axes:
-                if val not in self._axes[axis].choices:
-                    raise ValueError("Unsupported position %s" % pos)
-                return self._executor.submit(self._doMovePos, val)
-            else:
-                raise ValueError("Unsupported axis %s" % (axis,))
-        else: # empty move requested
+        if not pos:
             return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        return self._executor.submit(self._doMovePos, pos.values()[0])
 
     def stop(self, axes=None):
         self._executor.cancel()

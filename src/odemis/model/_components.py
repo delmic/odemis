@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import Pyro4
 from Pyro4.core import isasync
 from abc import ABCMeta, abstractmethod
+import collections
 import inspect
 import logging
 import odemis
@@ -29,7 +30,7 @@ import threading
 import urllib
 import weakref
 
-from . import _core, _dataflow, _vattributes
+from . import _core, _dataflow, _vattributes, _futures
 from ._core import roattribute
 
 
@@ -630,6 +631,8 @@ class Actuator(HwComponent):
     # helper methods
     def _applyInversionRel(self, shift):
         """
+        Convert from external relative position to internal position and 
+        vice-versa. (It's an involutary function, so it works in both ways)
         shift (dict string -> float): the shift for a moveRel()
         return (dict string -> float): the shift with inversion of axes applied
         """
@@ -641,9 +644,9 @@ class Actuator(HwComponent):
 
     def _applyInversionAbs(self, pos):
         """
+        Convert from external absolute position to internal position and 
+        vice-versa. (It's an involutary function, so it works in both ways)
         pos (dict string -> float): the new position for a moveAbs()
-        Note: it's an involutary function, it can be used also to convert
-          internal position to the user.
         return (dict string -> float): the position with inversion of axes applied
         """
         ret = dict(pos)
@@ -651,6 +654,51 @@ class Actuator(HwComponent):
             if a in ret:
                 ret[a] = self._axes[a].range[0] + self._axes[a].range[1] - ret[a]
         return ret
+
+    def _checkMoveRel(self, shift):
+        """
+        Check that the arguments passed to moveRel() is (potentially) correct
+        shift (dict string -> float): the new position for a moveRel()
+        raise ValueError: if the argument is incorrect
+        """
+        for axis, val in shift.items():
+            if axis in self.axes:
+                axis_def = self.axes[axis]
+                if (hasattr(axis_def, "range") and
+                    abs(val) > abs(axis_def.range[1] - axis_def.range[0])):
+                    # we cannot check more precisely, unless we also know all
+                    # the moves queued (eg, if we had a targetPosition)
+                    rng = axis_def.range
+                    raise ValueError(u"Move %s for axis %s outside of range %f→%f"
+                                     % (val, axis, rng[0], rng[1]))
+                elif hasattr(axis_def, "choices"):
+                    # TODO: actually, in _some_ cases it could be acceptable
+                    # such as an almost continuous axis, but with only some
+                    # positions possible
+                    logging.warning("Change of enumerated axes via .moveRel() "
+                                    "are discouraged (axis %s)" % (axis,))
+            else:
+                raise ValueError("Unknown axis %s" % (axis,))
+
+    def _checkMoveAbs(self, pos):
+        """
+        Check that the argument passed to moveAbs() is (potentially) correct
+        pos (dict string -> float): the new position for a moveAbs()
+        raise ValueError: if the argument is incorrect
+        """
+        for axis, val in pos.items():
+            if axis in self.axes:
+                axis_def = self.axes[axis]
+                if hasattr(axis_def, "choices") and val not in axis_def.choices:
+                    raise ValueError("Unsupported position %s for axis %s"
+                                     % (val, axis))
+                elif (hasattr(axis_def, "range") and not
+                      axis_def.range[0] <= val <= axis_def.range[1]):
+                    rng = axis_def.range
+                    raise ValueError(u"Position %s for axis %s outside of range %f→%f"
+                                     % (val, axis, rng[0], rng[1]))
+            else:
+                raise ValueError("Unknown axis %s" % (axis,))
 
 class Emitter(HwComponent):
     """
@@ -796,17 +844,15 @@ class CombinedActuator(Actuator):
         Move the stage the defined values in m for each axis given.
         shift dict(string-> float): name of the axis and shift in m
         """
+        if not shift:
+            return _futures.InstantaneousFuture()
+        self._checkMoveRel(shift)
         shift = self._applyInversionRel(shift)
-        # TODO check values are within range
 
         # merge multiple axes for the same children
-        child_to_move = {} # child -> moveRel argument
+        child_to_move = collections.defaultdict(dict) # child -> moveRel argument
         for axis, distance in shift.items():
-            if axis not in self._axis_to_child:
-                raise Exception("Axis unknown: %s" % axis)
             child, child_axis = self._axis_to_child[axis]
-            if not child in child_to_move:
-                child_to_move[child] = {}
             child_to_move[child].update({child_axis: distance})
             logging.debug("Moving axis %s (-> %s) by %g", axis, child_axis, distance)
 
@@ -829,15 +875,14 @@ class CombinedActuator(Actuator):
         sync (boolean): whether the moves should be done asynchronously or the
         method should return only when all the moves are over (sync=True)
         """
+        if not pos:
+            return _futures.InstantaneousFuture()
+        self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
-        # TODO check values are within range
-        child_to_move = {} # child -> moveAbs argument
+
+        child_to_move = collections.defaultdict(dict) # child -> moveAbs argument
         for axis, distance in pos.items():
-            if axis not in self._axis_to_child:
-                raise Exception("Axis unknown: %s" % axis)
             child, child_axis = self._axis_to_child[axis]
-            if not child in child_to_move:
-                child_to_move[child] = {}
             child_to_move[child].update({child_axis: distance})
             logging.debug("Moving axis %s (-> %s) to %g", axis, child_axis, distance)
 
