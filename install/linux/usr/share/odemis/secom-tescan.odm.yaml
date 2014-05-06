@@ -51,7 +51,7 @@ Spectra: {
 "EBeam ExtXY": {
     # Internal child of Quanta ExtXY, so no class
     role: e-beam,
-    init: {},
+    init: {fov_range: [196.e-9, 25586.e-6]},
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
@@ -124,11 +124,8 @@ Spectra: {
 
 "OLStage": {
     role: stage,
-    init: {axes: [x, y]},
+    init: {},
     affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-        speed: {x: 0.1, y: 0.1} #m/s
-    }
 }
 
 "ChamberCam": {
