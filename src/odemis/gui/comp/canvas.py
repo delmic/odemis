@@ -708,15 +708,6 @@ class BitmapCanvas(BufferedCanvas):
         Both _dc_center's should be close in order to have the parts with only
         one picture drawn without transparency
 
-        :param dc_buffer: (wx.DC) The buffer device context which will be drawn
-            to
-        :param images: (list of wx.Image): The images to be drawn or a list with
-            a sinle 'None' element.
-        :parma mergeratio: (float [0..1]): How to merge the images (between 1st
-            and all others)
-        :parma scale: (float > 0): the scaling of the images in addition to
-            their own scale.
-
         :return: (int) Frames per second
 
         Note: this is a very rough implementation. It's not fully optimized and
@@ -748,15 +739,20 @@ class BitmapCanvas(BufferedCanvas):
             )
 
         for im in self.images[-1:]: # the last image (or nothing)
+
             if im is None:
                 continue
+
             if nb_firsts == 0:
-                mergeratio = 1.0 # no transparency if it's alone
+                merge_ratio = 1.0 # no transparency if it's alone
+            else:
+                merge_ratio = self.merge_ratio
+
             self._draw_image(
                 ctx,
                 im,
                 im.metadata['dc_center'],
-                self.merge_ratio,
+                merge_ratio,
                 im_scale=im.metadata['dc_scale'],
                 keepalpha=im.metadata['dc_keepalpha']
             )
