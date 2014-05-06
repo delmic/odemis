@@ -23,8 +23,9 @@ import numpy
 import wx
 
 from odemis.model import DataArray
+from profilehooks import profile
 
-
+# @profile
 def format_rgba_darray(im_darray):
     """ Make sure the data array has the right shape and swap bytes """
 
@@ -32,15 +33,14 @@ def format_rgba_darray(im_darray):
         h, w, _ = im_darray.shape
         rgba_shape = (h, w, 4)
         rgba = numpy.empty(rgba_shape, dtype=numpy.uint8)
-        rgba[..., ..., :-1] = im_darray.copy()
-        rgba[..., 3] = 255
+        rgba[:, :, 0:3] = im_darray[:, :, ::-1]
+        rgba[:, :, 3] = 255
         new_darray = DataArray(rgba)
-    elif im_darray.shape[-1] != 4:
+        return new_darray
+    elif im_darray.shape[-1] == 4:
+        return im_darray
+    else:
         raise ValueError("Unsupporeted colour depth!")
-
-    new_darray[..., [0, 1, 2, 3]] = new_darray[..., [2, 1, 0, 3]]
-
-    return new_darray
 
 # Note: it's also possible to directly generate a wx.Bitmap from a buffer, but
 # always implies a memory copy.

@@ -674,7 +674,7 @@ class BitmapCanvas(BufferedCanvas):
     def draw(self):
         """ Redraw the buffer with the images and overlays
 
-        Overlays must have a `Draw(dc_buffer, shift, scale)` method.
+        Overlays must have a `Draw(ctx, shift, scale)` method.
         """
 
         # TODO: Do we need clear here? Or can we just handling 'clearing' in
@@ -757,7 +757,6 @@ class BitmapCanvas(BufferedCanvas):
                 keepalpha=im.metadata['dc_keepalpha']
             )
 
-    # @profile
     def _draw_image(self, ctx, im_data, w_im_center,
                     opacity=1.0, im_scale=1.0, keepalpha=False):
         """ Draw the given image to the Cairo context
@@ -772,7 +771,6 @@ class BitmapCanvas(BufferedCanvas):
         :param keepalpha: (boolean) if True, will use a slow method to apply
                opacity that keeps the alpha channel information.
         """
-
         # Fully transparent image does not need to be drawn
         if opacity <= 0.0:
             logging.debug("Skipping draw: image fully transparent")
@@ -823,7 +821,7 @@ class BitmapCanvas(BufferedCanvas):
         # Render the image data to the context
 
         im_format = cairo.FORMAT_ARGB32
-        # im_format = cairo.FORMAT_RGB24
+        im_format = cairo.FORMAT_RGB24
         height, width, _ = im_data.shape
         logging.debug("Image data shape is %s", im_data.shape)
 
