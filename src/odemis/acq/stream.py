@@ -1658,7 +1658,7 @@ class StaticARStream(StaticStream):
         returns DataArray: the polar projection
         """
         if pos in self._polar:
-            polarp = self._polar[pos]
+            polard = self._polar[pos]
         else:
             # Compute the polar representation
             data = self._sempos[pos]
@@ -1692,20 +1692,19 @@ class StaticARStream(StaticStream):
 
                 # 2 x size of original image (on smallest axis) and at most
                 # the size of a full-screen canvas
-                polarp = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
-                self._polar[pos] = polarp
+                polard = polar.AngleResolved2Polar(data0, size, hole=False, dtype=dtype)
+                self._polar[pos] = polard
             except Exception:
                 logging.exception("Failed to convert to azymuthal projection")
                 return data # display it raw as fallback
 
-        return polarp
+        return polard
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self):
         """ Recomputes the image with all the raw data available for the current
         selected point.
         """
-        # check to avoid running it if there is already one running
         if not self.raw:
             return
 
@@ -1714,16 +1713,20 @@ class StaticARStream(StaticStream):
             if pos == (None, None):
                 self.image.value = None
             else:
-                polar = self._getPolarProjection(pos)
+                polard = self._getPolarProjection(pos)
                 # update the histrogram
                 # TODO: cache the histogram per image
                 # FIXME: histogram should not include the black pixels outside
                 # of the circle. => use a masked array?
-                self._updateHistogram(polar)
+                # reset the drange to ensure that it doesn't depend on older data
+                self._irange = None
+                self._updateHistogram(polard)
+                self._updateIRange(polard)
                 irange = self._getDisplayIRange()
+                logging.debug("irange = %s, drange=%s", irange, self._irange)
 
                 # Convert to RGB
-                rgbim = img.DataArray2RGB(polar, irange)
+                rgbim = img.DataArray2RGB(polard, irange)
                 rgbim.flags.writeable = False
                 # For polar view, no PIXEL_SIZE nor POS
                 self.image.value = model.DataArray(rgbim)
@@ -1875,12 +1878,12 @@ class StaticSpectrumStream(StaticStream):
     def _updateIRange(self, data=None):
         if data is None:
             data = self._calibrated
-        super(StaticSpectrumStream, self)._updateIRange()
+        super(StaticSpectrumStream, self)._updateIRange(data)
 
     def _updateHistogram(self, data=None):
         if data is None:
             data = self._calibrated
-        super(StaticSpectrumStream, self)._updateHistogram(data=data)
+        super(StaticSpectrumStream, self)._updateHistogram(data)
 
     def _get_bandwidth_in_pixel(self):
         """
