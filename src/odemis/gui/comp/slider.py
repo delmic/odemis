@@ -127,8 +127,9 @@ class BaseSlider(wx.PyControl):
 
     @staticmethod
     def _linear_val_to_perc(r0, r1, v):
-        try: return (v - r0) / (r1 - r0)
-        except ZeroDivisionError: return 0.0
+        if r0 == r1: # Division by 0
+            return 0.0
+        return (v - r0) / (r1 - r0)
 
     @staticmethod
     def _linear_prec_to_val(r0, r1, p):
@@ -763,7 +764,7 @@ class VisualRangeSlider(BaseSlider):
                 raise ValueError("Needs min and max values")
         logging.debug("Setting range to %s, %s", min_value, max_value)
 
-        if min_value >= max_value:
+        if min_value > max_value:
             raise ValueError("Minimum %s is bigger than maximum %s." %
                              (min_value, max_value))
 

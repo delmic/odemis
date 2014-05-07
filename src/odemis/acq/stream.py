@@ -269,7 +269,8 @@ class Stream(object):
                         drange = (idt.min, idt.max)
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
-                drange = (numpy.array(data).min(), numpy.array(data).max())
+                drange = (data.view(numpy.ndarray).min(),
+                          data.view(numpy.ndarray).max())
                 if self._drange is not None:
                     drange = (min(drange[0], self._drange[0]),
                               max(drange[1], self._drange[1]))
@@ -394,7 +395,7 @@ class Stream(object):
         if self._drange and isinstance(self._drange[1], numbers.Integral):
             if not all(isinstance(v, numbers.Integral) for v in irange):
                 # Round down/up
-                irange = int(irange[0]), int(round(irange[1]))
+                irange = int(irange[0]), int(math.ceil(irange[1]))
 
         return irange
 
@@ -417,7 +418,7 @@ class Stream(object):
         data (DataArray): the raw data to use, default to .raw[0]
         """
         # Compute histogram and compact version
-        if not self.raw and not data:
+        if not self.raw and data is None:
             return
 
         data = self.raw[0] if data is None else data
@@ -1718,8 +1719,8 @@ class StaticARStream(StaticStream):
                 # of the circle. => use a masked array?
                 # reset the drange to ensure that it doesn't depend on older data
                 self._drange = None
-                self._updateHistogram(polard)
                 self._updateDRange(polard)
+                self._updateHistogram(polard)
                 irange = self._getDisplayIRange()
 
                 # Convert to RGB
