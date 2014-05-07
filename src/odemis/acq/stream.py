@@ -129,9 +129,7 @@ class Stream(object):
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, long, float))
 
-        # TODO: rename _irange to _drange? That should avoid confusion with
-        # intensityRange
-        self._irange = None # min/max data range
+        self._drange = None # min/max data range, or None if unknown
 
         # whether to use auto brightness & contrast
         self.auto_bc = model.BooleanVA(True)
@@ -143,7 +141,7 @@ class Stream(object):
 
         # Used if auto_bc is False
         # min/max ratio of the whole intensity level which are mapped to
-        # black/white. Its range is ._irange (will be updated by _updateIRange)
+        # black/white. Its range is ._drange (will be updated by _updateDRange)
         self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
                                                     cls=(int, long, float),
@@ -151,7 +149,7 @@ class Stream(object):
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.
         self.intensityRange.clip_on_range = True
-        self._updateIRange()
+        self._updateDRange()
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
@@ -227,14 +225,14 @@ class Stream(object):
     # No __del__: subscription should be automatically stopped when the object
     # disappears, and the user should stop the update first anyway.
 
-    def _updateIRange(self, data=None):
+    def _updateDRange(self, data=None):
         """
-        Update the ._irange, with whatever data is known so far.
+        Update the ._drange, with whatever data is known so far.
         data (None or DataArray): data on which to base the detection. If None,
           it will try to use .raw, and if there is nothing, will just use the
           detector information.
         """
-        # 2 types of irange management:
+        # 2 types of drange management:
         # * dtype is int -> follow MD_BPP/shape/dtype.max
         # * dtype is float -> always increase, starting from 0-depth
         if data is None:
@@ -251,9 +249,9 @@ class Stream(object):
                         raise ValueError()
 
                     if data.dtype.kind == "i":
-                        irange = (-depth // 2, depth // 2 - 1)
+                        drange = (-depth // 2, depth // 2 - 1)
                     else:
-                        irange = (0, depth - 1)
+                        drange = (0, depth - 1)
                 except (KeyError, ValueError):
                     try:
                         depth = self._detector.shape[-1]
@@ -263,18 +261,18 @@ class Stream(object):
                             raise ValueError()
 
                         if data.dtype.kind == "i":
-                            irange = (-depth // 2, depth // 2 - 1)
+                            drange = (-depth // 2, depth // 2 - 1)
                         else:
-                            irange = (0, depth - 1)
+                            drange = (0, depth - 1)
                     except (AttributeError, IndexError, ValueError):
                         idt = numpy.iinfo(data.dtype)
-                        irange = (idt.min, idt.max)
+                        drange = (idt.min, idt.max)
             else: # float
                 # cast to ndarray to ensure a scalar (instead of a DataArray)
-                irange = (numpy.array(data).min(), numpy.array(data).max())
-                if self._irange is not None:
-                    irange = (min(irange[0], self._irange[0]),
-                              max(irange[1], self._irange[1]))
+                drange = (numpy.array(data).min(), numpy.array(data).max())
+                if self._drange is not None:
+                    drange = (min(drange[0], self._drange[0]),
+                              max(drange[1], self._drange[1]))
         else:
             # no data, assume it's uint
             try:
@@ -285,15 +283,15 @@ class Stream(object):
                     logging.warning("Detector %s report a depth of %d",
                                      self._detector.name, depth)
                     raise ValueError()
-                irange = (0, depth - 1)
+                drange = (0, depth - 1)
             except (AttributeError, IndexError, ValueError):
-                irange = None
+                drange = None
 
-        if irange:
+        if drange:
             # This VA will clip its own value if it is out of range
-            self.intensityRange.range = ((irange[0], irange[0]),
-                                         (irange[1], irange[1]))
-        self._irange = irange
+            self.intensityRange.range = ((drange[0], drange[0]),
+                                         (drange[1], drange[1]))
+        self._drange = drange
 
     def _getDisplayIRange(self):
         """
@@ -303,7 +301,7 @@ class Stream(object):
         if self.auto_bc.value:
             # The histogram might be slightly old, but not too much
             # The main thing to pay attention is that the data range is identical
-            if self.histogram._edges != self._irange:
+            if self.histogram._edges != self._drange:
                 self._updateHistogram()
             irange = img.findOptimalRange(self.histogram._full_hist,
                                           self.histogram._edges,
@@ -393,7 +391,7 @@ class Stream(object):
 
     def _setIntensityRange(self, irange):
         # Not much to do, but force int if the data is int
-        if self._irange and isinstance(self._irange[1], numbers.Integral):
+        if self._drange and isinstance(self._drange[1], numbers.Integral):
             if not all(isinstance(v, numbers.Integral) for v in irange):
                 # Round down/up
                 irange = int(irange[0]), int(round(irange[1]))
@@ -423,8 +421,8 @@ class Stream(object):
             return
 
         data = self.raw[0] if data is None else data
-        # Initially, _irange might be None, in which case it will be guessed
-        hist, edges = img.histogram(data, irange=self._irange)
+        # Initially, _drange might be None, in which case it will be guessed
+        hist, edges = img.histogram(data, irange=self._drange)
         if hist.size > 256:
             chist = img.compactHistogram(hist, 256)
         else:
@@ -479,15 +477,15 @@ class Stream(object):
             # logging.debug("Receive raw %g s after acquisition",
             #                time.time() - data.metadata[model.MD_ACQ_DATE])
 
-        old_irange = self._irange
+        old_drange = self._drange
         if not self.raw:
             self.raw.append(data)
         else:
             self.raw[0] = data
 
         # Depth can change at each image (depends on hardware settings)
-        self._updateIRange()
-        if old_irange == self._irange:
+        self._updateDRange()
+        if old_drange == self._drange:
             # If different range, it will be immediately recomputed
             self._shouldUpdateHistogram()
 
@@ -1719,11 +1717,10 @@ class StaticARStream(StaticStream):
                 # FIXME: histogram should not include the black pixels outside
                 # of the circle. => use a masked array?
                 # reset the drange to ensure that it doesn't depend on older data
-                self._irange = None
+                self._drange = None
                 self._updateHistogram(polard)
-                self._updateIRange(polard)
+                self._updateDRange(polard)
                 irange = self._getDisplayIRange()
-                logging.debug("irange = %s, drange=%s", irange, self._irange)
 
                 # Convert to RGB
                 rgbim = img.DataArray2RGB(polard, irange)
@@ -1798,7 +1795,7 @@ class StaticSpectrumStream(StaticStream):
         MD_WL_POLYNOMIAL should be included in order to associate the C to a
         wavelength.
         """
-        self._calibrated = None # just for the _updateIRange to not complain
+        self._calibrated = None # just for the _updateDRange to not complain
         Stream.__init__(self, name, None, None, None)
         # Spectrum stream has in addition to normal stream:
         #  * information about the current bandwidth displayed (avg. spectrum)
@@ -1849,7 +1846,7 @@ class StaticSpectrumStream(StaticStream):
         # which are applied to RGB
         self.fitToRGB = model.BooleanVA(False)
 
-        self._irange = None
+        self._drange = None
 
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
@@ -1868,17 +1865,17 @@ class StaticSpectrumStream(StaticStream):
         self.raw = [image] # for compatibility with other streams (like saving...)
         self._calibrated = image # the raw data after calibration
 
-        self._updateIRange()
+        self._updateDRange()
         self._updateHistogram()
         self._updateImage()
 
     # The tricky part is we need to keep the raw data as .raw for things
     # like saving the stream or updating the calibration, but all the
     # display-related methods must work on the calibrated data.
-    def _updateIRange(self, data=None):
+    def _updateDRange(self, data=None):
         if data is None:
             data = self._calibrated
-        super(StaticSpectrumStream, self)._updateIRange(data)
+        super(StaticSpectrumStream, self)._updateDRange(data)
 
     def _updateHistogram(self, data=None):
         if data is None:
@@ -2063,7 +2060,7 @@ class StaticSpectrumStream(StaticStream):
         """
 
         # histogram will change as the pixel intensity is different
-        self._updateIRange()
+        self._updateDRange()
         self._updateHistogram()
 
         self._updateImage()
