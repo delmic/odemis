@@ -64,10 +64,7 @@ Spectra: {
 "Ebeam-focus actuator": {
     role: focus,
     init: {axes: [z]},
-    affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-        speed: {z: 0.1} #m/s
-    }
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 "Nikon Super Duper": {
@@ -125,23 +122,18 @@ Spectra: {
 "OLStage": {
     role: stage,
     init: {},
-    affects: ["Andor SimCam", "EBeam ExtXY"],
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 "ChamberCam": {
     role: camera,
-    init: {
-    },
-    properties: {
-    }
+    init: {}
 }
 
 "ChamberPressure": {
     role: pressure,
-    init: {axes: [z]},
-    affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-    }
+    init: {axes: [pressure]},
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 # Use 2 CombinedActuators to separate the axes of the PIGCS over different roles

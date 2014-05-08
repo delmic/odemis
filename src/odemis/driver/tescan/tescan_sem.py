@@ -28,7 +28,9 @@ from odemis import model, util
 from odemis.model import isasync
 import threading
 import time
+from odemis.model._futures import CancellableThreadPoolExecutor
 import weakref
+from odemis.util import TimeoutError
 from tescan import sem
 import re
 
@@ -124,6 +126,10 @@ class TescanSEM(model.HwComponent):
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterwards.
         """
+        # Terminate components
+        self._stage.terminate()
+        self._camera.terminate()
+        self._focus.terminate()
         # finish
         self._device.Disconnect()
 
@@ -238,6 +244,15 @@ class Scanner(model.Emitter):
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
+        
+    def updateHorizontalFOV(self):
+        with self.parent._acquisition_init_lock:
+            new_fov = self.parent._device.GetViewField()
+        # self._setHorizontalFOV(new_fov * 1e-03)
+        self.horizontalFOV.value = new_fov * 1e-03
+        # Update current pixelSize and magnification
+        self._updatePixelSize()
+        self._updateMagnification()
 
     def _setHorizontalFOV(self, value):
         # FOV to mm to comply with Tescan API
@@ -271,7 +286,6 @@ class Scanner(model.Emitter):
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
         # Adjust brightness and contrast
-        # TODO only on great change
         with self.parent._acquisition_init_lock:
             self.parent._device.DtAutoSignal(self.parent._detector._channel)
 
@@ -438,8 +452,6 @@ class Detector(model.Detector):
         # adjust brightness and contrast
         self.parent._device.DtAutoSignal(self._channel)
 
-        self._lock = self.parent._acquisition_init_lock
-
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
@@ -460,7 +472,7 @@ class Detector(model.Detector):
 
     def stop_acquire(self):
         with self._acquisition_lock:
-            with self._lock:
+            with self.parent._acquisition_init_lock:
                 self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -484,7 +496,7 @@ class Detector(model.Detector):
         current drift.
         """
 
-        with self._lock:
+        with self.parent._acquisition_init_lock:
             pxs = self.parent._scanner.pixelSize.value  # m/px
 
             pxs_pos = self.parent._scanner.translation.value
@@ -516,11 +528,12 @@ class Detector(model.Detector):
                         "Odemis scanning in progress, pause Odemis acquisition "
                         "to access this interface.",
                         0, 1, 0, 100)
+            dt = self.parent._scanner.dwellTime.value * 1e9
             self.parent._device.ScScanXY(0, res[0], res[1],
-                                 l, t, r, b, 1,
-                                 self.parent._scanner.dwellTime.value * 1e9)
+                                 l, t, r, b, 1, dt)
 
             # fetch the image (blocking operation), ndarray is returned
+            logging.debug("fetching res %s", res)
             sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
             sem_img.shape = res
 
@@ -590,28 +603,40 @@ class Stage(model.Actuator):
         axes_def = {}
         self._position = {}
 
-        rng = [-0.1, 0.1]
+        rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
         rng_rot = [0, 2 * math.pi]
         axes_def["rz"] = model.Axis(unit="rad", range=rng_rot)
 
+        # First calibrate
+        parent._device.StgCalibrate()
+
+        #Wait for stage to be stable after calibration
+        while parent._device.StgIsBusy() != 0:
+            # If the stage is busy (movement is in progress), current position is
+            # updated approximately every 500 ms
+            time.sleep(0.5)
+            
         x, y, z, rot, tilt = parent._device.StgGetPosition()
         self._position["x"] = -x * 1e-3
         self._position["y"] = -y * 1e-3
+        # z axis is controlled by focus, just obtain the current z position of
+        # Tescan stage in order to maintain it the same when we move the stage
+        # via odemis
         self.init_z = -z * 1e-3
         # degrees to rad
         self._position["rz"] = (rot * math.pi) / 180
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
-
-        # First calibrate
-        self.parent._device.StgCalibrate()
 
     def _updatePosition(self):
         """
@@ -621,66 +646,66 @@ class Stage(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
+    def _doMove(self, pos):
+        """
+        move to the position 
+        """
+        # Perform move through Tescan API
+        # Position from m to mm and inverted
+        self.parent._device.StgMoveTo(-pos["x"] * 1e3,
+                                    - pos["y"] * 1e3,
+                                    - self.init_z * 1e3,
+                                    (pos["rz"] * 180) / math.pi)
+
+        # Obtain the finally reached position after move is performed.
+        # This is mainly in order to keep the correct position in case the
+        # move we tried to perform was greater than the maximum possible
+        # one.
+        with self.parent._acquisition_init_lock:
+            x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+            self._position["x"] = -x * 1e-3
+            self._position["y"] = -y * 1e-3
+            self._position["rz"] = (rot * math.pi) / 180
+
+        self._updatePosition()
+
     @isasync
     def moveRel(self, shift):
-        # TODO add limits to position change
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
         shift = self._applyInversionRel(shift)
 
         for axis, change in shift.items():
-            if not axis in shift:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
             self._position[axis] += change
 
-            if (self._position[axis] < self.axes[axis].range[0] or
-                self._position[axis] > self.axes[axis].range[1]):
-                logging.warning("moving axis %s to %f, outside of range %r",
-                                axis, self._position[axis], self.axes[axis].range)
-            else:
-                logging.info("moving axis %s to %f", axis, self._position[axis])
-
-        # FIXME: move this code to a separate function, and return a Future
-        # cf tlaptfm for example. Also, better to use StgMove, or update
-        # _position, once executing the code.
-
-        # Perform move through Tescan API
-        # Position from m to mm and inverted
-        # print self.parent._device.TcpGetSWVersion()
-        self.parent._device.StgMoveTo(-self._position["x"] * 1e3,
-                                    - self._position["y"] * 1e3,
-                                    self.init_z * 1e3,
-                                    (self._position["rz"] * 180) / math.pi)
-        self._updatePosition() # TODO: possibly, during the move, update the
-        # position regularly (~ 5Hz)
-
-
-        return model.InstantaneousFuture()
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
 
     @isasync
     def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
 
         for axis, new_pos in pos.items():
-            if not axis in pos:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
-            change = self._position[axis] - new_pos
             self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
 
-        # FIXME: move to a future
-        # Perform move through Tescan API
-        # Position from m to mm and inverted
-        self.parent._device.StgMoveTo(-self._position["x"] * 1e3,
-                                    - self._position["y"] * 1e3,
-                                    self.init_z * 1e3,
-                                    (self._position["rz"] * 180) / math.pi)
-        self._updatePosition()
-        return model.InstantaneousFuture()
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
 
     def stop(self, axes=None):
-        # TODO empty the queue for the given axes
-        # FIXME: STOP for real!
+        # Empty the queue for the given axes
+        self._executor.cancel()
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
-        return
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
 
 class EbeamFocus(model.Actuator):
     """
@@ -695,49 +720,27 @@ class EbeamFocus(model.Actuator):
 
         axes_def = {}
         self._position = {}
-        init_speed = {}
 
         # Just z axis
         a = axes[0]
-        # TODO: possible to get the range via the API? Otherwise, explain where
-        # does these value come from? Probably the highest point is 0, and lowest
-        # is -270 mm (according to axis
-        rng = ranges.get(a, [0, 270e-3])
-        axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
+        # The maximum, obviously, is not 1 meter. We do not actually care
+        # about the range since Tescan API will adjust the value set if the
+        # required one is out of limits.
+        rng = [0, 1]
+        axes_def[a] = model.Axis(unit="m", range=rng)
 
         # start at the centre
-        self._position[a] = parent._device.GetWD()
-        # FIXME: if we don't support speed => don't provide it
-        init_speed[a] = 10.0  # we are super fast!
+        self._position[a] = parent._device.GetWD() * 1e-3
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
 
-        self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
-
-    def _updatePixelSize(self):
-        """
-        Update the pixel size using the working distance
-        """
-        # FIXME: merge with _scanner._updatePixelSize()? Or explain how come
-        # the two methods don't step on each other toes...
-        scanner = self.parent._scanner
-        mag = self._position["z"] / scanner._hfw_nomag
-        self.parent._metadata[model.MD_LENS_MAG] = mag
-
-        pxs = (scanner._hfw_nomag / (scanner._shape[0] * mag),
-               scanner._hfw_nomag / (scanner._shape[1] * mag))
-
-        # it's read-only, so we change it only via _value
-        scanner.pixelSize._value = pxs
-        scanner.pixelSize.notify(pxs)
-
-        # If scaled up, the pixels are bigger
-        pxs_scaled = (pxs[0] * scanner.scale.value[0], pxs[1] * scanner.scale.value[1])
-        self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
     def _updatePosition(self):
         """
@@ -747,64 +750,61 @@ class EbeamFocus(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
-    @isasync
-    def moveRel(self, shift):
-        shift = self._applyInversionRel(shift)
-        time_start = time.time()
-        maxtime = 0
-        for axis, change in shift.items():
-            if not axis in shift:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
-
-            # TODO GetWD to stay updated to changes made via Tescan sw
-            self._position[axis] += change
-            if (self._position[axis] < self.axes[axis].range[0] or
-                self._position[axis] > self.axes[axis].range[1]):
-                logging.warning("moving axis %s to %f, outside of range %r",
-                                axis, self._position[axis], self.axes[axis].range)
-            else:
-                logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-
+    def _doMove(self, pos):
+        """
+        move to the position 
+        """
         # Perform move through Tescan API
         # Position from m to mm and inverted
         self.parent._device.SetWD(self._position["z"] * 1e03)
 
-        time_end = time_start + maxtime
+        # Obtain the finally reached position after move is performed.
+        with self.parent._acquisition_init_lock:
+            wd = self.parent._device.GetWD()
+            self._position["z"] = wd * 1e-3
+
+        # Changing WD results to change in fov
+        self.parent._scanner.updateHorizontalFOV()
+
         self._updatePosition()
-        self._updatePixelSize()
-        # TODO queue the move and pretend the position is changed only after the given time
-        return model.InstantaneousFuture()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        shift = self._applyInversionRel(shift)
+
+        for axis, change in shift.items():
+            self._position[axis] += change
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
 
     @isasync
     def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
-        time_start = time.time()
-        maxtime = 0
+
         for axis, new_pos in pos.items():
-            if not axis in pos:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
-            change = self._position[axis] - new_pos
             self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
-        # Perform move through Tescan API
-        # Position from m to mm and inverted
-        self.parent._device.SetWD(self._position["z"] * 1e03)
-
-        # TODO stop add this move
-        time_end = time_start + maxtime
-        self._updatePosition()
-        self._updatePixelSize()
-        return model.InstantaneousFuture()
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
 
     def stop(self, axes=None):
-        # TODO empty the queue for the given axes
-        # FIXME: if not possible to stop, just put a logging.warning that it will not be
-        # stopped, and empty the futures queue.
+        # Empty the queue for the given axes
+        self._executor.cancel()
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
-        return
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
 
 class ChamberView(model.DigitalCamera):
     """
@@ -818,11 +818,20 @@ class ChamberView(model.DigitalCamera):
         Raise an exception if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
-        # FIXME: does enabling the camera has any drawback(eg: light on?), if
-        # so, it should be enabled only when acquiring.
-        self.parent._device.CameraEnable(0, 0.05, 5, 0) # TODO: what are these values?
 
-        self._shape = (2 ** 8,) # FIXME: only one point?? Should be the max X, Y + depth
+        # Parameters explanation: Chamber camera enabled on channel 0 (reserved),
+        # without zoom applied so we get the maximum size of the image (1),
+        # in the maximum fps (5), and compression mode 0 (must be so, according,
+        # to Tescan API documentation).
+        self.parent._device.CameraEnable(0, 1, 5, 0)
+        # Wait for camera to be enabled
+        while (self.parent._device.CameraGetStatus(0))[0] != 1:
+            time.sleep(0.5)
+        # Get a first image to determine the resolution
+        width, height, img_str = self.parent._device.FetchCameraImage(0)
+        self.parent._device.CameraDisable()
+        resolution = (height, width)
+        self._shape = resolution + (2 ** 8,)
 
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
@@ -839,7 +848,8 @@ class ChamberView(model.DigitalCamera):
         """
         return int: chamber camera status, 0 - off, 1 - on
         """
-        status = self.parent._device.CameraGetStatus(0) # TODO: what is 0?
+        with self.parent._acquisition_init_lock:
+            status = self.parent._device.CameraGetStatus(0)  # channel 0, reserved
         return status[0]
 
     def start_flow(self, callback):
@@ -848,6 +858,8 @@ class ChamberView(model.DigitalCamera):
         callback (callable (DataArray) no return):
          function called for each image acquired
         """
+        self.parent._device.CameraEnable(0, 1, 5, 0)
+
         # if there is a very quick unsubscribe(), subscribe(), the previous
         # thread might still be running
         self.wait_stopped_flow()  # no-op is the thread is not running
@@ -867,13 +879,16 @@ class ChamberView(model.DigitalCamera):
         """
         try:
             while not self.acquire_must_stop.is_set():
-                width, height, img_str = self.parent._device.FetchCameraImage(0)
+                with self.parent._acquisition_init_lock:
+                    width, height, img_str = self.parent._device.FetchCameraImage(0)
                 sem_img = numpy.frombuffer(img_str, dtype=numpy.uint8)
-                sem_img.shape = (width, height) # FIXME: why not height, width?
+                sem_img.shape = (height, width)
                 array = model.DataArray(sem_img)
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
-                if self.acquire_must_stop.wait(5000): # FIXME: why 5000s?!
+                # If the Chamber view is just enabled it may take several seconds
+                # to get the first image.
+                if self.acquire_must_stop.wait(10):
                     break
 
                 callback(self._transposeDAToUser(array))
@@ -931,25 +946,21 @@ class ChamberPressure(model.Actuator):
     vent the chamber and get the current pressure of it.
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
-        # TODO: fix the axis name to "pressure"
-
         if ranges is None:
             ranges = {}
 
         axes_def = {}
         self._position = {}
 
-        # Just z axis
+        # Just pressure axis
         a = axes[0]
         # 1 for evacuated, 0 for vented chamber
-        # FIXME: axis choices is like : {0: 'vented', 1:'pumped'}
-        _dict = dict([('vented', 0), ('pumped', 1)])
+        _dict = dict({0: 'vented', 1:'pumped'})
         axes_def[a] = model.Axis(unit="", range=_dict, speed=[0., 10.])
 
         # VA that retains the current chamber pressure
         pressure = parent._device.VacGetPressure(0)
-        # TODO: is it possible to get the range from
-        self.chamberPressure = model.FloatContinuous(pressure, (1e-4, 1e6), unit="Pa")
+        self.chamberPressure = model.VigilantAttribute(pressure, unit="Pa", readonly=True)
 
         # Try to decide if we are currently pumped or vented
         if parent._device.VacGetStatus() == 0 and pressure < 1:
@@ -957,11 +968,29 @@ class ChamberPressure(model.Actuator):
         else:
             self._position[a] = 0
             
+        # Used when we stop a vacuum action that is in progress
+        self._prev_pos = self._position[a]
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
         # RO, as to modify it the client must use .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="", readonly=True)
+
+    def GetStatus(self):
+        """
+        return int: vacuum status, 
+            -1 error 
+            0 ready for operation
+            1 pumping in progress
+            2 venting in progress
+            3 vacuum off (pumps are switched off, valves are closed)
+            4 chamber open
+        """
+        with self.parent._acquisition_init_lock:
+            status = self.parent._device.VacGetStatus()  # channel 0, reserved
+        return status
 
     def _updatePosition(self):
         """
@@ -971,78 +1000,55 @@ class ChamberPressure(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
-    @isasync
-    def moveRel(self, shift):
-        # FIXME: for enumerated axis, moveRel should report a warning, and call
-        # moveAbs
-        shift = self._applyInversionRel(shift)
-        time_start = time.time()
-        maxtime = 0
-        for axis, change in shift.items():
-            if not axis in shift:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
+    def _updateChamberPressure(self):
+        # it's read-only, so we change it only via _value
+        pressure = self.parent._device.VacGetPressure(0)
+        self.chamberPressure._value = pressure
+        self.chamberPressure.notify(pressure)
 
-            self._position[axis] += change
-            if (self._position[axis] < self.axes[axis].range[0] or
-                self._position[axis] > self.axes[axis].range[1]):
-                logging.warning("moving axis %s to %f, outside of range %r",
-                                axis, self._position[axis], self.axes[axis].range)
-            else:
-                logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-
+    def _doMove(self, pos):
+        """
+        move to the position 
+        """
         # Make sure we update with the initial and final chamber pressure
-        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
-        if self._position["z"] == 1:
+        self._updateChamberPressure()
+        self._prev_pos = self._position["pressure"]
+        if self._position["pressure"] == 1:
             self.parent._device.VacPump()
         else:
             self.parent._device.VacVent()
-        # TODO add timeout
-        while not self.parent._device.VacGetStatus() == 0:
+        # timeout after 5 seconds
+        start = time.time()
+        while not self.GetStatus() == 0:
+            if (time.time()-start)>=5:
+                raise TimeoutError("Vacuum action timed out")
             # Update chamber pressure until pumping/venting process is done
-            self.chamberPressure.value = self.parent._device.VacGetPressure(0)
-        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
+            self._updateChamberPressure()
+        self._updateChamberPressure()
 
-        time_end = time_start + maxtime
-        # Update only once we are in the required state
         self._updatePosition()
-        # TODO queue the move and pretend the position is changed only after the given time
-        return model.InstantaneousFuture()
+
+    @isasync
+    def moveRel(self, shift):
+        logging.warning("Relative move on enumerated axis not supported")
+        self.moveAbs(shift)
 
     @isasync
     def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
-        time_start = time.time()
-        maxtime = 0
+
         for axis, new_pos in pos.items():
-            if not axis in pos:
-                raise ValueError("Axis '%s' doesn't exist." % str(axis))
-            change = self._position[axis] - new_pos
             self._position[axis] = new_pos
-            logging.info("moving axis %s to %f", axis, self._position[axis])
-            maxtime = max(maxtime, abs(change) / self.speed.value[axis])
 
-        # FIXME: move to separate code and call via future
-        # Make sure we update with the initial and final chamber pressure
-        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
-        if self._position["z"] == 1:
-            self.parent._device.VacPump()
-        else:
-            self.parent._device.VacVent()
-        # TODO add timeout
-        while not self.parent._device.VacGetStatus() == 0:
-            # Update chamber pressure until pumping/venting process is done
-            self.chamberPressure.value = self.parent._device.VacGetPressure(0)
-        self.chamberPressure.value = self.parent._device.VacGetPressure(0)
-
-        # TODO stop add this move
-        time_end = time_start + maxtime
-        self._updatePosition()
-        return model.InstantaneousFuture()
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
 
     def stop(self, axes=None):
-        # TODO empty the queue for the given axes
-        # FIXME: can the procedure be stopped? Probably? Maybe just a matter of
-        # requesting the previous pressure?
+        self._executor.cancel()
+        # Requesting the previous pressure state
+        self.moveAbs(self._prev_pos)
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
         return
