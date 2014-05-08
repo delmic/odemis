@@ -379,9 +379,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
 
-            # rgba_im = img.NDImage2wxImage(rgbim)
             rgba_im = img.format_rgba_darray(rgbim)
-            keepalpha = (rgbim.shape[2] == 4)
+            keepalpha = True
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
 
@@ -1272,14 +1271,12 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 if (self._goal_wim is None or prev_im is None or
                     prev_im is not rgbim):
                     logging.debug("Converting goal image")
-                    # wim = img.NDImage2wxImage(rgbim)
                     wim = img.format_rgba_darray(rgbim)
                     self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
                     self._goal_wim = wim
                 else:
                     wim = self._goal_wim
             else:
-                # wim = img.NDImage2wxImage(rgbim)
                 wim = img.format_rgba_darray(rgbim)
 
             keepalpha = (rgbim.shape[2] == 4)
@@ -1501,7 +1498,6 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         ims = []
         for rgbim in images:
             # image is always centered, fitting the whole canvas
-            # wim = img.NDImage2wxImage(rgbim)
             wim = img.format_rgba_darray(rgbim)
             ims.append((wim, (0, 0), 0.1, False))
         self.set_images(ims)

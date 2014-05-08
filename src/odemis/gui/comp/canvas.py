@@ -157,10 +157,8 @@ import wx.lib.wxcairo as wxcairo
 
 from abc import ABCMeta, abstractmethod
 from decorator import decorator
-import numpy
-from odemis.model import DataArray
 from odemis.util.conversion import wxcol_to_frgb
-from profilehooks import profile
+
 
 #pylint: disable=E1002
 
@@ -659,16 +657,19 @@ class BitmapCanvas(BufferedCanvas):
                 images.append(None)
             else:
                 im, w_pos, scale, keepalpha = args
+                height, width, depth = im.shape
 
-                if im.shape[-1] != 4:
-                    raise ValueError("Unsupporeted colour depth!")
+                if depth != 4:
+                    raise ValueError("Unsupporeted colour depth! (%s)", depth)
 
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
-                im.metadata['width'] = im.shape[1]
-                im.metadata['height'] = im.shape[0]
+                im.metadata['width'] = width
+                im.metadata['height'] = height
                 im.metadata['dc_keepalpha'] = keepalpha
+
                 images.append(im)
+
         self.images = images
 
     def draw(self):
@@ -821,7 +822,6 @@ class BitmapCanvas(BufferedCanvas):
         # Render the image data to the context
 
         im_format = cairo.FORMAT_ARGB32
-        im_format = cairo.FORMAT_RGB24
         height, width, _ = im_data.shape
         logging.debug("Image data shape is %s", im_data.shape)
 

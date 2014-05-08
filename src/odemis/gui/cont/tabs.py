@@ -43,6 +43,7 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
     call_after, align, call_after_wrapper
+from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -1416,7 +1417,7 @@ class LensAlignTab(Tab):
     def _on_acquisition(self, is_acquiring):
         # A bit tricky because (in theory), could happen in any tab
         self._subscribe_for_fa_dt(not is_acquiring)
-        
+
     def _subscribe_for_fa_dt(self, subscribe=True):
         # Make sure that we don't update fineAlignDwellTime unless:
         # * The tab is shown
@@ -1668,7 +1669,8 @@ class MirrorAlignTab(Tab):
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
                        "calibration/ma_goal_5_13_sensor_13312_13312.png")
         goal_im = model.DataArray(scipy.misc.imread(goal_rs))
-
+        # No need to swap bytes for goal_im. Alpha needs to be fixed though
+        goal_im = scale_to_alpha(goal_im)
         # It should be displayed at the same scale as the actual image.
         # In theory, it would be direct, but as the backend doesn't know when
         # the lens is on or not, it's considered always on, and so the optical
@@ -1676,7 +1678,7 @@ class MirrorAlignTab(Tab):
 
         # The resolution is the same as the maximum sensor resolution, if not,
         # we adapt the pixel size
-        im_res = (goal_im.shape[1], goal_im.shape[0]) #pylint: disable=E1101
+        im_res = (goal_im.shape[1], goal_im.shape[0]) #pylint: disable=E1101,E1103
         scale = ccd_res[0] / im_res[0]
         if scale != 1:
             logging.warning("Goal image has resolution %s while CCD has %s",

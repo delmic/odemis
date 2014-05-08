@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Jan 2014
 
 @author: Éric Piel
@@ -8,12 +8,18 @@ Copyright © 2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the
+terms of the GNU General Public License version 2 as published by the Free
+Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+YoushouldhavereceivedacopyoftheGNUGeneralPublicLicensealongwithOdemis.Ifnot,see
+http://www.gnu.org/licenses/.
+
+"""
 # Some helper functions to convert/manipulate images (DataArray and wxImage)
 
 from __future__ import division
@@ -27,7 +33,7 @@ from profilehooks import profile
 
 # @profile
 def format_rgba_darray(im_darray):
-    """ Make sure the data array has the right shape and swap bytes """
+    """ Reshape the given numpy.ndarray from RGB to BGRA format """
 
     if im_darray.shape[-1] == 3:
         h, w, _ = im_darray.shape
@@ -36,11 +42,35 @@ def format_rgba_darray(im_darray):
         rgba[:, :, 0:3] = im_darray[:, :, ::-1]
         rgba[:, :, 3] = 255
         new_darray = DataArray(rgba)
+
         return new_darray
+
     elif im_darray.shape[-1] == 4:
+
+        if hasattr(im_darray, 'metadata'):
+            if not im_darray.metadata.get('byteswapped', False):
+                rgba = numpy.empty(im_darray.shape, dtype=numpy.uint8)
+                rgba[:, :, 0] = im_darray[:, :, 2]
+                rgba[:, :, 1] = im_darray[:, :, 1]
+                rgba[:, :, 2] = im_darray[:, :, 0]
+                rgba[:, :, 3] = im_darray[:, :, 3]
+                new_darray = DataArray(rgba)
+                new_darray.metadata = im_darray.metadata
+                new_darray.metadata['byteswapped'] = True
+
+                return new_darray
+            else:
+                print "not swaaapaing"
         return im_darray
     else:
         raise ValueError("Unsupporeted colour depth!")
+
+def scale_to_alpha(im_darray):
+    """ Scale the R, G and B values to the given alpha value """
+    im_darray[:, :, 0] *= im_darray[:, :, 3] / 255
+    im_darray[:, :, 1] *= im_darray[:, :, 3] / 255
+    im_darray[:, :, 2] *= im_darray[:, :, 3] / 255
+    return im_darray
 
 # Note: it's also possible to directly generate a wx.Bitmap from a buffer, but
 # always implies a memory copy.
