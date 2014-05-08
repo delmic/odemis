@@ -42,9 +42,11 @@ Spectra: {
 "SEM ExtXY": {
     class: phenom.phenom_sem.PhenomSEM,
     role: none,
-    init: {},
+    init: {host: "http://localhost:8888", 
+           username: "SummitTAD",
+           password: "SummitTADSummitTAD"},
     # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY",
+    children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
                stage: "OLStage", focus: "Ebeam-focus actuator", camera: "ChamberCam", pressure: "ChamberPressure"}
 }
 
@@ -64,10 +66,7 @@ Spectra: {
 "Ebeam-focus actuator": {
     role: focus,
     init: {axes: [z]},
-    affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-        speed: {z: 0.1} #m/s
-    }
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 "Nikon Super Duper": {
@@ -124,28 +123,19 @@ Spectra: {
 
 "OLStage": {
     role: stage,
-    init: {axes: [x, y]},
-    affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-        speed: {x: 0.1, y: 0.1} #m/s
-    }
+    init: {},
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 "ChamberCam": {
     role: camera,
-    init: {
-    },
-    properties: {
-    }
+    init: {}
 }
 
 "ChamberPressure": {
     role: pressure,
-    init: {axes: [z]},
-    affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-        speed: {z: 0.1} #m/s
-    }
+    init: {axes: [pressure]},
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 # Use 2 CombinedActuators to separate the axes of the PIGCS over different roles

@@ -49,7 +49,7 @@ class PhenomSEM(model.HwComponent):
     metadata. 
     '''
 
-    def __init__(self, name, role, children, daemon=None, **kwargs):
+    def __init__(self, name, role, children, host, username, password, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
@@ -60,14 +60,12 @@ class PhenomSEM(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         # you can change the 'localhost' string and provide another SEM addres
-        client = Client("http://localhost:8888?om", location="http://localhost:8888", username="SummitTAD", password="SummitTADSummitTAD")
+        client = Client(host + "?om", location=host, username=username, password=password)
         self._device = client.service
 
-        # we can read some parameter
-        print('wd: ', self._device.GetSEMWD())
-
-        # tuple is returned if the function has more output arguments
-        print('stage position: ', self._device.GetStageModeAndPosition())
+        # Lock in order to synchronize all the child component functions
+        # that acquire data from the SEM while we continuously acquire images
+        self._acquisition_init_lock = threading.Lock()
 
         self._imagingDevice = client.factory.create('ns0:imagingDevice')
 
@@ -83,7 +81,7 @@ class PhenomSEM(model.HwComponent):
 
         # create the detector child
         try:
-            kwargs = children["detector0"]
+            kwargs = children["detector"]
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'detector' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
@@ -129,7 +127,8 @@ class PhenomSEM(model.HwComponent):
         Must be called at the end of the usage. Can be called multiple times,
         but the component shouldn't be used afterward.
         """
-        # finish
+        # Don't need to close the connection, it's already closed by the time
+        # suds returns the data
         pass
 
 class Scanner(model.Emitter):
@@ -148,17 +147,23 @@ class Scanner(model.Emitter):
 
         self._shape = (2048, 2048)
 
-        # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
         # via calibration. We assume that image is square, i.e., VFW = HFW
-        self._hfw_nomag = 0.00183908649384  # m
+        self._hfw_nomag = 0.268  # m
 
-        # Allow the user to modify the value, to copy it from the SEM software
-        mag = 1e3  # pretty random value which could be real
+        # Get current field of view and compute magnification
+        fov = self.parent._device.GetSEMHFW()
+        mag = self._hfw_nomag / fov
+
         # Field of view in Phenom is set in m
         self.parent._device.SetSEMHFW(self._hfw_nomag / mag)
-        self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
-        self.magnification.subscribe(self._onMagnification)
+        self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
+
+        range = self.parent._device.GetSEMHFWRange()
+        fov_range = [range.min, range.max]
+        self.horizontalFOV = model.FloatContinuous(fov, range=fov_range, unit="m",
+                                                   setter=self._setHorizontalFOV)
+        self.horizontalFOV.subscribe(self._onHorizontalFOV)  # to update metadata
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -194,35 +199,41 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
         # (float) in rad => rotation of the image compared to the original axes
-        # TODO: for now it's readonly because no rotation is supported
-        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
-                                              readonly=True)
+        rot = parent._device.GetSEMRotation()
+        rotation = (rot * math.pi) / 180
+        rot_range = (0, 2 * math.pi)
+        self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
+        self.rotation.subscribe(self._onRotation)
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
         self.dwellTime.subscribe(self._onDwellTime)
 
-        # Range is according to min and max voltages accepted by Tescan API
-        volt = self.parent._device.HVGetVoltage()
-        self.accelVoltage = model.FloatContinuous(volt, (200, 35000), unit="V")
+        # Range is according to min and max voltages accepted by Phenom API
+        range = parent._device.SEMGetHighTensionRange()
+        volt_range = [-range.max, -range.min]
+        volt = self.parent._device.SEMGetHighTension()
+        self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 0 turns off the e-beam, 1 turns it on
         power_choices = set([0, 1])
-        self._power = max(power_choices)  # Just in case more choises are added
-        self.parent._device.HVBeamOn()
+        self._spotSize = self.parent._device.SEMGetSpotSize()
+        # Don't change state
+        if self._spotSize == 0:
+            self._power = 0
+        else:
+            self._power = 1
+        
         self.power = model.IntEnumerated(self._power, power_choices, unit="",
-                                  setter=self.setPower)
-
-        # Blanker is automatically enabled when no scanning takes place
-        # TODO it may cause time overhead, check on testing
-        # self.parent._device.ScSetBlanker(0, 2)
+                                  setter=self._setPower)
 
         # Enumerated float with respect to the PC indexes of Tescan API
-        pc_choices = set(self.GetProbeCurrents())
-        self._list_currents = sorted(pc_choices, reverse=True)
-        self._probeCurrent = min(pc_choices)
+        self._list_currents = self.GetProbeCurrents()
+        pc_choices = set(self._list_currents)
+        # We use the current PC
+        self._probeCurrent = self._list_currents[self.parent._device.GetPCIndex() - 1]
         self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
-                                  setter=self.setPC)
+                                  setter=self._setPC)
 
 
     def updateMetadata(self, md):
