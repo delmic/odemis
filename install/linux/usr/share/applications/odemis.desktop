@@ -13,3 +13,9 @@ Categories=Utility;
 #StartupWMClass=Odemis # not necessary as it's the same name as this file
 StartupNotify=true
 
+Actions=Stop
+
+[Desktop Action Stop]
+Name=Fully stop
+Exec=odemis-stop
+OnlyShowIn=Unity;

@@ -1129,6 +1129,13 @@ class SparcSettingsController(SettingsBarController):
                     main_data.spectrometer,
                     self._spectrum_panel
             )
+            # If available, add filter selection
+            # TODO: have the control in a (common) separate panel?
+            # TODO: also add it to the Mirror alignment tab?
+            if main_data.light_filter:
+                self._spectrum_panel.add_axis("band",
+                                              main_data.light_filter,
+                                              CONFIG["filter"]["band"])
 
             self._spectrum_panel.add_divider()
             if spec_stream:
@@ -1183,6 +1190,11 @@ class SparcSettingsController(SettingsBarController):
 
         if main_data.ccd:
             self.add_component("Camera", main_data.ccd, self._angular_panel)
+
+            if main_data.light_filter:
+                self._angular_panel.add_axis("band",
+                                              main_data.light_filter,
+                                              CONFIG["filter"]["band"])
 
             self._angular_panel.add_divider()
             if ar_stream is not None:

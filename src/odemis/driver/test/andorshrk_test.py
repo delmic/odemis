@@ -144,7 +144,7 @@ class TestShamrock(unittest.TestCase):
         """
         sp = self.spectrograph
         # wrong axis
-        with self.assertRaises(LookupError):
+        with self.assertRaises(ValueError):
             pos = {"boo": 0}
             f = sp.moveAbs(pos)
             f.result()

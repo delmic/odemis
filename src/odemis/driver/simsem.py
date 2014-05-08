@@ -103,18 +103,20 @@ class Scanner(model.Emitter):
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
-        # via calibration. We assume that image is square, i.e., VFW = HFW
+        # via calibration. We assume that image is square, i.e., VFV = HFV
         self._hfw_nomag = 0.25  # m
-
-        # Allow the user to modify the value, to copy it from the SEM software
-        mag = 1e3  # pretty random value which could be real
-        self.magnification = model.FloatContinuous(mag, range=[1, 1e9], unit="")
-        self.magnification.subscribe(self._onMagnification)
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
         pxs = self.parent.fake_img.metadata[model.MD_PIXEL_SIZE]
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+
+        # the horizontalFoV VA indicates that it's possible to control the zoom
+        hfv = pxs[0] * self._shape[0]
+        self.horizontalFoV = model.FloatContinuous(hfv, range=[1e-6, 10e-3],
+                                                   unit="m")
+        self.magnification = model.VigilantAttribute(self._hfw_nomag / hfv,
+                                                     unit="", readonly=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
@@ -150,11 +152,18 @@ class Scanner(model.Emitter):
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
 
+        # VAs to control the ebeam, purely fake
+        self.power = model.FloatEnumerated(1, {0, 1})
+        self.probeCurrent = model.FloatEnumerated(1.3e-9,
+                          {0.1e-9, 1.3e-9, 2.6e-9, 3.4e-9, 11.564e-9, 23e-9},
+                          unit="A")
+        self.accelVoltage = model.FloatContinuous(10e6, (1e6, 30e6), unit="V")
+
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def _onMagnification(self, mag):
+    def _onHFV(self, mag):
         self._updatePixelSize()
 
     def _onScale(self, s):
@@ -162,13 +171,11 @@ class Scanner(model.Emitter):
 
     def _updatePixelSize(self):
         """
-        Update the pixel size using the scale, HFWNoMag and magnification
+        Update the pixel size using the scale, and horizontalFoV.
+        Also updates magnification, using HFWNoMag
         """
-        mag = self.magnification.value
-        self.parent._metadata[model.MD_LENS_MAG] = mag
-
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[1] * mag))
+        hfv = self.horizontalFoV.value
+        pxs = (hfv / self._shape[0], hfv / self._shape[0]) # always square
 
         # it's read-only, so we change it only via _value
         self.pixelSize._value = pxs
@@ -177,6 +184,12 @@ class Scanner(model.Emitter):
         # If scaled up, the pixels are bigger
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self.parent._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
+
+        # magnification
+        mag = self._hfw_nomag / hfv
+        self.magnification._value = mag
+        self.magnification.notify(mag)
+        self.parent._metadata[model.MD_LENS_MAG] = mag
 
     def _setScale(self, value):
         """
@@ -329,17 +342,18 @@ class Detector(model.Detector):
         current drift.
         """
         metadata = dict(self.parent._metadata)
+        scanner = self.parent._scanner
 
         with self._acquisition_init_lock:
-            pxs = self.parent._scanner.pixelSize.value  # m/px
+            pxs = scanner.pixelSize.value  # m/px
 
-            pxs_pos = self.parent._scanner.translation.value
-            scale = self.parent._scanner.scale.value
-            res = (self.parent._scanner.resolution.value[0] * scale[0],
-                   self.parent._scanner.resolution.value[1] * scale[1])
+            pxs_pos = scanner.translation.value
+            scale = scanner.scale.value
+            res = (scanner.resolution.value[0] * scale[0],
+                   scanner.resolution.value[1] * scale[1])
 
             phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = self.parent._scanner.pixelToPhy(pxs_pos)
+            trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
             shape = self.fake_img.shape
@@ -349,12 +363,17 @@ class Detector(model.Detector):
             sim_img = self.fake_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2):scale[0],
                                     center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2):scale[1]]
 
+            if scanner.power.value == 0:
+                sim_img [...] = 0 # black it out
+
             # update fake output metadata
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
-            metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+            metadata[model.MD_ROTATION] = scanner.rotation.value,
+            metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
+            metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value,
+            metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
             return model.DataArray(sim_img, metadata)
     
     def _acquire_thread(self, callback):

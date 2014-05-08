@@ -19,11 +19,11 @@ from __future__ import division
 
 from Pyro4.core import isasync
 import collections
-from concurrent.futures.thread import ThreadPoolExecutor
 import glob
 import logging
 from odemis import model
 import odemis
+from odemis.model._futures import CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
 import re
@@ -52,7 +52,7 @@ class FW102c(model.Actuator):
         port (string): name of the serial port to connect to. Can be a pattern,
          in which case, all the ports fitting the pattern will be tried, and the
          first one which looks like an FW102C will be used.
-        bands (dict 1<=int<=12 -> 2-tuple of floats > 0):
+        bands (dict 1<=int<=12 -> 2-tuple of floats > 0 or str):
           filter position -> lower and higher bound of the wavelength (m) of the
           light which goes _through_. If it's a list, it implies that the filter
           is multi-band.
@@ -74,7 +74,12 @@ class FW102c(model.Actuator):
                 if not 1 <= pos <= self._maxpos:
                     raise ValueError("Filter position should be between 1 and "
                                      "%d, but got %d." % (self._maxpos, pos))
-                self._checkBand(band)
+                # To support "weird" filter, we accept strings
+                if isinstance(band, basestring):
+                    if not band.strip():
+                        raise ValueError("Name of filter %d is empty" % pos)
+                else:
+                    self._checkBand(band)
         except Exception:
             logging.exception("Failed to parse bands %s", bands)
             raise
@@ -87,7 +92,7 @@ class FW102c(model.Actuator):
         self._hwVersion = self._idn
 
         # will take care of executing axis move asynchronously
-        self._executor = ThreadPoolExecutor(max_workers=1) # one task at a time
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
         self._speed = self.GetSpeed()
 
@@ -354,30 +359,22 @@ class FW102c(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
-        logging.warning("Relative move is not advised for enumerated axes")
-        # TODO move to the +N next position?
         if not shift:
             return model.InstantaneousFuture()
-        else:
-            raise NotImplementedError("Relative move on enumerated axis not supported")
+        self._checkMoveRel(shift)
+        # TODO move to the +N next position? (and modulo number of axes)
+        raise NotImplementedError("Relative move on enumerated axis not supported")
         
     @isasync
     def moveAbs(self, pos):
-        for axis, val in pos.items():
-            if axis == "band":
-                if val not in self._axes[axis].choices:
-                    raise ValueError("Unsupported position %s" % pos)
-            else:
-                raise ValueError("Unsupported axis %s" % (axis,))
-
-        if "band" in pos:
-            p = pos["band"]
-            return self._executor.submit(self._doMoveBand, p)
-        else: # nothing to do
+        if not pos:
             return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        return self._executor.submit(self._doMoveBand, pos["band"])
     
     def stop(self, axes=None):
-        pass # TODO cancel all the futures not yet executed. cf SpectraPro
+        self._executor.cancel()
 
     def selfTest(self):
         """

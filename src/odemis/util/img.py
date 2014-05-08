@@ -198,7 +198,8 @@ def histogram(data, irange=None):
             # For floats, it will automatically find the minimum and maximum
             length = 256
         hist, all_edges = numpy.histogram(data, bins=length, range=irange)
-        edges = (all_edges[0], all_edges[-1])
+        edges = (max(irange[0], all_edges[0]),
+                 min(irange[1], all_edges[-1]))
 
     return hist, edges
 

@@ -452,11 +452,22 @@ class SparcAcquisitionTab(Tab):
         if self._ar_stream and self._spec_stream:
             main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
             main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
-            main_frame.fp_settings_sparc_spectrum.Hide()
-            main_frame.fp_settings_sparc_angular.Hide()
-            acq_view.removeStream(self._sem_spec_stream)
-            acq_view.removeStream(self._sem_ar_stream)
-            self._scount_stream.should_update.value = False
+            if main_data.ar_spec_sel:
+                # use the current position to select the default instrument
+                # TODO: or just don't select anything, as if the GUI was closed
+                # in the alignment tab, it will always end up in AR.
+                if main_data.ar_spec_sel.position.value["rx"] == 0: # AR on
+                    self.main_frame.acq_btn_angular.SetToggle(True)
+                    self._show_spec(False)
+                else: # Spec on
+                    self.main_frame.acq_btn_spectrometer.SetToggle(True)
+                    self._scount_stream.should_update.value = True
+                    self._show_ar(False)
+                # Show() will take care of setting the lenses
+            else:
+                # disable everything
+                self._show_ar(False)
+                self._show_spec(False)
         else:
             # only one detector => hide completely the buttons
             main_frame.sparc_button_panel.Hide()
@@ -545,6 +556,9 @@ class SparcAcquisitionTab(Tab):
         self._spec_graph.SetContent(disp)
 
     def on_acquisition(self, is_acquiring):
+        # We don't call set_lenses() now, so that if the user thinks he's more
+        # clever he can change the switches manually beforehand (and it's faster).
+
         # Disable spectrometer count stream during acquisition
         if self._scount_stream:
             active = self._scount_stream.should_update.value and (not is_acquiring)
@@ -643,6 +657,10 @@ class SparcAcquisitionTab(Tab):
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
+        
+        if show:
+            self._set_lenses()
+        # don't put switches back when hiding, to avoid unnecessary moves
 
     def terminate(self):
         # ensure we are not acquiring anything
@@ -688,6 +706,27 @@ class SparcAcquisitionTab(Tab):
             self._sem_cl_stream.roi.value = roi
             self._sem_cl_stream.roi.subscribe(self.onROI)
 
+    def _set_lenses(self):
+        """
+        Set the lenses ready (as defined by the current stream)
+        """
+        # Enable the lens and put the mirror to the right position
+        streams = self.tab_data_model.acquisitionView.getStreams()
+        if self._sem_ar_stream in streams: # AR on
+            ar_spec_pos = 0
+        elif self._sem_spec_stream in streams: # Spec on
+            ar_spec_pos = math.radians(90)
+        else: # no stream => nothing to do (yet)
+            return
+
+        if self.tab_data_model.main.lens_switch:
+            # convention is: 90° == on (lens)
+            self.tab_data_model.main.lens_switch.moveAbs({"rx": math.radians(90)})
+
+        if self.tab_data_model.main.ar_spec_sel:
+            # convention is: 90° == on (mirror) == spectrometer
+            self.tab_data_model.main.ar_spec_sel.moveAbs({"rx": ar_spec_pos})
+
     def _show_spec(self, show=True):
         """
         Show (or hide) the widgets for spectrum acquisition settings
@@ -709,6 +748,10 @@ class SparcAcquisitionTab(Tab):
         self._scount_stream.should_update.value = show
         self._scount_stream.is_active.value = show
 
+        if show:
+            self._set_lenses()
+        # don't put switches back when hiding, to avoid unnecessary moves
+
     def _show_ar(self, show=True):
         """
         Show (or hide) the widgets for AR acquisition settings
@@ -726,6 +769,10 @@ class SparcAcquisitionTab(Tab):
         else:
             acq_view.removeStream(self._sem_ar_stream)
 
+        if show:
+            self._set_lenses()
+        # don't put switches back when hiding, to avoid unnecessary moves
+
     def onToggleSpec(self, evt):
         """
         called when the Spectrometer button is toggled
@@ -736,6 +783,7 @@ class SparcAcquisitionTab(Tab):
         # is not available (but for now, it's never available)
         self._show_ar(False)
         self.main_frame.acq_btn_angular.SetToggle(False)
+
         self._show_spec(show)
         if show:
             self._spec_stream.roi.value = self._sem_cl_stream.roi.value
@@ -1630,6 +1678,11 @@ class MirrorAlignTab(Tab):
         else:
             self._sem_stream = None
 
+        # Save the current filter
+        if main_data.light_filter:
+            self._prev_filter = main_data.light_filter.position.value["band"]
+            self._move_filter_f = model.InstantaneousFuture() # "fake" move
+
         self._settings_controller = settings.SparcAlignSettingsController(
                                         self.main_frame,
                                         self.tab_data_model,
@@ -1700,6 +1753,39 @@ class MirrorAlignTab(Tab):
             self._ccd_stream.is_active.value = show
         if self._sem_stream:
             self._sem_stream.is_active.value = show
+        
+        # If there is an actuator, disable the lens
+        main_data = self.tab_data_model.main
+        if show:
+            if main_data.lens_switch:
+                # convention is: 0 rad == off (no lens)
+                main_data.lens_switch.moveAbs({"rx": 0})
+            if main_data.ar_spec_sel:
+                # convention is: 0 rad == off (no mirror) == AR
+                main_data.ar_spec_sel.moveAbs({"rx": 0})
+            
+            # pick a filter which is pass-through (=empty)
+            if main_data.light_filter:
+                fltr = main_data.light_filter
+                # find the right filter
+                for p, d in fltr.axes["band"].choices.items():
+                    if d == "pass-through":
+                        if self._move_filter_f.done():
+                            # Don't save if it's not yet in the previous value
+                            # (can happen when quickly switching between tabs)
+                            self._prev_filter = fltr.position.value["band"]
+                        fltr.moveAbs({"band": p})
+                        break
+                else:
+                    logging.info("Failed to find pass-through filter")
+        else:
+            # don't put it back lenses when hiding, to avoid unnessary moves
+            if main_data.light_filter:
+                # If the user has just started to change the filter it won't be
+                # recorded... not sure how to avoid it easily, so for now we'll
+                # accept this little drawback.
+                f = main_data.light_filter.moveAbs({"band": self._prev_filter})
+                self._move_filter_f = f
 
     def terminate(self):
         if self._ccd_stream:

@@ -34,7 +34,7 @@ from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
-from odemis.acq import find_overlay
+from odemis.acq import align
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 from odemis.gui import conf, acqmng
@@ -242,11 +242,12 @@ class SnapshotController(object):
                         d.metadata[model.MD_DESCRIPTION] = s.name.value
                 raw_images.extend(data)
 
+            Message.show_message(self._main_frame,
+                                 "Snapshot saved in %s" % (filepath,),
+                                 timeout=3
+                                 )
             # record everything to a file
             exporter.export(filepath, raw_images, thumbnail)
-
-            wx.CallAfter(Message.show_message, self._main_frame,
-                                               "Snapshot saved")
 
             logging.info("Snapshot saved as file '%s'.", filepath)
         except Exception:
@@ -330,7 +331,7 @@ class SnapshotController(object):
             return
         # to simplify, we don't use the XRANDR API, but just call xrandr command
         # we need to build a whole line with all the outputs, like:
-        # xrandr --output VGA1 --brigthness 2 --output LVDS1 --brigthness 2
+        # xrandr --output VGA1 --brightness 2 --output LVDS1 --brightness 2
         args = ["xrandr"]
         for o in outputs:
             args += ["--output", o, "--brightness", "%f" % brightness]
@@ -715,6 +716,10 @@ class FineAlignController(object):
       the time to expose each spot to the ebeam).
     """
 
+    OVRL_MAX_DIFF = 1e-06  # m
+    OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
+#     OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
+
     def __init__(self, tab_data, main_frame, settings_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
@@ -727,11 +732,13 @@ class FineAlignController(object):
         self._settings_controller = settings_controller
 
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._fa_btn_label = self._main_frame.btn_fine_align.Label
         self._faf_connector = None
 
         # Make sure to reset the correction metadata if lens move
         self._main_data_model.aligner.position.subscribe(self._on_aligner_pos)
 
+        self._main_data_model.fineAlignDwellTime.subscribe(self._on_dwell_time)
         self._tab_data_model.tool.subscribe(self._onTool, init=True)
 
     @call_after
@@ -742,6 +749,35 @@ class FineAlignController(object):
         # Only allow fine alignment when spot mode is on (so that the exposure
         # time has /some chances/ to represent the needed dwell time)
         self._main_frame.btn_fine_align.Enable(tool == guimod.TOOL_SPOT)
+        self._update_est_time()
+
+    def _on_dwell_time(self, dt):
+        self._update_est_time()
+
+    @call_after
+    def _update_est_time(self):
+        """
+        Compute and displays the estimated time for the fine alignment
+        """
+        if self._tab_data_model.tool.value == guimod.TOOL_SPOT:
+            dt = self._main_data_model.fineAlignDwellTime.value
+            t = align.find_overlay.estimateOverlayTime(dt, self.OVRL_REPETITION)
+            t = math.ceil(t) # round a bit pessimistic
+            txt = u"~ %s" % units.readable_time(t, full=False)
+        else:
+            txt = u""
+        self._main_frame.lbl_fine_align.Label = txt
+
+    def _on_aligner_pos(self, pos):
+        """
+        Called when the position of the lens is changed
+        """
+        # This means that the translation correction information from fine
+        # alignment is not correct anymore, so reset it.
+        self._tab_data_model.main.ccd.updateMetadata({model.MD_POS_COR: (0, 0)})
+
+        # The main goal is to remove the "Succesful" text if it there
+        self._update_est_time()
 
     def _pause(self):
         """
@@ -751,8 +787,8 @@ class FineAlignController(object):
         self._settings_controller.enable(False)
         self._settings_controller.pause()
 
-        # TODO: disable every control (eg. toolbar, actuator buttons)
-        self._main_frame.btn_fine_align.Enable(False)
+        # TODO: disable every control (eg. actuator buttons)
+        self._main_frame.lens_align_tb.enable(False)
 
         # make sure to not disturb the acquisition
         for s in self._tab_data_model.streams.value:
@@ -767,7 +803,7 @@ class FineAlignController(object):
         self._settings_controller.resume()
         self._settings_controller.enable(True)
 
-        self._main_frame.btn_fine_align.Enable(True)
+        self._main_frame.lens_align_tb.enable(True)
 
         # Restart the streams (which were being played)
         for s in self._tab_data_model.streams.value:
@@ -778,10 +814,6 @@ class FineAlignController(object):
                   self._main_frame.vp_align_sem.canvas]:
             c.abilities |= set([CAN_DRAG, CAN_FOCUS])
 
-
-    OVRL_MAX_DIFF = 1e-6 # m
-    OVRL_REPETITION = (4, 4) # Not too many, to keep it fast
-#    OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
     def _on_fine_align(self, event):
         """
         Called when the "Fine alignment" button is clicked
@@ -791,24 +823,41 @@ class FineAlignController(object):
         main_data.is_acquiring.value = True
 
         logging.debug("Starting overlay procedure")
-        f = find_overlay.FindOverlay(self.OVRL_REPETITION,
+        f = align.FindOverlay(self.OVRL_REPETITION,
                                      main_data.fineAlignDwellTime.value,
                                      self.OVRL_MAX_DIFF,
                                      main_data.ebeam,
                                      main_data.ccd,
                                      main_data.sed)
         logging.debug("Overlay procedure is running...")
+        self._acq_future = f
+        # Transform Fine alignment button into cancel
+        self._main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_cancel)
+        self._main_frame.btn_fine_align.Label = "Cancel"
 
         # Set up progress bar
         self._main_frame.lbl_fine_align.Hide()
         self._main_frame.gauge_fine_align.Show()
-        self._main_frame.gauge_fine_align.Value = 0
         fa_sizer = self._main_frame.pnl_align_controls.GetSizer()
         fa_sizer.Layout()
         self._faf_connector = ProgessiveFutureConnector(f,
                                             self._main_frame.gauge_fine_align)
 
         f.add_done_callback(self._on_fa_done)
+
+    def _on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        if not self._acq_future:
+            msg = "Tried to cancel acquisition while it was not started"
+            logging.warning(msg)
+            return
+
+        self._acq_future.cancel()
+#        self._main_data_model.is_acquiring.value = False
+        # all the rest will be handled by _on_fa_done()
+
 
     @call_after
     def _on_fa_done(self, future):
@@ -818,32 +867,33 @@ class FineAlignController(object):
             trans_val, cor_md = future.result()
             # The magic: save the correction metadata straight into the CCD
             main_data.ccd.updateMetadata(cor_md)
+        except CancelledError:
+            self._main_frame.lbl_fine_align.Label = "Cancelled"
         except Exception:
             logging.warning("Failed to run the fine alignment, a report "
                             "should be available in ~/odemis-overlay-report.")
-            self._main_frame.lbl_fine_align.SetLabel("Failed")
+            self._main_frame.lbl_fine_align.Label = "Failed"
         else:
-            self._main_frame.lbl_fine_align.SetLabel("Successful")
+            self._main_frame.lbl_fine_align.Label = "Successful"
             # Temporary info until the GUI can actually rotate the images
             if model.MD_ROTATION_COR in cor_md:
-                logging.warning("Rotation needed of %f° will not be displayed",
+                Message.show_message(self._main_frame,
+                                     "Rotation needed: %f°" %
+                                     (cor_md[model.MD_ROTATION_COR],),
+                                     timeout=3
+                                    )
+                logging.warning("Fine alignment computed rotation needed of %f°",
                                 cor_md[model.MD_ROTATION_COR])
 
         # As the CCD image might have different pixel size, force to fit
         self._main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
 
         main_data.is_acquiring.value = False
+        self._main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
+        self._main_frame.btn_fine_align.Label = self._fa_btn_label
         self._resume()
 
         self._main_frame.lbl_fine_align.Show()
         self._main_frame.gauge_fine_align.Hide()
         fa_sizer = self._main_frame.pnl_align_controls.GetSizer()
         fa_sizer.Layout()
-
-    def _on_aligner_pos(self, pos):
-        """
-        Called when the position of the lens is changed
-        """
-        # This means that the translation correction information from fine
-        # alignment is not correct anymore, so reset it.
-        self._tab_data_model.main.ccd.updateMetadata({model.MD_POS_COR: (0, 0)})

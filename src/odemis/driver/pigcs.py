@@ -1794,18 +1794,12 @@ class Bus(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
+        self._checkMoveRel(shift)
         shift = self._applyInversionRel(shift)
         # converts the request into one action (= a dict controller -> channels + distance)
-        action_axes = {}
+        action_axes = collections.defaultdict(list)
         for axis, distance in shift.items():
-            if axis not in self.axes:
-                raise ValueError("Axis unknown: " + str(axis))
-            if abs(distance) > self.axes[axis].range[1]:
-                raise ValueError("Trying to move axis %s by %f m> %f m." %
-                                (axis, distance, self.axes[axis].range[1]))
             controller, channel = self._axis_to_cc[axis]
-            if not controller in action_axes:
-                action_axes[controller] = []
             action_axes[controller].append((channel, distance))
 
         action = ActionFuture(MOVE_REL, action_axes)
@@ -1821,19 +1815,12 @@ class Bus(model.Actuator):
         pos dict(string-> float): name of the axis and new position in m
         returns (Future): object to control the move request
         """
+        self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
         # converts the request into one action (= a dict controller -> channels + distance)
-        action_axes = {}
+        action_axes = collections.defaultdict(list)
         for axis, p in pos.items():
-            if axis not in self.axes:
-                raise ValueError("Axis unknown: " + str(axis))
-            rng = self.axes[axis].range
-            if not rng[0] <= p <= rng[1]:
-                raise ValueError("Trying to move axis %s by %f m, outside of %s." %
-                                (axis, p, rng))
             controller, channel = self._axis_to_cc[axis]
-            if not controller in action_axes:
-                action_axes[controller] = []
             action_axes[controller].append((channel, p))
 
         action = ActionFuture(MOVE_ABS, action_axes)

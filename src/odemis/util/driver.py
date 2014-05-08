@@ -123,8 +123,10 @@ def _speedUpPyroVAConnect(comp):
     # If the connection already exists it's very fast, otherwise, we wait
     # for the connection to be created in a separate thread
 
-    for va in model.getVAs(comp).values():
-        t = threading.Thread(target=va._pyroBind)
+    for name, va in model.getVAs(comp).items():
+        t = threading.Thread(name="Connection to VA %s.%s" % (comp.name, name),
+                             target=va._pyroBind)
+        t.daemon = True
         t.start()
 
 def speedUpPyroConnect(comp):
@@ -141,17 +143,17 @@ def speedUpPyroConnect(comp):
         obj._pyroBind()
         speedUpPyroConnect(obj)
 
-    for child in getattr(comp, "children", []):
-        t = threading.Thread(target=bind_obj, args=(child,))
-        t.start()
-
     _speedUpPyroVAConnect(comp)
 
-    # cannot check for Microscope because it's a proxy
+    # cannot check for Microscope explicitly because it's a proxy
     if isinstance(comp.detectors, collections.Set):
-        for child in (comp.detectors | comp.emitters | comp.actuators):
-            t = threading.Thread(target=bind_obj, args=(child,))
-            t.start()
+        children = (comp.detectors | comp.emitters | comp.actuators)
+    else:
+        children = getattr(comp, "children", [])
+
+    for child in children:
+        t = threading.Thread(name="Connection to %s" % child.name, target=bind_obj, args=(child,))
+        t.start()
 
 
 BACKEND_RUNNING = "RUNNING"

@@ -505,19 +505,7 @@ class Shamrock(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
-        # light check it's in the ranges (can only check it's not too huge)
-        for axis, value in shift.items():
-            if not axis in self._axes:
-                raise LookupError("Axis '%s' doesn't exist" % axis)
-
-            try:
-                maxp = self.axes[axis].range[1]
-            except AttributeError:
-                raise ValueError("Axis %s cannot be moved relative" % axis)
-
-            if abs(value) > maxp:
-                raise ValueError("Move by %f of axis '%s' bigger than %f" %
-                                 (value, axis, maxp))
+        self._checkMoveRel(shift)
 
         for axis in shift:
             if axis == "wavelength":
@@ -534,21 +522,7 @@ class Shamrock(model.Actuator):
         pos dict(string-> float): name of the axis and new position in m
         returns (Future): future that control the asynchronous move
         """
-        # check it's in the ranges
-        for axis, value in pos.items():
-            if not axis in self._axes:
-                raise LookupError("Axis '%s' doesn't exist" % axis)
-
-            axis_def = self.axes[axis]
-            if hasattr(axis_def, "range"):
-                minp, maxp = axis_def.range
-                if not minp <= value <= maxp:
-                    raise ValueError("Position %f of axis '%s' not within range %f→%f" %
-                                     (value, axis, minp, maxp))
-            else:
-                if not value in axis_def.choices:
-                    raise ValueError("Position %f of axis '%s' not within choices %s" %
-                                     (value, axis, axis_def.choices))
+        self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
         if "grating" in pos:

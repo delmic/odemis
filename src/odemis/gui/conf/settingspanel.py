@@ -116,15 +116,6 @@ def _binning_firstd_only(comp, va, conf):
     except NotApplicableError:
         return [cur_val]
 
-def _exposure_range_by_role(comp, va, conf):
-    if comp.role == "ccd":
-        return (0.01, 60.0)
-    elif comp.role == "spectrometer":
-        return (0.01, 500.0)
-    else:
-        return (0.01, 10.0)
-
-
 
 # ==============================================================================
 # All values in CONFIG are optional
@@ -136,12 +127,12 @@ def _exposure_range_by_role(comp, va, conf):
 #   role of component
 #       vigilant attribute name
 #           label
-#              control_type (CONTROL_NONE to hide it)
-#              range
-#              choices
-#              scale
-#              type
-#              format
+#           control_type (CONTROL_NONE to hide it)
+#           range
+#           choices
+#           scale
+#           type
+#           format
 #
 # Any value can be replaced with a function, to allow for dynamic values which
 # can be depending on the backend configuration.
@@ -154,7 +145,7 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_SLIDER,
             "scale": "log",
-            "range": _exposure_range_by_role,
+            "range": (0.01, 60.0), # TODO: SECOM => 1e-3 -> 60, SPARC => 0.01 -> 500
             "type": "float",
             "accuracy": 2,
         },
@@ -240,7 +231,7 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_SLIDER,
             "scale": "log",
-            "range": _exposure_range_by_role,
+            "range": (0.01, 500.0),
             "type": "float",
             "accuracy": 2,
         },
@@ -301,6 +292,14 @@ CONFIG = {
         },
         "grating": # that select the bandwidth observed
         {
+            "control_type": odemis.gui.CONTROL_COMBO,
+        },
+    },
+    "filter": # For the SPARC
+    {
+        "band": # to select the filter used
+        {
+            "label": "Filter",
             "control_type": odemis.gui.CONTROL_COMBO,
         },
     },

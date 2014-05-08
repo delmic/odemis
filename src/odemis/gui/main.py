@@ -82,14 +82,6 @@ class OdemisGUIApp(wx.App):
         # and it needs the attributes defined in this constructor!
         wx.App.__init__(self, redirect=True)
 
-        # TODO: need to set WM_CLASS to a better value than "main.py". For now
-        # almost all wxPython windows get agglomerated together and Odemis is
-        # named "FirstStep" sometimes.
-        # Not clear whether wxPython supports it. See:
-        # http://trac.wxwidgets.org/ticket/12778
-        # Maybe just change the name of this module to something more unique?
-        # (eg, odemis.py)
-
     def OnInit(self):
         """ Application initialization, automatically run from the :wx:`App`
         constructor.

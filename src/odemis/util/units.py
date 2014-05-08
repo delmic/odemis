@@ -189,10 +189,12 @@ def readable_str(value, unit=None, sig=None):
         return u"%s%s" % (to_string_si_prefix(value, sig), unit)
 
 
-def readable_time(seconds):
+def readable_time(seconds, full=True):
     """This function translates intervals given in seconds into human readable
     strings.
     seconds (float)
+    full (bool): if True, will display with full words, otherwise will use an
+                 abbreviated way
     """
     # TODO: a way to indicate some kind of significant number? (If it's going to
     # last 5 days, the number of seconds is generally pointless)
@@ -223,16 +225,28 @@ def readable_time(seconds):
     day, hour = divmod(hour, 24)
 
     if day:
-        result.append(u"%d day%s" % (day, u"" if day == 1 else u"s"))
+        if full:
+            result.append(u"%d day%s" % (day, u"" if day == 1 else u"s"))
+        else:
+            result.append(u"%d d" % (day,))
 
     if hour:
-        result.append(u"%d hour%s" % (hour, u"" if hour == 1 else u"s"))
+        if full:
+            result.append(u"%d hour%s" % (hour, u"" if hour == 1 else u"s"))
+        else:
+            result.append(u"%d h" % (hour,))
 
     if minute:
-        result.append(u"%d minute%s" % (minute, u"" if minute == 1 else u"s"))
+        if full:
+            result.append(u"%d minute%s" % (minute, u"" if minute == 1 else u"s"))
+        else:
+            result.append(u"%d min" % (minute,))
 
     if second:
-        result.append(u"%d second%s" % (second, u"" if second == 1 else u"s"))
+        if full:
+            result.append(u"%d second%s" % (second, u"" if second == 1 else u"s"))
+        else:
+            result.append(u"%d s" % (second,))
 
     if msec:
         result.append(u"%d ms" % msec)

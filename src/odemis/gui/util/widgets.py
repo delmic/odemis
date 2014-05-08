@@ -323,8 +323,6 @@ class ProgessiveFutureConnector(object):
             self._bar.Range = 100 * (past + left)
             self._bar.Value = 100 * past
 
-        if self._label is None:
-            return
 
         if self._future.done():
             # make really sure we don't update the text after the future is over
@@ -341,7 +339,11 @@ class ProgessiveFutureConnector(object):
 
         if left > 2:
             lbl_txt = "%s left." % units.readable_time(left)
-            self._label.SetLabel(lbl_txt)
         else:
             # don't be too precise
-            self._label.SetLabel("a few seconds left.")
+            lbl_txt = "a few seconds left."
+
+        if self._label is None:
+            self._bar.SetToolTipString(lbl_txt)
+        else:
+            self._label.SetLabel(lbl_txt)

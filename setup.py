@@ -66,6 +66,7 @@ if sys.platform.startswith('linux'):
                   # TODO udev rules might actually be better off in /lib/udev/rules.d/
                   ('/lib/udev/rules.d', glob.glob('install/linux/lib/udev/rules.d/*.rules')),
                   ('share/odemis/', glob.glob('install/linux/usr/share/odemis/*.odm.yaml')),
+                  ('share/odemis/examples', glob.glob('install/linux/usr/share/odemis/examples/*.odm.yaml')),
                   # TODO: need to run desktop-file-install in addition to update-desktop-database?
                   ('share/applications/', glob.glob('install/linux/usr/share/applications/*.desktop')),
                   ('share/icons/hicolor/32x32/apps/', ['install/linux/usr/share/icons/hicolor/32x32/apps/odemis.png']),
@@ -81,6 +82,7 @@ if sys.platform.startswith('linux'):
                'install/linux/usr/bin/odemis-gui',
                'install/linux/usr/bin/odemis-start',
                'install/linux/usr/bin/odemis-stop',
+               'install/linux/usr/bin/odemis-cycle',
                ]
 else:
     data_files = []
@@ -103,9 +105,8 @@ dist = setup(name='Odemis',
                          ],
              package_dir={'': 'src'},
              packages=find_packages('src', exclude=["*.test"]),
-             package_data={'odemis.gui.img': ["example/*.png", "example/*.mat",
-                                              "calibration/*.png"],
-                           'odemis.gui.doc': ["*.html"],
+             package_data={'odemis.gui.img': ["calibration/*.png"],
+                           'odemis.gui': ["doc/*.html"],
                            'odemis.driver': ["*.tiff", "*.h5"],
                           },
             ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),

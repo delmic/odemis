@@ -151,6 +151,13 @@ class TestSEM(unittest.TestCase):
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
+    def test_hfv(self):
+        orig_pxs = self.scanner.pixelSize.value
+        orig_hfv = self.scanner.horizontalFoV.value
+        self.scanner.horizontalFoV.value = orig_hfv / 2
+
+        self.assertAlmostEqual(orig_pxs[0] / 2, self.scanner.pixelSize.value[0])
+
     def test_roi(self):
         """
         check that .translation and .scale work

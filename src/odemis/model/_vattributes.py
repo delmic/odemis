@@ -718,6 +718,15 @@ class Continuous(object):
         """The range within which the value of the VA can be"""
         return self._get_range()
 
+    # To be called only by the owner of the object
+    @range.setter
+    def range(self, value):
+        self._set_range(value)
+
+    @range.deleter
+    def range(self):
+        del self._range
+
     def _set_range(self, new_range):
         """ Set the range after performing some basic constraint checks
         """
@@ -785,15 +794,6 @@ class Continuous(object):
             return clipped
         else:
             return max(min(val, self.max), self.min)
-
-    # To be called only by the owner of the object
-    @range.setter
-    def range(self, value):
-        self._set_range(value)
-
-    @range.deleter
-    def range(self):
-        del self._range
 
     def _check(self, value):
         """

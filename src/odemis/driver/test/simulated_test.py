@@ -19,11 +19,14 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+from concurrent.futures._base import CancelledError
+import logging
 from odemis import model
 from odemis.driver import simulated
-from unittest.case import skip
-import logging
+import time
 import unittest
+from unittest.case import skip
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -71,10 +74,13 @@ class ActuatorTest(object):
 
     def test_simple(self):
         self.assertGreaterEqual(len(self.dev.axes), 1, "Actuator has no axis")
-        self.assertIsInstance(self.dev.speed, model.VigilantAttribute, "range is not a VigilantAttribute")
-        self.assertIsInstance(self.dev.speed.value, dict, "speed value is not a dict")
         for n, a in self.dev.axes.items():
             self.assertEqual(len(a.range), 2, "range is not a 2-tuple")
+
+        self.assertIsInstance(self.dev.position.value, dict, "position value is not a dict")
+
+        self.assertIsInstance(self.dev.speed, model.VigilantAttribute, "speed is not a VigilantAttribute")
+        self.assertIsInstance(self.dev.speed.value, dict, "speed value is not a dict")
 
     def test_moveAbs(self):
         # It's optional
@@ -178,6 +184,92 @@ class CombinedTest(unittest.TestCase, ActuatorTest):
     def tearDown(self):
         ActuatorTest.tearDown(self)
 
+
+class ChamberTest(unittest.TestCase):
+
+    actuator_type = simulated.Chamber
+    # name, role, children (must be None)
+    _kwargs = dict(name="c", role="chamber")
+
+    def setUp(self):
+        self.dev = self.actuator_type(**self._kwargs)
+        self._orig_pos = self.dev.position.value
+
+    def tearDown(self):
+        # move back to original position
+        self.dev.moveAbs(self._orig_pos)
+        self.dev.terminate()
+
+    def test_simple(self):
+        self.assertGreaterEqual(len(self.dev.axes), 1, "Actuator has no axis")
+        press_axis = self.dev.axes["pressure"]
+        self.assertGreaterEqual(len(press_axis.choices), 2)
+
+        # if not moving pressure VA and position should be the same
+        cur_press = self.dev.pressure.value
+        pos_press = self.dev.position.value["pressure"]
+        self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05) # ±5%
+
+    def test_moveAbs(self):
+        pos_press = self.dev.position.value["pressure"]
+        logging.info("Device is currently at position %s", pos_press)
+
+        # don't change position
+        f = self.dev.moveAbs({"pressure": pos_press})
+        f.result()
+
+        self.assertEqual(self.dev.position.value["pressure"], pos_press)
+
+        # try every other position
+        axis_def = self.dev.axes["pressure"]
+        for p in axis_def.choices:
+            if p != pos_press:
+                logging.info("Testing move to pressure %s", p)
+                f = self.dev.moveAbs({"pressure": p})
+                # Should still be close from the original pressure
+                cur_press = self.dev.pressure.value
+                self.assertTrue(pos_press * 0.95 <= cur_press <= pos_press * 1.05) # ±5%
+
+                f.result()
+                self.assertEqual(self.dev.position.value["pressure"], p)
+                cur_press = self.dev.pressure.value
+                self.assertTrue(p * 0.95 <= cur_press <= p * 1.05) # ±5%
+
+        if self.dev.position.value["pressure"] == pos_press:
+            self.fail("Failed to find a position different from %d" % pos_press)
+
+    def test_stop(self):
+        self.dev.stop()
+
+        # Create a move with every axis different
+        cur_pos = self.dev.position.value
+        move = {}
+        for n, axis in self.dev.axes.items():
+            for p in axis.choices:
+                if p != cur_pos[n]:
+                    move[n] = p
+                    break
+            else:
+                self.fail("Failed to find a position in %s different from %s" %
+                          (n, cur_pos[n]))
+            
+        f1 = self.dev.moveAbs(move)
+        f2 = self.dev.moveAbs(move)
+        time.sleep(0.001)
+        self.dev.stop()
+
+        with self.assertRaises(CancelledError):
+            f1.result() # might not raise CancelledError, if the operation is not cancellable
+            f2.result()
+
+    def test_wrong_moveAbs(self):
+        # wrong axis
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs({"ba":-2})
+
+        # wrong position
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs({"pressure":-5})
 
 if __name__ == "__main__":
     unittest.main()
