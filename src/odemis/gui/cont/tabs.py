@@ -1772,6 +1772,8 @@ class MirrorAlignTab(Tab):
                             # Don't save if it's not yet in the previous value
                             # (can happen when quickly switching between tabs)
                             self._prev_filter = fltr.position.value["band"]
+                        else:
+                            self._move_filter_f.cancel()
                         fltr.moveAbs({"band": p})
                         break
                 else:
@@ -1879,9 +1881,9 @@ class TabBarController(object):
 
         try:
             self.main_frame.Freeze()
-            # TODO: only call Hide() on the previously selected tab
             for t in self._tab.choices:
-                t.Hide()
+                if t.IsShown():
+                    t.Hide()
         finally:
             self.main_frame.Thaw()
         # It seems there is a bug in wxWidgets which makes the first .Show() not
