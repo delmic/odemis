@@ -397,7 +397,7 @@ class SparcAcquisitionTab(Tab):
                                               main_data.spectrometer.data,
                                               main_data.ebeam)
             self._scount_stream.should_update.value = True
-            self._scount_stream.windowPeriod.value = 30 #s
+            self._scount_stream.windowPeriod.value = 30 # s
 
         if main_data.ccd:
             ar_stream = streammod.ARStream(
@@ -1623,6 +1623,11 @@ class MirrorAlignTab(Tab):
         self._ccd_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
+        self._settings_controller = settings.SparcAlignSettingsController(
+                                        self.main_frame,
+                                        self.tab_data_model,
+                                    )
+
         # create the stream to the AR image + goal image
         if main_data.ccd:
             # Not ARStream as this is for multiple repetitions, and we just care
@@ -1667,6 +1672,26 @@ class MirrorAlignTab(Tab):
             self._view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
 
+        # One of the goal of changing the raw/pitch is to optimise the light
+        # reaching the optical fiber to the spectrometer
+        # TODO: add a way to switch the selector mirror. For now, it's always
+        # switched to AR, and it's up to the user to manually switch it to
+        # spectrometer.
+        if main_data.spectrometer:
+            # Only add the average count stream
+            self._scount_stream = streammod.CameraCountStream("Spectrum count",
+                                              main_data.spectrometer,
+                                              main_data.spectrometer.data,
+                                              main_data.ebeam)
+            self._scount_stream.should_update.value = True
+            self._scount_stream.windowPeriod.value = 30 # s
+            self._spec_graph = self._settings_controller.spec_graph
+            self._txt_mean = self._settings_controller.txt_mean
+            self._scount_stream.image.subscribe(self._on_spec_count, init=True)
+        else:
+            self._scount_stream = None
+            self.main_frame.fp_settings_sparc_spectrum.Show(False)
+
         if main_data.ebeam:
             # SEM, just for the spot mode
             # Not via stream controller, so we can avoid the scheduler
@@ -1682,17 +1707,51 @@ class MirrorAlignTab(Tab):
             self._prev_filter = main_data.light_filter.position.value["band"]
             self._move_filter_f = model.InstantaneousFuture() # "fake" move
 
-        self._settings_controller = settings.SparcAlignSettingsController(
-                                        self.main_frame,
-                                        self.tab_data_model,
-                                    )
-
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
                                                        "mirror_align_")
 
         # Bind keys
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
+
+    # TODO: factorize with SparcAcquisitionTab
+    @call_after
+    def _on_spec_count(self, scount):
+        """
+        Called when a new spectrometer data comes in (and so the whole intensity
+        window data is updated)
+        scount (DataArray)
+        """
+        if len(scount) > 0:
+            # Indicate the raw value
+            v = scount[-1]
+            if v < 1:
+                txt = units.readable_str(float(scount[-1]), sig=6)
+            else:
+                txt = "%d" % round(v) # to make it clear what is small/big
+            self._txt_mean.SetValue(txt)
+
+            # fit min/max between 0 and 1
+            ndcount = scount.view(numpy.ndarray) # standard NDArray to get scalars
+            vmin, vmax = ndcount.min(), ndcount.max()
+            b = vmax - vmin
+            if b == 0:
+                b = 1
+            disp = (scount - vmin) / b
+
+            # insert 0s at the beginning if the window is not (yet) full
+            dates = scount.metadata[model.MD_ACQ_DATE]
+            dur = dates[-1] - dates[0]
+            if dur == 0: # only one tick?
+                dur = 1 # => make it 1s large
+            exp_dur = self._scount_stream.windowPeriod.value
+            missing_dur = exp_dur - dur
+            nb0s = int(missing_dur * len(scount) / dur)
+            if nb0s > 0:
+                disp = numpy.concatenate([numpy.zeros(nb0s), disp])
+        else:
+            disp = []
+        self._spec_graph.SetContent(disp)
 
     def _getGoalImage(self, main_data):
         """
@@ -1752,6 +1811,10 @@ class MirrorAlignTab(Tab):
         if self._sem_stream:
             self._sem_stream.is_active.value = show
         
+        if self._scount_stream:
+            active = self._scount_stream.should_update.value and show
+            self._scount_stream.is_active.value = active
+
         # If there is an actuator, disable the lens
         main_data = self.tab_data_model.main
         if show:
