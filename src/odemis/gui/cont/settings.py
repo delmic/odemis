@@ -1418,7 +1418,7 @@ class SparcAlignSettingsController(SettingsBarController):
         main_data = tab_data.main
 
         self._ar_panel = AngularSettingsPanel(
-                                parent_frame.fp_sparc_settings,
+                                parent_frame.fp_ma_settings_ar,
                                 "No angular resolved camera found")
         self._spectrum_panel = SpectrumSettingsPanel(
                                     parent_frame.fp_ma_settings_spectrum,
