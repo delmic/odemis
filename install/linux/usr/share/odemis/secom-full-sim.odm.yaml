@@ -1,0 +1,182 @@
+SECOM: {
+    class: Microscope,
+    role: secom,
+    emitters: ["Spectra", "Nikon Lens", "FW102C", "EBeam ExtXY"],
+    detectors: ["Clara", "SED ExtXY", "ChamberCam", "NavCam"],
+    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator",
+                "SEM Chamber"],
+}
+
+#Light: {
+#    class: simulated.Light,
+#    role: light,
+#    affects: ["Clara"],
+#    properties: {
+#        power: 100 # W
+#    }
+#}
+
+Spectra: {
+    class: lle.FakeLLE,
+    role: light,
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        sources: {"red": [615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
+                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
+                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
+                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
+                  "yellow": [565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9],
+                  "blue": [420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9],
+                  "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
+                 }
+        },
+    affects: ["Clara"],
+}
+
+"SEM ExtXY": {
+    class: simsem.SimSEM,
+    role: none,
+    init: {},
+    # more detectors can be added, if necessary
+    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+}
+
+"EBeam ExtXY": {
+    # Internal child of Quanta ExtXY, so no class
+    role: e-beam,
+    init: {},
+    affects: ["SED ExtXY", "Clara"] # affects the CCD in case of cathodoluminescence
+}
+
+"SED ExtXY": { # aka ETD
+    # Internal child of Quanta ExtXY, so no class
+    role: se-detector,
+    init: {drift_period: 15} # seconds
+}
+
+"Nikon Lens": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 10.0}, # ratio
+    affects: ["Clara"]
+}
+
+#"MultiBand Fixed Filter": {
+#    class: static.LightFilter,
+#    role: filter,
+#    init: {band: [[420.e-9, 460.e-9],
+#                  [510.e-9, 532.e-9], 
+#                  [590.e-9, 624.e-9],
+#                  [677.e-9, 723.e-9]]}, # m,m
+#    affects: ["Clara"]
+#}
+
+# Thorlabs FW102C with 6 filters
+"FW102C": {
+    class: tlfw.FakeFW102c,
+    role: filter,
+    init: {port: "/dev/ttyFTDI*", # will automatically find the right port
+           bands: {1: [420.e-9, 460.e-9], # pos -> m,m
+                   2: [500.e-9, 550.e-9], 
+                   3: [553.e-9, 577.e-9],
+                   4: [582.e-9, 636.e-9],
+                   5: [635.e-9, 675.e-9],
+                   6: [633.e-9, 1200.e-9]}, 
+           },
+    affects: ["Clara"]
+}
+
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Clara": {
+    class: andorcam2.FakeAndorCam2,
+    role: ccd,
+    init: {device: 0,
+           transpose: [-2, 1], # rotated 90° clockwise
+           # Look-up table for recommended EMCCD Real Gain
+           # readout rate, gain, real gain (integer)
+           emgains: [[10.e+6, 1, 50],
+                     [1.e+6, 1, 150],
+                    ],
+           image: "andorcam2-fake-clara.tiff", # only for simulator
+    },
+    properties: {
+        targetTemperature: -75, # °C
+    }
+}
+
+# Allows to change pressure in the chamber (and load/unload the sample)
+"SEM Chamber": {
+    class: simulated.Chamber,
+    role: chamber,
+}
+
+"ChamberCam": {
+    class: andorcam2.FakeAndorCam2,
+    role: chamber-ccd,
+    init: {device: 0,
+           image: "andorcam2-fake-clara.tiff", # TODO: should have a 8-bit chamber fake image
+    },
+}
+
+"NavCam": {
+    class: andorcam2.FakeAndorCam2,
+    role: overview-ccd,
+    init: {device: 0,
+           image: "andorcam2-fake-clara.tiff", # TODO: should have an 8-bit overview fake image
+    },
+}
+
+"OLStage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: [x, y]},
+    affects: ["Clara", "EBeam ExtXY"],
+    properties: {
+        speed: {x: 0.1, y: 0.1} #m/s
+    }
+}
+
+# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
+"SEM-Optical Alignment": {
+    class: CombinedActuator,
+    role: align,
+    affects: ["Clara"],
+    children: {"a": PIGCS, "b": PIGCS},
+    init: {
+        axes_map: {"a": "a", "b": "b"},
+#        inverted: ["a"]
+    },
+    properties: {
+        speed: {'a': 0.001, 'b': 0.001} #m/s
+    }
+}
+
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)    
+"OpticalZ actuator": {
+    class: CombinedActuator,
+    role: focus,
+    affects: ["Clara"],
+    children: {"z": PIGCS},
+    init: {
+        axes_map: {"z": "z"}
+    },
+    properties: {
+        speed: {'z': 0.1} #m/s
+    }
+}
+
+PIGCS: {
+    class: pigcs.FakeBus,
+    role: none,
+    init: {
+        port: "/dev/ttyPIGCS",
+        # axis -> controller, channel, closed-loop?
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False]},
+    },
+}
+
+
