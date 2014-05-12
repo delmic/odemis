@@ -842,6 +842,8 @@ class BitmapCanvas(BufferedCanvas):
         # Translate to the top left position of the image data
         ctx.translate(*b_im_rect[:2])
         # Apply total scale
+        logging.error("Drawing at total scale %s (%sx%s)",
+                      total_scale, im_scale, self.scale)
         ctx.scale(total_scale, total_scale)
         # We probably cannot use the following method, because we need to
         # set the filter used for scaling. Using set_source instead

@@ -124,6 +124,7 @@ class GuiTestCase(unittest.TestCase):
             raise ValueError("No frame_class set!")
         cls.app_class = cls.app_class or GuiTestApp
         cls.app = cls.app_class(cls.frame_class)
+        cls.frame = cls.app.test_frame
         cls.panel = cls.app.panel_finder(cls.app.test_frame)
         cls.sizer = cls.panel.GetSizer()
 

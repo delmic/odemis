@@ -19,6 +19,8 @@ from odemis.gui.util.img import format_rgba_darray
 from odemis.model import DataArray, VigilantAttribute, FloatContinuous
 import odemis.gui.model as guimodel
 import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.comp.canvas as canvas
+from odemis.acq.stream import StaticStream, RGBStream
 
 import unittest
 import wx
@@ -36,31 +38,162 @@ logging.getLogger().setLevel(logging.ERROR)
 # Create Test images
 
 
-class TestBitmapCanvas(test.GuiTestCase):
+class TestCanvas(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
+    def test_bitmap_canvas(self):
 
-    def test_multiplication(self):
+        # Setting up test frame
 
-        w, h = 10000, 10000
+        cnvs = canvas.BitmapCanvas(self.panel)
+        cnvs.background_brush = wx.SOLID
+        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+
+        self.app.test_frame.SetSize((500, 500))
+        self.app.test_frame.Center()
+        self.app.test_frame.Layout()
+
+        test.gui_loop()
+        self.assertEqual(cnvs.scale, 1)
+        # Creating test data
+
+        img = generate_img_data(50, 50, 4)
+
+        images = [
+            (img, (-25.0, -25.0), 1, True),
+            (img.copy(), (25.0, -25.0), 1, True),
+            (img.copy(), (25, 25.0), 1, True),
+            (img.copy(), (-25.0, 25.0), 1, True),
+        ]
+
+        cnvs.set_images(images)
+        cnvs.update_drawing()
+        test.gui_loop()
 
 
-        a = generate_img_data(h, w, 4)
-        a[..., -1] = numpy.linspace(0, 255, h * w ).reshape(h, w) #pylint: disable=E1103
+        return
 
-        start = time.time()
+        stream1 = RGBStream("stream_one", img)
+        # Set the mpp again, because the on_size handler will recalculate it
+        view.mpp.value = 1
 
-        a[:, :, 0] *= a[:, :, 3] / 255
-        a[:, :, 1] *= a[:, :, 3] / 255
-        a[:, :, 2] *= a[:, :, 3] / 255
+        # Dummy image
+        shape = (200, 201, 4)
+        rgb = numpy.empty(shape, dtype=numpy.uint8)
+        rgb[..., ..., ...] = 255
+        darray = DataArray(rgb)
 
-        print("\n%fs\n" % (time.time() - start))
+        logging.getLogger().setLevel(logging.DEBUG)
 
-    @unittest.skip("simple")
-    def test_format_rgba_darray(self):
-        pass
+        buffer_rect = (0, 0) + canvas._bmp_buffer_size
+        logging.debug("Buffer size is %s", buffer_rect)
 
+        im_scales = [0.00001, 0.33564, 0.9999, 1, 1.3458, 2, 3.0, 101.0, 333.5]
+        im_centers = [(0.0, 0.0), (-1.5, 5.2), (340.0, -220.0), (-20.0, -1.0)]
+
+        canvas.scale = 0.5
+        # Expected rectangles for the given image scales and canvas scale 0.5
+        rects = [
+            (611.9994975, 611.9995, 0.001005, 0.001),
+            (595.13409, 595.218, 33.73182, 33.564),
+            (561.755025, 562.005, 100.48995000000001, 99.99),
+            (561.75, 562.0, 100.5, 100.0),
+            (544.37355, 544.71, 135.2529, 134.58),
+            (511.5, 512.0, 201.0, 200.0),
+            (461.25, 462.0, 301.5, 300.0),
+            (-4463.25, -4438.0, 10150.5, 10100.0),
+            (-16146.375, -16063.0, 33516.75, 33350.0),
+        ]
+
+        for im_center in im_centers:
+            logging.debug("Center: %s", im_center)
+            for im_scale, rect in zip(im_scales, rects):
+                logging.debug("Scale: %s", im_scale)
+                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
+
+                for v in b_rect:
+                    self.assertIsInstance(v, float)
+
+                rect = (
+                    rect[0] + im_center[0] * canvas.scale,
+                    rect[1] + im_center[1] * canvas.scale,
+                    rect[2],
+                    rect[3]
+                )
+                # logging.debug(b_rect)
+                for b, r in zip(b_rect, rect):
+                    self.assertAlmostEqual(b, r)
+
+        canvas.scale = 1.0
+        # Expected rectangle size for the given image scales and canvas scale 1
+        rects = [
+            (611.998995, 611.999, 0.00201, 0.002),
+            (578.26818, 578.436, 67.46364, 67.128),
+            (511.51005, 512.01, 200.97990000000001, 199.98),
+            (511.5, 512.0, 201.0, 200.0),
+            (476.7471, 477.41999999999996, 270.5058, 269.16),
+            (411.0, 412.0, 402.0, 400.0),
+            (310.5, 312.0, 603.0, 600.0),
+            (-9538.5, -9488.0, 20301.0, 20200.0),
+            (-32904.75, -32738.0, 67033.5, 66700.0),
+        ]
+
+        for im_center in im_centers:
+            logging.debug("Center: %s", im_center)
+            for im_scale, rect in zip(im_scales, rects):
+                logging.debug("Scale: %s", im_scale)
+                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
+
+                for v in b_rect:
+                    self.assertIsInstance(v, float)
+
+                # logging.debug(b_rect)
+                rect = (
+                    rect[0] + im_center[0] * canvas.scale,
+                    rect[1] + im_center[1] * canvas.scale,
+                    rect[2],
+                    rect[3]
+                )
+                # logging.debug(b_rect)
+                for b, r in zip(b_rect, rect):
+                    self.assertAlmostEqual(b, r)
+
+        canvas.scale = 2.3
+        # Expected rectangles for the given image scales and canvas scale 2.3
+        rects = [
+            (611.9976885, 611.9977, 0.0046229999999999995, 0.0046),
+            (534.416814, 534.8028, 155.166372, 154.3944),
+            (380.873115, 382.023, 462.25377, 459.95399999999995),
+            (380.85, 382.0, 462.29999999999995, 459.99999999999994),
+            (300.91833, 302.466, 622.16334, 619.068),
+            (149.70000000000005, 152.00000000000006, 924.5999999999999, 919.9999999999999),
+            (-81.44999999999993, -78.0, 1386.8999999999999, 1380.0),
+            (-22734.149999999998, -22618.0, 46692.299999999996, 46460.0),
+            (-76476.525, -76093.0, 154177.05, 153410.0),
+        ]
+
+        for im_center in im_centers:
+            logging.debug("Center: %s", im_center)
+            for im_scale, rect in zip(im_scales, rects):
+                logging.debug("Scale: %s", im_scale)
+                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
+
+                for v in b_rect:
+                    self.assertIsInstance(v, float)
+
+                # logging.debug(b_rect)
+                rect = (
+                    rect[0] + im_center[0] * canvas.scale,
+                    rect[1] + im_center[1] * canvas.scale,
+                    rect[2],
+                    rect[3]
+                )
+                # logging.debug(b_rect)
+                for b, r in zip(b_rect, rect):
+                    self.assertAlmostEqual(b, r)
+
+        logging.getLogger().setLevel(logging.ERROR)
 
     # @profile
     def xtest(self):
@@ -214,190 +347,63 @@ class TestBitmapCanvas(test.GuiTestCase):
     @unittest.skip("simple")
     def test_reshape(self):
 
+        darray = generate_img_data(100, 100, 4, 100)
+
         self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
 
-        # old_canvas = DraggableCanvas(self.panel)
         mmodel = test.FakeMicroscopeModel()
-        mpp = FloatContinuous(10e-6, range=(1e-3, 1), unit="m/px")
+        mpp = FloatContinuous(2, range=(0, 1), unit="m/px")
         mmodel.focussedView.value.mpp = mpp
 
         view = mmodel.focussedView.value
         canvas = miccanvas.DblMicroscopeCanvas(self.panel)
 
-        darray = generate_img_data(100, 100, 4, 100)
-        print darray
 
         canvas.setView(view, mmodel)
-        self.add_control(canvas, flags=wx.EXPAND, proportion=1)
-        test.gui_loop()
-        # Set the mpp again, because the on_size handler will have recalculated it
-        view.mpp.value = 1
+        # self.add_control(canvas, flags=wx.EXPAND, proportion=1)
+        # test.gui_loop()
+        # # Set the mpp again, because the on_size handler will have recalculated it
+        # view.mpp.value = 1
 
-        images = [(format_rgba_darray(darray), (0.0, 0.0), 2, True)]
-        canvas.set_images(images)
-        canvas.scale = 1
-        canvas.update_drawing()
+        # images = [(format_rgba_darray(darray), (0.0, 0.0), 2, True)]
+        # canvas.set_images(images)
+        # canvas.scale = 1
+        # test.gui_loop()
 
-        shape = (5, 5, 4)
-        rgb = numpy.empty(shape, dtype=numpy.uint8)
-        rgb[::2, ...] = [
-                    [255, 0, 0, 255],
-                    [0, 255, 0, 255],
-                    [255, 255, 0, 255],
-                    [255, 0, 255, 255],
-                    [0, 0, 255, 255]
-                ][:shape[1]]
-        rgb[1::2, ...] = [
-                    [127, 0, 0, 255],
-                    [0, 127, 0, 255],
-                    [127, 127, 0, 255],
-                    [127, 0, 127, 255],
-                    [0, 0, 127, 255]
-                ][:shape[1]]
+        # shape = (5, 5, 4)
+        # rgb = numpy.empty(shape, dtype=numpy.uint8)
+        # rgb[::2, ...] = [
+        #             [255, 0, 0, 255],
+        #             [0, 255, 0, 255],
+        #             [255, 255, 0, 255],
+        #             [255, 0, 255, 255],
+        #             [0, 0, 255, 255]
+        #         ][:shape[1]]
+        # rgb[1::2, ...] = [
+        #             [127, 0, 0, 255],
+        #             [0, 127, 0, 255],
+        #             [127, 127, 0, 255],
+        #             [127, 0, 127, 255],
+        #             [0, 0, 127, 255]
+        #         ][:shape[1]]
 
-        rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
-        reshaped_array = DataArray(rgb)
+
+
+        # rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
+        # reshaped_array = DataArray(rgb)
         # self.assertTrue(reshaped_array == format_rgba_darray(darray))
 
-    @unittest.skip("simple")
-    def test_calc_img_buffer_rect(self):
-        self.app.test_frame.SetSize((200, 200))
-        self.app.test_frame.Center()
-        self.app.test_frame.Layout()
+    # @unittest.skip("simple")
 
-        mmodel = test.FakeMicroscopeModel()
-        mpp = FloatContinuous(10e-6, range=(1e-3, 1), unit="m/px")
-        mmodel.focussedView.value.mpp = mpp
-
-        view = mmodel.focussedView.value
-        canvas = miccanvas.DblMicroscopeCanvas(self.panel)
-        canvas.setView(view, mmodel)
-        self.add_control(canvas, flags=wx.EXPAND, proportion=1)
-        test.gui_loop()
-        # Set the mpp again, because the on_size handler will recalculate it
-        view.mpp.value = 1
-
-        # Dummy image
-        shape = (200, 201, 4)
-        rgb = numpy.empty(shape, dtype=numpy.uint8)
-        rgb[..., ..., ...] = 255
-        darray = DataArray(rgb)
-
-        logging.getLogger().setLevel(logging.DEBUG)
-
-        buffer_rect = (0, 0) + canvas._bmp_buffer_size
-        logging.debug("Buffer size is %s", buffer_rect)
-
-        im_scales = [0.00001, 0.33564, 0.9999, 1, 1.3458, 2, 3.0, 101.0, 333.5]
-        im_centers = [(0.0, 0.0), (-1.5, 5.2), (340.0, -220.0), (-20.0, -1.0)]
-
-        canvas.scale = 0.5
-        # Expected rectangles for the given image scales and canvas scale 0.5
-        rects = [
-            (611.9994975, 611.9995, 0.001005, 0.001),
-            (595.13409, 595.218, 33.73182, 33.564),
-            (561.755025, 562.005, 100.48995000000001, 99.99),
-            (561.75, 562.0, 100.5, 100.0),
-            (544.37355, 544.71, 135.2529, 134.58),
-            (511.5, 512.0, 201.0, 200.0),
-            (461.25, 462.0, 301.5, 300.0),
-            (-4463.25, -4438.0, 10150.5, 10100.0),
-            (-16146.375, -16063.0, 33516.75, 33350.0),
-        ]
-
-        for im_center in im_centers:
-            logging.debug("Center: %s", im_center)
-            for im_scale, rect in zip(im_scales, rects):
-                logging.debug("Scale: %s", im_scale)
-                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
-
-                for v in b_rect:
-                    self.assertIsInstance(v, float)
-
-                rect = (
-                    rect[0] + im_center[0] * canvas.scale,
-                    rect[1] + im_center[1] * canvas.scale,
-                    rect[2],
-                    rect[3]
-                )
-                # logging.debug(b_rect)
-                for b, r in zip(b_rect, rect):
-                    self.assertAlmostEqual(b, r)
-
-        canvas.scale = 1.0
-        # Expected rectangle size for the given image scales and canvas scale 1
-        rects = [
-            (611.998995, 611.999, 0.00201, 0.002),
-            (578.26818, 578.436, 67.46364, 67.128),
-            (511.51005, 512.01, 200.97990000000001, 199.98),
-            (511.5, 512.0, 201.0, 200.0),
-            (476.7471, 477.41999999999996, 270.5058, 269.16),
-            (411.0, 412.0, 402.0, 400.0),
-            (310.5, 312.0, 603.0, 600.0),
-            (-9538.5, -9488.0, 20301.0, 20200.0),
-            (-32904.75, -32738.0, 67033.5, 66700.0),
-        ]
-
-        for im_center in im_centers:
-            logging.debug("Center: %s", im_center)
-            for im_scale, rect in zip(im_scales, rects):
-                logging.debug("Scale: %s", im_scale)
-                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
-
-                for v in b_rect:
-                    self.assertIsInstance(v, float)
-
-                # logging.debug(b_rect)
-                rect = (
-                    rect[0] + im_center[0] * canvas.scale,
-                    rect[1] + im_center[1] * canvas.scale,
-                    rect[2],
-                    rect[3]
-                )
-                # logging.debug(b_rect)
-                for b, r in zip(b_rect, rect):
-                    self.assertAlmostEqual(b, r)
-
-        canvas.scale = 2.3
-        # Expected rectangles for the given image scales and canvas scale 2.3
-        rects = [
-            (611.9976885, 611.9977, 0.0046229999999999995, 0.0046),
-            (534.416814, 534.8028, 155.166372, 154.3944),
-            (380.873115, 382.023, 462.25377, 459.95399999999995),
-            (380.85, 382.0, 462.29999999999995, 459.99999999999994),
-            (300.91833, 302.466, 622.16334, 619.068),
-            (149.70000000000005, 152.00000000000006, 924.5999999999999, 919.9999999999999),
-            (-81.44999999999993, -78.0, 1386.8999999999999, 1380.0),
-            (-22734.149999999998, -22618.0, 46692.299999999996, 46460.0),
-            (-76476.525, -76093.0, 154177.05, 153410.0),
-        ]
-
-        for im_center in im_centers:
-            logging.debug("Center: %s", im_center)
-            for im_scale, rect in zip(im_scales, rects):
-                logging.debug("Scale: %s", im_scale)
-                b_rect = canvas._calc_img_buffer_rect(darray, im_scale, im_center)
-
-                for v in b_rect:
-                    self.assertIsInstance(v, float)
-
-                # logging.debug(b_rect)
-                rect = (
-                    rect[0] + im_center[0] * canvas.scale,
-                    rect[1] + im_center[1] * canvas.scale,
-                    rect[2],
-                    rect[3]
-                )
-                # logging.debug(b_rect)
-                for b, r in zip(b_rect, rect):
-                    self.assertAlmostEqual(b, r)
-
-        logging.getLogger().setLevel(logging.ERROR)
 
 
 # Utility functions
+
+def set_img_meta(img, pixel_size, pos):
+    img.metadata[model.MD_PIXEL_SIZE] = pixel_size
+    img.metadata[model.MD_POS] = pos
 
 def generate_img_data(width, height, depth, alpha=255):
     """ Create an image of the given dimensions """
