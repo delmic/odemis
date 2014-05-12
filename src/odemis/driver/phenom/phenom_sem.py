@@ -42,6 +42,11 @@ import time
 import Image
 import re
 
+# Fixed dwell time of Phenom SEM
+DWELL_TIME = 1.92e-07  # s
+#Fixed max number of frames per acquisition
+MAX_FRAMES = 255
+
 class PhenomSEM(model.HwComponent):
     '''
     This is an extension of the model.HwComponent class. It instantiates the scanner 
@@ -62,12 +67,14 @@ class PhenomSEM(model.HwComponent):
         # you can change the 'localhost' string and provide another SEM addres
         client = Client(host + "?om", location=host, username=username, password=password)
         self._device = client.service
+        # Access to service objects
+        self._objects = client.factory
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acquisition_init_lock = threading.Lock()
 
-        self._imagingDevice = client.factory.create('ns0:imagingDevice')
+        self._imagingDevice = self._objects.create('ns0:imagingDevice')
 
         self._metadata = {model.MD_HW_NAME: "PhenomSEM"}
 
@@ -87,14 +94,14 @@ class PhenomSEM(model.HwComponent):
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._detector)
 
-#         # create the stage child
-#         try:
-#             kwargs = children["stage"]
-#         except (KeyError, TypeError):
-#             raise KeyError("PhenomSEM was not given a 'stage' child")
-#         self._stage = Stage(parent=self, daemon=daemon, **kwargs)
-#         self.children.add(self._stage)
-#
+        # create the stage child
+        try:
+            kwargs = children["stage"]
+        except (KeyError, TypeError):
+            raise KeyError("PhenomSEM was not given a 'stage' child")
+        self._stage = Stage(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._stage)
+
 #         # create the focus child
 #         try:
 #             kwargs = children["focus"]
@@ -149,14 +156,12 @@ class Scanner(model.Emitter):
 
         # Distance between borders if magnification = 1. It should be found out
         # via calibration. We assume that image is square, i.e., VFW = HFW
-        self._hfw_nomag = 0.268  # m
+        self._hfw_nomag = 0.268128  # m
 
         # Get current field of view and compute magnification
         fov = self.parent._device.GetSEMHFW()
         mag = self._hfw_nomag / fov
 
-        # Field of view in Phenom is set in m
-        self.parent._device.SetSEMHFW(self._hfw_nomag / mag)
         self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
 
         range = self.parent._device.GetSEMHFWRange()
@@ -205,14 +210,20 @@ class Scanner(model.Emitter):
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
 
-        self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
+        #Compute dwellTime range based on max number of frames and the fixed
+        #phenom dwellTime        
+        dt_range = [DWELL_TIME, DWELL_TIME * MAX_FRAMES]
+        dt = DWELL_TIME
+        # Corresponding nr of frames for initial DWELL_TIME
+        self.nr_frames = 1
+        self.dwellTime = model.FloatContinuous(dt, dt_range, unit="s")
         self.dwellTime.subscribe(self._onDwellTime)
 
         # Range is according to min and max voltages accepted by Phenom API
         range = parent._device.SEMGetHighTensionRange()
         volt_range = [-range.max, -range.min]
         volt = self.parent._device.SEMGetHighTension()
-        self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
+        self.accelVoltage = model.FloatContinuous(-volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 0 turns off the e-beam, 1 turns it on
@@ -227,77 +238,104 @@ class Scanner(model.Emitter):
         self.power = model.IntEnumerated(self._power, power_choices, unit="",
                                   setter=self._setPower)
 
-        # Enumerated float with respect to the PC indexes of Tescan API
-        self._list_currents = self.GetProbeCurrents()
-        pc_choices = set(self._list_currents)
-        # We use the current PC
-        self._probeCurrent = self._list_currents[self.parent._device.GetPCIndex() - 1]
-        self.probeCurrent = model.FloatEnumerated(self._probeCurrent, pc_choices, unit="A",
-                                  setter=self._setPC)
-
+        # Set maximum voltage just to get the min range of spot size (the
+        # difference with max range is trivial, we just want to avoid out of
+        # bounds when we reach the limits)
+        parent._device.SEMSetHighTension(-volt_range[1])
+        range = parent._device.SEMGetSpotSizeRange()
+        parent._device.SEMSetHighTension(volt)
+        # Convert A/sqrt(V) to just A
+        pc_range = [(range.min * math.sqrt(volt_range[1])), (range.max * math.sqrt(volt_range[1]))]
+        # Calculate current pc
+        self._probeCurrent = self._spotSize * math.sqrt(-volt)
+        self.probeCurrent = model.FloatContinuous(self._probeCurrent, pc_range, unit="A",
+                                                  setter=self._setPC)
 
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def _onMagnification(self, mag):
-        # HFW to mm to comply with Tescan API
-        self.parent._device.SetViewField(self._hfw_nomag * 1e03 / mag)
+    def _onHorizontalFOV(self, s):
+        # Update current pixelSize and magnification
         self._updatePixelSize()
+        self._updateMagnification()
+
+    def updateHorizontalFOV(self):
+        with self.parent._acquisition_init_lock:
+            new_fov = self.parent._device.GetSEMHFW()
+
+        self.horizontalFOV.value = new_fov
+        # Update current pixelSize and magnification
+        self._updatePixelSize()
+        self._updateMagnification()
+
+    def _setHorizontalFOV(self, value):
+        self.parent._device.SetSEMHFW(value)
+
+#         # Ensure fov odemis field always shows the right value
+#         # Also useful in case fov value that we try to set is
+#         # out of range
+#         with self.parent._acquisition_init_lock:
+#             cur_fov = self.parent._device.GetSEMHFW()
+#             value = cur_fov
+
+        return value
+
+    def _updateMagnification(self):
+
+        # it's read-only, so we change it only via _value
+        mag = self._hfw_nomag / self.horizontalFOV.value
+        self.magnification._value = mag
+        self.magnification.notify(mag)
 
     def _onDwellTime(self, dt):
-        # TODO interrupt current scanning when dwell time is changed
-        # ScStopScan does not work this way
+        # Abort current scanning when dwell time is changed
+        # self.parent._device.SEMAbortImageAcquisition()
+        # Calculate number of frames
+        self.nr_frames = int(math.ceil(dt / DWELL_TIME))
+
+    def _onRotation(self, rot):
+        # move = {'rz':rot}
+        # self.parent._stage.moveAbs(move)
         pass
 
     def _onVoltage(self, volt):
-        self.parent._device.HVSetVoltage(volt)
+        self.parent._device.SEMSetHighTension(-volt)
+        # Brightness and contrast have to be adjusted just once
+        # we set up the detector (see SEMACB())
 
-    def setPower(self, value):
+    def _setPower(self, value):
         powers = self.power.choices
 
         self._power = util.find_closest(value, powers)
         if self._power == 0:
-            self.parent._device.HVBeamOff()
+            self.parent._device.SEMSetSpotSize(0)
         else:
-            self.parent._device.HVBeamOn()
+            volt = self.accelVoltage.value
+            cur_spotSize = self._probeCurrent / math.sqrt(volt)
+            self.parent._device.SEMSetSpotSize(cur_spotSize)
         return self._power
 
-    def setPC(self, value):
-        currents = self.probeCurrent.choices
-
-        self._probeCurrent = util.find_closest(value, currents)
-        self._indexCurrent = util.index_closest(value, self._list_currents)
-
-        # Set the corresponding current index to Tescan SEM
-        self.parent._device.SetPCContinual(self._indexCurrent + 1)
+    def _setPC(self, value):
+        # Set the corresponding spot size to Phenom SEM
+        self._probeCurrent = value
+        volt = self.accelVoltage.value
+        new_spotSize = value / math.sqrt(volt)
+        self.parent._device.SEMSetSpotSize(new_spotSize)
 
         return self._probeCurrent
-
-    def GetProbeCurrents(self):
-        """
-        return (list of float): probe current values ordered by index
-        """
-        currents = []
-        pcs = self.parent._device.EnumPCIndexes()
-        cur = re.findall(r'\=(.*?)\n', pcs)
-        for i in enumerate(cur):
-            # picoamps to amps
-            currents.append(float(i[1]) * 1e-12)
-        return currents
 
     def _onScale(self, s):
         self._updatePixelSize()
 
     def _updatePixelSize(self):
         """
-        Update the pixel size using the scale, HFWNoMag and magnification
+        Update the pixel size using the scale and FOV
         """
-        mag = self.magnification.value
-        self.parent._metadata[model.MD_LENS_MAG] = mag
+        fov = self.horizontalFOV.value
 
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[1] * mag))
+        pxs = (fov / self._shape[0],
+               fov / self._shape[1])
 
         # it's read-only, so we change it only via _value
         self.pixelSize._value = pxs
@@ -377,3 +415,273 @@ class Scanner(model.Emitter):
         pxs = self.pixelSize.value  # m/px
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
+
+class Detector(model.Detector):
+    """
+    This is an extension of model.Detector class. It performs the main functionality 
+    of the SEM. It sets up a Dataflow and notifies it every time that an SEM image 
+    is captured.
+    """
+    def __init__(self, name, role, parent, channel, **kwargs):
+        """
+        Note: parent should have a child "scanner" already initialised
+        """
+        # It will set up ._shape and .parent
+        model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+
+        # setup detector
+        self._scanParams = self.parent._objects.create('ns0:scanParams')
+        self._detectorMode = self.parent._objects.create('ns0:detector')
+        # use all detector segments
+        detectorMode = 'SEM-DETECTOR-MODE-ALL'
+        self._scanParams.detector = detectorMode
+        #always acquire to the center of FOV
+        self._scanParams.center.x = 0
+        self._scanParams.center.y = 0
+        self._scanParams.scale = 1
+
+        # adjust brightness and contrast
+        self.parent._device.SEMACB()
+
+        self.data = SEMDataFlow(self, parent)
+        self._acquisition_thread = None
+        self._acquisition_lock = threading.Lock()
+        self._acquisition_must_stop = threading.Event()
+
+        # The shape is just one point, the depth
+        self._shape = (2 ** 16,)  # only one point
+
+    def start_acquire(self, callback):
+        with self._acquisition_lock:
+            self._wait_acquisition_stopped()
+            target = self._acquire_thread
+            self._acquisition_thread = threading.Thread(target=target,
+                    name="PhenomSEM acquire flow thread",
+                    args=(callback,))
+            self._acquisition_thread.start()
+
+    def stop_acquire(self):
+        with self._acquisition_lock:
+            with self.parent._acquisition_init_lock:
+                self._acquisition_must_stop.set()
+
+    def _wait_acquisition_stopped(self):
+        """
+        Waits until the acquisition thread is fully finished _iff_ it was requested
+        to stop.
+        """
+        # "if" is to not wait if it's already finished
+        if self._acquisition_must_stop.is_set():
+            logging.debug("Waiting for thread to stop.")
+            self._acquisition_thread.join(10)  # 10s timeout for safety
+            if self._acquisition_thread.isAlive():
+                logging.exception("Failed to stop the acquisition thread")
+                # Now let's hope everything is back to normal...
+            # ensure it's not set, even if the thread died prematurely
+            self._acquisition_must_stop.clear()
+
+    def _acquire_image(self):
+        """
+        Acquires the SEM image based on the translation, resolution and
+        current drift.
+        """
+
+        with self.parent._acquisition_init_lock:
+            pxs = self.parent._scanner.pixelSize.value  # m/px
+
+            pxs_pos = self.parent._scanner.translation.value
+            scale = self.parent._scanner.scale.value
+            res = (self.parent._scanner.resolution.value[0],
+                   self.parent._scanner.resolution.value[1])
+
+            metadata = dict(self.parent._metadata)
+            phy_pos = metadata.get(model.MD_POS, (0, 0))
+            trans = self.parent._scanner.pixelToPhy(pxs_pos)
+            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+
+            # update changed metadata
+            metadata[model.MD_POS] = updated_phy_pos
+            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
+            metadata[model.MD_ACQ_DATE] = time.time()
+            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
+            metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+
+            center = (res[0] / 2, res[1] / 2)
+            l = center[0] + pxs_pos[1] - (res[1] / 2)
+            t = center[1] + pxs_pos[0] - (res[0] / 2)
+            r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
+            b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
+
+            dt = self.parent._scanner.dwellTime.value
+            self._scanParams.resolution.height = res[0]
+            self._scanParams.resolution.width = res[1]
+            self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
+            self._scanParams.HDR = True  # 16 bits
+            img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
+
+            # image to ndarray
+            sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint16")
+            sem_img.shape = res
+
+            return model.DataArray(sem_img, metadata)
+
+    def _acquire_thread(self, callback):
+        """
+        Thread that performs the SEM acquisition. It calculates and updates the
+        center (e-beam) position based on the translation and provides the new 
+        generated output to the Dataflow. 
+        """
+        try:
+            while not self._acquisition_must_stop.is_set():
+                callback(self._acquire_image())
+        except Exception:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()
+
+    def updateMetadata(self, md):
+        # we share metadata with our parent
+        self.parent.updateMetadata(md)
+
+class SEMDataFlow(model.DataFlow):
+    """
+    This is an extension of model.DataFlow. It receives notifications from the 
+    detector component once the SEM output is captured. This is the dataflow to 
+    which the SEM acquisition streams subscribe.
+    """
+    def __init__(self, detector, sem):
+        """
+        detector (semcomedi.Detector): the detector that the dataflow corresponds to
+        sem (semcomedi.SEMComedi): the SEM
+        """
+        model.DataFlow.__init__(self)
+        self.component = weakref.ref(detector)
+
+    # start/stop_generate are _never_ called simultaneously (thread-safe)
+    def start_generate(self):
+        try:
+            self.component().start_acquire(self.notify)
+        except ReferenceError:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+
+    def stop_generate(self):
+        try:
+            self.component().stop_acquire()
+            # Note that after that acquisition might still go on for a short time
+        except ReferenceError:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+
+class Stage(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    moving the Phenom stage and updating the position. 
+    """
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        axes (set of string): names of the axes
+        """
+        axes_def = {}
+        self._position = {}
+
+        # Position phenom object
+        self._stagePos = self.parent._objects.create('ns0:position')
+
+        rng = [-0.5, 0.5]
+        axes_def["x"] = model.Axis(unit="m", range=rng)
+        axes_def["y"] = model.Axis(unit="m", range=rng)
+        rng_rot = [0, 2 * math.pi]
+        axes_def["rz"] = model.Axis(unit="rad", range=rng_rot)
+
+        # First calibrate
+        self._stagePos.x, self._stagePos.y = 0, 0
+        parent._device.SetStageCenterCalib(self._stagePos)
+
+        mode_pos = parent._device.GetStageModeAndPosition()
+        self._position["x"] = mode_pos.position.x
+        self._position["y"] = mode_pos.position.y
+
+        # degrees to rad
+        rot = parent._device.GetSEMRotation()
+        self._position["rz"] = (rot * math.pi) / 180
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    def _doMove(self, pos):
+        """
+        move to the position 
+        """
+        # Perform move through Tescan API
+        # Position from m to mm and inverted
+        self.parent._device.StgMoveTo(-pos["x"] * 1e3,
+                                    - pos["y"] * 1e3,
+                                    - self.init_z * 1e3,
+                                    (pos["rz"] * 180) / math.pi)
+
+        # Obtain the finally reached position after move is performed.
+        # This is mainly in order to keep the correct position in case the
+        # move we tried to perform was greater than the maximum possible
+        # one.
+        with self.parent._acquisition_init_lock:
+            x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+            self._position["x"] = -x * 1e-3
+            self._position["y"] = -y * 1e-3
+            self._position["rz"] = (rot * math.pi) / 180
+
+        self._updatePosition()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        shift = self._applyInversionRel(shift)
+
+        for axis, change in shift.items():
+            self._position[axis] += change
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
+
+        for axis, new_pos in pos.items():
+            self._position[axis] = new_pos
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
+
+    def stop(self, axes=None):
+        # Empty the queue for the given axes
+        self._executor.cancel()
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
