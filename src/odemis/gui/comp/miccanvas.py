@@ -743,8 +743,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         t_start = time.time()
         super(DblMicroscopeCanvas, self).draw()
         dur = time.time() - t_start
-        fps = 1 / dur
-        self._fps_label.text = u"%s fps" % units.readable_str(fps, sig=4)
+        try:
+            fps = 1 / dur
+            self._fps_label.text = u"%s fps" % units.readable_str(fps, sig=4)
+        except ZeroDivisionError:
+            self._fps_label.text = u"∞ fps"
 
         # if latest > 0:
         #     logging.debug("Drew canvas %g s after acquisition (took %g s).",

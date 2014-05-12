@@ -1418,10 +1418,33 @@ class SparcAlignSettingsController(SettingsBarController):
         main_data = tab_data.main
 
         self._ar_panel = AngularSettingsPanel(
-                                parent_frame.fp_sparc_settings,
+                                parent_frame.fp_ma_settings_ar,
                                 "No angular resolved camera found")
+        self._spectrum_panel = SpectrumSettingsPanel(
+                                    parent_frame.fp_ma_settings_spectrum,
+                                    "No spectrometer found")
 
-        # Query Odemis daemon (Should move this to separate thread)
         if main_data.ccd:
             self.add_component("Camera", main_data.ccd, self._ar_panel)
+
+        if main_data.spectrometer:
+            self.add_component(
+                    "Spectrometer",
+                    main_data.spectrometer,
+                    self._spectrum_panel
+            )
+            # Add a intensity/time graph
+            self.spec_graph = hist.Histogram(self._spectrum_panel.panel,
+                                        size=(-1, 40))
+            self.spec_graph.SetBackgroundColour("#000000")
+            self._spectrum_panel.add_widgets(self.spec_graph)
+            # the "Mean" value bellow the graph
+            lbl_mean = wx.StaticText(self._spectrum_panel.panel, label="Mean")
+            tooltip_txt = "Average intensity value of the last image"
+            lbl_mean.SetToolTipString(tooltip_txt)
+            self.txt_mean = wx.TextCtrl(self._spectrum_panel.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
+            self.txt_mean.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+            self.txt_mean.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+            self.txt_mean.SetToolTipString(tooltip_txt)
+            self._spectrum_panel.add_widgets(lbl_mean, self.txt_mean)
 

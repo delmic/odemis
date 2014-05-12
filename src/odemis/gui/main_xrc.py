@@ -115,7 +115,8 @@ class xrcfr_main(wx.Frame):
         self.mirror_align_btn_prz = xrc.XRCCTRL(self, "mirror_align_btn_prz")
         self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_sparc_settings = xrc.XRCCTRL(self, "fp_sparc_settings")
+        self.fp_ma_settings_ar = xrc.XRCCTRL(self, "fp_ma_settings_ar")
+        self.fp_ma_settings_spectrum = xrc.XRCCTRL(self, "fp_ma_settings_spectrum")
         self.pnl_sparc_align_streams = xrc.XRCCTRL(self, "pnl_sparc_align_streams")
         self.pnl_tab_sparc_acqui = xrc.XRCCTRL(self, "pnl_tab_sparc_acqui")
         self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
@@ -1958,8 +1959,8 @@ def __init_resources():
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
                           <object class="FoldPanelBar">
-                            <object class="FoldPanelItem" name="fp_sparc_settings">
-                              <label>INSTRUMENT SETTINGS</label>
+                            <object class="FoldPanelItem" name="fp_ma_settings_ar">
+                              <label>ANGLE RESOLVED</label>
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                               <XRCED>
@@ -1983,6 +1984,23 @@ def __init_resources():
                               <fg>#1A1A1A</fg>
                               <bg>#555555</bg>
                             </object>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="FoldPanelBar">
+                            <object class="FoldPanelItem" name="fp_ma_settings_spectrum">
+                              <label>SPECTROMETER</label>
+                              <fg>#1A1A1A</fg>
+                              <bg>#555555</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <spacing>0</spacing>
+                            <leftspacing>0</leftspacing>
+                            <rightspacing>0</rightspacing>
+                            <bg>#333333</bg>
                           </object>
                           <flag>wxEXPAND</flag>
                         </object>
