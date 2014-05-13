@@ -25,39 +25,39 @@ import wx
 # Known good key bindings
 # WXK -> (args for tab_data_model.step())
 KB_SECOM = {
-        wx.WXK_LEFT: ("x", -1),
-        wx.WXK_RIGHT: ("x", 1),
-        wx.WXK_DOWN: ("y", -1),
-        wx.WXK_UP: ("y", 1),
-        wx.WXK_PAGEDOWN: ("z", -1),
-        wx.WXK_PAGEUP: ("z", 1),
-        wx.WXK_NUMPAD_HOME: ("b", -1),
-        wx.WXK_NUMPAD_PAGEDOWN: ("b", 1),
-        wx.WXK_NUMPAD_END: ("a", -1),
-        wx.WXK_NUMPAD_PAGEUP: ("a", 1),
+        wx.WXK_LEFT: ("stage", "x", -1),
+        wx.WXK_RIGHT: ("stage", "x", 1),
+        wx.WXK_DOWN: ("stage", "y", -1),
+        wx.WXK_UP: ("stage", "y", 1),
+        wx.WXK_PAGEDOWN: ("focus", "z", -1),
+        wx.WXK_PAGEUP: ("focus", "z", 1),
+        wx.WXK_NUMPAD_HOME: ("aligner", "b", -1),
+        wx.WXK_NUMPAD_PAGEDOWN: ("aligner", "b", 1),
+        wx.WXK_NUMPAD_END: ("aligner", "a", -1),
+        wx.WXK_NUMPAD_PAGEUP: ("aligner", "a", 1),
         # same but with NumLock
-        wx.WXK_NUMPAD7: ("b", -1),
-        wx.WXK_NUMPAD3: ("b", 1),
-        wx.WXK_NUMPAD1: ("a", -1),
-        wx.WXK_NUMPAD9: ("a", 1),
+        wx.WXK_NUMPAD7: ("aligner", "b", -1),
+        wx.WXK_NUMPAD3: ("aligner", "b", 1),
+        wx.WXK_NUMPAD1: ("aligner", "a", -1),
+        wx.WXK_NUMPAD9: ("aligner", "a", 1),
 }
 
 KB_SPARC = {
-        wx.WXK_LEFT: ("x", -1), # so that image goes in same direction
-        wx.WXK_RIGHT: ("x", 1),
-        wx.WXK_DOWN: ("y", 1),
-        wx.WXK_UP: ("y", -1),
-        wx.WXK_PAGEDOWN: ("z", -1),
-        wx.WXK_PAGEUP: ("z", 1),
-        wx.WXK_NUMPAD_LEFT: ("rz", -1),
-        wx.WXK_NUMPAD_RIGHT: ("rz", 1),
-        wx.WXK_NUMPAD_DOWN: ("ry", 1),
-        wx.WXK_NUMPAD_UP: ("ry", -1),
+        wx.WXK_LEFT: ("mirror", "x", -1), # so that image goes in same direction
+        wx.WXK_RIGHT: ("mirror", "x", 1),
+        wx.WXK_DOWN: ("mirror", "y", 1),
+        wx.WXK_UP: ("mirror", "y", -1),
+        wx.WXK_PAGEDOWN: ("focus_sem", "z", -1),
+        wx.WXK_PAGEUP: ("focus_sem", "z", 1),
+        wx.WXK_NUMPAD_LEFT: ("mirror", "rz", -1),
+        wx.WXK_NUMPAD_RIGHT: ("mirror", "rz", 1),
+        wx.WXK_NUMPAD_DOWN: ("mirror", "ry", 1),
+        wx.WXK_NUMPAD_UP: ("mirror", "ry", -1),
         # same but with NumLock
-        wx.WXK_NUMPAD4: ("rz", -1),
-        wx.WXK_NUMPAD6: ("rz", 1),
-        wx.WXK_NUMPAD2: ("ry", 1),
-        wx.WXK_NUMPAD8: ("ry", -1),
+        wx.WXK_NUMPAD4: ("mirror", "rz", -1),
+        wx.WXK_NUMPAD6: ("mirror", "rz", 1),
+        wx.WXK_NUMPAD2: ("mirror", "ry", 1),
+        wx.WXK_NUMPAD8: ("mirror", "ry", -1),
 }
 
 KEY_BINDINGS = {
@@ -99,21 +99,21 @@ class ActuatorController(object):
             logging.warning("No slider found for tab %s", tab_prefix)
 
         # Bind buttons
-        for axis in tab_data.axes:
+        for actuator, axis in tab_data.axes:
             for suffix, factor in [("m", -1), ("p", 1)]:
-                # something like "lens_align_btn_prz"
-                btn_name = tab_prefix + "btn_" + suffix + axis
+                # something like "lens_align_btn_p_mirror_rz"
+                btn_name = "%sbtn_%s_%s_%s" % (tab_prefix, suffix, actuator, axis)
                 try:
                     btn = getattr(main_frame, btn_name)
                 except AttributeError:
                     logging.debug("No button in GUI found for axis %s", axis)
                     continue
 
-                def btn_action(evt, tab_data=tab_data, axis=axis, factor=factor):
+                def btn_action(evt, tab_data=tab_data, actuator=actuator, axis=axis, factor=factor):
                     # Button events don't contain key state, so check ourselves
                     if wx.GetKeyState(wx.WXK_SHIFT):
                         factor /= 10
-                    tab_data.step(axis, factor)
+                    tab_data.step(actuator, axis, factor)
 
                 btn.Bind(wx.EVT_BUTTON, btn_action)
 
@@ -129,8 +129,8 @@ class ActuatorController(object):
             logging.warning("No known key binding for microscope %s", role)
             return
         # Remove keys for axes not available
-        for key, (axis, _) in self.key_bindings.items():
-            if not axis in self._tab_data_model.axes:
+        for key, (actuator, axis, _) in self.key_bindings.items():
+            if not (actuator, axis) in self._tab_data_model.axes:
                 del self.key_bindings[key]
 
         # Keybinding is difficult:
@@ -150,10 +150,10 @@ class ActuatorController(object):
             focusedWin = wx.Window.FindFocus()
             # TODO: need to check for more widget types?
             if not isinstance(focusedWin, (wx.TextCtrl, ComboBox)):
-                axis, size = self.key_bindings[key]
+                actuator, axis, size = self.key_bindings[key]
                 if event.ShiftDown():
                     size /= 10
-                self._tab_data_model.step(axis, size)
+                self._tab_data_model.step(actuator, axis, size)
                 return # keep it for ourselves
 
         # everything else we don't process

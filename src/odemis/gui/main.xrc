@@ -349,7 +349,7 @@
                         <cellpos>3,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_mb">
+                        <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
                           <label>↖</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -374,7 +374,7 @@
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pa">
+                        <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -399,7 +399,7 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
                           <label>↙</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -424,7 +424,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pb">
+                        <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1401,7 +1401,7 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_py">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
                           <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1426,7 +1426,7 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_my">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
                           <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1451,7 +1451,7 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_px">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
                           <label>←</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1474,7 +1474,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mx">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
                           <label>→</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1617,7 +1617,7 @@
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mry">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
                           <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1642,7 +1642,7 @@
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_pry">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
                           <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1667,7 +1667,7 @@
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mrz">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
                           <label>←</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
@@ -1690,7 +1690,7 @@
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_prz">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
                           <label>→</label>
                           <delta>1</delta>
                           <bitmap>img/btn_64x48.png</bitmap>
