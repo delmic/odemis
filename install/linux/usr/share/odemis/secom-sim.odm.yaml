@@ -3,7 +3,7 @@ SimSECOM: {
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
     detectors: ["Andor SimCam", "SED ExtXY"],
-    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator", "EBeam Focus"],
 }
 
 #Light: {
@@ -39,12 +39,14 @@ Spectra: {
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
     },
-    # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+    children: {scanner: "EBeam ExtXY",
+               detector0: "SED ExtXY",
+               focus: "EBeam Focus",
+    }
 }
 
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: e-beam,
     init: {},
     properties: {
@@ -54,11 +56,16 @@ Spectra: {
 }
 
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: se-detector,
     init: {
            drift_period: 5, # seconds
     },
+}
+
+"EBeam Focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
 }
 
 "Nikon Super Duper": {
@@ -152,12 +159,6 @@ Spectra: {
         speed: {'z': 0.1} #m/s
     }
 }
-
-# USB should be connected to a E-861 or C-867
-# PI E-861/C-867 jumpers (. = off):
-# A = 1234.6..
-# B = 123..6..
-# Z = 12.4.6..
 
 PIGCS: {
     class: pigcs.FakeBus,
