@@ -3,7 +3,7 @@ SPARC: {
     class: Microscope,
     role: sparc,
     emitters: ["EBeam ExtXY", "AR Lens", "FW102C"],
-    detectors: ["SED ExtXY", "ARCam", "AndorSpec"], # Remove ARCam to not have the button in the GUI
+    detectors: ["SED ExtXY", "ARCam", "AndorSpec"],
     actuators: ["MirrorMover", "MFFLens", "MFFSelector"],
 }
 
@@ -25,14 +25,15 @@ SPARC: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[3, -3], [-4, 4]],  # V
-        settle_time: 10.e-6, # s
-        hfw_nomag: 0.1067, # m
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 244, # (ratio)
+        magnification: 100, # (ratio)
     },
     affects: ["SED ExtXY", AndorSpec, ARCam] # affects the CCD in case of cathodoluminescence
 }
@@ -55,7 +56,6 @@ SPARC: {
           }, 
     affects: ["ARCam"]
 }
-
 
 # Thorlabs MFF102 holding the lens
 # The convention for the position is:
@@ -108,6 +108,7 @@ ARCam: {
     },
     affects: ["ARCam", "AndorSpec"]  
 }
+
 # Andor iDus 406 + Shamrock SR303i
 AndorSpec: {
     class: andorshrk.AndorSpec, # Instantiates an Andorcam2 + Shamrock
@@ -142,7 +143,7 @@ SR303i: {
 # RZ (yaw)   = 12.4.6..
 # RY (pitch) = 12...6..
 MirrorMover: {
-    class: pigcs.FakeBus, # Simulated!
+    class: pigcs.Bus,
     role: mirror,
     init: {
         port: "/dev/ttyPIGCS",

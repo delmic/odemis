@@ -2,9 +2,9 @@
 SPARC-AR: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY", "AR Lens"],
-    detectors: ["SED ExtXY", "ARCam", "Spec10"], # Remove Spec10 to not have the button in the GUI
-    actuators: ["MirrorMover"],
+    emitters: ["EBeam ExtXY", "AR Lens", "FW102C"],
+    detectors: ["SED ExtXY", "ARCam"],
+    actuators: ["MirrorMover", "MFFLens", "MFFSelector"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -25,16 +25,17 @@ SPARC-AR: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[3, -3], [-4, 4]],  # V
-        settle_time: 10.e-6, # s
-        hfw_nomag: 0.1067, # m
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 244, # (ratio)
+        magnification: 100, # (ratio)
     },
-    affects: ["SED ExtXY", SpecCam, ARCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", ARCam] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -57,6 +58,32 @@ SPARC-AR: {
 }
 
 
+# Thorlabs MFF102 holding the lens
+# The convention for the position is:
+# 0° (1)  -> no lens
+# 90° (2) -> lens
+"MFFLens": {
+    class: tlaptmf.MFF,
+    role: lens-switch,
+    init: {sn: "37848823",
+           axis: "rx",
+           # inverted: ["rx"],
+    },
+    affects: ["AR Lens", "ARCam"]  
+}
+
+# Thorlabs FW102C with some filters
+"FW102C": {
+    class: tlfw.FW102c,
+    role: filter,
+    init: {port: "/dev/ttyFTDI*", # will automatically find the right port
+           bands: {1: [420.e-9, 460.e-9], # pos -> m,m
+                   2: [500.e-9, 550.e-9], 
+                   3: "polariser",
+                   6: "pass-through"},
+           },
+    affects: ["ARCam"]
+}
 # Zyla/CL
 ARCam: {
     class: andorcam3.AndorCam3,
@@ -68,29 +95,18 @@ ARCam: {
            }
 }
 
-Spec10: {
-    class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
-    children: {detector: "SpecCam", spectrograph: "FakeSP2300i"},
-    properties: {
-        binning: [4, 16],
+# Thorlabs MFF102 holding the mirror to select AR or spectrometer
+# The convention for the position is:
+# 0° (1)  -> AR
+# 90° (2) -> spectrometer
+"MFFSelector": {
+    class: tlaptmf.MFF,
+    role: ar-spec-selector,
+    init: {sn: "37848720",
+           axis: "rx",
+           # inverted: ["rx"],
     },
-}
-
-SpecCam: {
-    class: andorcam2.FakeAndorCam2,
-    role: sp-ccd,
-    init: {device: 0} # same device number but it will actually be different device
-}
-
-# Simulated SP-2300i, the spectrograph part of the Spec-10
-FakeSP2300i: {
-    class: spectrapro.FakeSpectraPro,
-    role: spectrograph,
-    affects: [SpecCam],
-    init: {
-        port: "/dev/ttySP",
-    },
+    affects: ["ARCam"]  
 }
 
 # PI E-861 jumpers (. = off):
