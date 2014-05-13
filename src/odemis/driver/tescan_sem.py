@@ -30,9 +30,12 @@ import threading
 import time
 from odemis.model._futures import CancellableThreadPoolExecutor
 import weakref
+import odemis
 from odemis.util import TimeoutError
 from tescan import sem, CancelledError
 import re
+
+MAX_FAILURES = 5  # maximum allowed number of acquisition failures in a row
 
 class TescanSEM(model.HwComponent):
     '''
@@ -66,8 +69,11 @@ class TescanSEM(model.HwComponent):
         # procedures, even before we configure the detectors
         self._device.ScStopScan()
 
-        self._metadata = {model.MD_HW_NAME: "TescanSEM",
-                          model.MD_HW_VERSION: self._device.TcpGetDevice()}
+        self._hwName = "TescanSEM (s/n: %s)" % (self._device.TcpGetDevice())
+        self._metadata = {model.MD_HW_NAME: self._hwName}
+        self._swVersion = "SEM sw %s, protocol %s" % (self._device.TcpGetSWVersion(),
+                                                      self._device.TcpGetVersion())
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
 
         # create the scanner child
         try:
@@ -202,11 +208,9 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
         # (float) in rad => rotation of the image compared to the original axes
-        x, y, z, rot, tilt = parent._device.StgGetPosition()
-        rotation = (rot * math.pi) / 180
-        rot_range = (0, 2 * math.pi)
-        self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
-        self.rotation.subscribe(self._onRotation)
+        # TODO: for now it's readonly because no rotation is supported
+        self.rotation = model.FloatContinuous(0, [0, 2 * math.pi], unit="rad",
+                                              readonly=True)
 
         self.dwellTime = model.FloatContinuous(1e-06, (1e-06, 1000), unit="s")
         self.dwellTime.subscribe(self._onDwellTime)
@@ -281,10 +285,6 @@ class Scanner(model.Emitter):
         self.parent._device.CancelRecv()
         self.parent._device.ScStopScan()
         pass
-
-    def _onRotation(self, rot):
-        move = {'rz':rot}
-        self.parent._stage.moveAbs(move)
 
     def _onVoltage(self, volt):
         self.parent._device.HVSetVoltage(volt)
@@ -451,7 +451,7 @@ class Detector(model.Detector):
         self.acq_shape = self.parent._scanner._shape
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
-        self.parent._device.SetWaitFlags(1 << 3)  # bit 3 =D = SEM automatic procedure
+        self.parent._device.SetWaitFlags(1 << 0 | 1 << 1)  # SEM scanning & SEM stage
 
         # adjust brightness and contrast
         self.parent._device.DtAutoSignal(self._channel)
@@ -459,6 +459,7 @@ class Detector(model.Detector):
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
+        self._failures = 0
         # self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
 
@@ -543,6 +544,8 @@ class Detector(model.Detector):
             # we must stop the scanning even after single scan
             self.parent._device.ScStopScan()
 
+            # Successful acquisition, reset number of failures
+            self._failures = 0
             return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
@@ -559,7 +562,12 @@ class Detector(model.Detector):
                 # Waiting to fetch image is cancelled
                 pass
             except Exception:
-                logging.exception("Unexpected failure during image acquisition")
+                self._failures += 1
+                if self._failures >= MAX_FAILURES:
+                    logging.exception("Image acquisition failed")
+                else:
+                    logging.warning("Acquisition failure, retry to acquire...")
+                    pass
             finally:
                 logging.debug("Acquisition thread closed")
                 self._acquisition_must_stop.clear()
@@ -613,11 +621,12 @@ class Stage(model.Actuator):
         rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
-        rng_rot = [0, 2 * math.pi]
-        axes_def["rz"] = model.Axis(unit="rad", range=rng_rot)
+        axes_def["z"] = model.Axis(unit="m", range=rng)
 
-        # First calibrate
-        parent._device.StgCalibrate()
+        # Demand calibrated stage
+        if parent._device.StgIsCalibrated() !=1:
+            logging.warning("Stage was not calibrated. We are performing calibration now.")
+            parent._device.StgCalibrate()
 
         #Wait for stage to be stable after calibration
         while parent._device.StgIsBusy() != 0:
@@ -628,12 +637,7 @@ class Stage(model.Actuator):
         x, y, z, rot, tilt = parent._device.StgGetPosition()
         self._position["x"] = -x * 1e-3
         self._position["y"] = -y * 1e-3
-        # z axis is controlled by focus, just obtain the current z position of
-        # Tescan stage in order to maintain it the same when we move the stage
-        # via odemis
-        self.init_z = -z * 1e-3
-        # degrees to rad
-        self._position["rz"] = (rot * math.pi) / 180
+        self._position["z"] = -z * 1e-3
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
@@ -661,8 +665,7 @@ class Stage(model.Actuator):
         # Position from m to mm and inverted
         self.parent._device.StgMoveTo(-pos["x"] * 1e3,
                                     - pos["y"] * 1e3,
-                                    - self.init_z * 1e3,
-                                    (pos["rz"] * 180) / math.pi)
+                                    - pos["z"] * 1e3)
 
         # Obtain the finally reached position after move is performed.
         # This is mainly in order to keep the correct position in case the
@@ -672,7 +675,7 @@ class Stage(model.Actuator):
             x, y, z, rot, tilt = self.parent._device.StgGetPosition()
             self._position["x"] = -x * 1e-3
             self._position["y"] = -y * 1e-3
-            self._position["rz"] = (rot * math.pi) / 180
+            self._position["z"] = -z * 1e-3
 
         self._updatePosition()
 
@@ -840,6 +843,8 @@ class ChamberView(model.DigitalCamera):
         self.parent._device.CameraDisable()
         resolution = (height, width)
         self._shape = resolution + (2 ** 8,)
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), (2048, 2048)],
+                                            readonly=True)
 
         self.acquisition_lock = threading.Lock()
         self.acquire_must_stop = threading.Event()
@@ -892,6 +897,9 @@ class ChamberView(model.DigitalCamera):
                 sem_img = numpy.frombuffer(img_str, dtype=numpy.uint8)
                 sem_img.shape = (height, width)
                 array = model.DataArray(sem_img)
+                # update resolution
+                self.resolution._value = sem_img.shape
+                self.resolution.notify(sem_img.shape)
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
                 # If the Chamber view is just enabled it may take several seconds
@@ -947,44 +955,33 @@ class ChamberDataFlow(model.DataFlow):
             return
         comp.req_stop_flow()
 
+PRESSURE_VENTED = 1e05  # Pa
+PRESSURE_PUMPED = 1e-02  # Pa
+VACUUM_TIMEOUT = 5 * 60  # seconds
 class ChamberPressure(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
     adjusting the chamber pressure. It actually allows the user to evacuate or
     vent the chamber and get the current pressure of it.
     """
-    def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
-        if ranges is None:
-            ranges = {}
+    def __init__(self, name, role, parent, ranges=None, **kwargs):
+        axes = {"pressure": model.Axis(unit="Pa",
+                                       choices={PRESSURE_VENTED: "vented",
+                                                PRESSURE_PUMPED: "vacuum"})}
+        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+        # For simulating moves
+        self._position = parent._device.VacGetPressure(0)  # last official position
 
-        axes_def = {}
-        self._position = {}
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    {"pressure": self._position},
+                                    unit="Pa", readonly=True)
+        # Almost the same as position, but gives the current position
+        self.pressure = model.VigilantAttribute(self._position,
+                                    unit="Pa", readonly=True)
 
-        # Just pressure axis
-        a = axes[0]
-        # 1 for evacuated, 0 for vented chamber
-        _dict = dict({0: 'vented', 1:'pumped'})
-        axes_def[a] = model.Axis(unit="", range=_dict, speed=[0., 10.])
-
-        # VA that retains the current chamber pressure
-        pressure = parent._device.VacGetPressure(0)
-        self.chamberPressure = model.VigilantAttribute(pressure, unit="Pa", readonly=True)
-
-        # Try to decide if we are currently pumped or vented
-        if parent._device.VacGetStatus() == 0 and pressure < 1:
-            self._position[a] = 1
-        else:
-            self._position[a] = 0
-            
-        # Used when we stop a vacuum action that is in progress
-        self._prev_pos = self._position[a]
-        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
-        # RO, as to modify it the client must use .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
-                                    unit="", readonly=True)
 
     def GetStatus(self):
         """
@@ -1000,63 +997,63 @@ class ChamberPressure(model.Actuator):
             status = self.parent._device.VacGetStatus()  # channel 0, reserved
         return status
 
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
     def _updatePosition(self):
         """
-        update the position VA
+        update the position VA and .pressure VA
         """
         # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
+        pos = self.parent._device.VacGetPressure(0)
+        self.pressure._value = pos
+        self.pressure.notify(pos)
+
+        # .position contains the last known/valid position
+        # it's read-only, so we change it via _value
+        self.position._value = {"pressure": self._position}
         self.position.notify(self.position.value)
-
-    def _updateChamberPressure(self):
-        # it's read-only, so we change it only via _value
-        pressure = self.parent._device.VacGetPressure(0)
-        self.chamberPressure._value = pressure
-        self.chamberPressure.notify(pressure)
-
-    def _doMove(self, pos):
-        """
-        move to the position 
-        """
-        # Make sure we update with the initial and final chamber pressure
-        self._updateChamberPressure()
-        self._prev_pos = self._position["pressure"]
-        if self._position["pressure"] == 1:
-            self.parent._device.VacPump()
-        else:
-            self.parent._device.VacVent()
-        # timeout after 5 seconds
-        start = time.time()
-        while not self.GetStatus() == 0:
-            if (time.time()-start)>=5:
-                raise TimeoutError("Vacuum action timed out")
-            # Update chamber pressure until pumping/venting process is done
-            self._updateChamberPressure()
-        self._updateChamberPressure()
-
-        self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
-        logging.warning("Relative move on enumerated axis not supported")
-        self.moveAbs(shift)
+        self._checkMoveRel(shift)
+
+        # convert into an absolute move
+        pos = {}
+        for a, v in shift.items:
+            pos[a] = self.position.value[a] + v
+
+        return self.moveAbs(pos)
 
     @isasync
     def moveAbs(self, pos):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        pos = self._applyInversionAbs(pos)
+        return self._executor.submit(self._changePressure, pos["pressure"])
 
-        for axis, new_pos in pos.items():
-            self._position[axis] = new_pos
+    def _changePressure(self, p):
+        """
+        Synchronous change of the pressure
+        p (float): target pressure
+        """
+        if p == PRESSURE_VENTED:
+            self.parent._device.VacVent()
+        else:
+            self.parent._device.VacPump()
 
-        pos = self._position
-        return self._executor.submit(self._doMove, pos)
+        start = time.time()
+        while not self.GetStatus() == 0:
+            if (time.time() - start) >= VACUUM_TIMEOUT:
+                raise TimeoutError("Vacuum action timed out")
+            # Update chamber pressure until pumping/venting process is done
+            self._updatePosition()
+        self._position = p
+        self._updatePosition()
 
     def stop(self, axes=None):
         self._executor.cancel()
-        # Requesting the previous pressure state
-        self.moveAbs(self._prev_pos)
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
-        return
+        logging.warning("Stopped pressure change")

@@ -132,7 +132,7 @@ Spectra: {
 
 "ChamberPressure": {
     role: pressure,
-    init: {axes: [pressure]},
+    init: {},
     affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
