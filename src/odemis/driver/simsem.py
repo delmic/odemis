@@ -24,8 +24,7 @@ from __future__ import division
 import logging
 import math
 import numpy
-from odemis import model, util
-from odemis.dataio import hdf5
+from odemis import model, util, dataio
 from odemis.util import img
 import os.path
 import threading
@@ -41,17 +40,23 @@ class SimSEM(model.HwComponent):
     and se-detector children components and provides an update function for its metadata. 
     '''
 
-    def __init__(self, name, role, children, daemon=None, **kwargs):
+    def __init__(self, name, role, children, image=None, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
             They will be provided back in the .children roattribute
+        image (str or None): path to a file to use as fake image (relative to
+         the directory of this class)
         Raise an exception if the device cannot be opened
         '''
         # fake image setup
-        fake_image = hdf5.read_data(os.path.dirname(__file__) + u"/simsem-fake-output.h5")
-        # 0MQ can do zero copy if it's in C order
-        self.fake_img = numpy.require(img.ensure2DImage(fake_image[0]), requirements=['C'])
+        if image is None:
+            image = u"simsem-fake-output.h5"
+        image = unicode(image)
+        # change to this directory to ensure relative path is from this file
+        os.chdir(os.path.dirname(unicode(__file__)))
+        exporter = dataio.find_fittest_exporter(image)
+        self.fake_img = img.ensure2DImage(exporter.read_data(image)[0])
 
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
@@ -81,7 +86,7 @@ class SimSEM(model.HwComponent):
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
-        but the component shouldn't be used afterward.
+        but the component shouldn't be used afterwards.
         """
         self._detector._update_drift_timer.cancel()
 
@@ -99,7 +104,8 @@ class Scanner(model.Emitter):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
-        self._shape = (1024, 1024)  # half the size of the fake_img
+        fake_img = self.parent.fake_img
+        self._shape = tuple(v // 2 for v in fake_img.shape[::-1]) # half the size
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
@@ -108,7 +114,7 @@ class Scanner(model.Emitter):
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
-        pxs = self.parent.fake_img.metadata[model.MD_PIXEL_SIZE]
+        pxs = fake_img.metadata[model.MD_PIXEL_SIZE]
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
         # the horizontalFoV VA indicates that it's possible to control the zoom

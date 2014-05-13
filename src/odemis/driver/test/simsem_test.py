@@ -39,7 +39,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 CONFIG_SED = {"name": "sed", "role": "sed", "drift_period": 0}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
-CONFIG_SEM = {"name": "sem", "role": "sem",
+CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
 
