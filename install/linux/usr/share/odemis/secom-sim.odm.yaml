@@ -33,16 +33,12 @@ Spectra: {
     affects: ["Andor SimCam"],
 }
 
-# This is a very simple SEM simulator, without detector
-#EBeam: {
-#    class: simulated.EBeam,
-#    role: e-beam,
-#}
-
 "SEM ExtXY": {
     class: simsem.SimSEM,
     role: none,
-    init: {},
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+    },
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
 }
@@ -51,13 +47,18 @@ Spectra: {
     # Internal child of Quanta ExtXY, so no class
     role: e-beam,
     init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
     # Internal child of Quanta ExtXY, so no class
     role: se-detector,
-    init: {drift_period: 15} # seconds
+    init: {
+           drift_period: 5, # seconds
+    },
 }
 
 "Nikon Super Duper": {
