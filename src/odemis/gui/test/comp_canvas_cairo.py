@@ -10,6 +10,7 @@ from __future__ import division
 
 import time
 import sys
+from odemis import model
 from odemis.gui import test
 from odemis.gui.img.data import gettest_patternImage, gettest_pattern_sImage
 import odemis.gui.comp.overlay.view as view_overlay
@@ -42,35 +43,62 @@ class TestCanvas(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    def test_bitmap_canvas(self):
+
+    def test_calc_img_buffer_rect(self):
 
         # Setting up test frame
-
-        cnvs = canvas.BitmapCanvas(self.panel)
-        cnvs.background_brush = wx.SOLID
-        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+        # pylint: disable=E1103
 
         self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
 
         test.gui_loop()
-        self.assertEqual(cnvs.scale, 1)
-        # Creating test data
 
-        img = generate_img_data(50, 50, 4)
+        mmodel = test.FakeMicroscopeModel()
+        view = mmodel.focussedView.value
 
-        images = [
-            (img, (-25.0, -25.0), 1, True),
-            (img.copy(), (25.0, -25.0), 1, True),
-            (img.copy(), (25, 25.0), 1, True),
-            (img.copy(), (-25.0, 25.0), 1, True),
-        ]
+        # Changes in default values might affect other test, so we need to know
+        self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
 
-        cnvs.set_images(images)
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+        # Changes in default values might affect other test, so we need to know
+        self.assertEqual(cnvs.scale, 1, "Default canvas scale has changed!")
+        cnvs.setView(view, mmodel)
+
+        # Setting the view, calls _onMPP with the view.mpp value
+        # mpwu / mpp = scale => 1 (fixed, default) / view.mpp (1e-5)
+        self.assertEqual(cnvs.scale, 1 / view.mpp.value)
+
+        # Create a even black background, so we can test pixel values
+        cnvs.background_brush = wx.SOLID
+
+
+        ############ Create test image ###############
+
+        img1 = generate_img_data(100, 100, 4)
+        # 100 pixels is 1e-4 meters
+        img1.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
+        img1.metadata[model.MD_POS] = (0, 0)
+        stream1 = RGBStream("s1", img1)
+        view.addStream(stream1)
+
+        self.assertEqual(cnvs.scale, 1 / view.mpp.value)
+
+
+
+        # cnvs.set_images(images)
         cnvs.update_drawing()
-        test.gui_loop()
 
+        # for im_data, im_center, im_scale, _ in images:
+        #     print cnvs._calc_img_buffer_rect(im_data, im_scale, im_center)
+
+        # test.gui_loop(500)
+
+        for i in range(10):
+            test.gui_loop()
+            view.mpp.value *= 1.2
 
         return
 
@@ -408,7 +436,7 @@ def set_img_meta(img, pixel_size, pos):
 def generate_img_data(width, height, depth, alpha=255):
     """ Create an image of the given dimensions """
 
-    shape = (width, height, depth)
+    shape = (height, width, depth)
     rgb = numpy.empty(shape, dtype=numpy.uint8)
 
     if width > 10 or height > 10:
@@ -419,21 +447,21 @@ def generate_img_data(width, height, depth, alpha=255):
 
         rgb = numpy.zeros(shape, dtype=numpy.uint8)
 
-        rgb[..., -1, 0] = numpy.linspace(tr[0], br[0], width)
-        rgb[..., -1, 1] = numpy.linspace(tr[1], br[1], width)
-        rgb[..., -1, 2] = numpy.linspace(tr[2], br[2], width)
+        rgb[..., -1, 0] = numpy.linspace(tr[0], br[0], height)
+        rgb[..., -1, 1] = numpy.linspace(tr[1], br[1], height)
+        rgb[..., -1, 2] = numpy.linspace(tr[2], br[2], height)
 
-        rgb[..., 0, 0] = numpy.linspace(tl[0], bl[0], width)
-        rgb[..., 0, 1] = numpy.linspace(tl[1], bl[1], width)
-        rgb[..., 0, 2] = numpy.linspace(tl[2], bl[2], width)
+        rgb[..., 0, 0] = numpy.linspace(tl[0], bl[0], height)
+        rgb[..., 0, 1] = numpy.linspace(tl[1], bl[1], height)
+        rgb[..., 0, 2] = numpy.linspace(tl[2], bl[2], height)
 
         for i in xrange(height):
             sr, sg, sb = rgb[i, 0, :3]
             er, eg, eb = rgb[i, -1, :3]
 
-            rgb[i, :, 0] = numpy.linspace(int(sr), int(er), height)
-            rgb[i, :, 1] = numpy.linspace(int(sg), int(eg), height)
-            rgb[i, :, 2] = numpy.linspace(int(sb), int(eb), height)
+            rgb[i, :, 0] = numpy.linspace(int(sr), int(er), width)
+            rgb[i, :, 1] = numpy.linspace(int(sg), int(eg), width)
+            rgb[i, :, 2] = numpy.linspace(int(sb), int(eb), width)
 
         if depth == 4:
             rgb[..., 3] = min(255, max(alpha, 0))
