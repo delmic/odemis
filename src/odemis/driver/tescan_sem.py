@@ -31,7 +31,7 @@ import time
 from odemis.model._futures import CancellableThreadPoolExecutor
 import weakref
 from odemis.util import TimeoutError
-from tescan import sem
+from tescan import sem, CancelledError
 import re
 
 class TescanSEM(model.HwComponent):
@@ -66,7 +66,8 @@ class TescanSEM(model.HwComponent):
         # procedures, even before we configure the detectors
         self._device.ScStopScan()
 
-        self._metadata = {model.MD_HW_NAME: "TescanSEM"}
+        self._metadata = {model.MD_HW_NAME: "TescanSEM",
+                          model.MD_HW_VERSION: self._device.TcpGetDevice()}
 
         # create the scanner child
         try:
@@ -277,6 +278,8 @@ class Scanner(model.Emitter):
     def _onDwellTime(self, dt):
         # TODO interrupt current scanning when dwell time is changed
         # ScStopScan does not work this way
+        self.parent._device.CancelRecv()
+        self.parent._device.ScStopScan()
         pass
 
     def _onRotation(self, rot):
@@ -445,9 +448,10 @@ class Detector(model.Detector):
         self._channel = channel
         self.parent._device.DtSelect(self._channel, 0)
         self.parent._device.DtEnable(self._channel, 1, 16)  # 16 bits
+        self.acq_shape = self.parent._scanner._shape
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
-        self.parent._device.SetWaitFlags(0x08 or 0x09)
+        self.parent._device.SetWaitFlags(1 << 3)  # bit 3 =D = SEM automatic procedure
 
         # adjust brightness and contrast
         self.parent._device.DtAutoSignal(self._channel)
@@ -472,6 +476,7 @@ class Detector(model.Detector):
 
     def stop_acquire(self):
         with self._acquisition_lock:
+            self.parent._device.CancelRecv()
             with self.parent._acquisition_init_lock:
                 self._acquisition_must_stop.set()
 
@@ -485,7 +490,7 @@ class Detector(model.Detector):
             logging.debug("Waiting for thread to stop.")
             self._acquisition_thread.join(10)  # 10s timeout for safety
             if self._acquisition_thread.isAlive():
-                logging.exception("Failed to stop the acquisition thread")
+                logging.error("Failed to stop the acquisition thread")
                 # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
@@ -517,10 +522,10 @@ class Detector(model.Detector):
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
 
             center = (res[0] / 2, res[1] / 2)
-            l = center[0] + pxs_pos[1] - (res[1] / 2)
-            t = center[1] + pxs_pos[0] - (res[0] / 2)
-            r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
-            b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
+            l = int(center[0] + pxs_pos[1] - (res[0] / 2))
+            t = int(center[1] + pxs_pos[0] - (res[1] / 2))
+            r = l + res[0] - 1
+            b = t + res[1] - 1
 
             # Prevent scanning via the standard UI (as it prevents us from
             # getting the acquisition result), and tell the user why.
@@ -531,11 +536,9 @@ class Detector(model.Detector):
             dt = self.parent._scanner.dwellTime.value * 1e9
             self.parent._device.ScScanXY(0, res[0], res[1],
                                  l, t, r, b, 1, dt)
-
             # fetch the image (blocking operation), ndarray is returned
-            logging.debug("fetching res %s", res)
             sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
-            sem_img.shape = res
+            sem_img.shape = res[::-1]
 
             # we must stop the scanning even after single scan
             self.parent._device.ScStopScan()
@@ -548,14 +551,18 @@ class Detector(model.Detector):
         center (e-beam) position based on the translation and provides the new 
         generated output to the Dataflow. 
         """
-        try:
-            while not self._acquisition_must_stop.is_set():
-                callback(self._acquire_image())
-        except Exception:
-            logging.exception("Unexpected failure during image acquisition")
-        finally:
-            logging.debug("Acquisition thread closed")
-            self._acquisition_must_stop.clear()
+        while True:
+            try:
+                while not self._acquisition_must_stop.is_set():
+                    callback(self._acquire_image())
+            except CancelledError:
+                # Waiting to fetch image is cancelled
+                pass
+            except Exception:
+                logging.exception("Unexpected failure during image acquisition")
+            finally:
+                logging.debug("Acquisition thread closed")
+                self._acquisition_must_stop.clear()
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -828,7 +835,8 @@ class ChamberView(model.DigitalCamera):
         while (self.parent._device.CameraGetStatus(0))[0] != 1:
             time.sleep(0.5)
         # Get a first image to determine the resolution
-        width, height, img_str = self.parent._device.FetchCameraImage(0)
+        # width, height, img_str = self.parent._device.FetchCameraImage(0)
+        width, height = 2048, 2048
         self.parent._device.CameraDisable()
         resolution = (height, width)
         self._shape = resolution + (2 ** 8,)
