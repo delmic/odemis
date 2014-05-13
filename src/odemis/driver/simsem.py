@@ -21,12 +21,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+from Pyro4.core import isasync
 import logging
 import math
 import numpy
 from odemis import model, util, dataio
 from odemis.util import img
 import os.path
+from scipy import ndimage
 import threading
 import time
 import weakref
@@ -79,6 +81,15 @@ class SimSEM(model.HwComponent):
             raise KeyError("SimSEM was not given a 'detector' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._detector)
+
+        try:
+            kwargs = children["focus"]
+        except (KeyError, TypeError):
+            logging.info("Will not simulate focus")
+            self._focus = None
+        else:
+            self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
+            self.children.add(self._focus)
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -295,10 +306,9 @@ class Detector(model.Detector):
 
         self.drift_factor = 1  # dummy value for drift in pixels
         self.current_drift = 0
-        # Given that max resolution is (1024,1024) and the shape of fake_img
-        # is (2048,2048) we set the drift bound thus we stay inside of the
-        # fake_img bounds
-        self.drift_bound = 512
+        # Given that max resolution is half the shape of fake_img,
+        # we set the drift bound to stay inside the fake_img bounds
+        self.drift_bound = min(v // 4 for v in self.fake_img.shape[::-1])
         self.drift_period = drift_period
         self._update_drift_timer = util.RepeatingTimer(self.drift_period, self._update_drift,
                                                        "Drift update")
@@ -370,7 +380,12 @@ class Detector(model.Detector):
                                     center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2):scale[1]]
 
             if scanner.power.value == 0:
-                sim_img [...] = 0 # black it out
+                sim_img[...] = 0 # black it out
+            elif self.parent._focus:
+                # apply the defocus
+                pos = self.parent._focus.position.value['z']
+                dist = abs(pos) * 1e4
+                sim_img = ndimage.gaussian_filter(sim_img, sigma=dist)
 
             # update fake output metadata
             metadata[model.MD_POS] = updated_phy_pos
@@ -436,3 +451,65 @@ class SEMDataFlow(model.DataFlow):
         except ReferenceError:
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             pass
+
+
+
+class EbeamFocus(model.Actuator):
+    """
+    Simulated focus component.
+    Just pretends to be able to move Z (instantaneously).
+    """
+    def __init__(self, name, role, **kwargs):
+        axes_def = {"z": model.Axis(unit="m", range=[-0.3, 0.3])}
+        self._position = {"z": 0}
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+        shift = self._applyInversionRel(shift)
+
+        for axis, change in shift.items():
+            self._position[axis] += change
+            rng = self.axes[axis].range
+            if not rng[0] < self._position[axis] < rng[1]:
+                logging.warning("moving axis %s to %f, outside of range %r",
+                                axis, self._position[axis], rng)
+            else:
+                logging.info("moving axis %s to %f", axis, self._position[axis])
+
+        self._updatePosition()
+        return model.InstantaneousFuture()
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
+
+        for axis, new_pos in pos.items():
+            self._position[axis] = new_pos
+            logging.info("moving axis %s to %f", axis, self._position[axis])
+
+        self._updatePosition()
+        return model.InstantaneousFuture()
+
+    def stop(self, axes=None):
+        logging.warning("Stopping z axis")
