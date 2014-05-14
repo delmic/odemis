@@ -228,7 +228,6 @@ class TestSEM(unittest.TestCase):
         pxs = self.scanner.pixelSize.value
         exp_pos = (center[0] + (-1.26 * pxs[0]),
                    center[1] - (10 * pxs[1]))  # because translation Y is opposite from physical one
-
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
@@ -280,12 +279,12 @@ class TestSEM(unittest.TestCase):
 
         for i in range(number):
             self.sed.data.subscribe(self.receive_image)
-            time.sleep(0.1 * i)
+            time.sleep(i)
             self.sed.data.unsubscribe(self.receive_image)
 
         # now this one should work
         self.sed.data.subscribe(self.receive_image)
-        time.sleep(expected_duration * 2)  # make sure we received at least one image
+        time.sleep(expected_duration * 5)  # make sure we received at least one image
         self.sed.data.unsubscribe(self.receive_image)
 
         self.assertLessEqual(self.left, 10000 - 1)

@@ -575,7 +575,6 @@ class Detector(model.Detector):
             finally:
                 logging.debug("Acquisition thread closed")
                 self._acquisition_must_stop.clear()
-                break
 
     def updateMetadata(self, md):
         # we share metadata with our parent
