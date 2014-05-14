@@ -30,12 +30,9 @@ import threading
 import time
 from odemis.model._futures import CancellableThreadPoolExecutor
 import weakref
-import odemis
 from odemis.util import TimeoutError
 from tescan import sem, CancelledError
 import re
-
-MAX_FAILURES = 1  # maximum allowed number of acquisition failures in a row
 
 class TescanSEM(model.HwComponent):
     '''
@@ -56,10 +53,11 @@ class TescanSEM(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         self._device = sem.Sem()
+        logging.info("Going to connect to host")
         result = self._device.Connect(host, 8300)
-
         if result < 0:
             raise IOError()
+        logging.info("Connected")
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
@@ -113,9 +111,10 @@ class TescanSEM(model.HwComponent):
         try:
             kwargs = children["camera"]
         except (KeyError, TypeError):
-            raise KeyError("TescanSEM was not given a 'camera' child")
-        self._camera = ChamberView(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._camera)
+            logging.info("Not initialising the chamber camera")
+        else:
+            self._camera = ChamberView(parent=self, daemon=daemon, **kwargs)
+            self.children.add(self._camera)
 
         # create the pressure child
         try:
@@ -135,8 +134,10 @@ class TescanSEM(model.HwComponent):
         """
         # Terminate components
         self._stage.terminate()
-        self._camera.terminate()
         self._focus.terminate()
+        if hasattr(self, "_camera"):
+            self._camera.terminate()
+        self._pressure.terminate()
         # finish
         self._device.Disconnect()
 
@@ -431,6 +432,7 @@ class Scanner(model.Emitter):
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
         return phy_pos
 
+MAX_FAILURES = 5  # maximum allowed number of acquisition failures in a row
 class Detector(model.Detector):
     """
     This is an extension of model.Detector class. It performs the main functionality 
@@ -479,8 +481,7 @@ class Detector(model.Detector):
         with self._acquisition_lock:
             self.parent._device.CancelRecv()
             self.parent._device.ScStopScan()
-            with self.parent._acquisition_init_lock:
-                self._acquisition_must_stop.set()
+            self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
         """
@@ -929,7 +930,7 @@ class ChamberView(model.DigitalCamera):
             self.acquire_thread.join(10)  # 10s timeout for safety
             if self.acquire_thread.isAlive():
                 raise OSError("Failed to stop the acquisition thread")
-            # ensure it's not set, even if the thread died prematurately
+            # ensure it's not set, even if the thread died prematurely
             self.acquire_must_stop.clear()
 
     def terminate(self):
@@ -956,7 +957,7 @@ class ChamberDataFlow(model.DataFlow):
         comp = self.component()
         if comp is None:
             return
-        comp.req_stop_flow()
+        comp.req_stop_flow() # FIXME
 
 PRESSURE_VENTED = 1e05  # Pa
 PRESSURE_PUMPED = 1e-02  # Pa

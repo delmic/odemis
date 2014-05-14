@@ -1,9 +1,11 @@
-SimSECOM: {
+SimTescanSECOM: {
     class: Microscope,
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
-    detectors: ["Andor SimCam", "SED ExtXY", "ChamberCam"],
-    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", "Ebeam-focus actuator", "ChamberPressure"],
+    detectors: ["Andor SimCam", "SED ExtXY"#, "ChamberCam"
+                ],
+    actuators: ["SEM-Optical Alignment", "OpticalZ actuator",
+                "OLStage", "Ebeam-focus actuator", "ChamberPressure"],
 }
 
 #Light: {
@@ -44,8 +46,13 @@ Spectra: {
     role: none,
     init: {host: "192.168.92.91"},
     # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
-               stage: "OLStage", focus: "Ebeam-focus actuator", camera: "ChamberCam", pressure: "ChamberPressure"}
+    children: {scanner: "EBeam ExtXY",
+               detector: "SED ExtXY",
+               stage: "OLStage",
+               focus: "Ebeam-focus actuator",
+               # camera: "ChamberCam", # comment out if using the simulator
+               pressure: "ChamberPressure"
+    }
 }
 
 "EBeam ExtXY": {
@@ -62,7 +69,7 @@ Spectra: {
 }
 
 "Ebeam-focus actuator": {
-    role: focus,
+    role: ebeam-focus,
     init: {axes: [z]},
     affects: ["Andor SimCam", "EBeam ExtXY"]
 }
@@ -125,15 +132,14 @@ Spectra: {
     affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
-"ChamberCam": {
-    role: camera,
-    init: {}
-}
+# "ChamberCam": {
+#     role: chamber-ccd,
+#     init: {}
+# }
 
 "ChamberPressure": {
-    role: pressure,
+    role: chamber,
     init: {},
-    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 # Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
