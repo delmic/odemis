@@ -85,7 +85,7 @@ class Stage(model.Actuator):
             axes_def[a] = model.Axis(unit="m", range=rng, speed=[0., 10.])
             # start at the centre
             self._position[a] = (rng[0] + rng[1]) / 2
-            init_speed[a] = 10.0 # we are super fast!
+            init_speed[a] = 10.0  # we are super fast!
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
@@ -93,9 +93,9 @@ class Stage(model.Actuator):
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
-        
+
         self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
-    
+
     def _updatePosition(self):
         """
         update the position VA
@@ -103,7 +103,7 @@ class Stage(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
-        
+
     @isasync
     def moveRel(self, shift):
         if not shift:
@@ -125,7 +125,7 @@ class Stage(model.Actuator):
         self._updatePosition()
         # TODO queue the move and pretend the position is changed only after the given time
         return model.InstantaneousFuture()
-        
+
     @isasync
     def moveAbs(self, pos):
         if not pos:
@@ -139,11 +139,11 @@ class Stage(model.Actuator):
             self._position[axis] = new_pos
             logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-         
+
         # TODO queue the move
         self._updatePosition()
         return model.InstantaneousFuture()
-    
+
     def stop(self, axes=None):
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
