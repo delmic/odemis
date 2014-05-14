@@ -815,7 +815,7 @@ class MicroscopeView(View):
         Called when one stream has its image updated
         im (DataArray)
         """
-        # just let everyone that the composited image has changed
+        # just let everyone know that the composited image has changed
         self.lastUpdate.value = time.time()
 
     def _onMergeRatio(self, ratio):

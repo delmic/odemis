@@ -886,7 +886,7 @@ class FineAlignController(object):
                                 cor_md[model.MD_ROTATION_COR])
 
         # As the CCD image might have different pixel size, force to fit
-        self._main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
+        self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
 
         main_data.is_acquiring.value = False
         self._main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)

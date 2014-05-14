@@ -657,7 +657,7 @@ class SparcAcquisitionTab(Tab):
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
-        
+
         if show:
             self._set_lenses()
         # don't put switches back when hiding, to avoid unnecessary moves
@@ -991,7 +991,7 @@ class AnalysisTab(Tab):
                    self.main_frame.vp_inspection_tr,
                    self.main_frame.vp_inspection_bl,
                    self.main_frame.vp_inspection_br]:
-            vp.canvas.fitViewToNextImage = True
+            vp.canvas.fit_view_to_next_image = True
 
         # AR data is special => all merged in one big stream
         ar_data = []
@@ -1329,7 +1329,7 @@ class LensAlignTab(Tab):
         # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
         # prevent the first image to reset our computation
-        main_frame.vp_align_sem.canvas.fitViewToNextImage = False
+        main_frame.vp_align_sem.canvas.fit_view_to_next_image = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
@@ -1812,7 +1812,7 @@ class MirrorAlignTab(Tab):
             self._ccd_stream.is_active.value = show
         if self._sem_stream:
             self._sem_stream.is_active.value = show
-        
+
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
@@ -1826,7 +1826,7 @@ class MirrorAlignTab(Tab):
             if main_data.ar_spec_sel:
                 # convention is: 0 rad == off (no mirror) == AR
                 main_data.ar_spec_sel.moveAbs({"rx": 0})
-            
+
             # pick a filter which is pass-through (=empty)
             if main_data.light_filter:
                 fltr = main_data.light_filter

@@ -62,7 +62,13 @@ class TestCanvas(test.GuiTestCase):
         self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
 
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.fit_view_to_next_image = False
+        # Create a even black background, so we can test pixel values
+        cnvs.background_brush = wx.SOLID
+
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+        test.gui_loop(10)
+
         # Changes in default values might affect other test, so we need to know
         self.assertEqual(cnvs.scale, 1, "Default canvas scale has changed!")
         cnvs.setView(view, mmodel)
@@ -71,34 +77,39 @@ class TestCanvas(test.GuiTestCase):
         # mpwu / mpp = scale => 1 (fixed, default) / view.mpp (1e-5)
         self.assertEqual(cnvs.scale, 1 / view.mpp.value)
 
-        # Create a even black background, so we can test pixel values
-        cnvs.background_brush = wx.SOLID
+        # Make sure the buffer is set at the right size
+        self.assertEqual(cnvs._bmp_buffer_size, (1524, 1524))
 
 
         ############ Create test image ###############
 
-        img1 = generate_img_data(100, 100, 4)
+        img = generate_img_data(100, 100, 4)
         # 100 pixels is 1e-4 meters
-        img1.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
-        img1.metadata[model.MD_POS] = (0, 0)
-        stream1 = RGBStream("s1", img1)
+        img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
+        img.metadata[model.MD_POS] = im_pos = (0, 0)
+        im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
+
+        self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
+
+        stream1 = RGBStream("s1", img)
         view.addStream(stream1)
 
-        self.assertEqual(cnvs.scale, 1 / view.mpp.value)
+        # Verify view mpp and canvas scale
+        self.assertEqual(view.mpp.value, 1e-5, "Default mpp value has changed!")
+        self.assertEqual(cnvs.scale, 1 / view.mpp.value, "Canvas scale should not have changed!")
 
-
-
-        # cnvs.set_images(images)
         cnvs.update_drawing()
 
-        # for im_data, im_center, im_scale, _ in images:
-        #     print cnvs._calc_img_buffer_rect(im_data, im_scale, im_center)
 
-        # test.gui_loop(500)
-
-        for i in range(10):
+        mpps = [1e-8]#, 1e-6, 1e-5]
+        for mpp in mpps:
+            view.mpp.value = mpp
             test.gui_loop()
-            view.mpp.value *= 1.2
+            # print mpp, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
+
+        # for i in range(10):
+        #     test.gui_loop()
+        #     view.mpp.value /= 1.2
 
         return
 
@@ -439,7 +450,7 @@ def generate_img_data(width, height, depth, alpha=255):
     shape = (height, width, depth)
     rgb = numpy.empty(shape, dtype=numpy.uint8)
 
-    if width > 10 or height > 10:
+    if width > 1000 or height > 1000:
         tl = random_color(alpha=alpha)
         tr = random_color(alpha=alpha)
         bl = random_color(alpha=alpha)

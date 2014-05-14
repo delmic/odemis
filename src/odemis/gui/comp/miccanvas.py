@@ -82,7 +82,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     Public attributes:
     .abilities (set of CAN_*): features/restrictions allowed to be performed
-    .fitViewToNextImage (Boolean): False by default. If True, next time an image
+    .fit_view_to_next_image (Boolean): False by default. If True, next time an image
       is received, it will ensure the whole content fits the view (and reset
       this flag).
     """
@@ -92,7 +92,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
 
         self.abilities |= set([CAN_ZOOM, CAN_FOCUS])
-        self.fitViewToNextImage = True
+        self.fit_view_to_next_image = True
 
         # TODO: If it's too resource consuming, which might want to create just
         # our own thread. cf model.stream.histogram
@@ -164,7 +164,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_overlay = view_overlay.FocusOverlay(self)
             self.view_overlays.append(self.focus_overlay)
 
-        self.microscope_view.mpp.subscribe(self._onMPP, init=True)
+        self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
 
         if tab_data.tool:
             # If required, create a DichotomyOverlay
@@ -408,9 +408,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: use the real streamtree functions
         # for now we call a conversion layer
         self._convertStreamsToImages()
-        if self.fitViewToNextImage and any([i is not None for i in self.images]):
+        if self.fit_view_to_next_image and any([i is not None for i in self.images]):
             self.fit_view_to_content()
-            self.fitViewToNextImage = False
+            self.fit_view_to_next_image = False
         #logging.debug("Will update drawing for new image")
         wx.CallAfter(self.request_drawing_update)
 
@@ -509,22 +509,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).fit_to_content(recenter=recenter)
 
-        # this will indirectly call _onMPP(), but not have any additional effect
+        # this will indirectly call _on_view_mpp(), but not have any additional effect
         if self.microscope_view:
             new_mpp = self.mpwu / self.scale
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
-    def _onMPP(self, mpp):
-        """ Called when the view.mpp is updated
-        """
-        print "boomn", mpp
+    def _on_view_mpp(self, mpp):
+        """ Called when the view.mpp is updated """
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.request_drawing_update)
 
     def on_size(self, event):
         new_size = event.Size
 
-        # Update the mpp, so that the same data is displayed (Meaning that)
+        # Update the mpp, so that the same data will be displayed.
         if self.microscope_view:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
@@ -560,7 +558,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     pass
 
         mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
-        self.microscope_view.mpp.value = mpp # this will call _onMPP()
+        self.microscope_view.mpp.value = mpp # this will call _on_view_mpp()
 
     # Zoom/merge management
     def on_wheel(self, evt):

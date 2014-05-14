@@ -83,11 +83,17 @@ Image scale:
     'pixel' of image data (wupp). The higher this value, the larger the picture
     will seem.
 
+    This scale should be calculated using the image's MD_PIXEL_SIZE meta data,
+    and the current canvas' mpwu.
+
 Canvas scale:
     The canvas scale is the ratio between 'meters per world unit' and 'meters
     per pixel' (mpwu / mpp), which expresses the number of 'pixels' per 'world
     unit' to use to display data (ppwu). The higher the number, the more pixel
     that are used to display the data.
+
+    The canvas scale is updated when the mpp of a connected MicroscopeView is
+    updated.
 
 
 BufferedCanvas
@@ -808,15 +814,21 @@ class BitmapCanvas(BufferedCanvas):
             logging.debug("Up scaling required")
 
             # Make clipping a bit smarter: if very little data is trimmed, it's
-            # better to scale the entire image than to create a slightly smaller one
-            # first.
+            # better to scale the entire image than to create a slightly smaller
+            # copy first.
             if (b_im_rect[2] > intersection[2] * 1.1 or
                 b_im_rect[3] > intersection[3] * 1.1):
 
-                #im_data = im_data[clip_x:(clip_x + clip_w), clip_x:(clip_y + clip_h)].copy()
-                im_data = self._calc_buffer_rect_img_data(intersection, b_im_rect,
+                im_data = self._calc_buffer_rect_img_data(
+                                                intersection,
+                                                b_im_rect,
                                                 im_data, total_scale)
 
+                # Re-calculate the buffer rectangle
+                b_im_rect = self._calc_img_buffer_rect(
+                                                im_data,
+                                                im_scale,
+                                                w_im_center)
 
         # Render the image data to the context
 
@@ -855,112 +867,6 @@ class BitmapCanvas(BufferedCanvas):
         # Reset the transformation matrix
         ctx.identity_matrix()
 
-
-    # TODO: see if with Numpy it's faster (~less memory copy),
-    # cf http://wiki.wxpython.org/WorkingWithImages
-    # Could also see gdk_pixbuf_composite()
-    def _rescale_image(self, dc_buffer, im, scale, center):
-        """Rescale an image considering it will be displayed on the buffer
-
-        *IMPORTANT*: The origin (0, 0) of the dc_buffer is in the center!
-
-        Does not modify the original image.
-
-        :param scale: the scale of the picture to fit the world
-        :param center: position of the image in world coordinates
-        :return: a (wx.Image, (x, y)) tuple of
-           * a copy of the image rescaled, it can be of any size
-           * a 2-tuple representing the top-left point on the buffer coordinate
-        """
-
-        # The buffer area the image would occupy (top, left, width, height)
-        buff_rect = self._calc_img_buffer_rect(im, scale, center)
-        # Combine the zoom and image scales.
-        total_scale = scale * self.scale
-
-        if total_scale == 1.0:
-            # TODO: should see how to avoid (it slows down quite a bit)
-            # Maybe just return a reference to im? (with a copy of Alpha?)
-            ret = im.Copy()
-            tl = buff_rect[0:2]
-        elif total_scale < 1.0:
-            w, h = buff_rect[2:4]
-            if w >= 1 and h >= 1:
-                # logging.debug("Scaling to %s, %s", w, h)
-                ret = im.Scale(*buff_rect[2:4])
-                tl = buff_rect[0:2]
-            else:
-                # less that one pixel big? Skip it!
-                logging.info("Image scale %s for size %s, %s, dropping it",
-                             total_scale,
-                             w,
-                             h)
-                return (None, None)
-        elif total_scale > 1.0:
-            # We could end-up with a lot of the up-scaling useless, so crop it
-            orig_size = im.GetSize()
-
-            # where is the buffer in the world?
-            buffer_rect = (dc_buffer.DeviceToLogicalX(0),
-                           dc_buffer.DeviceToLogicalY(0),
-                           self._bmp_buffer_size[0],
-                           self._bmp_buffer_size[1])
-
-            goal_rect = wx.IntersectRect(buff_rect, buffer_rect)
-
-            if not goal_rect: # no intersection
-                return (None, None)
-
-            # where is this rect in the original image?
-            unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
-                         (goal_rect[1] - buff_rect[1]) / total_scale,
-                          goal_rect[2] / total_scale,
-                          goal_rect[3] / total_scale)
-
-            # Note that width and length must be "double rounded" to account
-            # for the round down of the origin and round up of the bottom left
-            unsc_rnd_rect = [
-                int(unsc_rect[0]), # rounding down
-                int(unsc_rect[1]),
-                math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
-                math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
-                ]
-
-            # assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0])
-            # assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1])
-
-            if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > orig_size[0]
-                or unsc_rnd_rect[1] + unsc_rnd_rect[3] > orig_size[1]):
-                # sometimes floating errors + rounding leads to one pixel too
-                # much => just crop
-                assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= orig_size[0] + 1)
-                assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= orig_size[1] + 1)
-                unsc_rnd_rect[2] = orig_size[0] - unsc_rnd_rect[0]
-                unsc_rnd_rect[3] = orig_size[1] - unsc_rnd_rect[1]
-
-            # FIXME: there is a bug causing non square pixels when (probably)
-            # one dimension is truncated and another not.
-            imcropped = im.GetSubImage(unsc_rnd_rect)
-
-            # like goal_rect but taking into account rounding
-            final_rect = ((unsc_rnd_rect[0] * total_scale) + buff_rect[0],
-                          (unsc_rnd_rect[1] * total_scale) + buff_rect[1],
-                          int(unsc_rnd_rect[2] * total_scale),
-                          int(unsc_rnd_rect[3] * total_scale))
-
-            if (final_rect[2] > 2 * goal_rect[2] or
-                final_rect[3] > 2 * goal_rect[3]):
-                # a sign we went too far (too much zoomed) => not as perfect but
-                # don't use too much memory
-                final_rect = goal_rect
-                msg = "limiting image rescaling to %dx%d px" % final_rect[2:4]
-                logging.debug(msg)
-
-            ret = imcropped.Rescale(*final_rect[2:4])
-            # need to save it as the cropped part is not centred anymore
-            tl = final_rect[0:2]
-
-        return (ret, tl)
 
     def _calc_img_buffer_rect(self, im_data, im_scale, w_im_center):
         """ Compute the rectangle containing the image in buffer coordinates
@@ -1045,9 +951,7 @@ class BitmapCanvas(BufferedCanvas):
         sub_im_w = max(sub_im_w, 2)
         sub_im_h = max(sub_im_h, 2)
 
-        # print "%s:%s, %s:%s" % (sub_im_y, sub_im_y + sub_im_h, sub_im_x, sub_im_x + sub_im_w)
         im_data = im_data[sub_im_y:sub_im_y + sub_im_h, sub_im_x:sub_im_x + sub_im_w].copy()
-        # print im_data
         return im_data
 
         # unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
