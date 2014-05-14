@@ -43,46 +43,44 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_PIXEL_SIZE] = pxs
         self.data = data
 
-        white_data_512 = hdf5.read_data("white_data_512.h5")
+#         white_data_512 = hdf5.read_data("white_data_512.h5")
+        white_data_512 = model.DataArray(numpy.empty((512, 512), dtype="uint16"))
+        white_data_512[...] = 255
         white_mag_512 = 0.4917
         white_spxs_512 = (13e-6, 13e-6)
         white_binning_512 = (2, 2)
-        white_data_512[0].metadata[model.MD_BINNING] = white_binning_512
-        white_data_512[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = white_spxs_512
-        white_data_512[0].metadata[model.MD_LENS_MAG] = white_mag_512
-        white_data_512[0].metadata[model.MD_AR_POLE] = (283, 259)
-        white_mag_512 = white_data_512[0].metadata[model.MD_LENS_MAG]
+        white_data_512.metadata[model.MD_AR_POLE] = (283, 259)
         white_pxs_512 = (white_spxs_512[0] * white_binning_512[0] / white_mag_512,
                white_spxs_512[1] * white_binning_512[1] / white_mag_512)
-        white_data_512[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_512
+        white_data_512.metadata[model.MD_PIXEL_SIZE] = white_pxs_512
         self.white_data_512 = white_data_512
 
-        white_data_1024 = hdf5.read_data("white_data_1024.h5")
+#         white_data_1024 = hdf5.read_data("white_data_1024.h5")
+        white_data_1024 = model.DataArray(numpy.empty((1024, 1024), dtype="uint16"))
+        white_data_1024[...] = 255
         white_mag_1024 = 0.4917
         white_spxs_1024 = (13e-6, 13e-6)
         white_binning_1024 = (2, 2)
-        white_data_1024[0].metadata[model.MD_BINNING] = white_binning_1024
-        white_data_1024[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = white_spxs_1024
-        white_data_1024[0].metadata[model.MD_LENS_MAG] = white_mag_1024
-        white_data_1024[0].metadata[model.MD_AR_POLE] = (283, 259)
-        white_mag_1024 = white_data_1024[0].metadata[model.MD_LENS_MAG]
+        white_data_1024.metadata[model.MD_AR_POLE] = (283, 259)
         white_pxs_1024 = (white_spxs_1024[0] * white_binning_1024[0] / white_mag_1024,
                white_spxs_1024[1] * white_binning_1024[1] / white_mag_1024)
-        white_data_1024[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_1024
+        white_data_1024.metadata[model.MD_PIXEL_SIZE] = white_pxs_1024
         self.white_data_1024 = white_data_1024
 
-        white_data_2500 = hdf5.read_data("white_data_2500.h5")
+        white_data_2500 = model.DataArray(numpy.empty((2560, 2160), dtype="uint16"))
+        white_data_2500[...] = 255
         white_mag_2500 = 0.4917
         white_spxs_2500 = (13e-6, 13e-6)
         white_binning_2500 = (2, 2)
-        white_data_2500[0].metadata[model.MD_BINNING] = white_binning_2500
-        white_data_2500[0].metadata[model.MD_SENSOR_PIXEL_SIZE] = white_spxs_2500
-        white_data_2500[0].metadata[model.MD_LENS_MAG] = white_mag_2500
-        white_data_2500[0].metadata[model.MD_AR_POLE] = (283, 259)
-        white_mag_2500 = white_data_2500[0].metadata[model.MD_LENS_MAG]
+        white_data_2500.metadata[model.MD_AR_POLE] = (283, 259)
+        # These values makes the computation much harder:
+#         white_mag_2500 = 0.53
+#         white_spxs_2500 = (6.5e-6, 6.5e-6)
+#         white_binning_2500 = (1, 1)
+#         white_data_2500.metadata[model.MD_AR_POLE] = (1480, 1129)
         white_pxs_2500 = (white_spxs_2500[0] * white_binning_2500[0] / white_mag_2500,
                white_spxs_2500[1] * white_binning_2500[1] / white_mag_2500)
-        white_data_2500[0].metadata[model.MD_PIXEL_SIZE] = white_pxs_2500
+        white_data_2500.metadata[model.MD_PIXEL_SIZE] = white_pxs_2500
         self.white_data_2500 = white_data_2500
 
     def test_precomputed(self):
@@ -192,9 +190,8 @@ class TestPolarConversion(unittest.TestCase):
         Test for 512x512 white image input
         """
         white_data_512 = self.white_data_512
-        C, T, Z, Y, X = white_data_512[0].shape
-        white_data_512[0].shape = Y, X
-        result = polar.AngleResolved2Polar(white_data_512[0], 201)
+        Y, X = white_data_512.shape
+        result = polar.AngleResolved2Polar(white_data_512, 201)
 
         desired_output = hdf5.read_data("desired_white_512.h5")
         C, T, Z, Y, X = desired_output[0].shape
@@ -207,9 +204,8 @@ class TestPolarConversion(unittest.TestCase):
         Test for 1024x1024 white image input
         """
         white_data_1024 = self.white_data_1024
-        C, T, Z, Y, X = white_data_1024[0].shape
-        white_data_1024[0].shape = Y, X
-        result = polar.AngleResolved2Polar(white_data_1024[0], 201)
+        Y, X = white_data_1024.shape
+        result = polar.AngleResolved2Polar(white_data_1024, 201)
 
         desired_output = hdf5.read_data("desired_white_1024.h5")
         C, T, Z, Y, X = desired_output[0].shape
@@ -222,9 +218,8 @@ class TestPolarConversion(unittest.TestCase):
         Test for 2560x2160 white image input
         """
         white_data_2500 = self.white_data_2500
-        C, T, Z, Y, X = white_data_2500[0].shape
-        white_data_2500[0].shape = Y, X
-        result = polar.AngleResolved2Polar(white_data_2500[0], 2000, dtype=numpy.float16)
+        Y, X = white_data_2500.shape
+        result = polar.AngleResolved2Polar(white_data_2500, 2000, dtype=numpy.float16)
 
         desired_output = hdf5.read_data("desired_white_2500.h5")
         C, T, Z, Y, X = desired_output[0].shape
