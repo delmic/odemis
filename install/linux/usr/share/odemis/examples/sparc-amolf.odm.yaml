@@ -112,7 +112,7 @@ MirrorMover: {
         inverted: ["y", "ry"],
     },
     properties: {
-        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} # m/s
+        speed: {"x": 0.01, "y": 0.01, "rz": 0.01, "ry": 0.01} # m/s
     }
 }
 

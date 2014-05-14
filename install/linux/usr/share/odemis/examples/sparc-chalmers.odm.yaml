@@ -84,15 +84,18 @@ SPARC: {
     affects: ["ARCam", "AndorSpec"]
 }
 
-# Zyla/CL
+# Andor Neo
 ARCam: {
     class: andorcam3.AndorCam3,
     role: ccd,
     init: {
-           device: 0,  # if a real camera is plugged in, it's usually 0
-           bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
-           #transpose: [1, -2], # mirrored on Y axis
-           }
+        device: 0,  # if a real camera is plugged in, it's usually 0
+        bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
+        transpose: [1, -2], # mirrored on Y axis
+    },
+    properties: {
+        fanSpeed: 0.0, # 0 = Off, 0.5= half speed, 1 = max speed
+    }
 }
 
 # Thorlabs MFF102 holding the mirror to select AR or spectrometer
@@ -159,8 +162,6 @@ MirrorMover: {
         #dist_to_steps: {"x": 100000, "y": 100000}, # step/m
     },
     properties: {
-        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} # m/s
+        speed: {"x": 0.01, "y": 0.01, "rz": 0.01, "ry": 0.01} # m/s
     }
 }
-
-
