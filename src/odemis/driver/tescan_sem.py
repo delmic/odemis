@@ -35,7 +35,7 @@ from odemis.util import TimeoutError
 from tescan import sem, CancelledError
 import re
 
-MAX_FAILURES = 5  # maximum allowed number of acquisition failures in a row
+MAX_FAILURES = 1  # maximum allowed number of acquisition failures in a row
 
 class TescanSEM(model.HwComponent):
     '''
@@ -451,7 +451,7 @@ class Detector(model.Detector):
         self.acq_shape = self.parent._scanner._shape
         # now tell the engine to wait for scanning inactivity and auto procedure finish,
         # see the docs for details
-        self.parent._device.SetWaitFlags(1 << 0 | 1 << 1)  # SEM scanning & SEM stage
+        self.parent._device.SetWaitFlags(1 << 3)  # SEM auto procedure
 
         # adjust brightness and contrast
         self.parent._device.DtAutoSignal(self._channel)
@@ -478,6 +478,7 @@ class Detector(model.Detector):
     def stop_acquire(self):
         with self._acquisition_lock:
             self.parent._device.CancelRecv()
+            self.parent._device.ScStopScan()
             with self.parent._acquisition_init_lock:
                 self._acquisition_must_stop.set()
 
@@ -522,7 +523,8 @@ class Detector(model.Detector):
             metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
 
-            center = (res[0] / 2, res[1] / 2)
+            scaled_shape = (self.acq_shape[0] / scale[0], self.acq_shape[1] / scale[1])
+            center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
             l = int(center[0] + pxs_pos[1] - (res[0] / 2))
             t = int(center[1] + pxs_pos[0] - (res[1] / 2))
             r = l + res[0] - 1
@@ -535,7 +537,7 @@ class Detector(model.Detector):
                         "to access this interface.",
                         0, 1, 0, 100)
             dt = self.parent._scanner.dwellTime.value * 1e9
-            self.parent._device.ScScanXY(0, res[0], res[1],
+            self.parent._device.ScScanXY(0, scaled_shape[0], scaled_shape[1],
                                  l, t, r, b, 1, dt)
             # fetch the image (blocking operation), ndarray is returned
             sem_img = self.parent._device.FetchArray(0, res[0] * res[1])
@@ -558,6 +560,7 @@ class Detector(model.Detector):
             try:
                 while not self._acquisition_must_stop.is_set():
                     callback(self._acquire_image())
+                break
             except CancelledError:
                 # Waiting to fetch image is cancelled
                 pass
@@ -565,12 +568,14 @@ class Detector(model.Detector):
                 self._failures += 1
                 if self._failures >= MAX_FAILURES:
                     logging.exception("Image acquisition failed")
+                    break
                 else:
                     logging.warning("Acquisition failure, retry to acquire...")
                     pass
             finally:
                 logging.debug("Acquisition thread closed")
                 self._acquisition_must_stop.clear()
+                break
 
     def updateMetadata(self, md):
         # we share metadata with our parent
