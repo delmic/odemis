@@ -43,7 +43,6 @@ class TestPolarConversion(unittest.TestCase):
         data[0].metadata[model.MD_PIXEL_SIZE] = pxs
         self.data = data
 
-#         white_data_512 = hdf5.read_data("white_data_512.h5")
         white_data_512 = model.DataArray(numpy.empty((512, 512), dtype="uint16"))
         white_data_512[...] = 255
         white_mag_512 = 0.4917
@@ -55,7 +54,6 @@ class TestPolarConversion(unittest.TestCase):
         white_data_512.metadata[model.MD_PIXEL_SIZE] = white_pxs_512
         self.white_data_512 = white_data_512
 
-#         white_data_1024 = hdf5.read_data("white_data_1024.h5")
         white_data_1024 = model.DataArray(numpy.empty((1024, 1024), dtype="uint16"))
         white_data_1024[...] = 255
         white_mag_1024 = 0.4917
