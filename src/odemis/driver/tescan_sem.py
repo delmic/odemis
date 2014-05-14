@@ -842,8 +842,7 @@ class ChamberView(model.DigitalCamera):
         while (self.parent._device.CameraGetStatus(0))[0] != 1:
             time.sleep(0.5)
         # Get a first image to determine the resolution
-        # width, height, img_str = self.parent._device.FetchCameraImage(0)
-        width, height = 2048, 2048
+        width, height, img_str = self.parent._device.FetchCameraImage(0)
         self.parent._device.CameraDisable()
         resolution = (height, width)
         self._shape = resolution + (2 ** 8,)
