@@ -27,14 +27,15 @@ SPARC-AMOLF: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[3, -3], [-4, 4]], # V
-        settle_time: 10.e-6, # s
+        limits: [[2.7, -2.7], [-3.7, 3.7]],  # V
+        park: [4, -4],  # V (higher voltage causes strong beam shift)
+        settle_time: 150.e-6, # s
         hfw_nomag: 0.1067, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 200, # (ratio)
+        magnification: 244, # (ratio)
     },
     affects: ["SED ExtXY", SpecCam, ARCam] # affects the CCD in case of cathodoluminescence
 }
