@@ -52,7 +52,10 @@ def apply_preset(preset):
         for se, value in preset.items():
             if se.name == name:
                 logging.debug("Updating preset %s -> %s", se.name, value)
-                se.va.value = value
+                try:
+                    se.va.value = value
+                except Exception:
+                    logging.exception("Failed to update preset %s", se.name)
                 del preset[se]
 
     apply_presets_named("binning")
@@ -62,7 +65,10 @@ def apply_preset(preset):
 
     for se, value in preset.items():
         logging.debug("Updating preset %s -> %s", se.name, value)
-        se.va.value = value
+        try:
+            se.va.value = value
+        except Exception:
+            logging.exception("Failed to update preset %s", se.name)
 
 def _get_entry(entries, comp, name):
     """
