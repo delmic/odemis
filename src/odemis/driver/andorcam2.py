@@ -453,9 +453,10 @@ class AndorCam2(model.DigitalCamera):
                 ranges = self.GetTemperatureRange()
             else:
                 ranges = [-275, 100]
+            # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
             self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C",
-                                                            setter=self.setTargetTemperature)
-            self.setTargetTemperature(ranges[0])
+                                                            setter=self._setTargetTemperature)
+            self._applyTargetTemperature(ranges[0])
 
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # max speed
@@ -708,7 +709,7 @@ class AndorCam2(model.DigitalCamera):
         # put back the settings
         self._prev_settings = [None, None, None, None]
         self._setStaticSettings()
-        self.setTargetTemperature(self.targetTemperature.value)
+        self._applyTargetTemperature(self.targetTemperature.value)
         self.setFanSpeed(self.fanSpeed.value)
 
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
@@ -1026,30 +1027,12 @@ class AndorCam2(model.DigitalCamera):
         caps = self.GetCapabilities()
         return bool(caps.GetFunctions & function)
 
-    def setTargetTemperature(self, temp):
+    def _applyTargetTemperature(self, temp):
         """
-        Change the targeted temperature of the CCD.
-        The cooler the less dark noise. Not everything is possible, but it will
-        try to accommodate by targeting the closest temperature possible.
+        Change the target temperature and turn on the cooler if needed
         temp (-300 < float < 100): temperature in C
         """
         assert(-300 <= temp <= 100)
-        if temp == self.targetTemperature.value:
-            # Don't do anything for such simple case
-            return float(temp)
-
-        self.select()
-#         if not self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
-#             return
-
-#         if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
-#             ranges = self.GetTemperatureRange()
-#             temp = sorted(ranges + (temp,))[1]
-
-        # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
-
-        temp = int(round(temp))
-
         try:
             self.atcore.SetTemperature(temp)
             if temp > 20:
@@ -1063,6 +1046,21 @@ class AndorCam2(model.DigitalCamera):
                 logging.error("Failed to update temperature due to acquisition in progress")
                 return self.targetTemperature.value
             raise
+
+    def _setTargetTemperature(self, temp):
+        """
+        Change the targeted temperature of the CCD.
+        The cooler the less dark noise. Not everything is possible, but it will
+        try to accommodate by targeting the closest temperature possible.
+        temp (-300 < float < 100): temperature in C
+        """
+        if temp == self.targetTemperature.value:
+            # Don't do anything for such simple case
+            return float(temp)
+
+        temp = int(round(temp))
+        self.select()
+        self._applyTargetTemperature(temp)
 
         return float(temp)
 
