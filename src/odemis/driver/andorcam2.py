@@ -1033,27 +1033,37 @@ class AndorCam2(model.DigitalCamera):
         try to accommodate by targeting the closest temperature possible.
         temp (-300 < float < 100): temperature in C
         """
-        assert((-300 <= temp) and (temp <= 100))
+        assert(-300 <= temp <= 100)
+        if temp == self.targetTemperature.value:
+            # Don't do anything for such simple case
+            return float(temp)
 
         self.select()
-        if not self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
-            return
+#         if not self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
+#             return
 
-        if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
-            ranges = self.GetTemperatureRange()
-            temp = sorted(ranges + (temp,))[1]
+#         if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
+#             ranges = self.GetTemperatureRange()
+#             temp = sorted(ranges + (temp,))[1]
 
         # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
 
         temp = int(round(temp))
-        self.atcore.SetTemperature(temp)
-        if temp > 20:
-            self.atcore.CoolerOFF()
-        else:
-            self.atcore.CoolerON()
 
-        # TODO: a more generic function which set up the fan to the right speed
-        # according to the target temperature?
+        try:
+            self.atcore.SetTemperature(temp)
+            if temp > 20:
+                self.atcore.CoolerOFF()
+            else:
+                self.atcore.CoolerON()
+        except AndorV2Error as (errno, strerr):
+            # TODO: With some cameras it can fail if the driver is acquiring
+            # => queue it for after the end of the acquisition
+            if errno == 20072: # DRV_ACQUIRING
+                logging.error("Failed to update temperature due to acquisition in progress")
+                return self.targetTemperature.value
+            raise
+
         return float(temp)
 
     def updateTemperatureVA(self):
