@@ -42,9 +42,9 @@ Spectra: {
 "SEM ExtXY": {
     class: phenom.phenom_sem.PhenomSEM,
     role: none,
-    init: {host: "http://localhost:8888", 
-           username: "SummitTAD",
-           password: "SummitTADSummitTAD"},
+    init: {host: "http://Phenom-MVE0206151080.local:8888", 
+           username: "delmic",
+           password: "6526AM9688B1"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
                stage: "OLStage"}
@@ -119,7 +119,7 @@ Spectra: {
     role: stage,
     init: {},
     affects: ["Andor SimCam", "EBeam ExtXY"]
-}s
+}
 
 # Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {

@@ -34,6 +34,7 @@ from odemis.dataio import hdf5
 from odemis.util import img
 from odemis.model import isasync
 import os.path
+from odemis.model._futures import CancellableThreadPoolExecutor
 import threading
 import time
 from random import randint
@@ -590,8 +591,8 @@ class Stage(model.Actuator):
         self._position = {}
 
         # Position phenom object
-        self._stagePos = self.parent._objects.create('ns0:position')
-        self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
+        self._stagePos = parent._objects.create('ns0:position')
+        self._navAlgorithm = parent._objects.create('ns0:navigationAlgorithm')
         self._navAlgorithm = 'NAVIGATION-AUTO'
 
         rng = [-0.5, 0.5]
@@ -602,12 +603,13 @@ class Stage(model.Actuator):
 
         # First calibrate
         calib_pos = parent._device.GetStageCenterCalib()
-        if calib_pos.position.x != 0 or calib_pos.position.y != 0:
+        if calib_pos.x != 0 or calib_pos.y != 0:
             logging.warning("Stage was not calibrated. We are performing calibration now.")
             self._stagePos.x, self._stagePos.y = 0, 0
             parent._device.SetStageCenterCalib(self._stagePos)
 
         mode_pos = parent._device.GetStageModeAndPosition()
+        logging.debug("EDW!")
         self._position["x"] = mode_pos.position.x
         self._position["y"] = mode_pos.position.y
 
@@ -637,6 +639,8 @@ class Stage(model.Actuator):
         """
         move to the position 
         """
+        print "DOIIIIII"
+        print pos
         # Perform move through Tescan API
         # Position from m to mm and inverted
         self._stagePos.x, self._stagePos.y = pos["x"], pos["y"]
@@ -658,6 +662,7 @@ class Stage(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
+        print "DAAAAAAAA"
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)

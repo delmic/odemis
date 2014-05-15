@@ -224,10 +224,10 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_NONE,
         },
-        "rotation":
-        {
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
+#         "rotation":
+#         {
+#             "control_type": odemis.gui.CONTROL_NONE,
+#         },
         "pixelSize":
         {
             "control_type": odemis.gui.CONTROL_NONE,
