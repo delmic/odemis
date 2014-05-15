@@ -238,11 +238,13 @@ class Shamrock(model.Actuator):
                     }
 
             # add slit input direct if available
+            # Note: the documentation mentions the width is in mm,
+            # but it's probably actually µm (10 is the minimum).
             if self.AutoSlitIsPresent(INPUT_SLIT_SIDE):
                 self._slit = INPUT_SLIT_SIDE
                 axes["slit"] = model.Axis(unit="m",
-                                          range=[SLITWIDTHMIN * 1e-3,
-                                                 SLITWIDTHMAX * 1e-3]
+                                          range=[SLITWIDTHMIN * 1e-6,
+                                                 SLITWIDTHMAX * 1e-6]
                                           )
             else:
                 self._slit = None
@@ -478,10 +480,9 @@ class Shamrock(model.Actuator):
         width (0<float): slit opening width in m
         """
         assert(1 <= index <= 4)
-        width_mm = c_float(width * 1e3)
-        assert(SLITWIDTHMIN <= width_mm <= SLITWIDTHMAX)
+        width_um = c_float(width * 1e6)
 
-        self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_mm)
+        self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
 
     def GetAutoSlitWidth(self, index):
         """
@@ -489,9 +490,9 @@ class Shamrock(model.Actuator):
         return (0<float): slit opening width in m
         """
         assert(1 <= index <= 4)
-        width_mm = c_float()
-        self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_mm))
-        return width_mm.value * 1e-3
+        width_um = c_float()
+        self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_um))
+        return width_um.value * 1e-6
 
     def AutoSlitReset(self, index):
         """
