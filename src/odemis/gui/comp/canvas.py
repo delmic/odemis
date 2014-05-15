@@ -127,23 +127,13 @@ Graphical data is drawn using the following sequence of method calls:
 
                 * _draw_background()
 
-                * Set the device origin to the center of the buffer
-
                 * _draw_merged_images
 
                    * for all but last image:
                         * _draw_image()
-                            * _rescale_image()
-                            * memset_object() (For opacity)
-                            * Draw the image to the _dc_buffer
 
                     * for last image:
                         * _draw_image()
-                            * _rescale_image()
-                            * memset_object() (For opacity)
-                            * Draw the image to the _dc_buffer
-
-                * Restore device origin to the top left
 
             * Refresh/Update canvas
 
@@ -153,7 +143,6 @@ from __future__ import division
 
 import cairo
 import collections
-import ctypes
 import logging
 import math
 import odemis.gui.img.data as imgdata
@@ -624,6 +613,7 @@ class BufferedCanvas(wx.Panel):
         return (max(1, min(pos[0], self._bmp_buffer_size[0] - 1)),
                 max(1, min(pos[1], self._bmp_buffer_size[1] - 1)))
 
+
 class BitmapCanvas(BufferedCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -652,7 +642,6 @@ class BitmapCanvas(BufferedCanvas):
             afterwards
         """
         # TODO:
-        # * image should just be a numpy RGB(A) array
         # * take an image composition tree (operator + images + scale + pos)
         # * keepalpha not needed => just use alpha iff the image has it
         # * allow to indicate just one image has changed (and so the rest
@@ -776,7 +765,12 @@ class BitmapCanvas(BufferedCanvas):
         :param im_scale: (float)
         :param keepalpha: (boolean) if True, will use a slow method to apply
                opacity that keeps the alpha channel information.
+
+        TODO: keepalha is probably obsolete, so it can be removed (in this)
+        method and elsewhere.
+
         """
+
         # Fully transparent image does not need to be drawn
         if opacity <= 0.0:
             logging.debug("Skipping draw: image fully transparent")
@@ -813,42 +807,23 @@ class BitmapCanvas(BufferedCanvas):
         elif total_scale > 1.0:
             logging.debug("Up scaling required")
 
-            # # Make clipping a bit smarter: if very little data is trimmed, it's
-            # # better to scale the entire image than to create a slightly smaller
-            # # copy first.
-            # if (b_im_rect[2] > intersection[2] * 1.1 or
-            #     b_im_rect[3] > intersection[3] * 1.1):
+            # Make clipping a bit smarter: if very little data is trimmed, it's
+            # better to scale the entire image than to create a slightly smaller
+            # copy first.
+            if (b_im_rect[2] > intersection[2] * 1.1 or
+                b_im_rect[3] > intersection[3] * 1.1):
 
-            print "old b rect:", b_im_rect
+                im_data, tl = self._get_sub_img(
+                                                intersection,
+                                                b_im_rect,
+                                                im_data, total_scale)
 
-            im_data, tl = self._calc_buffer_rect_img_data(
-                                            intersection,
-                                            b_im_rect,
-                                            im_data, total_scale)
-
-            print "  new data shape:", im_data.shape
-
-            print " tl", tl
-            b_im_rect = (
-                tl[0],
-                tl[1],
-                b_im_rect[2],
-                b_im_rect[3],
-            )
-
-            print "  new b rect", b_im_rect
-
-            # intersection = wx.IntersectRect(buffer_rect, new_b_im_rect)
-
-            # print "  new intersect:", intersection
-
-            # b_im_rect = (
-            #     intersection[0],
-            #     intersection[1],
-            #     b_im_rect[2],
-            #     b_im_rect[3],
-            # )
-
+                b_im_rect = (
+                        tl[0],
+                        tl[1],
+                        b_im_rect[2],
+                        b_im_rect[3],
+                    )
 
 
         # Render the image data to the context
@@ -899,7 +874,7 @@ class BitmapCanvas(BufferedCanvas):
 
         # There are two scales:
         # * the scale of the image (dependent on the size of what the image
-        #   represent)
+        #   represents)
         # * the scale of the buffer (dependent on how much the user zoomed in)
 
         # Scale the image
@@ -919,31 +894,44 @@ class BitmapCanvas(BufferedCanvas):
 
         return b_topleft + final_size
 
-    def _calc_buffer_rect_img_data(self, b_intersect, b_im_rect, im_data, tot_scale):
-        """ Calculate the image rectangle that corresponds to the buffer rectangle
+    def _get_sub_img(self, b_intersect, b_im_rect, im_data, total_scale):
+        """ Return the minimial image data that will cover the intersection
+
+        :param b_intersect: (rect) Intersection of the full image and the buffer
+        :param b_im_rect: (rect) The area the full image would occupy in the
+            buffer
+        :param im_data: (DataArray) The original image data
+        :param total_scale: (float) The scale used to convert the image data to
+            buffer pixels. (= image scale * buffer scale)
+
+        :return: (DataArray, (float, float))
+
+        Since trimming the image will possibly change the top left buffer
+        coordinates it should be drawn at, an adjusted (x, y) tuple will be
+        returned as well.
+
         """
 
         im_h, im_w = im_data.shape[:2]
 
         # No need to get sub images from small image data
-        # if im_h <= 4 or im_w <= 4:
-        #     logging.debug("Image too small to intersect...")
-        #     return im_data
+        if im_h <= 4 or im_w <= 4:
+            logging.debug("Image too small to intersect...")
+            return im_data, b_im_rect[:2]
 
         # where is this intersection in the original image?
+        unsc_rect = ((b_intersect[0] - b_im_rect[0]) / total_scale,
+                     (b_intersect[1] - b_im_rect[1]) / total_scale,
+                      b_intersect[2] / total_scale,
+                      b_intersect[3] / total_scale)
 
-        tl = (b_intersect[0] - b_im_rect[0]), (b_intersect[1] - b_im_rect[1])
-
-        unsc_rect = ((b_intersect[0] - b_im_rect[0]) / tot_scale,
-                     (b_intersect[1] - b_im_rect[1]) / tot_scale,
-                      b_intersect[2] / tot_scale,
-                      b_intersect[3] / tot_scale)
-
-        # Note that width and length must be "double rounded" to account
-        # for the round down of the origin and round up of the bottom left
+        # Round the rectangle values to whole pixel values
+        # Note that the width and length get "double rounded":
+        # The bottom left gets rounded up to match complete pixels and that
+        # value is adjusted by a rounded down top/left.
         unsc_rnd_rect = [
-                int(unsc_rect[0]), # rounding down
-                int(unsc_rect[1]),
+                int(unsc_rect[0]), # rounding down origin
+                int(unsc_rect[1]), # rounding down origin
                 math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
                 math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
         ]
@@ -955,48 +943,23 @@ class BitmapCanvas(BufferedCanvas):
             # much => just crop. pylint: disable=C0325
             assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
             assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
-            unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]
-            unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]
+            unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0] # clip width
+            unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1] # clip height
 
-        # b_topleft = b_intersect[:2]
-        # b_w, b_h = b_intersect[-2:]
+        # New top left origin in buffer coordinates to account for the clipping
+        b_new_x = (unsc_rnd_rect[0] * total_scale) + b_im_rect[0]
+        b_new_y = (unsc_rnd_rect[1] * total_scale) + b_im_rect[1]
 
-        # w_topleft = self.buffer_to_world(b_topleft, self.get_half_buffer_size())
-        # w_topleft = tuple(int(int(d) / im_scale) for d in w_topleft)
-
-        # scaled_im_size = (b_w / self.scale, b_h / self.scale)
-
-        # im_size = tuple(int(d / im_scale) for d in scaled_im_size)
-
-        # logging.error("My guess: %s", unsc_rnd_rect)
-
+        # Calculate slicing parameters
         sub_im_x, sub_im_y = unsc_rnd_rect[:2]
         sub_im_w, sub_im_h = unsc_rnd_rect[-2:]
         sub_im_w = max(sub_im_w, 2)
         sub_im_h = max(sub_im_h, 2)
 
-        im_data = im_data[sub_im_y:sub_im_y + sub_im_h, sub_im_x:sub_im_x + sub_im_w].copy()
-        return im_data, tl
+        im_data = im_data[sub_im_y:sub_im_y + sub_im_h,
+                          sub_im_x:sub_im_x + sub_im_w].copy()
 
-        # unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
-        #                  (goal_rect[1] - buff_rect[1]) / total_scale,
-        #                   goal_rect[2] / total_scale,
-        #                   goal_rect[3] / total_scale)
-
-        # print unsc_rect
-
-
-    @staticmethod
-    def memset_object(buffer_object, value):
-        """Note: dangerous"""
-        data = ctypes.POINTER(ctypes.c_char)()
-        size = ctypes.c_int()
-        ctypes.pythonapi.PyObject_AsCharBuffer(
-            ctypes.py_object(buffer_object),
-            ctypes.pointer(data), ctypes.pointer(size)
-        )
-        ctypes.memset(data, value, size.value)
-
+        return im_data, (b_new_x, b_new_y)
 
     # Position conversion
 
@@ -1043,6 +1006,7 @@ class BitmapCanvas(BufferedCanvas):
             self.margins)
 
     # END Position conversion
+
 
 # A class for smooth, flicker-less display of anything on a window, with drag
 # and zoom capability a bit like: wx.canvas, wx.BufferedWindow, BufferedCanvas,

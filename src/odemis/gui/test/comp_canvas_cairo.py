@@ -118,7 +118,7 @@ class TestCanvas(test.GuiTestCase):
         cnvs.update_drawing()
 
         view.mpp.value = 1e-6
-        shift = (10, -10)
+        shift = (10, 10)
         cnvs.shift_view(shift)
 
         #
