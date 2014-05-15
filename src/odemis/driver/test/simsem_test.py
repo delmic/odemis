@@ -36,11 +36,12 @@ from unittest.case import skip
 logging.getLogger().setLevel(logging.DEBUG)
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "drift_period": 0}
+CONFIG_SED = {"name": "sed", "role": "sed"}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
 CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
+              "drift_period": 0.1,
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS}
               }

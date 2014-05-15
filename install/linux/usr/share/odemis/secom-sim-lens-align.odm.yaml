@@ -38,7 +38,7 @@ Spectra: {
 # "SEM ExtXY": {
 #     class: simsem.SimSEM,
 #     role: none,
-#     init: {},
+#     init: {drift_period: 15}, # seconds
 #     # more detectors can be added, if necessary
 #     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
 # }
@@ -56,7 +56,7 @@ Spectra: {
 # "SED ExtXY": { # aka ETD
 #     # Internal child of Quanta ExtXY, so no class
 #     role: se-detector,
-#     init: {drift_period: 15} # seconds
+#     init: {},
 # }
 
 # Can simulate a SEM connected to a DAQ board by using the comedi_test driver:

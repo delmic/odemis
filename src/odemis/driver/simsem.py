@@ -42,13 +42,15 @@ class SimSEM(model.HwComponent):
     and se-detector children components and provides an update function for its metadata. 
     '''
 
-    def __init__(self, name, role, children, image=None, daemon=None, **kwargs):
+    def __init__(self, name, role, children, image=None, drift_period=None,
+                 daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
             They will be provided back in the .children roattribute
         image (str or None): path to a file to use as fake image (relative to
          the directory of this class)
+        drift_period (None or 0<float): time period for drift updating in seconds
         Raise an exception if the device cannot be opened
         '''
         # fake image setup
@@ -59,6 +61,8 @@ class SimSEM(model.HwComponent):
         os.chdir(os.path.dirname(unicode(__file__)))
         exporter = dataio.find_fittest_exporter(image)
         self.fake_img = img.ensure2DImage(exporter.read_data(image)[0])
+
+        self._drift_period = drift_period
 
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
@@ -116,7 +120,11 @@ class Scanner(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         fake_img = self.parent.fake_img
-        self._shape = tuple(v // 2 for v in fake_img.shape[::-1]) # half the size
+        if parent._drift_period:
+            # half the size, to keep some margin for the drift
+            self._shape = tuple(v // 2 for v in fake_img.shape[::-1])
+        else:
+            self._shape = fake_img.shape[::-1]
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
@@ -143,7 +151,7 @@ class Scanner(model.Emitter):
         tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
                     (self._shape[0] / 2, self._shape[1] / 2)]
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="",
+                                              cls=(int, long, float), unit="px",
                                               setter=self._setTranslation)
 
         # .resolution is the number of pixels actually scanned. If it's less than
@@ -285,10 +293,9 @@ class Detector(model.Detector):
     of the fake SEM. It sets up a Dataflow and notifies it every time that a fake 
     SEM image is generated. It also keeps and updates a “drift vector”
     """
-    def __init__(self, name, role, parent, drift_period=None, **kwargs):
+    def __init__(self, name, role, parent, **kwargs):
         """
         Note: parent should have a child "scanner" already initialised
-        drift_period (None or 0<float): time period for drift updating in seconds
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
@@ -309,10 +316,10 @@ class Detector(model.Detector):
         # Given that max resolution is half the shape of fake_img,
         # we set the drift bound to stay inside the fake_img bounds
         self.drift_bound = min(v // 4 for v in self.fake_img.shape[::-1])
-        self.drift_period = drift_period
-        self._update_drift_timer = util.RepeatingTimer(self.drift_period, self._update_drift,
+        self._update_drift_timer = util.RepeatingTimer(parent._drift_period,
+                                                       self._update_drift,
                                                        "Drift update")
-        if self.drift_period is not None:
+        if parent._drift_period:
             self._update_drift_timer.start()
 
     def start_acquire(self, callback):

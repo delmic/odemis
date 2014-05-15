@@ -38,6 +38,7 @@ Spectra: {
     role: none,
     init: {
            image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           drift_period: 5, # s, comment out to disable drift
     },
     children: {scanner: "EBeam ExtXY",
                detector0: "SED ExtXY",
@@ -58,9 +59,7 @@ Spectra: {
 "SED ExtXY": { # aka ETD
     # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {
-           drift_period: 5, # s, comment out to disable drift
-    },
+    init: {},
 }
 
 "EBeam Focus": {

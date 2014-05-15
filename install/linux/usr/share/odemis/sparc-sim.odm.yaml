@@ -54,7 +54,7 @@ SimSPARC: {
 "SEM ExtXY": {
     class: simsem.SimSEM,
     role: none,
-    init: {},
+    init: {drift_period: 5}, # seconds
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
 }
@@ -72,7 +72,7 @@ SimSPARC: {
 "SED ExtXY": { # aka ETD
     # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {drift_period: 5} # seconds
+    init: {},
 }
 
 
