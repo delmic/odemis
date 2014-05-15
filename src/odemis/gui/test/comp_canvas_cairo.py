@@ -60,7 +60,7 @@ class TestCanvas(test.GuiTestCase):
 
         print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
 
-    def test_calc_img_buffer_rect(self):
+    def xtest_threading(self):
 
         # Setting up test frame
         # pylint: disable=E1103
@@ -78,6 +78,7 @@ class TestCanvas(test.GuiTestCase):
         self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
 
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.use_threading = True
         cnvs.default_margin = 50
         cnvs.fit_view_to_next_image = False
         # Create a even black background, so we can test pixel values
@@ -103,7 +104,7 @@ class TestCanvas(test.GuiTestCase):
         img = generate_img_data(20, 20, 4)
         # 100 pixels is 1e-4 meters
         img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
-        img.metadata[model.MD_POS] = im_pos = (0, 0)
+        img.metadata[model.MD_POS] = (0, 0)
         im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
 
         self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
@@ -356,7 +357,7 @@ class TestCanvas(test.GuiTestCase):
         logging.getLogger().setLevel(logging.ERROR)
 
     # @profile
-    def xtest(self):
+    def test(self):
         self.app.test_frame.SetSize((500, 1000))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
@@ -365,13 +366,14 @@ class TestCanvas(test.GuiTestCase):
         mmodel = test.FakeMicroscopeModel()
         view = mmodel.focussedView.value
         old_canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        old_canvas.use_threading = True
         # self.canvas.background_brush = wx.SOLID # no special background
         old_canvas.setView(view, mmodel)
         self.add_control(old_canvas, flags=wx.EXPAND, proportion=1)
 
 
-        new_canvas = DraggableCanvas(self.panel)
-        self.add_control(new_canvas, flags=wx.EXPAND, proportion=1)
+        # new_canvas = DraggableCanvas(self.panel)
+        # self.add_control(new_canvas, flags=wx.EXPAND, proportion=1)
 
 
         # # Test images: (im, w_pos, scale, keepalpha)
@@ -380,8 +382,6 @@ class TestCanvas(test.GuiTestCase):
         #     (gettest_patternImage(), (0.0, 0.0), 1, True),
         # ]
 
-
-        assert sys.byteorder == 'little', 'We don\'t support big endian'
 
         # shape = (250, 250, 4)
         # rgb = numpy.empty(shape, dtype=numpy.uint8)
@@ -416,16 +416,7 @@ class TestCanvas(test.GuiTestCase):
         #     (darray_thr, (0, 0.0), 0.0005, True),
         # ]
 
-        shape = (250, 250, 4)
-        rgb = numpy.empty(shape, dtype=numpy.uint8)
-        rgb[..., 0] = numpy.linspace(0, 255, shape[1])
-        rgb[..., 1] = numpy.linspace(123, 156, shape[1])
-        rgb[..., 2] = numpy.linspace(100, 255, shape[1])
-        rgb[..., 3] = 255
-        rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
-        # rgb = rgb[3400:3600, 3400:3600].copy()
-        # print rgb[3400:3600, 3400:3600].copy()
-        darray_one = DataArray(rgb)
+        darray_one = generate_img_data(250, 250, 4)
 
 
         images = [
@@ -435,16 +426,17 @@ class TestCanvas(test.GuiTestCase):
         ]
 
         old_canvas.set_images(images)
+        old_canvas.shift_view((125, 125))
         # new_canvas.set_images(images)
 
         # Number of redraw we're going to request
-        FRAMES_TO_DRAW = 2
+        # FRAMES_TO_DRAW = 2
 
-        t_start = time.time()
-        for _ in range(FRAMES_TO_DRAW):
-            old_canvas.update_drawing()
-            test.gui_loop()
-        print "%ss"% (time.time() - t_start)
+        # t_start = time.time()
+        # for _ in range(FRAMES_TO_DRAW):
+        #     old_canvas.update_drawing()
+        #     test.gui_loop()
+        # print "%ss"% (time.time() - t_start)
 
         # t_start = time.time()
         # for _ in range(FRAMES_TO_DRAW):

@@ -147,6 +147,7 @@ import logging
 import math
 import odemis.gui.img.data as imgdata
 import os
+import threading
 import wx
 import wx.lib.wxcairo as wxcairo
 
@@ -247,8 +248,11 @@ class BufferedCanvas(wx.Panel):
 
         # END Event Biding
 
+        # TEST ATTRIBUTE TO SWITCH BETWEEN TIMER AND THREAD BASES RENDERING
+        self.use_threading = True
         # Timer used to set a maximum of frames per second
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
+        self.draw_thread = None
 
     ############ Event Handlers ############
 
@@ -431,8 +435,25 @@ class BufferedCanvas(wx.Panel):
             If you're unsure about the current thread, use:
             `wx.CallAfter(canvas.request_drawing_update)`
         """
-        if not self.draw_timer.IsRunning():
-            self.draw_timer.Start(delay * 1000.0, oneShot=True)
+
+        # For testing purposes we've split the rendering into a thread bases and
+        # a timer based versions, which can be switched using the
+        # `use_threading` attribute.
+
+        if not self.draw_thread and self.use_threading:
+            self.draw_thread = threading.Thread(target=self.draw)
+
+            self.draw_thread.start()
+            self.draw_thread.join()
+            self.draw_thread = None
+            # eraseBackground doesn't seem to matter, but just in case...
+            self.Refresh(eraseBackground=False)
+            # not really necessary as refresh causes an onPaint event soon, but
+            # makes it slightly sooner, so smoother
+            self.Update()
+        else:
+            if not self.draw_timer.IsRunning():
+                self.draw_timer.Start(delay * 1000.0, oneShot=True)
 
     def update_drawing(self):
         """ Redraw the buffer and display it """
