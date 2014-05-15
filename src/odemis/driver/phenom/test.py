@@ -18,7 +18,7 @@ phenom = Client("http://localhost:8888?om", location="http://localhost:8888", us
 # phenom = Client("file://" + urllib2.quote(wsdlp), location="http://localhost:8888")
 range = phenom.service.SEMGetHighTensionRange()
 volt_range = [-range.max, -range.min]
-range = phenom.service.GetSEMHFW()
+range = phenom.service.GetStageCenterCalib()
 print range
 
 imagingDevice = phenom.factory.create('ns0:imagingDevice')
@@ -32,7 +32,7 @@ phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)  # or NAVCAMIMDEV
 
 # Use all detector segments
 detectorMode = 'SEM-DETECTOR-MODE-ALL'
-nalg = 'NAVIGATION-RAW'
+navAlgorithm = 'NAVIGATION-RAW'
 scanParams.detector = detectorMode
 # Some resolutions are not allowed e.g. 250 doesnt work, 256 does
 scanParams.resolution.width = 2048
@@ -47,7 +47,7 @@ pos.x, pos.y = 0, 0
 phenom.service.SetStageCenterCalib(pos)
 print phenom.service.GetStageModeAndPosition()
 pos.x, pos.y = 0.001, 0.001
-resp = phenom.service.MoveBy(pos, nalg)
+resp = phenom.service.MoveBy(pos, navAlgorithm)
 # print resp
 print phenom.service.GetStageModeAndPosition()
 

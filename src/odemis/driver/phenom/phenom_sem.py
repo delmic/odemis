@@ -205,7 +205,7 @@ class Scanner(model.Emitter):
 
         # (float) in rad => rotation of the image compared to the original axes
         rot = parent._device.GetSEMRotation()
-        rotation = (rot * math.pi) / 180
+        rotation = numpy.deg2rad(rot)
         rot_range = (0, 2 * math.pi)
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
@@ -428,6 +428,7 @@ class Detector(model.Detector):
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self.acq_shape = self.parent._scanner._shape
 
         # setup detector
         self._scanParams = self.parent._objects.create('ns0:scanParams')
@@ -462,8 +463,7 @@ class Detector(model.Detector):
 
     def stop_acquire(self):
         with self._acquisition_lock:
-            with self.parent._acquisition_init_lock:
-                self._acquisition_must_stop.set()
+            self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
         """
@@ -506,17 +506,20 @@ class Detector(model.Detector):
             metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
 
-            center = (res[0] / 2, res[1] / 2)
-            l = center[0] + pxs_pos[1] - (res[1] / 2)
-            t = center[1] + pxs_pos[0] - (res[0] / 2)
-            r = center[0] + pxs_pos[1] + (res[1] / 2) - 1
-            b = center[1] + pxs_pos[0] + (res[0] / 2) - 1
+            scaled_shape = (self.acq_shape[0] / scale[0], self.acq_shape[1] / scale[1])
+            center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
+            l = int(center[0] + pxs_pos[1] - (res[0] / 2))
+            t = int(center[1] + pxs_pos[0] - (res[1] / 2))
+            r = l + res[0] - 1
+            b = t + res[1] - 1
 
             dt = self.parent._scanner.dwellTime.value
             self._scanParams.resolution.height = res[0]
             self._scanParams.resolution.width = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
             self._scanParams.HDR = True  # 16 bits
+            self._scanParams.center.x = pxs_pos[0]
+            self._scanParams.center.y = pxs_pos[1]
             img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
 
             # image to ndarray
@@ -588,6 +591,8 @@ class Stage(model.Actuator):
 
         # Position phenom object
         self._stagePos = self.parent._objects.create('ns0:position')
+        self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
+        self._navAlgorithm = 'NAVIGATION-AUTO'
 
         rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)
@@ -596,8 +601,11 @@ class Stage(model.Actuator):
         axes_def["rz"] = model.Axis(unit="rad", range=rng_rot)
 
         # First calibrate
-        self._stagePos.x, self._stagePos.y = 0, 0
-        parent._device.SetStageCenterCalib(self._stagePos)
+        calib_pos = parent._device.GetStageCenterCalib()
+        if calib_pos.position.x != 0 or calib_pos.position.y != 0:
+            logging.warning("Stage was not calibrated. We are performing calibration now.")
+            self._stagePos.x, self._stagePos.y = 0, 0
+            parent._device.SetStageCenterCalib(self._stagePos)
 
         mode_pos = parent._device.GetStageModeAndPosition()
         self._position["x"] = mode_pos.position.x
@@ -605,7 +613,7 @@ class Stage(model.Actuator):
 
         # degrees to rad
         rot = parent._device.GetSEMRotation()
-        self._position["rz"] = (rot * math.pi) / 180
+        self._position["rz"] = numpy.deg2rad(rot)
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
@@ -631,20 +639,20 @@ class Stage(model.Actuator):
         """
         # Perform move through Tescan API
         # Position from m to mm and inverted
-        self.parent._device.StgMoveTo(-pos["x"] * 1e3,
-                                    - pos["y"] * 1e3,
-                                    - self.init_z * 1e3,
-                                    (pos["rz"] * 180) / math.pi)
+        self._stagePos.x, self._stagePos.y = pos["x"], pos["y"]
+        self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
+        self.parent._device.SetSEMRotation(numpy.rad2deg(pos["rz"]))
 
         # Obtain the finally reached position after move is performed.
         # This is mainly in order to keep the correct position in case the
         # move we tried to perform was greater than the maximum possible
         # one.
         with self.parent._acquisition_init_lock:
-            x, y, z, rot, tilt = self.parent._device.StgGetPosition()
-            self._position["x"] = -x * 1e-3
-            self._position["y"] = -y * 1e-3
-            self._position["rz"] = (rot * math.pi) / 180
+            mode_pos = self.parent._device.GetStageModeAndPosition()
+            self._position["x"] = mode_pos.position.x
+            self._position["y"] = mode_pos.position.y
+            rot = self.parent._device.GetSEMRotation()
+            self._position["rz"] = numpy.deg2rad(rot)
 
         self._updatePosition()
 
