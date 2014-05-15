@@ -456,13 +456,13 @@ class AndorCam2(model.DigitalCamera):
             # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
             self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C",
                                                             setter=self._setTargetTemperature)
-            self._applyTargetTemperature(ranges[0])
+            self._setTargetTemperature(ranges[0], force=True)
 
         if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
             # max speed
             self.fanSpeed = model.FloatContinuous(1.0, [0.0, 1.0], unit="",
-                                        setter=self.setFanSpeed) # ratio to max speed
-            self.setFanSpeed(1.0)
+                                        setter=self._setFanSpeed) # ratio to max speed
+            self._setFanSpeed(1.0, force=True)
 
         self._binning = (1, 1) # px, horizontal, vertical
         self._image_rect = (1, resolution[0], 1, resolution[1])
@@ -709,8 +709,8 @@ class AndorCam2(model.DigitalCamera):
         # put back the settings
         self._prev_settings = [None, None, None, None]
         self._setStaticSettings()
-        self._applyTargetTemperature(self.targetTemperature.value)
-        self.setFanSpeed(self.fanSpeed.value)
+        self._setTargetTemperature(self.targetTemperature.value, force=True)
+        self._setFanSpeed(self.fanSpeed.value, force=True)
 
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")
@@ -1027,12 +1027,22 @@ class AndorCam2(model.DigitalCamera):
         caps = self.GetCapabilities()
         return bool(caps.GetFunctions & function)
 
-    def _applyTargetTemperature(self, temp):
+    def _setTargetTemperature(self, temp, force=False):
         """
-        Change the target temperature and turn on the cooler if needed
+        Change the targeted temperature of the CCD.
+        The cooler the less dark noise. Not everything is possible, but it will
+        try to accommodate by targeting the closest temperature possible.
         temp (-300 < float < 100): temperature in C
+        force (bool): whether the hardware will be set even if it appears it's
+          not necessary
         """
         assert(-300 <= temp <= 100)
+        if temp == self.targetTemperature.value and not force:
+            # Don't do anything for such simple case
+            return float(temp)
+
+        temp = int(round(temp))
+        self.select()
         try:
             self.atcore.SetTemperature(temp)
             if temp > 20:
@@ -1046,21 +1056,6 @@ class AndorCam2(model.DigitalCamera):
                 logging.error("Failed to update temperature due to acquisition in progress")
                 return self.targetTemperature.value
             raise
-
-    def _setTargetTemperature(self, temp):
-        """
-        Change the targeted temperature of the CCD.
-        The cooler the less dark noise. Not everything is possible, but it will
-        try to accommodate by targeting the closest temperature possible.
-        temp (-300 < float < 100): temperature in C
-        """
-        if temp == self.targetTemperature.value:
-            # Don't do anything for such simple case
-            return float(temp)
-
-        temp = int(round(temp))
-        self.select()
-        self._applyTargetTemperature(temp)
 
         return float(temp)
 
@@ -1088,16 +1083,23 @@ class AndorCam2(model.DigitalCamera):
         self.temperature.notify(self.temperature.value)
         logging.debug("temp is %d", temp)
 
-    def setFanSpeed(self, speed):
+    def _applyFanSpeed(self, val):
+        """
+        Change the fan speed. Will accommodate to whichever speed is possible.
+        val (0 <= int <= 2): 0 = full, 1 = low, 2 = off
+        """
+
+    def _setFanSpeed(self, speed, force=False):
         """
         Change the fan speed. Will accommodate to whichever speed is possible.
         speed (0<=float<= 1): ratio of full speed -> 0 is slowest, 1.0 is fastest
+        force (bool): whether the hardware will be set even if it appears it's
+          not necessary
         """
-        assert((0 <= speed) and (speed <= 1))
-
-        self.select()
-        if not self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
-            return 0
+        assert(0 <= speed <= 1)
+        if speed == self.fanSpeed.value and not force:
+            # Don't do anything for such simple case
+            return speed
 
         # It's more or less linearly distributed in speed...
         # 0 = full, 1 = low, 2 = off
@@ -1106,7 +1108,16 @@ class AndorCam2(model.DigitalCamera):
         else:
             values = [2, 0]
         val = values[int(round(speed * (len(values) - 1)))]
-        self.atcore.SetFanMode(val)
+        self.select()
+        try:
+            self.atcore.SetFanMode(val)
+        except AndorV2Error as (errno, strerr):
+            # TODO: With some cameras it can fail if the driver is acquiring
+            # => queue it for after the end of the acquisition
+            if errno == 20072: # DRV_ACQUIRING
+                logging.error("Failed to change fan speed due to acquisition in progress")
+                return self.targetTemperature.value
+            raise
         return val / max(values)
 
     def getModelName(self):
