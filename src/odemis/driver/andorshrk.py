@@ -482,7 +482,8 @@ class Shamrock(model.Actuator):
         assert(1 <= index <= 4)
         width_um = c_float(width * 1e6)
 
-        self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
+        with self._hw_access:
+            self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
 
     def GetAutoSlitWidth(self, index):
         """
@@ -491,7 +492,8 @@ class Shamrock(model.Actuator):
         """
         assert(1 <= index <= 4)
         width_um = c_float()
-        self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_um))
+        with self._hw_access:
+            self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_um))
         return width_um.value * 1e-6
 
     def AutoSlitReset(self, index):
@@ -499,7 +501,8 @@ class Shamrock(model.Actuator):
         index (1<=int<=4): Slit number
         """
         assert(1 <= index <= 4)
-        self._dll.ShamrockAutoSlitReset(self._device, index)
+        with self._hw_access:
+            self._dll.ShamrockAutoSlitReset(self._device, index)
 
     def AutoSlitIsPresent(self, index):
         """
