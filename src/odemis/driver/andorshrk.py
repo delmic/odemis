@@ -222,7 +222,7 @@ class Shamrock(model.Actuator):
                 wmin, wmax = self.GetWavelengthLimits(g)
                 wl_range = min(wl_range[0], wmin), max(wl_range[1], wmax)
 
-            # Slit (we only actually care about the input direct slit for now)
+            # Slit (we only actually care about the input side slit for now)
             slits = {"input side": 1,
                      "input direct": 2,
                      "output side": 3,
@@ -237,16 +237,15 @@ class Shamrock(model.Actuator):
                     "grating": model.Axis(choices=gchoices)
                     }
 
-            pos = {"wavelength": self.GetWavelength(),
-                   "grating": self.GetGrating()}
-
             # add slit input direct if available
-            if self.AutoSlitIsPresent(INPUT_SLIT_DIRECT):
+            if self.AutoSlitIsPresent(INPUT_SLIT_SIDE):
+                self._slit = INPUT_SLIT_SIDE
                 axes["slit"] = model.Axis(unit="m",
                                           range=[SLITWIDTHMIN * 1e-3,
                                                  SLITWIDTHMAX * 1e-3]
                                           )
-                pos["slit"] = self.GetAutoSlitWidth(INPUT_SLIT_DIRECT)
+            else:
+                self._slit = None
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, parent=parent, **kwargs)
@@ -260,7 +259,8 @@ class Shamrock(model.Actuator):
             self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
             # RO, as to modify it the client must use .moveRel() or .moveAbs()
-            self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
+            self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+            self._updatePosition()
 
         except Exception:
             self.Close()
@@ -533,6 +533,8 @@ class Shamrock(model.Actuator):
         pos = {"wavelength": self.GetWavelength(),
                "grating": self.GetGrating()
               }
+        if self._slit:
+            pos["slit"] = self.GetAutoSlitWidth(self._slit)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -661,21 +663,21 @@ class Shamrock(model.Actuator):
         """
         Change the slit width by a value
         """
-        width = self.GetAutoSlitWidth(INPUT_SLIT_DIRECT) + shift
+        width = self.GetAutoSlitWidth(self._slit) + shift
         # it's only now that we can check the absolute position is wrong
         minp, maxp = self.axes["slit"].range
         if not minp <= width <= maxp:
             raise ValueError("Position %f of axis '%s' not within range %f→%f" %
                              (width, "slit", minp, maxp))
 
-        self.SetAutoSlitWidth(INPUT_SLIT_DIRECT, width)
+        self.SetAutoSlitWidth(self._slit, width)
         self._updatePosition()
 
     def _doSetSlitAbs(self, width):
         """
         Change the slit width to a value
         """
-        self.SetAutoSlitWidth(INPUT_SLIT_DIRECT, width)
+        self.SetAutoSlitWidth(self._slit, width)
         self._updatePosition()
 
     def stop(self, axes=None):
