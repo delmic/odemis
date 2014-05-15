@@ -813,22 +813,43 @@ class BitmapCanvas(BufferedCanvas):
         elif total_scale > 1.0:
             logging.debug("Up scaling required")
 
-            # Make clipping a bit smarter: if very little data is trimmed, it's
-            # better to scale the entire image than to create a slightly smaller
-            # copy first.
-            if (b_im_rect[2] > intersection[2] * 1.1 or
-                b_im_rect[3] > intersection[3] * 1.1):
+            # # Make clipping a bit smarter: if very little data is trimmed, it's
+            # # better to scale the entire image than to create a slightly smaller
+            # # copy first.
+            # if (b_im_rect[2] > intersection[2] * 1.1 or
+            #     b_im_rect[3] > intersection[3] * 1.1):
 
-                im_data = self._calc_buffer_rect_img_data(
-                                                intersection,
-                                                b_im_rect,
-                                                im_data, total_scale)
+            print "old b rect:", b_im_rect
 
-                # Re-calculate the buffer rectangle
-                b_im_rect = self._calc_img_buffer_rect(
-                                                im_data,
-                                                im_scale,
-                                                w_im_center)
+            im_data, tl = self._calc_buffer_rect_img_data(
+                                            intersection,
+                                            b_im_rect,
+                                            im_data, total_scale)
+
+            print "  new data shape:", im_data.shape
+
+            print " tl", tl
+            b_im_rect = (
+                tl[0],
+                tl[1],
+                b_im_rect[2],
+                b_im_rect[3],
+            )
+
+            print "  new b rect", b_im_rect
+
+            # intersection = wx.IntersectRect(buffer_rect, new_b_im_rect)
+
+            # print "  new intersect:", intersection
+
+            # b_im_rect = (
+            #     intersection[0],
+            #     intersection[1],
+            #     b_im_rect[2],
+            #     b_im_rect[3],
+            # )
+
+
 
         # Render the image data to the context
 
@@ -910,6 +931,9 @@ class BitmapCanvas(BufferedCanvas):
         #     return im_data
 
         # where is this intersection in the original image?
+
+        tl = (b_intersect[0] - b_im_rect[0]), (b_intersect[1] - b_im_rect[1])
+
         unsc_rect = ((b_intersect[0] - b_im_rect[0]) / tot_scale,
                      (b_intersect[1] - b_im_rect[1]) / tot_scale,
                       b_intersect[2] / tot_scale,
@@ -952,7 +976,7 @@ class BitmapCanvas(BufferedCanvas):
         sub_im_h = max(sub_im_h, 2)
 
         im_data = im_data[sub_im_y:sub_im_y + sub_im_h, sub_im_x:sub_im_x + sub_im_w].copy()
-        return im_data
+        return im_data, tl
 
         # unsc_rect = ((goal_rect[0] - buff_rect[0]) / total_scale,
         #                  (goal_rect[1] - buff_rect[1]) / total_scale,

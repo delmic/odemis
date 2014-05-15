@@ -44,7 +44,108 @@ class TestCanvas(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
 
+    def xtest_calc_buffer_rect_img_data(self):
+
+        im_data = numpy.array([
+                        [1, 2, 3, 4],
+                        [5, 6, 7, 8],
+                        [9, 10, 11, 12],
+                        [13, 14, 15, 16],
+                    ])
+
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        brect = (1, -1, 4, 4)
+        irect = (1, 0, 3, 3)
+
+        print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
+
     def test_calc_img_buffer_rect(self):
+
+        # Setting up test frame
+        # pylint: disable=E1103
+
+        self.app.test_frame.SetSize((200, 200))
+        self.app.test_frame.Center()
+        self.app.test_frame.Layout()
+
+        test.gui_loop()
+
+        mmodel = test.FakeMicroscopeModel()
+        view = mmodel.focussedView.value
+
+        # Changes in default values might affect other test, so we need to know
+        self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
+
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.default_margin = 50
+        cnvs.fit_view_to_next_image = False
+        # Create a even black background, so we can test pixel values
+        cnvs.background_brush = wx.SOLID
+
+        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+        test.gui_loop()
+
+        # Changes in default values might affect other test, so we need to know
+        self.assertEqual(cnvs.scale, 1, "Default canvas scale has changed!")
+        cnvs.setView(view, mmodel)
+
+        # Setting the view, calls _onMPP with the view.mpp value
+        # mpwu / mpp = scale => 1 (fixed, default) / view.mpp (1e-5)
+        self.assertEqual(cnvs.scale, 1 / view.mpp.value)
+
+        # Make sure the buffer is set at the right size
+        self.assertEqual(cnvs._bmp_buffer_size, (300, 300))
+
+
+        ############ Create test image ###############
+
+        img = generate_img_data(20, 20, 4)
+        # 100 pixels is 1e-4 meters
+        img.metadata[model.MD_PIXEL_SIZE] = (1e-6, 1e-6)
+        img.metadata[model.MD_POS] = im_pos = (0, 0)
+        im_scale = img.metadata[model.MD_PIXEL_SIZE][0] / cnvs.mpwu
+
+        self.assertEqual(im_scale, img.metadata[model.MD_PIXEL_SIZE][0])
+
+        stream1 = RGBStream("s1", img)
+        view.addStream(stream1)
+
+        # Verify view mpp and canvas scale
+        self.assertEqual(view.mpp.value, 1e-5, "Default mpp value has changed!")
+        self.assertEqual(cnvs.scale, 1 / view.mpp.value, "Canvas scale should not have changed!")
+
+        cnvs.update_drawing()
+
+        view.mpp.value = 1e-6
+        shift = (10, -10)
+        cnvs.shift_view(shift)
+
+        #
+        # img.metadata[model.MD_POS] = im_pos = (100e-7, 0)
+        # cnvs.update_drawing()
+
+        # rect = (145.0, 145.0, 10.0, 10.0)
+        # impos = (10 / cnvs.scale, 0)
+        # print im_scale * cnvs.scale, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
+
+        # view.mpp.value = 1e-7
+        # rect = (145.0, 145.0, 10.0, 10.0)
+        # print im_scale * cnvs.scale, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
+
+        # view.mpp.value = 1e-8
+        # rect = (145.0, 145.0, 10.0, 10.0)
+        # print im_scale * cnvs.scale, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
+
+        # for mpp, scale, rect in zip(mpps, exp_scales, exp_b_rect):
+        #     view.mpp.value = mpp
+        #     self.assertAlmostEqual(scale, cnvs.scale)
+        #     for ev, v in zip(rect, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)):
+        #         self.assertAlmostEqual(ev, v)
+        #     test.gui_loop()
+
+
+    def xtest_calc_img_buffer_rect(self):
 
         # Setting up test frame
         # pylint: disable=E1103
@@ -100,16 +201,36 @@ class TestCanvas(test.GuiTestCase):
 
         cnvs.update_drawing()
 
+        # We're going to control the render size of the image using the
+        # following meter per pixel values
+        mpps = [1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10]
 
-        mpps = [1e-8]#, 1e-6, 1e-5]
-        for mpp in mpps:
+        # They sould set the canvas scales to the following values
+        exp_scales = [1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10]
+        exp_b_rect = [
+            (761.5, 761.5, 1.0, 1.0),
+            (757, 757, 10.0, 10.0),
+            (712, 712, 100.0, 100.0),
+            (262, 262, 1000.0, 1000.0),
+            (-4238, -4238, 10000.0, 10000.0),
+        ]
+
+        for mpp, scale, rect in zip(mpps, exp_scales, exp_b_rect):
             view.mpp.value = mpp
-            test.gui_loop()
-            # print mpp, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
+            self.assertAlmostEqual(scale, cnvs.scale)
+            for ev, v in zip(rect, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)):
+                self.assertAlmostEqual(ev, v)
+            test.gui_loop(100)
 
-        # for i in range(10):
-        #     test.gui_loop()
-        #     view.mpp.value /= 1.2
+        im_pos = (-100, -100)
+
+        for mpp, scale, rect in zip(mpps, exp_scales, exp_b_rect):
+            view.mpp.value = mpp
+            self.assertAlmostEqual(scale, cnvs.scale)
+            for ev, v in zip(rect, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)):
+                self.assertAlmostEqual(ev, v)
+            test.gui_loop(100)
+
 
         return
 
@@ -450,7 +571,7 @@ def generate_img_data(width, height, depth, alpha=255):
     shape = (height, width, depth)
     rgb = numpy.empty(shape, dtype=numpy.uint8)
 
-    if width > 1000 or height > 1000:
+    if width > 100 or height > 100:
         tl = random_color(alpha=alpha)
         tr = random_color(alpha=alpha)
         bl = random_color(alpha=alpha)
