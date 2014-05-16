@@ -37,7 +37,7 @@ Spectra: {
     class: simsem.SimSEM,
     role: none,
     init: {
-           image: "/home/piel/Pictures/songbird-sim-sem.h5", # any large 16 bit image is fine
+           image: "songbird-sim-sem.h5", # any large 16 bit image is fine
     },
     children: {scanner: "EBeam ExtXY",
                detector0: "SED ExtXY",
@@ -108,7 +108,7 @@ Spectra: {
     role: ccd,
     init: {device: 0,
 #            transpose: [-2, 1], # rotated 90° clockwise
-           image: "/home/piel/Pictures/songbird-sim-ccd.h5", # only for simulator
+           image: "songbird-sim-ccd.h5", # only for simulator
     },
 }
 
