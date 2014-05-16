@@ -3,7 +3,7 @@ SECOM: {
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
     detectors: ["Andor SimCam", "SED ExtXY"],
-    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage"],
+    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", "Ebeam-focus actuator"],
 }
 
 #Light: {
@@ -47,7 +47,9 @@ Spectra: {
            password: "6526AM9688B1"},
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
-               stage: "OLStage"}
+               stage: "OLStage",
+               focus: "Ebeam-focus actuator"
+    }
 }
 
 "EBeam ExtXY": {
@@ -60,7 +62,13 @@ Spectra: {
 "SED ExtXY": { # aka ETD
     # Internal child of Quanta ExtXY, so no class
     role: se-detector,
-    init: {channel: 0}
+    init: {}
+}
+
+"Ebeam-focus actuator": {
+    role: ebeam-focus,
+    init: {axes: [z]},
+    affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
 "Nikon Super Duper": {

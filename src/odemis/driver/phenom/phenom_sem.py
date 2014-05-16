@@ -47,6 +47,7 @@ import re
 DWELL_TIME = 1.92e-07  # s
 #Fixed max number of frames per acquisition
 MAX_FRAMES = 255
+SOCKET_TIMEOUT = 1000  # timeout for suds client
 
 class PhenomSEM(model.HwComponent):
     '''
@@ -66,7 +67,7 @@ class PhenomSEM(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         # you can change the 'localhost' string and provide another SEM addres
-        client = Client(host + "?om", location=host, username=username, password=password)
+        client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
         self._device = client.service
         # Access to service objects
         self._objects = client.factory
@@ -103,14 +104,14 @@ class PhenomSEM(model.HwComponent):
         self._stage = Stage(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._stage)
 
-#         # create the focus child
-#         try:
-#             kwargs = children["focus"]
-#         except (KeyError, TypeError):
-#             raise KeyError("PhenomSEM was not given a 'focus' child")
-#         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
-#         self.children.add(self._focus)
-#
+        # create the focus child
+        try:
+            kwargs = children["focus"]
+        except (KeyError, TypeError):
+            raise KeyError("PhenomSEM was not given a 'focus' child")
+        self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._focus)
+
 #         # create the camera child
 #         try:
 #             kwargs = children["camera"]
@@ -205,8 +206,7 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
         # (float) in rad => rotation of the image compared to the original axes
-        rot = parent._device.GetSEMRotation()
-        rotation = numpy.deg2rad(rot)
+        rotation = parent._device.GetSEMRotation()
         rot_range = (0, 2 * math.pi)
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
@@ -262,8 +262,8 @@ class Scanner(model.Emitter):
         self._updateMagnification()
 
     def updateHorizontalFOV(self):
-        with self.parent._acquisition_init_lock:
-            new_fov = self.parent._device.GetSEMHFW()
+        # with self.parent._acquisition_init_lock:
+        new_fov = self.parent._device.GetSEMHFW()
 
         self.horizontalFOV.value = new_fov
         # Update current pixelSize and magnification
@@ -296,8 +296,8 @@ class Scanner(model.Emitter):
         self.nr_frames = int(math.ceil(dt / DWELL_TIME))
 
     def _onRotation(self, rot):
-        # move = {'rz':rot}
-        # self.parent._stage.moveAbs(move)
+        with self.parent._acquisition_init_lock:
+            self.parent._device.SetSEMRotation(rot)
         pass
 
     def _onVoltage(self, volt):
@@ -423,7 +423,7 @@ class Detector(model.Detector):
     of the SEM. It sets up a Dataflow and notifies it every time that an SEM image 
     is captured.
     """
-    def __init__(self, name, role, parent, channel, **kwargs):
+    def __init__(self, name, role, parent, **kwargs):
         """
         Note: parent should have a child "scanner" already initialised
         """
@@ -589,33 +589,30 @@ class Stage(model.Actuator):
         """
         axes_def = {}
         self._position = {}
+        self._rel = {}
 
         # Position phenom object
         self._stagePos = parent._objects.create('ns0:position')
+        self._stageRel = parent._objects.create('ns0:position')
         self._navAlgorithm = parent._objects.create('ns0:navigationAlgorithm')
         self._navAlgorithm = 'NAVIGATION-AUTO'
 
         rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
-        rng_rot = [0, 2 * math.pi]
-        axes_def["rz"] = model.Axis(unit="rad", range=rng_rot)
 
         # First calibrate
-        calib_pos = parent._device.GetStageCenterCalib()
-        if calib_pos.x != 0 or calib_pos.y != 0:
-            logging.warning("Stage was not calibrated. We are performing calibration now.")
-            self._stagePos.x, self._stagePos.y = 0, 0
-            parent._device.SetStageCenterCalib(self._stagePos)
+#         calib_pos = parent._device.GetStageCenterCalib()
+#         if calib_pos.x != 0 or calib_pos.y != 0:
+#             logging.warning("Stage was not calibrated. We are performing calibration now.")
+#             self._stagePos.x, self._stagePos.y = 0, 0
+#             parent._device.SetStageCenterCalib(self._stagePos)
 
         mode_pos = parent._device.GetStageModeAndPosition()
-        logging.debug("EDW!")
         self._position["x"] = mode_pos.position.x
         self._position["y"] = mode_pos.position.y
-
-        # degrees to rad
-        rot = parent._device.GetSEMRotation()
-        self._position["rz"] = numpy.deg2rad(rot)
+        self._rel["x"] = 0
+        self._rel["y"] = 0
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
@@ -635,34 +632,142 @@ class Stage(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
-    def _doMove(self, pos):
+    def _doMoveAbs(self, pos):
         """
         move to the position 
         """
-        print "DOIIIIII"
-        print pos
-        # Perform move through Tescan API
-        # Position from m to mm and inverted
-        self._stagePos.x, self._stagePos.y = pos["x"], pos["y"]
-        self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
-        self.parent._device.SetSEMRotation(numpy.rad2deg(pos["rz"]))
+        with self.parent._acquisition_init_lock:
+            self._stagePos.x, self._stagePos.y = pos["x"], pos["y"]
+            self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
 
         # Obtain the finally reached position after move is performed.
         # This is mainly in order to keep the correct position in case the
         # move we tried to perform was greater than the maximum possible
         # one.
+        # with self.parent._acquisition_init_lock:
+        mode_pos = self.parent._device.GetStageModeAndPosition()
+        self._position["x"] = mode_pos.position.x
+        self._position["y"] = mode_pos.position.y
+        self._updatePosition()
+
+    def _doMoveRel(self, rel):
+        """
+        move to the position 
+        """
         with self.parent._acquisition_init_lock:
-            mode_pos = self.parent._device.GetStageModeAndPosition()
-            self._position["x"] = mode_pos.position.x
-            self._position["y"] = mode_pos.position.y
-            rot = self.parent._device.GetSEMRotation()
-            self._position["rz"] = numpy.deg2rad(rot)
+            self._stageRel.x, self._stageRel.y = rel["x"], rel["y"]
+            self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
+
+        # Obtain the finally reached position after move is performed.
+        # This is mainly in order to keep the correct position in case the
+        # move we tried to perform was greater than the maximum possible
+        # one.
+        # with self.parent._acquisition_init_lock:
+        mode_pos = self.parent._device.GetStageModeAndPosition()
+        self._position["x"] = mode_pos.position.x
+        self._position["y"] = mode_pos.position.y
+        self._updatePosition()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        shift = self._applyInversionRel(shift)
+
+        for axis, change in shift.items():
+            self._rel[axis] = change
+
+        rel = self._rel
+        return self._executor.submit(self._doMoveRel, rel)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
+
+        for axis, new_pos in pos.items():
+            self._position[axis] = new_pos
+
+        pos = self._position
+        # self._doMove(pos)
+        return self._executor.submit(self._doMoveAbs, pos)
+
+    def stop(self, axes=None):
+        # Empty the queue for the given axes
+        self._executor.cancel()
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+class EbeamFocus(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    adjusting the ebeam focus by changing the working distance i.e. the distance 
+    between the end of the objective and the surface of the observed specimen 
+    """
+    def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
+        assert len(axes) > 0
+        if ranges is None:
+            ranges = {}
+
+        axes_def = {}
+        self._position = {}
+
+        # Just z axis
+        a = axes[0]
+
+        range = parent._device.GetSEMWDRange()
+        rng = [range.min, range.max]
+        axes_def[a] = model.Axis(unit="m", range=rng)
+
+        # start at the centre
+        self._position[a] = parent._device.GetSEMWD()
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    def _doMove(self, pos):
+        """
+        move to the position 
+        """
+        # Perform move through Phenom API
+        with self.parent._acquisition_init_lock:
+            self.parent._device.SetSEMWD(self._position["z"])
+
+        # Obtain the finally reached position after move is performed.
+        wd = self.parent._device.GetSEMWD()
+        self._position["z"] = wd
+
+        # Changing WD results to change in fov
+        self.parent._scanner.updateHorizontalFOV()
 
         self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
-        print "DAAAAAAAA"
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
