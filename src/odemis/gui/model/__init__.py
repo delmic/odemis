@@ -95,6 +95,7 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.focus = None # actuator to change the camera focus
+        self.ebeam_focus = None # change the e-beam focus
         self.aligner = None # actuator to align ebeam/ccd
         self.mirror = None # actuator to change the mirror position (on SPARC)
         self.light = None
@@ -129,6 +130,8 @@ class MainGUIData(object):
                     self.stage = a # most views move this actuator when moving
                 elif a.role == "focus":
                     self.focus = a
+                elif a.role == "ebeam-focus":
+                    self.ebeam_focus = a
                 elif a.role == "mirror":
                     self.mirror = a
                 elif a.role == "align":
