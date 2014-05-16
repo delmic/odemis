@@ -776,7 +776,7 @@ class FineAlignController(object):
         # alignment is not correct anymore, so reset it.
         self._tab_data_model.main.ccd.updateMetadata({model.MD_POS_COR: (0, 0)})
 
-        # The main goal is to remove the "Succesful" text if it there
+        # The main goal is to remove the "Successful" text if it there
         self._update_est_time()
 
     def _pause(self):
@@ -877,11 +877,13 @@ class FineAlignController(object):
             self._main_frame.lbl_fine_align.Label = "Successful"
             # Temporary info until the GUI can actually rotate the images
             if model.MD_ROTATION_COR in cor_md:
+                rot = cor_md[model.MD_ROTATION_COR]
+                # the worse is the rotation, the longer it's displayed
+                timeout = max(2, min(abs(rot), 10))
                 Message.show_message(self._main_frame,
-                                     "Rotation needed: %f°" %
-                                     (cor_md[model.MD_ROTATION_COR],),
-                                     timeout=3
-                                    )
+                                     u"Rotation needed: %s" % (
+                                      units.readable_str(rot, unit="°", sig=3)),
+                                     timeout=timeout)
                 logging.warning("Fine alignment computed rotation needed of %f°",
                                 cor_md[model.MD_ROTATION_COR])
 
