@@ -3,7 +3,7 @@ SimSECOM: {
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
     detectors: ["Andor SimCam", "SED ExtXY"],
-    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator"],
+    actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator", "EBeam Focus"],
 }
 
 #Light: {
@@ -33,37 +33,44 @@ Spectra: {
     affects: ["Andor SimCam"],
 }
 
-# This is a very simple SEM simulator, without detector
-#EBeam: {
-#    class: simulated.EBeam,
-#    role: e-beam,
-#}
-
 "SEM ExtXY": {
     class: simsem.SimSEM,
     role: none,
-    init: {},
-    # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           drift_period: 5, # s, comment out to disable drift
+    },
+    children: {scanner: "EBeam ExtXY",
+               detector0: "SED ExtXY",
+               focus: "EBeam Focus",
+    }
 }
 
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: e-beam,
     init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {drift_period: 15} # seconds
+    init: {},
+}
+
+"EBeam Focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
 }
 
 "Nikon Super Duper": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 10.0}, # ratio
+    init: {mag: 60.0}, # ratio
     affects: ["Andor SimCam"]
 }
 
@@ -151,12 +158,6 @@ Spectra: {
         speed: {'z': 0.1} #m/s
     }
 }
-
-# USB should be connected to a E-861 or C-867
-# PI E-861/C-867 jumpers (. = off):
-# A = 1234.6..
-# B = 123..6..
-# Z = 12.4.6..
 
 PIGCS: {
     class: pigcs.FakeBus,

@@ -54,10 +54,10 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
         self.pnl_tab_secom_align = xrc.XRCCTRL(self, "pnl_tab_secom_align")
         self.lens_align_slider_aligner = xrc.XRCCTRL(self, "lens_align_slider_aligner")
-        self.lens_align_btn_mb = xrc.XRCCTRL(self, "lens_align_btn_mb")
-        self.lens_align_btn_pa = xrc.XRCCTRL(self, "lens_align_btn_pa")
-        self.lens_align_btn_ma = xrc.XRCCTRL(self, "lens_align_btn_ma")
-        self.lens_align_btn_pb = xrc.XRCCTRL(self, "lens_align_btn_pb")
+        self.lens_align_btn_m_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_b")
+        self.lens_align_btn_p_aligner_a = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_a")
+        self.lens_align_btn_m_aligner_a = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_a")
+        self.lens_align_btn_p_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_b")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
         self.html_alignment = xrc.XRCCTRL(self, "html_alignment")
@@ -104,15 +104,15 @@ class xrcfr_main(wx.Frame):
         self.pnl_tab_sparc_align = xrc.XRCCTRL(self, "pnl_tab_sparc_align")
         self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
         self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
-        self.mirror_align_btn_py = xrc.XRCCTRL(self, "mirror_align_btn_py")
-        self.mirror_align_btn_my = xrc.XRCCTRL(self, "mirror_align_btn_my")
-        self.mirror_align_btn_px = xrc.XRCCTRL(self, "mirror_align_btn_px")
-        self.mirror_align_btn_mx = xrc.XRCCTRL(self, "mirror_align_btn_mx")
+        self.mirror_align_btn_p_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_y")
+        self.mirror_align_btn_m_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_y")
+        self.mirror_align_btn_p_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_x")
+        self.mirror_align_btn_m_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_x")
         self.mirror_align_slider_mirror_r = xrc.XRCCTRL(self, "mirror_align_slider_mirror_r")
-        self.mirror_align_btn_mry = xrc.XRCCTRL(self, "mirror_align_btn_mry")
-        self.mirror_align_btn_pry = xrc.XRCCTRL(self, "mirror_align_btn_pry")
-        self.mirror_align_btn_mrz = xrc.XRCCTRL(self, "mirror_align_btn_mrz")
-        self.mirror_align_btn_prz = xrc.XRCCTRL(self, "mirror_align_btn_prz")
+        self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
+        self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
+        self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
+        self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
         self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_ma_settings_ar = xrc.XRCCTRL(self, "fp_ma_settings_ar")
@@ -562,7 +562,7 @@ def __init_resources():
                         <cellpos>3,3</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_mb">
+                        <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
                           <label>↖</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -587,7 +587,7 @@ def __init_resources():
                         <cellpos>1,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pa">
+                        <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
                           <label>↗</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -612,7 +612,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_ma">
+                        <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
                           <label>↙</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -637,7 +637,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_pb">
+                        <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
                           <label>↘</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1614,7 +1614,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_py">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
                           <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1639,7 +1639,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_my">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
                           <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1664,7 +1664,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_px">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
                           <label>←</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1687,7 +1687,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mx">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
                           <label>→</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1830,7 +1830,7 @@ def __init_resources():
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mry">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
                           <label>↑</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1855,7 +1855,7 @@ def __init_resources():
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_pry">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
                           <label>↓</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1880,7 +1880,7 @@ def __init_resources():
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_mrz">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
                           <label>←</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>
@@ -1903,7 +1903,7 @@ def __init_resources():
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_prz">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
                           <label>→</label>
                           <delta>1</delta>
                           <bitmap>img_btn_64x48_png</bitmap>

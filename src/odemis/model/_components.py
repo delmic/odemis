@@ -563,7 +563,16 @@ class Axis(object):
         else:
             abs_str = ""
 
-        return "%s in %s%s" % (self.__class__.__name__, pos_str, abs_str)
+        if hasattr(self, "speed"):
+            if self.unit is not None:
+                speed_str = (" (speed %s -> %s %s/s)" %
+                             (self.speed[0], self.speed[1], self.unit))
+            else:
+                speed_str = " (speed %s -> %s)" % (self.speed[0], self.speed[1])
+        else:
+            speed_str = ""
+
+        return "%s in %s%s%s" % (self.__class__.__name__, pos_str, abs_str, speed_str)
 
 
 class Actuator(HwComponent):

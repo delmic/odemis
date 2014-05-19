@@ -36,11 +36,14 @@ from unittest.case import skip
 logging.getLogger().setLevel(logging.DEBUG)
 
 # arguments used for the creation of basic components
-CONFIG_SED = {"name": "sed", "role": "sed", "drift_period": 0}
+CONFIG_SED = {"name": "sed", "role": "sed"}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
-CONFIG_SEM = {"name": "sem", "role": "sem",
-              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
+CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus"}
+CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
+              "drift_period": 0.1,
+              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER,
+                           "focus": CONFIG_FOCUS}
               }
 
 
@@ -53,7 +56,7 @@ class TestSEMStatic(unittest.TestCase):
         Doesn't even try to acquire an image, just create and delete components
         """
         sem = simsem.SimSEM(**CONFIG_SEM)
-        self.assertEqual(len(sem.children), 2)
+        self.assertEqual(len(sem.children), 3)
         
         for child in sem.children:
             if child.name == CONFIG_SED["name"]:
@@ -106,6 +109,8 @@ class TestSEM(unittest.TestCase):
                 cls.sed = child
             elif child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
 
     @classmethod
     def tearUpClass(cls):
@@ -228,6 +233,7 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
+    @skip("faster")
     def test_acquire_high_osr(self):
         """
         small resolution, but large osr, to force acquisition not by whole array
@@ -384,6 +390,26 @@ class TestSEM(unittest.TestCase):
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
             self.acq_done.set()
+            
+    def test_focus(self):
+        """
+        Check it's possible to change the focus
+        """
+        pos = self.focus.position.value
+        f = self.focus.moveRel({"z": 1e-3}) # 1 mm
+        f.result()
+        self.assertNotEqual(self.focus.position.value, pos)
+        self.sed.data.get()
+
+        f = self.focus.moveRel({"z":-10e-3}) # 10 mm
+        f.result()
+        self.assertNotEqual(self.focus.position.value, pos)
+        self.sed.data.get()
+
+        # restore original position
+        f = self.focus.moveAbs(pos)
+        f.result()
+        self.assertEqual(self.focus.position.value, pos)
 
 if __name__ == "__main__":
     unittest.main()

@@ -199,7 +199,7 @@ class ViewController(object):
             for viewport in self._viewports:
                 vpv[viewport] = {"name": "SEM %d" % i,
                                  "stage": self._main_data_model.stage,
-                                 "focus0": None, # TODO: SEM focus or focus1?
+                                 "focus1": self._main_data_model.ebeam_focus,
                                  "stream_classes": EM_STREAMS,
                                  }
                 i += 1
@@ -213,7 +213,7 @@ class ViewController(object):
             for viewport in self._viewports:
                 vpv[viewport] = {"name": "Optical %d" % i,
                                  "stage": self._main_data_model.stage,
-                                 "focus0": self._main_data_model.focus,
+                                 "focus1": self._main_data_model.focus,
                                  "stream_classes": OPTICAL_STREAMS,
                                  }
                 i += 1
@@ -227,7 +227,7 @@ class ViewController(object):
             (self._viewports[0],  # focused view
              {"name": "SEM",
               "stage": self._main_data_model.stage,
-              "focus0": None, # TODO: SEM focus
+              "focus1":  self._main_data_model.ebeam_focus,
               "stream_classes": EM_STREAMS,
               }),
             (self._viewports[1],

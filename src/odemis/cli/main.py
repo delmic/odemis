@@ -179,21 +179,27 @@ def print_roattributes(component, pretty):
             continue
         print_roattribute(name, value, pretty)
 
-def print_data_flow(name, df):
-    print u"\t" + name + u" (Data-flow)"
+def print_data_flow(name, df, pretty):
+    if pretty:
+        print u"\t" + name + u" (Data-flow)"
+    else:
+        print(u"%s\ttype:data-flow" % (name,))
 
-def print_data_flows(component):
+def print_data_flows(component, pretty):
     # find all dataflows
     for name, value in model.getDataFlows(component).items():
-        print_data_flow(name, value)
+        print_data_flow(name, value, pretty)
 
-def print_event(name, evt):
-    print u"\t" + name + u" (Event)"
+def print_event(name, evt, pretty):
+    if pretty:
+        print u"\t" + name + u" (Event)"
+    else:
+        print(u"%s\ttype:event" % (name,))
 
-def print_events(component):
+def print_events(component, pretty):
     # find all Events
     for name, value in model.getEvents(component).items():
-        print_event(name, value)
+        print_event(name, value, pretty)
 
 def print_vattribute(name, va, pretty):
     if va.unit:
@@ -246,6 +252,19 @@ def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
         print_vattribute(name, value, pretty)
 
+def print_metadata(component, pretty):
+    md = component.getMetadata()
+    if pretty:
+        if not md:
+            return
+        print("\tMetadata:")
+        for name, value in md.items():
+            print(u"\t\t%s: '%s'" % (name, value))
+    else:
+        for name, value in md.items():
+            print(u"%s\ttype:metadata\tvalue:%s" % (name, value))
+        
+
 def print_attributes(component, pretty):
     if pretty:
         print u"Component '%s':" % component.name
@@ -257,8 +276,9 @@ def print_attributes(component, pretty):
         print u"affects\tvalue:" + u"\t".join([c.name for c in component.affects])
     print_roattributes(component, pretty)
     print_vattributes(component, pretty)
-    print_data_flows(component) # TODO: pretty
-    print_events(component)
+    print_data_flows(component, pretty)
+    print_events(component, pretty)
+    print_metadata(component, pretty)
 
 def get_component_from_set(comp_name, components):
     """

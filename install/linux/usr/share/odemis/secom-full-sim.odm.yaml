@@ -1,10 +1,10 @@
-SECOM: {
+SimSECOM: {
     class: Microscope,
     role: secom,
     emitters: ["Spectra", "Nikon Lens", "FW102C", "EBeam ExtXY"],
     detectors: ["Clara", "SED ExtXY", "ChamberCam", "NavCam"],
     actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator",
-                "SEM Chamber"],
+                "SEM Chamber", "EBeam Focus"],
 }
 
 #Light: {
@@ -37,22 +37,35 @@ Spectra: {
 "SEM ExtXY": {
     class: simsem.SimSEM,
     role: none,
-    init: {},
-    # more detectors can be added, if necessary
-    children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           drift_period: 5, # seconds
+    },
+    children: {scanner: "EBeam ExtXY",
+               detector0: "SED ExtXY",
+               focus: "EBeam Focus",
+    }
 }
 
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: e-beam,
     init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
     affects: ["SED ExtXY", "Clara"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {drift_period: 15} # seconds
+    init: {},
+}
+
+"EBeam Focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
 }
 
 "Nikon Lens": {

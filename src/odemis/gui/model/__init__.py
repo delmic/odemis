@@ -95,6 +95,7 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.focus = None # actuator to change the camera focus
+        self.ebeam_focus = None # change the e-beam focus
         self.aligner = None # actuator to align ebeam/ccd
         self.mirror = None # actuator to change the mirror position (on SPARC)
         self.light = None
@@ -129,6 +130,8 @@ class MainGUIData(object):
                     self.stage = a # most views move this actuator when moving
                 elif a.role == "focus":
                     self.focus = a
+                elif a.role == "ebeam-focus":
+                    self.ebeam_focus = a
                 elif a.role == "mirror":
                     self.mirror = a
                 elif a.role == "align":
@@ -460,47 +463,36 @@ class ActuatorGUIData(MicroscopyGUIData):
         if not main.microscope.actuators:
             raise KeyError("No actuators found in the microscope")
 
+        # Step size name -> val, range, actuator, axes (None if all)
+        # str -> float, [float, float], str, (str, ...)
+        ss_def = {"stage": (1e-6, [1e-8, 1e-3], "stage", None),
+                  "focus": (1e-7, [1e-8, 1e-4], "focus", None),
+                  "aligner": (1e-6, [1e-8, 1e-4], "aligner", None),
+                  # Mirror is a bit more complicated as it has 4 axes and Y
+                  # usually needs to be 10x bigger than X
+                  "mirror_x": (1e-6, [1e-8, 1e-3], "mirror", ("x",)),
+                  "mirror_y": (10e-6, [1e-8, 1e-3], "mirror", ("y",)),
+                  "mirror_r": (10e-6, [1e-8, 1e-3], "mirror", ("ry", "rz"))
+                  }
         # str -> VA: name (as the name of the attribute) -> step size (m)
-        self.stepsizes = {"stage": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
-                          "focus": model.FloatContinuous(1e-7, [1e-8, 1e-4]),
-                          "aligner": model.FloatContinuous(1e-6, [1e-8, 1e-4]),
-                          }
-        # remove the ones that don't have an actuator
-        for an in self.stepsizes.keys():
-            if getattr(main, an) is None:
-                del self.stepsizes[an]
+        self.stepsizes = {}
 
-        # Mirror is a bit more complicated as it has 4 axes and Y usually needs
-        # to be 10x bigger than X
-        if main.mirror is not None:
-            mss = {"mirror_x": model.FloatContinuous(1e-6, [1e-8, 1e-3]),
-                   "mirror_y": model.FloatContinuous(10e-6, [1e-8, 1e-3]),
-                   "mirror_r": model.FloatContinuous(10e-6, [1e-8, 1e-3])
-                   }
-            self.stepsizes.update(mss)
-
-        # stepsize to actuator name and axes (missing => same as stepsize)
-        ss_to_act = {"mirror_x": ("mirror", ("x")),
-                     "mirror_y": ("mirror", ("y")),
-                     "mirror_r": ("mirror", ("ry", "rz"))}
-
-        # This allow the interface to not care about the name of the actuator,
-        # but just the name of the axis.
+        # This allow the UI code to mention axes only as role/axis name.
         # str -> (str, str):
-        #   axis name ("x") -> (actuator ("mirror"), stepsize ("mirror_t"))
+        # role/axis ("mirror/x") -> (actuator ("mirror"), stepsize ("mirror_r"))
         self._axis_to_act_ss = {}
-        for ssn in self.stepsizes.keys():
-            an, axes = ss_to_act.get(ssn, (ssn, None))
-            act = getattr(main, an)
-            for axisn in act.axes:
-                if axes and axisn not in axes:
-                    continue # hopefully in another stepsize
-                if axisn in self._axis_to_act_ss:
-                    logging.error("Actuators '%s' and '%s' have both the axis '%s'",
-                                  self._axis_to_act_ss[axisn][0], an, axisn)
-                else:
-                    self._axis_to_act_ss[axisn] = (an, ssn)
 
+        # remove the ones that don't have an actuator
+        for ss, (v, r, an, axn) in ss_def.items():
+            if getattr(main, an) is not None:
+                self.stepsizes[ss] = model.FloatContinuous(v, r)
+                if axn is None:
+                    axn = getattr(main, an).axes
+                for a in axn:
+                    self._axis_to_act_ss[(an, a)] = (an, ss)
+                    logging.debug("Add axis %s/%s to stepsize %s", an, a, ss)
+
+        # set of (str, str): actuator name, axis name
         self.axes = frozenset(self._axis_to_act_ss.keys())
 
         # Tools are for lens alignment (mirror alignment actually needs none)
@@ -509,21 +501,20 @@ class ActuatorGUIData(MicroscopyGUIData):
 
         # For dichotomic mode
         self.dicho_seq = model.ListVA() # list of 4 enumerated for each corner
-        # TODO: a method somewhere to convert from sequence to rectangle values
-        # cf DichotomyOverlay
 
-    def step(self, axis, factor, sync=False):
+    def step(self, actuator, axis, factor, sync=False):
         """
         Moves a given axis by a one step (of stepsizes).
 
-        :param axis: (str) name of the axis to move (from .axes)
+        :param actuator: (str) name of the actuator to move (from .axes[0])
+        :param axis: (str) name of the axis to move (from .axes[1])
         :param factor: (float) amount to which multiply the stepsizes. -1 makes
             it goes one step backward.
         :param sync: (bool) wait until the move is over before returning
 
         :raises: KeyError if the axis doesn't exist
         """
-        an, ssn = self._axis_to_act_ss[axis]
+        an, ssn = self._axis_to_act_ss[(actuator, axis)]
         a = getattr(self.main, an)
         ss = factor * self.stepsizes[ssn].value
 

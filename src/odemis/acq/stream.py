@@ -1664,13 +1664,20 @@ class StaticARStream(StaticStream):
             try:
                 if numpy.prod(data.shape) > (1280 * 1080):
                     # AR conversion fails one very large images due to too much
-                    # memory consumed (> 2Gb). So, use a "degraded" type that
+                    # memory consumed (> 2Gb). So, rescale + use a "degraded" type that
                     # uses less memory. As the display size is small (compared
                     # to the size of the input image, it shouldn't actually
                     # affect much the output.
                     logging.info("AR image is very large %s, will convert to "
                                  "azymuthal projection in reduced precision.",
                                  data.shape)
+                    y, x = data.shape
+                    if y > x:
+                        small_shape = 1024, int(round(1024 * x / y))
+                    else:
+                        small_shape = int(round(1024 * y / x)), 1024
+                    # resize
+                    data = img.rescale_hq(data, small_shape)
                     dtype = numpy.float16
                 else:
                     dtype = None # just let the function use the best one

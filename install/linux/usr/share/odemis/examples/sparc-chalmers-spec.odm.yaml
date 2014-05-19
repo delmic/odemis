@@ -2,9 +2,9 @@
 SPARC-Spec: {
     class: Microscope,
     role: sparc,
-    emitters: ["EBeam ExtXY", "AR Lens"],
-    detectors: ["SED ExtXY", "ARCam", "AndorSpec"], # Remove ARCam to not have the button in the GUI
-    actuators: ["MirrorMover"],
+    emitters: ["EBeam ExtXY", "AR Lens", "FW102C"],
+    detectors: ["SED ExtXY", "AndorSpec"],
+    actuators: ["MirrorMover", "MFFLens", "MFFSelector"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -25,16 +25,17 @@ SPARC-Spec: {
     role: e-beam,
     init: {
         channels: [0, 1],
-        limits: [[3, -3], [-4, 4]],  # V
-        settle_time: 10.e-6, # s
-        hfw_nomag: 0.1067, # m
+        limits: [[-3.1754, 3.1754], [-3.7, 3.7]],  # V
+        park: [-5, -5], # V
+        settle_time: 5.e-6, # s
+        hfw_nomag: 0.25, # m
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 244, # (ratio)
+        magnification: 100, # (ratio)
     },
-    affects: ["SED ExtXY", AndorSpec, ARCam] # affects the CCD in case of cathodoluminescence
+    affects: ["SED ExtXY", AndorSpec] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -52,17 +53,48 @@ SPARC-Spec: {
     role: lens,
     init: {mag: 0.4917, # ratio
            pole_pos: [1280, 1080], # (px, px), position of the pole (aka the hole in the mirror)
-          }, 
-    affects: ["ARCam"]
+          },
 }
 
-ARCam: {
-    class: andorcam2.FakeAndorCam2,
-    role: ccd,
-    init: {
-           device: 0,  # if a real camera is plugged in, it's usually 0
-           #transpose: [1, -2], # mirrored on Y axis
+# Thorlabs MFF102 holding the lens
+# The convention for the position is:
+# 0° (1)  -> no lens
+# 90° (2) -> lens
+"MFFLens": {
+    class: tlaptmf.MFF,
+    role: lens-switch,
+    init: {sn: "37848823",
+           axis: "rx",
+           # inverted: ["rx"],
+    },
+    affects: ["AR Lens", "AndorSpec"]  
+}
+
+# Thorlabs FW102C with some filters
+"FW102C": {
+    class: tlfw.FW102c,
+    role: filter,
+    init: {port: "/dev/ttyFTDI*", # will automatically find the right port
+           bands: {1: [420.e-9, 460.e-9], # pos -> m,m
+                   2: [500.e-9, 550.e-9], 
+                   3: "polariser",
+                   6: "pass-through"},
            },
+    affects: ["AndorSpec"]
+}
+
+# Thorlabs MFF102 holding the mirror to select AR or spectrometer
+# The convention for the position is:
+# 0° (1)  -> AR
+# 90° (2) -> spectrometer
+"MFFSelector": {
+    class: tlaptmf.MFF,
+    role: ar-spec-selector,
+    init: {sn: "37848720",
+           axis: "rx",
+           # inverted: ["rx"],
+    },
+    affects: ["AndorSpec"]  
 }
 
 # Andor iDus 406 + Shamrock SR303i
@@ -99,7 +131,7 @@ SR303i: {
 # RZ (yaw)   = 12.4.6..
 # RY (pitch) = 12...6..
 MirrorMover: {
-    class: pigcs.FakeBus, # Simulated!
+    class: pigcs.Bus,
     role: mirror,
     init: {
         port: "/dev/ttyPIGCS",
@@ -115,7 +147,7 @@ MirrorMover: {
         #dist_to_steps: {"x": 100000, "y": 100000}, # step/m
     },
     properties: {
-        speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} # m/s
+        speed: {"x": 0.01, "y": 0.01, "rz": 0.01, "ry": 0.01} # m/s
     }
 }
 

@@ -101,8 +101,8 @@ class ShamrockDLL(CDLL):
 # SHAMROCK_TURRETMIN 1
 # SHAMROCK_TURRETMAX 3
 # SHAMROCK_GRATINGMIN 1
-# SHAMROCK_SLITWIDTHMIN 10
-# SHAMROCK_SLITWIDTHMAX 2500
+SLITWIDTHMIN = 10
+SLITWIDTHMAX = 2500
 # SHAMROCK_I24SLITWIDTHMAX 24000
 # SHAMROCK_SHUTTERMODEMIN 0
 # SHAMROCK_SHUTTERMODEMAX 1
@@ -114,10 +114,10 @@ class ShamrockDLL(CDLL):
 # SHAMROCK_SLIT_INDEX_MIN    1
 # SHAMROCK_SLIT_INDEX_MAX    4
 
-# SHAMROCK_INPUT_SLIT_SIDE   1
-# SHAMROCK_INPUT_SLIT_DIRECT  2
-# SHAMROCK_OUTPUT_SLIT_SIDE  3
-# SHAMROCK_OUTPUT_SLIT_DIRECT 4
+INPUT_SLIT_SIDE = 1
+INPUT_SLIT_DIRECT = 2
+OUTPUT_SLIT_SIDE = 3
+OUTPUT_SLIT_DIRECT = 4
 
 # SHAMROCK_FLIPPER_INDEX_MIN    1
 # SHAMROCK_FLIPPER_INDEX_MAX    2
@@ -147,7 +147,7 @@ class HwAccessMgr(object):
 
     def __exit__(self, exc_type, exc_value, traceback):
         """
-        returns True if the exception is to be supressed (never)
+        returns True if the exception is to be suppressed (never)
         """
         if self._ccd is None:
             return
@@ -209,7 +209,9 @@ class Shamrock(model.Actuator):
 
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
             max_speed = 1000e-9 / 5 # about 1000 nm takes 5s => max speed in m/s
-            self.speed = model.MultiSpeedVA(max_speed, range=[max_speed, max_speed], unit="m/s",
+            self.speed = model.MultiSpeedVA({"wavelength": max_speed},
+                                            range=[max_speed, max_speed],
+                                            unit="m/s",
                                             readonly=True)
 
             gchoices = self._getGratingChoices()
@@ -220,10 +222,33 @@ class Shamrock(model.Actuator):
                 wmin, wmax = self.GetWavelengthLimits(g)
                 wl_range = min(wl_range[0], wmin), max(wl_range[1], wmax)
 
+            # Slit (we only actually care about the input side slit for now)
+            slits = {"input side": 1,
+                     "input direct": 2,
+                     "output side": 3,
+                     "output direct": 4,
+                     }
+            for slitn, i in slits.items():
+                logging.info("Slit %s is %spresent", slitn,
+                             "" if self.AutoSlitIsPresent(i) else "not ")
+
             axes = {"wavelength": model.Axis(unit="m", range=wl_range,
                                              speed=(max_speed, max_speed)),
                     "grating": model.Axis(choices=gchoices)
                     }
+
+            # add slit input direct if available
+            # Note: the documentation mentions the width is in mm,
+            # but it's probably actually µm (10 is the minimum).
+            if self.AutoSlitIsPresent(INPUT_SLIT_SIDE):
+                self._slit = INPUT_SLIT_SIDE
+                axes["slit"] = model.Axis(unit="m",
+                                          range=[SLITWIDTHMIN * 1e-6,
+                                                 SLITWIDTHMAX * 1e-6]
+                                          )
+            else:
+                self._slit = None
+
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, parent=parent, **kwargs)
 
@@ -235,16 +260,13 @@ class Shamrock(model.Actuator):
             # will take care of executing axis move asynchronously
             self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
-            pos = {"wavelength": self.GetWavelength(),
-                   "grating": self.GetGrating()}
             # RO, as to modify it the client must use .moveRel() or .moveAbs()
-            self.position = model.VigilantAttribute(pos, unit="m", readonly=True)
+            self.position = model.VigilantAttribute({}, unit="m", readonly=True)
+            self._updatePosition()
 
         except Exception:
             self.Close()
             raise
-
-
 
     def Initialize(self):
         """
@@ -356,7 +378,6 @@ class Shamrock(model.Actuator):
                          byref(Lines), Blaze, byref(Home), byref(Offset))
         return Lines.value * 1e3, float(Blaze.value) * 1e-9, Home.value, Offset.value
 
-
     def SetWavelength(self, wavelength):
         """
         Sets the required wavelength.
@@ -389,7 +410,7 @@ class Shamrock(model.Actuator):
                     time.sleep(0.1)
                 else:
                     break
-        
+
     def GetWavelength(self):
         """
         Gets the current wavelength.
@@ -399,7 +420,7 @@ class Shamrock(model.Actuator):
             wavelength = c_float() # in nm
             self._dll.ShamrockGetWavelength(self._device, byref(wavelength))
         return wavelength.value * 1e-9
-        
+
     def GetWavelengthLimits(self, grating):
         """
         grating (0<int<=3)
@@ -410,22 +431,22 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockGetWavelengthLimits(self._device, grating, 
                                               byref(Min), byref(Max))
         return Min.value * 1e-9, Max.value * 1e-9
-        
+
     def WavelengthIsPresent(self):
         """
         return (boolean): True if it's possible to change the wavelength
         """
         present = c_int()
         self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
-        return (present != 0)
-        
+        return (present.value != 0)
+
     def GetCalibration(self, npixels):
         """
         npixels (0<int): number of pixels on the sensor. It's actually the 
         length of the list that is being returned.
         return (list of floats of length npixels): wavelength in m
         """
-        assert 0< npixels
+        assert(0 < npixels)
         # TODO: this is pretty slow, and could be optimised either by using a 
         # numpy array or returning directly the C array. We could also just
         # allocate one array at the init, and reuse it.
@@ -450,9 +471,49 @@ class Shamrock(model.Actuator):
         """
         self._dll.ShamrockSetNumberPixels(self._device, npixels)
 
-
 #self._dll.ShamrockGetPixelWidth(self._device, float* Width)
 #self._dll.ShamrockGetNumberPixels(self._device, int* NumberPixels)
+
+    def SetAutoSlitWidth(self, index, width):
+        """
+        index (1<=int<=4): Slit number
+        width (0<float): slit opening width in m
+        """
+        assert(1 <= index <= 4)
+        width_um = c_float(width * 1e6)
+
+        with self._hw_access:
+            self._dll.ShamrockSetAutoSlitWidth(self._device, index, width_um)
+
+    def GetAutoSlitWidth(self, index):
+        """
+        index (1<=int<=4): Slit number
+        return (0<float): slit opening width in m
+        """
+        assert(1 <= index <= 4)
+        width_um = c_float()
+        with self._hw_access:
+            self._dll.ShamrockGetAutoSlitWidth(self._device, index, byref(width_um))
+        return width_um.value * 1e-6
+
+    def AutoSlitReset(self, index):
+        """
+        index (1<=int<=4): Slit number
+        """
+        assert(1 <= index <= 4)
+        with self._hw_access:
+            self._dll.ShamrockAutoSlitReset(self._device, index)
+
+    def AutoSlitIsPresent(self, index):
+        """
+        Finds if a specified slit is present.
+        index (1<=int<=4): Slit number
+        return (bool): True if slit is present
+        """
+        assert(1 <= index <= 4)
+        present = c_int()
+        self._dll.ShamrockAutoSlitIsPresent(self._device, index, byref(present))
+        return (present.value != 0)
 
     # Helper functions
     def _getGratingChoices(self):
@@ -476,6 +537,8 @@ class Shamrock(model.Actuator):
         pos = {"wavelength": self.GetWavelength(),
                "grating": self.GetGrating()
               }
+        if self._slit:
+            pos["slit"] = self.GetAutoSlitWidth(self._slit)
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -505,15 +568,24 @@ class Shamrock(model.Actuator):
         shift dict(string-> float): name of the axis and shift in m
         returns (Future): future that control the asynchronous move
         """
+        if not shift:
+            return model.InstantaneousFuture()
         self._checkMoveRel(shift)
 
+        fs = []
         for axis in shift:
             if axis == "wavelength":
                 # cannot convert it directly to an absolute move, because
                 # several in a row must mean they accumulate. So we queue a
                 # special task. That also means the range check is delayed until
                 # the actual position is known.
-                return self._executor.submit(self._doSetWavelengthRel, shift[axis])
+                f = self._executor.submit(self._doSetWavelengthRel, shift[axis])
+                fs.append(f)
+            elif axis == "slit":
+                f = self._executor.submit(self._doSetSlitRel, shift[axis])
+                fs.append(f)
+        # TODO: handle correctly when more than one future
+        return fs[-1]
 
     @isasync
     def moveAbs(self, pos):
@@ -522,19 +594,25 @@ class Shamrock(model.Actuator):
         pos dict(string-> float): name of the axis and new position in m
         returns (Future): future that control the asynchronous move
         """
+        if not pos:
+            return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
+        fs = []
         if "grating" in pos:
             g = pos["grating"]
             wl = pos.get("wavelength")
-            return self._executor.submit(self._doSetGrating, g, wl)
+            fs.append(self._executor.submit(self._doSetGrating, g, wl))
         elif "wavelength" in pos:
             wl = pos["wavelength"]
-            return self._executor.submit(self._doSetWavelengthAbs, wl)
-        else: # nothing to do
-            return model.InstantaneousFuture()
+            fs.append(self._executor.submit(self._doSetWavelengthAbs, wl))
 
+        if "slit" in pos:
+            width = pos["slit"]
+            fs.append(self._executor.submit(self._doSetSlitAbs, width))
+
+        return fs[-1]
 
     def _doSetWavelengthRel(self, shift):
         """
@@ -583,6 +661,27 @@ class Shamrock(model.Actuator):
             logging.exception("Failed to change grating to %d", g)
             raise
 
+        self._updatePosition()
+
+    def _doSetSlitRel(self, shift):
+        """
+        Change the slit width by a value
+        """
+        width = self.GetAutoSlitWidth(self._slit) + shift
+        # it's only now that we can check the absolute position is wrong
+        minp, maxp = self.axes["slit"].range
+        if not minp <= width <= maxp:
+            raise ValueError("Position %f of axis '%s' not within range %f→%f" %
+                             (width, "slit", minp, maxp))
+
+        self.SetAutoSlitWidth(self._slit, width)
+        self._updatePosition()
+
+    def _doSetSlitAbs(self, width):
+        """
+        Change the slit width to a value
+        """
+        self.SetAutoSlitWidth(self._slit, width)
         self._updatePosition()
 
     def stop(self, axes=None):
@@ -758,7 +857,10 @@ class FakeShamrockDLL(object):
         
     def ShamrockSetNumberPixels(self, device, npixels):
         self._np = _val(npixels)
-        
+
+    def ShamrockAutoSlitIsPresent(self, device, index, p_present):
+        present = _deref(p_present, c_int)
+        present.value = 0 # no!
 
 class AndorSpec(model.Detector):
     """

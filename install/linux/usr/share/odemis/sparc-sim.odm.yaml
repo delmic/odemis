@@ -54,22 +54,25 @@ SimSPARC: {
 "SEM ExtXY": {
     class: simsem.SimSEM,
     role: none,
-    init: {},
+    init: {drift_period: 5}, # seconds
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector0: "SED ExtXY"}
 }
 
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: e-beam,
     init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
     affects: ["SED ExtXY", AndorSpec, ARCam] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {drift_period: 15} # seconds
+    init: {},
 }
 
 
@@ -191,13 +194,32 @@ SR303i: {
 }
 
 MirrorMover: {
-    class: simulated.Stage,
+    class: pigcs.FakeBus,
     role: mirror,
-    affects: [AndorSpec, ARCam],
-    init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
+    init: {
+        port: "/dev/ttyPIGCS",
+        # X/Y are same axes as SEM
+        # yaw/pitch are axes according to Mirror's orientation
+        # rz = yaw, ry = pitch (from Mirror's point of view)
+        # axis -> controller, channel, closed-loop?
+        axes: {"y":  [1, 1, False],
+               "x":  [2, 1, False],
+               "ry": [3, 1, False],
+               "rz": [4, 1, False]},
+        # inverted: ["y", "ry"],
+        #dist_to_steps: {"x": 100000, "y": 100000}, # step/m
+    },
     properties: {
         speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
     }
 }
 
-
+# MirrorMover: {
+#     class: simulated.Stage,
+#     role: mirror,
+#     affects: [AndorSpec, ARCam],
+#     init: {axes: ["x", "y", "rz", "ry"]}, # rz = yaw, ry = pitch
+#     properties: {
+#         speed: {"x": 0.1, "y": 0.1, "rz": 0.1, "ry": 0.1} #m/s
+#     }
+# }
