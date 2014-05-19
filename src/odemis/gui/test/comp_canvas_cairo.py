@@ -60,7 +60,7 @@ class TestCanvas(test.GuiTestCase):
 
         print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
 
-    def xtest_threading(self):
+    def test_threading(self):
 
         # Setting up test frame
         # pylint: disable=E1103
@@ -357,7 +357,7 @@ class TestCanvas(test.GuiTestCase):
         logging.getLogger().setLevel(logging.ERROR)
 
     # @profile
-    def test(self):
+    def xtest(self):
         self.app.test_frame.SetSize((500, 1000))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
@@ -497,7 +497,7 @@ class TestCanvas(test.GuiTestCase):
         test.gui_loop(100)
 
     @unittest.skip("simple")
-    def test_reshape(self):
+    def xtest_reshape(self):
 
         darray = generate_img_data(100, 100, 4, 100)
 

@@ -380,7 +380,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # recorded separately).
 
             rgba_im = img.format_rgba_darray(rgbim)
-            keepalpha = True
+            keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
 

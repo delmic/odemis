@@ -673,15 +673,12 @@ class BitmapCanvas(BufferedCanvas):
                 images.append(None)
             else:
                 im, w_pos, scale, keepalpha = args
-                height, width, depth = im.shape
 
-                if depth != 4:
-                    raise ValueError("Unsupporeted colour depth! (%s)", depth)
+                if im.shape[2] != 4:
+                    raise ValueError("Unsupported colour byte size! (%s)", im.shape[2])
 
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
-                im.metadata['width'] = width
-                im.metadata['height'] = height
                 im.metadata['dc_keepalpha'] = keepalpha
 
                 images.append(im)
@@ -831,25 +828,24 @@ class BitmapCanvas(BufferedCanvas):
             # Make clipping a bit smarter: if very little data is trimmed, it's
             # better to scale the entire image than to create a slightly smaller
             # copy first.
-            if (b_im_rect[2] > intersection[2] * 1.1 or
-                b_im_rect[3] > intersection[3] * 1.1):
+            if (b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1):
 
-                im_data, tl = self._get_sub_img(
-                                                intersection,
-                                                b_im_rect,
-                                                im_data, total_scale)
+                im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
 
                 b_im_rect = (
-                        tl[0],
-                        tl[1],
-                        b_im_rect[2],
-                        b_im_rect[3],
-                    )
-
+                    tl[0],
+                    tl[1],
+                    b_im_rect[2],
+                    b_im_rect[3],
+                )
 
         # Render the image data to the context
 
-        im_format = cairo.FORMAT_ARGB32
+        if im_data.metadata.get('dc_keepalpha', True):
+            im_format = cairo.FORMAT_ARGB32
+        else:
+            im_format = cairo.FORMAT_RGB24
+
         height, width, _ = im_data.shape
         logging.debug("Image data shape is %s", im_data.shape)
 
