@@ -2,7 +2,8 @@ SECOM: {
     class: Microscope,
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
-    detectors: ["Andor SimCam", "SED ExtXY"],
+    detectors: ["Andor SimCam", "SED ExtXY"#, "NavCam"
+               ],
     actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", "Ebeam-focus actuator"],
 }
 
@@ -48,7 +49,8 @@ Spectra: {
     # more detectors can be added, if necessary
     children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
                stage: "OLStage",
-               focus: "Ebeam-focus actuator"
+               focus: "Ebeam-focus actuator",
+               #camera: "NavCam"
     }
 }
 
@@ -128,6 +130,11 @@ Spectra: {
     init: {},
     affects: ["Andor SimCam", "EBeam ExtXY"]
 }
+
+#"NavCam": {
+#    role: overview-ccd,
+#    init: {}
+#}
 
 # Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {
