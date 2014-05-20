@@ -60,7 +60,34 @@ class TestCanvas(test.GuiTestCase):
 
         print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
 
-    def test_threading(self):
+    def test_cairo_tranformation(self):
+        self.app.test_frame.SetSize((400, 400))
+        self.app.test_frame.Center()
+        self.app.test_frame.Layout()
+
+        cnvs = canvas.BitmapCanvas(self.panel)
+        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+        test.gui_loop()
+
+        img = generate_img_data(20, 20, 4)
+        img2 = generate_img_data(2000, 2000, 4)
+
+        # images = [
+        #     (img, (250000.0, 250000.0), 25000.0, True, None),
+        #     (img2, (160.0, 160.0), 16.0, True, None),
+        # ]
+
+        steps = 1000
+        for i in range(steps):
+            images = [
+                (img2, (200.0 * i / steps, 200.0 * i / steps), 0.1, True, i * 0.01),
+            ]
+
+            cnvs.set_images(images)
+            cnvs.update_drawing()
+            test.gui_loop()
+
+    def xtest_threading(self):
 
         # Setting up test frame
         # pylint: disable=E1103
@@ -78,8 +105,8 @@ class TestCanvas(test.GuiTestCase):
         self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
 
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        cnvs.use_threading = True
-        cnvs.default_margin = 50
+        cnvs.use_threading = False
+        cnvs.default_margin = 0
         cnvs.fit_view_to_next_image = False
         # Create a even black background, so we can test pixel values
         cnvs.background_brush = wx.SOLID
@@ -96,8 +123,7 @@ class TestCanvas(test.GuiTestCase):
         self.assertEqual(cnvs.scale, 1 / view.mpp.value)
 
         # Make sure the buffer is set at the right size
-        self.assertEqual(cnvs._bmp_buffer_size, (300, 300))
-
+        # self.assertEqual(cnvs._bmp_buffer_size, (300, 300))
 
         ############ Create test image ###############
 
@@ -121,29 +147,6 @@ class TestCanvas(test.GuiTestCase):
         view.mpp.value = 1e-6
         shift = (10, 10)
         cnvs.shift_view(shift)
-
-        #
-        # img.metadata[model.MD_POS] = im_pos = (100e-7, 0)
-        # cnvs.update_drawing()
-
-        # rect = (145.0, 145.0, 10.0, 10.0)
-        # impos = (10 / cnvs.scale, 0)
-        # print im_scale * cnvs.scale, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
-
-        # view.mpp.value = 1e-7
-        # rect = (145.0, 145.0, 10.0, 10.0)
-        # print im_scale * cnvs.scale, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
-
-        # view.mpp.value = 1e-8
-        # rect = (145.0, 145.0, 10.0, 10.0)
-        # print im_scale * cnvs.scale, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)
-
-        # for mpp, scale, rect in zip(mpps, exp_scales, exp_b_rect):
-        #     view.mpp.value = mpp
-        #     self.assertAlmostEqual(scale, cnvs.scale)
-        #     for ev, v in zip(rect, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)):
-        #         self.assertAlmostEqual(ev, v)
-        #     test.gui_loop()
 
 
     def xtest_calc_img_buffer_rect(self):
@@ -420,9 +423,9 @@ class TestCanvas(test.GuiTestCase):
 
 
         images = [
-            (darray_one, (0.0, 0.0), 0.0000003, True),
-            # (darray_two, (0.0, 0.0), 0.33, True),
-            # (darray_thr, (0, 0.0), 1, True),
+            (darray_one, (0.0, 0.0), 0.0000003, True, None),
+            # (darray_two, (0.0, 0.0), 0.33, True, None),
+            # (darray_thr, (0, 0.0), 1, True, None),
         ]
 
         old_canvas.set_images(images)
@@ -490,7 +493,7 @@ class TestCanvas(test.GuiTestCase):
         # Set the mpp again, because the on_size handler will have recalculated it
         view.mpp.value = 1
 
-        images = [(darray, (0.0, 0.0), 2, True)]
+        images = [(darray, (0.0, 0.0), 2, True, None)]
         canvas.set_images(images)
         canvas.scale = 1
         canvas.update_drawing()

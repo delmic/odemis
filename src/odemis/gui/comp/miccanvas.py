@@ -384,7 +384,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
 
-            ims.append((rgba_im, pos, scale, keepalpha))
+            ims.append((rgba_im, pos, scale, keepalpha, None))
         self.set_images(ims)
 
         # For debug only:
@@ -515,7 +515,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
     def _on_view_mpp(self, mpp):
-        """ Called when the view.mpp is updated """
+        """
+        Called when the view.mpp is updated
+        """
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.request_drawing_update)
 
@@ -1288,10 +1290,10 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha))
+                ims.append((wim, pos, scale, keepalpha, None))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha)
+                ims[0] = (wim, pos, scale, keepalpha, None)
 
         self.set_images(ims)
 
@@ -1501,7 +1503,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         for rgbim in images:
             # image is always centered, fitting the whole canvas
             wim = img.format_rgba_darray(rgbim)
-            ims.append((wim, (0, 0), 0.1, False))
+            ims.append((wim, (0, 0), 0.1, False, None))
         self.set_images(ims)
 
     def _onViewImageUpdate(self, t):

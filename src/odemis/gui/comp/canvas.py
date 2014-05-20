@@ -249,7 +249,7 @@ class BufferedCanvas(wx.Panel):
         # END Event Biding
 
         # TEST ATTRIBUTE TO SWITCH BETWEEN TIMER AND THREAD BASES RENDERING
-        self.use_threading = True
+        self.use_threading = False
         # Timer used to set a maximum of frames per second
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
         self.draw_thread = None
@@ -672,13 +672,14 @@ class BitmapCanvas(BufferedCanvas):
             if args is None:
                 images.append(None)
             else:
-                im, w_pos, scale, keepalpha = args
+                im, w_pos, scale, keepalpha, rotation = args
 
                 if im.shape[2] != 4:
                     raise ValueError("Unsupported colour byte size! (%s)", im.shape[2])
 
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
+                im.metadata['dc_rotation'] = rotation
                 im.metadata['dc_keepalpha'] = keepalpha
 
                 images.append(im)
@@ -749,7 +750,7 @@ class BitmapCanvas(BufferedCanvas):
                 im.metadata['dc_center'],
                 r,
                 im_scale=im.metadata['dc_scale'],
-                keepalpha=im.metadata['dc_keepalpha']
+                rotation=im.metadata['dc_rotation']
             )
 
         for im in self.images[-1:]: # the last image (or nothing)
@@ -767,11 +768,10 @@ class BitmapCanvas(BufferedCanvas):
                 im.metadata['dc_center'],
                 merge_ratio,
                 im_scale=im.metadata['dc_scale'],
-                keepalpha=im.metadata['dc_keepalpha']
+                rotation=im.metadata['dc_rotation']
             )
 
-    def _draw_image(self, ctx, im_data, w_im_center,
-                    opacity=1.0, im_scale=1.0, keepalpha=False):
+    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0, im_scale=1.0, rotation=None):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -781,8 +781,7 @@ class BitmapCanvas(BufferedCanvas):
         :param w_im_center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
         :param im_scale: (float)
-        :param keepalpha: (boolean) if True, will use a slow method to apply
-               opacity that keeps the alpha channel information.
+        :param rotation: (float) Rotation around the image center in radians
 
         TODO: keepalha is probably obsolete, so it can be removed (in this)
         method and elsewhere.
@@ -828,7 +827,7 @@ class BitmapCanvas(BufferedCanvas):
             # Make clipping a bit smarter: if very little data is trimmed, it's
             # better to scale the entire image than to create a slightly smaller
             # copy first.
-            if (b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1):
+            if b_im_rect[2] > intersection[2] * 1.1 or b_im_rect[3] > intersection[3] * 1.1:
 
                 im_data, tl = self._get_sub_img(intersection, b_im_rect, im_data, total_scale)
 
@@ -839,6 +838,7 @@ class BitmapCanvas(BufferedCanvas):
                     b_im_rect[3],
                 )
 
+                # print b_im_rect
         # Render the image data to the context
 
         if im_data.metadata.get('dc_keepalpha', True):
@@ -856,17 +856,42 @@ class BitmapCanvas(BufferedCanvas):
         # to use it as the source for a pattern
         imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format,
                                                         width, height, stride)
+
         # In Cairo a pattern is the 'paint' that it uses to draw
         surfpat = cairo.SurfacePattern(imgsurface)
         # Set the filter, so we get low quality but fast scaling
         surfpat.set_filter(cairo.FILTER_FAST)
-
         # The Context matrix, translates from user space to device space
 
-        # Translate to the top left position of the image data
-        ctx.translate(*b_im_rect[:2])
+        # TEST: Changing the order of translate and scale didn't solve the problem
+        # ctx.translate(b_im_rect[0] / total_scale, b_im_rect[1] / total_scale)
+
+        ctx.save()
+
+        x, y, w, h = b_im_rect
+
+        if rotation is not None:
+            hw = w / 2.0
+            hh = h /2.0
+            # Translate to the center of the image (in buffer coordinates)
+            ctx.translate(x + hw, y + hh)
+            # Rotate
+            ctx.rotate(rotation * math.pi)
+            # Translate back, so the origin is at the top left position of the image
+            ctx.translate(-hw, -hh)
+        else:
+            # Translate to the top left position of the image data
+            ctx.translate(x, y)
+
         # Apply total scale
         ctx.scale(total_scale, total_scale)
+
+        # test_scale = 25000
+        # ctx.set_matrix(cairo.Matrix(test_scale, 0, 0, test_scale, 100, 100))
+        # ctx.set_matrix(cairo.Matrix(12500, 0, 0, 12500, 150, 150))
+        # ctx.set_matrix(cairo.Matrix(32, 0, 0, 32, 150, 150))
+        # print ctx.get_matrix()
+
         # We probably cannot use the following method, because we need to
         # set the filter used for scaling. Using set_source instead
         # ctx.set_source_surface(imgsurface)
@@ -877,9 +902,7 @@ class BitmapCanvas(BufferedCanvas):
         else:
             ctx.paint()
 
-        # Reset the transformation matrix
-        ctx.identity_matrix()
-
+        ctx.restore()
 
     def _calc_img_buffer_rect(self, im_data, im_scale, w_im_center):
         """ Compute the rectangle containing the image in buffer coordinates
@@ -912,7 +935,8 @@ class BitmapCanvas(BufferedCanvas):
         return b_topleft + final_size
 
     def _get_sub_img(self, b_intersect, b_im_rect, im_data, total_scale):
-        """ Return the minimial image data that will cover the intersection
+        """
+        Return the minimial image data that will cover the intersection
 
         :param b_intersect: (rect) Intersection of the full image and the buffer
         :param b_im_rect: (rect) The area the full image would occupy in the
@@ -926,6 +950,10 @@ class BitmapCanvas(BufferedCanvas):
         Since trimming the image will possibly change the top left buffer
         coordinates it should be drawn at, an adjusted (x, y) tuple will be
         returned as well.
+
+        TODO: Test if scaling a sub image really has performance benefits while rendering with
+        Cairo (i.e. Maybe Cairo is smart enough to render big images without calculating the pixels
+        that are not visible.)
 
         """
 
@@ -973,6 +1001,8 @@ class BitmapCanvas(BufferedCanvas):
         sub_im_w = max(sub_im_w, 2)
         sub_im_h = max(sub_im_h, 2)
 
+        # We need to copy the data, since cairo.ImageSurface.create_for_data expects a single
+        # segment buffer object (i.e. the data must be contiguous)
         im_data = im_data[sub_im_y:sub_im_y + sub_im_h,
                           sub_im_x:sub_im_x + sub_im_w].copy()
 
