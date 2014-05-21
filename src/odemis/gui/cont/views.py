@@ -239,14 +239,14 @@ class ViewController(object):
             (self._viewports[2],
              {"name": "Combined 1",
               "stage": self._main_data_model.stage,
-              "focus0": None, # TODO: SEM focus
+              "focus0": None, # TODO: SEM focus when em stream on
               "focus1": self._main_data_model.focus,
               "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
               }),
             (self._viewports[3],
              {"name": "Combined 2",
               "stage": self._main_data_model.stage,
-              "focus0": None, # TODO: SEM focus
+              "focus0": None, # TODO: SEM focus when em stream on
               "focus1": self._main_data_model.focus,
               "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
               }),
