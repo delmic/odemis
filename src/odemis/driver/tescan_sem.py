@@ -890,6 +890,16 @@ class ChamberView(model.DigitalCamera):
                 args=(callback,))
         self.acquire_thread.start()
 
+    def req_stop_flow(self):
+        """
+        Cancel the acquisition of a flow of images: there will not be any notify() after this function
+        Note: the thread should be already running
+        Note: the thread might still be running for a little while after!
+        """
+        assert not self.acquire_must_stop.is_set()
+        self.acquire_must_stop.set()
+        self.parent._device.CancelRecv()
+
     def _acquire_thread_continuous(self, callback):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is set.
@@ -972,9 +982,13 @@ class ChamberPressure(model.Actuator):
         axes = {"pressure": model.Axis(unit="Pa",
                                        choices={PRESSURE_VENTED: "vented",
                                                 PRESSURE_PUMPED: "vacuum"})}
-        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
-        # For simulating moves
-        self._position = parent._device.VacGetPressure(0)  # last official position
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
+
+        # last official position
+        if self.GetStatus() == 0:
+            self._position = PRESSURE_PUMPED
+        else:
+            self._position = PRESSURE_VENTED
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
@@ -1044,7 +1058,7 @@ class ChamberPressure(model.Actuator):
         Synchronous change of the pressure
         p (float): target pressure
         """
-        if p == PRESSURE_VENTED:
+        if p["pressure"] == PRESSURE_VENTED:
             self.parent._device.VacVent()
         else:
             self.parent._device.VacPump()
