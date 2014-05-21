@@ -24,21 +24,21 @@ detectorMode = phenom.factory.create('ns0:detector')
 scanMode = 'SEM-SCAN-MODE-IMAGING'
 # phenom.service.SelectImagingDevice(imagingDevice.NAVCAMIMDEV)  # or NAVCAMIMDEV
 # status = phenom.service.GetDoorStatus()
-area = phenom.service.GetProgressAreaSelection().target
-print area
+# area = phenom.service.GetProgressAreaSelection().target
+# print area
 # phenom.service.SetSEMWD(0.008723)
 # print phenom.service.GetSEMDeviceMode()
 # phenom.service.SEMAbortImageAcquisition()
 
-# instr = phenom.service.GetInstrumentMode()
-oper = phenom.service.GetOperationalMode()
-print oper
-# area = phenom.service.GetProgressAreaSelection()
+print phenom.service.GetInstrumentMode()
+print phenom.service.GetOperationalMode()
+# print oper
+print phenom.service.GetProgressAreaSelection()
 # open = phenom.service.GetDoorStatus()
 # resp = phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)
 # resp = phenom.service.UnloadSample()
 # print instr, oper, area, open, resp
-# print phenom.service.GetSampleHolder()
+# print phenom.service.GetSampleHolder().holderType
 # # 0.00751932078719
 # camParams = phenom.factory.create('ns0:camParams')
 # camParams.height = 1

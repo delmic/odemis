@@ -45,11 +45,13 @@ CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus", "axes": ["z"]}
 CONFIG_NC_FOCUS = {"name": "navcam_focus", "role": "overview-focus", "axes": ["z"]}
 CONFIG_STAGE = {"name": "stage", "role": "stage"}
 CONFIG_NAVCAM = {"name": "camera", "role": "overview-ccd"}
+CONFIG_PRESSURE = {"name": "pressure", "role": "pressure"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080.local:8888",
               "username": "delmic", "password" : "6526AM9688B1",
               "children": {"detector": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STAGE, "focus": CONFIG_FOCUS,
-                           "camera": CONFIG_NAVCAM, "navcam_focus": CONFIG_NC_FOCUS}
+                           "camera": CONFIG_NAVCAM, "navcam_focus": CONFIG_NC_FOCUS,
+                           "pressure": CONFIG_PRESSURE}
               }
 
 @skip("skip")
@@ -123,6 +125,8 @@ class TestSEM(unittest.TestCase):
                 cls.camera = child
             elif child.name == CONFIG_NC_FOCUS["name"]:
                 cls.navcam_focus = child
+            elif child.name == CONFIG_PRESSURE["name"]:
+                cls.pressure = child
 
     @classmethod
     def tearUpClass(cls):
@@ -437,6 +441,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertTupleAlmostEqual(self.stage.position.value, pos)
 
+    @skip("skip")
     def test_navcam(self):
         """
         Check it's possible to move the stage
@@ -460,6 +465,15 @@ class TestSEM(unittest.TestCase):
         f = self.navcam_focus.moveAbs(pos)
         f.result()
         self.assertAlmostEqual(self.navcam_focus.position.value, pos)
+
+    def test_pressure(self):
+        """
+        Check it's possible to change the pressure state
+        """
+        f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
+        f.result()
+        new_pos = self.pressure.position.value["pressure"]
+        self.assertEqual({'pressure': 10000.0}, new_pos)
 
 
 if __name__ == "__main__":

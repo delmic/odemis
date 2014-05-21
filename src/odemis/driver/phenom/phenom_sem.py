@@ -35,6 +35,9 @@ from odemis.util import img
 from odemis.model import isasync
 import os.path
 from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.acq._futures import executeTask
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
 import threading
 import time
 from random import randint
@@ -128,13 +131,13 @@ class PhenomSEM(model.HwComponent):
         self._navcam_focus = NavCamFocus(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._navcam_focus)
 #
-#         # create the pressure child
-#         try:
-#             kwargs = children["pressure"]
-#         except (KeyError, TypeError):
-#             raise KeyError("PhenomSEM was not given a 'pressure' child")
-#         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
-#         self.children.add(self._pressure)
+        # create the pressure child
+        try:
+            kwargs = children["pressure"]
+        except (KeyError, TypeError):
+            raise KeyError("PhenomSEM was not given a 'pressure' child")
+        self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._pressure)
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -286,14 +289,19 @@ class Scanner(model.Emitter):
     def _setHorizontalFOV(self, value):
         self.parent._device.SetSEMHFW(value)
 
-#         # Ensure fov odemis field always shows the right value
-#         # Also useful in case fov value that we try to set is
-#         # out of range
-#         with self.parent._acquisition_init_lock:
-#             cur_fov = self.parent._device.GetSEMHFW()
-#             value = cur_fov
-
         return value
+
+    def GetStatus(self):
+        """
+        return int: SEM status, 0 - off, 1 - on
+        """
+        with self.parent._acquisition_init_lock:
+            mode = self.parent._device.GetSEMDeviceMode()
+            if mode == "SEM-MODE-IMAGING":
+                status = 1
+            else:
+                status = 0
+        return status
 
     def _updateMagnification(self):
 
@@ -1103,10 +1111,10 @@ class NavCamFocus(model.Actuator):
             self._executor.shutdown()
             self._executor = None
 
-# PRESSURE_UNLOADED = 1e05  # Pa
-# PRESSURE_NAVCAM = 1e-01  # Pa
-# PRESSURE_SEM = 1e-02  # Pa
-VACUUM_TIMEOUT = 5 * 60  # seconds
+PRESSURE_UNLOADED = 1e05  # Pa
+PRESSURE_NAVCAM = 1e04  # Pa
+PRESSURE_SEM = 1e-02  # Pa
+VACUUM_TIMEOUT = 5  # s
 class ChamberPressure(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
@@ -1115,31 +1123,28 @@ class ChamberPressure(model.Actuator):
     """
     def __init__(self, name, role, parent, ranges=None, **kwargs):
         axes = {"pressure": model.Axis(unit="",
-                                       choices={"unloaded", "NavCam", "SEM"})}
-        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+                                       choices={PRESSURE_UNLOADED: "unloaded", 
+                                                PRESSURE_NAVCAM: "NavCam",
+                                                PRESSURE_SEM: "SEM"})}
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
         self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
 
-        area = parent._device.GetProgressAreaSelection().target  # last official position
+        area = self.parent._device.GetProgressAreaSelection().target  # last official position
+
         if area == "LOADING-WORK-AREA-SEM":
-            self._position = "SEM"
+            self._position = PRESSURE_SEM
         elif area == "LOADING-WORK-AREA-NAVCAM":
-            self._position = "NavCam"
+            self._position = PRESSURE_NAVCAM
         else:
-            self._position = "unloaded"
+            self._position = PRESSURE_UNLOADED
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     {"pressure": self._position},
                                     unit="Pa", readonly=True)
-
-        # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
-
-    def terminate(self):
-        if self._executor:
-            self.stop()
-            self._executor.shutdown()
-            self._executor = None
+        sampleHolder = "Sample Holder ID %s, type %s" % (self.parent._device.GetSampleHolder().holderID.id[0],
+                                                         self.parent._device.GetSampleHolder().holderType)
+        self.sampleHolder = model.VigilantAttribute(sampleHolder, unit="", readonly=True)
 
     def _updatePosition(self):
         """
@@ -1166,27 +1171,98 @@ class ChamberPressure(model.Actuator):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
-        return self._executor.submit(self._changePressure, pos["pressure"])
+        return self._doMove(pos)
 
-    def _changePressure(self, p):
+    def _doMove(self, pos):
         """
-        Synchronous change of the pressure
+        Wrapper for _changePressure. 
+        """
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + self._estimateMoveTime())
+        f._move_state = RUNNING
+        f._move_lock = threading.Lock()
+
+        # Task to run
+        doMove = self._changePressure
+        f.task_canceller = self._CancelMove
+
+        # Run in separate thread
+        move_thread = threading.Thread(target=executeTask,
+                      name="Pressure change",
+                      args=(f, doMove, f, pos))
+
+        move_thread.start()
+        return f
+
+    def _CancelMove(self, future):
+        """
+        Canceller of _changePressure task.
+        """
+        logging.debug("Cancelling pressure change...")
+
+        with future._move_lock:
+            if future._move_state == FINISHED:
+                return False
+            future._move_state = CANCELLED
+            logging.debug("Pressure change cancelled.")
+
+        return True
+
+    def _estimateMoveTime(self):
+        """
+        Estimates move procedure duration
+        """
+        # Just an indicative time. It will be updated by polling the remaining
+        # time.
+        timeRemaining = 15
+        return timeRemaining  # s
+
+    def _changePressure(self, future, p):
+        """
+        Change of the pressure
         p (float): target pressure
         """
-        if p == PRESSURE_VENTED:
-            self.parent._device.VacVent()
-        else:
-            self.parent._device.VacPump()
+        try:
+            if future._move_state == CANCELLED:
+                raise CancelledError()
 
-        start = time.time()
-        while not self.GetStatus() == 0:
-            if (time.time() - start) >= VACUUM_TIMEOUT:
-                raise TimeoutError("Vacuum action timed out")
-            # Update chamber pressure until pumping/venting process is done
+            # Keep remaining time up to date
+            TimeUpdater = self.TimeUpdater(self.parent, future, p)
+            TimeUpdater.start()
+
+            if p["pressure"] == PRESSURE_SEM:
+                self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+            elif p["pressure"] == PRESSURE_NAVCAM:
+                self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+            else:
+                self.parent._device.UnloadSample()
+
+            self._position = p
             self._updatePosition()
-        self._position = p
-        self._updatePosition()
+            TimeUpdater.join(VACUUM_TIMEOUT)
+        finally:
+            with future._move_lock:
+                if future._move_state == CANCELLED:
+                    raise CancelledError()
+                future._move_state = FINISHED
 
-    def stop(self, axes=None):
-        self._executor.cancel()
-        logging.warning("Stopped pressure change")
+    class TimeUpdater(threading.Thread):
+        """
+        Thread that polls the remaining time of the pressure change in progress.
+        """
+        def __init__(self, parent, future, target):
+            threading.Thread.__init__(self)
+            self.parent = parent
+            self.future = future
+            self.target = target
+     
+        def run(self):
+            time.sleep(1)  # To make sure that the procedure has been started
+            while self.target != self.parent._pressure.position.value["pressure"]:
+                remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
+                print remainingTime
+                self.future.set_end_time(time.time() + remainingTime)
+
+        
