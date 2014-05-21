@@ -112,13 +112,21 @@ class PhenomSEM(model.HwComponent):
         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._focus)
 
-#         # create the camera child
-#         try:
-#             kwargs = children["camera"]
-#         except (KeyError, TypeError):
-#             raise KeyError("PhenomSEM was not given a 'camera' child")
-#         self._camera = ChamberView(parent=self, daemon=daemon, **kwargs)
-#         self.children.add(self._camera)
+        # create the camera child
+        try:
+            kwargs = children["camera"]
+        except (KeyError, TypeError):
+            raise KeyError("PhenomSEM was not given a 'camera' child")
+        self._camera = NavCam(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._camera)
+
+        # create the NavCam focus child
+        try:
+            kwargs = children["navcam_focus"]
+        except (KeyError, TypeError):
+            raise KeyError("PhenomSEM was not given a 'navcam_focus' child")
+        self._navcam_focus = NavCamFocus(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._navcam_focus)
 #
 #         # create the pressure child
 #         try:
@@ -239,6 +247,11 @@ class Scanner(model.Emitter):
         self.power = model.IntEnumerated(self._power, power_choices, unit="",
                                   setter=self._setPower)
 
+        # 16 or 8 bits image
+        self.quality = model.VAEnumerated(True, choices={True: "high", False: "low"},
+                                          unit="", setter=self._setQuality)
+        self.dataType = "uint16"
+
         # Set maximum voltage just to get the min range of spot size (the
         # difference with max range is trivial, we just want to avoid out of
         # bounds when we reach the limits)
@@ -291,7 +304,9 @@ class Scanner(model.Emitter):
 
     def _onDwellTime(self, dt):
         # Abort current scanning when dwell time is changed
-        # self.parent._device.SEMAbortImageAcquisition()
+        # print self.parent._acquisition_init_lock.locked()
+        # if self.parent._acquisition_init_lock.locked():
+            #self.parent._device.SEMAbortImageAcquisition()
         # Calculate number of frames
         self.nr_frames = int(math.ceil(dt / DWELL_TIME))
 
@@ -316,6 +331,16 @@ class Scanner(model.Emitter):
             cur_spotSize = self._probeCurrent / math.sqrt(volt)
             self.parent._device.SEMSetSpotSize(cur_spotSize)
         return self._power
+
+    def _setQuality(self, value):
+        with self.parent._acquisition_init_lock:
+            if value == True:
+                self.dataType = "uint16"
+                self.parent._detector.ResetShape(16)
+            else:
+                self.dataType = "uint8"
+                self.parent._detector.ResetShape(8)
+        return value
 
     def _setPC(self, value):
         # Set the corresponding spot size to Phenom SEM
@@ -443,7 +468,7 @@ class Detector(model.Detector):
         self._scanParams.scale = 1
 
         # adjust brightness and contrast
-        self.parent._device.SEMACB()
+#         self.parent._device.SEMACB()
 
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
@@ -453,7 +478,24 @@ class Detector(model.Detector):
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
 
+    def ResetShape(self, value):
+        self._shape = (2 ** value,)
+
+    def GetStatus(self):
+        """
+        return int: SEM status, 0 - off, 1 - on
+        """
+        with self.parent._acquisition_init_lock:
+            mode = self.parent._device.GetSEMDeviceMode()
+            if mode == "SEM-MODE-IMAGING":
+                status = 1
+            else:
+                status = 0
+        return status
+
     def start_acquire(self, callback):
+        assert(self.GetStatus() == 1)  # Just to be sure
+
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
             target = self._acquire_thread
@@ -464,6 +506,7 @@ class Detector(model.Detector):
 
     def stop_acquire(self):
         with self._acquisition_lock:
+            # self.parent._device.SEMAbortImageAcquisition()
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -518,13 +561,15 @@ class Detector(model.Detector):
             self._scanParams.resolution.height = res[0]
             self._scanParams.resolution.width = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
-            self._scanParams.HDR = True  # 16 bits
+            self._scanParams.HDR = self.parent._scanner.quality.value
             self._scanParams.center.x = pxs_pos[0]
             self._scanParams.center.y = pxs_pos[1]
             img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
 
             # image to ndarray
-            sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint16")
+            sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
+                                       dtype=self.parent._scanner.dataType)
+
             sem_img.shape = res
 
             return model.DataArray(sem_img, metadata)
@@ -803,3 +848,345 @@ class EbeamFocus(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
+# The improved NavCam in Phenom G2 and onwards delivers images with a native
+# resolution of 912x912 pixels. When requesting a different size, the image is
+# scaled by the Phenom to the requested resolution
+NAVCAM_RESOLUTION = (1, 1)
+
+class NavCam(model.DigitalCamera):
+    """
+    Represents the optical camera that is activated after the Phenom door is
+    closed and the sample is transferred to the optical imaging position.
+    """
+    def __init__(self, name, role, parent, **kwargs):
+        """
+        Initialises the device.
+        Raise an exception if the device cannot be opened.
+        """
+        model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
+
+        resolution = NAVCAM_RESOLUTION
+        # RGB
+        self._shape = resolution + (3, 2 ** 8)
+        self.resolution = model.ResolutionVA(resolution, [(1, 1), (2048, 2048)],
+                                            readonly=True)
+
+        # setup camera
+        self._camParams = self.parent._objects.create('ns0:camParams')
+        self._camParams.height = resolution[0]
+        self._camParams.width = resolution[1]
+
+        self.acquisition_lock = threading.Lock()
+        self.acquire_must_stop = threading.Event()
+        self.acquire_thread = None
+
+        self.data = NavCamDataFlow(self)
+
+        logging.debug("Camera component ready to use.")
+
+    def Shutdown(self):
+        self.req_stop_flow()
+
+    def GetStatus(self):
+        """
+        return int: NavCam status, 0 - off, 1 - on
+        """
+        with self.parent._acquisition_init_lock:
+            mode = self.parent._device.GetNavCamDeviceMode()
+            if mode == "NAVCAM-MODE-ON":
+                status = 1
+            else:
+                status = 0
+        return status
+
+    def start_flow(self, callback):
+        """
+        Set up the NavCam and start acquiring images.
+        callback (callable (DataArray) no return):
+         function called for each image acquired
+        """
+        # if there is a very quick unsubscribe(), subscribe(), the previous
+        # thread might still be running
+        self.wait_stopped_flow()  # no-op is the thread is not running
+        self.acquisition_lock.acquire()
+
+        assert(self.GetStatus() == 1)  # Just to be sure
+        # TODO IOError if not in NavCam mode, same for SEM
+
+        target = self._acquire_thread_continuous
+        self.acquire_thread = threading.Thread(target=target,
+                name="NavCam acquire flow thread",
+                args=(callback,))
+        self.acquire_thread.start()
+
+    def req_stop_flow(self):
+        """
+        Cancel the acquisition of a flow of images: there will not be any notify() after this function
+        Note: the thread should be already running
+        Note: the thread might still be running for a little while after!
+        """
+        assert not self.acquire_must_stop.is_set()
+        self.acquire_must_stop.set()
+        self.parent._device.NavCamAbortImageAcquisition()
+
+
+    def _acquire_thread_continuous(self, callback):
+        """
+        The core of the acquisition thread. Runs until acquire_must_stop is set.
+        """
+        try:
+            while not self.acquire_must_stop.is_set():
+                with self.parent._acquisition_init_lock:
+                    img_str = self.parent._device.NavCamAcquireImageCopy(self._camParams)
+                sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
+                sem_img.shape = (self._camParams.height, self._camParams.width, 3)
+                hdf5.export("navcam.h5", model.DataArray(sem_img))
+
+                # Obtain pixel size and position as metadata
+                pixelSize = (img_str.aAcqState.pixelHeight, img_str.aAcqState.pixelWidth)
+                pos = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+                metadata = {model.MD_POS: pos,
+                            model.MD_PIXEL_SIZE: pixelSize}
+                array = model.DataArray(sem_img, metadata)
+
+                # update resolution
+                self.resolution._value = sem_img.shape
+                self.resolution.notify(sem_img.shape)
+
+                # first we wait ourselves the typical time (which might be very long)
+                # while detecting requests for stop
+                if self.acquire_must_stop.wait(10):
+                    break
+                callback(self._transposeDAToUser(array))
+
+        except:
+            logging.exception("Failure during acquisition")
+        finally:
+            self.acquisition_lock.release()
+            logging.debug("Acquisition thread closed")
+            self.acquire_must_stop.clear()
+
+    def wait_stopped_flow(self):
+        """
+        Waits until the end acquisition of a flow of images. Calling from the
+         acquisition callback is not permitted (it would cause a dead-lock).
+        """
+        # "if" is to not wait if it's already finished
+        if self.acquire_must_stop.is_set():
+            self.acquire_thread.join(10)  # 10s timeout for safety
+            if self.acquire_thread.isAlive():
+                raise OSError("Failed to stop the acquisition thread")
+            # ensure it's not set, even if the thread died prematurely
+            self.acquire_must_stop.clear()
+
+    def terminate(self):
+        """
+        Must be called at the end of the usage
+        """
+        self.Shutdown()
+
+class NavCamDataFlow(model.DataFlow):
+    def __init__(self, camera):
+        """
+        camera: NavCam instance ready to acquire images
+        """
+        model.DataFlow.__init__(self)
+        self.component = weakref.ref(camera)
+
+    def start_generate(self):
+        comp = self.component()
+        if comp is None:
+            return
+        comp.start_flow(self.notify)
+
+    def stop_generate(self):
+        comp = self.component()
+        if comp is None:
+            return
+        comp.req_stop_flow()
+
+class NavCamFocus(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    adjusting the overview focus by changing the working distance i.e. the distance 
+    between the end of the camera and the surface of the observed specimen 
+    """
+    def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
+        assert len(axes) > 0
+        if ranges is None:
+            ranges = {}
+
+        axes_def = {}
+        self._position = {}
+
+        # Just z axis
+        a = axes[0]
+
+        range = parent._device.GetNavCamWDRange()
+        rng = [range.min, range.max]
+        axes_def[a] = model.Axis(unit="m", range=rng)
+
+        # start at the centre
+        self._position[a] = parent._device.GetNavCamWD()
+
+        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    self._applyInversionAbs(self._position),
+                                    unit="m", readonly=True)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(self._position)
+        self.position.notify(self.position.value)
+
+    def _doMove(self, pos):
+        """
+        move to the position 
+        """
+        # Perform move through Phenom API
+        # with self.parent._acquisition_init_lock:
+        self.parent._device.SetNavCamWD(self._position["z"])
+
+        # Obtain the finally reached position after move is performed.
+        wd = self.parent._device.GetNavCamWD()
+        self._position["z"] = wd
+
+        # Changing WD results to change in fov
+        self.parent._scanner.updateHorizontalFOV()
+
+        self._updatePosition()
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        shift = self._applyInversionRel(shift)
+
+        for axis, change in shift.items():
+            self._position[axis] += change
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
+
+        for axis, new_pos in pos.items():
+            self._position[axis] = new_pos
+
+        pos = self._position
+        return self._executor.submit(self._doMove, pos)
+
+    def stop(self, axes=None):
+        # Empty the queue for the given axes
+        self._executor.cancel()
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+# PRESSURE_UNLOADED = 1e05  # Pa
+# PRESSURE_NAVCAM = 1e-01  # Pa
+# PRESSURE_SEM = 1e-02  # Pa
+VACUUM_TIMEOUT = 5 * 60  # seconds
+class ChamberPressure(model.Actuator):
+    """
+    This is an extension of the model.Actuator class. It provides functions for
+    adjusting the chamber pressure. It actually allows the user to move the sample
+    between the NavCam and SEM areas or even unload it.
+    """
+    def __init__(self, name, role, parent, ranges=None, **kwargs):
+        axes = {"pressure": model.Axis(unit="",
+                                       choices={"unloaded", "NavCam", "SEM"})}
+        model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+        self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
+
+        area = parent._device.GetProgressAreaSelection().target  # last official position
+        if area == "LOADING-WORK-AREA-SEM":
+            self._position = "SEM"
+        elif area == "LOADING-WORK-AREA-NAVCAM":
+            self._position = "NavCam"
+        else:
+            self._position = "unloaded"
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    {"pressure": self._position},
+                                    unit="Pa", readonly=True)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _updatePosition(self):
+        """
+        update the position VA and .pressure VA
+        """
+        # .position contains the last known/valid position
+        # it's read-only, so we change it via _value
+        self.position._value = {"pressure": self._position}
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        self._checkMoveRel(shift)
+
+        # convert into an absolute move
+        pos = {}
+        for a, v in shift.items:
+            pos[a] = self.position.value[a] + v
+
+        return self.moveAbs(pos)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        return self._executor.submit(self._changePressure, pos["pressure"])
+
+    def _changePressure(self, p):
+        """
+        Synchronous change of the pressure
+        p (float): target pressure
+        """
+        if p == PRESSURE_VENTED:
+            self.parent._device.VacVent()
+        else:
+            self.parent._device.VacPump()
+
+        start = time.time()
+        while not self.GetStatus() == 0:
+            if (time.time() - start) >= VACUUM_TIMEOUT:
+                raise TimeoutError("Vacuum action timed out")
+            # Update chamber pressure until pumping/venting process is done
+            self._updatePosition()
+        self._position = p
+        self._updatePosition()
+
+    def stop(self, axes=None):
+        self._executor.cancel()
+        logging.warning("Stopped pressure change")

@@ -2,9 +2,10 @@ SECOM: {
     class: Microscope,
     role: secom,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
-    detectors: ["Andor SimCam", "SED ExtXY"#, "NavCam"
+    detectors: ["Andor SimCam", "SED ExtXY", "NavCam"
                ],
-    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", "Ebeam-focus actuator"],
+    actuators: ["SEM-Optical Alignment", "OpticalZ actuator", "OLStage", 
+                "Ebeam-focus actuator", "NavCam-focus actuator", "ChamberPressure"],
 }
 
 #Light: {
@@ -50,7 +51,9 @@ Spectra: {
     children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
                stage: "OLStage",
                focus: "Ebeam-focus actuator",
-               #camera: "NavCam"
+               camera: "NavCam"
+	       navcam_focus: "NavCam-focus actuator",
+               pressure: "ChamberPressure"
     }
 }
 
@@ -71,6 +74,12 @@ Spectra: {
     role: ebeam-focus,
     init: {axes: [z]},
     affects: ["Andor SimCam", "EBeam ExtXY"]
+}
+
+"NavCam-focus actuator": {
+    role: overview-focus,
+    init: {axes: [z]},
+    affects: ["NavCam"]
 }
 
 "Nikon Super Duper": {
@@ -131,10 +140,15 @@ Spectra: {
     affects: ["Andor SimCam", "EBeam ExtXY"]
 }
 
-#"NavCam": {
-#    role: overview-ccd,
-#    init: {}
-#}
+"NavCam": {
+    role: overview-ccd,
+    init: {}
+}
+
+"ChamberPressure": {
+    role: chamber,
+    init: {},
+}
 
 # Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {

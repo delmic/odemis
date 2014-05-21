@@ -22,28 +22,35 @@ scanParams = phenom.factory.create('ns0:scanParams')
 detectorMode = phenom.factory.create('ns0:detector')
 
 scanMode = 'SEM-SCAN-MODE-IMAGING'
-# phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)  # or NAVCAMIMDEV
-
+# phenom.service.SelectImagingDevice(imagingDevice.NAVCAMIMDEV)  # or NAVCAMIMDEV
+# status = phenom.service.GetDoorStatus()
+area = phenom.service.GetProgressAreaSelection().target
+print area
+# phenom.service.SetSEMWD(0.008723)
+# print phenom.service.GetSEMDeviceMode()
 # phenom.service.SEMAbortImageAcquisition()
 
-# # instr = phenom.service.GetInstrumentMode()
-# oper = phenom.service.GetOperationalMode()
-# print oper
+# instr = phenom.service.GetInstrumentMode()
+oper = phenom.service.GetOperationalMode()
+print oper
 # area = phenom.service.GetProgressAreaSelection()
 # open = phenom.service.GetDoorStatus()
 # resp = phenom.service.SelectImagingDevice(imagingDevice.SEMIMDEV)
 # resp = phenom.service.UnloadSample()
 # print instr, oper, area, open, resp
-
-camParams = phenom.factory.create('ns0:camParams')
-camParams.height = 912
-camParams.width = 912
-img_str = phenom.service.NavCamGetLiveImageCopy(1)
-print img_str.image.descriptor.bits
-sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint32")
-
-sem_img.shape = (img_str.image.descriptor.height, img_str.image.descriptor.width)
-hdf5.export("navcam.h5", model.DataArray(sem_img))
+# print phenom.service.GetSampleHolder()
+# # 0.00751932078719
+# camParams = phenom.factory.create('ns0:camParams')
+# camParams.height = 1
+# camParams.width = 1
+# img_str = phenom.service.NavCamAcquireImageCopy(camParams)
+# print img_str.image.descriptor
+# sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
+# print sem_img.shape
+# sem_img.shape = (img_str.image.descriptor.height, img_str.image.descriptor.width, 3)
+# hdf5.export("navcam.h5", model.DataArray(sem_img))
+# print (img_str.aAcqState.pixelHeight, img_str.aAcqState.pixelWidth)
+# print (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
 # The improved NavCam in Phenom G2 and onwards delivers images with a native
 # resolution of 912x912 pixels. When requesting a different size, the image is
 # scaled by the Phenom to the requested resolutio
