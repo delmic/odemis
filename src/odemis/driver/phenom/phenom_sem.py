@@ -329,16 +329,17 @@ class Scanner(model.Emitter):
         # we set up the detector (see SEMACB())
 
     def _setPower(self, value):
-        powers = self.power.choices
-
-        self._power = util.find_closest(value, powers)
-        if self._power == 0:
-            self.parent._device.SEMSetSpotSize(0)
-        else:
-            volt = self.accelVoltage.value
-            cur_spotSize = self._probeCurrent / math.sqrt(volt)
-            self.parent._device.SEMSetSpotSize(cur_spotSize)
-        return self._power
+        pass
+#         powers = self.power.choices
+#
+#         self._power = util.find_closest(value, powers)
+#         if self._power == 0:
+#             self.parent._device.SEMSetSpotSize(0)
+#         else:
+#             volt = self.accelVoltage.value
+#             cur_spotSize = self._probeCurrent / math.sqrt(volt)
+#             self.parent._device.SEMSetSpotSize(cur_spotSize)
+#         return self._power
 
     def _setQuality(self, value):
         with self.parent._acquisition_init_lock:
@@ -860,7 +861,7 @@ class EbeamFocus(model.Actuator):
 # The improved NavCam in Phenom G2 and onwards delivers images with a native
 # resolution of 912x912 pixels. When requesting a different size, the image is
 # scaled by the Phenom to the requested resolution
-NAVCAM_RESOLUTION = (1, 1)
+NAVCAM_RESOLUTION = (912, 912)
 
 class NavCam(model.DigitalCamera):
     """
@@ -937,7 +938,6 @@ class NavCam(model.DigitalCamera):
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
         self.parent._device.NavCamAbortImageAcquisition()
-
 
     def _acquire_thread_continuous(self, callback):
         """
@@ -1061,8 +1061,8 @@ class NavCamFocus(model.Actuator):
         move to the position 
         """
         # Perform move through Phenom API
-        # with self.parent._acquisition_init_lock:
-        self.parent._device.SetNavCamWD(self._position["z"])
+        with self.parent._acquisition_init_lock:
+            self.parent._device.SetNavCamWD(self._position["z"])
 
         # Obtain the finally reached position after move is performed.
         wd = self.parent._device.GetNavCamWD()
@@ -1262,7 +1262,6 @@ class ChamberPressure(model.Actuator):
             time.sleep(1)  # To make sure that the procedure has been started
             while self.target != self.parent._pressure.position.value["pressure"]:
                 remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-                print remainingTime
                 self.future.set_end_time(time.time() + remainingTime)
 
         

@@ -34,8 +34,7 @@ from unittest.case import skip
 
 from odemis.driver.phenom import phenom_sem
 
-
-logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed"}
@@ -53,7 +52,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080
                            "camera": CONFIG_NAVCAM, "navcam_focus": CONFIG_NC_FOCUS,
                            "pressure": CONFIG_PRESSURE}
               }
-
+        
 @skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
@@ -65,44 +64,43 @@ class TestSEMStatic(unittest.TestCase):
         """
         sem = phenom_sem.PhenomSEM(**CONFIG_SEM)
         self.assertEqual(len(sem.children), 3)
-        
+
         for child in sem.children:
             if child.name == CONFIG_SED["name"]:
                 sed = child
             elif child.name == CONFIG_SCANNER["name"]:
                 scanner = child
-        
+
         self.assertEqual(len(scanner.resolution.value), 2)
         self.assertIsInstance(sed.data, model.DataFlow)
-        
+
         self.assertTrue(sem.selfTest(), "SEM self test failed.")
         sem.terminate()
-    
+
     def test_error(self):
         wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["device"] = "/dev/comdeeeee"
         self.assertRaises(Exception, phenom_sem.PhenomSEM, **wrong_config)
-        
-        
+
+
         wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["children"]["scanner"]["channels"] = [1, 1]
         self.assertRaises(Exception, phenom_sem.PhenomSEM, **wrong_config)
-    
+
     def test_pickle(self):
         try:
             os.remove("test")
         except OSError:
             pass
         daemon = Pyro4.Daemon(unixsocket="test")
-        
+
         sem = phenom_sem.PhenomSEM(daemon=daemon, **CONFIG_SEM)
-                
+
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
         self.assertEqual(len(sem_unpickled.children), 2)
         sem.terminate()
-    
 
 class TestSEM(unittest.TestCase):
     """
@@ -111,7 +109,7 @@ class TestSEM(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.sem = phenom_sem.PhenomSEM(**CONFIG_SEM)
-        
+
         for child in cls.sem.children:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
@@ -139,7 +137,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.resolution.value = (512, 256)
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
-        self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver
+        self.acq_dates = (set(), set())  # 2 sets of dates, one for each receiver
         self.acq_done = threading.Event()
 
     def tearUp(self):
@@ -161,9 +159,9 @@ class TestSEM(unittest.TestCase):
         return size[0] * size[1] * dwell + size[1] * settle
     @skip("skip")
     def test_acquire(self):
-        self.scanner.dwellTime.value = 10e-6 # s
+        self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
-        
+
         start = time.time()
         im = self.sed.data.get()
         duration = time.time() - start
@@ -183,68 +181,68 @@ class TestSEM(unittest.TestCase):
         """
         check that .translation and .scale work
         """
-        
+
         # First, test simple behaviour on the VA
         # max resolution
         max_res = self.scanner.resolution.range[1]
         self.scanner.scale.value = (1, 1)
         self.scanner.resolution.value = max_res
-        self.scanner.translation.value = (-1, 1) # will be set back to 0,0 as it cannot move
+        self.scanner.translation.value = (-1, 1)  # will be set back to 0,0 as it cannot move
         self.assertEqual(self.scanner.translation.value, (0, 0))
-        
+
         # scale up
         self.scanner.scale.value = (16, 16)
         exp_res = (max_res[0] // 16, max_res[1] // 16)
         self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
         self.scanner.translation.value = (-1, 1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
-        
+
         # shift
         exp_res = (max_res[0] // 32, max_res[1] // 32)
         self.scanner.resolution.value = exp_res
         self.scanner.translation.value = (-1, 1)
         self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (-1, 1))
-        
+
         # change scale to some float
         self.scanner.resolution.value = (max_res[0] // 16, max_res[1] // 16)
         self.scanner.scale.value = (1.5, 2.3)
         exp_res = (max_res[0] // 1.5, max_res[1] // 2.3)
         self.assertTupleAlmostEqual(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (0, 0))
-        
+
         self.scanner.scale.value = (1, 1)
         self.assertTupleAlmostEqual(self.scanner.resolution.value, max_res, delta=1.1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
         # Then, check metadata fits with the expectations
-        center = (1e3, -2e3) #m
+        center = (1e3, -2e3)  # m
         # simulate the information on the position (normally from the mdupdater)
         self.scanner.updateMetadata({model.MD_POS: center})
 
-        self.scanner.resolution.value = max_res        
+        self.scanner.resolution.value = max_res
         self.scanner.scale.value = (16, 16)
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
-        
+
         # normal acquisition
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], center)
-        
+
         # shift a bit
         # reduce the size of the image so that we can have translation
         self.scanner.resolution.value = (max_res[0] // 32, max_res[1] // 32)
-        self.scanner.translation.value = (-1.26, 10) # px
+        self.scanner.translation.value = (-1.26, 10)  # px
         pxs = self.scanner.pixelSize.value
         exp_pos = (center[0] + (-1.26 * pxs[0]),
-                   center[1] - (10 * pxs[1])) # because translation Y is opposite from physical one
-        
+                   center[1] - (10 * pxs[1]))  # because translation Y is opposite from physical one
+
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
-        
+
         # only one point
-        self.scanner.resolution.value = (1,1)
+        self.scanner.resolution.value = (1, 1)
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
@@ -258,7 +256,7 @@ class TestSEM(unittest.TestCase):
         self.size = self.scanner.resolution.value
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
         expected_duration = self.compute_expected_duration()  # about 1 min
-        
+
         start = time.time()
         im = self.sed.data.get()
         duration = time.time() - start
@@ -274,7 +272,7 @@ class TestSEM(unittest.TestCase):
         """
         self.scanner.resolution.value = self.scanner.resolution.range[0]
         self.size = self.scanner.resolution.value
-        self.scanner.dwellTime.value = 10 # DPR should be 3
+        self.scanner.dwellTime.value = 10  # DPR should be 3
         expected_duration = self.compute_expected_duration()  # same as dwell time
 
         start = time.time()
@@ -296,11 +294,11 @@ class TestSEM(unittest.TestCase):
 
         self.left = 1
         start = time.time()
-        
+
         # acquire one long, and change to a short time
         self.sed.data.subscribe(self.receive_image)
         # time.sleep(0.1) # make sure it has started
-        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] # shorten
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]  # shorten
         expected_duration_s = self.compute_expected_duration()
         # unsub/sub should always work, as long as there is only one subscriber
         self.sed.data.unsubscribe(self.receive_image)
@@ -315,11 +313,11 @@ class TestSEM(unittest.TestCase):
     @skip("skip")
     def test_acquire_flow(self):
         expected_duration = self.compute_expected_duration()
-        
+
         number = 5
         self.left = number
         self.sed.data.subscribe(self.receive_image)
-        
+
         self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
 
         self.assertEqual(self.left, 0)
@@ -330,14 +328,14 @@ class TestSEM(unittest.TestCase):
         """
         dwell = self.scanner.dwellTime.range[0] * 2
         self.scanner.dwellTime.value = dwell
-        self.scanner.resolution.value = self.scanner.resolution.range[1] # test big image
+        self.scanner.resolution.value = self.scanner.resolution.range[1]  # test big image
         self.size = self.scanner.resolution.value
         expected_duration = self.compute_expected_duration()
-        
+
         number = 3
         self.left = number
         self.sed.data.subscribe(self.receive_image)
-        
+
         # change the attribute
         time.sleep(expected_duration)
         dwell = self.scanner.dwellTime.range[0]
@@ -345,21 +343,21 @@ class TestSEM(unittest.TestCase):
         expected_duration = self.compute_expected_duration()
 
         self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
-        
-        self.sed.data.unsubscribe(self.receive_image) # just in case it failed
+
+        self.sed.data.unsubscribe(self.receive_image)  # just in case it failed
         self.assertEqual(self.left, 0)
     @skip("skip")
     def test_df_fast_sub_unsub(self):
         """
         Test the dataflow on a very fast cycle subscribing/unsubscribing
         SEMComedi had a bug causing the threads not to start again
-        """ 
+        """
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
         number = 10
         expected_duration = self.compute_expected_duration()
-        
-        self.left = 10000 # don't unsubscribe automatically
-        
+
+        self.left = 10000  # don't unsubscribe automatically
+
         for i in range(number):
             self.sed.data.subscribe(self.receive_image)
             time.sleep(0.001 * i)
@@ -369,23 +367,23 @@ class TestSEM(unittest.TestCase):
         self.sed.data.subscribe(self.receive_image)
         time.sleep(expected_duration * 2)  # make sure we received at least one image
         self.sed.data.unsubscribe(self.receive_image)
-        
+
         self.assertLessEqual(self.left, 10000 - 1)
     @skip("skip")
     def test_df_alternate_sub_unsub(self):
         """
         Test the dataflow on a quick cycle subscribing/unsubscribing
         Andorcam3 had a real bug causing deadlock in this scenario
-        """ 
+        """
         self.scanner.dwellTime.value = 10e-6
         number = 5
         expected_duration = self.compute_expected_duration()
-        
-        self.left = 10000 + number # don't unsubscribe automatically
-        
+
+        self.left = 10000 + number  # don't unsubscribe automatically
+
         for i in range(number):
             self.sed.data.subscribe(self.receive_image)
-            time.sleep(expected_duration * 1.2) # make sure we received at least one image
+            time.sleep(expected_duration * 1.2)  # make sure we received at least one image
             self.sed.data.unsubscribe(self.receive_image)
 
         # if it has acquired a least 5 pictures we are already happy
@@ -441,15 +439,17 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertTupleAlmostEqual(self.stage.position.value, pos)
 
-    @skip("skip")
     def test_navcam(self):
         """
         Check it's possible to move the stage
         """
-        print "start!!!"
+        # Exposure time is fixed, time is mainly spent on the image transfer
+        expected_duration = 5  # s
+        start = time.time()
         img = self.camera.data.get()
-        print "got img"
-        hdf5.export("nav.h5", img)
+        duration = time.time() - start
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+
     @skip("skip")
     def test_navcam_focus(self):
         """
@@ -466,6 +466,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertAlmostEqual(self.navcam_focus.position.value, pos)
 
+    @skip("skip")
     def test_pressure(self):
         """
         Check it's possible to change the pressure state
