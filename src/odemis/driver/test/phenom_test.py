@@ -52,7 +52,6 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080
                            "camera": CONFIG_NAVCAM, "navcam_focus": CONFIG_NC_FOCUS,
                            "pressure": CONFIG_PRESSURE}
               }
-        
 @skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
@@ -63,7 +62,7 @@ class TestSEMStatic(unittest.TestCase):
         Doesn't even try to acquire an image, just create and delete components
         """
         sem = phenom_sem.PhenomSEM(**CONFIG_SEM)
-        self.assertEqual(len(sem.children), 3)
+        self.assertEqual(len(sem.children), 7)
 
         for child in sem.children:
             if child.name == CONFIG_SED["name"]:
@@ -99,7 +98,7 @@ class TestSEMStatic(unittest.TestCase):
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children), 2)
+        self.assertEqual(len(sem_unpickled.children), 7)
         sem.terminate()
 
 class TestSEM(unittest.TestCase):
@@ -225,7 +224,9 @@ class TestSEM(unittest.TestCase):
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
 
         # normal acquisition
+        print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
         im = self.sed.data.get()
+        hdf5.export("test1.h5", model.DataArray(im))
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], center)
 
@@ -236,14 +237,17 @@ class TestSEM(unittest.TestCase):
         pxs = self.scanner.pixelSize.value
         exp_pos = (center[0] + (-1.26 * pxs[0]),
                    center[1] - (10 * pxs[1]))  # because translation Y is opposite from physical one
-
+        print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
         im = self.sed.data.get()
+        hdf5.export("test2.h5", model.DataArray(im))
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
         # only one point
         self.scanner.resolution.value = (1, 1)
+        print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
         im = self.sed.data.get()
+        hdf5.export("test3.h5", model.DataArray(im))
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 

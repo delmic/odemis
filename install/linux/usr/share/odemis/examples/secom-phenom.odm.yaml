@@ -51,8 +51,8 @@ Spectra: {
     children: {scanner: "EBeam ExtXY", detector: "SED ExtXY",
                stage: "OLStage",
                focus: "Ebeam-focus actuator",
-               camera: "NavCam"
-	       navcam_focus: "NavCam-focus actuator",
+               camera: "NavCam",
+               navcam_focus: "NavCam-focus actuator",
                pressure: "ChamberPressure"
     }
 }

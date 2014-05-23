@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
+import suds
 from suds.client import Client
 import Image
 import base64
@@ -82,6 +83,11 @@ class PhenomSEM(model.HwComponent):
         self._imagingDevice = self._objects.create('ns0:imagingDevice')
 
         self._metadata = {model.MD_HW_NAME: "PhenomSEM"}
+        info = self._device.VersionInfo().versionInfo
+        start = info.index("'Version'>") + len("'Version'>")
+        end = info.index( "</Property", start )
+        self._swVersion = "SEM sw %s" % (info[start:end])
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
 
         # create the scanner child
         try:
@@ -179,9 +185,9 @@ class Scanner(model.Emitter):
 
         range = self.parent._device.GetSEMHFWRange()
         fov_range = [range.min, range.max]
-        self.horizontalFOV = model.FloatContinuous(fov, range=fov_range, unit="m",
-                                                   setter=self._setHorizontalFOV)
-        self.horizontalFOV.subscribe(self._onHorizontalFOV)  # to update metadata
+        self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
+                                                   setter=self._setHorizontalFoV)
+        self.horizontalFoV.subscribe(self._onHorizontalFoV)  # to update metadata
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -272,21 +278,21 @@ class Scanner(model.Emitter):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def _onHorizontalFOV(self, s):
+    def _onHorizontalFoV(self, s):
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
 
-    def updateHorizontalFOV(self):
+    def updateHorizontalFoV(self):
         # with self.parent._acquisition_init_lock:
         new_fov = self.parent._device.GetSEMHFW()
 
-        self.horizontalFOV.value = new_fov
+        self.horizontalFoV.value = new_fov
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
 
-    def _setHorizontalFOV(self, value):
+    def _setHorizontalFoV(self, value):
         self.parent._device.SetSEMHFW(value)
 
         return value
@@ -306,15 +312,17 @@ class Scanner(model.Emitter):
     def _updateMagnification(self):
 
         # it's read-only, so we change it only via _value
-        mag = self._hfw_nomag / self.horizontalFOV.value
+        mag = self._hfw_nomag / self.horizontalFoV.value
         self.magnification._value = mag
         self.magnification.notify(mag)
 
     def _onDwellTime(self, dt):
         # Abort current scanning when dwell time is changed
-        # print self.parent._acquisition_init_lock.locked()
-        # if self.parent._acquisition_init_lock.locked():
-            #self.parent._device.SEMAbortImageAcquisition()
+        try:
+            self.parent._device.SEMAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
+            
         # Calculate number of frames
         self.nr_frames = int(math.ceil(dt / DWELL_TIME))
 
@@ -329,17 +337,8 @@ class Scanner(model.Emitter):
         # we set up the detector (see SEMACB())
 
     def _setPower(self, value):
+        # TODO, blank the ebeam does not work as expected
         pass
-#         powers = self.power.choices
-#
-#         self._power = util.find_closest(value, powers)
-#         if self._power == 0:
-#             self.parent._device.SEMSetSpotSize(0)
-#         else:
-#             volt = self.accelVoltage.value
-#             cur_spotSize = self._probeCurrent / math.sqrt(volt)
-#             self.parent._device.SEMSetSpotSize(cur_spotSize)
-#         return self._power
 
     def _setQuality(self, value):
         with self.parent._acquisition_init_lock:
@@ -365,9 +364,9 @@ class Scanner(model.Emitter):
 
     def _updatePixelSize(self):
         """
-        Update the pixel size using the scale and FOV
+        Update the pixel size using the scale and FoV
         """
-        fov = self.horizontalFOV.value
+        fov = self.horizontalFoV.value
 
         pxs = (fov / self._shape[0],
                fov / self._shape[1])
@@ -461,6 +460,11 @@ class Detector(model.Detector):
         """
         Note: parent should have a child "scanner" already initialised
         """
+        # Check if Phenom is in the proper mode
+        area = self.parent._device.GetProgressAreaSelection().target
+        if area != "LOADING-WORK-AREA-SEM":
+            raise IOError("Cannot initiate SE-Detector, Phenom is not in SEM mode.")
+
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self.acq_shape = self.parent._scanner._shape
@@ -477,7 +481,7 @@ class Detector(model.Detector):
         self._scanParams.scale = 1
 
         # adjust brightness and contrast
-#         self.parent._device.SEMACB()
+        self.parent._device.SEMACB()
 
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
@@ -515,7 +519,10 @@ class Detector(model.Detector):
 
     def stop_acquire(self):
         with self._acquisition_lock:
-            # self.parent._device.SEMAbortImageAcquisition()
+            try:
+                self.parent._device.SEMAbortImageAcquisition()
+            except suds.WebFault:
+                logging.debug("No acquisition in progress to be aborted.")
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -559,27 +566,19 @@ class Detector(model.Detector):
             metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
 
-            scaled_shape = (self.acq_shape[0] / scale[0], self.acq_shape[1] / scale[1])
-            center = (scaled_shape[0] / 2, scaled_shape[1] / 2)
-            l = int(center[0] + pxs_pos[1] - (res[0] / 2))
-            t = int(center[1] + pxs_pos[0] - (res[1] / 2))
-            r = l + res[0] - 1
-            b = t + res[1] - 1
-
-            dt = self.parent._scanner.dwellTime.value
-            self._scanParams.resolution.height = res[0]
-            self._scanParams.resolution.width = res[1]
+            self._scanParams.resolution.width = res[0]
+            self._scanParams.resolution.height = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
             self._scanParams.HDR = self.parent._scanner.quality.value
-            self._scanParams.center.x = pxs_pos[0]
-            self._scanParams.center.y = pxs_pos[1]
+            self._scanParams.center.x = trans[0]
+            self._scanParams.center.y = trans[1]
             img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
 
             # image to ndarray
             sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
                                        dtype=self.parent._scanner.dataType)
 
-            sem_img.shape = res
+            sem_img.shape = res[::-1]
 
             return model.DataArray(sem_img, metadata)
 
@@ -816,7 +815,7 @@ class EbeamFocus(model.Actuator):
         self._position["z"] = wd
 
         # Changing WD results to change in fov
-        self.parent._scanner.updateHorizontalFOV()
+        self.parent._scanner.updateHorizontalFoV()
 
         self._updatePosition()
 
@@ -873,6 +872,11 @@ class NavCam(model.DigitalCamera):
         Initialises the device.
         Raise an exception if the device cannot be opened.
         """
+        # Check if Phenom is in the proper mode
+        area = self.parent._device.GetProgressAreaSelection().target
+        if area != "LOADING-WORK-AREA-NAVCAM":
+            raise IOError("Cannot initiate NavCam, Phenom is not in NAVCAM mode.")
+
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
 
         resolution = NAVCAM_RESOLUTION
@@ -921,7 +925,6 @@ class NavCam(model.DigitalCamera):
         self.acquisition_lock.acquire()
 
         assert(self.GetStatus() == 1)  # Just to be sure
-        # TODO IOError if not in NavCam mode, same for SEM
 
         target = self._acquire_thread_continuous
         self.acquire_thread = threading.Thread(target=target,
@@ -937,7 +940,10 @@ class NavCam(model.DigitalCamera):
         """
         assert not self.acquire_must_stop.is_set()
         self.acquire_must_stop.set()
-        self.parent._device.NavCamAbortImageAcquisition()
+        try:
+            self.parent._device.NavCamAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
 
     def _acquire_thread_continuous(self, callback):
         """
@@ -1069,7 +1075,7 @@ class NavCamFocus(model.Actuator):
         self._position["z"] = wd
 
         # Changing WD results to change in fov
-        self.parent._scanner.updateHorizontalFOV()
+        self.parent._scanner.updateHorizontalFoV()
 
         self._updatePosition()
 
@@ -1129,6 +1135,12 @@ class ChamberPressure(model.Actuator):
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
         self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
 
+        #Handle the cases of stand-by and hibernate mode
+        mode = self.parent._device.GetInstrumentMode()   
+        if mode == 'INSTRUMENT-MODE-HIBERNATE' or mode == 'INSTRUMENT-MODE-STANDBY':
+            self.parent._device.SetInstrumentMode('INSTRUMENT-MODE-OPERATIONAL')
+            self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+        
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
 
         if area == "LOADING-WORK-AREA-SEM":

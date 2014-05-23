@@ -74,16 +74,18 @@ scanParams.center.x = 0
 scanParams.center.y = 0
 scanParams.scale = 1
 #
-phenom.service.SetSEMViewingMode(scanParams, scanMode)
+# phenom.service.SetSEMViewingMode(scanParams, scanMode)
+# print phenom.service.GetSEMViewingMode()
 # """""""""""""""""""""""""""""""""""""""""""""
-print phenom.service.GetProgressSEMDeviceMode()
-# start = time.time()
-# img_str = phenom.service.SEMAcquireImage(scanParams)
+# print phenom.service.GetProgressSEMDeviceMode()
+start = time.time()
+img_str = phenom.service.SEMAcquireImageCopy(scanParams)
 # phenom.service.SEMAbortImageAcquisition()
-# end = time.time() - start
-# print end
-# # sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint16")
-# # sem_img.shape = (256, 256)
+end = time.time() - start
+print end
+print phenom.service.GetSEMViewingMode()
+# sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
+# sem_img.shape = (2048, 2048)
 #
 # mode = phenom.service.GetSEMViewingMode()
 # print mode
