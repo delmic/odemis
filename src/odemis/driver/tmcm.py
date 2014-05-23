@@ -25,12 +25,14 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from Pyro4.core import isasync
+from concurrent.futures._base import CancelledError
 import glob
 import logging
 import numpy
 from odemis import model
 import odemis
-from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.model._futures import CancellableThreadPoolExecutor, \
+    CancellableFuture
 from odemis.util import driver
 import os
 import serial
@@ -38,6 +40,7 @@ import struct
 import sys
 import threading
 import time
+
 
 class TMCLError(Exception):
     def __init__(self, status, value, cmd):
@@ -104,7 +107,9 @@ class TMCM3110(model.Actuator):
             return
 
         # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
+        self._executor = CancellableThreadPoolExecutor(max_workers=1, # one task at a time
+                                                       cls=CancellableFuture)
+        self._must_stop = threading.Event()
 
         # TODO: add support for speed. cf p.68: axis param 4 + p.81 + TMC 429 p.6
         axes_def = {}
@@ -142,7 +147,7 @@ class TMCM3110(model.Actuator):
         """
         instr (buffer of 9 bytes)
         """
-        target, n, typ, mot, val, chk = struct.unpack('>BBBBIB', instr)
+        target, n, typ, mot, val, chk = struct.unpack('>BBBBiB', instr)
         s = "%d, %d, %d, %d, %d (%d)" % (target, n, typ, mot, val, chk)
         return s
 
@@ -151,7 +156,7 @@ class TMCM3110(model.Actuator):
         """
         rep (buffer of 9 bytes)
         """
-        ra, rt, status, rn, rval, chk = struct.unpack('>BBBBIB', rep)
+        ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', rep)
         s = "%d, %d, %d, %d, %d (%d)" % (ra, rt, status, rn, rval, chk)
         return s
 
@@ -175,7 +180,7 @@ class TMCM3110(model.Actuator):
             # As there is no command 0, either we will receive a "wrong command" or
             # a "wrong checksum", but it will never do anything more.
             for i in range(9): # a message is 9 bytes
-                self._serial.write(b"0x00")
+                self._serial.write(b"\x00")
                 self._serial.flush()
                 res = self._serial.read(9)
                 if len(res) == 9:
@@ -200,24 +205,39 @@ class TMCM3110(model.Actuator):
             TMCLError: if status if bad
         """
         msg = numpy.empty(9, dtype=numpy.uint8)
-        struct.pack_into('>BBBBIB', msg, 0, self._target, n, typ, mot, val, 0)
+        struct.pack_into('>BBBBiB', msg, 0, self._target, n, typ, mot, val, 0)
         # compute the checksum (just the sum of all the bytes)
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
         logging.debug("Sending %s", self._instr_to_str(msg))
         with self._ser_access:
             self._serial.write(msg)
             self._serial.flush()
-            res = self._serial.read(9)
-            if len(res) < 9:
-                raise IOError("Received only %d bytes after %s" %
-                              (len(res), self._instr_to_str(msg)))
-            logging.debug("Received %s", self._reply_to_str(res))
-            ra, rt, status, rn, rval, chk = struct.unpack('>BBBBIB', res)
-            # TODO: check checksum? + ra + rt + rn?
-            if not status in TMCL_OK_STATUS:
-                raise TMCLError(status, rval, self._instr_to_str(msg))
+            while True:
+                res = self._serial.read(9)
+                if len(res) < 9: # TODO: TimeoutError?
+                    raise IOError("Received only %d bytes after %s" %
+                                  (len(res), self._instr_to_str(msg)))
+                logging.debug("Received %s", self._reply_to_str(res))
+                ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
 
-        return rval
+                # Check it's a valid message
+                if rt != self._target:
+                    logging.warning("Received a message from %d while expected %d",
+                                    rt, self._target)
+                if rn != n:
+                    logging.info("Skipping a message about instruction %d (waiting for %d)",
+                                  rn, n)
+                    continue
+                npres = numpy.frombuffer(res, dtype=numpy.uint8)
+                good_chk = numpy.sum(npres[:-1], dtype=numpy.uint8)
+                if chk != good_chk:
+                    logging.warning("Message checksum incorrect (%d), skipping it", chk)
+                    continue
+                if not status in TMCL_OK_STATUS:
+                    raise TMCLError(status, rval, self._instr_to_str(msg))
+
+                return rval
+
 
     # Low level functions
     def GetVersion(self):
@@ -242,6 +262,35 @@ class TMCM3110(model.Actuator):
         val = self.SendInstruction(6, param, axis)
         return val
 
+    def MoveAbsPos(self, axis, pos):
+        """
+        Requests a move to an absolute position. This is non-blocking.
+        axis (0<=int<=2): axis number
+        pos (-2**31 <= int 2*31-1): position
+        """
+        self.SendInstruction(4, 0, axis, pos) # 0 = absolute
+
+        
+    def MoveRelPos(self, axis, offset):
+        """
+        Requests a move to a relative position. This is non-blocking.
+        axis (0<=int<=2): axis number
+        offset (-2**31 <= int 2*31-1): relative postion
+        """
+        self.SendInstruction(4, 1, axis, offset) # 1 = relative
+        
+    def MotorStop(self, axis):
+        self.SendInstruction(3, mot=axis)
+        
+    def ReferenceSearch(self, axis):
+        self.SendInstruction(13, 0, axis) # 0 = start
+
+    def _isOnTarget(self, axis):
+        """
+        return (bool): True if the target position is reached
+        """
+        reached = self.GetAxisParam(axis, 8)
+        return (reached != 0)
 
     # high-level methods (interface)
     def _updatePosition(self):
@@ -256,32 +305,120 @@ class TMCM3110(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._value = pos
         self.position.notify(self.position.value)
-
+    
     @isasync
     def moveRel(self, shift):
+        self._checkMoveRel(shift)
+        shift = self._applyInversionRel(shift)
+        
+        # Check if the distance is big enough to make sense
+        for an, v in shift.items():
+            aid = self._axes_names.index(an)
+            if abs(v) < self._ustepsize[aid]:
+                # TODO: store and accumulate all the small moves instead of dropping them?
+                del shift[an]
+                logging.info("Dropped too small move of %f m", abs(v))
+        
         if not shift:
             return model.InstantaneousFuture()
-        self._checkMoveRel(shift)
-        # TODO move to the +N next position? (and modulo number of axes)
-        raise NotImplementedError("Relative move on enumerated axis not supported")
+
+        f = self._executor.submit(self._doMoveRel, shift)
+        f.task_canceller = self._cancelCurrentMove
+        return f
 
     @isasync
     def moveAbs(self, pos):
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
+        pos = self._applyInversionRel(pos)
 
-        return self._executor.submit(self._doMovePos, pos.values()[0])
+        f = self._executor.submit(self._doMoveAbs, pos)
+        f.task_canceller = self._cancelCurrentMove
+        return f
+    moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
 
     def stop(self, axes=None):
         self._executor.cancel()
 
-    def _doMovePos(self, pos):
-        jogp = self._pos_to_jog[pos]
-        self.MoveJog(jogp)
-        self._waitNoMotion(10) # by default, a move lasts ~0.5 s
+    def _doMoveRel(self, pos):
+        """
+        Blocking and cancellable relative move
+        pos (dict str -> float): axis name -> relative target position
+        """
+        self._must_stop.clear()
+        moving_axes = set()
+        for an, v in pos.items():
+            aid = self._axes_names.index(an)
+            moving_axes.add(aid)
+            usteps = int(round(v / self._ustepsize[aid]))
+            self.MoveRelPos(aid, usteps)
+
+        self._waitEndMove(moving_axes)
         self._updatePosition()
 
+    def _doMoveAbs(self, pos):
+        """
+        Blocking and cancellable absolute move
+        pos (dict str -> float): axis name -> absolute target position
+        """
+        self._must_stop.clear()
+        moving_axes = set()
+        for an, v in pos.items():
+            aid = self._axes_names.index(an)
+            moving_axes.add(aid)
+            usteps = int(round(v / self._ustepsize[aid]))
+            self.MoveAbsPos(aid, usteps)
+
+        self._waitEndMove(moving_axes)
+        self._updatePosition()
+
+    def _waitEndMove(self, axes, end=0):
+        """
+        Wait until all the given axes are finished moving, or a request to 
+        stop has been received.
+        axes (set of int): the axes IDs to check
+        end (float): expected end time
+        raise:
+            CancelledError: if cancelled before the end of the move
+        """
+        moving_axes = set(axes)
+
+        last_upd = time.time()
+        while not self._must_stop.is_set():
+            for aid in moving_axes.copy(): # need copy to remove during iteration
+                if self._isOnTarget(aid):
+                    moving_axes.discard(aid)
+            if not moving_axes:
+                return # no more axes to wait for
+
+            # Update the position from time to time (10 Hz)
+            if time.time() - last_upd > 0.1:
+                self._updatePosition()
+                last_upd = time.time()
+
+            # Wait half of the time left (maximum 0.1 s)
+            left = time.time() - end
+            sleept = min(0, max(left / 2, 0.1))
+            self._must_stop.wait(sleept)
+
+        logging.debug("Move of axes %s cancelled before the end", axes)
+        raise CancelledError()
+
+    def _cancelCurrentMove(self, future):
+        """
+        Cancels the current move (both absolute or relative). Non-blocking.
+        future (Future): the future to stop. Unused, only one future must be 
+         running at a time.
+        return (bool): True if it successfully cancelled (stopped) the move.
+        """
+        logging.debug("Cancelling current move")
+        self._must_stop.set() # tell the thread taking care of the move it's over
+        # As we don't know which axis is moving, stop all of them
+        # TODO: we should know which axis is still moving
+        for i, a in enumerate(self._axes_names):
+            self.MotorStop(i)
+        return True
 
     @staticmethod
     def _openSerialPort(port):
@@ -351,14 +488,50 @@ class TMCM3110Simulator(object):
         self._output_buf = "" # what the commands sends back to the "host computer"
         self._input_buf = "" # what we receive from the "host computer"
 
-        # internal values
-        self._state = {
+        self._naxes = 3
+
+        # internal state
+        self._id = 1
+
+        # internal global param values
+        # int -> int: param number -> value
+        self._gstate = {
                        }
-        # TODO
+        # internal axis param values
+        # int -> int: param number -> value
+        orig_axis_state = {0: 0, # target position
+                           1: 0, # current position (unused directly)
+                           4: 1024, # maximum positioning speed
+                           8: 1, # target reached? (unused directly)
+                           }
+        self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
+        self._aspeed = [1e-3] * 3 # m/s TODO: direction use param 4
+
+        # (float, float, int) for each axis 
+        # start, end, start position of a move
+        self._axis_move = [(0,0,0)] * self._naxes
+
+    def _getCurrentPos(self, axis):
+        now = time.time()
+        startt, endt, startp = self._axis_move[axis]
+        endp = self._astates[axis][0]
+        if endt < now:
+            return endp
+        # model as if it was linear (it's not, it's ramp-based positioning)
+        pos = startp + (endp - startp) * (now - startt) / (endt - startt)
+        return pos
+
     def write(self, data):
+        # We accept both a string/bytes and numpy array
+        if isinstance(data, numpy.ndarray):
+            data = data.tostring()
         self._input_buf += data
 
-        self._parseMessages() # will update _input_buf
+        # each message is 9 bytes => take the first 9 and process them
+        while len(self._input_buf) >= 9:
+            msg = self._input_buf[:9]
+            self._input_buf = self._input_buf[9:]
+            self._parseMessage(msg) # will update _output_buf
 
     def read(self, size=1):
         ret = self._output_buf[:size]
@@ -372,6 +545,92 @@ class TMCM3110Simulator(object):
     def flush(self):
         pass
 
-    def _parseMessages(self):
-        # TODO
-        pass
+    def flushInput(self):
+        self._output_buf = ""
+
+    def close(self):
+        # using read or write will fail after that
+        del self._output_buf
+        del self._input_buf
+
+    def _sendReply(self, inst, status=100, val=0):
+        msg = numpy.empty(9, dtype=numpy.uint8)
+        struct.pack_into('>BBBBiB', msg, 0, 2, self._id, status, inst, val, 0)
+        # compute the checksum (just the sum of all the bytes)
+        msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
+
+        self._output_buf += msg.tostring()
+        
+    def _parseMessage(self, msg):
+        """
+        msg (buffer of length 9): the message to parse
+        return None: self._output_buf is updated if necessary
+        """
+        target, inst, typ, mot, val, chk = struct.unpack('>BBBBiB', msg)
+#         logging.debug("SIM: parsing %s", TMCM3110._instr_to_str(msg))
+
+        # Check it's a valid message... for us
+        npmsg = numpy.frombuffer(msg, dtype=numpy.uint8)
+        good_chk = numpy.sum(npmsg[:-1], dtype=numpy.uint8)
+        if chk != good_chk:
+            self._sendReply(inst, status=1) # "Wrong checksum" message
+            return
+        if target != self._id:
+            logging.warning("SIM: skipping message for %d", target)
+            # The real controller doesn't seem to care
+
+        # decode the instruction
+        if inst == 3: # Motor stop
+            if not(0 <= mot <= self._naxes):
+                self._sendReply(inst, status=4) # invalid value
+                return
+            # TODO: should the target position be updated?
+            self._astates[mot][0] = self._getCurrentPos(mot)
+            self._axis_move[mot] = (0, 0, 0)
+            self._sendReply(inst)
+        elif inst == 4: # Move to position
+            if not (0 <= mot <= self._naxes):
+                self._sendReply(inst, status=4) # invalid value
+                return
+            if not typ in [0, 1, 2]:
+                self._sendReply(inst, status=3) # wrong type
+                return
+            pos = self._getCurrentPos(mot)
+            if typ == 1: # Relative
+                # convert to absolute and continue
+                val += pos
+            elif typ == 2: # Coordinate
+                raise NotImplementedError("simulator doesn't support coordinates")
+            # new move
+            now = time.time()
+            end = now + abs(pos - val) * self._aspeed[mot] # TODO: use param 4
+            self._astates[mot][0] = val
+            self._axis_move[mot] = (now, end, pos)
+            self._sendReply(inst)
+        elif inst == 6: # Get axis parameter
+            if not(0 <= mot <= self._naxes):
+                self._sendReply(inst, status=4) # invalid value
+                return
+            if typ not in self._astates[mot]:
+                self._sendReply(inst, status=3) # wrong type
+                return
+            # special code for special values
+            if typ == 2: # actual position
+                rval = self._getCurrentPos(mot)
+            elif typ == 8: # target reached?
+                rval = 0 if self._axis_move[mot][1] > time.time() else 1
+            else:
+                rval = self._astates[mot][typ]
+            self._sendReply(inst, val=rval)
+        elif inst == 136: # Get firmware version
+            if typ == 0: # string
+                raise NotImplementedError("Can't simulated GFV string")
+            elif typ == 1: # binary
+                self._sendReply(inst, val=0x0c260102) # 3110 v1.02
+            else:
+                self._sendReply(inst, status=3) # wrong type
+        elif inst == 138: # Request Target Position Reached Event
+            raise NotImplementedError("Can't simulated RTP string")
+        else:
+            logging.warning("SIM: Unsupported instruction %d", inst)
+            self._sendReply(inst, status=2) # wrong instruction
