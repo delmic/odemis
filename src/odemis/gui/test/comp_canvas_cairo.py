@@ -65,12 +65,13 @@ class TestCanvas(test.GuiTestCase):
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
 
+        # cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         cnvs = canvas.BitmapCanvas(self.panel)
         self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
         test.gui_loop()
 
         img = generate_img_data(20, 20, 4)
-        img2 = generate_img_data(2000, 2000, 4)
+        img2 = generate_img_data(200, 200, 4)
 
         # images = [
         #     (img, (250000.0, 250000.0), 25000.0, True, None),
@@ -80,7 +81,9 @@ class TestCanvas(test.GuiTestCase):
         steps = 1000
         for i in range(steps):
             images = [
-                (img2, (200.0 * i / steps, 200.0 * i / steps), 0.1, True, i * 0.01),
+                # (img2, (0, 0), 10 + 0.1 * i, True, 0.01),
+                (img2, (0, 0), 0.2 * i, True, 0.01),
+                # (img2, (200.0 * i / steps, 200.0 * i / steps), 0.1 * i, True, i * 0.01),
             ]
 
             cnvs.set_images(images)
@@ -566,7 +569,7 @@ def generate_img_data(width, height, depth, alpha=255):
     shape = (height, width, depth)
     rgb = numpy.empty(shape, dtype=numpy.uint8)
 
-    if width > 100 or height > 100:
+    if width > 1000 or height > 1000:
         tl = random_color(alpha=alpha)
         tr = random_color(alpha=alpha)
         bl = random_color(alpha=alpha)

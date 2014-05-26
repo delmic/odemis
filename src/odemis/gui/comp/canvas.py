@@ -817,6 +817,18 @@ class BitmapCanvas(BufferedCanvas):
         total_scale = im_scale * self.scale
         logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
+        x, y, w, h = b_im_rect
+
+        if rotation is not None:
+            rot_x = x + w / 2.0
+            rot_y = y + h / 2.0
+            # Translate to the center of the image (in buffer coordinates)
+            ctx.translate(rot_x, rot_y)
+            # Rotate
+            ctx.rotate(rotation * math.pi)
+            # Translate back, so the origin is at the top left position of the image
+            ctx.translate(-rot_x, -rot_y)
+
         if total_scale == 1.0:
             logging.debug("No scaling required")
         elif total_scale < 1.0:
@@ -868,20 +880,10 @@ class BitmapCanvas(BufferedCanvas):
 
         ctx.save()
 
-        x, y, w, h = b_im_rect
+        x, y, _, _ = b_im_rect
 
-        if rotation is not None:
-            hw = w / 2.0
-            hh = h /2.0
-            # Translate to the center of the image (in buffer coordinates)
-            ctx.translate(x + hw, y + hh)
-            # Rotate
-            ctx.rotate(rotation * math.pi)
-            # Translate back, so the origin is at the top left position of the image
-            ctx.translate(-hw, -hh)
-        else:
-            # Translate to the top left position of the image data
-            ctx.translate(x, y)
+        # Translate to the top left position of the image data
+        ctx.translate(x, y)
 
         # Apply total scale
         ctx.scale(total_scale, total_scale)
