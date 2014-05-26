@@ -100,6 +100,26 @@ def rect_intersect(ra, rb):
     return inter
 
 
+def intersect(ra, rb):
+    """
+    Computes the intersection between two rectangles of the form (left, top, width, height)
+    """
+
+    ax, ay, aw, ah = ra
+    bx, by, bw, bh = rb
+
+    # Return None if there's no intersection
+    if ax >= bx + bw or ay >= by + bh or bx >= ax + aw or by >= ay + ah:
+        return None
+
+    # Calculate the intersection's top left and width and height
+    ix = max(ax, bx)
+    iy = max(ay, by)
+    iw = min(ax + aw, bx + bw) - ix
+    ih = min(ay + ah, by + bh) - iy
+
+    return ix, iy, iw, ih
+
 def normalize_rect(rect):
     """
     Ensure that a rectangle has a the left less than right, and top less than

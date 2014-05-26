@@ -153,6 +153,7 @@ import wx.lib.wxcairo as wxcairo
 
 from abc import ABCMeta, abstractmethod
 from decorator import decorator
+from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 
 
@@ -804,7 +805,8 @@ class BitmapCanvas(BufferedCanvas):
 
         # Get the intersection with the actual buffer
         buffer_rect = (0, 0) + self._bmp_buffer_size
-        intersection = wx.IntersectRect(buffer_rect, b_im_rect)
+
+        intersection = intersect(buffer_rect, b_im_rect)
 
         # No intersection means nothing to draw
         if not intersection:
@@ -817,9 +819,10 @@ class BitmapCanvas(BufferedCanvas):
         total_scale = im_scale * self.scale
         logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
-        x, y, w, h = b_im_rect
-
+        # Rotate if needed
         if rotation is not None:
+            x, y, w, h = b_im_rect
+
             rot_x = x + w / 2.0
             rot_y = y + h / 2.0
             # Translate to the center of the image (in buffer coordinates)
@@ -850,7 +853,6 @@ class BitmapCanvas(BufferedCanvas):
                     b_im_rect[3],
                 )
 
-                # print b_im_rect
         # Render the image data to the context
 
         if im_data.metadata.get('dc_keepalpha', True):
@@ -873,11 +875,11 @@ class BitmapCanvas(BufferedCanvas):
         surfpat = cairo.SurfacePattern(imgsurface)
         # Set the filter, so we get low quality but fast scaling
         surfpat.set_filter(cairo.FILTER_FAST)
-        # The Context matrix, translates from user space to device space
 
         # TEST: Changing the order of translate and scale didn't solve the problem
         # ctx.translate(b_im_rect[0] / total_scale, b_im_rect[1] / total_scale)
 
+        # Cache the current transformation matrix
         ctx.save()
 
         x, y, _, _ = b_im_rect
@@ -888,13 +890,10 @@ class BitmapCanvas(BufferedCanvas):
         # Apply total scale
         ctx.scale(total_scale, total_scale)
 
-        # test_scale = 25000
-        # ctx.set_matrix(cairo.Matrix(test_scale, 0, 0, test_scale, 100, 100))
-        # ctx.set_matrix(cairo.Matrix(12500, 0, 0, 12500, 150, 150))
-        # ctx.set_matrix(cairo.Matrix(32, 0, 0, 32, 150, 150))
-        # print ctx.get_matrix()
+        # Debug print statement
+        # print ctx.get_matrix(), im_data.shape
 
-        # We probably cannot use the following method, because we need to
+        # The following method, because we need to
         # set the filter used for scaling. Using set_source instead
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
@@ -904,6 +903,7 @@ class BitmapCanvas(BufferedCanvas):
         else:
             ctx.paint()
 
+        # Restore the cached transformation matrix
         ctx.restore()
 
     def _calc_img_buffer_rect(self, im_data, im_scale, w_im_center):

@@ -4,33 +4,27 @@
 
 Dummy test case for rapid prototype of Cairo drawn canvas
 
+TODO: Useful code should be migrated to a 'real' test case for the canvas and miccanvas modules once
+Cairo has been fully integrated.
+
 """
 
 from __future__ import division
 
-import time
-import sys
-from odemis import model
-from odemis.gui import test
-from odemis.gui.img.data import gettest_patternImage, gettest_pattern_sImage
-import odemis.gui.comp.overlay.view as view_overlay
-from odemis.gui.comp.canvas import BitmapCanvas, DraggableCanvas
-from odemis.util import units
-from odemis.gui.util.img import format_rgba_darray
-from odemis.model import DataArray, VigilantAttribute, FloatContinuous
-import odemis.gui.model as guimodel
-import odemis.gui.comp.miccanvas as miccanvas
-import odemis.gui.comp.canvas as canvas
-from odemis.acq.stream import StaticStream, RGBStream
-
 import unittest
-import wx
-import wx.lib.wxcairo as wxcairo
-import cairo
 import logging
-from profilehooks import profile
 import numpy
 import random
+
+import wx
+
+from odemis import model
+from odemis.gui import test
+from odemis.model import DataArray, FloatContinuous
+import odemis.gui.comp.miccanvas as miccanvas
+import odemis.gui.comp.canvas as canvas
+from odemis.acq.stream import RGBStream
+
 
 test.goto_manual()
 # test.goto_inspect()
@@ -43,6 +37,51 @@ class TestCanvas(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
+    def test_cairo_wander_bug_demo(self):
+        """
+        This method is not really a test, but demonstrates a possible bug in Cairo.
+
+        When the image we want to draw is scaled by a large number, the position it is drawn at
+        starts to periodically wander. It is most likely a result of the scaling that takes place
+        inside the Cairo Context. The transformation matrix associated with the Context has correct
+        values.
+
+        Since the wandering is only noticible at high magnification, we're going to test if it is a
+        problem in real-world scenarios. If it is, this problem should be revisited at a later
+        point.
+
+        Possible things to check include testing against a newer version of the Cairio library or
+        seeking advice in the Cairo mailing list and/or Stack Overflow.
+
+        """
+
+        ######### Frame setup #########
+
+        self.app.test_frame.SetSize((400, 400))
+        self.app.test_frame.Center()
+        self.app.test_frame.Layout()
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+        test.gui_loop()
+
+        ######### Test #########
+
+        img = generate_img_data(200, 200, 4)
+        steps = 10000
+
+        try:
+            for i in range(steps):
+                images = [
+                    (img, (0, 0), 1, True, 0.0), # Simplest case with the image drawn in the center
+                    # (img, (100, 100), 1, True, 0.0), # Image drawn at the bottom right
+                ]
+                cnvs.set_images(images)
+                cnvs.scale = (2.1 * i)
+                cnvs.update_drawing()
+                if i % 100 == 0:
+                    test.gui_loop()
+        except wx.PyDeadObjectError:
+            pass
 
     def xtest_calc_buffer_rect_img_data(self):
 
@@ -59,36 +98,6 @@ class TestCanvas(test.GuiTestCase):
         irect = (1, 0, 3, 3)
 
         print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
-
-    def test_cairo_tranformation(self):
-        self.app.test_frame.SetSize((400, 400))
-        self.app.test_frame.Center()
-        self.app.test_frame.Layout()
-
-        # cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        cnvs = canvas.BitmapCanvas(self.panel)
-        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
-        test.gui_loop()
-
-        img = generate_img_data(20, 20, 4)
-        img2 = generate_img_data(200, 200, 4)
-
-        # images = [
-        #     (img, (250000.0, 250000.0), 25000.0, True, None),
-        #     (img2, (160.0, 160.0), 16.0, True, None),
-        # ]
-
-        steps = 1000
-        for i in range(steps):
-            images = [
-                # (img2, (0, 0), 10 + 0.1 * i, True, 0.01),
-                (img2, (0, 0), 0.2 * i, True, 0.01),
-                # (img2, (200.0 * i / steps, 200.0 * i / steps), 0.1 * i, True, i * 0.01),
-            ]
-
-            cnvs.set_images(images)
-            cnvs.update_drawing()
-            test.gui_loop()
 
     def xtest_threading(self):
 
