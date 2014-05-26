@@ -37,7 +37,7 @@ class TestCanvas(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    def test_cairo_wander_bug_demo(self):
+    def xtest_cairo_wander_bug_demo(self):
         """
         This method is not really a test, but demonstrates a possible bug in Cairo.
 
@@ -83,28 +83,9 @@ class TestCanvas(test.GuiTestCase):
         except wx.PyDeadObjectError:
             pass
 
-    def xtest_calc_buffer_rect_img_data(self):
+    def test_threading(self):
 
-        im_data = numpy.array([
-                        [1, 2, 3, 4],
-                        [5, 6, 7, 8],
-                        [9, 10, 11, 12],
-                        [13, 14, 15, 16],
-                    ])
-
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-
-        brect = (1, -1, 4, 4)
-        irect = (1, 0, 3, 3)
-
-        print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
-
-    def xtest_threading(self):
-
-        # Setting up test frame
-        # pylint: disable=E1103
-
-        self.app.test_frame.SetSize((200, 200))
+        self.app.test_frame.SetSize((400, 400))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
 
@@ -160,6 +141,21 @@ class TestCanvas(test.GuiTestCase):
         shift = (10, 10)
         cnvs.shift_view(shift)
 
+    def xtest_calc_buffer_rect_img_data(self):
+
+        im_data = numpy.array([
+                        [1, 2, 3, 4],
+                        [5, 6, 7, 8],
+                        [9, 10, 11, 12],
+                        [13, 14, 15, 16],
+                    ])
+
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        brect = (1, -1, 4, 4)
+        irect = (1, 0, 3, 3)
+
+        print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
 
     def xtest_calc_img_buffer_rect(self):
 
