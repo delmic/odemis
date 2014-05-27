@@ -16,12 +16,119 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from concurrent.futures._base import CancelledError
 import logging
-from odemis.model._futures import ProgressiveFuture, CancellableFuture
+from odemis.model._futures import ProgressiveFuture, CancellableFuture, \
+    CancellableThreadPoolExecutor
+import threading
 import time
 import unittest
 
 
 logging.getLogger().setLevel(logging.DEBUG)
+
+class TestExecutor(unittest.TestCase):
+
+    def setUp(self):
+        self.executor = None
+
+    def tearDown(self):
+        if self.executor:
+            self.executor.shutdown(wait=True)
+
+    def test_one_cancellable(self):
+        """
+        Test cancelling multiple cancellable futures running one at a time
+        """
+        self.executor = CancellableThreadPoolExecutor(max_workers=1)
+
+        self.called = 0
+        # Put several long task, and cancel all of them
+        fs = []
+        for i in range(20):
+            f = CancellableFuture()
+            f.task_canceller = self._canceller
+            f._must_stop = threading.Event()
+            f = self.executor.submitf(f, self._cancellable_task, f, 3 + i)
+            f.add_done_callback(self._on_end_task)
+            fs.append(f)
+
+        time.sleep(0.1)
+        self.executor.cancel()
+        self.assertEquals(self.called, 20)
+        for f in fs:
+            self.assertTrue(f.cancelled())
+            self.assertRaises(CancelledError, f.result)
+
+    def test_multiple_simple(self):
+        """
+        Try to cancel multiple running simple futures
+        """
+        self.executor = CancellableThreadPoolExecutor(max_workers=10)
+
+        # Put several long task, and cancel all of them
+        fs = []
+        for i in range(20):
+            f = self.executor.submit(self._task, 3 + i)
+            fs.append(f)
+        time.sleep(0.1)
+        self.executor.cancel()
+        cancelled = 0
+        for f in fs:
+            if f.cancelled():
+                cancelled += 1
+                self.assertRaises(CancelledError, f.result)
+            else:
+                self.assertGreaterEqual(f.result(), 1) # should be a number
+
+        self.assertGreaterEqual(cancelled, 10)
+
+    def _task(self, dur):
+        time.sleep(dur)
+        return dur
+
+    def test_multiple_cancellable(self):
+        """
+        Try to cancel multiple running cancellable futures
+        """
+        self.executor = CancellableThreadPoolExecutor(max_workers=10)
+
+        # Put several long task, and cancel all of them
+        fs = []
+        for i in range(20):
+            f = CancellableFuture()
+            f.task_canceller = self._canceller
+            f._must_stop = threading.Event()
+            f = self.executor.submitf(f, self._cancellable_task, f, 3 + i)
+            fs.append(f)
+        time.sleep(0.1)
+        self.executor.cancel()
+        for f in fs:
+            self.assertTrue(f.cancelled())
+            self.assertRaises(CancelledError, f.result)
+
+    def _cancellable_task(self, future, dur=0):
+        """
+        Fake task
+        future
+        dur (float): time to wait
+        return (float): dur
+        """
+        now = time.time()
+        end = now + dur
+        while now < end:
+            left = end - now
+            ms = future._must_stop.wait(max(0, left))
+            if ms:
+                raise CancelledError()
+            now = time.time()
+        return dur
+
+    def _canceller(self, future):
+        future._must_stop.set()
+        # for now we assume cancel is always successful
+        return True
+
+    def _on_end_task(self, future):
+        self.called += 1
 
 class TestFutures(unittest.TestCase):
 

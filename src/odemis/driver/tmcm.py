@@ -106,8 +106,7 @@ class TMCM3110(model.Actuator):
             return
 
         # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1, # one task at a time
-                                                       cls=CancellableFuture)
+        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
         self._moving_lock = threading.Lock() # taken while moving
         self._must_stop = threading.Event() # cancel of the current future requested
         self._was_stopped = threading.Event() # if cancel was succesful
@@ -347,7 +346,7 @@ class TMCM3110(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
 
-        f = self._executor.submit(self._doMoveRel, shift)
+        f = self._executor.submitf(CancellableFuture(), self._doMoveRel, shift)
         f.task_canceller = self._cancelCurrentMove
         return f
 
@@ -358,7 +357,7 @@ class TMCM3110(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversionRel(pos)
 
-        f = self._executor.submit(self._doMoveAbs, pos)
+        f = self._executor.submitf(CancellableFuture(), self._doMoveAbs, pos)
         f.task_canceller = self._cancelCurrentMove
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__

@@ -4,7 +4,7 @@ Created on 10 Dec 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -28,23 +28,23 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
     An extended ThreadPoolExecutor that can cancel all the jobs not yet started.
     It also allows non standard Future to be created.
     """
-    def __init__(self, max_workers, cls=futures.Future):
-        """
-        cls (class): the type of futures to create.
-        """
+    def __init__(self, max_workers):
         ThreadPoolExecutor.__init__(self, max_workers)
         self._queue = collections.deque() # thread-safe queue of futures
-        # TODO: or shall we just ask the user to give its own instance of Future
-        # to submit()
-        self._cls = cls
 
-    def submit(self, fn, *args, **kwargs):
-        logging.debug("queuing action %s with arguments %s", fn, args)
+    def submitf(self, f, fn, *args, **kwargs):
+        """
+        submit a task, handled by the given fresh Future
+        f (Future): a newly created Future
+        fn (callable): the function to call
+        args, kwargs -> passed to fn
+        returns (Future): f
+        """
+#         logging.debug("queuing action %s with future %s", fn, f.__class__.__name__)
         with self._shutdown_lock:
             if self._shutdown:
                 raise RuntimeError('cannot schedule new futures after shutdown')
 
-            f = self._cls()
             w = _WorkItem(f, fn, args, kwargs)
 
             self._work_queue.put(w)
@@ -54,6 +54,9 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
             self._queue.append(f)
             f.add_done_callback(self._on_done)
         return f
+
+    def submit(self, fn, *args, **kwargs):
+        return self.submitf(futures.Future(), fn, *args, **kwargs)
     submit.__doc__ = ThreadPoolExecutor.submit.__doc__
 
     def _on_done(self, future):
@@ -83,10 +86,12 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
                 uncancellables.append(f)
 
         # wait for the non cancellable tasks to finish
+        if uncancellables:
+            logging.debug("Waiting for %d futures to finish", len(uncancellables))
         for f in uncancellables:
             try:
                 f.result()
-            except:
+            except Exception:
                 # the task raised an exception => we don't care
                 pass
 
@@ -161,6 +166,43 @@ class CancellableFuture(futures.Future):
 
         self._invoke_callbacks()
         return True
+
+    def set_result(self, result):
+        """Sets the return value of work associated with the future.
+
+        Should only be used by Executor implementations and unit tests.
+        """
+        with self._condition:
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                # Can happen if was cancelled just before the end and the
+                # task failed to raise an CancelledError
+                logging.warning("Task was cancelled but returned result instead "
+                                "of raising an exception.")
+                return
+            self._result = result
+            self._state = FINISHED
+            for waiter in self._waiters:
+                waiter.add_result(self)
+            self._condition.notify_all()
+        self._invoke_callbacks()
+
+    def set_exception(self, exception):
+        """Sets the result of the future as being the given exception.
+
+        Should only be used by Executor implementations and unit tests.
+        """
+        with self._condition:
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                # Can happen if was cancelled just before the end
+                # TODO: check it is a CancelledError?
+                logging.debug("Skipping exception from task after it was cancelled")
+                return
+            self._exception = exception
+            self._state = FINISHED
+            for waiter in self._waiters:
+                waiter.add_exception(self)
+            self._condition.notify_all()
+        self._invoke_callbacks()
 
 class ProgressiveFuture(CancellableFuture):
     """
