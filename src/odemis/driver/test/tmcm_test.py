@@ -25,13 +25,12 @@ import time
 import unittest
 from unittest.case import skip
 
-
 logging.getLogger().setLevel(logging.DEBUG)
 
 if os.name == "nt":
     PORT = "COM1"
 else:
-    PORT = "/dev/ttyTMCM0" # "/dev/ttyACM0"
+    PORT = "/dev/ttyTMCM2" # "/dev/ttyACM0"
 
 CLASS = tmcm.TMCM3110
 KWARGS = dict(name="test", role="stage", port=PORT,
@@ -40,7 +39,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               inverted=["y"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM.update({"port": "/dev/fake"})
-# KWARGS = KWARGS_SIM # uncomment to force using only the simulator
+KWARGS = KWARGS_SIM # uncomment to force using only the simulator
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
@@ -82,67 +81,55 @@ class TestActuator(unittest.TestCase):
         self.orig_pos = dict(self.dev.position.value)
 
     def tearDown(self):
+        time.sleep(1)
         # move back to the original position
-        f = self.dev.moveAbs(self.orig_pos)
-        f.result()
+#         f = self.dev.moveAbs(self.orig_pos)
+#         f.result()
         self.dev.terminate()
 
 #    @skip("faster")
     def test_simple(self):
-        stage = CLASS(**self.kwargs)
-        move = {'x':0.01e-6}
-        stage.moveRel(move)
+        move = {'x': 0.01e-6}
+        self.dev.moveRel(move)
         time.sleep(0.1) # wait for the move to finish
-        stage.terminate()
 
-    @skip("todo")
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
 
-        stage = CLASS(**self.kwargs)
-        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
-        stage.speed.value = {"x": speed}
         move = {'x':100e-6}
         start = time.time()
-        f = stage.moveRel(move)
+        f = self.dev.moveRel(move)
         dur_async = time.time() - start
         f.result()
         self.assertTrue(f.done())
 
         move = {'x':-100e-6}
         start = time.time()
-        f = stage.moveRel(move)
+        f = self.dev.moveRel(move)
         f.result() # wait
         dur_sync = time.time() - start
         self.assertTrue(f.done())
 
         self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
 
-        move = {'x':100e-6}
-        f = stage.moveRel(move)
+        move = {'x':1e-3}
+        f = self.dev.moveRel(move)
         # timeout = 0.001s should be too short for such a long move
         self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
+        f.cancel()
 
-        stage.terminate()
-
-    @skip("todo")
     def test_linear_pos(self):
         """
         Check that the position reported during a move is always increasing
         (or decreasing, depending on the direction)
         """
-        stage = CLASS(**self.kwargs)
-
         move = {'x': 10e-3}
-        self.prev_pos = stage.position.value
+        self.prev_pos = self.dev.position.value
         self.direction = 1
-        stage.position.subscribe(self.pos_listener)
+        self.dev.position.subscribe(self.pos_listener)
 
-        f = stage.moveRel(move)
-#        while not f.done():
-#            time.sleep(0.01)
-#            pos = stage.position.value["x"]
+        f = self.dev.moveRel(move)
 
         f.result() # wait
         time.sleep(0.1) # make sure the listener has also received the info
@@ -150,12 +137,10 @@ class TestActuator(unittest.TestCase):
         # same, in the opposite direction
         move = {'x':-10e-3}
         self.direction = -1
-        f = stage.moveRel(move)
+        f = self.dev.moveRel(move)
         f.result() # wait
 
-        stage.position.unsubscribe(self.pos_listener)
-
-        stage.terminate()
+        self.dev.position.unsubscribe(self.pos_listener)
 
     def pos_listener(self, pos):
         diff_pos = pos["x"] - self.prev_pos["x"]
@@ -168,36 +153,30 @@ class TestActuator(unittest.TestCase):
         # back (at the end, in case of overshoot)
         self.assertGreater(diff_pos * self.direction, -20e-6) # negative means opposite dir
 
-    @skip("todo")
     def test_stop(self):
-        stage = CLASS(**self.kwargs)
-        stage.stop()
+        self.dev.stop()
 
-        move = {'x':-100e-6}
-        f = stage.moveRel(move)
-        stage.stop()
+        move = {'y':100e-6}
+        f = self.dev.moveRel(move)
+        self.assertTrue(f.cancel())
         self.assertTrue(f.cancelled())
-        stage.terminate()
 
-    @skip("todo")
+        # Try similar but with stop (should cancel every futures)
+        move = {'y':-100e-6}
+        f = self.dev.moveRel(move)
+        self.dev.stop()
+        self.assertTrue(f.cancelled())
+
     def test_queue(self):
-        """
-        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
-        so test failure might not indicate software bug.
-        """
-        stage = CLASS(**self.kwargs)
-        if isinstance(stage, pigcs.SMOController):
-            logging.warning("Speed is very imprecise on device, test failure might not indicate software bug")
-        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
-        stage.speed.value = {"x": speed}
-        move_forth = {'x': speed} # => 1s per move
-        move_back = {'x':-speed}
+        # long moves
+        move_forth = {'x': 1e-3}
+        move_back = {'x':-1e-3}
         start = time.time()
-        expected_time = 4 * move_forth["x"] / stage.speed.value["x"]
-        f0 = stage.moveRel(move_forth)
-        f1 = stage.moveRel(move_back)
-        f2 = stage.moveRel(move_forth)
-        f3 = stage.moveRel(move_back)
+        expected_time = 4 * move_forth["x"] / self.dev.speed.value["x"]
+        f0 = self.dev.moveRel(move_forth)
+        f1 = self.dev.moveRel(move_back)
+        f2 = self.dev.moveRel(move_forth)
+        f3 = self.dev.moveRel(move_back)
 
         # intentionally skip some sync (it _should_ not matter)
 #        f0.result()
@@ -208,15 +187,12 @@ class TestActuator(unittest.TestCase):
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
 
-    @skip("todo")
     def test_cancel(self):
-        stage = CLASS(**self.kwargs)
-        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
-        stage.speed.value = {"x": speed}
-        move_forth = {'x': speed} # => 1s per move
-        move_back = {'x':-speed}
+        # long moves
+        move_forth = {'x': 1e-3}
+        move_back = {'x':-1e-3}
         # test cancel during action
-        f = stage.moveRel(move_forth)
+        f = self.dev.moveRel(move_forth)
         time.sleep(0.01) # to make sure the action is being handled
         self.assertTrue(f.running())
         f.cancel()
@@ -224,8 +200,8 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(f.done())
 
         # test cancel in queue
-        f1 = stage.moveRel(move_forth)
-        f2 = stage.moveRel(move_back)
+        f1 = self.dev.moveRel(move_forth)
+        f2 = self.dev.moveRel(move_back)
         f2.cancel()
         self.assertFalse(f1.done())
         self.assertTrue(f2.cancelled())
@@ -238,16 +214,10 @@ class TestActuator(unittest.TestCase):
 
         f1.result() # wait for the move to be finished
 
-        stage.terminate()
-
-    @skip("todo")
     def test_not_cancel(self):
-        stage = CLASS(**self.kwargs)
-        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
-        stage.speed.value = {"x": speed}
-        small_move_forth = {'x': speed / 10}  # => 0.1s per move
+        small_move_forth = {'x': 0.1e-3}
         # test cancel after done => not cancelled
-        f = stage.moveRel(small_move_forth)
+        f = self.dev.moveRel(small_move_forth)
         time.sleep(1)
         self.assertFalse(f.running())
         f.cancel()
@@ -255,35 +225,21 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(f.done())
 
         # test cancel after result()
-        f = stage.moveRel(small_move_forth)
+        f = self.dev.moveRel(small_move_forth)
         f.result()
         f.cancel()
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
 
         # test not cancelled
-        f = stage.moveRel(small_move_forth)
+        f = self.dev.moveRel(small_move_forth)
         f.result()
         self.assertFalse(f.cancelled())
         self.assertTrue(f.done())
 
-        stage.terminate()
-
-    @skip("todo")
     def test_move_circle(self):
-        # check if we can run it
-        buses = CLASS.scan(PORT)
-        self.assertGreaterEqual(len(buses), 1)
-        b = buses.pop()
-        kwargs = b[1]
-        devices = kwargs["axes"]
-        if len(devices) < 2:
-            self.skipTest("Couldn't find two controllers")
 
-        stage = CLASS(**self.kwargs_two)
-        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
-        stage.speed.value = {"x": speed, "y": speed}
-        radius = 1000e-6 # m
+        radius = 1e-3 # m
         # each step has to be big enough so that each move is above imprecision
         steps = 100
         cur_pos = (0, 0)
@@ -294,23 +250,17 @@ class TestActuator(unittest.TestCase):
             move['x'] = next_pos[0] - cur_pos[0]
             move['y'] = next_pos[1] - cur_pos[1]
             print next_pos, move
-            f = stage.moveRel(move)
+            f = self.dev.moveRel(move)
             f.result() # wait
             cur_pos = next_pos
 
-        stage.terminate()
-
-    @skip("todo")
     def test_future_callback(self):
-        stage = CLASS(**self.kwargs)
-        speed = max(stage.axes["x"].speed[0], 1e-3) # try as slow as reasonable
-        stage.speed.value = {"x": speed}
-        move_forth = {'x': speed / 10}  # => 0.1s per move
-        move_back = {'x':-speed / 10}
+        move_forth = {'x': 0.1e-3}
+        move_back = {'x':-0.1e-3}
 
         # test callback while being executed
-        f = stage.moveRel(move_forth)
         self.called = 0
+        f = self.dev.moveRel(move_forth)
         time.sleep(0.01)
         f.add_done_callback(self.callback_test_notify)
         f.result()
@@ -319,37 +269,41 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(f.done())
 
         # test callback while in the queue
-        f1 = stage.moveRel(move_back)
-        f2 = stage.moveRel(move_forth)
+        self.called = 0
+        f1 = self.dev.moveRel(move_back)
+        f2 = self.dev.moveRel(move_forth)
         f2.add_done_callback(self.callback_test_notify)
         self.assertFalse(f1.done())
         f2.result()
         self.assertTrue(f1.done())
         time.sleep(0.01) # make sure the callback had time to be called
-        self.assertEquals(self.called, 2)
+        self.assertEquals(self.called, 1)
         self.assertTrue(f2.done())
 
         # It should work even if the action is fully done
         f2.add_done_callback(self.callback_test_notify2)
-        self.assertEquals(self.called, 3)
+        self.assertEquals(self.called, 2)
 
         # test callback called after being cancelled
-        f = stage.moveRel(move_forth)
+        move_forth = {'x': 12e-3}
         self.called = 0
-        time.sleep(0.01)
+        f = self.dev.moveRel(move_forth)
+        time.sleep(0) # give it some time to be scheduled (but not enough to be finished)
         f.add_done_callback(self.callback_test_notify)
-        f.cancel()
+        self.assertTrue(f.cancel()) # Returns false if already over
         time.sleep(0.01) # make sure the callback had time to be called
         self.assertEquals(self.called, 1)
         self.assertTrue(f.cancelled())
 
-        stage.terminate()
-
     def callback_test_notify(self, future):
+        # Don't display future with %s or %r as it uses lock, which can deadlock
+        # with the logging
+        logging.debug("received done for future %s", id(future))
         self.assertTrue(future.done())
         self.called += 1
 
     def callback_test_notify2(self, future):
+        logging.debug("received (2) done for future %s", id(future))
         self.assertTrue(future.done())
         self.called += 1
 

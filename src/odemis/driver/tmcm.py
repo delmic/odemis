@@ -37,7 +37,6 @@ from odemis.util import driver
 import os
 import serial
 import struct
-import sys
 import threading
 import time
 
@@ -109,9 +108,11 @@ class TMCM3110(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1, # one task at a time
                                                        cls=CancellableFuture)
-        self._must_stop = threading.Event()
+        self._moving_lock = threading.Lock() # taken while moving
+        self._must_stop = threading.Event() # cancel of the current future requested
+        self._was_stopped = threading.Event() # if cancel was succesful
 
-        # TODO: add support for speed. cf p.68: axis param 4 + p.81 + TMC 429 p.6
+
         axes_def = {}
         for n, sz in zip(self._axes_names, self._ustepsize):
             # Mov abs supports ±2³¹ but the actual position is only within ±2²³
@@ -125,14 +126,17 @@ class TMCM3110(model.Actuator):
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
         self._hwVersion = "TMCM-%d (firmware %d.%02d)" % (modl, vmaj, vmin)
 
-        self.position = model.VigilantAttribute({}, readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
 
+        # TODO: add support for changing speed. cf p.68: axis param 4 + p.81 + TMC 429 p.6
+        self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
+        self._updateSpeed()
 
     def terminate(self):
         if self._executor:
             self.stop()
-            self._executor.shutdown()
+            self._executor.shutdown(wait=True)
             self._executor = None
 
         with self._ser_access:
@@ -208,8 +212,8 @@ class TMCM3110(model.Actuator):
         struct.pack_into('>BBBBiB', msg, 0, self._target, n, typ, mot, val, 0)
         # compute the checksum (just the sum of all the bytes)
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
-        logging.debug("Sending %s", self._instr_to_str(msg))
         with self._ser_access:
+            logging.debug("Sending %s", self._instr_to_str(msg))
             self._serial.write(msg)
             self._serial.flush()
             while True:
@@ -297,6 +301,7 @@ class TMCM3110(model.Actuator):
         """
         update the position VA
         """
+        # TODO: allow to specify which axes to update (and other axes keep the current position)
         pos = {}
         for i, n in enumerate(self._axes_names):
             # param 1 = current position
@@ -306,6 +311,26 @@ class TMCM3110(model.Actuator):
         self.position._value = pos
         self.position.notify(self.position.value)
     
+    def _updateSpeed(self):
+        """
+        Update the speed VA from the controller settings
+        """
+        speed = {}
+        # As described in section 3.4.1:
+        #       fCLK * velocity
+        # usf = ------------------------
+        #       2**pulse_div * 2048 * 32
+        for i, n in enumerate(self._axes_names):
+            velocity = self.GetAxisParam(i, 4)
+            pulse_div = self.GetAxisParam(i, 154)
+            # fCLK = 16 MHz
+            usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
+            speed[n] = usf * self._ustepsize[i] # m/s
+
+        # it's read-only, so we change it via _value
+        self.speed._value = speed
+        self.speed.notify(self.speed.value)
+
     @isasync
     def moveRel(self, shift):
         self._checkMoveRel(shift)
@@ -346,32 +371,32 @@ class TMCM3110(model.Actuator):
         Blocking and cancellable relative move
         pos (dict str -> float): axis name -> relative target position
         """
-        self._must_stop.clear()
-        moving_axes = set()
-        for an, v in pos.items():
-            aid = self._axes_names.index(an)
-            moving_axes.add(aid)
-            usteps = int(round(v / self._ustepsize[aid]))
-            self.MoveRelPos(aid, usteps)
+        with self._moving_lock:
+            moving_axes = set()
+            for an, v in pos.items():
+                aid = self._axes_names.index(an)
+                moving_axes.add(aid)
+                usteps = int(round(v / self._ustepsize[aid]))
+                self.MoveRelPos(aid, usteps)
 
-        self._waitEndMove(moving_axes)
-        self._updatePosition()
+            self._waitEndMove(moving_axes)
+        logging.debug("move successfully completed")
 
     def _doMoveAbs(self, pos):
         """
         Blocking and cancellable absolute move
         pos (dict str -> float): axis name -> absolute target position
         """
-        self._must_stop.clear()
-        moving_axes = set()
-        for an, v in pos.items():
-            aid = self._axes_names.index(an)
-            moving_axes.add(aid)
-            usteps = int(round(v / self._ustepsize[aid]))
-            self.MoveAbsPos(aid, usteps)
+        with self._moving_lock:
+            moving_axes = set()
+            for an, v in pos.items():
+                aid = self._axes_names.index(an)
+                moving_axes.add(aid)
+                usteps = int(round(v / self._ustepsize[aid]))
+                self.MoveAbsPos(aid, usteps)
 
-        self._waitEndMove(moving_axes)
-        self._updatePosition()
+            self._waitEndMove(moving_axes)
+        logging.debug("move successfully completed")
 
     def _waitEndMove(self, axes, end=0):
         """
@@ -385,25 +410,34 @@ class TMCM3110(model.Actuator):
         moving_axes = set(axes)
 
         last_upd = time.time()
-        while not self._must_stop.is_set():
-            for aid in moving_axes.copy(): # need copy to remove during iteration
-                if self._isOnTarget(aid):
-                    moving_axes.discard(aid)
-            if not moving_axes:
-                return # no more axes to wait for
+        try:
+            while not self._must_stop.is_set():
+                for aid in moving_axes.copy(): # need copy to remove during iteration
+                    if self._isOnTarget(aid):
+                        moving_axes.discard(aid)
+                if not moving_axes:
+                    # no more axes to wait for
+                    return
 
-            # Update the position from time to time (10 Hz)
-            if time.time() - last_upd > 0.1:
-                self._updatePosition()
-                last_upd = time.time()
+                # Update the position from time to time (10 Hz)
+                if time.time() - last_upd > 0.1:
+                    self._updatePosition() # TODO: only update the axes which moved since last time
+                    last_upd = time.time()
 
-            # Wait half of the time left (maximum 0.1 s)
-            left = time.time() - end
-            sleept = min(0, max(left / 2, 0.1))
-            self._must_stop.wait(sleept)
+                # Wait half of the time left (maximum 0.1 s)
+                left = time.time() - end
+                sleept = min(0, max(left / 2, 0.1))
+                self._must_stop.wait(sleept)
 
-        logging.debug("Move of axes %s cancelled before the end", axes)
-        raise CancelledError()
+            logging.debug("Move of axes %s cancelled before the end", axes)
+            # stop all axes still moving them
+            for i in moving_axes:
+                self.MotorStop(i)
+            self._was_stopped.set()
+            raise CancelledError()
+        finally:
+            self._updatePosition() # update with final position
+            self._must_stop.clear()
 
     def _cancelCurrentMove(self, future):
         """
@@ -412,13 +446,19 @@ class TMCM3110(model.Actuator):
          running at a time.
         return (bool): True if it successfully cancelled (stopped) the move.
         """
+        # The difficulty is to synchronise correctly when:
+        #  * the task is just starting (not finished requesting axes to move)
+        #  * the task is finishing (about to say that it finished successfully)
         logging.debug("Cancelling current move")
+
+        self._was_stopped.clear()
         self._must_stop.set() # tell the thread taking care of the move it's over
-        # As we don't know which axis is moving, stop all of them
-        # TODO: we should know which axis is still moving
-        for i, a in enumerate(self._axes_names):
-            self.MotorStop(i)
-        return True
+        with self._moving_lock:
+            if self._was_stopped.is_set():
+                return True
+            else:
+                logging.debug("Cancelling failed")
+                return False
 
     @staticmethod
     def _openSerialPort(port):
@@ -503,15 +543,19 @@ class TMCM3110Simulator(object):
                            1: 0, # current position (unused directly)
                            4: 1024, # maximum positioning speed
                            8: 1, # target reached? (unused directly)
+                           154: 3, # pulse div
                            }
         self._astates = [dict(orig_axis_state) for i in range(self._naxes)]
-        self._aspeed = [1e-3] * 3 # m/s TODO: direction use param 4
+#         self._ustepsize = [1e-6] * 3 # m/µstep
 
         # (float, float, int) for each axis 
         # start, end, start position of a move
         self._axis_move = [(0,0,0)] * self._naxes
 
     def _getCurrentPos(self, axis):
+        """
+        return (int): position in microsteps
+        """
         now = time.time()
         startt, endt, startp = self._axis_move[axis]
         endp = self._astates[axis][0]
@@ -520,6 +564,15 @@ class TMCM3110Simulator(object):
         # model as if it was linear (it's not, it's ramp-based positioning)
         pos = startp + (endp - startp) * (now - startt) / (endt - startt)
         return pos
+
+    def _getMaxSpeed(self, axis):
+        """
+        return (float): speed in microsteps/s
+        """
+        velocity = self._astates[axis][4]
+        pulse_div = self._astates[axis][154]
+        usf = (16e6 * velocity) / (2 ** pulse_div * 2048 * 32)
+        return usf # µst/s
 
     def write(self, data):
         # We accept both a string/bytes and numpy array
@@ -584,8 +637,8 @@ class TMCM3110Simulator(object):
             if not(0 <= mot <= self._naxes):
                 self._sendReply(inst, status=4) # invalid value
                 return
-            # TODO: should the target position be updated?
-            self._astates[mot][0] = self._getCurrentPos(mot)
+            # Note: the target position in axis param is not changed (in the
+            # real controller)
             self._axis_move[mot] = (0, 0, 0)
             self._sendReply(inst)
         elif inst == 4: # Move to position
@@ -603,7 +656,7 @@ class TMCM3110Simulator(object):
                 raise NotImplementedError("simulator doesn't support coordinates")
             # new move
             now = time.time()
-            end = now + abs(pos - val) * self._aspeed[mot] # TODO: use param 4
+            end = now + abs(pos - val) / self._getMaxSpeed(mot)
             self._astates[mot][0] = val
             self._axis_move[mot] = (now, end, pos)
             self._sendReply(inst)
