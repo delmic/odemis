@@ -107,10 +107,6 @@ class TMCM3110(model.Actuator):
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
-        self._moving_lock = threading.Lock() # taken while moving
-        self._must_stop = threading.Event() # cancel of the current future requested
-        self._was_stopped = threading.Event() # if cancel was succesful
-
 
         axes_def = {}
         for n, sz in zip(self._axes_names, self._ustepsize):
@@ -330,6 +326,17 @@ class TMCM3110(model.Actuator):
         self.speed._value = speed
         self.speed.notify(self.speed.value)
 
+    def _createFuture(self):
+        """
+        Return (CancellableFuture): a future that can be used to manage a move
+        """
+        f = CancellableFuture()
+        f._moving_lock = threading.Lock() # taken while moving
+        f._must_stop = threading.Event() # cancel of the current future requested
+        f._was_stopped = threading.Event() # if cancel was successful
+        f.task_canceller = self._cancelCurrentMove
+        return f
+
     @isasync
     def moveRel(self, shift):
         self._checkMoveRel(shift)
@@ -346,8 +353,8 @@ class TMCM3110(model.Actuator):
         if not shift:
             return model.InstantaneousFuture()
 
-        f = self._executor.submitf(CancellableFuture(), self._doMoveRel, shift)
-        f.task_canceller = self._cancelCurrentMove
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
     @isasync
@@ -357,47 +364,56 @@ class TMCM3110(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversionRel(pos)
 
-        f = self._executor.submitf(CancellableFuture(), self._doMoveAbs, pos)
-        f.task_canceller = self._cancelCurrentMove
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
 
     def stop(self, axes=None):
         self._executor.cancel()
 
-    def _doMoveRel(self, pos):
+    def _doMoveRel(self, future, pos):
         """
         Blocking and cancellable relative move
         pos (dict str -> float): axis name -> relative target position
         """
-        with self._moving_lock:
+        with future._moving_lock:
+            end = 0 # expected end
             moving_axes = set()
             for an, v in pos.items():
                 aid = self._axes_names.index(an)
                 moving_axes.add(aid)
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveRelPos(aid, usteps)
+                # compute expected end
+                dur = abs(usteps) * self._ustepsize[aid] / self.speed.value[an]
+                end = max(time.time() + dur, end)
 
-            self._waitEndMove(moving_axes)
+            self._waitEndMove(future, moving_axes, end)
         logging.debug("move successfully completed")
 
-    def _doMoveAbs(self, pos):
+    def _doMoveAbs(self, future, pos):
         """
         Blocking and cancellable absolute move
         pos (dict str -> float): axis name -> absolute target position
         """
-        with self._moving_lock:
+        with future._moving_lock:
+            end = 0 # expected end
+            old_pos = self.position.value
             moving_axes = set()
             for an, v in pos.items():
                 aid = self._axes_names.index(an)
                 moving_axes.add(aid)
                 usteps = int(round(v / self._ustepsize[aid]))
                 self.MoveAbsPos(aid, usteps)
+                # compute expected end
+                dur = abs(v - old_pos[an]) / self.speed.value[an]
+                end = max(time.time() + dur, end)
 
-            self._waitEndMove(moving_axes)
+            self._waitEndMove(future, moving_axes, end)
         logging.debug("move successfully completed")
 
-    def _waitEndMove(self, axes, end=0):
+    def _waitEndMove(self, future, axes, end=0):
         """
         Wait until all the given axes are finished moving, or a request to 
         stop has been received.
@@ -410,7 +426,7 @@ class TMCM3110(model.Actuator):
 
         last_upd = time.time()
         try:
-            while not self._must_stop.is_set():
+            while not future._must_stop.is_set():
                 for aid in moving_axes.copy(): # need copy to remove during iteration
                     if self._isOnTarget(aid):
                         moving_axes.discard(aid)
@@ -424,19 +440,18 @@ class TMCM3110(model.Actuator):
                     last_upd = time.time()
 
                 # Wait half of the time left (maximum 0.1 s)
-                left = time.time() - end
-                sleept = min(0, max(left / 2, 0.1))
-                self._must_stop.wait(sleept)
+                left = end - time.time()
+                sleept = max(0, min(left / 2, 0.1))
+                future._must_stop.wait(sleept)
 
             logging.debug("Move of axes %s cancelled before the end", axes)
             # stop all axes still moving them
             for i in moving_axes:
                 self.MotorStop(i)
-            self._was_stopped.set()
+            future._was_stopped.set()
             raise CancelledError()
         finally:
             self._updatePosition() # update with final position
-            self._must_stop.clear()
 
     def _cancelCurrentMove(self, future):
         """
@@ -450,10 +465,9 @@ class TMCM3110(model.Actuator):
         #  * the task is finishing (about to say that it finished successfully)
         logging.debug("Cancelling current move")
 
-        self._was_stopped.clear()
-        self._must_stop.set() # tell the thread taking care of the move it's over
-        with self._moving_lock:
-            if self._was_stopped.is_set():
+        future._must_stop.set() # tell the thread taking care of the move it's over
+        with future._moving_lock:
+            if future._was_stopped.is_set():
                 return True
             else:
                 logging.debug("Cancelling failed")
@@ -667,7 +681,7 @@ class TMCM3110Simulator(object):
                 self._sendReply(inst, status=3) # wrong type
                 return
             # special code for special values
-            if typ == 2: # actual position
+            if typ == 1: # actual position
                 rval = self._getCurrentPos(mot)
             elif typ == 8: # target reached?
                 rval = 0 if self._axis_move[mot][1] > time.time() else 1

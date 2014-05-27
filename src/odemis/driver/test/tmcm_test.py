@@ -30,7 +30,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 if os.name == "nt":
     PORT = "COM1"
 else:
-    PORT = "/dev/ttyTMCM2" # "/dev/ttyACM0"
+    PORT = "/dev/ttyTMCM0" # "/dev/ttyACM0"
 
 CLASS = tmcm.TMCM3110
 KWARGS = dict(name="test", role="stage", port=PORT,
@@ -39,7 +39,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               inverted=["y"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM.update({"port": "/dev/fake"})
-KWARGS = KWARGS_SIM # uncomment to force using only the simulator
+# KWARGS = KWARGS_SIM # uncomment to force using only the simulator
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
@@ -55,7 +55,7 @@ class TestStatic(unittest.TestCase):
         self.assertGreater(len(devices), 0)
 
         for name, kwargs in devices:
-            print "opening ", name
+            print "opening", name
             stage = CLASS(name, "stage", **kwargs)
             self.assertTrue(stage.selfTest(), "Controller self test failed.")
 
@@ -83,8 +83,8 @@ class TestActuator(unittest.TestCase):
     def tearDown(self):
         time.sleep(1)
         # move back to the original position
-#         f = self.dev.moveAbs(self.orig_pos)
-#         f.result()
+        f = self.dev.moveAbs(self.orig_pos)
+        f.result()
         self.dev.terminate()
 
 #    @skip("faster")
@@ -255,13 +255,13 @@ class TestActuator(unittest.TestCase):
             cur_pos = next_pos
 
     def test_future_callback(self):
-        move_forth = {'x': 0.1e-3}
-        move_back = {'x':-0.1e-3}
+        move_forth = {'x': 1e-3}
+        move_back = {'x':-1e-3}
 
         # test callback while being executed
         self.called = 0
         f = self.dev.moveRel(move_forth)
-        time.sleep(0.01)
+        time.sleep(0.0)  # give it some time to be scheduled (but not enough to be finished)
         f.add_done_callback(self.callback_test_notify)
         f.result()
         time.sleep(0.01) # make sure the callback had time to be called
@@ -288,24 +288,24 @@ class TestActuator(unittest.TestCase):
         move_forth = {'x': 12e-3}
         self.called = 0
         f = self.dev.moveRel(move_forth)
-        time.sleep(0) # give it some time to be scheduled (but not enough to be finished)
-        f.add_done_callback(self.callback_test_notify)
+        time.sleep(0.0)
         self.assertTrue(f.cancel()) # Returns false if already over
+        f.add_done_callback(self.callback_test_notify)
         time.sleep(0.01) # make sure the callback had time to be called
         self.assertEquals(self.called, 1)
         self.assertTrue(f.cancelled())
 
     def callback_test_notify(self, future):
+        self.assertTrue(future.done())
+        self.called += 1
         # Don't display future with %s or %r as it uses lock, which can deadlock
         # with the logging
         logging.debug("received done for future %s", id(future))
-        self.assertTrue(future.done())
-        self.called += 1
 
     def callback_test_notify2(self, future):
-        logging.debug("received (2) done for future %s", id(future))
         self.assertTrue(future.done())
         self.called += 1
+        logging.debug("received (2) done for future %s", id(future))
 
 if __name__ == "__main__":
     unittest.main()
