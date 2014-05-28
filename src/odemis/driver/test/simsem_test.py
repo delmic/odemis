@@ -163,6 +163,20 @@ class TestSEM(unittest.TestCase):
 
         self.assertAlmostEqual(orig_pxs[0] / 2, self.scanner.pixelSize.value[0])
 
+    def test_small_res(self):
+        for i in range(8):
+            s = 1 + i * 1.1
+            for j in range(5):
+                r = int(2 ** j * 1.1)
+                self.scanner.scale.value = (s, s)
+                self.scanner.resolution.value = (r, r)
+
+                im = self.sed.data.get()
+                
+                self.assertEqual(im.shape, (r, r), 
+                                 "Scale = %g, res = %s gives shape %s" % (s, (r, r), im.shape)
+                                 )
+
     def test_roi(self):
         """
         check that .translation and .scale work
