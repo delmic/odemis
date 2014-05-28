@@ -51,7 +51,7 @@ def get_instantiation_model(inst_file):
     try:
         # yaml.load() is dangerous as it can create any python object
         data = yaml.safe_load(inst_file)
-    except yaml.YAMLError, exc:
+    except yaml.YAMLError as exc:
         logging.error("Syntax error in microscope instantiation file: %s", exc)
         if hasattr(exc, 'problem_mark'):
             mark = exc.problem_mark
@@ -439,7 +439,7 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
     instantiator = Instantiator(inst_model, container, create_sub_containers, dry_run)
     try:
         instantiator.instantiate_model()
-    except:
+    except Exception:
         logging.exception("Failed to instantiate the model")
         # clean up by stopping everything which we had started
         for comp in instantiator.components:
