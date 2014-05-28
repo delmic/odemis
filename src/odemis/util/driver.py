@@ -20,13 +20,14 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from Pyro4.errors import CommunicationError
-from odemis import model
 import collections
 import logging
+from odemis import model
 import os
 import re
 import sys
 import threading
+
 
 def getSerialDriver(name):
     """
@@ -45,6 +46,7 @@ def getSerialDriver(name):
         return "Unknown"
 
 # String -> VA conversion helper
+
 def boolify(s):
     if s == 'True' or s == 'true':
         return True

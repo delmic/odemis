@@ -20,8 +20,10 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import unittest
 from odemis.util import conversion
+from odemis.util.conversion import convertToObject
+import unittest
+
 
 class TestConversion(unittest.TestCase):
 
@@ -58,6 +60,53 @@ class TestConversion(unittest.TestCase):
         col = (0.2, 0.5, 1, 1)
         ncol = conversion.change_brightness(col, -1)
         self.assertTrue(ncol, (0, 0, 0, 1))
+
+    def test_convertToObject_good(self):
+        """
+        check various inputs and compare to expected output
+        for values that should work
+        """
+        # example value / input str / expected output
+        tc = [("-1561", -1561),
+              ("0.123", 0.123),
+              ("true", True),
+              ("c: 6,d: 1.3", {"c": 6., "d":1.3}),
+              ("-9, -8", [-9, -8]),
+              (" 9, -8", [9, -8]),
+              ("0, -8, -15.e-3, 6.", [0, -8, -15e-3, 6.0]),
+              ("0.1", 0.1),
+              ("[aa,bb]", ["aa", "bb"]),
+              # TODO: more complicated but nice to support for the user
+#               ("256 x 256 px", (256, 256)),
+#               ("21 x 0.2 m", (21, 0.2)),
+              ("", None),
+              ("{5: }", {5: None}), # Should it fail?
+              ("-1, 63, 12", [-1, 63, 12]), # NotifyingList becomes a list
+              ("9.3, -8", [9.3, -8]),
+              # Note: we don't support SI prefixes
+              ("[aa, c a]", ["aa", "c a"]),
+              ]
+
+        for str_val, expo in tc:
+            out = convertToObject(str_val)
+            self.assertEqual(out, expo,
+                 "Testing with '%s' -> %s" % (str_val, out))
+
+    def test_convertToObject_bad(self):
+        """
+        check various inputs and compare to expected output
+        for values that should raise an exception
+        """
+        # example value / input str
+        tc = [("{5:"),
+              ("[5.3"),
+              # ("5,6]"), # TODO
+              ]
+
+        for str_val in tc:
+            with self.assertRaises((ValueError, TypeError)):
+                out = convertToObject(str_val)
+
 
 if __name__ == "__main__":
     unittest.main()
