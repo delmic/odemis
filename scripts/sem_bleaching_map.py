@@ -9,13 +9,15 @@ This is a script to scan a region with a e-beam and observe the reduction
 of fluorescence on an optical image for each point scanned (due to bleaching).
 
 run as:
-./scripts/sem_bleaching_map.py --dt=0.1 --roi=0.1,0.2,0.1,0.2 --pxs=78 --12-thres=0.1 --output filename.h5
+./scripts/sem_bleaching_map.py --dt=0.01 --roi=0.1,0.1,0.2,0.2 --pxs=7800 --subpx=49 --output filename.h5
 
---dt defines the dwell time when scanning (time required to bleach one spot)
+--dt defines the dwell time when scanning (time required to bleach one spot/sub-pixel)
 --roi the top-left and bottom-right points of the region to scan (relative to
       the SEM field of view).
 --pxs the distance between the centers of two consecutive spots, in nm. It 
       should be compatible with the current SEM magnification.
+--subpx the number of subpixels (must be a square of a integer).
+      For each pixel acquired by the CCD, each subpixel is scanned by the ebeam.
 --12-thres defines the threshold to pass from 1D scanning to 2D scanning in
           percentage of reduction of light intensity
 --output indicates the name of the file which will contain all the output. It 
@@ -51,13 +53,20 @@ import sys
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
 class Acquirer(object):
-    def __init__(self, dt, roi, pxs):
+    def __init__(self, dt, roi, pxs, subpx=1):
         """
-        pxs (float): distance in m
+        pxs (0<float): distance in m between center of each tile 
+        subpx (1<=int): number of sub-pixels
         """
+        if subpx < 1 or (math.sqrt(subpx) % 1) != 0:
+            raise ValueError("subpx must be square of an integer")
         self.dt = dt
         self.roi = roi
+        subpx_x = math.trunc(math.sqrt(subpx))
         self.pxs = pxs
+        self.subpxs = pxs / subpx_x
+        logging.info("Sub-pixels will be spaced by %f nm", self.subpxs * 1e9)
+        self.tile_shape = (subpx_x, subpx_x) # for now always the same in x and y
 
         # Get the components we need
         self.sed = model.getComponent(role="se-detector")
@@ -265,15 +274,19 @@ class Acquirer(object):
         self.light.power.value = lpower
 
     
-    def configure_sem_for_spot(self):
+    def configure_sem_for_tile(self):
         """
         Configure the SEM to be able to acquire one spot
         """
         self.ebeam.dwellTime.value = self.dt
-        # For spot, the easiest is to put the scale to 1, so translation can be
-        # anywhere
-        self.ebeam.scale.value = (1, 1)
-        self.ebeam.resolution.value = (1, 1) # just a spot
+
+        # TODO: check this will allow the spots to be regularly spaced between
+        # tiles
+        # scale is the ratio between the goal pixel size and pixel size at scale=1
+        epxs = self.ebeam.pixelSize.value
+        s = tuple(self.subpxs / e for e in epxs)
+        self.ebeam.scale.value = s
+        self.ebeam.resolution.value = self.tile_shape # just a spot
 
     def calc_xy_pos(self, roi, pxs):
         """
@@ -319,23 +332,23 @@ class Acquirer(object):
     
     def bleach_spot(self, pos):
         """
-        Bleach one spot
+        Bleach one spot, by scanning over each subpixel around that spot
         pos (0<=2 floats): X/Y position of the e-beam in SEM coordinates
-        return (number): the SED acquisition during this bleaching 
+        return (ndarray): the SED acquisition during this bleaching 
         """
         # position the ebeam
         self.ebeam.translation.value = pos
         
         # .get() has an advantage over subscribe + unsubscribe to ensure the
         # ebeam stays at the spot (almost) just the requested dwell time
-        # TODO: check in semcomedi that it really never happens.
+        # TODO: check in semcomedi that it really happens.
         data = self.sed.data.get()
         
-        if data.shape != (1, 1):
-            logging.error("Expected to acquire a spot, but acquired %s points", 
-                          data.shape)
+        if data.shape != self.tile_shape[::-1]:
+            logging.error("Expected to get a SEM image of %s, but acquired %s points",
+                          self.tile_shape, data.shape[::-1])
 
-        return data[0, 0]
+        return data
 
     def get_fluo_count(self):
         """
@@ -367,40 +380,43 @@ class Acquirer(object):
         return intensity
 
 
-#    def scan_line(self):
-#        # scans one line, in one go, and returns a SED line and an (average) CCD light diff line
-#        pass
-#
-#
-#    def assemble_lines(self, lines):
-#        """
-#        Convert a series of lines (1D images) into an image (2D)
-#        """
-#        pass
-
-    def assemble_spots(self, shape, data, roi, pxs):
+    def assemble_tiles(self, shape, data, roi, pxs):
         """
-        Convert a series of spots acquisitions into an image (2D)
-        shape (2 0<ints): Expected shape of the output (Y, X)
-        data (list or ndarray of numbers): the values, ordered with X first
+        Convert a series of tiles acquisitions into an image (2D)
+        shape (2 x 0<ints): Number of tiles in the output (Y, X)
+        data (ndarray of shape N, T, S): the values, 
+         ordered in blocks of TxS with X first, then Y. N = Y*X.
+         Each element along N is tiled on the final data.
         roi (4 0<=floats<=1): ROI relative to the SEM FoV used to compute the
           spots positions
-        pxs (0 float): distance (in m) between 2 spots used to compute the 
+        pxs (0<float): distance (in m) between 2 tile centers, used to compute the 
           spots positions
-        return (DataArray): the data with the correct metadata
+        return (DataArray of shape Y*T, X*S): the data with the correct metadata
         """
-        # Put all the data into one big array (should work even with a list of
-        # DataArray of shape 1,1)
-        arr = numpy.array(data)
-        # reshape to get a 2D image
-        arr.shape = shape
-        
+        N, T, S = data.shape
+        if T == 1 and S == 1:
+            # fast path: the data is already ordered
+            arr = data
+            # reshape to get a 2D image
+            arr.shape = shape
+        else:
+            # need to reorder data by tiles
+            Y, X = shape
+            # change N to Y, X
+            arr = data.reshape((Y, X, T, S))
+            # change to Y, T, X, S by moving the "T" axis
+            arr = numpy.rollaxis(arr, 2, 1)
+            # and apply the change in memory (= 1 copy)
+            arr = numpy.ascontiguousarray(arr)
+            # reshape to apply the tiles
+            arr.shape = (Y * T, X * S)
+
         # set the metadata
         phys_roi = self.convert_roi_ratio_to_phys(roi)
         center = ((phys_roi[0] + phys_roi[2]) / 2,
                   (phys_roi[1] + phys_roi[3]) / 2)
         md = {model.MD_POS: center,
-              model.MD_PIXEL_SIZE: (pxs, pxs)}
+              model.MD_PIXEL_SIZE: (pxs / S, pxs / T)}
         
         return model.DataArray(arr, md)
 
@@ -448,7 +464,7 @@ class Acquirer(object):
             
             ccd_roi = self.sem_roi_to_ccd(self.roi)
             self.configure_ccd(ccd_roi)
-            self.configure_sem_for_spot()
+            self.configure_sem_for_tile()
             
             dur = self.estimate_acq_time(shape)
             logging.info("Estimated acquisition time: %s",
@@ -462,7 +478,7 @@ class Acquirer(object):
             ccd_data = [self.get_fluo_count()]
             try:
                 # TODO: support drift correction (cf ar_spectral_ph)
-                for i in numpy.ndindex(*shape):
+                for i in numpy.ndindex(shape):
                     logging.info("Acquiring pixel %d,%d", i[1], i[0])
                     sem_data.append(self.bleach_spot(spots[i].tolist()))
                     ccd_data.append(self.get_fluo_count())
@@ -471,14 +487,16 @@ class Acquirer(object):
                  
                 # Reconstruct the complete images
                 logging.info("Reconstructing final images")
-                sem_final = self.assemble_spots(shape, sem_data, self.roi, self.pxs)
+                sem_array = numpy.array(sem_data) # put everything in a big array
+                sem_final = self.assemble_tiles(shape, sem_array, self.roi, self.pxs)
                 sem_final.metadata[model.MD_DWELL_TIME] = self.dt
                 sem_final.metadata[model.MD_DESCRIPTION] = "SEM"
                 
                 # compute the diff
                 ccd_data = numpy.array(ccd_data) # force to be one big array
                 ccd_diff = ccd_data[0:-1] - ccd_data[1:]
-                ccd_final = self.assemble_spots(shape, ccd_diff, self.roi, self.pxs)
+                ccd_diff.shape += (1, 1) # add info that each element is one pixel
+                ccd_final = self.assemble_tiles(shape, ccd_diff, self.roi, self.pxs)
                 ccd_md = self.ccd.getMetadata()
                 ccd_final.metadata[model.MD_IN_WL] = ccd_md[model.MD_IN_WL]
                 ccd_final.metadata[model.MD_DESCRIPTION] = "Light diff"
@@ -509,9 +527,13 @@ def main(args):
                      "SEM fluorescence bleaching map")
 
     parser.add_argument("--dt", "-d", dest="dt", type=float, required=True,
-                        help="ebeam (bleaching) dwell time in s")
+                        help="ebeam (bleaching) dwell time in s (for each sub-pixel)")
     parser.add_argument("--pxs", "-p", dest="pxs", type=float, required=True,
                         help="distance between 2 spots in nm")
+    parser.add_argument("--subpx", "-s", dest="subpx", type=int, default=1,
+                        help="number of sub-pixels scanned by the ebeam for "
+                            "each pixel acquired by the CCD. Must be a the "
+                            "square of an integer.")
     parser.add_argument("--roi", dest="roi", required=True,
                         help="e-beam ROI positions (ltrb, relative to the SEM "
                              "field of view)")
@@ -524,7 +546,7 @@ def main(args):
     if not all(0 <= r <= 1 for r in roi):
         raise ValueError("roi values must be between 0 and 1")
 
-    a = Acquirer(options.dt, roi, options.pxs * 1e-9)
+    a = Acquirer(options.dt, roi, options.pxs * 1e-9, options.subpx)
     a.acquire(options.filename)
 
 if __name__ == '__main__':
