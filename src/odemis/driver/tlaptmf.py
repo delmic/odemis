@@ -95,13 +95,9 @@ MOT_REQ_JOGPARAMS = APTReq(0x0417, 0x0418)
 # FIXME: these ones are event messages from the device
 MOT_MOVE_COMPLETED = APTSet(0x0464)
 MOT_MOVE_STOPPED = APTSet(0x0466)
-
-
-
-# TODO: how to change the "transit time" (= speed)?
-# Probably via a "MOT_SET_MFF_OPERPARAMS" message, but not described in the
-# document v9. APTServer.chm has SetMFFOperParams() which is probably a direct
-# mapping.
+# TODO: Use this to change the "transit time" (= speed)
+MOT_SET_MFF_OPERPARAMS = APTSet(0x0510)
+MOT_REQ_MFF_OPERPARAMS = APTReq(0x0511, 0x0512)
 
 # Status flags (for MOT_REQ_*STATUSUPDATE)
 # There are more, but we don't use them for now (cf p.90)
