@@ -2,6 +2,7 @@ import threading
 import wx
 from wx.lib.delayedresult import startWorker
 import array
+import numpy
 
 
 #=============================================================================
@@ -10,15 +11,11 @@ class DrawPanelDBT(wx.Panel):
     Complex panel with its content drawn in another thread
     """
     def __init__(self, *args, **kwargs):
-        kwargs['style'] = wx.NO_FULL_REPAINT_ON_RESIZE | kwargs.get('style', 0)
         wx.Panel.__init__(self, *args, **kwargs)
 
         self.t = None
         self.w, self.h = self.GetClientSizeTuple()
-
-        self.show_buffer = wx.EmptyBitmap(self.w, self.h)
-
-        self._needs_recompute = threading.Event()
+        self.buffer = wx.EmptyBitmap(self.w, self.h)
 
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
@@ -32,12 +29,12 @@ class DrawPanelDBT(wx.Panel):
     #-------------------------------------------------------------------------
     def OnPaint(self, event):
         # Just draw prepared bitmap
-        wx.BufferedPaintDC(self, self.show_buffer)
+        wx.BufferedPaintDC(self, self.buffer)
 
     #-------------------------------------------------------------------------
     def OnSize(self, event):
         self.w, self.h = self.GetClientSizeTuple()
-        self.show_buffer = wx.EmptyBitmap(self.w, self.h)
+        self.buffer = wx.EmptyBitmap(self.w, self.h)
         self.Refresh()
         self.Update()
         # After drawing empty bitmap start update
@@ -55,12 +52,6 @@ class DrawPanelDBT(wx.Panel):
             self.timer.Stop()
             self.t = startWorker(self.ComputationDone, self.Compute)
 
-    def _run_render(self):
-         while True:
-            self._needs_recompute.wait()  # wait until a new image is available
-            self.Compute(self.render_buffer)
-            self._cnvs_needs_recompute.clear()
-
     #-------------------------------------------------------------------------
     def SizeUpdate(self):
         # The timer is used to wait for last thread to finish
@@ -68,7 +59,7 @@ class DrawPanelDBT(wx.Panel):
         self.timer.Start(100)
 
     #-------------------------------------------------------------------------
-    def Compute(self, buffer):
+    def Compute(self):
         # Compute Fractal
         MI = 20
 
@@ -117,7 +108,7 @@ class DrawPanelDBT(wx.Panel):
         # But not if the later thread is waiting!
         temp = r.get()
         if not self.timer.IsRunning():
-            self.show_buffer = temp
+            self.buffer = temp
             self.Refresh()
             self.Update()
         self.t = None

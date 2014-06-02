@@ -147,8 +147,6 @@ import logging
 import math
 import odemis.gui.img.data as imgdata
 import os
-import threading
-import time
 import wx
 import wx.lib.wxcairo as wxcairo
 
@@ -164,6 +162,7 @@ from odemis.util.conversion import wxcol_to_frgb
 CAN_DRAG = 1    # Content can be dragged
 CAN_FOCUS = 2   # Can adjust focus
 CAN_ZOOM = 4    # Can adjust scale
+
 
 @decorator
 def ignore_if_disabled(f, self, *args, **kwargs):
@@ -254,18 +253,9 @@ class BufferedCanvas(wx.Panel):
 
         # END Event Biding
 
-        # TEST ATTRIBUTE TO SWITCH BETWEEN TIMER AND THREAD BASED RENDERING
-        self.use_threading = False
 
-        if self.use_threading:
-            self._cnvs_needs_recompute = threading.Event()
-            self._draw_thread = threading.Thread(target=self._run_draw_thread,
-                                                 name="Canvas rendering")
-            self._draw_thread.daemon = True
-            self._draw_thread.start()
-        else:
-            # Timer used to set a maximum of frames per second
-            self.draw_timer = wx.PyTimer(self.on_draw_timer)
+        # Timer used to set a maximum of frames per second
+        self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
         self.background_img = imgdata.getcanvasbgBitmap()
 
@@ -375,6 +365,7 @@ class BufferedCanvas(wx.Panel):
         """
         # Ensure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
+
         if min_size != self._bmp_buffer_size:
             logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(min_size)
@@ -455,44 +446,9 @@ class BufferedCanvas(wx.Panel):
             `wx.CallAfter(canvas.request_drawing_update)`
         """
 
-        # For testing purposes we've split the rendering into a thread bases and
-        # a timer based versions, which can be switched using the
-        # `use_threading` attribute.
 
-        if self.use_threading:
-            # If the previous request is still being processed, the event
-            # synchronization allows to delay it (without accumulation).
-            self._cnvs_needs_recompute.set()
-
-            # self.draw_thread = threading.Thread(target=self.draw)
-            #
-            # self.draw_thread.start()
-            # self.draw_thread.join()
-            # self.draw_thread = None
-            # # eraseBackground doesn't seem to matter, but just in case...
-            # self.Refresh(eraseBackground=False)
-            # # not really necessary as refresh causes an onPaint event soon, but
-            # # makes it slightly sooner, so smoother
-            # self.Update()
-        else:
-            if not self.draw_timer.IsRunning():
-                self.draw_timer.Start(delay * 1000.0, oneShot=True)
-
-    def _run_draw_thread(self):
-        """
-        Called as a separate thread, and recomputes the histogram whenever
-        it receives an event asking for it.
-        """
-        while True:
-            self._cnvs_needs_recompute.wait()  # wait until a new image is available
-            self._cnvs_needs_recompute.clear()
-            tstart = time.time()
-            self.draw()
-            tend = time.time()
-
-            # sleep at as much, to ensure we are not using too much CPU
-            # tsleep = max(0.5, tend - tstart)  # max 5 Hz
-            # time.sleep(tsleep)
+        if not self.draw_timer.IsRunning():
+            self.draw_timer.Start(delay * 1000.0, oneShot=True)
 
     def update_drawing(self):
         """ Redraw the buffer and display it """
@@ -513,6 +469,8 @@ class BufferedCanvas(wx.Panel):
 
         # Only support wx.SOLID, and anything else is checkered
         if self.background_brush == wx.SOLID:
+            ctx.set_source_rgb(0, 0, 0)
+            ctx.paint()
             return
 
         surface = wxcairo.ImageSurfaceFromBitmap(self.background_img)
@@ -739,15 +697,21 @@ class BitmapCanvas(BufferedCanvas):
         # Since we will pass this context around to various methods, we will
         # reset its transformation matrix in between various calls to prevent
         # unexpected behaviour.
-        # ctx = wxcairo.ContextFromDC(self._dc_buffer)
-        # ctx = self.ctx
+
+        # if self.use_threading:
+        #     imgsurface = cairo.ImageSurface(cairo.FORMAT_ARGB32, self._bmp_buffer_size[0],
+        #                                     self._bmp_buffer_size[1])
+        #     ctx = cairo.Context(imgsurface)
+        # else:
+        #
+        #     ctx = self.ctx
+
         self._draw_background(self.ctx)
         self.ctx.identity_matrix()
 
         self._draw_merged_images(self.ctx)
         self.ctx.identity_matrix()
 
-        #
         # # Each overlay draws itself
         # # Remember that the device context being passed belongs to the *buffer*
         # for o in self.world_overlays:
@@ -936,10 +900,10 @@ class BitmapCanvas(BufferedCanvas):
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
 
-        # if opacity < 1.0:
-        #     ctx.paint_with_alpha(opacity)
-        # else:
-        #     ctx.paint()
+        if opacity < 1.0:
+            ctx.paint_with_alpha(opacity)
+        else:
+            ctx.paint()
 
         # Restore the cached transformation matrix
         ctx.restore()

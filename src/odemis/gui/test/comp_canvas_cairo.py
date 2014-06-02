@@ -98,7 +98,6 @@ class TestCanvas(test.GuiTestCase):
         self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
 
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        cnvs.use_threading = False
         cnvs.default_margin = 0
         cnvs.fit_view_to_next_image = False
         # Create a even black background, so we can test pixel values
