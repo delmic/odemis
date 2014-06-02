@@ -82,7 +82,6 @@ class TestStatic(unittest.TestCase):
         with self.assertRaises(ValueError):
             dev = CLASS(**kwargsw)
 
-    @skip("emulator doesn't exist yet")
     def test_fake(self):
         """
         Just makes sure we don't (completely) break FakeMFF after an update

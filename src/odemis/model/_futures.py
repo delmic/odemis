@@ -4,7 +4,7 @@ Created on 10 Dec 2013
 
 @author: Éric Piel
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -18,7 +18,7 @@ import collections
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, CANCELLED_AND_NOTIFIED, FINISHED, \
     PENDING, RUNNING
-from concurrent.futures.thread import ThreadPoolExecutor
+from concurrent.futures.thread import ThreadPoolExecutor, _WorkItem
 import logging
 import time
 
@@ -26,18 +26,38 @@ import time
 class CancellableThreadPoolExecutor(ThreadPoolExecutor):
     """
     An extended ThreadPoolExecutor that can cancel all the jobs not yet started.
+    It also allows non standard Future to be created.
     """
-    def __init__(self, *args, **kwargs):
-        ThreadPoolExecutor.__init__(self, *args, **kwargs)
+    def __init__(self, max_workers):
+        ThreadPoolExecutor.__init__(self, max_workers)
         self._queue = collections.deque() # thread-safe queue of futures
 
-    def submit(self, fn, *args, **kwargs):
-        logging.debug("queuing action %s with arguments %s", fn, args)
-        f = ThreadPoolExecutor.submit(self, fn, *args, **kwargs)
-        # add to the queue and track the task
-        self._queue.append(f)
-        f.add_done_callback(self._on_done)
+    def submitf(self, f, fn, *args, **kwargs):
+        """
+        submit a task, handled by the given fresh Future
+        f (Future): a newly created Future
+        fn (callable): the function to call
+        args, kwargs -> passed to fn
+        returns (Future): f
+        """
+#         logging.debug("queuing action %s with future %s", fn, f.__class__.__name__)
+        with self._shutdown_lock:
+            if self._shutdown:
+                raise RuntimeError('cannot schedule new futures after shutdown')
+
+            w = _WorkItem(f, fn, args, kwargs)
+
+            self._work_queue.put(w)
+            self._adjust_thread_count()
+
+            # add to the queue and track the task
+            self._queue.append(f)
+            f.add_done_callback(self._on_done)
         return f
+
+    def submit(self, fn, *args, **kwargs):
+        return self.submitf(futures.Future(), fn, *args, **kwargs)
+    submit.__doc__ = ThreadPoolExecutor.submit.__doc__
 
     def _on_done(self, future):
         # task is over
@@ -52,6 +72,7 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
         Cancels all the tasks still in the work queue, if they can be cancelled
         Returns when all the tasks have been cancelled or are done.
         """
+        logging.debug("Cancelling all the %d futures in queue", len(self._queue))
         uncancellables = []
         # cancel one task at a time until there is nothing in the queue
         while True:
@@ -60,14 +81,17 @@ class CancellableThreadPoolExecutor(ThreadPoolExecutor):
                 f = self._queue.pop()
             except IndexError:
                 break
+            logging.debug("Cancelling %s", f)
             if not f.cancel():
                 uncancellables.append(f)
 
         # wait for the non cancellable tasks to finish
+        if uncancellables:
+            logging.debug("Waiting for %d futures to finish", len(uncancellables))
         for f in uncancellables:
             try:
                 f.result()
-            except:
+            except Exception:
                 # the task raised an exception => we don't care
                 pass
 
@@ -104,9 +128,86 @@ class InstantaneousFuture(futures.Future):
         fn(self)
 
 
-class ProgressiveFuture(futures.Future):
+class CancellableFuture(futures.Future):
     """
-    set task_canceller to a function to call to cancel a running task
+    set task_canceller to a callable to allow cancelling a running task
+    """
+
+    def __init__(self):
+        futures.Future.__init__(self)
+
+        # Callable that takes the future as argument and returns True if the
+        # cancellation was successful (and False otherwise).
+        # As long as it's None, the future cannot be cancelled while running
+        self.task_canceller = None
+
+    def cancel(self):
+        """Cancel the future if possible.
+
+        Returns True if the future was cancelled, False otherwise. A future
+        cannot be cancelled if it has already completed.
+        """
+        # different implementation because we _can_ cancel a running task, by
+        # calling a special function
+        with self._condition:
+            if self._state == FINISHED:
+                return False
+
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                return True
+
+            if self._state == RUNNING:
+                canceller = self.task_canceller
+                if not (canceller and canceller(self)):
+                    return False
+
+            self._state = CANCELLED
+            self._condition.notify_all()
+
+        self._invoke_callbacks()
+        return True
+
+    def set_result(self, result):
+        """Sets the return value of work associated with the future.
+
+        Should only be used by Executor implementations and unit tests.
+        """
+        with self._condition:
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                # Can happen if was cancelled just before the end and the
+                # task failed to raise an CancelledError
+                logging.warning("Task was cancelled but returned result instead "
+                                "of raising an exception.")
+                return
+            self._result = result
+            self._state = FINISHED
+            for waiter in self._waiters:
+                waiter.add_result(self)
+            self._condition.notify_all()
+        self._invoke_callbacks()
+
+    def set_exception(self, exception):
+        """Sets the result of the future as being the given exception.
+
+        Should only be used by Executor implementations and unit tests.
+        """
+        with self._condition:
+            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
+                # Can happen if was cancelled just before the end
+                # TODO: check it is a CancelledError?
+                logging.debug("Skipping exception from task after it was cancelled")
+                return
+            self._exception = exception
+            self._state = FINISHED
+            for waiter in self._waiters:
+                waiter.add_exception(self)
+            self._condition.notify_all()
+        self._invoke_callbacks()
+
+class ProgressiveFuture(CancellableFuture):
+    """
+    Allows to track the current progress of the task by getting the (expected)
+    start and end time.
     """
 
     def __init__(self, start=None, end=None):
@@ -114,17 +215,24 @@ class ProgressiveFuture(futures.Future):
         start (float): start time
         end (float): end time
         """
-        futures.Future.__init__(self)
+        CancellableFuture.__init__(self)
         self._upd_callbacks = []
 
         # just a bit ahead of time to say it's not starting now
         self._start_time = start or (time.time() + 0.1)
         self._end_time = end or (self._start_time + 0.1)
+        self.add_done_callback(self.__on_done)
 
-        # Callable that takes the future and returns True if the
-        # cancellation was successful.
-        # As long as it's None, the future cannot be cancelled while running
-        self.task_canceller = None
+    def __on_done(self, future):
+        """
+        Called when the future is over to report the update one last time
+        => the last update callbacks will be called _before_ the done callbacks
+        """
+        with self._condition:
+            self._end_time = time.time()
+        self._invoke_upd_callbacks()
+
+    # TODO: Add support to get the current status? as a standard call?
 
     def _report_update(self, fn):
         # Why the 'with'? Is there some cleanup needed?
@@ -148,6 +256,7 @@ class ProgressiveFuture(futures.Future):
                                   "finished already %f s ago", -left)
                     left = 0
         try:
+            # TODO: better use absolute values: start/now/end ? or current ratio/start/end?
             fn(self, past, left)
         except Exception:
             logging.exception('exception calling callback for %r', self)
@@ -197,55 +306,18 @@ class ProgressiveFuture(futures.Future):
         # Immediately report the current known information (even if finished)
         self._report_update(fn)
 
-    def cancel(self):
-        """Cancel the future if possible.
-
-        Returns True if the future was cancelled, False otherwise. A future
-        cannot be cancelled if it has already completed.
-        """
-        # different implementation because we _can_ cancel a running task, by
-        # calling a special function
-        with self._condition:
-            if self._state == FINISHED:
-                return False
-
-            if self._state in [CANCELLED, CANCELLED_AND_NOTIFIED]:
-                return True
-
-            if self._state == RUNNING:
-                canceller = self.task_canceller
-                if not (canceller and canceller(self)):
-                    return False
-
-            self._state = CANCELLED
-            self._condition.notify_all()
-
-        self._invoke_callbacks()
-        self._invoke_upd_callbacks()
-        return True
-
     def set_running_or_notify_cancel(self):
         """
         Returns:
             False if the Future was cancelled, True otherwise.
         """
         running = futures.Future.set_running_or_notify_cancel(self)
-        now = time.time()
         if running:
+            now = time.time()
             with self._condition:
                 self._start_time = now
+            self._invoke_upd_callbacks()
 
-        self._invoke_upd_callbacks()
         return running
 
-    def set_result(self, result):
-        futures.Future.set_result(self, result)
-        with self._condition:
-            self._end_time = time.time()
-        self._invoke_upd_callbacks()
 
-    def set_exception(self, exception):
-        futures.Future.set_exception(self, exception)
-        with self._condition:
-            self._end_time = time.time()
-        self._invoke_upd_callbacks()

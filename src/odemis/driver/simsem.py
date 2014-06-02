@@ -372,8 +372,7 @@ class Detector(model.Detector):
 
             pxs_pos = scanner.translation.value
             scale = scanner.scale.value
-            res = (scanner.resolution.value[0] * scale[0],
-                   scanner.resolution.value[1] * scale[1])
+            res = scanner.resolution.value
 
             phy_pos = metadata.get(model.MD_POS, (0, 0))
             trans = scanner.pixelToPhy(pxs_pos)
@@ -381,11 +380,17 @@ class Detector(model.Detector):
 
             shape = self.fake_img.shape
             # Simulate drift
-            center = ((shape[0] / 2) - self.current_drift, (shape[1] / 2) + self.current_drift)
+            center = (shape[1] / 2 - self.current_drift,
+                      shape[0] / 2 + self.current_drift)
 
-            sim_img = self.fake_img[center[0] + pxs_pos[1] - (res[1] / 2):center[0] + pxs_pos[1] + (res[1] / 2):scale[0],
-                                    center[1] + pxs_pos[0] - (res[0] / 2):center[1] + pxs_pos[0] + (res[0] / 2):scale[1]]
-
+            lt = (center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
+                  center[1] + pxs_pos[1] - (res[1] / 2) * scale[1])
+            assert(lt[0] >= 0 and lt[1] >= 0)
+            # compute each row and column that will be included
+            coord = ([int(round(lt[0] + i * scale[0])) for i in range(res[0])],
+                     [int(round(lt[1] + i * scale[1])) for i in range(res[1])])
+            sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])]
+            
             if scanner.power.value == 0:
                 sim_img[...] = 0 # black it out
             elif self.parent._focus:

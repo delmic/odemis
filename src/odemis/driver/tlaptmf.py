@@ -155,11 +155,6 @@ class MFF(model.Actuator):
         # required
         self.SendMessage(HW_NO_FLASH_PROGRAMMING)
 
-        driver_name = driver.getSerialDriver(self._port)
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        sn, modl, typ, fmv, notes, hwv, state, nc = self.GetInfo()
-        self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
-
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
@@ -181,6 +176,11 @@ class MFF(model.Actuator):
                                  choices=set(self._pos_to_jog.keys()))
                 }
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
+
+        driver_name = driver.getSerialDriver(self._port)
+        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
+        snd, modl, typ, fmv, notes, hwv, state, nc = self.GetInfo()
+        self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()

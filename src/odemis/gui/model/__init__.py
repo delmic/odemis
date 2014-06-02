@@ -95,19 +95,22 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.focus = None # actuator to change the camera focus
-        self.ebeam_focus = None # change the e-beam focus
         self.aligner = None # actuator to align ebeam/ccd
         self.mirror = None # actuator to change the mirror position (on SPARC)
         self.light = None
         self.light_filter = None # emission light filter for SECOM/output filter for SPARC
         self.lens = None
         self.ebeam = None
+        self.ebeam_focus = None # change the e-beam focus
         self.sed = None # secondary electron detector
         self.bsd = None # back-scatter electron detector
         self.spectrometer = None # spectrometer
         self.spectrograph = None # actuator to change the wavelength
         self.ar_spec_sel = None # actuator to select AR/Spectrometer (SPARC)
         self.lens_switch = None # actuator to (de)activate the lens (SPARC)
+        self.chamber = None # actuator to control the chamber (pressure)
+        self.ccd_chamber = None # view of inside the chamber
+        self.ccd_overview = None # global view from above the sample
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
@@ -124,6 +127,10 @@ class MainGUIData(object):
                     self.bsd = d
                 elif d.role == "spectrometer":
                     self.spectrometer = d
+                elif d.role == "ccd-chamber":
+                    self.ccd_chamber = d
+                elif d.role == "ccd-overview":
+                    self.ccd_overview = d
 
             for a in microscope.actuators:
                 if a.role == "stage":
@@ -140,6 +147,8 @@ class MainGUIData(object):
                     self.lens_switch = a
                 elif a.role == "ar-spec-selector":
                     self.ar_spec_sel = a
+                elif a.role == "chamber":
+                    self.chamber = a
 
             # Spectrograph is not directly an actuator, but a sub-comp of spectrometer
             if self.spectrometer:

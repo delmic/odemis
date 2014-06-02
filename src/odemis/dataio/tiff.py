@@ -626,6 +626,7 @@ def _getIFDsFromOME(pixele):
 
         # TODO: If has UUID tag, it means it's actually in a separate document
         # (cf tiff series) => load it and add it to the data as a new IFD?
+        # Or raise an Error if it's not this current document?
 
         # If PlaneCount is > 1: it's in the same order as DimensionOrder
         # TODO: for now fixed to ZTC, but that should as DimensionOrder

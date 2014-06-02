@@ -2,20 +2,29 @@
 Basic objects of the component framework
 ****************************************
 
-Each part of the software runs as a separate component. Components are isolated in containers, which are actually a Unix process listening for requests. In most cases this is transparent to the development. However, there are a couple of guidelines and restrictions.
+Each part of the software runs as a separate component. Components are isolated 
+in containers, which are actually a Unix process listening for requests. In most
+cases this is transparent to the development. However, there are a couple of 
+guidelines and restrictions.
 
-To get the microscope component, the special :py:meth:`model.getMicroscope` function will return the microscope component wherever it is (as long as it is available). To access a specific component it's also possible to use model.getObject(container_name, component_name) but it requires to know the name of the container. Only the name of the main back-end container is sure: model.BACKEND_NAME. In practice, most components are either in the back-end container or in a separate container with the same name as the component.
+To stop the system, all the components should be terminated (:py:meth:`Component.terminate`)
+and then the back-end container can be terminated (:py:meth:`Container.terminate`).
+This container will ensure that all the other containers are also terminated.
 
-
-To stop the system, all the components should be terminated (.terminate()) and then the back-end container can be terminated (.terminate()). This container will ensure that all the other containers are also terminated.
-
-All the methods of a component are directly accessible remotely. However, not all attributes are remotely accessible. Only the DataFlows, VigilantAttributes, and roattributes are automatically shared. roattributes are read-only attributes which value must not be modified after initialisation. They are declared with the @roattribute decorator (like a property). Methods that return a future should be decorated with @isasync (it will work without it, but much slower). Methods that do not return any value and for which the caller never needs to know when they are finished can be decorated with @oneway to improve performance.
-When accessing an object running in the same container, a normal python object is always returned automatically. 
-
-.. TODO: probably needs more tweaking to be really true, like in the case of accessing .parent of a remote object.
+All the methods of a component are directly accessible remotely.
+However, not all attributes are remotely accessible.
+Only the DataFlows, VigilantAttributes, Events, and roattributes are 
+automatically shared. 
+roattributes are read-only attributes which value must not be modified after 
+initialisation. They are declared with the :py:obj:`@roattribute` decorator
+(like a property).
+Methods that do not return any value and for which the caller never needs to 
+know when they are finished can be decorated with :py:obj:`@oneway` to improve performance.
+When accessing an object running in the same container, a normal python object 
+is always returned automatically.
 
 In addition, when a component is accessed from a separate container (e.g., when 
-accessing a hardware adapter from the GUI) the actual python object is a proxy
+accessing a hardware adapter from the GUI) the actual Python object is a proxy
 to the real component. While in most cases this is transparent, you should be aware of:
 
 * :py:func:`isinstance` (and everything related to type) will not work as expected 
@@ -23,12 +32,13 @@ to the real component. While in most cases this is transparent, you should be aw
   So relying on class type to take a decision will not work.
   There is an (important) exception for the Component, VigilantAttribute, Future,
   DataFlow, and Event classes, which all have an equivalent \*Base classes from
-  which the Proxy inherits. So for these types, isinstance() can be used.
+  which the Proxy inherits. So for these types, :py:func:`isinstance` can be used.
   
   .. TODO It's recommended to rely on the .capabilities attribute. TODO create .capabilities. Create also a ._realclass_ on proxy?
 
 * :py:func:`hasattr` (and everything related to accessing non-existing attributes) will
-  not work as expected because Proxys always return an object from __getitem__() (a :py:meth:`Pyro4.core._RemoteMethod`). 
+  not work as expected because Proxys *always* return an object from :py:meth:`__getitem__`
+  (a :py:class:`Pyro4.core._RemoteMethod`).
   
   .. TODO It is recommended to rely on the .capabilities attribute, or if an attribute is expected compare the type of the attribute to _RemoteMethod.
 
@@ -85,6 +95,29 @@ but it is expected that children are instantiated *before* their parent.
         it can create all sort of problems with cyclic dependency. For now the 
         implementation supports it a bit (because we need it), but this attribute
         points to only one of the parents.
+
+The following helper functions allow to list selectively the special attributes
+of a component.
+
+.. py:function:: model.getVAs(component)
+
+    :returns: all the VAs in the component with their name
+    :rtype: dict of name -> VigilantAttributeBase
+
+.. py:function:: model.getROAttributes(component)
+
+    :returns: all the names of the roattributes and their values
+    :rtype: dict of name -> value
+
+.. py:function:: model.getDataFlows(component)
+
+    :returns: all the DataFlows in the component with their name
+    :rtype: dict of name -> DataFlow
+
+.. py:function:: model.getEvents(component)
+
+    :returns: all the Events in the component with their name
+    :rtype: dict of name -> Events
 
 DataArray
 =========
@@ -546,23 +579,33 @@ The following additional functions allow to manage containers.
     :param bool validate: whether the connection should be validated
     :returns: the (proxy to the) new container
 
-.. py:function:: createInNewContainer(container_name, klass, kwargs)
+.. py:function:: model.createInNewContainer(container_name, klass, kwargs)
+
     Creates a new component in a new container
     
-    :param str container_name:
+    :param str container_name: Name of the container
     :param class klass: component class
     :param kwargs: arguments for the __init__() of the component
     :type kwargs: dict (str -> value)
     :returns: the (proxy to the) new component
     
-.. py:function:: getContainer(name[, validate=True])
+.. py:function:: model.getContainer(name[, validate=True])
 
     :param bool validate: whether the connection should be validated
     :returns: (a proxy to) the container with the given name
     :raises: an exception if no such container exist
     
-.. py:function:: getObject(container_name, object_name)
+.. py:function:: model.getObject(container_name, object_name)
+
+    Returns an object in a container based on its name and  
+    Only the name of the main back-end container is fixed: :py:data:`model.BACKEND_NAME`.
+    In practice, most components are either in 
+    the back-end container or in a separate container with the same name as the 
+    component.
     
+    :param str container_name: Name of the container
+    :param str object_name: Name of the object (for Components, it's the same as
+      :py:attr:`Component.name`)
     :returns: (a proxy to) the object with the given name in the given container
     :raises: an exception if no such object or container exist
 

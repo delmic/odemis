@@ -31,7 +31,8 @@ import inspect
 import logging
 from odemis import model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
-from odemis.util.driver import reproduceTypedValue, BACKEND_RUNNING, \
+from odemis.util.conversion import convertToObject
+from odemis.util.driver import BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
 import odemis.util.driver
 import sys
@@ -367,37 +368,10 @@ def set_attr(comp_name, attr_name, str_val):
         logging.error("'%s' is not a vigilant attribute of component '%s'", attr_name, comp_name)
         return 129
 
-    # Sometimes the current value is a (valid) subtype which do not allow all
-    # possible values (eg: a int for a FloatContinuous). So try also with range
-    # and choices
-    val_try = [attr.value]
     try:
-        for v in attr.range:
-            val_try.insert(0, v)
-    except (AttributeError, model.NotApplicableError):
-        pass
-    try:
-        for v in attr.choices:
-            val_try.insert(0, v)
-    except (AttributeError, model.NotApplicableError):
-        pass
-
-    for v in val_try[:-1]: # try all but last silently
-        try:
-            new_val = reproduceTypedValue(v, str_val)
-            break # it's all fine
-        except (TypeError, ValueError):
-            logging.debug("Failed to convert %s to a %r, will try again",
-                          str_val, type(v))
-    else: # try last one and report the error
-        try:
-            new_val = reproduceTypedValue(val_try[-1], str_val)
-        except TypeError:
-            logging.error("'%s' is of unsupported type %r", attr_name, type(val_try[-1]))
-            return 127
-        except ValueError:
-            logging.error("Impossible to convert '%s' to a %r", str_val, type(val_try[-1]))
-            return 127
+        new_val = convertToObject(str_val)
+    except Exception:
+        return 127
 
     # Special case for floats, due to rounding error, it's very hard to put the
     # exact value if it's an enumerated VA. So just pick the closest one in this
@@ -452,8 +426,7 @@ def move(comp_name, axis_name, str_distance):
             logging.error("Distance of %f m is too big (> %f m)", abs(distance), MAX_DISTANCE)
             return 129
     else:
-        cur_pos = component.position.value[axis_name]
-        distance = reproduceTypedValue(cur_pos, str_distance)
+        distance = convertToObject(str_distance)
 
     try:
         m = component.moveRel({axis_name: distance})
@@ -502,8 +475,7 @@ def move_abs(comp_name, axis_name, str_position):
             logging.error("Distance of move of %g m is too big (> %g m)", abs(cur_pos - position), MAX_DISTANCE)
             return 129
     else:
-        cur_pos = component.position.value[axis_name]
-        position = reproduceTypedValue(cur_pos, str_position)
+        position = convertToObject(str_position)
 
     try:
         m = component.moveAbs({axis_name: position})

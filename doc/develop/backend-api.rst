@@ -9,6 +9,28 @@ them with the front-end. User interfaces and scripts can control the hardware
 via the use of this API. It is specifically focused to represent and manipulate
 microscope hardware.
 
+To get the (root) microscope component, the special :py:meth:`model.getMicroscope` 
+function can be used. There are a few other helper functions to directly access
+an component:
+
+.. py:function:: model.getComponents()
+
+    Return all the components that are available in the back-end. 
+
+    :returns: All the components 
+    :rtype: set of HwComponents
+
+.. py:function:: model.getComponent(name=None, role=None)
+
+    Find a component, according to its name or role.
+    At least a name or a role should be provided.
+
+    :param str name: name of the component to look for
+    :param str role: role of the component to look for
+    :returns HwComponent: the component with the given name/role
+    :raises LookupError: if no component with such a name is given
+
+
 .. py:class:: HwComponent(name, role[, parent=None][, children=None])
     
     This is the generic type for representing a hardware component.

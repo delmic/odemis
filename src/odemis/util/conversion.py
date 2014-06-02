@@ -19,7 +19,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
+
 import logging
+import re
+import yaml
+
 
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
@@ -124,3 +128,24 @@ def change_brightness(colf, weight):
     new_col = tuple(f(c * (1 - weight) + lim * weight, lim) for c in colf[:3])
 
     return new_col + colf[3:]
+
+def convertToObject(s):
+    """
+    Tries to convert a string to a (simple) object. 
+    s (str): string that will be converted
+    return (object) the value contained in the string with the type of the real value
+    raises
+      ValueError() if not possible to convert
+    """
+    try:
+        # be nice and accept list and dict without [] or {}
+        fixed = s.strip()
+        if re.match(r"([-.a-zA-Z0-9_]+\s*:\s+[-.a-zA-Z0-9_]+)(\s*,\s*([-.a-zA-Z0-9_]+\s*:\s+[-.a-zA-Z0-9_]+))*$", fixed): # a dict?
+            fixed = "{" + fixed + "}"
+        elif re.match(r"[-.a-zA-Z0-9_]+(\s*,\s*[-.a-zA-Z0-9_]+)+$", fixed): # a list?
+            fixed = "[" + fixed + "]"
+        return yaml.safe_load(fixed)
+    except yaml.YAMLError as exc:
+        logging.error("Syntax error: %s", exc)
+        # TODO: with Python3: raise from?
+        raise ValueError("Failed to parse %s" % s)
