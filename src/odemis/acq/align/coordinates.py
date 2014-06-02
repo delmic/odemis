@@ -337,7 +337,8 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
         if len(optical_coordinates) > len(electron_coordinates):
             optical_coordinates = _FindInnerOutliers(optical_coordinates)
     else:
-        logging.warning("Cannot find overlay.")
+        logging.warning("Cannot find overlay (only %s spot found).",
+                        len(input_coordinates))
         return [], []
 
     quality = 0
@@ -379,17 +380,22 @@ def MatchCoordinates(input_coordinates, electron_coordinates, guess_scale, max_a
             coord_diff.append(math.hypot(tab[0], tab[1]))
 
         sort_diff = sorted(coord_diff)
-        diff_number_sort = math.floor(DIFF_NUMBER * (len(sort_diff)))
-        max_diff = sort_diff[int(diff_number_sort)]
+        diff_number_sort = math.trunc(DIFF_NUMBER * len(sort_diff)) - 1
+        max_diff = sort_diff[diff_number_sort]
 
-        if max_diff < max_allowed_diff and sum(e_wrong_points) <= max_wrong_points and total_shift <= max_allowed_diff:
+        if (max_diff < max_allowed_diff
+            and sum(e_wrong_points) <= max_wrong_points
+            and total_shift <= max_allowed_diff):
             quality = 1
             break
 
         transformed_coordinates = estimated_coordinates
 
     if quality == 0:
-        logging.warning("Cannot find overlay.")
+        logging.warning("Cannot find overlay: distance = %f px (> %f px), after %d steps.",
+                        max_diff, max_allowed_diff, step + 1)
+        logging.warning("Optical coordinates found: %s", estimated_coordinates)
+        logging.warning("SEM coordinates distances: %s", sort_diff)
         return [], []
 
     # The ordered list gives for each electron coordinate the corresponding optical coordinates
@@ -565,7 +571,10 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
         avg_rotation = avg_rotation + 180 / math.pi * angle_correction
 
     # Perform transformation
-    estimated_coordinates = _TransformCoordinates(optical_coordinates, (avg_x_move, avg_y_move), avg_rotation, (avg_x_scale, avg_y_scale))
+    estimated_coordinates = _TransformCoordinates(optical_coordinates,
+                                                  (avg_x_move, avg_y_move),
+                                                  avg_rotation,
+                                                  (avg_x_scale, avg_y_scale))
     new_index1 = _KNNsearch(estimated_coordinates, electron_coordinates)
     new_index2 = _KNNsearch(electron_coordinates, estimated_coordinates)
     new_e_index = [new_index2[i] for i in new_index1]
