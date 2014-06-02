@@ -1,5 +1,5 @@
 autogenerate=1
-embedResource=1
+embedResource=0
 filename=main_xrc.py
 genGettext=0
 makeXRS=0

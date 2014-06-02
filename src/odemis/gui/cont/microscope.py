@@ -28,13 +28,13 @@ btn_to_va = {"sem": "emState",
              "opt": "opticalState",
              "spectrometer": "specState",
              "angular": "arState",
-             "press": "vacuumState", # TODO
+             "press": "vacuumState",  #TODO
              }
             # TODO: pause button
 
 class MicroscopeStateController(object):
-    """ This controller controls the main microscope buttons (ON/OFF, 
-    Pause, vacuum...) and updates the model. To query/change the status of a 
+    """ This controller controls the main microscope buttons (ON/OFF,
+    Pause, vacuum...) and updates the model. To query/change the status of a
     specific component, use the main data model directly.
     """
 
@@ -44,7 +44,7 @@ class MicroscopeStateController(object):
 
         tab_data (MicroscopyGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
-        btn_prefix (string): common prefix of the names of the buttons 
+        btn_prefix (string): common prefix of the names of the buttons
         """
         main_data = tab_data.main
 
@@ -63,7 +63,6 @@ class MicroscopeStateController(object):
             except AttributeError:
                 # This microscope is not available
                 btn.Hide()
-                # TODO: need to update layout?
                 continue
             logging.debug("Connecting button %s to %s", btn_name, vaname)
 
