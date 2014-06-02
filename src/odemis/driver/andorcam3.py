@@ -33,6 +33,7 @@ import collections
 from ctypes import *
 import gc
 import logging
+import math
 import numpy
 from odemis import model, util
 import odemis
@@ -258,8 +259,9 @@ class AndorCam3(model.DigitalCamera):
                                                   setter=self.setFanSpeed) # ratio to max speed
             self.setFanSpeed(1.0)
 
-        # binning, image, exp time, readout rate, gain, synchronised
-        self._prev_settings = [None, None, None, None, None, None]
+        # binning, res, trans, exp time, readout rate, gain, synchronised
+        self._prev_settings = [None, None, None, None, None, None, None]
+        self._translation = (0, 0)
         self._binning = (1, 1) # used by resolutionFitter()
         self._resolution = resolution
         if (not self.isImplemented(u"AOIWidth") or
@@ -277,7 +279,21 @@ class AndorCam3(model.DigitalCamera):
                               [self._transposeSizeToUser((1, 1)),
                                self._transposeSizeToUser(self._getMaxBinnings())],
                                           setter=self._setBinning)
-        
+
+        # translation is automatically adjusted to fit whenever res/bin change
+        if self.isImplemented(u"FullAOIControl") and self.GetBool(u"FullAOIControl"):
+            # Support ROI anywhere => provide translation
+            hlf_shape = (self._shape[0] // 2 - 1, self._shape[1] // 2 - 1)
+            uh_shape = self._transposeSizeToUser(hlf_shape)
+            tran_rng = [(-uh_shape[0], -uh_shape[1]),
+                        (uh_shape[0], uh_shape[1])]
+            self.translation = model.ResolutionVA((0, 0), tran_rng,
+                                                  cls=(int, long), unit="px",
+                                                  setter=self._setTranslation)
+        else:
+            # to keep it simple, provide a translation VA but fixed to 0,0
+            self.translation = model.VigilantAttribute((0, 0), unit="px",
+                                                       readonly=True)
         range_exp = list(self.GetFloatRanges(u"ExposureTime"))
         range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0
         self._exp_time = 1.0
@@ -322,6 +338,7 @@ class AndorCam3(model.DigitalCamera):
 
         self.data = AndorCam3DataFlow(self)
     
+    # TODO: merge into HwComponent
     def getMetadata(self):
         return self._metadata
     
@@ -333,7 +350,7 @@ class AndorCam3(model.DigitalCamera):
         md (dict string -> value): the metadata
         """
         self._metadata.update(md)
-    
+
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
 
@@ -834,11 +851,13 @@ class AndorCam3(model.DigitalCamera):
                   self._bin_to_resrng[1][self._binning[1]])
         size = (max(ranges[0][0], min(size[0], ranges[0][1])),
                 max(ranges[1][0], min(size[1], ranges[0][1])))
-        
-        # TODO: need to check for FullAOIControl is implemented and True
+
+        # if the size is odd, actually the translation is -0.5, due to rounding
+        trans = self._translation
+
         # center the AOI (in original/sensor pixels)
-        lt = ((resolution[0] - size[0] * self._binning[0]) // 2 + 1,
-              (resolution[1] - size[1] * self._binning[1]) // 2 + 1)
+        lt = ((resolution[0] - size[0] * self._binning[0]) // 2 + 1 + trans[0],
+              (resolution[1] - size[1] * self._binning[1]) // 2 + 1 + trans[1])
 
         # order matters
         self.SetInt(u"AOIWidth", size[0])
@@ -861,16 +880,17 @@ class AndorCam3(model.DigitalCamera):
                 m = re.match("([0-9]+)x([0-9]+)", bs)
                 b = int(m.group(1)), int(m.group(2))
                 self.SetEnumString(u"AOIBinning", bs)
-                # FIXME: SDK3.4 32 bits seems to have a problem with AOI < 4096 (kernel oops)
+                # Note: SDK3.4 32 bits seems to have a problem with AOI < 4096 (kernel oops)
                 # => forbid small resolutions > 48*48 px
+                # From SDK 3.5, it seems to work fine.
                 # Once using only versions >= 3.5: can use this simple code:
-#                rrng_width[b[0]] = self.GetIntRanges(u"AOIWidth")
-#                rrng_height[b[1]] = self.GetIntRanges(u"AOIHeight")
+                rrng_width[b[0]] = self.GetIntRanges(u"AOIWidth")
+                rrng_height[b[1]] = self.GetIntRanges(u"AOIHeight")
 
-                rng_width = self.GetIntRanges(u"AOIWidth")
-                rng_height = self.GetIntRanges(u"AOIHeight")
-                rrng_width[b[0]] = (max(48, rng_width[0]), rng_width[1])
-                rrng_height[b[1]] = (max(48, rng_height[0]), rng_height[1])
+#                 rng_width = self.GetIntRanges(u"AOIWidth")
+#                 rng_height = self.GetIntRanges(u"AOIHeight")
+#                 rrng_width[b[0]] = (max(48, rng_width[0]), rng_width[1])
+#                 rrng_height[b[1]] = (max(48, rng_height[0]), rng_height[1])
         else:
             # no binning -> 1x1
             rrng_width[1] = self.GetIntRanges(u"AOIWidth")
@@ -910,7 +930,48 @@ class AndorCam3(model.DigitalCamera):
         value = self._transposeSizeFromUser(value)
         new_res = self.resolutionFitter(value)
         self._resolution = new_res
+        if not self.translation.readonly:
+            self.translation.value = self.translation.value # force re-check
         return self._transposeSizeToUser(new_res)
+
+    def _setTranslation(self, value):
+        """
+        value (int, int): shift from the center. It will always ensure that
+          the whole ROI fits the screen.
+        returns actual shift accepted
+        """
+        value = self._transposeTransFromUser(value)
+        # compute the min/max of the shift. It's the same as the margin between
+        # the centered ROI and the border, taking into account the binning.
+        max_tran = ((self._shape[0] - self._resolution[0] * self._binning[0]) // 2,
+                    (self._shape[1] - self._resolution[1] * self._binning[1]) // 2)
+
+        # between -margin and +margin
+        trans = (max(-max_tran[0], min(value[0], max_tran[0])),
+                 max(-max_tran[1], min(value[1], max_tran[1])))
+        self._translation = trans
+        return self._transposeTransToUser(trans)
+
+    def _getPhysTrans(self):
+        """
+        Compute the translation in physical units (using the available metadata).
+        Note: the convention is that in internal coordinates Y goes down, while
+        in physical coordinates, Y goes up.
+        returns (tuple of 2 floats): physical position in meters 
+        """
+        try:
+            pxs = self._metadata[model.MD_PIXEL_SIZE]
+            # take into account correction
+            pxs_cor = self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1))
+            pxs = (pxs[0] * pxs_cor[0], pxs[1] * pxs_cor[1])
+        except KeyError:
+            pxs = self._metadata[model.MD_SENSOR_PIXEL_SIZE]
+
+        # subtract 0.5 px if the resolution is a odd number
+        trans = [t - (r % 2) / 2 for t, r in zip(self._translation, self._resolution)]
+        phyt = (trans[0] * pxs[0], -trans[1] * pxs[1]) # - to invert Y
+
+        return phyt
 
     def _storeExposureTime(self, exp):
         """
@@ -1032,8 +1093,8 @@ class AndorCam3(model.DigitalCamera):
         synchronised = (self.data._sync_event is not None)
         readout_rate = self.readoutRate.value
         gain = self.gain.value
-        new_settings = [self._binning, self._resolution, self._exp_time,
-                        readout_rate, gain, synchronised]
+        new_settings = [self._binning, self._resolution, self._translation,
+                        self._exp_time, readout_rate, gain, synchronised]
         return new_settings != self._prev_settings
 
     def _update_settings(self):
@@ -1042,7 +1103,7 @@ class AndorCam3(model.DigitalCamera):
         modified are updated.
         Note: acquisition_lock must be taken, and acquisition must _not_ going on.
         """
-        [prev_binning, prev_resolution, prev_exp,
+        [prev_binning, prev_resolution, prev_trans, prev_exp,
          prev_rorate, prev_gain, prev_sync] = self._prev_settings
 
         synchronised = (self.data._sync_event is not None)
@@ -1083,7 +1144,8 @@ class AndorCam3(model.DigitalCamera):
             self._binning = self._storeBinning(self._binning)
             self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
 
-        if prev_resolution != self._resolution:
+        if (prev_resolution != self._resolution or
+            prev_trans != self._translation):
             logging.debug("Updating resolution settings")
             self._setSize(self._resolution)
 
@@ -1091,8 +1153,8 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"BaselineLevel"):
             self._metadata[model.MD_BASELINE] = self.GetInt(u"BaselineLevel")
 
-        self._prev_settings = [self._binning, self._resolution, self._exp_time,
-                               readout_rate, gain, synchronised]
+        self._prev_settings = [self._binning, self._resolution, self._translation,
+                               self._exp_time, readout_rate, gain, synchronised]
 
     def _allocate_buffer(self, size):
         """
@@ -1208,6 +1270,7 @@ class AndorCam3(model.DigitalCamera):
                     self.SetEnumString(u"CycleMode", u"Continuous")
 
                     self._update_settings()
+                    phyt = self._getPhysTrans()
                     synchronised = (self.data._sync_event is not None)
                     size = self._resolution
                     exposure_time = self._exp_time
@@ -1236,6 +1299,8 @@ class AndorCam3(model.DigitalCamera):
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
                 metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                center = metadata.get(model.MD_POS, (0, 0))
+                metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
 
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop

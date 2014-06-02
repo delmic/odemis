@@ -135,6 +135,52 @@ class VirtualTestCam(object):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
+    def test_translation(self):
+        """
+        test the translation VA (if available)
+        """
+        if (not hasattr(self.camera, "translation") or
+            not isinstance(self.camera.translation, model.VigilantAttributeBase) or
+            self.camera.translation.readonly):
+            self.skipTest("Camera doesn't support setting translation")
+
+        # Check the translation can be changed
+        self.camera.binning.value = (2, 2)
+        self.camera.resolution.value = (16, 16)
+        self.camera.translation.value = (-10, 3) # values are small enough they should always be fine
+        im = self.camera.data.get()
+        self.assertEqual(self.camera.translation.value, (-10, 3))
+
+        # Check the translation automatically fits after putting a large ROI
+        self.camera.binning.value = (1, 1)
+        self.camera.resolution.value = self.camera.resolution.range[1]
+        self.assertEqual(self.camera.translation.value, (0, 0))
+        im = self.camera.data.get()
+        
+
+        # Check the MD_POS metadata is correctly updated
+        orig_md = {model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m
+                   model.MD_PIXEL_SIZE_COR: (0.5, 0.5), # the actual pxs is /2
+                   model.MD_POS: (-1.1, 0.9),
+                   }
+        self.camera.updateMetadata(orig_md)
+        im = self.camera.data.get()
+        self.assertEqual(im.metadata[model.MD_POS], orig_md[model.MD_POS])
+
+        self.camera.binning.value = (2, 2)
+        self.camera.updateMetadata({model.MD_PIXEL_SIZE: (2e-6, 2e-6)})
+        self.camera.resolution.value = (16, 16)
+        im = self.camera.data.get()
+        self.assertEqual(im.metadata[model.MD_POS], orig_md[model.MD_POS])
+        
+        self.camera.translation.value = (-10, 3)
+        im = self.camera.data.get()
+        exp_pos = (-1.1 + (-10 * 2e-6 * 0.5), -0.9 - (3 * 2e-6 * 0.5))
+        self.assertEqual(im.metadata[model.MD_POS], exp_pos)
+        
+        # Note: the position of the image when the resolution is odd can be slightly
+        # shift without any translation, but let's not go there...
+
 #    @unittest.skip("simple")
     def test_two_acquire(self):
         exposure = 0.1

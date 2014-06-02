@@ -411,27 +411,40 @@ class DigitalCamera(Detector):
         return self._transposeShapeToUser(self._shape)
 
     # helper functions for handling transpose
-    def _transposePosToUser(self, v, origin=None):
+    def _transposePosToUser(self, v):
         """
-        For position, etc.
+        For position, etc., origin is top-left
         v (tuple of Numbers): logical position of a point
-        origin (tuple of Numbers of same length as v): position of the logical
-          origin on the CCD. Default is 0 * length (=top-left pixel). Note that
-          floats are possible. 
         """
         if self._transpose is None:
             return v
-        # TODO: what to do with origin?
         vt = []
         for idx in self._transpose:
-            if idx > 0:
-                vt.append(v[idx - 1])
-            else:
-                idx = -1 - idx
-                vt.append(self._shape[idx] - v[idx] - 1)
+            ov = v[abs(idx) - 1]
+            if idx < 0:
+                ov = self._shape[abs(idx) - 1] - ov - 1
+            vt.append(ov)
 
         typev = type(v)
         return typev(vt)
+
+    def _transposeTransToUser(self, v):
+        """
+        For translation, etc., origin is at the center
+        v (tuple of Numbers): logical position of a point
+        """
+        if self._transpose is None:
+            return v
+        vt = []
+        for idx in self._transpose:
+            ov = v[idx - 1]
+            if idx < 0:
+                ov = -ov
+            vt.append(ov)
+
+        typev = type(v)
+        return typev(vt)
+
 
     def _transposeSizeToUser(self, v):
         """
@@ -464,6 +477,22 @@ class DigitalCamera(Detector):
         for idx, ov in zip(self._transpose, v):
             if idx < 0:
                 ov = self._shape[abs(idx) - 1] - ov - 1
+            vt[abs(idx) - 1] = ov
+
+        typev = type(v)
+        return typev(vt)
+
+    def _transposeTransFromUser(self, v):
+        """
+        For translation values, and everything starting at 0,0 = center
+        """
+        if self._transpose is None:
+            return v
+
+        vt = [None] * len(self._transpose)
+        for idx, ov in zip(self._transpose, v):
+            if idx < 0:
+                ov = -ov
             vt[abs(idx) - 1] = ov
 
         typev = type(v)
