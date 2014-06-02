@@ -1996,7 +1996,7 @@ class Scanner(model.Emitter):
         tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
                     (self._shape[0] / 2, self._shape[1] / 2)]
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="",
+                                              cls=(int, long, float), unit="px",
                                               setter=self._setTranslation)
 
         # .resolution is the number of pixels actually scanned. If it's less than
