@@ -42,6 +42,12 @@ STATE_OFF = 0
 STATE_ON = 1
 STATE_PAUSE = 2
 
+# Chamber states
+CHAMBER_VENTED = 0   # Chamber can be opened
+CHAMBER_VACUUM = 1   # Chamber ready for imaging
+CHAMBER_PUMPING = 2  # Decreasing chamber pressure
+CHAMBER_VENTING = 3  # Pressurizing chamber
+
 # The different types of view layouts
 VIEW_LAYOUT_ONE = 0 # one big view
 VIEW_LAYOUT_22 = 1 # 2x2 layout
@@ -200,6 +206,13 @@ class MainGUIData(object):
             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
             self.specState.subscribe(self.onSpecState)
 
+        # Chamber vacuum states
+        # FIXME: test set to be always true for testing purposes. Remove for production!
+        if self.chamber or True:
+            chamber_states = set([CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM, CHAMBER_VENTING])
+            self.vacuum_state = model.IntEnumerated(CHAMBER_VENTED, chamber_states)
+            self.vacuum_state.subscribe(self.on_vacuum_state)
+
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
         # hasn't specified anything (yet).
@@ -290,6 +303,10 @@ class MainGUIData(object):
 
     def onSpecState(self, state):
         # nothing to do here, the settings controller will just hide the stream/settings
+        pass
+
+    def on_vacuum_state(self, state):
+        # Nothing to do here, the settings controller will just adjust the settings
         pass
 
     def stopMotion(self):

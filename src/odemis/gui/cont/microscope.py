@@ -28,7 +28,7 @@ btn_to_va = {"sem": "emState",
              "opt": "opticalState",
              "spectrometer": "specState",
              "angular": "arState",
-             "press": "vacuumState",  #TODO
+             "press": "vacuum_state",  #TODO
              }
             # TODO: pause button
 
