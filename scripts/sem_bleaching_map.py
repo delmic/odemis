@@ -456,7 +456,7 @@ class Acquirer(object):
         shape (2 int): number of pixels to be acquired in each position
         return (float): time (in s) of the total acquisition
         """
-        num_spots = numpy.prod(shape)
+        num_spots = numpy.prod(shape) * numpy.prod(self.tile_shape)
         sem_time = self.dt * num_spots
         
         res = self.ccd.resolution.value
@@ -485,6 +485,10 @@ class Acquirer(object):
 
     def acquire(self, fn):
         self.save_hw_settings()
+        
+        # it's not possible to keep in memory all the CCD images, so we save
+        # them one by one in separate files (fn-ccd-XXXX.h5)
+        fn_base, fn_ext = os.path.splitext(fn)
 
         try:
             spots = self.calc_xy_pos(self.roi, self.pxs)
@@ -504,13 +508,20 @@ class Acquirer(object):
             # Let's go!
             sem_data = []
             # start with the original fluorescence count (no bleaching)
-            ccd_data = [self.get_fluo_image()]
+
+            n = 0
+            ccd_data = self.get_fluo_image()
+            self.save_data(ccd_data, "%s-ccd-%05d%s" % (fn_base, n, fn_ext))
+            ccd_count = [self.ccd_image_to_count(ccd_data, ccd_roi)]
             try:
                 # TODO: support drift correction (cf ar_spectral_ph)
                 for i in numpy.ndindex(shape):
                     logging.info("Acquiring pixel %d,%d", i[1], i[0])
                     sem_data.append(self.bleach_spot(spots[i].tolist()))
-                    ccd_data.append(self.get_fluo_image())
+                    ccd_data = self.get_fluo_image()
+                    n += 1
+                    self.save_data(ccd_data, "%s-ccd-%05d%s" % (fn_base, n, fn_ext))
+                    ccd_count.append(self.ccd_image_to_count(ccd_data, ccd_roi))
                 
                 # TODO: acquire a "SEM survey" image?
                  
@@ -522,7 +533,6 @@ class Acquirer(object):
                 sem_final.metadata[model.MD_DESCRIPTION] = "SEM"
                 
                 # compute the diff
-                ccd_count = [self.ccd_image_to_count(d, ccd_roi) for d in ccd_data]
                 ccd_count = numpy.array(ccd_count) # force to be one big array
                 ccd_diff = ccd_count[0:-1] - ccd_count[1:]
                 ccd_diff.shape += (1, 1) # add info that each element is one pixel
@@ -531,15 +541,15 @@ class Acquirer(object):
                 ccd_final.metadata[model.MD_IN_WL] = ccd_md[model.MD_IN_WL]
                 ccd_final.metadata[model.MD_DESCRIPTION] = "Light diff"
                 
-                ccd_data = model.DataArray(ccd_data)
-                ccd_data.metadata[model.MD_EXP_TIME] = self.ccd.exposureTime.value
-                ccd_data.metadata[model.MD_DESCRIPTION] = "Raw CCD intensity" 
+#                 ccd_data = model.DataArray(ccd_data)
+#                 ccd_data.metadata[model.MD_EXP_TIME] = self.ccd.exposureTime.value
+#                 ccd_data.metadata[model.MD_DESCRIPTION] = "Raw CCD intensity"
             except Exception:
                 # TODO: try to save the data as is
                 raise
             
             # Save the data
-            data = [sem_final, ccd_final, ccd_data]
+            data = [sem_final, ccd_final]
             self.save_data(data, fn)
         finally:
             self.resume_hw_settings()
