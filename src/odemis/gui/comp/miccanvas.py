@@ -29,7 +29,7 @@ import numpy
 from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_MOVE, CAN_FOCUS
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
@@ -82,7 +82,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     Public attributes:
     .abilities (set of CAN_*): features/restrictions allowed to be performed
-    .fitViewToNextImage (Boolean): False by default. If True, next time an image
+    .fit_view_to_next_image (Boolean): False by default. If True, next time an image
       is received, it will ensure the whole content fits the view (and reset
       this flag).
     """
@@ -92,7 +92,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
 
         self.abilities |= set([CAN_ZOOM, CAN_FOCUS])
-        self.fitViewToNextImage = True
+        self.fit_view_to_next_image = True
 
         # TODO: If it's too resource consuming, which might want to create just
         # our own thread. cf model.stream.histogram
@@ -153,7 +153,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         # This is a kind of kludge, see mscviewport.MicroscopeViewport for
         # details
-        assert(self.microscope_view is None)
+        assert(self.microscope_view is None)  #pylint: disable=C0325
 
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
@@ -164,7 +164,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_overlay = view_overlay.FocusOverlay(self)
             self.view_overlays.append(self.focus_overlay)
 
-        self.microscope_view.mpp.subscribe(self._onMPP, init=True)
+        self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
 
         if tab_data.tool:
             # If required, create a DichotomyOverlay
@@ -221,7 +221,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: send a .enable/.disable to overlay when becoming the active one
         if self.current_mode == MODE_SECOM_DICHO:
             self.dicho_overlay.enable(False)
-            self.abilities.add(canvas.CAN_MOVE)
+            self.abilities.add(canvas.CAN_DRAG)
         elif self.current_mode == guimodel.TOOL_SPOT:
             self._showSpotMode(False)
 
@@ -278,7 +278,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.dicho_overlay.enable(True)
             # FIXME: the right way would be to let the overlay say it wants
             # all the move-related events... and then it'd eat these events
-            self.abilities.remove(canvas.CAN_MOVE)
+            self.abilities.remove(canvas.CAN_DRAG)
         elif tool == guimodel.TOOL_SPOT:
             self.current_mode = tool
             # the only thing the view does is to indicate the mode
@@ -347,10 +347,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             except ValueError:
                 pass # it was already not displayed
 
-    def _getOrderedImages(self):
-        """
-        return the list of images to display, in order from lowest to topest
-         (last to draw)
+    def _get_ordered_images(self):
+        """ Return the list of images to display, ordered bottom to top (=last
+        to draw)
         """
         st = self.microscope_view.stream_tree
         images = st.getImages()
@@ -368,7 +367,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Temporary function to convert the StreamTree to a list of images as
         the canvas currently expects.
         """
-        images = self._getOrderedImages()
+
+        images = self._get_ordered_images()
 
         # add the images in order
         ims = []
@@ -379,14 +379,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
 
-            # convert to wxImage
-            wim = img.NDImage2wxImage(rgbim)
-            keepalpha = (rgbim.shape[2] == 4)
-
+            rgba_im = img.format_rgba_darray(rgbim)
+            keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
 
-            ims.append((wim, pos, scale, keepalpha))
+            ims.append((rgba_im, pos, scale, keepalpha, None))
         self.set_images(ims)
 
         # For debug only:
@@ -407,12 +405,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     # fully destroyed.
     @ignore_dead
     def _onViewImageUpdate(self, t):
-        # TODO use the real streamtree functions
+        # TODO: use the real streamtree functions
         # for now we call a conversion layer
         self._convertStreamsToImages()
-        if self.fitViewToNextImage and filter(bool, self.images):
+        if self.fit_view_to_next_image and any([i is not None for i in self.images]):
             self.fit_view_to_content()
-            self.fitViewToNextImage = False
+            self.fit_view_to_next_image = False
         #logging.debug("Will update drawing for new image")
         wx.CallAfter(self.request_drawing_update)
 
@@ -511,13 +509,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).fit_to_content(recenter=recenter)
 
-        # this will indirectly call _onMPP(), but not have any additional effect
+        # this will indirectly call _on_view_mpp(), but not have any additional effect
         if self.microscope_view:
             new_mpp = self.mpwu / self.scale
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
-    def _onMPP(self, mpp):
-        """ Called when the view.mpp is updated
+    def _on_view_mpp(self, mpp):
+        """
+        Called when the view.mpp is updated
         """
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.request_drawing_update)
@@ -525,7 +524,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def on_size(self, event):
         new_size = event.Size
 
-        # Update the mpp, so that the same width is displayed
+        # Update the mpp, so that the same data will be displayed.
         if self.microscope_view:
             hfw = self._previous_size[0] * self.microscope_view.mpp.value
             new_mpp = hfw / new_size[0]
@@ -536,8 +535,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     @microscope_view_check
     def Zoom(self, inc, block_on_zero=False):
-        """
-        Zoom by the given factor
+        """ Zoom by the given factor
+
         inc (float): scale the current view by 2^inc
         block_on_zero (boolean): if True, and the zoom goes from software
           downscaling to software upscaling, it will stop at no software scaling
@@ -561,7 +560,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                     pass
 
         mpp = sorted(self.microscope_view.mpp.range + (mpp,))[1]
-        self.microscope_view.mpp.value = mpp # this will call _onMPP()
+        self.microscope_view.mpp.value = mpp # this will call _on_view_mpp()
 
     # Zoom/merge management
     def on_wheel(self, evt):
@@ -737,10 +736,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     # Hook to update the FPS value
     def draw(self):
-#        if hasattr(self, "_latest"):
-#            latest = self._latest
-#        else:
-#            latest = 0
+        # if hasattr(self, "_latest"):
+        #     latest = self._latest
+        # else:
+        #     latest = 0
 
         t_start = time.time()
         super(DblMicroscopeCanvas, self).draw()
@@ -771,13 +770,13 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         # TODO: once the StreamTrees can render fully, reactivate the background
         # pattern
-        self.backgroundBrush = wx.SOLID
+        self.background_brush = wx.SOLID
 
 
     # Special version which put the SEM images first, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed
     # together last
-    def _getOrderedImages(self):
+    def _get_ordered_images(self):
         """
         return the list of images to display, in order from lowest to topest
          (last to draw)
@@ -1239,7 +1238,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(SparcAlignCanvas, self).__init__(*args, **kwargs)
-        self.abilities -= set([CAN_ZOOM, CAN_MOVE])
+        self.abilities -= set([CAN_ZOOM, CAN_DRAG])
 
         self._goal_im_ref = None
         self._goal_wim = None
@@ -1276,13 +1275,13 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 if (self._goal_wim is None or prev_im is None or
                     prev_im is not rgbim):
                     logging.debug("Converting goal image")
-                    wim = img.NDImage2wxImage(rgbim)
+                    wim = img.format_rgba_darray(rgbim)
                     self._goal_im_ref = weakref.ref(rgbim, self._reset_goal_im)
                     self._goal_wim = wim
                 else:
                     wim = self._goal_wim
             else:
-                wim = img.NDImage2wxImage(rgbim)
+                wim = img.format_rgba_darray(rgbim)
 
             keepalpha = (rgbim.shape[2] == 4)
 
@@ -1291,10 +1290,10 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha))
+                ims.append((wim, pos, scale, keepalpha, None))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha)
+                ims[0] = (wim, pos, scale, keepalpha, None)
 
         self.set_images(ims)
 
@@ -1457,9 +1456,9 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.microscope_view = None
         self._tab_data_model = None
-        self.abilities -= set([CAN_MOVE, CAN_FOCUS])
+        self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        self.backgroundBrush = wx.SOLID # background is always black
+        self.background_brush = wx.SOLID # background is always black
 
         ## Overlays
 
@@ -1503,8 +1502,8 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         ims = []
         for rgbim in images:
             # image is always centered, fitting the whole canvas
-            wim = img.NDImage2wxImage(rgbim)
-            ims.append((wim, (0, 0), 0.1, False))
+            wim = img.format_rgba_darray(rgbim)
+            ims.append((wim, (0, 0), 0.1, False, None))
         self.set_images(ims)
 
     def _onViewImageUpdate(self, t):

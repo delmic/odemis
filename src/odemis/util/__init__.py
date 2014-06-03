@@ -8,15 +8,15 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Various helper functions that have a generic usefulness
@@ -40,7 +40,7 @@ import time
 def find_closest(val, l):
     """
     finds in a list the closest existing value from a given value
-    """ 
+    """
     return min(l, key=lambda x:abs(x - val))
 
 def index_closest(val, l):
@@ -78,7 +78,7 @@ def rect_intersect(ra, rb):
     ra (tuple of 4 floats): position of the first rectangle left, top, right, bottom
     rb (tuple of 4 floats): position of the second rectangle
     return (None or tuple of 4 floats): None if there is no intersection, or
-     the rectangle representing the intersection 
+     the rectangle representing the intersection
     Note that the rectangles can have the top/bottom and left/right in any order,
     but the return value will always have top < bottom and left < right.
     """
@@ -98,6 +98,27 @@ def rect_intersect(ra, rb):
              min(ra[2], rb[2]), min(ra[3], rb[3]))
 
     return inter
+
+
+def intersect(ra, rb):
+    """
+    Computes the intersection between two rectangles of the form (left, top, width, height)
+    """
+
+    ax, ay, aw, ah = ra
+    bx, by, bw, bh = rb
+
+    # Return None if there's no intersection
+    if ax >= bx + bw or ay >= by + bh or bx >= ax + aw or by >= ay + ah:
+        return None
+
+    # Calculate the intersection's top left and width and height
+    ix = max(ax, bx)
+    iy = max(ay, by)
+    iw = min(ax + aw, bx + bw) - ix
+    ih = min(ay + ah, by + bh) - iy
+
+    return ix, iy, iw, ih
 
 def normalize_rect(rect):
     """
@@ -205,7 +226,7 @@ def timeout(seconds):
 
 class RepeatingTimer(threading.Thread):
     """
-    An almost endless timer thread. 
+    An almost endless timer thread.
     It stops when calling cancel() or the callback disappears.
     """
     def __init__(self, period, callback, name="TimerThread"):
@@ -219,7 +240,7 @@ class RepeatingTimer(threading.Thread):
         self.period = period
         self.daemon = True
         self._must_stop = threading.Event()
-    
+
     def run(self):
         # use the timeout as a timer
         try:
@@ -233,6 +254,6 @@ class RepeatingTimer(threading.Thread):
             logging.exception("Failure while calling a repeating timer")
         finally:
             logging.debug("Repeating timer thread over")
-        
+
     def cancel(self):
         self._must_stop.set()

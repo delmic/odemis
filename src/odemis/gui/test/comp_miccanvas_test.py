@@ -122,7 +122,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.SetBackgroundColour("#00599B")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
 
-        img = (data.gettest_pattern_sImage(), (0.0, 0.0), 1.0, True)
+        img = (data.gettest_pattern_sImage(), (0.0, 0.0), 1.0, True, None)
 
         cnvs.set_images([img, None])
         cnvs.update_drawing()

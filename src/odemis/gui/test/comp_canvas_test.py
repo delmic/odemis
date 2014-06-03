@@ -36,6 +36,7 @@ import odemis.gui.model as guimodel
 
 
 # logging.getLogger().setLevel(logging.DEBUG)
+
 #pylint: disable=E1103
 def GetRGB(im, x, y):
     # TODO: use DC.GetPixel()
@@ -88,7 +89,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.mmodel = FakeMicroscopeModel()
         self.view = self.mmodel.focussedView.value
         self.canvas = miccanvas.DblMicroscopeCanvas(self.frame)
-        self.canvas.backgroundBrush = wx.SOLID # no special background
+        self.canvas.background_brush = wx.SOLID # no special background
         self.canvas.setView(self.view, self.mmodel)
 
         self.frame.SetSize((400, 400))
@@ -101,7 +102,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.frame.Destroy()
         self.app.MainLoop()
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_CrossHair(self):
         # crosshair
         show_crosshair = self.view.show_crosshair #pylint: disable=E1103
@@ -192,7 +193,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
          resultIm.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_BasicMove(self):
         mpp = 0.0001
         self.view.mpp.value = mpp
@@ -246,7 +247,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
                      resultIm.Height / 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
-    # @unittest.skip("simple")
+    @unittest.skip("simple")
     def test_ZoomMove(self):
         mpp = 0.0001
         self.view.mpp.value = mpp

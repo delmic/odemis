@@ -45,9 +45,8 @@ class TextViewOverlay(ViewOverlay):
         super(TextViewOverlay, self).__init__(cnvs)
         self.vpos = vpos
 
-    def Draw(self, dc):
+    def Draw(self, ctx):
         if self.labels:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
             self._write_labels(ctx)
 
 class CrossHairOverlay(ViewOverlay):
@@ -56,29 +55,37 @@ class CrossHairOverlay(ViewOverlay):
                  center=(0, 0)):
         super(CrossHairOverlay, self).__init__(cnvs)
 
-        self.pen = wx.Pen(colour)
+        self.colour = conversion.hex_to_frgba(colour)
         self.size = size
         self.center = center
 
-    def Draw(self, dc):
-        """
-        Draws the crosshair
-        dc (wx.DC)
-        """
-        center = self.center
+    def Draw(self, ctx):
+        """ Draw a cross hair to the ctx Cairo context """
+
+        ctx.save()
+
+        center = self.cnvs.get_half_view_size()
+
         tl = (center[0] - self.size, center[1] - self.size)
         br = (center[0] + self.size, center[1] + self.size)
 
-        # Draw black contrast cross first
-        pen = wx.Pen(wx.BLACK)
-        dc.SetPen(pen)
-        dc.DrawLine(tl[0] + 1, center[1] + 1, br[0] + 1, center[1] + 1)
-        dc.DrawLine(center[0] + 1, tl[1] + 1, center[0] + 1, br[1] + 1)
+        ctx.set_line_width(1)
 
-        dc.SetPen(self.pen)
-        dc.DrawLine(tl[0], center[1], br[0], center[1])
-        dc.DrawLine(center[0], tl[1], center[0], br[1])
+        ctx.set_source_rgba(0, 0, 0, 0.9)
+        ctx.move_to(tl[0] + 1.5, center[1] + 1.5)
+        ctx.line_to(br[0] + 1.5, center[1] + 1.5)
+        ctx.move_to(center[0] + 1.5, tl[1] + 1.5)
+        ctx.line_to(center[0] + 1.5, br[1] + 1.5)
+        ctx.stroke()
 
+        ctx.set_source_rgba(*self.colour)
+        ctx.move_to(tl[0] + 0.5, center[1] + 0.5)
+        ctx.line_to(br[0] + 0.5, center[1] + 0.5)
+        ctx.move_to(center[0] + 0.5, tl[1] + 0.5)
+        ctx.line_to(center[0] + 0.5, br[1] + 0.5)
+        ctx.stroke()
+
+        ctx.restore()
 
 class SpotModeOverlay(ViewOverlay):
     """ This overlay displays a circle marker in the center of
@@ -93,13 +100,15 @@ class SpotModeOverlay(ViewOverlay):
                                marker_size.GetHeight() // 2 - 1)
         self.center = (0, 0)
 
-    def Draw(self, dc_buffer):
-        dc_buffer.DrawBitmapPoint(
-            self.marker_bmp,
-            wx.Point(
-                self.center[0] - self._marker_offset[0],
-                self.center[1] - self._marker_offset[1]),
-            useMask=False)
+    def Draw(self, ctx):
+        pass
+        # raise NotImplementedError
+        # dc_buffer.DrawBitmapPoint(
+        #     self.marker_bmp,
+        #     wx.Point(
+        #         self.center[0] - self._marker_offset[0],
+        #         self.center[1] - self._marker_offset[1]),
+        #     useMask=False)
 
 
 class StreamIconOverlay(ViewOverlay):
@@ -128,9 +137,7 @@ class StreamIconOverlay(ViewOverlay):
             self.play = 1.0
         wx.CallAfter(self.cnvs.Refresh)
 
-    def Draw(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-
+    def Draw(self, ctx):
         if self.pause:
             self._draw_pause(ctx)
         elif self.play:
@@ -221,7 +228,7 @@ class FocusOverlay(ViewOverlay):
 
         self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
 
-    def Draw(self, dc):
+    def Draw(self, ctx):
         """
         Draws the crosshair
         dc (wx.DC)
@@ -229,7 +236,6 @@ class FocusOverlay(ViewOverlay):
         # TODO: handle displaying the focus 0 (horizontally)
 
         if self.shifts[1]:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
             ctx.set_line_width(10)
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
@@ -278,7 +284,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
         self.position_label = self.add_label("")
 
 
-    def Draw(self, dc, shift=(0, 0), scale=1.0):
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.v_start_pos and self.v_end_pos:
             #pylint: disable=E1103
@@ -289,8 +295,6 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
             #                                                start_pos[1],
             #                                                end_pos[0],
             #                                                end_pos[1] )
-
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
 
             rect = (start_pos[0] + 0.5,
                     start_pos[1] + 0.5,
@@ -399,9 +403,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
         self.label = label
 
-    def Draw(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
-
+    def Draw(self, ctx):
         ctx.set_line_width(self.line_width)
         ctx.set_dash([3,])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
@@ -629,11 +631,9 @@ class DichotomyOverlay(ViewOverlay):
         return x, y, w, h
 
 
-    def Draw(self, dc):
+    def Draw(self, ctx):
 
         if self.enabled:
-            ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
             ctx.set_source_rgba(*self.colour)
             ctx.set_line_width(2)
             ctx.set_dash([2,])
@@ -931,9 +931,7 @@ class PolarOverlay(ViewOverlay):
 
         self._calculate_display()
 
-    def Draw(self, dc):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc)
-
+    def Draw(self, ctx):
         ### Draw angle lines ###
 
         ctx.set_line_width(2.5)

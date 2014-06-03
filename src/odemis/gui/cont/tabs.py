@@ -43,6 +43,7 @@ from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
     call_after, align, call_after_wrapper
+from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
 import pkg_resources
@@ -656,7 +657,7 @@ class SparcAcquisitionTab(Tab):
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
-        
+
         if show:
             self._set_lenses()
         # don't put switches back when hiding, to avoid unnecessary moves
@@ -990,7 +991,7 @@ class AnalysisTab(Tab):
                    self.main_frame.vp_inspection_tr,
                    self.main_frame.vp_inspection_bl,
                    self.main_frame.vp_inspection_br]:
-            vp.canvas.fitViewToNextImage = True
+            vp.canvas.fit_view_to_next_image = True
 
         # AR data is special => all merged in one big stream
         ar_data = []
@@ -1328,7 +1329,7 @@ class LensAlignTab(Tab):
         # No need to check for resize events, because the view has a fixed size.
         main_frame.vp_align_sem.canvas.abilities -= set([CAN_ZOOM])
         # prevent the first image to reset our computation
-        main_frame.vp_align_sem.canvas.fitViewToNextImage = False
+        main_frame.vp_align_sem.canvas.fit_view_to_next_image = False
         main_data.ebeam.pixelSize.subscribe(self._onSEMpxs, init=True)
 
         # Update the SEM area in dichotomic mode
@@ -1464,7 +1465,7 @@ class LensAlignTab(Tab):
     def _on_acquisition(self, is_acquiring):
         # A bit tricky because (in theory), could happen in any tab
         self._subscribe_for_fa_dt(not is_acquiring)
-        
+
     def _subscribe_for_fa_dt(self, subscribe=True):
         # Make sure that we don't update fineAlignDwellTime unless:
         # * The tab is shown
@@ -1780,7 +1781,8 @@ class MirrorAlignTab(Tab):
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
                        "calibration/ma_goal_5_13_sensor_13312_13312.png")
         goal_im = model.DataArray(scipy.misc.imread(goal_rs))
-
+        # No need to swap bytes for goal_im. Alpha needs to be fixed though
+        goal_im = scale_to_alpha(goal_im)
         # It should be displayed at the same scale as the actual image.
         # In theory, it would be direct, but as the backend doesn't know when
         # the lens is on or not, it's considered always on, and so the optical
@@ -1788,7 +1790,7 @@ class MirrorAlignTab(Tab):
 
         # The resolution is the same as the maximum sensor resolution, if not,
         # we adapt the pixel size
-        im_res = (goal_im.shape[1], goal_im.shape[0]) #pylint: disable=E1101
+        im_res = (goal_im.shape[1], goal_im.shape[0]) #pylint: disable=E1101,E1103
         scale = ccd_res[0] / im_res[0]
         if scale != 1:
             logging.warning("Goal image has resolution %s while CCD has %s",
@@ -1810,7 +1812,7 @@ class MirrorAlignTab(Tab):
             self._ccd_stream.is_active.value = show
         if self._sem_stream:
             self._sem_stream.is_active.value = show
-        
+
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
@@ -1824,7 +1826,7 @@ class MirrorAlignTab(Tab):
             if main_data.ar_spec_sel:
                 # convention is: 0 rad == off (no mirror) == AR
                 main_data.ar_spec_sel.moveAbs({"rx": 0})
-            
+
             # pick a filter which is pass-through (=empty)
             if main_data.light_filter:
                 fltr = main_data.light_filter

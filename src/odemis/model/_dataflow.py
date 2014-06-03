@@ -113,7 +113,13 @@ class DataArray(numpy.ndarray):
     def __array_finalize__(self, obj):
         if obj is None:
             return
-        self.metadata = getattr(obj, 'metadata', {})
+
+        if hasattr(obj, 'metadata'):
+            # Create a shallow copy of the meta data, otherwise when the array
+            # gets copied, both will use the same meta data dictionary.
+            self.metadata = obj.metadata.copy()
+        else:
+            self.metadata = {}
 
     # Used to send the DataArray over Pyro (over ZMQ, we use an optimised way)
     def __reduce__(self):
@@ -127,6 +133,14 @@ class DataArray(numpy.ndarray):
         nd_state, md = state
         numpy.ndarray.__setstate__(self, nd_state)
         self.metadata = md
+
+    # def __array_wrap__(self, out_arr, context=None):
+    #     print 'In __array_wrap__:'
+    #     print '   self is %s' % repr(self)
+    #     print '   arr is %s' % repr(out_arr)
+    #     # then just call the parent
+    #     out_arr.metadata = self.metadata
+    #     return numpy.ndarray.__array_wrap__(self, out_arr, context)
 
 class DataFlowBase(object):
     """

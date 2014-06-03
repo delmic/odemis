@@ -225,7 +225,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     # fit it to 8 bits and update brightness and contrast at the same time
     if irange is None:
         # automatic scaling (not so fast as min and max must be found)
-#        drescaled = scipy.misc.bytescale(data)
+        # drescaled = scipy.misc.bytescale(data)
         irange = (data.view(numpy.ndarray).min(), data.view(numpy.ndarray).max())
 
     if data.dtype == "uint8" and irange == (0, 255):

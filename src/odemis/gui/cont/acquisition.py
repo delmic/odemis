@@ -39,7 +39,7 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import get_available_formats
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
-from odemis.gui.comp.canvas import CAN_MOVE, CAN_FOCUS
+from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
@@ -709,10 +709,10 @@ class FineAlignController(object):
     Takes care of the fine alignment button and process on the SECOM lens
     alignment tab.
     Not an "acquisition" process per-se but actually very similar, the main
-    difference being that the result is not saved as a file, but sent to the 
+    difference being that the result is not saved as a file, but sent to the
     CCD (for calibration).
-    
-    Note: It needs the VA .fineAlignDwellTime on the main GUI data (contains 
+
+    Note: It needs the VA .fineAlignDwellTime on the main GUI data (contains
       the time to expose each spot to the ebeam).
     """
 
@@ -798,7 +798,7 @@ class FineAlignController(object):
         # Prevent moving the stages
         for c in [self._main_frame.vp_align_ccd.canvas,
                   self._main_frame.vp_align_sem.canvas]:
-            c.abilities -= set([CAN_MOVE, CAN_FOCUS])
+            c.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
     def _resume(self):
         self._settings_controller.resume()
@@ -813,7 +813,7 @@ class FineAlignController(object):
         # Allow moving the stages
         for c in [self._main_frame.vp_align_ccd.canvas,
                   self._main_frame.vp_align_sem.canvas]:
-            c.abilities |= set([CAN_MOVE, CAN_FOCUS])
+            c.abilities |= set([CAN_DRAG, CAN_FOCUS])
 
     def _on_fine_align(self, event):
         """
@@ -889,7 +889,7 @@ class FineAlignController(object):
                                 cor_md[model.MD_ROTATION_COR])
 
         # As the CCD image might have different pixel size, force to fit
-        self._main_frame.vp_align_ccd.canvas.fitViewToNextImage = True
+        self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
 
         main_data.is_acquiring.value = False
         self._main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
