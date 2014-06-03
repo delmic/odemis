@@ -28,6 +28,7 @@ import math
 import numpy
 from odemis import model
 from odemis.dataio import hdf5
+import heapq
 import os
 import time
 from . import coordinates, transform
@@ -116,6 +117,20 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
             optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
+
+            # Check if SEM calibration is correct. If this is not the case
+            # generate a warning message and provide the ratio of X/Y scale.
+            x_cors = [i[0] for i in optical_coordinates]
+            y_cors = [i[1] for i in optical_coordinates]
+            x_max_cors = numpy.mean(heapq.nlargest(repetitions[0], x_cors))
+            x_min_cors = numpy.mean(heapq.nsmallest(repetitions[0], x_cors))
+            y_max_cors = numpy.mean(heapq.nlargest(repetitions[1], y_cors))
+            y_min_cors = numpy.mean(heapq.nsmallest(repetitions[1], y_cors))
+            x_scale = x_max_cors - x_min_cors
+            y_scale = y_max_cors - y_min_cors
+            ratio = x_scale / y_scale
+            if (ratio<0.9) or (ratio>1.1):
+                 logging.warning("SEM may needs calibration. X/Y ratio is %f.", ratio)
 
             opt_offset = (opt_img_shape[1] / 2, opt_img_shape[0] / 2)
 

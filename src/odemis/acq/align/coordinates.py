@@ -509,7 +509,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
     avg_x_move = (x_move1 + x_move2) / 2
     avg_y_move = (y_move1 + y_move2) / 2
     avg_x_scale = (x_scale1 + x_scale2) / 2
-    avg_y_scale = (x_scale1 + y_scale2) / 2
+    avg_y_scale = (y_scale1 + y_scale2) / 2
     avg_rotation = (rotation1 + rotation2) / 2
 
     # Correct for shift if more than SHIFT_THRESHOLD (percentage) of points are wrong
