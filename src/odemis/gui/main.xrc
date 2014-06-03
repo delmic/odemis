@@ -1180,7 +1180,65 @@
                       <object class="wxBoxSizer">
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
+<<<<<<< HEAD
                           <object class="ImageTextToggleButton" name="lens_align_btn_sem">
+||||||| merged common ancestors
+                          <object class="ImageTextToggleButton" name="live_btn_press">
+                            <size>92,48</size>
+                            <label>0 kPa</label>
+                            <delta>1</delta>
+                            <bitmap>img/btn_press.png</bitmap>
+                            <hover>img/btn_press_h.png</hover>
+                            <selected>img/btn_press_on_a.png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextToggleButton" name="live_btn_sem">
+=======
+                          <object class="ImageTextToggleButton" name="live_btn_press">
+                            <size>92,48</size>
+                            <label>0 kPa</label>
+                            <delta>1</delta>
+                            <bitmap>img/btn_press.png</bitmap>
+                            <hover>img/btn_press_h.png</hover>
+                            <selected>img/btn_press_orange_a.png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <family>default</family>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextToggleButton" name="live_btn_sem">
+>>>>>>> gui: Added extended pressure button images
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
