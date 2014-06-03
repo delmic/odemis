@@ -401,7 +401,7 @@ class Acquirer(object):
         # between acquisitions?
 #        pxs = data.metadata[model.MD_PIXEL_SIZE]
 #        area = numpy.prod(data.shape) * numpy.prod(pxs) # m²
-        datar = data[roi[0]:roi[2] + 1, roi[1]:roi[3] + 1]
+        datar = data[roi[1]:roi[3] + 1, roi[0]:roi[2] + 1]
 
         intensity = datar.view(numpy.ndarray).mean()
         return intensity
