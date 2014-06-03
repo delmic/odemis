@@ -716,7 +716,8 @@ class FineAlignController(object):
       the time to expose each spot to the ebeam).
     """
 
-    OVRL_MAX_DIFF = 1e-06  # m
+    # TODO: make the max diff dependant on the optical FoV?
+    OVRL_MAX_DIFF = 10e-06  # m, don't be too picky
     OVRL_REPETITION = (4, 4)  # Not too many, to keep it fast
 #     OVRL_REPETITION = (7, 7) # DEBUG (for compatibility with fake image)
 

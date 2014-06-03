@@ -2805,7 +2805,7 @@ class SEMARMDStream(SEMCCDMDStream):
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will concider an error occured and
 # raise an exception
-OVRL_MAX_DIFF = 1e-06 # m
+OVRL_MAX_DIFF = 10e-06 # m
 
 class OverlayStream(Stream):
     """
