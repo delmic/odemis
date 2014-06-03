@@ -120,17 +120,11 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
 
             # Check if SEM calibration is correct. If this is not the case
             # generate a warning message and provide the ratio of X/Y scale.
-            x_cors = [i[0] for i in optical_coordinates]
-            y_cors = [i[1] for i in optical_coordinates]
-            x_max_cors = numpy.mean(heapq.nlargest(repetitions[0], x_cors))
-            x_min_cors = numpy.mean(heapq.nsmallest(repetitions[0], x_cors))
-            y_max_cors = numpy.mean(heapq.nlargest(repetitions[1], y_cors))
-            y_min_cors = numpy.mean(heapq.nsmallest(repetitions[1], y_cors))
-            x_scale = x_max_cors - x_min_cors
-            y_scale = y_max_cors - y_min_cors
-            ratio = x_scale / y_scale
-            if (ratio<0.9) or (ratio>1.1):
-                 logging.warning("SEM may needs calibration. X/Y ratio is %f.", ratio)
+            ratio = _computeGridRatio(optical_coordinates, repetitions)
+            if not (0.9 < ratio < 1.1):
+                logging.warning("SEM may needs calibration. X/Y ratio is %f.", ratio)
+            else:
+                logging.info("SEM X/Y ratio is %f.", ratio)
 
             opt_offset = (opt_img_shape[1] / 2, opt_img_shape[0] / 2)
 
@@ -216,6 +210,22 @@ def _CancelFindOverlay(future):
         logging.debug("Overlay cancelled.")
 
     return True
+
+def _computeGridRatio(coord, shape):
+    """
+    coord (list of tuple of 2 floats): coordinates
+    shape (2 ints): X and Y number of coordinates 
+    return (float): ratio X/Y
+    """
+    x_cors = [i[0] for i in coord]
+    y_cors = [i[1] for i in coord]
+    x_max_cors = numpy.mean(heapq.nlargest(shape[0], x_cors))
+    x_min_cors = numpy.mean(heapq.nsmallest(shape[0], x_cors))
+    y_max_cors = numpy.mean(heapq.nlargest(shape[1], y_cors))
+    y_min_cors = numpy.mean(heapq.nsmallest(shape[1], y_cors))
+    x_scale = x_max_cors - x_min_cors
+    y_scale = y_max_cors - y_min_cors
+    return x_scale / y_scale
 
 def estimateOverlayTime(dwell_time, repetitions):
     """
