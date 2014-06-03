@@ -49,6 +49,8 @@ from odemis.util import img
 import os
 import sys
 
+CCD_ROI = False # If True, the CCD ROI will be set to fit the SEM ROI.
+# Otherwise the whole image will be taken.
 
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
@@ -75,10 +77,17 @@ class Acquirer(object):
         self.ccd = model.getComponent(role="ccd")
         self.stage = model.getComponent(role="stage")
         
-        if self.ebeam.pixelSize.value[0] > 10 * pxs:
-            raise ValueError("Pixel size requested (%g nm) is too small "
+        # counter-intuitively, to get the smaller pixel size, no sub-pixel
+        # should be used. That's because when there is no sub-pixel we can use
+        # spot mode, which allows to go at less than scale=1.
+        # It could easily be fixed by allowsing scale down to 0.1 in the driver.
+
+        if (self.ebeam.pixelSize.value[0] > 10 * pxs or
+            self.ebeam.pixelSize.value[0] > self.subpxs):
+            raise ValueError("Pixel size requested (%g nm/%g nm) is too small "
                              "compared to recommended SEM pixel size (%g nm)"
-                             % (pxs * 1e9, self.ebeam.pixelSize.value[0] * 1e9))
+                             % (pxs * 1e9, self.subpxs * 1e9,
+                                self.ebeam.pixelSize.value[0] * 1e9))
             
         elif self.ebeam.pixelSize.value[0] > pxs:
             logging.warning("Pixel size requested (%g nm) is smaller than "
@@ -222,33 +231,39 @@ class Acquirer(object):
         region that fit in the given ROI and with the maximum binning possible.
         roi (0<=4 int): ltrb pixels on the CCD, when binning == 1
         """
-        # As translation is not possible, the acquisition region must be
-        # centered. => Compute the minimal centered rectangle that includes the
-        # roi.
-        center = [s / 2 for s in self.ccd.shape[0:2]]
-        hwidth = (max(abs(roi[0] - center[0]), abs(roi[2] - center[0])),
-                  max(abs(roi[1] - center[1]), abs(roi[3] - center[1])))
-#        big_roi = (center[0] - hwidth[0], center[1] - hwidth[1],
-#                   center[0] + hwidth[0], center[1] + hwidth[1])
-        res = [int(math.ceil(w * 2)) for w in hwidth]
-
         # Set the resolution (using binning 1, to use the direct values)
         self.ccd.binning.value = (1, 1)
-        self.ccd.resolution.value = self.ccd.resolution.clip(res)
 
-        # maximum binning (= resolution = 1 px for the whole image)
-        # CCD resolution is automatically updated to fit
-        self.ccd.binning.value = self.ccd.binning.clip(res)
+        if CCD_ROI:
+            # TODO: with andorcam3, translation is possible
+            # As translation is not possible, the acquisition region must be
+            # centered. => Compute the minimal centered rectangle that includes the
+            # roi.
+            center = [s / 2 for s in self.ccd.shape[0:2]]
+            hwidth = (max(abs(roi[0] - center[0]), abs(roi[2] - center[0])),
+                      max(abs(roi[1] - center[1]), abs(roi[3] - center[1])))
+    #        big_roi = (center[0] - hwidth[0], center[1] - hwidth[1],
+    #                   center[0] + hwidth[0], center[1] + hwidth[1])
+            res = [int(math.ceil(w * 2)) for w in hwidth]
 
-        # FIXME: it's a bit tricky for the user to have the binning set
-        # automatically, while the exposure time is fixed.
+            self.ccd.resolution.value = self.ccd.resolution.clip(res)
+
+            # maximum binning (= resolution = 1 px for the whole image)
+            # CCD resolution is automatically updated to fit
+            self.ccd.binning.value = self.ccd.binning.clip(res)
+
+            # FIXME: it's a bit tricky for the user to have the binning set
+            # automatically, while the exposure time is fixed.
+
+            # TODO: check that the physical area of the final ROI is still within
+            # the original ROI
+        else:
+            self.ccd.resolution.value = self.ccd.resolution.range[1]
+            logging.info("Using the whole CCD area")
+
         logging.info("CCD res = %s, binning = %s",
                       self.ccd.resolution.value,
                       self.ccd.binning.value)
-        
-        # TODO: check that the physical area of the final ROI is still within
-        # the original ROI
-        
         # Just to be sure, turn off the light
         self.light.power.value = 0
 
@@ -282,10 +297,14 @@ class Acquirer(object):
 
         # TODO: check this will allow the spots to be regularly spaced between
         # tiles
-        # scale is the ratio between the goal pixel size and pixel size at scale=1
-        epxs = self.ebeam.pixelSize.value
-        s = tuple(self.subpxs / e for e in epxs)
-        self.ebeam.scale.value = s
+        if self.tile_shape == (1, 1):
+            # scale doesn't matter, so just use 1
+            self.ebeam.scale.value = (1, 1)
+        else:
+            # scale is the ratio between the goal pixel size and pixel size at scale=1
+            sem_pxs = self.ebeam.pixelSize.value
+            scale = (self.subpxs / sem_pxs[0], self.subpxs / sem_pxs[1])
+            self.ebeam.scale.value = scale
         self.ebeam.resolution.value = self.tile_shape # just a spot
 
     def calc_xy_pos(self, roi, pxs):
@@ -350,10 +369,10 @@ class Acquirer(object):
 
         return data
 
-    def get_fluo_count(self):
+    def get_fluo_image(self):
         """
         Acquire a CCD image and convert it into a intensity count
-        return (float): the light intensity (currently, the mean)
+        return (DataArray): the light intensity (currently, the mean)
         """
         # TODO: see if there are better ways to measure the intensity (ex:
         # use average over multiple frames after discarding outliers to 
@@ -368,7 +387,15 @@ class Acquirer(object):
         
         # Turn off the light again
         self.light.power.value = 0
-        
+
+        return data
+
+    def ccd_image_to_count(self, data, roi):
+        """
+        Convert a CCD image into a one value (count)
+        return (float): the light intensity (currently, the mean)
+        """
+        # TODO: crop to the actual CCD ROI
         # compute intensity
         # We use a view to compute the mean to ensure to get a float (and not
         # a DataArray of one value)
@@ -376,7 +403,9 @@ class Acquirer(object):
         # between acquisitions?
 #        pxs = data.metadata[model.MD_PIXEL_SIZE]
 #        area = numpy.prod(data.shape) * numpy.prod(pxs) # m²
-        intensity = data.view(numpy.ndarray).mean()
+        datar = data[roi[0]:roi[2] + 1, roi[1]:roi[3] + 1]
+
+        intensity = datar.view(numpy.ndarray).mean()
         return intensity
 
 
@@ -475,13 +504,13 @@ class Acquirer(object):
             # Let's go!
             sem_data = []
             # start with the original fluorescence count (no bleaching)
-            ccd_data = [self.get_fluo_count()]
+            ccd_data = [self.get_fluo_image()]
             try:
                 # TODO: support drift correction (cf ar_spectral_ph)
                 for i in numpy.ndindex(shape):
                     logging.info("Acquiring pixel %d,%d", i[1], i[0])
                     sem_data.append(self.bleach_spot(spots[i].tolist()))
-                    ccd_data.append(self.get_fluo_count())
+                    ccd_data.append(self.get_fluo_image())
                 
                 # TODO: acquire a "SEM survey" image?
                  
@@ -493,8 +522,9 @@ class Acquirer(object):
                 sem_final.metadata[model.MD_DESCRIPTION] = "SEM"
                 
                 # compute the diff
-                ccd_data = numpy.array(ccd_data) # force to be one big array
-                ccd_diff = ccd_data[0:-1] - ccd_data[1:]
+                ccd_count = [self.ccd_image_to_count(d, ccd_roi) for d in ccd_data]
+                ccd_count = numpy.array(ccd_count) # force to be one big array
+                ccd_diff = ccd_count[0:-1] - ccd_count[1:]
                 ccd_diff.shape += (1, 1) # add info that each element is one pixel
                 ccd_final = self.assemble_tiles(shape, ccd_diff, self.roi, self.pxs)
                 ccd_md = self.ccd.getMetadata()
