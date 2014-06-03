@@ -18,8 +18,6 @@ run as:
       should be compatible with the current SEM magnification.
 --subpx the number of subpixels (must be a square of a integer).
       For each pixel acquired by the CCD, each subpixel is scanned by the ebeam.
---12-thres defines the threshold to pass from 1D scanning to 2D scanning in
-          percentage of reduction of light intensity
 --output indicates the name of the file which will contain all the output. It 
          should finish by .h5 (for HDF5) or .tiff (for TIFF).
 
@@ -456,8 +454,8 @@ class Acquirer(object):
         shape (2 int): number of pixels to be acquired in each position
         return (float): time (in s) of the total acquisition
         """
-        num_spots = numpy.prod(shape) * numpy.prod(self.tile_shape)
-        sem_time = self.dt * num_spots
+        num_spots = numpy.prod(shape)
+        sem_time = self.dt * num_spots * numpy.prod(self.tile_shape)
         
         res = self.ccd.resolution.value
         ro_time = numpy.prod(res) / self.ccd.readoutRate.value
@@ -479,7 +477,7 @@ class Acquirer(object):
             # mostly to warn if multiple ypos/xpos are rounded to the same value
             logging.warning("Overwriting file '%s'.", fn)
         else:
-            logging.info("Saving file '%s", fn)
+            logging.info("Saving file '%s'", fn)
     
         exporter.export(fn, data)
 
