@@ -437,7 +437,7 @@ class DigitalCamera(Detector):
             return v
         vt = []
         for idx in self._transpose:
-            ov = v[idx - 1]
+            ov = v[abs(idx) - 1]
             if idx < 0:
                 ov = -ov
             vt.append(ov)

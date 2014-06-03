@@ -967,9 +967,10 @@ class AndorCam3(model.DigitalCamera):
         except KeyError:
             pxs = self._metadata[model.MD_SENSOR_PIXEL_SIZE]
 
+        trans = self.translation.value # use user transposed value, as it's external world 
         # subtract 0.5 px if the resolution is a odd number
-        trans = [t - (r % 2) / 2 for t, r in zip(self._translation, self._resolution)]
-        phyt = (trans[0] * pxs[0], -trans[1] * pxs[1]) # - to invert Y
+        shift = [t - (r % 2) / 2 for t, r in zip(trans, self._resolution)]
+        phyt = (shift[0] * pxs[0], -shift[1] * pxs[1]) # - to invert Y
 
         return phyt
 
