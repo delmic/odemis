@@ -261,9 +261,14 @@ class DataFlow(DataFlowBase):
             return
         if self._max_discard == 0:
             # High-water mark
-            self.pipe.hwm = 0
+            self.pipe.hwm = 10000
         else:
-            self.pipe.hwm = 1
+            # allow a bit of delay, but nothing more: if more than 4 already
+            # queued, the newest one will be dropped.
+            self.pipe.hwm = 4
+            # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
+            # containing only the newest message. That sounds closer to what we
+            # need (though, currently multi-part messages are not supported).
 
     def _register(self, daemon):
         """
@@ -391,7 +396,7 @@ class DataFlow(DataFlowBase):
 class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, max_discard=0): # XXX max_discard = 100
+    def __init__(self, uri, max_discard=100): # XXX max_discard = 100
         """
         uri : see Proxy
         max_discard (int): amount of messages that can be discarded in a row if
@@ -465,7 +470,8 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
                     if len(self._listeners):
                         if logging:
                             logging.debug("Stopping subscription while there "
-                                          "are still subscribers because dataflow '%s' is going out of context", self._global_name)
+                                          "are still subscribers because dataflow '%s' is going out of context",
+                                          self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
                     self._commands.send("STOP")
                     self._thread.join(1)
@@ -513,7 +519,7 @@ class SubscribeProxyThread(threading.Thread):
         # ensure all the data is received when the client needs it.
         # API should be either:
         #  *  .max_discard = XXX (= per dataflow)
-        #  * .subscribe(callback, no_discard=True) (per subscriber)
+        #  * .subscribe(callback, discard=True) (per subscriber)
 
     def run(self):
         """
@@ -559,8 +565,8 @@ class SubscribeProxyThread(threading.Thread):
                         discarded < self.max_discard):
                         discarded += 1
                         continue
-                    # if discarded:
-                    #     logging.debug("had discarded %d arrays", discarded)
+                    if discarded:
+                        logging.debug("discarded %d arrays", discarded)
                     discarded = 0
                     # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
                     array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
