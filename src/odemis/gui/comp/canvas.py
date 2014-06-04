@@ -201,7 +201,7 @@ class BufferedCanvas(wx.Panel):
 
         # Set default background colour
         self.SetBackgroundColour(wx.BLACK)
-        self.bg_offset = (0, 0)
+        self.bg_offset = (0, 0)  # in px
 
         # Memory buffer device context
         self._dc_buffer = wx.MemoryDC()
@@ -218,8 +218,7 @@ class BufferedCanvas(wx.Panel):
         if os.name == "nt":
             # Avoids flickering on windows, but prevents black background on
             # Linux...
-            # TODO: to check, thsrc/odemis/gui/comp/canvas.pye documentation
-            # says the opposite
+            # TODO: to check, the documentation says the opposite
             self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
 
         # Initialize the buffer
@@ -1354,15 +1353,20 @@ class DraggableCanvas(BitmapCanvas):
         return (self.ClientSize.x + self.default_margin * 2,
                 self.ClientSize.y + self.default_margin * 2)
 
-    def _calc_bg_offset(self, world_pos):
-        # FIXME: doesn't seem to work: the background checker moves after dragging
-        # Probably should be computed everytime background is displayed, based on the fact that
-        # the pattern top-left is displayed at 0,0
-        bg_offset = ((self.requested_world_pos[0] - world_pos[0]) % 40,
-                     (self.requested_world_pos[1] - world_pos[1]) % 40)
+    def _calc_bg_offset(self, new_pos):
+        """
+        new_pos (2 floats): new world position
+        """
+        # Convert the shift in world units into pixels
+        old_pos = self.requested_world_pos
+        shift_world = (old_pos[0] - new_pos[0],
+                       old_pos[1] - new_pos[1])
+        shift_px = (int(round(self.scale * shift_world[0])),
+                    int(round(self.scale * shift_world[1])))
+        # TODO: change the 40 to the size of the background image
         self.bg_offset = (
-            (self.bg_offset[0] - bg_offset[0]) % 40,
-            (self.bg_offset[1] - bg_offset[1]) % 40
+            (self.bg_offset[0] - shift_px[0]) % 40,
+            (self.bg_offset[1] - shift_px[1]) % 40
         )
 
     def recenter_buffer(self, world_pos):
