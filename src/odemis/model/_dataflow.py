@@ -579,8 +579,9 @@ class SubscribeProxyThread(threading.Thread):
                         discarded < self.max_discard):
                         discarded += 1
                         continue
-                    if discarded:
-                        logging.debug("discarded %d arrays", discarded)
+                    # TODO: only log the accumulated number every second, to avoid log flooding
+#                     if discarded:
+#                         logging.debug("Dataflow %s dropped %d arrays", self.uri, discarded)
                     discarded = 0
                     # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
                     array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])

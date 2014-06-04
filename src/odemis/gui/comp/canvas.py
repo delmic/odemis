@@ -141,23 +141,23 @@ Graphical data is drawn using the following sequence of method calls:
 
 from __future__ import division
 
+from abc import ABCMeta, abstractmethod
 import cairo
 import collections
+from decorator import decorator
 import logging
 import math
-import odemis.gui.img.data as imgdata
-import os
-import wx
-import wx.lib.wxcairo as wxcairo
-
-from abc import ABCMeta, abstractmethod
-from decorator import decorator
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
+import os
+import threading
+import wx
+
+import odemis.gui.img.data as imgdata
+import wx.lib.wxcairo as wxcairo
 
 
 #pylint: disable=E1002
-
 # Special abilities that a canvas might possess
 CAN_DRAG = 1    # Content can be dragged
 CAN_FOCUS = 2   # Can adjust focus
@@ -344,18 +344,19 @@ class BufferedCanvas(wx.Panel):
     def on_paint(self, evt):
         """ Copy the buffer to the screen (i.e. the device context) """
 
-        wx.BufferedPaintDC(self, self._bmp_buffer)
+        # TODO: what was the reason for this to be used instead of blit?
+#         wx.BufferedPaintDC(self, self._bmp_buffer)
 
-        # dc_view = wx.PaintDC(self)
-        # # Blit the appropriate area from the buffer to the view port
-        # dc_view.BlitPointSize(
-        #             (0, 0),             # destination point
-        #             self.ClientSize,    # size of area to copy
-        #             self._dc_buffer,    # source
-        #             (0, 0)              # source point
-        # )
-        # ctx = wxcairo.ContextFromDC(dc_view)
-        # self._draw_view_overlays(ctx)
+        dc_view = wx.PaintDC(self)
+        # Blit the appropriate area from the buffer to the view port
+        dc_view.BlitPointSize(
+                    (0, 0),             # destination point
+                    self.ClientSize,    # size of area to copy
+                    self._dc_buffer,    # source
+                    (0, 0)              # source point
+        )
+        ctx = wxcairo.ContextFromDC(dc_view)
+        self._draw_view_overlays(ctx)
 
     def on_size(self, evt):
         """ Handle size events
@@ -445,7 +446,6 @@ class BufferedCanvas(wx.Panel):
             `wx.CallAfter(canvas.request_drawing_update)`
         """
 
-
         if not self.draw_timer.IsRunning():
             self.draw_timer.Start(delay * 1000.0, oneShot=True)
 
@@ -491,10 +491,10 @@ class BufferedCanvas(wx.Panel):
     # END Buffer and drawing methods
 
     def _draw_view_overlays(self, ctx):
-        """ Draws all the view overlays on the ctx Cairo context"""
-        # center the coordinates
-        # dc.SetDeviceOrigin(self.ClientSize.x // 2, self.ClientSize.y // 2)
-        # ctx.translate(self.ClientSize.x // 2, self.ClientSize.y // 2)
+        """
+        Draws all the view overlays
+        ctx (cairo context): the context on which to draw
+        """
         # TODO: Add filtering for *enabled overlays
         for vo in self.view_overlays:
             vo.Draw(ctx)
@@ -785,22 +785,20 @@ class BitmapCanvas(BufferedCanvas):
         :param im_scale: (float)
         :param rotation: (float) Rotation around the image center in radians
 
-        TODO: keepalha is probably obsolete, so it can be removed (in this)
-        method and elsewhere.
-
         """
 
         # Fully transparent image does not need to be drawn
-        if opacity <= 0.0:
+        if opacity < 1e-8:
             logging.debug("Skipping draw: image fully transparent")
             return
 
         # Determine the rectangle the image would occupy in the buffer
         b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, w_im_center)
-        logging.debug("Image on buffer %s", b_im_rect)
+#         logging.debug("Image on buffer %s", b_im_rect)
 
         # To small to see, so no need to draw
         if b_im_rect[2] < 1 or b_im_rect[3] < 1:
+            # TODO: compute the mean, and display one pixel with it
             logging.debug("Skipping draw: too small")
             return
 
@@ -814,18 +812,20 @@ class BitmapCanvas(BufferedCanvas):
             logging.debug("Skipping draw: no intersection with buffer")
             return
 
-        logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
+#         logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
 
         # Combine the image scale and the buffer scale
         total_scale = im_scale * self.scale
-        logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
+        if abs(total_scale - 1) < 1e-8: # in case of small floating errors
+            total_scale = 1
+#         logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         # Rotate if needed
         if rotation is not None:
             x, y, w, h = b_im_rect
 
-            rot_x = x + w / 2.0
-            rot_y = y + h / 2.0
+            rot_x = x + w / 2
+            rot_y = y + h / 2
             # Translate to the center of the image (in buffer coordinates)
             ctx.translate(rot_x, rot_y)
             # Rotate
@@ -834,11 +834,13 @@ class BitmapCanvas(BufferedCanvas):
             ctx.translate(-rot_x, -rot_y)
 
         if total_scale == 1.0:
-            logging.debug("No scaling required")
+#             logging.debug("No scaling required")
+            pass
         elif total_scale < 1.0:
-            logging.debug("Down scaling required")
+#             logging.debug("Down scaling required")
+            pass
         elif total_scale > 1.0:
-            logging.debug("Up scaling required")
+#             logging.debug("Up scaling required")
 
             # Make clipping a bit smarter: if very little data is trimmed, it's
             # better to scale the entire image than to create a slightly smaller
@@ -862,7 +864,7 @@ class BitmapCanvas(BufferedCanvas):
             im_format = cairo.FORMAT_RGB24
 
         height, width, _ = im_data.shape
-        logging.debug("Image data shape is %s", im_data.shape)
+#         logging.debug("Image data shape is %s", im_data.shape)
 
         # Note: Stride calculation is done automatically when no stride
         # parameter is provided.

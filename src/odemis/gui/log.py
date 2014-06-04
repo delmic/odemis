@@ -121,6 +121,11 @@ class TextFieldHandler(logging.Handler):
             else:
                 colour = "#777777"
 
+            # FIXME: still seems to be possible to completely hog the GUI by
+            # logging too much. A way to fix it would be to run the textfield
+            # update at a maximum frequency (10Hz), and queue the logs in
+            # between.
+
             # Do the actual writing in a CallAfter, so logging won't interfere
             # with the GUI drawing process.
             wx.CallAfter(self.write_to_field, record, colour)
@@ -130,14 +135,18 @@ class TextFieldHandler(logging.Handler):
             self.error_va.value = True
 
     def write_to_field(self, record, colour):
-
-        while self.textfield.GetNumberOfLines() > LOG_LINES:
+        nb_lines = self.textfield.GetNumberOfLines()
+        nb_old = nb_lines - LOG_LINES
+        if nb_old > 0:
             # Removes the characters from position 0 up to and including the
-            # first line break
-            self.textfield.Remove(0, self.textfield.GetValue().find('\n') + 1)
+            # Nth line break
+            first_new = 0
+            txt = self.textfield.Value
+            for i in range(nb_old):
+                first_new = txt.find('\n', first_new) + 1
+
+            self.textfield.Remove(0, first_new)
 
         self.textfield.SetDefaultStyle(wx.TextAttr(colour, None))
-        self.textfield.AppendText(''.join([self.format(record), '\n']))
-        self.textfield.LineUp()
-
+        self.textfield.AppendText("\n" + self.format(record))
 

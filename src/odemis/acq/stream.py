@@ -472,11 +472,11 @@ class Stream(object):
         # (in the future, we could keep the old ones which are not fully
         # overlapped)
 
-        if model.MD_ACQ_DATE in data.metadata:
-            pass
-            # Commented out to prevent log flooding
-            # logging.debug("Receive raw %g s after acquisition",
-            #                time.time() - data.metadata[model.MD_ACQ_DATE])
+#         if model.MD_ACQ_DATE in data.metadata:
+#             pass
+#             # Commented out to prevent log flooding
+#             logging.debug("Receive raw %g s after acquisition",
+#                           time.time() - data.metadata[model.MD_ACQ_DATE])
 
         old_drange = self._drange
         if not self.raw:
