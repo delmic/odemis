@@ -318,7 +318,7 @@ class Stream(object):
 
     def _find_metadata(self, md):
         """
-        Find the PIXEL_SIZE and POS metadata from the given raw image
+        Find the PIXEL_SIZE, POS, and ROTATION metadata from the given raw image
         return (dict MD_* -> value)
         """
         try:
@@ -340,6 +340,8 @@ class Stream(object):
             # msg = "Pixel density of image unknown, using sensor size"
             # logging.warning(msg)
 
+        rot = md.get(model.MD_ROTATION, 0)
+
         # Not necessary, but handy to debug latency problems
         try:
             date = md[model.MD_ACQ_DATE]
@@ -348,6 +350,7 @@ class Stream(object):
 
         return {model.MD_PIXEL_SIZE: pxs,
                 model.MD_POS: pos,
+                model.MD_ROTATION: rot,
                 model.MD_ACQ_DATE: date}
 
     @limit_invocation(0.1) # Max 10 Hz

@@ -878,7 +878,7 @@ class FineAlignController(object):
             self._main_frame.lbl_fine_align.Label = "Successful"
             # Temporary info until the GUI can actually rotate the images
             if model.MD_ROTATION_COR in cor_md:
-                rot = cor_md[model.MD_ROTATION_COR]
+                rot = math.degrees(cor_md[model.MD_ROTATION_COR])
                 # the worse is the rotation, the longer it's displayed
                 timeout = max(2, min(abs(rot), 10))
                 Message.show_message(self._main_frame,
@@ -886,7 +886,7 @@ class FineAlignController(object):
                                       units.readable_str(rot, unit="°", sig=3)),
                                      timeout=timeout)
                 logging.warning("Fine alignment computed rotation needed of %f°",
-                                cor_md[model.MD_ROTATION_COR])
+                                rot)
 
         # As the CCD image might have different pixel size, force to fit
         self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True

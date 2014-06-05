@@ -208,7 +208,7 @@ class TestMatchCoordinates(unittest.TestCase):
         self.scale = uniform(4, 4.2)
         self.scale_x, self.scale_y = self.scale, self.scale
         # self.rotation = -0.4517
-        self.rotation = uniform(-2, 2)
+        self.rotation = math.radians(uniform(-2, 2))
 
     def test_match_coordinates_precomputed_output(self):
         """

@@ -433,7 +433,7 @@ def _TransformCoordinates(x_coordinates, translation, rotation, scale):
     Transforms the x_coordinates according to the parameters.
     x_coordinates (List of tuples): List of coordinates
     translation (Tuple of floats): Translation
-    rotation (float): Rotation #degrees
+    rotation (float): Rotation in rad
     scale (Tuple of floats): Scaling
     returns (List of tuples): Transformed coordinates
     """
@@ -443,9 +443,8 @@ def _TransformCoordinates(x_coordinates, translation, rotation, scale):
         translated = [a + t for a, t in zip(ta, translation)]
         scaled = [t * s for t, s in zip(translated, scale)]
         x, y = scaled
-        rad_rotation = math.radians(-rotation) # rotation in radians, clockwise
-        x_rotated = x * math.cos(rad_rotation) - y * math.sin(rad_rotation)
-        y_rotated = x * math.sin(rad_rotation) + y * math.cos(rad_rotation)
+        x_rotated = x * math.cos(-rotation) - y * math.sin(-rotation)
+        y_rotated = x * math.sin(-rotation) + y * math.cos(-rotation)
         rotated = (x_rotated, y_rotated)
         transformed_coordinates.append(rotated)
 
@@ -568,7 +567,7 @@ def _MatchAndCalculate(transformed_coordinates, optical_coordinates, electron_co
 
         # Apply correction
         angle_correction = 0.5 * (numpy.mean(angle_diff_electron_wrong, 0) - numpy.mean(angle_diff_transformed_wrong, 0))
-        avg_rotation = avg_rotation + 180 / math.pi * angle_correction
+        avg_rotation = avg_rotation + angle_correction
 
     # Perform transformation
     estimated_coordinates = _TransformCoordinates(optical_coordinates,

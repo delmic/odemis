@@ -27,7 +27,7 @@ from odemis.acq.align import transform
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-@unittest.skip("skip")
+# @unittest.skip("skip")
 class TestTransformationParams(unittest.TestCase):
     """
     Test TransformationParams functions
@@ -40,7 +40,7 @@ class TestTransformationParams(unittest.TestCase):
         electron_coordinates = [(0, 1), (0, 2), (1, 0), (1, 4)]
 
         (translation_x, translation_y), (scaling_x, scaling_y), rotation = transform.CalculateTransform(optical_coordinates, electron_coordinates)
-        numpy.testing.assert_almost_equal((translation_x, translation_y, scaling_x, scaling_y, rotation), (1.3000132631489385, 2.3999740720548788, 1.60000617, 1.60000617, 34.9996552027154))
+        numpy.testing.assert_almost_equal((translation_x, translation_y, scaling_x, scaling_y, rotation), (1.3000132631489385, 2.3999740720548788, 1.60000617, 1.60000617, 0.61085922))
 
     # TODO: Calculate optical coordinates given the electron coordinates and translation, rotation and scale values
     #        and test.

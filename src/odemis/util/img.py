@@ -408,7 +408,7 @@ def mergeMetadata(current, correction=None):
         correction = current
 
     if model.MD_ROTATION_COR in correction:
-        # Default rotation is 0° if not specified
+        # Default rotation is 0 rad if not specified
         rotation_cor = correction[model.MD_ROTATION_COR]
         rotation = current.get(model.MD_ROTATION, 0)
         current[model.MD_ROTATION] = rotation - rotation_cor

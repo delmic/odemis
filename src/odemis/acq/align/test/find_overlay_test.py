@@ -99,7 +99,7 @@ class TestOverlay(unittest.TestCase):
 
         t, md = f.result()
 
-    @unittest.skip("skip")
+#     @unittest.skip("skip")
     def test_find_overlay_failure(self):
         """
         Test FindOverlay failure due to low maximum allowed difference
@@ -113,7 +113,7 @@ class TestOverlay(unittest.TestCase):
         with self.assertRaises(ValueError):
             f.result()
 
-    @unittest.skip("skip")
+#     @unittest.skip("skip")
     def test_find_overlay_cancelled(self):
         """
         Test FindOverlay cancellation
