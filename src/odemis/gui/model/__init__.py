@@ -114,7 +114,8 @@ class MainGUIData(object):
         self.spectrograph = None # actuator to change the wavelength
         self.ar_spec_sel = None # actuator to select AR/Spectrometer (SPARC)
         self.lens_switch = None # actuator to (de)activate the lens (SPARC)
-        self.chamber = None # actuator to control the chamber (pressure)
+        self.chamber = None # actuator to control the chamber (has vacuum, pumping etc.)
+        self.pressure = None  # Current pressure of the chamber
         self.ccd_chamber = None # view of inside the chamber
         self.ccd_overview = None # global view from above the sample
 
@@ -212,6 +213,8 @@ class MainGUIData(object):
             chamber_states = set([CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM, CHAMBER_VENTING])
             self.vacuum_state = model.IntEnumerated(CHAMBER_VENTED, chamber_states)
             self.vacuum_state.subscribe(self.on_vacuum_state)
+            # Pressure VA for dev purposes
+            self.pressure = model.FloatContinuous(101325.0, (0.0, 101325.0), unit="Pa")
 
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
