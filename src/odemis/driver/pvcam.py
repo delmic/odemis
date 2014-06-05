@@ -118,7 +118,7 @@ class PVCamDLL(CDLL):
         try:
             func = super(PVCamDLL, self).__getitem__(name)
         except Exception:
-            raise AttributeError("Failed to find %s", name)
+            raise AttributeError("Failed to find %s" % (name,))
         func.__name__ = name
         if not name in self.err_funcs:
             func.errcheck = self.pv_errcheck

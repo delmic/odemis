@@ -113,7 +113,7 @@ class ATDLL(CDLL):
         try:
             func = super(ATDLL, self).__getitem__(name)
         except Exception:
-            raise AttributeError("Failed to find %s", name)
+            raise AttributeError("Failed to find %s" % (name,))
         func.__name__ = name
         func.errcheck = self.at_errcheck
         return func

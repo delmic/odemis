@@ -54,7 +54,7 @@ def open_acq(fn):
     try:
         data = fmt_mng.read_data(fn)
     except Exception:
-        raise ValueError("Failed to open the file '%s' as %s", fn, fmt_mng.FORMAT)
+        raise ValueError("Failed to open the file '%s' as %s" % (fn, fmt_mng.FORMAT))
 
     if not data:
         logging.warning("Couldn't load any data from file '%s' as %s",

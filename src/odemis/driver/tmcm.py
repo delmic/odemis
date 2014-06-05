@@ -78,8 +78,7 @@ class TMCM3110(model.Actuator):
          empty or the name of the axis)
         """
         if len(axes) != 3:
-            raise ValueError("Axes must be a list of 3 axis names (got %s)" %
-                             (axes,))
+            raise ValueError("Axes must be a list of 3 axis names (got %s)" % (axes,))
         self._axes_names = axes # axes names in order
 
         if len(axes) != len(ustepsize):
@@ -87,8 +86,7 @@ class TMCM3110(model.Actuator):
                              (len(axes), ustepsize))
         for sz in ustepsize:
             if sz > 10e-3: # sz is typically ~1µm, so > 1 cm is very fishy
-                raise ValueError("ustepsize should be in meter, but got %g",
-                                  sz)
+                raise ValueError("ustepsize should be in meter, but got %g" % (sz,))
         self._ustepsize = ustepsize
 
         self._serial = self._openSerialPort(port)

@@ -403,7 +403,7 @@ class MFF(model.Actuator):
                 return
 
             if timeout is not None and (time.time() > start + timeout):
-                raise IOError("Device still in motion after %g s", timeout)
+                raise IOError("Device still in motion after %g s" % (timeout,))
 
             # Give it a small break
             time.sleep(0.05) # 20Hz

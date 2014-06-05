@@ -74,7 +74,7 @@ class ShamrockDLL(CDLL):
         try:
             func = super(ShamrockDLL, self).__getitem__(name)
         except Exception:
-            raise AttributeError("Failed to find %s", name)
+            raise AttributeError("Failed to find %s" % (name,))
         func.__name__ = name
         func.errcheck = self.at_errcheck
         return func
