@@ -64,11 +64,9 @@ def format_rgba_darray(im_darray, alpha=None):
                 new_darray.metadata['byteswapped'] = True
 
                 return new_darray
-            else:
-                print "not swaaapaing"
         return im_darray
     else:
-        raise ValueError("Unsupporeted colour depth!")
+        raise ValueError("Unsupported colour depth!")
 
 
 def scale_to_alpha(im_darray):

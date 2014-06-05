@@ -670,7 +670,7 @@ class BitmapCanvas(BufferedCanvas):
             else:
                 im, w_pos, scale, keepalpha, rotation = args
 
-                if im.shape[2] != 4:
+                if im.shape[2] != 4: # Both ARGB32 and RGB24 need 4 bytes
                     raise ValueError("Unsupported colour byte size! (%s)", im.shape[2])
 
                 im.metadata['dc_center'] = w_pos

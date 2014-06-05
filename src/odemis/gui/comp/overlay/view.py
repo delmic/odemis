@@ -1010,8 +1010,6 @@ class PolarOverlay(ViewOverlay):
         self.canvas_padding = pad
 
         if self.intensity_label.text and self.intersection:
-            print "?????????????"
-
             ctx.set_source_rgb(*self.colour_highlight)
             ctx.arc(self.intersection[0], self.intersection[1], 3, 0, self.tau)
             ctx.fill()
