@@ -15,8 +15,8 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General
 Public License for more details.
 
-YoushouldhavereceivedacopyoftheGNUGeneralPublicLicensealongwithOdemis.Ifnot,see
-http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
@@ -24,8 +24,10 @@ http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import logging
 import numpy
 import odemis.model
+import wx
 
 
 # @profile
@@ -51,20 +53,19 @@ def format_rgba_darray(im_darray, alpha=None):
         return new_darray
 
     elif im_darray.shape[-1] == 4:
-
         if hasattr(im_darray, 'metadata'):
-            if not im_darray.metadata.get('byteswapped', False):
-                rgba = numpy.empty(im_darray.shape, dtype=numpy.uint8)
-                rgba[:, :, 0] = im_darray[:, :, 2]
-                rgba[:, :, 1] = im_darray[:, :, 1]
-                rgba[:, :, 2] = im_darray[:, :, 0]
-                rgba[:, :, 3] = im_darray[:, :, 3]
-                new_darray = odemis.model.DataArray(rgba)
-                new_darray.metadata = im_darray.metadata
-                new_darray.metadata['byteswapped'] = True
+            if im_darray.metadata.get('byteswapped', False):
+                logging.warning("Trying to convert to BGRA an array already in BGRA")
+                return im_darray
 
-                return new_darray
-        return im_darray
+        rgba = numpy.empty(im_darray.shape, dtype=numpy.uint8)
+        rgba[:, :, 0] = im_darray[:, :, 2]
+        rgba[:, :, 1] = im_darray[:, :, 1]
+        rgba[:, :, 2] = im_darray[:, :, 0]
+        rgba[:, :, 3] = im_darray[:, :, 3]
+        new_darray = odemis.model.DataArray(rgba)
+        new_darray.metadata['byteswapped'] = True
+        return new_darray
     else:
         raise ValueError("Unsupported colour depth!")
 
