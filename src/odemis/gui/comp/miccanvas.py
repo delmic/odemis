@@ -25,6 +25,7 @@ from __future__ import division
 
 from decorator import decorator
 import logging
+import math
 import numpy
 from odemis import util, model
 from odemis.acq import stream
@@ -373,9 +374,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # add the images in order
         ims = []
         for rgbim in images:
-            # TODO: convert to wxImage (or wxBitmap) later, in canvas.
-            # It's creating a new wxImage for each stream, whenever one stream
-            # is updated.
+            # TODO: convert to RGBA later, in canvas and/or cache the convertion
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
 
@@ -383,8 +382,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
+            rot = -rgbim.metadata.get(model.MD_ROTATION, 0) # ccw -> cw
 
-            ims.append((rgba_im, pos, scale, keepalpha, None))
+            ims.append((rgba_im, pos, scale, keepalpha, rot))
         self.set_images(ims)
 
         # For debug only:

@@ -655,6 +655,7 @@ class BitmapCanvas(BufferedCanvas):
                 units)
             scale (float): scaling of the image
             keepalpha (boolean): whether the alpha channel must be used to draw
+            rotation (float): clockwise rotation in radians on the center of the image
         Note: call request_drawing_update() to actually get the image redrawn
             afterwards
         """
@@ -783,7 +784,7 @@ class BitmapCanvas(BufferedCanvas):
         :param w_im_center: (2-tuple float)
         :param opacity: (float) [0..1] => [transparent..opaque]
         :param im_scale: (float)
-        :param rotation: (float) Rotation around the image center in radians
+        :param rotation: (float) Clock-wise rotation around the image center in radians
 
         """
 
@@ -813,6 +814,8 @@ class BitmapCanvas(BufferedCanvas):
             return
 
 #         logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
+        # Cache the current transformation matrix
+        ctx.save()
 
         # Combine the image scale and the buffer scale
         total_scale = im_scale * self.scale
@@ -821,7 +824,7 @@ class BitmapCanvas(BufferedCanvas):
 #         logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         # Rotate if needed
-        if rotation is not None:
+        if rotation is not None and abs(rotation) >= 0.008: # > 0.5°
             x, y, w, h = b_im_rect
 
             rot_x = x + w / 2
@@ -829,7 +832,7 @@ class BitmapCanvas(BufferedCanvas):
             # Translate to the center of the image (in buffer coordinates)
             ctx.translate(rot_x, rot_y)
             # Rotate
-            ctx.rotate(rotation * math.pi)
+            ctx.rotate(rotation)
             # Translate back, so the origin is at the top left position of the image
             ctx.translate(-rot_x, -rot_y)
 
@@ -882,8 +885,6 @@ class BitmapCanvas(BufferedCanvas):
         # TEST: Changing the order of translate and scale didn't solve the problem
         # ctx.translate(b_im_rect[0] / total_scale, b_im_rect[1] / total_scale)
 
-        # Cache the current transformation matrix
-        ctx.save()
 
         x, y, _, _ = b_im_rect
 
