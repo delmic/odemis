@@ -13,7 +13,11 @@ grep -IrE --colour 'raise.*",' --include=*.py src/odemis/
 echo "---"
 
 echo "These files are not using division from the future:"
-grep -IrL "from __future__ import.*division" --include=*.py  src/
+grep -IrL "from __future__ import.*division" --include=*.py src/
+echo "---"
+
+echo "These files do not have the license header:"
+grep -LIr "GNU General Public License"--include=*.py src/
 echo "---"
 
 PYTHONPATH=./src/:../Pyro4/src/
