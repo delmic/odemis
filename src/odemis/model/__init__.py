@@ -29,6 +29,7 @@ from ._vattributes import *
 from ._components import *
 from ._dataflow import *
 from ._core import *
+from ._metadata import *
 
 
 #__all__ = []
