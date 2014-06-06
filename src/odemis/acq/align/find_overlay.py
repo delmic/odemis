@@ -163,7 +163,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                     logging.warning("Trying with dwell time = %g s...", future._scanner.dwell_time)
         else:
             # Make failure report
-            _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates)
+            _MakeReport(optical_image, repetitions, escan.magnification.value, escan.pixelSize.value, dwell_time, electron_coordinates)
             raise ValueError("Overlay failure")
 
 
@@ -273,7 +273,7 @@ def _transformMetadata(optical_image, transformation_values, escan, ccd):
     return transform_md
 
 
-def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
+def _MakeReport(optical_image, repetitions, magnification, pixel_size, dwell_time, electron_coordinates):
     """
     Creates failure report in case we cannot match the coordinates.
     optical_image (2d array): Image from CCD
@@ -287,6 +287,8 @@ def _MakeReport(optical_image, repetitions, dwell_time, electron_coordinates):
     hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
     report = open(os.path.join(path, u"report.txt"), 'w')
     report.write("\n****Overlay Failure Report****\n\n"
+                 + "\nSEM magnification:\n" + magnification
+                 + "\nSEM pixel size:\n" + pixel_size
                  + "\nGrid size:\n" + str(repetitions)
                  + "\n\nMaximum dwell time used:\n" + str(dwell_time)
                  + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
