@@ -287,8 +287,8 @@ def _MakeReport(optical_image, repetitions, magnification, pixel_size, dwell_tim
     hdf5.export(os.path.join(path, u"OpticalGrid.h5"), optical_image)
     report = open(os.path.join(path, u"report.txt"), 'w')
     report.write("\n****Overlay Failure Report****\n\n"
-                 + "\nSEM magnification:\n" + magnification
-                 + "\nSEM pixel size:\n" + pixel_size
+                 + "\nSEM magnification:\n" + str(magnification)
+                 + "\nSEM pixel size:\n" + str(pixel_size)
                  + "\nGrid size:\n" + str(repetitions)
                  + "\n\nMaximum dwell time used:\n" + str(dwell_time)
                  + "\n\nElectron coordinates of the scanned grid:\n" + str(electron_coordinates)
