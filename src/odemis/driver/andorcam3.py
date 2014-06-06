@@ -203,7 +203,11 @@ class AndorCam3(model.DigitalCamera):
         self._bitflow_install_dirs = bitflow_install_dirs
         self.atcore = ATDLL()
         
-        self.Open(device)
+        try:
+            self.Open(device)
+        except Exception:
+            logging.error("Failed to initialise Andor camera %d", device)
+            raise
         if device is None:
             # nothing else to initialise
             return
