@@ -102,10 +102,54 @@ class ChamberButtonController(HardwareButtonController):
 
         super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
 
+        # Since there are various factors that determine what images will be used as button faces,
+        # (so, not just the button state!) we will explicitly define them in this class.
+        self.btn_faces = {}
+        self._determine_button_faces(main_data)
+
         # TODO: grab this va from main_data
         # self.pressure_va = None  # This VA will indicate the current pressure in the chamber
         self.pressure_va = main_data.pressure
 
+    def _determine_button_faces(self, main_data):
+        """ Determine what button faces to use depending on values found in main_data """
+
+        if main_data.role == "secommini":
+            self.btn_faces = {
+                'normal': {
+                    'normal': imgdata.btn_eject.Bitmap,
+                    'hover': imgdata.btn_eject_h.Bitmap,
+                    'active': imgdata.btn_eject_a.Bitmap,
+                },
+                'working': {
+                    'normal': imgdata.btn_eject_orange.Bitmap,
+                    'hover': imgdata.btn_eject_orange_h.Bitmap,
+                    'active': imgdata.btn_eject_orange_a.Bitmap,
+                },
+                'vacuum': {
+                    'normal': imgdata.btn_eject_green.Bitmap,
+                    'hover': imgdata.btn_eject_green_h.Bitmap,
+                    'active': imgdata.btn_eject_green_a.Bitmap,
+                }
+            }
+        else:
+            self.btn_faces = {
+                'normal': {
+                    'normal': imgdata.btn_press.Bitmap,
+                    'hover': imgdata.btn_press_h.Bitmap,
+                    'active': imgdata.btn_press_a.Bitmap,
+                },
+                'working': {
+                    'normal': imgdata.btn_press_orange.Bitmap,
+                    'hover': imgdata.btn_press_orange_h.Bitmap,
+                    'active': imgdata.btn_press_orange_a.Bitmap,
+                },
+                'vacuum': {
+                    'normal': imgdata.btn_press_green.Bitmap,
+                    'hover': imgdata.btn_press_green_h.Bitmap,
+                    'active': imgdata.btn_press_green_a.Bitmap,
+                }
+            }
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state
@@ -120,21 +164,21 @@ class ChamberButtonController(HardwareButtonController):
 
         # Set the appropriate images
         if is_working:
-            self.btn.SetBitmapLabel(imgdata.btn_eject_orange.getBitmap())
-            self.btn.SetBitmapHover(imgdata.btn_eject_orange_h.getBitmap())
-            self.btn.SetBitmapSelected(imgdata.btn_eject_orange_a.getBitmap())
+            self.btn.SetBitmapLabel(self.btn_faces['working']['normal'])
+            self.btn.SetBitmapHover(self.btn_faces['working']['hover'])
+            self.btn.SetBitmapSelected(self.btn_faces['working']['active'])
 
             self.pressure_va.subscribe(self._update_label, init=True)
         elif has_vacuum:
-            self.btn.SetBitmapLabel(imgdata.btn_eject_green.getBitmap())
-            self.btn.SetBitmapHover(imgdata.btn_eject_green_h.getBitmap())
-            self.btn.SetBitmapSelected(imgdata.btn_eject_green_a.getBitmap())
+            self.btn.SetBitmapLabel(self.btn_faces['vacuum']['normal'])
+            self.btn.SetBitmapHover(self.btn_faces['vacuum']['hover'])
+            self.btn.SetBitmapSelected(self.btn_faces['vacuum']['active'])
 
             self.pressure_va.unsubscribe(self._update_label)
         else:
-            self.btn.SetBitmapLabel(imgdata.btn_eject.getBitmap())
-            self.btn.SetBitmapHover(imgdata.btn_eject_h.getBitmap())
-            self.btn.SetBitmapSelected(imgdata.btn_eject_a.getBitmap())
+            self.btn.SetBitmapLabel(self.btn_faces['normal']['normal'])
+            self.btn.SetBitmapHover(self.btn_faces['normal']['hover'])
+            self.btn.SetBitmapSelected(self.btn_faces['normal']['active'])
 
             self.pressure_va.unsubscribe(self._update_label)
 

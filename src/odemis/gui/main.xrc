@@ -1215,9 +1215,9 @@
                             <size>92,48</size>
                             <label>kPa</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_eject.png</bitmap>
-                            <hover>img/btn_eject_h.png</hover>
-                            <selected>img/btn_eject_orange_a.png</selected>
+                            <bitmap>img/btn_press.png</bitmap>
+                            <hover>img/btn_press_h.png</hover>
+                            <selected>img/btn_press_orange_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -1351,8 +1351,6 @@
 >>>>>>> gui: Image button update
                           <border>10</border>
                         </object>
-                      
-                        
                       </object>
                       <size>512,-1</size>
                       <bg>#4D4D4D</bg>
