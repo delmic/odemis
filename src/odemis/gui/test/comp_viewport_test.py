@@ -62,6 +62,7 @@ BAD_RANGED_PLOTS = [
     ((5, 5), (0, 10), [3, 5, 8], [2, 3, 1]),
 ]
 
+
 class CanvasTestCase(test.GuiTestCase):
     #pylint: disable=E1101
     frame_class = test.test_gui.xrccanvas_frame
@@ -69,10 +70,8 @@ class CanvasTestCase(test.GuiTestCase):
     def test_plot_viewport(self):
         vwp = viewport.PlotViewport(self.panel)
 
-
         self.add_control(vwp, wx.EXPAND, proportion=1)
-
-        vwp.canvas.SetForegroundColour("#CAE102")
+        vwp.canvas.SetForegroundColour("#FF0000")
 
         for mode in MODES:
             vwp.canvas.set_plot_mode(mode)

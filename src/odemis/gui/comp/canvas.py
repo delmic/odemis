@@ -468,7 +468,7 @@ class BufferedCanvas(wx.Panel):
 
         # Only support wx.SOLID, and anything else is checkered
         if self.background_brush == wx.SOLID:
-            ctx.set_source_rgb(0, 0, 0)
+            ctx.set_source_rgb(*wxcol_to_frgb(self.BackgroundColour))
             ctx.paint()
             return
 
@@ -1392,6 +1392,7 @@ class DraggableCanvas(BitmapCanvas):
         dragging.
 
         """
+
         # TODO: might be obsolete, do test
         self.draw()
         self.Refresh(eraseBackground=False)
@@ -1560,6 +1561,8 @@ class PlotCanvas(BufferedCanvas):
         # Default plot settings
         self.plot_closed = PLOT_CLOSE_BOTTOM
         self.plot_mode = PLOT_MODE_LINE
+
+        self.background_brush = wx.SOLID
 
     # Getters and Setters
 
@@ -1755,8 +1758,8 @@ class PlotCanvas(BufferedCanvas):
         """
         # Ensure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
-        if (min_size[0] > self._bmp_buffer_size[0] or
-            min_size[1] > self._bmp_buffer_size[1]):
+
+        if min_size != self._bmp_buffer_size:
             self.resize_buffer(min_size)
 
         self._pass_event_to_active_overlay('on_size', evt)
@@ -1773,13 +1776,10 @@ class PlotCanvas(BufferedCanvas):
         #     logging.warn("No buffer created yet, ignoring draw request")
         #     return
 
-        dc = self._dc_buffer
-        dc.SetBackground(wx.Brush(self.BackgroundColour, wx.SOLID))
-        dc.Clear()
+        self._draw_background(self.ctx)
 
         if self._data:
-            ctx = wxcairo.ContextFromDC(dc)
-            self._plot_data(ctx)
+            self._plot_data(self.ctx)
 
     def _draw_view_overlays(self, ctx):
         """ Draws all the view overlays on the ctx Cairo context"""

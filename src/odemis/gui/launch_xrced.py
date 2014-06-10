@@ -16,9 +16,7 @@ import sys
 
 if __name__ == '__main__':
     try:
-        sys.path.append('/usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx/tools')
-        sys.path.append('/home/rinze/development/odemis/src/')
-
+        sys.path.extend(['/home/rinze/dev/misc', '/home/rinze/dev/odemis/src', '/home/rinze/dev/lib/Pyro4/src/'])
         from XRCed.xrced import main
     except ImportError:
         print >> sys.stderr, 'XRCed parent directory must be in PYTHONPATH'
