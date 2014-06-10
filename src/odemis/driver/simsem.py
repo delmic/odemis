@@ -403,9 +403,9 @@ class Detector(model.Detector):
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = scanner.rotation.value,
+            metadata[model.MD_ROTATION] = scanner.rotation.value
             metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
-            metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value,
+            metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value
             metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
             return model.DataArray(sim_img, metadata)
     
