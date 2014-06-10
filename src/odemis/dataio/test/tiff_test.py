@@ -664,6 +664,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_EXP_TIME: 1, # s
                      model.MD_IN_WL: (600e-9, 620e-9), # m
                      model.MD_OUT_WL: (620e-9, 650e-9), # m
+                     model.MD_ROTATION: 0.1, # rad
                     },
                     ]
         # create 3 greyscale images of same size
@@ -712,6 +713,7 @@ class TestTiffIO(unittest.TestCase):
             self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
                              owl[1] <= md[model.MD_OUT_WL][1]))
 
+            self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
 
 
         # check thumbnail

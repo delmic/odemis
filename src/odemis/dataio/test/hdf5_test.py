@@ -567,7 +567,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_EXP_TIME: 1, # s
                      model.MD_IN_WL: (600e-9, 620e-9), # m
                      model.MD_OUT_WL: (620e-9, 650e-9), # m
-                     model.MD_ROTATION:-0.1, # rad
+                     model.MD_ROTATION: 0.1, # rad
                     },
                     ]
         # create 3 greyscale images of same size

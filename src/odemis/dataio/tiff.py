@@ -24,9 +24,10 @@ from __future__ import division
 import calendar
 from libtiff import TIFF
 import logging
+import math
 import numpy
 from numpy.polynomial import polynomial
-from odemis import model
+from odemis import model, util
 import odemis
 from odemis.util import spectrum
 import re
@@ -93,6 +94,8 @@ def _convertToTiffTag(metadata):
             tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
         elif key == model.MD_PIXEL_SIZE:
             # convert m/px -> px/cm
+            # Note: apparently some reader (Word?) try to use this to display
+            # the image, which ends up in very very small images.
             try:
                 tiffmd[T.TIFFTAG_XRESOLUTION] = (1 / val[0]) / 100
                 tiffmd[T.TIFFTAG_YRESOLUTION] = (1 / val[1]) / 100
@@ -106,11 +109,10 @@ def _convertToTiffTag(metadata):
             # correct relatively to each other (for a given sample).
             tiffmd[T.TIFFTAG_XPOSITION] = 100 + val[0] * 100
             tiffmd[T.TIFFTAG_YPOSITION] = 100 + val[1] * 100
-        elif key == model.MD_ROTATION:
+#         elif key == model.MD_ROTATION:
             # TODO: should use the coarse grain rotation to update Orientation
             # and update rotation information to -45< rot < 45 -> maybe GeoTIFF's ModelTransformationTag?
             # or actually rotate the data?
-            logging.info("Metadata tag '%s' skipped when saving TIFF file", key)
         # TODO MD_BPP : the actual bit size of the detector
         # Use SMINSAMPLEVALUE and SMAXSAMPLEVALUE ?
         # N = SPP in the specification, but libtiff duplicates the values
@@ -279,6 +281,7 @@ def _convertToOMEMD(images):
 #        + ExperimenterRef
 #        + InstrumentRef
 #        + ImagingEnvironment # To describe the physical conditions (temp...)
+#        + Transform       # Affine transform (to record the rotation...)
 #        + Pixels          # technical dimensions of the images (XYZ, T, C)
 #          + Channel (*)   # emitter settings for the given channel (light wavelength)
 #            + DetectorSettings
@@ -426,6 +429,23 @@ def _updateMDFromOME(root, das):
             md[model.MD_LENS_MAG] = float(mag)
         except (AttributeError, KeyError, ValueError):
             pass
+
+        # rotation (and mirroring and translation, but we don't support this)
+        trans_mat = ime.find("Transform")
+        if trans_mat is not None:
+            try:
+                cosv = float(trans_mat.attrib["A00"]) # = ["A11"]
+                sinv = float(trans_mat.attrib["A01"]) # = -["A10"]
+                cosv2 = float(trans_mat.attrib["A11"])
+                sinvm = float(trans_mat.attrib["A10"])
+                if not (util.almost_equal(cosv, cosv2)
+                        and util.almost_equal(sinv, -sinvm)):
+                    logging.warning("Image metadata has complex transformation "
+                                    "which is not supported by Odemis.")
+                rot = math.atan2(sinv, cosv) % (2 * math.pi)
+                md[model.MD_ROTATION] = rot
+            except (AttributeError, KeyError, ValueError):
+                pass
 
         pxe = ime.find("Pixels") # there must be only one per Image
         try:
@@ -812,10 +832,13 @@ def _findImageGroups(das):
     prev_da = None
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
-        if (prev_da is None or
-            prev_da.shape != da.shape or
-            prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None) or
-            prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
+        if (prev_da is None
+            or prev_da.shape != da.shape
+            or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
+            or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
+            or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
+            # or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
+            or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
             ):
             # new group
             group_ifd = current_ifd
@@ -903,6 +926,15 @@ def _addImageElement(root, das, ifd, rois):
         ose = ET.SubElement(ime, "ObjectiveSettings",
                             attrib={"ID": "Objective:%d" % ifd})
 
+    if model.MD_ROTATION in globalMD:
+        rot = globalMD[model.MD_ROTATION]
+        sinr, cosr = math.sin(rot), math.cos(rot)
+        trans_mat = [[cosr, sinr, 0],
+                     [-sinr, cosr, 0]]
+        trane = ET.SubElement(ime, "Transform")
+        for i in range(2):
+            for j in range(3):
+                trane.attrib["A%d%d" % (i, j)] = "%.15f" % trans_mat[i][j]
 
     # Find a dimension along which the DA can be concatenated. That's a
     # dimension which is of size 1.
