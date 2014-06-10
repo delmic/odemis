@@ -521,7 +521,7 @@ class Detector(model.Detector):
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
+            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
 
             scaled_shape = (self.acq_shape[0] / scale[0], self.acq_shape[1] / scale[1])
