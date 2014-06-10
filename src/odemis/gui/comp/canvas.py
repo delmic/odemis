@@ -1543,7 +1543,7 @@ class PlotCanvas(BufferedCanvas):
         self.min_y = None
         self.max_y = None
 
-        # The rane of the x and y data
+        # The range of the x and y data
         self.range_x = None
         self.range_y = None
 

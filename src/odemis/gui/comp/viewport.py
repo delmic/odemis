@@ -57,9 +57,7 @@ class ViewPort(wx.Panel):
         # Keep track of this panel's pseudo focus
         self._has_focus = False
 
-        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
-                          wx.FONTSTYLE_NORMAL,
-                          wx.FONTWEIGHT_NORMAL)
+        font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.SetFont(font)
         self.SetBackgroundColour("#1A1A1A")
         self.SetForegroundColour("#BBBBBB")

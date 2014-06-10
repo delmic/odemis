@@ -1859,6 +1859,7 @@ class MirrorAlignTab(Tab):
         if self._sem_stream:
             self._sem_stream.is_active.value = False
 
+
 class TabBarController(object):
 
     def __init__(self, tab_rules, main_frame, main_data):
