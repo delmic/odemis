@@ -55,17 +55,20 @@ EXTENSIONS = [u".h5", u".hdf5"]
 # Image is an official extension to HDF5:
 # http://www.hdfgroup.org/HDF5/doc/ADGuide/ImageSpec.html
 
-# TODO: define format for Angular Resolved images acquired by the SPARC.
-# They can be up to 4D: SEMY, SEMX, CCDY, CCDX (SEM* are the positions on the sample)
-# CCDY, CCDX are not directly mappable to an angle, so their unit can only be px.
-# SEMY, SEMX are not necessarily on a grid/line. So it seems the less bad way to
-# save them would be a C11YX format, with C = SEMX * SEMY. It would have an
-# additional metadata PhysicalData/CenterPosition of Cx2 (or Cx3) floats to
-# contain the actual SEMY SEMX positions for each C.
-# An advantage of this format is that it works with complex acquisition shapes
-# like cross or circle. In addition, it's relatively simple for the user to
-# check each CCD image with a simple HDF5 viewer.
+# TODO: Document all our extensions (Preview, AR images, Rotation...)
+# Angular Resolved images (acquired by the SPARC) are recorded such as:
+# * Each CCD image is a separate acquisition, containing the raw data
+# * For each acquisition, the offset contains the position of the ebeam
+# * For each acquisition, a PhysicalData/PolePosition contains the X,Y
+#   coordinates (in px) of the mirror pole on the raw data.
 
+# Rotation information is saved in ImageData/Rotation as a series of floats
+# (of 3 or more dimensions, corresponding to X, Y, Z dimensions). It represents
+# the rotation vector (with right-hand rule). See the wikipedia article for
+# details. It's basically a vector which represents the plan of rotation by its
+# direction, and the angle (in rad) by its norm. The rotation is always applied
+# on the center of the data. For example, to rotate a 2D image by 0.7 rad
+# counter clockwise, the rotation vector would be 0, 0, 0.7
 
 # h5py doesn't implement explicitly HDF5 image, and is not willing to cf:
 # http://code.google.com/p/h5py/issues/detail?id=157
@@ -160,7 +163,7 @@ def _read_image_dataset(dataset):
 
 def _add_image_info(group, dataset, image, rgb=False):
     """
-    Adds the basic metadata information about an image (scale and offset)
+    Adds the basic metadata information about an image (scale, offset, and rotation)
     group (HDF Group): the group that contains the dataset
     dataset (HDF Dataset): the image dataset
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
@@ -304,9 +307,13 @@ def _add_image_info(group, dataset, image, rgb=False):
                             "it will not be saved.")
         
 
-    # TODO: extension for Rotation:
-#   RotationAngle (scalar): angle in radian
-#   RotationAxis (3-scalar): X,Y,Z of the rotation vector
+    # Rotation (3-scalar): X,Y,Z of the rotation vector, with the norm being the
+    # angle in radians (according to the right-hand rule)
+    if model.MD_ROTATION in image.metadata:
+        # In Odemis we only support 2D rotation, so just around Z
+        group["Rotation"] = (0, 0, image.metadata[model.MD_ROTATION])
+        _h5svi_set_state(group["Rotation"], ST_REPORTED)
+        group["Rotation"].attrs["UNIT"] = "rad"
 
 def _read_image_info(group):
     """
@@ -357,6 +364,16 @@ def _read_image_info(group):
                     pn = [float(group["COffset"][()]),
                           float(dim[0][()])]
                     md[model.MD_WL_POLYNOMIAL] = pn
+    except Exception:
+        pass
+
+    try:
+        rot = group["Rotation"]
+        md[model.MD_ROTATION] = float(rot[2])
+        if rot[0] != 0 or rot[1] != 0:
+            logging.info("Metadata contains rotation vector %s, which cannot be"
+                         " fully reproduced in Odemis.", rot) 
+
     except Exception:
         pass
 
@@ -773,6 +790,7 @@ def _findImageGroups(das):
     # * metadata that show they were acquired by the same instrument
     # * same position
     # * same density (MPP)
+    # * same rotation
     groups = []
 
     for i, da in enumerate(das):
@@ -781,11 +799,13 @@ def _findImageGroups(das):
             da0 = das[g[0]]
             if da0.shape != da.shape:
                 continue
-            if (da0.metadata.get(model.MD_HW_NAME) != da.metadata.get(model.MD_HW_NAME) or
-                da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)):
+            if (da0.metadata.get(model.MD_HW_NAME) != da.metadata.get(model.MD_HW_NAME)
+                or da0.metadata.get(model.MD_HW_VERSION) != da.metadata.get(model.MD_HW_VERSION)):
                 continue
-            if (da0.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE) or
-                da0.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)):
+            if (da0.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
+                or da0.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
+                or da0.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
+                ):
                 continue
             # Found!
             g.append(i)
