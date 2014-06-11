@@ -699,14 +699,33 @@ class SEMComedi(model.HwComponent):
             comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
                                                   wcmd, nwchans, period_ns)
         period_ns = wcmd.scan_begin_arg
+        
+        rcmd = comedi.cmd_struct()
+        wcmd = comedi.cmd_struct()
+
+        # First try with a read period just fitting. If it works, it's great
+        rperiod_ns = int(self._min_ai_periods[nrchans] * 1e9)
+        osr = max(1, min(period_ns // rperiod_ns, max_osr))
+        comedi.get_cmd_generic_timed(self._device, self._ai_subdevice,
+                                     rcmd, nrchans, period_ns // osr)
+        rperiod_ns = rcmd.scan_begin_arg
+        wperiod_ns = rperiod_ns * osr
+        if self._test:
+            wcmd.scan_begin_arg = wperiod_ns
+        else:
+            # check this _exact_ write period is compatible
+            comedi.get_cmd_generic_timed(self._device, self._ao_subdevice,
+                                         wcmd, nwchans, wperiod_ns)
+        if wcmd.scan_begin_arg == wperiod_ns:
+            # we've found it!
+            logging.debug("Found over-sampling rate: %g ns x %d = %g ns", rperiod_ns, osr, wperiod_ns)
+            return dpr * wperiod_ns / 1e9, osr, dpr
 
         # The read period should be as close as possible from the minimum read
         # period (as long as it's equal or above). Then try to find a write
         # period compatible with this read period, more or less in the same order
         # of time as given
         orig_rperiod_ns = rperiod_ns = int(self._min_ai_periods[nrchans] * 1e9)
-        rcmd = comedi.cmd_struct()
-        wcmd = comedi.cmd_struct()
         while rperiod_ns < 5 * orig_rperiod_ns:
             # it'll probably work on the first time, but just in case, we try
             # 5 times, with slighly bigger read periods
