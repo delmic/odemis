@@ -33,7 +33,7 @@ import math
 import odemis.gui
 
 # ==============================================================================
-# The following function can be used to set dynamic configuratin values
+# The following function can be used to set dynamic configuration values
 # ==============================================================================
 
 def _resolution_from_range(comp, va, conf):
@@ -76,11 +76,11 @@ def _binning_1d_from_2d(comp, va, conf):
 
         # add up to 5 binnings
         b = int(math.ceil(minbin)) # in most cases, that's 1
-        for _ in range(5):
-            if minbin <= b and b <= maxbin:
+        for _ in range(6):
+            if minbin <= b <= maxbin:
                 choices.add(b)
 
-            if len(choices) >= 4 and b >= cur_val[0]:
+            if len(choices) >= 5 and b >= cur_val[0]:
                 break
 
             b *= 2
@@ -103,11 +103,11 @@ def _binning_firstd_only(comp, va, conf):
 
         # add up to 5 binnings
         b = int(math.ceil(minbin)) # in most cases, that's 1
-        for _ in range(5):
-            if minbin <= b and b <= maxbin:
+        for _ in range(6):
+            if minbin <= b <= maxbin:
                 choices.add(b)
 
-            if len(choices) >= 4 and b >= cur_val:
+            if len(choices) >= 5 and b >= cur_val:
                 break
 
             b *= 2
@@ -162,6 +162,10 @@ CONFIG = {
             "choices": _resolution_from_range,
         },
         # what we don't want to display:
+        "translation":
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
         "targetTemperature":
         {
             "control_type": odemis.gui.CONTROL_NONE,

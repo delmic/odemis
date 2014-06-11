@@ -1993,10 +1993,10 @@ class Scanner(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         # In theory the shape depends on the X/Y ranges, the actual ranges that
-        # can be used and the maxdata. For simplicity we just fix it to 2048
+        # can be used and the maxdata. For simplicity we just fix it to 4096
         # which is probably sufficient for most usages and almost always reachable
         # shapeX = (diff_limitsX / diff_bestrangeX) * maxdataX
-        self._shape = (2048, 2048)
+        self._shape = (4096, 4096)
 
         # next two values are just to determine the pixel size
         # Distance between borders if magnification = 1. It should be found out
@@ -2030,7 +2030,7 @@ class Scanner(model.Emitter):
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
-        resolution = (self._shape[0] // 8, self._shape[1] // 8)
+        resolution = (self._shape[0] // 16, self._shape[1] // 16)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), self._shape],
                                              setter=self._setResolution)
         self._resolution = resolution

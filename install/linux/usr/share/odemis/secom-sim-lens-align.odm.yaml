@@ -87,7 +87,7 @@ Spectra: {
         hfw_nomag: 0.25, # m
     },
     properties: {
-        scale: [8, 8], # (ratio) : start with a pretty fast scan
+        scale: [16, 16], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 10000, # (ratio)
     },
