@@ -26,6 +26,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import logging
 import threading
+import numpy
 import time
 from odemis.acq._futures import executeTask
 from odemis import model
@@ -33,6 +34,9 @@ from odemis import model
 from .images import GridScanner
 from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverlay
 from .spot import estimateAlignmentTime, _DoAlignSpot, _CancelAlignSpot
+from .autofocus import estimateAutoFocusTime, _DoAutoFocus, _CancelAutoFocus, MeasureFocus
+
+SPOTMODE_ACCURACY = 0.001  # focus accuracy in spot mode #m
 
 
 def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
@@ -96,6 +100,9 @@ def AlignSpot(ccd, stage, escan, focus):
     doAlignSpot = _DoAlignSpot
     f.task_canceller = _CancelAlignSpot
 
+    # Create autofocusing module
+    f._autofocus = AutoFocusing(ccd, focus, SPOTMODE_ACCURACY)
+
     # Run in separate thread
     alignment_thread = threading.Thread(target=executeTask,
                   name="Spot alignment",
@@ -103,3 +110,66 @@ def AlignSpot(ccd, stage, escan, focus):
 
     alignment_thread.start()
     return f
+
+def AutoFocus(device, focus, accuracy):
+    """
+    Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
+    procedure or even cancel it.
+    device: model.DigitalCamera or model.Detector
+    focus (model.CombinedActuator): The optical focus
+    accuracy (float): Focus precision #m
+    returns (model.ProgressiveFuture):    Progress of DoAutoFocus, whose result() will return:
+            Focus position #m
+            Focus level
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    # Check if you focus the SEM or a digital camera
+    print device.resolution.value
+    if device.role == "se-detector":
+        et = device.dwellTime.value * numpy.prod(device.resolution.value)
+    else:
+        et = device.exposureTime.value
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateAutoFocusTime(et))
+    f._autofocus_state = RUNNING
+    f._autofocus_lock = threading.Lock()
+
+    # Task to run
+    doAutoFocus = _DoAutoFocus
+    f.task_canceller = _CancelAutoFocus
+
+    # Run in separate thread
+    autofocus_thread = threading.Thread(target=executeTask,
+                  name="Autofocus",
+                  args=(f, doAutoFocus, f, device, et, focus, accuracy))
+
+    autofocus_thread.start()
+    return f
+
+class AutoFocusing(object):
+    """
+    Class providing the ability to AlignSpot to create an AutoFocusing module.
+    """
+    def __init__(self, device, focus, accuracy):
+        self.device = device
+        self.focus = focus
+        self.accuracy = accuracy
+        self.future_focus = None
+
+        self._autofocus_state = FINISHED
+        self._autofocus_lock = threading.Lock()
+
+    def _doMeasureFocus(self, image):
+        return MeasureFocus(image)
+
+    def DoAutoFocus(self):
+        self.future_focus = AutoFocus(self.device, self.focus, self.accuracy)
+        foc_pos, fm_level = self.future_focus.result()
+        return foc_pos, fm_level
+
+    def CancelAutoFocus(self):
+        """
+        Canceller of DoAutoFocus task.
+        """
+        return self.future_focus.cancel()

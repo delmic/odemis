@@ -70,7 +70,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     if future._spot_alignment_state == CANCELLED:
         raise CancelledError()
     logging.debug("Autofocusing...")
-    lens_pos = AutoSpotFocus(ccd, escan, focus)
+    lens_pos = AutoSpotFocus(future, ccd, escan, focus)
     if lens_pos is None:
         raise IOError('Spot alignment failure')
 
@@ -100,7 +100,7 @@ def _CancelAlignSpot(future):
         if future._spot_alignment_state == FINISHED:
             return False
         future._spot_alignment_state = CANCELLED
-        future._future_scan.cancel()
+        future._autofocus.CancelAutoFocus()
         logging.debug("Spot alignment cancelled.")
 
     return True
@@ -111,7 +111,7 @@ def estimateAlignmentTime():
     Estimates spot alignment procedure duration
     """
     # TODO
-    return 0  # s
+    return 60  # s
 
 
 def FindSpot(image):
@@ -130,7 +130,7 @@ def FindSpot(image):
     return optical_coordinates[0]
 
 
-def AutoSpotFocus(ccd, escan, focus):
+def AutoSpotFocus(future, ccd, escan, focus):
     """
     Sets the right CCD settings, the ebeam to spot mode and calls the generic 
     AutoFocus function.
@@ -170,7 +170,7 @@ def AutoSpotFocus(ccd, escan, focus):
                             sorted((range_y[0], 2 * max_dim + FOV_MARGIN, range_y[1]))[1])
 
     # Focus
-    lens_pos = autofocus.AutoFocus(ccd, focus)
+    lens_pos, fm_level = future._autofocus.DoAutoFocus()
     return lens_pos
 
 
@@ -311,5 +311,4 @@ class InclinedStage(model.Actuator):
     def stop(self, axes=None):
         # This is normally never used (child is directly stopped)
         self._child.stop()
-
 

@@ -31,6 +31,7 @@ from odemis.util import driver
 from odemis import model
 from odemis.dataio import hdf5
 import odemis
+from odemis.acq import align
 from odemis.acq.align import autofocus
 from scipy import ndimage
 
@@ -115,7 +116,7 @@ class TestAutofocus(unittest.TestCase):
         """
         focus = self.focus
         ccd = self.FakeCCD(self, focus)
-        foc_pos = autofocus.AutoFocus(ccd, focus)
+        foc_pos, fm_level = align.AutoFocus(ccd, focus)
         self.assertAlmostEqual(foc_pos, ccd.p0, 5)
 
     class FakeCCD():
