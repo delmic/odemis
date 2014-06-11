@@ -31,8 +31,6 @@ import logging
 from Pyro4.core import isasync
 from odemis import model
 from scipy import ndimage
-from odemis.dataio import hdf5
-from . import autofocus
 
 _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
