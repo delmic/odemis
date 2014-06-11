@@ -394,7 +394,7 @@ class GridScanner(object):
         """
         Convert the ROI in physical coordinates into a CCD ROI (in pixels)
         roi (4 floats): ltrb positions in m
-        return (4 ints or None): ltrb positions in pixels, or 
+        return (4 ints or None): ltrb positions in pixels, or None if no intersection 
         """
         ccd_rect = self.get_ccd_fov()
         logging.debug("CCD FoV = %s", ccd_rect)
@@ -407,8 +407,8 @@ class GridScanner(object):
                 (roi[2] - ccd_rect[0]) / phys_width[0],
                 (roi[3] - ccd_rect[1]) / phys_width[1],
                 )
-        # ensure it's in ltrb order
-        proi = util.normalize_rect(proi)
+        # inverse Y (because physical Y goes down, while pixel Y goes up)
+        proi = (proi[0], 1 - proi[3], proi[2], 1 - proi[1])
 
         # convert to pixel values, rounding to slightly bigger area
         shape = self.ccd.shape[0:2]
