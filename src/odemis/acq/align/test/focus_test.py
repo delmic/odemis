@@ -115,9 +115,11 @@ class TestAutofocus(unittest.TestCase):
         Test AutoFocus
         """
         focus = self.focus
+        ebeam = self.ebeam
         ccd = self.FakeCCD(self, focus)
-        foc_pos, fm_level = align.AutoFocus(ccd, focus)
-        self.assertAlmostEqual(foc_pos, ccd.p0, 5)
+        future_focus = align.AutoFocus(ccd, ebeam, focus, 10e-06)
+        foc_pos, fm_final = future_focus.result()
+        self.assertAlmostEqual(foc_pos, ccd.p0, 4)
 
     class FakeCCD():
         """
@@ -130,8 +132,10 @@ class TestAutofocus(unittest.TestCase):
             """
             self.testCase = testCase
             self.focus = focus
+            self.role = "ccd"
+            self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
             # Just a random number
-            self.p0 = -162e-06
+            self.p0 = -50e-06
             self.data = self.testCase.CCDDataFlow(self)
             self._acquisition_thread = None
             self._acquisition_lock = threading.Lock()

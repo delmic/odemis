@@ -37,7 +37,7 @@ from . import autofocus
 _acq_lock = threading.Lock()
 _ccd_done = threading.Event()
 
-MAX_STEPS_NUMBER = 20  # Max steps to perform alignment
+MAX_STEPS_NUMBER = 3  # Max steps to perform alignment
 FOV_MARGIN = 50  # pixelss
 
 _alignment_lock = threading.Lock()
@@ -160,6 +160,7 @@ def AutoSpotFocus(future, ccd, escan, focus):
     center_pxs = ((image.shape[0] / 2),
                  (image.shape[1] / 2))
     spot_pxs = FindSpot(image)
+
     if spot_pxs is None:
         return None
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
@@ -217,7 +218,7 @@ def CenterSpot(ccd, escan, stage):
             break
 
         # Move to the found spot
-        f = stage_ab.moveRel({"x":tab[1], "y":tab[0]})
+        f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
         f.result()
 
         image = ccd.data.get()

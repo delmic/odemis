@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
 """
-Created on 2 Jun 2014
+Created on 11 Jun 2014
 
 @author: Kimon Tsitsikas
 
 Copyright © 2013-2014 Kimon Tsitsikas, Delmic
 
-This is a script to test the functionalities included to “Autofocus” i.e. 
-MeasureFocus and Autofocus.
+This is a script to test the functionalities included to “AlignSpot” i.e. 
+Autofocus and CenterSpot.
 
 run as:
-python autofocus.py --accuracy 0.001
-
---accuracy Focus precision #m
+python spot_alignment.py
 
 You first need to run the odemis backend with the SECOM config:
 odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
@@ -43,13 +41,7 @@ def main(args):
 
     # arguments handling
     parser = argparse.ArgumentParser(description=
-                     "Automated focus procedure")
-
-    parser.add_argument("--accuracy", "-a", dest="accuracy", required=True,
-                        help="Focus precision in meters")
-
-    options = parser.parse_args(args[1:])
-    accuracy = float(options.accuracy)
+                     "Automated spot alignment procedure")
 
     try:
         ebeam_focus = None
@@ -57,6 +49,7 @@ def main(args):
         escan = None
         ccd = None
         focus = None
+        stage = None
 
         # find components by their role
         for c in model.getComponents():
@@ -70,19 +63,16 @@ def main(args):
                 ccd = c
             elif c.role == "focus":
                 focus = c
-        if not all([ebeam_focus, detector, escan, ccd, focus]):
+            elif c.role == "align":
+                stage = c
+        if not all([ebeam_focus, detector, escan, ccd, focus, stage]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
-    
-        # Measure current focus
-        img = detector.data.get()
-        fm_cur = autofocus.MeasureFocus(img)
-        logging.debug("Current focus level: %f", fm_cur)
 
-        # Apply autofocus
-        future_focus = align.AutoFocus(detector, escan, ebeam_focus, accuracy)
-        foc_pos, fm_final = future_focus.result()
-        logging.debug("Focus level after applying autofocus: %f", fm_final)
+        # Apply spot alignment
+        future_spot = align.AlignSpot(ccd, stage, escan, focus)
+        t = future_spot.result()
+        logging.debug("Final distance to the center (in meters): %f", t)
 
     except:
         logging.exception("Unexpected error while performing action.")

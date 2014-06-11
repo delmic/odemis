@@ -29,7 +29,7 @@ import subprocess
 from odemis.util import driver
 from odemis import model
 import odemis
-from odemis.acq import spot_alignment
+from odemis.acq import align
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -98,10 +98,9 @@ class TestAlignment(unittest.TestCase):
         ccd = self.ccd
         focus = self.focus
 
-        f = spot_alignment.AlignSpot(ccd, stage, escan, focus)
+        f = align.AlignSpot(ccd, stage, escan, focus)
 
         t = f.result()
-        print t
 
     @unittest.skip("skip")
     def test_spot_alignment_cancelled(self):
@@ -113,7 +112,7 @@ class TestAlignment(unittest.TestCase):
         ccd = self.ccd
         focus = self.focus
 
-        f = spot_alignment.AlignSpot(ccd, stage, escan, focus)
+        f = align.AlignSpot(ccd, stage, escan, focus)
         time.sleep(0.01)  # Cancel almost after the half grid is scanned
 
         f.cancel()

@@ -130,6 +130,8 @@ class TestSpotAlignment(unittest.TestCase):
             """
             self.testCase = testCase
             self.align = align
+            self.role = "ccd"
+            self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
 
             self.data = self.testCase.CCDDataFlow(self)
             self._acquisition_thread = None
@@ -175,7 +177,7 @@ class TestSpotAlignment(unittest.TestCase):
             with self._acquisition_init_lock:
                 pos = self.align.position.value
                 ac, bc = pos.get("a"), pos.get("b")
-                ang = math.radians(-135)
+                ang = math.radians(135)
                 # AB->XY
                 xc = ac * math.sin(ang) + bc * math.cos(ang)
                 yc = ac * math.cos(ang) - bc * math.sin(ang)
