@@ -20,6 +20,9 @@ run as:
       For each pixel acquired by the CCD, each subpixel is scanned by the ebeam.
 --output indicates the name of the file which will contain all the output. It 
          should finish by .h5 (for HDF5) or .tiff (for TIFF).
+--lpower defines the excitation light power on the first fluorescence pixel. The value can be 
+		 between 0.004 and 0.4 (in W). Power will be gradually scaled up to the maximum (0.4 W) 
+         on the last pixel to compensate photobleaching effect in the signal drop.
 
 You first need to run the odemis backend with the SECOM config. For instance,
 start Odemis, and close the graphical interface. Alternatively you can start
@@ -53,13 +56,14 @@ CCD_ROI = False # If True, the CCD ROI will be set to fit the SEM ROI.
 logging.getLogger().setLevel(logging.INFO) # put "DEBUG" level for more messages
 
 class Acquirer(object):
-    def __init__(self, dt, roi, pxs, subpx=1):
+    def __init__(self, dt, roi, pxs, subpx=1, lpower=0.2):
         """
         pxs (0<float): distance in m between center of each tile 
         subpx (1<=int): number of sub-pixels
         """
         if subpx < 1 or (math.sqrt(subpx) % 1) != 0:
             raise ValueError("subpx must be square of an integer")
+        
         self.dt = dt
         self.roi = roi
         subpx_x = math.trunc(math.sqrt(subpx))
@@ -67,6 +71,7 @@ class Acquirer(object):
         self.subpxs = pxs / subpx_x
         logging.info("Sub-pixels will be spaced by %f nm", self.subpxs * 1e9)
         self.tile_shape = (subpx_x, subpx_x) # for now always the same in x and y
+        self.lpower = lpower
 
         # Get the components we need
         self.sed = model.getComponent(role="se-detector")
@@ -75,6 +80,10 @@ class Acquirer(object):
         self.ccd = model.getComponent(role="ccd")
         self.stage = model.getComponent(role="stage")
         
+        lprng = self.light.power.range
+        if not (lprng[0] < lpower < lprng[1]):
+            raise ValueError("starting light power value must be between %s", lprng)
+
         # counter-intuitively, to get the smaller pixel size, no sub-pixel
         # should be used. That's because when there is no sub-pixel we can use
         # spot mode, which allows to go at less than scale=1.
@@ -168,7 +177,7 @@ class Acquirer(object):
         """
         Convert the ROI in physical coordinates into a CCD ROI (in pixels)
         roi (4 floats): ltrb positions in m
-        return (4 ints or None): ltrb positions in pixels, or 
+        return (4 ints or None): ltrb positions in pixels, or None if no intersection
         """
         ccd_rect = self.get_ccd_fov()
         logging.debug("CCD FoV = %s", ccd_rect)
@@ -181,8 +190,8 @@ class Acquirer(object):
                 (roi[2] - ccd_rect[0]) / phys_width[0],
                 (roi[3] - ccd_rect[1]) / phys_width[1],
                 )
-        # ensure it's in ltbr order
-        proi = util.normalize_rect(proi)
+        # inverse Y (because physical Y goes down, while pixel Y goes up)
+        proi = (proi[0], 1 - proi[3], proi[2], 1 - proi[1])
 
         # convert to pixel values, rounding to slightly bigger area
         shape = self.ccd.shape[0:2]
@@ -271,7 +280,7 @@ class Acquirer(object):
         trans = self.ebeam.translation.value
         dt = self.ebeam.dwellTime.value
         lpower = self.light.power.value
-        
+
         self._hw_settings = (res, scale, trans, dt, lpower)
     
     def resume_hw_settings(self):
@@ -281,12 +290,9 @@ class Acquirer(object):
         self.ebeam.scale.value = scale
         self.ebeam.resolution.value = res
         self.ebeam.translation.value = trans
-
         self.ebeam.dwellTime.value = dt
-        
         self.light.power.value = lpower
 
-    
     def configure_sem_for_tile(self):
         """
         Configure the SEM to be able to acquire one spot
@@ -319,12 +325,13 @@ class Acquirer(object):
         scale = (pxs / sem_pxs[0], pxs / sem_pxs[1]) # it's ok to have something a bit < 1
         
         rel_width = [roi[2] - roi[0], roi[3] - roi[1]]
-#         rel_center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
+        rel_center = [(roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2]
         
         px_width = [full_width[0] * rel_width[0], full_width[1] * rel_width[1]]
-#         px_center = [full_width[0] * rel_center[0], full_width[1] * rel_center[1]]
+        px_center = [full_width[0] * (rel_center[0] - 0.5),
+                     full_width[1] * (rel_center[1] - 0.5)]
         
-        # number of points to scan 
+        # number of points to scan
         rep = [int(max(1, px_width[0] / scale[0])),
                int(max(1, px_width[1] / scale[1]))]  
         
@@ -332,8 +339,8 @@ class Acquirer(object):
         # so need to update the width.
         px_width = [rep[0] * scale[0], rep[1] * scale[1]]
         # + scale/2 is to put the spot at the center of each pixel
-        lt = [-px_width[0] / 2 + scale[0] / 2,
-              - px_width[1] / 2 + scale[1] / 2]
+        lt = [px_center[0] - px_width[0] / 2 + scale[0] / 2,
+              px_center[1] - px_width[1] / 2 + scale[1] / 2]
         
         # Note: currently the semcomedi driver doesn't allow to move to the very
         # border, so any roi must be at least > 0.5  and below < rngs - 0.5,
@@ -378,7 +385,7 @@ class Acquirer(object):
         
         # Turn on the light
         # TODO: allow user to specify power (instead of using the maximum)
-        self.light.power.value = self.light.power.range[1]
+        self.light.power.value = self.lpower
         
         # Acquire an image of the fluorescence
         data = self.ccd.data.get()
@@ -575,6 +582,12 @@ def main(args):
     parser.add_argument("--roi", dest="roi", required=True,
                         help="e-beam ROI positions (ltrb, relative to the SEM "
                              "field of view)")
+    parser.add_argument("--lpower", "-lp", dest="lpower", type=float, default=0.02,
+                        help="excitation light power on the first fluorescence pixel. "
+                            "Choose the value between 0.004 and 0.4 (in W). "
+                            "Power will be gradually scaled up to the maximum (0.4 W) "
+                            "on the last pixel to compensate photobleaching effect "
+                            "in the signal drop.")
     parser.add_argument("--output", "-o", dest="filename", required=True,
                         help="name of the file output")
 
@@ -584,7 +597,7 @@ def main(args):
     if not all(0 <= r <= 1 for r in roi):
         raise ValueError("roi values must be between 0 and 1")
 
-    a = Acquirer(options.dt, roi, options.pxs * 1e-9, options.subpx)
+    a = Acquirer(options.dt, roi, options.pxs * 1e-9, options.subpx, options.lpower)
     a.acquire(options.filename)
 
 if __name__ == '__main__':
