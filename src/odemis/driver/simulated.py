@@ -26,9 +26,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-
 import logging
-from odemis import model
+from odemis import model, util
 from odemis.model import isasync
 from odemis.model._futures import CancellableThreadPoolExecutor
 import random
@@ -180,18 +179,26 @@ class Chamber(model.Actuator):
         self.pressure = model.VigilantAttribute(self._position,
                                     unit="Pa", readonly=True)
 
+        self._press_timer = util.RepeatingTimer(1, self._updatePressure,
+                                         "Simulated pressure update")
+        self._press_timer.start()
+
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
     def terminate(self):
+        if self._press_timer:
+            self._press_timer.cancel()
+            self._press_timer = None
+
         if self._executor:
             self.stop()
             self._executor.shutdown()
             self._executor = None
 
-    def _updatePosition(self):
+    def _updatePressure(self):
         """
-        update the position VA and .pressure VA
+        update the pressure VA (called regularly from a thread)
         """
         # Compute the current pressure
         now = time.time()
@@ -207,6 +214,10 @@ class Chamber(model.Actuator):
         self.pressure._value = pos
         self.pressure.notify(pos)
 
+    def _updatePosition(self):
+        """
+        update the position VA
+        """
         # .position contains the last known/valid position
         # it's read-only, so we change it via _value
         self.position._value = {"pressure": self._position}
@@ -237,12 +248,13 @@ class Chamber(model.Actuator):
         """
         # TODO: allow to cancel during the change
         now = time.time()
-        duration = 5 # s
+        duration = 15 # s
         self._time_start = now
         self._time_goal = now + duration # s
         self._goal = p
 
         time.sleep(duration)
+
         self._position = p
         self._updatePosition()
 
