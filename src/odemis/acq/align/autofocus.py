@@ -89,7 +89,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
 
         # Determine focus direction
         # TODO check if out of bounds
-        step = 0.5e-3
+        step = 500e-6
         image = device.data.get()
         fm_cur = MeasureFocus(image)
         hdf5.export("firstimg.h5", model.DataArray(image))

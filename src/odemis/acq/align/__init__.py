@@ -36,7 +36,7 @@ from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverla
 from .spot import estimateAlignmentTime, _DoAlignSpot, _CancelAlignSpot
 from .autofocus import estimateAutoFocusTime, _DoAutoFocus, _CancelAutoFocus, MeasureFocus
 
-SPOTMODE_ACCURACY = 0.0001  # focus accuracy in spot mode #m
+SPOTMODE_ACCURACY = 100e-6  # focus accuracy in spot mode #m
 
 
 def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
