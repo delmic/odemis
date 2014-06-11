@@ -27,6 +27,7 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import threading
 import coordinates
 import math
+import time
 import logging
 from Pyro4.core import isasync
 from odemis import model
@@ -167,6 +168,11 @@ def AutoSpotFocus(future, ccd, escan, focus):
     range_y = (ccd.resolution.range[0][1], ccd.resolution.range[1][1])
     ccd.resolution.value = (sorted((range_x[0], 2 * max_dim + FOV_MARGIN, range_x[1]))[1],
                             sorted((range_y[0], 2 * max_dim + FOV_MARGIN, range_y[1]))[1])
+
+    #Make sure acquired images have the correct resolution
+    image = ccd.data.get()
+    while image.shape != ccd.resolution.value:
+        image = ccd.data.get()
 
     # Focus
     lens_pos, fm_level = future._autofocus.DoAutoFocus()
