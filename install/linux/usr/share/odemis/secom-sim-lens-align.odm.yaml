@@ -82,6 +82,7 @@ Spectra: {
         channels: [1, 0],
         limits: [[0, 5], [0, 5]],  # V
         park: [-5, -5], # V
+        fastpark: True,
         settle_time: 10.e-6, # s
         hfw_nomag: 0.25, # m
     },

@@ -863,8 +863,10 @@ class SEMComedi(model.HwComponent):
             logging.debug("Going to read %d lines", lines)
             wdata = data[x:x + lines, :, :] # just a couple of lines
             wdata = wdata.reshape(-1, wdata.shape[2]) # flatten X/Y
+            islast = (x + lines >= data.shape[0])
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
-                                            rranges, period, osr, wdata, margin)
+                                    rranges, period, osr, wdata, margin,
+                                    rest=(islast and self._scanner.fast_park))
 
             # decimate into each buffer
             for i, b in enumerate(buf):
@@ -923,8 +925,10 @@ class SEMComedi(model.HwComponent):
                 ss = dpr
             else:
                 ss = 0
+            islast = ((x + 1, y + 1) == data.shape)
             rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
-                                        rranges, period / dpr, osr, wdata, ss)
+                                    rranges, period / dpr, osr, wdata, ss,
+                                    rest=(islast and self._scanner.fast_park))
 
             # decimate into each buffer
             for i, b in enumerate(buf):
@@ -951,12 +955,20 @@ class SEMComedi(model.HwComponent):
         oarray[x, y - margin] = numpy.sum(data, dtype=adtype) / (osr * dpr)
 
     def _fake_write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges,
-                                 period, osr, data, settling_samples):
+                                 period, osr, data, settling_samples, rest=False):
         """
         Imitates _write_read_raw_one_cmd() but works with the comedi_test driver,
           just read data.
         """
         begin = time.time()
+        if rest:
+            rd, rc, rr = self._scanner.get_resting_point_data()
+            if rr != wranges:
+                logging.error("write (%s) and rest (%s) ranges are different",
+                              wranges, rr)
+            logging.debug("Would write rest position %s", rd)
+            data = numpy.append(data, [rd], axis=0)
+
         nwscans = data.shape[0]
         nwchans = data.shape[1]
         nrscans = nwscans * osr
@@ -1011,11 +1023,13 @@ class SEMComedi(model.HwComponent):
         self._writer.wait(0.1)
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
+        if rest:
+            rbuf = rbuf[:-osr, :] # remove data read during rest positioning
         logging.debug("acquisition took %g s, init=%g s", time.time() - begin, start - begin)
         return rbuf
 
     def _write_read_raw_one_cmd(self, wchannels, wranges, rchannels, rranges,
-                            period, osr, data, settling_samples):
+                            period, osr, data, settling_samples, rest=False):
         """
         write data on the given analog output channels and read synchronously
           on the given analog input channels in one command
@@ -1031,12 +1045,19 @@ class SEMComedi(model.HwComponent):
           first dimension is along the time, second is along the channels
         settling_samples (int): number of first write samples used for the 
           settling of the beam, and so don't need to trigger newPosition 
+        rest (boolean): if True, will add one more write to set to rest position
         return (2D numpy.array with dtype=device type)
             the raw data read (first dimension is data.shape[0] * osr) for each
             channel (as second dimension).
         raises:
             IOError: in case of timeout or cancellation
         """
+        if rest:
+            rd, rc, rr = self._scanner.get_resting_point_data()
+            if rr != wranges:
+                logging.error("write (%s) and rest (%s) ranges are different",
+                              wranges, rr)
+            data = numpy.append(data, [rd], axis=0)
         # We write at the given period, and read osr samples for each pixel
         nwscans = data.shape[0]
         nwchans = data.shape[1]
@@ -1109,6 +1130,8 @@ class SEMComedi(model.HwComponent):
             self._writer.wait() # writer is faster, so there should be no wait
         # reshape to 2D
         rbuf.shape = (nrscans, nrchans)
+        if rest:
+            rbuf = rbuf[:-osr, :] # remove data read during rest positioning
         return rbuf
 
     def _start_new_position_notifier(self, n, start, period):
@@ -1897,7 +1920,7 @@ class Scanner(model.Emitter):
       Resolution > Translation.  
     """
     def __init__(self, name, role, parent, channels, limits, settle_time,
-                 hfw_nomag, park=None, **kwargs):
+                 hfw_nomag, park=None, fastpark=False, **kwargs):
         """
         channels (2-tuple of (0<=int)): output channels for X/Y to drive. X is
           the fast scanned axis, Y is the slow scanned axis. 
@@ -1910,6 +1933,8 @@ class Scanner(model.Emitter):
           (lower/upper limit in X) if magnification is 1 (in m)
         park (None or 2-tuple of (0<=float)): voltage of resting position, 
           if None, it will default to top-left corner.
+        fastpart (boolean): if True, will park immediatly after finishing a scan
+          (otherwise, it will wait a few ms to check there if a new scan
         """
         if len(channels) != 2:
             raise ValueError("E-beam scanner '%s' needs 2 channels" % (name,))
@@ -1956,6 +1981,10 @@ class Scanner(model.Emitter):
                 except comedi.ComediError:
                     raise ValueError("Park voltage %g V is too high for hardware." %
                                      (park[i],))
+        # TODO: if fast park is required, we can only allow the same ranges as
+        # for the standard scanning, but we don't handle it now as it's more a
+        # hack than anything official
+        self.fast_park = fastpark
 
         # TODO: only set this to True if the order of the conversion polynomial <=1
         self._can_generate_raw_directly = True
