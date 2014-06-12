@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
@@ -40,7 +40,7 @@ class Light(model.Emitter):
     """
     def __init__(self, name, role, **kwargs):
         model.Emitter.__init__(self, name, role, **kwargs)
-        
+
         self._shape = ()
         self.power = model.FloatContinuous(0., [0., 100.], unit="W")
         self.power.subscribe(self._updatePower)
@@ -49,13 +49,13 @@ class Light(model.Emitter):
         self.emissions = model.ListVA([1.0], unit="", setter=lambda x: [1.0])
         self.spectra = model.ListVA([(380e-9, 160e-9, 560e-9, 960e-9, 740e-9)],
                                      unit="m", readonly=True) # list of 5-tuples of floats
-        
+
     def getMetadata(self):
         metadata = {}
         metadata[model.MD_IN_WL] = (380e-9, 740e-9)
         metadata[model.MD_LIGHT_POWER] = self.power.value
         return metadata
-    
+
     def _updatePower(self, value):
         if value == 0:
             logging.info("Light is off")
@@ -114,12 +114,12 @@ class Stage(model.Actuator):
             self._position[axis] += change
             rng = self.axes[axis].range
             if not rng[0] < self._position[axis] < rng[1]:
-                logging.warning("moving axis %s to %f, outside of range %r", 
+                logging.warning("moving axis %s to %f, outside of range %r",
                                 axis, self._position[axis], rng)
-            else: 
+            else:
                 logging.info("moving axis %s to %f", axis, self._position[axis])
             maxtime = max(maxtime, abs(change) / self.speed.value[axis])
-        
+
         self._updatePosition()
         # TODO queue the move and pretend the position is changed only after the given time
         return model.InstantaneousFuture()
@@ -150,7 +150,6 @@ PRESSURE_VENTED = 100e3 # Pa
 PRESSURE_OVERVIEW = PRESSURE_VENTED - 1 # fake
 PRESSURE_LOW = 20e3 # Pa
 PRESSURE_PUMPED = 5e3 # Pa
-
 PRESSURES={"vented": PRESSURE_VENTED,
            "overview": PRESSURE_OVERVIEW,
            "low-vacuum": PRESSURE_LOW,
@@ -170,8 +169,6 @@ class Chamber(model.Actuator):
         # TODO: or just provide .targetPressure (like .targetTemperature) ?
         # Or maybe provide .targetPosition: position that would be reached if
         # all the requested move were instantly applied?
-        
-        chp = {}
         for p in positions:
             try:
                 chp[PRESSURES[p]] = p
@@ -180,11 +177,11 @@ class Chamber(model.Actuator):
         axes = {"pressure": model.Axis(unit="Pa", choices=chp)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
         # For simulating moves
-        self._position = PRESSURE_PUMPED # last official position
-        self._goal = PRESSURE_PUMPED
+        self._position = PRESSURE_VENTED # last official position
+        self._goal = PRESSURE_VENTED
         self._time_goal = 0 # time the goal was/will be reached
         self._time_start = 0 # time the move started
-        
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     {"pressure": self._position},
@@ -201,7 +198,7 @@ class Chamber(model.Actuator):
             self._press_timer = None
 
         # will take care of executing axis move asynchronously
-        self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
     def terminate(self):
         if self._press_timer:
@@ -226,7 +223,7 @@ class Chamber(model.Actuator):
             # TODO make it logarithmic
             ratio = (now - self._time_start) / (self._time_goal - self._time_start)
             pos = self._position + (self._goal - self._position) * ratio
-        
+
         # it's read-only, so we change it via _value
         self.pressure._value = pos
         self.pressure.notify(pos)
@@ -269,6 +266,7 @@ class Chamber(model.Actuator):
         self._time_start = now
         self._time_goal = now + duration # s
         self._goal = p
+        print "---------------------------------------------------------------"
 
         time.sleep(duration)
 

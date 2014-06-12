@@ -115,7 +115,6 @@ class MainGUIData(object):
         self.ar_spec_sel = None # actuator to select AR/Spectrometer (SPARC)
         self.lens_switch = None # actuator to (de)activate the lens (SPARC)
         self.chamber = None # actuator to control the chamber (has vacuum, pumping etc.)
-        self.pressure = None  # Current pressure of the chamber
         self.ccd_chamber = None # view of inside the chamber
         self.ccd_overview = None # global view from above the sample
 
@@ -189,7 +188,7 @@ class MainGUIData(object):
         # => we'd be better with just one global pause button (and pressure)
 
         # Handle turning on/off the instruments
-        hw_states = set([STATE_OFF, STATE_ON, STATE_PAUSE])
+        hw_states = {STATE_OFF, STATE_ON, STATE_PAUSE}
         if self.ccd:
             # not so nice to hard code it here, but that should do it for now...
             if self.role == "sparc":
@@ -208,13 +207,13 @@ class MainGUIData(object):
             self.specState.subscribe(self.onSpecState)
 
         # Chamber vacuum states
-        # FIXME: test set to be always true for testing purposes. Remove for production!
-        if self.chamber or True:
-            chamber_states = set([CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM, CHAMBER_VENTING])
-            self.vacuum_state = model.IntEnumerated(CHAMBER_VENTED, chamber_states)
-            self.vacuum_state.subscribe(self.on_vacuum_state)
-            # Pressure VA for dev purposes
-            self.pressure = model.FloatContinuous(101325.0, (0.0, 101325.0), unit="Pa")
+        if self.chamber:
+            chamber_states = {CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM, CHAMBER_VENTING}
+            self.chamber_state = model.IntEnumerated(CHAMBER_VENTED, chamber_states)
+            self.chamber_state.subscribe(self.on_chamber_state)
+
+            if hasattr(self.chamber, 'pressure'):
+                self.chamber.pressure.subscribe(self.on_chamber_pressure)
 
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
@@ -308,9 +307,38 @@ class MainGUIData(object):
         # nothing to do here, the settings controller will just hide the stream/settings
         pass
 
-    def on_vacuum_state(self, state):
-        # Nothing to do here, the settings controller will just adjust the settings
-        pass
+    def on_chamber_state(self, chamber_state):
+        """ Pump or vent the chamber when it's actual state does not match the chamber_state value
+        """
+
+        vented_pressure, vacuum_pressure = self.chamber.axes["pressure"].choices.keys()
+
+        if chamber_state == CHAMBER_PUMPING:
+            print "Moving to", vacuum_pressure
+            self.chamber.moveAbs(vacuum_pressure)
+        elif chamber_state == CHAMBER_VENTING:
+            print "Moving to", vented_pressure
+            self.chamber.moveAbs(vented_pressure)
+
+    def on_chamber_pressure(self, current_pressure):
+        """ Determine the state of the chamber when the pressure changes """
+
+        if self.chamber_state.value == CHAMBER_PUMPING:
+
+            _, vacuum_pressure = self.chamber.axes["pressure"].choices.keys()
+
+            if current_pressure <= vacuum_pressure:
+                print "vacuum", current_pressure
+                self.chamber_state.value = CHAMBER_VACUUM
+
+        elif self.chamber_state.value == CHAMBER_VENTING:
+
+            vented_pressure, _ = self.chamber.axes["pressure"].choices.keys()
+
+            if current_pressure >= vented_pressure:
+
+                print "vented", current_pressure
+                self.chamber_state.value = CHAMBER_VENTED
 
     def stopMotion(self):
         """

@@ -390,7 +390,8 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         stop the remote subscription
         """
         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
-        self._commands.send("UNSUB")
+        if self._commands:
+            self._commands.send("UNSUB")
 
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)

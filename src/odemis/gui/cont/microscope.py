@@ -41,6 +41,7 @@ class MicroscopeStateController(object):
         tab_data (MicroscopyGUIData): the data model of the tab
         main_frame: (wx.Frame): the main frame of the GUI
         btn_prefix (string): common prefix of the names of the buttons
+
         """
 
         # Look for which buttons actually exist, and which VAs exist. Bind the
@@ -49,15 +50,13 @@ class MicroscopeStateController(object):
         self._btn_controllers = []
 
         for btn_name, (va_name, control_class) in BTN_TO_VA.items():
-            try:
-                btn = getattr(main_frame, btn_prefix + btn_name)
-            except AttributeError:
+
+            btn = getattr(main_frame, btn_prefix + btn_name, None)
+            if not btn:
                 continue
 
-            try:
-                va = getattr(tab_data.main, va_name)
-            except AttributeError:
-                # This microscope is not available
+            va = getattr(tab_data.main, va_name, None)
+            if not va:
                 btn.Hide()
                 continue
 
@@ -66,7 +65,6 @@ class MicroscopeStateController(object):
             btn_cont = control_class(btn, va, tab_data.main)
 
             self._btn_controllers.append(btn_cont)
-
 
         if not self._btn_controllers:
             logging.warning("No microscope button found in tab %s", btn_prefix)
@@ -97,24 +95,28 @@ class ChamberButtonController(HardwareButtonController):
     def __init__(self, btn_ctrl, va, main_data):
         """
         :type btn_ctrl: odemis.gui.comp.buttons.ImageTextToggleButton
+        :type btn_ctrl: odemis.gui.comp.buttons.ImageTextToggleButton
 
         """
-
         super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
 
         # Since there are various factors that determine what images will be used as button faces,
         # (so, not just the button state!) we will explicitly define them in this class.
         self.btn_faces = {}
-        self._determine_button_faces(main_data)
+        self._determine_button_faces(main_data.role)
 
-        # TODO: grab this va from main_data
-        # self.pressure_va = None  # This VA will indicate the current pressure in the chamber
-        self.pressure_va = main_data.pressure
+        self.chamber_act = getattr(main_data, 'chamber', None)
+        self.pressure_va = None
 
-    def _determine_button_faces(self, main_data):
+        if self.chamber_act:
+            self.pressure_va = getattr(self.chamber_act, 'pressure', None)
+            if self.pressure_va:
+                self.pressure_va.subscribe(self._update_label, init=True)
+
+    def _determine_button_faces(self, role):
         """ Determine what button faces to use depending on values found in main_data """
 
-        if main_data.role == "secommini":
+        if role == "secommini":
             self.btn_faces = {
                 'normal': {
                     'normal': imgdata.btn_eject.Bitmap,
@@ -156,48 +158,53 @@ class ChamberButtonController(HardwareButtonController):
 
         If the va indicates an 'ON' state, we subscribe to the pressure va and unsubscribe if it's
         off.
+
         """
 
-        # Determine what the chamber is doing
-        is_working = state in (model.CHAMBER_PUMPING, model.CHAMBER_VENTING)
-        has_vacuum = state == model.CHAMBER_VACUUM
-
-        # Set the appropriate images
-        if is_working:
+        # When the chamber is pumping or venting, it's considered to be working
+        if state in (model.CHAMBER_PUMPING, model.CHAMBER_VENTING):
             self.btn.SetBitmapLabel(self.btn_faces['working']['normal'])
             self.btn.SetBitmapHover(self.btn_faces['working']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['working']['active'])
-
-            self.pressure_va.subscribe(self._update_label, init=True)
-        elif has_vacuum:
+        elif state == model.CHAMBER_VACUUM:
             self.btn.SetBitmapLabel(self.btn_faces['vacuum']['normal'])
             self.btn.SetBitmapHover(self.btn_faces['vacuum']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['vacuum']['active'])
-
-            self.pressure_va.unsubscribe(self._update_label)
         else:
             self.btn.SetBitmapLabel(self.btn_faces['normal']['normal'])
             self.btn.SetBitmapHover(self.btn_faces['normal']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['normal']['active'])
 
-            self.pressure_va.unsubscribe(self._update_label)
-
-        self.btn.SetToggle(is_working or has_vacuum)
+        # The the chamber is pumping, or a vacuum has been reached, the buttons should be down
+        #self.btn.SetToggle(state in (model.CHAMBER_PUMPING, model.CHAMBER_VACUUM))
 
     def _btn_to_va(self):
-        """ Return the hardware state associated with the current button toggle state """
-        return model.STATE_ON if self.btn.GetToggle() else model.STATE_OFF
+        """ Return the hardware state associated with the current button toggle state
 
-    def _update_label(self, value):
-        """ Set a formatted pressure value as the label of the button"""
-        str_value = units.readable_str(value, sig=3, unit=self.pressure_va.unit)
+        When the button is pressed down (i.e. toggled), the chamber is expected to be pumping to
+        create a vacuum. When the button is up (i.e. un-toggled), the chamber is expected to be
+        venting.
+
+        """
+        if self.btn.GetToggle():
+            print "pumping"
+            return model.CHAMBER_PUMPING
+        else:
+            print "venting"
+            return model.CHAMBER_VENTING
+
+    def _update_label(self, pressure_val):
+        """ Set a formatted pressure value as the label of the button """
+        str_value = units.readable_str(pressure_val, sig=1, unit=self.pressure_va.unit)
         self.btn.SetLabel(str_value)
+        self.btn.Refresh()
 
 
 # GUI toggle button (suffix) name -> VA name
-BTN_TO_VA = {"sem": ("emState", HardwareButtonController),
-             "opt": ("opticalState", HardwareButtonController),
-             "spectrometer": ("specState", HardwareButtonController),
-             "angular": ("arState", HardwareButtonController),
-             "press": ("vacuum_state", ChamberButtonController),
-             }
+BTN_TO_VA = {
+    "sem": ("emState", HardwareButtonController),
+    "opt": ("opticalState", HardwareButtonController),
+    "press": ("chamber_state", ChamberButtonController),
+    "spectrometer": ("specState", HardwareButtonController),
+    "angular": ("arState", HardwareButtonController),
+}
