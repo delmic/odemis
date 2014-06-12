@@ -482,7 +482,12 @@ class MFF(model.Actuator):
                 if snp == sn:
                     break
             else:
-                raise ValueError("No USB device with S/N %s" % sn)
+                # There is a known problem with the APT devices that prevent
+                # them from connecting to USB if they are connected via a hub
+                # and powered on before the host PC.
+                raise ValueError("No USB device with S/N %s.\n"
+                                 "Check that the Thorlabs filter flipper was "
+                                 "turned on *after* the host computer." % sn)
 
             # Deduce the tty:
             # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1
