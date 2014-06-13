@@ -65,7 +65,7 @@ def main(args):
                 focus = c
             elif c.role == "align":
                 stage = c
-        if not all([ebeam_focus, detector, escan, ccd, focus, stage]):
+        if not all([detector, escan, ccd, focus, stage]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 

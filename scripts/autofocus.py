@@ -75,12 +75,12 @@ def main(args):
             raise KeyError("Not all components found")
     
         # Measure current focus
-        img = detector.data.get()
+        img = ccd.data.get()
         fm_cur = autofocus.MeasureFocus(img)
         logging.debug("Current focus level: %f", fm_cur)
 
         # Apply autofocus
-        future_focus = align.AutoFocus(detector, escan, ebeam_focus, accuracy)
+        future_focus = align.AutoFocus(ccd, escan, focus, accuracy)
         foc_pos, fm_final = future_focus.result()
         logging.debug("Focus level after applying autofocus: %f", fm_final)
 

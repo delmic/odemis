@@ -24,14 +24,20 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
+import logging
 import numpy
 from odemis import model
+from odemis.acq._futures import executeTask
 from odemis.dataio import hdf5
 from scipy import signal
-import logging
+import threading
 import time
 
-MAX_STEPS_NUMBER = 2  # Max steps to perform autofocus
+
+FINE_SPOTMODE_ACCURACY = 10e-6  # fine focus accuracy in spot mode #m
+ROUGH_SPOTMODE_ACCURACY = 15e-6  # rough focus accuracy in spot mode #m
+
+MAX_STEPS_NUMBER = 3  # Max steps to perform autofocus
 MAX_TRIALS_NUMBER = 2
 
 
@@ -89,7 +95,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
 
         # Determine focus direction
         # TODO check if out of bounds
-        step = 500e-6
+        step = 20e-6
         image = device.data.get()
         fm_cur = MeasureFocus(image)
         hdf5.export("firstimg.h5", model.DataArray(image))
@@ -104,7 +110,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
             raise CancelledError()
         print fm_test
         # Check if we our completely out of focus
-        if abs(fm_cur - fm_test) < (0.005 * fm_cur):
+        if abs(fm_cur - fm_test) < (0.05 * fm_cur):
             logging.warning("Completely out of focus, retrying...")
             fm_new = 0
             sign = 1
@@ -165,7 +171,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
         step = accuracy
         fm_old, fm_new = fm_test, fm_test
         steps = 0
-        while fm_old <= fm_new:
+        while (0.98 * fm_old) <= fm_new:
             if steps >= MAX_STEPS_NUMBER:
                 break
             fm_old = fm_new
@@ -227,3 +233,40 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     Estimates overlay procedure duration
     """
     return steps * (exposure_time + 3)  # 3 sec approx. for focus actuator to move
+
+
+def AutoFocus(detector, scanner, focus, accuracy):
+    """
+    Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
+    procedure or even cancel it.
+    detector (model.DigitalCamera or model.Detector):
+    scanner (None or model.Scanner): In case of a SED this is the scanner used
+    focus (model.CombinedActuator): The optical focus
+    accuracy (float): Focus precision #m
+    returns (model.ProgressiveFuture):    Progress of DoAutoFocus, whose result() will return:
+            Focus position #m
+            Focus level
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    # Check if you focus the SEM or a digital camera
+    if scanner is not None:
+        et = scanner.dwellTime.value * numpy.prod(scanner.resolution.value)
+    else:
+        et = detector.exposureTime.value
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateAutoFocusTime(et))
+    f._autofocus_state = RUNNING
+    f._autofocus_lock = threading.Lock()
+
+    # Task to run
+    doAutoFocus = _DoAutoFocus
+    f.task_canceller = _CancelAutoFocus
+
+    # Run in separate thread
+    autofocus_thread = threading.Thread(target=executeTask,
+                  name="Autofocus",
+                  args=(f, doAutoFocus, f, detector, et, focus, accuracy))
+
+    autofocus_thread.start()
+    return f
