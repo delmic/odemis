@@ -144,15 +144,35 @@ class OdemisGUIApp(wx.App):
 
             gc = odemis.gui.conf.get_general_conf()
 
-            if os.path.exists(gc.html_dev_doc):
-                self.main_frame.menu_item_htmldoc.Enable(True)
-
             if gc.get_manual(self.main_data.role):
                 self.main_frame.menu_item_manual.Enable(True)
 
+            # TODO: rename htmldoc to devmanual and change from
+            # "Source code documentation" to "Developper documentation"
+            if gc.get_dev_manual():
+                self.main_frame.menu_item_htmldoc.Enable(True)
+
+            # TODO:
+            # File/Open... Ctrl+O -> same as "select image..." in analysis tab
+            # (but can be called from anywhere and will automatically switch to
+            # analysis tab if not cancelled)
+
+            # TODO:
+            # View/Play stream F6 -> toggle menu that play/pause the current
+            # stream (defaulting to optical stream in SECOM)
+            # Disabled if current stream is None or is StaticStream
+
+            # TODO:
+            # View/Auto brightness/contrast F9 -> toggle menu that enable/
+            # disable the auto BC of the current stream. Disabled if current
+            # stream is None or has no .AutoBC VA.
+
+            # TODO:
+            # View/Auto focus F10 -> run auto focus on the current stream
+            # Disabled if the current stream is None
+
             # Note: "snapshot" menu is handled by acquisition controller
-            # TODO: add a "Save as...", which is somehow like snapshot, but ask
-            # for a name (and format).
+            # TODO: change snapshot shortcuts to Ctrl+S and Shift+Ctrl+S
 
             # TODO: re-organise the Help menu:
             # * Report a bug... (Opens a mail client to send an email to us?)
@@ -163,7 +183,7 @@ class OdemisGUIApp(wx.App):
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_htmldoc.GetId(),
-                        self.on_htmldoc)
+                        self.on_dev_manual)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_inspect.GetId(),
@@ -306,22 +326,26 @@ see http://www.fluorophores.org/disclaimer/.
         gc = odemis.gui.conf.get_general_conf()
         subprocess.Popen(['xdg-open', gc.get_manual(self.main_data.role)])
 
+    def on_dev_manual(self, evt):
+        gc = odemis.gui.conf.get_general_conf()
+        subprocess.Popen(['xdg-open', gc.get_dev_manual()])
+
     def on_inspect(self, evt):
         from wx.lib.inspection import InspectionTool
         InspectionTool().Show()
-
-    def on_htmldoc(self, evt):
-        """ Launch Python's SimpleHTTPServer in a separate process and have it
-        serve the source code documentation as created by Sphinx
-        """
-        self.http_proc = subprocess.Popen(
-            ["python", "-m", "SimpleHTTPServer"],
-            stderr=subprocess.STDOUT,
-            stdout=subprocess.PIPE,
-            cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
-
-        import webbrowser
-        webbrowser.open('http://localhost:8000')
+#
+#     def on_htmldoc(self, evt):
+#         """ Launch Python's SimpleHTTPServer in a separate process and have it
+#         serve the source code documentation as created by Sphinx
+#         """
+#         self.http_proc = subprocess.Popen(
+#             ["python", "-m", "SimpleHTTPServer"],
+#             stderr=subprocess.STDOUT,
+#             stdout=subprocess.PIPE,
+#             cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
+#
+#         import webbrowser
+#         webbrowser.open('http://localhost:8000')
 
     def on_debug_menu(self, evt):
         """ Update the debug VA according to the menu

@@ -160,16 +160,6 @@ class GeneralConfig(Config):
         # Define the default settings
         self.default.add_section("help")
 
-        self.default.set(
-                    "help",
-                     "html_dev_doc",
-                     os.path.abspath(
-                        os.path.join(
-                            __file__,
-                            u"../../../../../doc/code/_build/html/index.html")
-                        )
-                    )
-
         self.default.set("help",
                          "manual_base_name",
                          u"user-guide.pdf"
@@ -184,10 +174,6 @@ class GeneralConfig(Config):
         self.default.add_section("calibration")
         self.default.set("calibration", "ar_file", u"")
         self.default.set("calibration", "spec_file", u"")
-
-    @property
-    def html_dev_doc(self):
-        return self.get("help", "html_dev_doc")
 
     def get_manual(self, role=None):
         """ This method returns the path to the user manual
@@ -207,7 +193,7 @@ class GeneralConfig(Config):
             if os.path.exists(full_path):
                 return full_path
             else:
-                logging.warn("%s Manual not found!", role)
+                logging.info("%s manual not found, will use default one.", role)
 
         full_path = os.path.join(manual_path, manual_base_name)
         if os.path.exists(full_path):
@@ -215,6 +201,15 @@ class GeneralConfig(Config):
         else:
             return None
 
+    def get_dev_manual(self):
+        """
+        Returns (unicode): the path to the developer manual (or None)
+        """
+        manual_path = self.get("help", "manual_path")
+        full_path = os.path.join(manual_path, u"odemis-develop.pdf")
+        if os.path.exists(full_path):
+            return full_path
+        return None
 
 class AcquisitionConfig(Config):
 

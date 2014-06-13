@@ -358,6 +358,10 @@ class MicroscopyGUIData(object):
         # attribute is unique (i.e. only occurs once in the list).
         self.streams = model.ListVA()
 
+        # TODO: the latest stream used.
+        # IOW, either the active one, or the last stream which was paused.
+        self.currentStream = VigilantAttribute(None)
+
         # Available Views. The are handled by the ViewController.
         # The `views` list basically keeps track of the relevant references.
         self.views = model.ListVA()
