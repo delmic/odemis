@@ -1,0 +1,160 @@
+SECOMmini: {
+    class: Microscope,
+    role: secommini,
+    emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
+    detectors: ["Zyla", "SED Phenom", "NavCam"],
+    actuators: ["Stage", "Optical stage", "Optical focus",
+                "SEM Chamber", "EBeam focus", "NavCam focus"],
+}
+
+Spectra: {
+    class: lle.FakeLLE,
+    role: light,
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        sources: {"red": [615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
+                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
+                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
+                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
+                  "yellow": [565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9],
+                  "blue": [420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9],
+                  "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
+                 }
+        },
+    affects: ["Zyla"],
+}
+
+"Phenom": {
+    class: simsem.SimSEM,
+    role: none,
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           drift_period: 5, # seconds
+    },
+    children: {scanner: "EBeam Phenom",
+               detector0: "SED Phenom",
+               focus: "EBeam focus",
+    }
+}
+
+"EBeam Phenom": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SED Phenom", "Zyla"] # affects the CCD in case of cathodoluminescence
+}
+
+"SED Phenom": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+"EBeam focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
+}
+
+"Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: ["x", "y"]},
+    affects: ["Zyla", "EBeam Phenom"],
+    properties: {
+        speed: {"x": 0.01, "y": 0.01} #m/s
+    }
+}
+
+# Allows to change pressure in the chamber (and load/unload the sample)
+"SEM Chamber": {
+    class: simulated.Chamber,
+    role: chamber,
+    # TODO: overview position
+}
+
+"NavCam": {
+    class: andorcam2.FakeAndorCam2,
+    role: overview-ccd,
+    init: {device: 0,
+           image: "andorcam2-fake-clara.tiff", # TODO: should have an RGB 8-bit overview fake image
+    },
+}
+
+"NavCam focus": {
+    class: simulated.Stage,
+    role: overview-focus,
+    init: {axes: ["z"]},
+    affects: ["NavCam"],
+    properties: {
+        speed: {"z": 0.01} #m/s
+    }
+}
+
+"Nikon Lens": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 60.0}, # ratio
+    affects: ["Zyla"]
+}
+
+"MultiBand Filter": {
+    class: static.LightFilter,
+    role: filter,
+    init: {band: [[420.e-9, 460.e-9],
+                  [510.e-9, 532.e-9], 
+                  [590.e-9, 624.e-9],
+                  [677.e-9, 723.e-9]]}, # m,m
+    affects: ["Zyla"]
+}
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Zyla": {
+    class: andorcam2.FakeAndorCam2,
+    role: ccd,
+    init: {device: 0,
+           transpose: [-2, 1], # rotated 90° clockwise
+           image: "andorcam2-fake-clara.tiff", # only for simulator
+    },
+}
+
+# Use 2 CombinedActuators to separate the axes of the TMCM over different roles
+"Optical stage": {
+    class: CombinedActuator,
+    role: align,
+    affects: ["Zyla"],
+    children: {"x": TMCM, "y": TMCM},
+    init: {
+        axes_map: {"x": "x", "y": "y"},
+    },
+}
+
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)    
+"Optical focus": {
+    class: CombinedActuator,
+    role: focus,
+    affects: ["Zyla"],
+    children: {"z": TMCM},
+    init: {
+        axes_map: {"z": "z"}
+    },
+}
+
+# Controller for the X, Y, Z axes of the optical lens
+TMCM: {
+    class: tmcm.TMCM3110,
+    role: none,
+    init: {
+        port: "/dev/fake",
+        axes: ["x", "y", "z"],
+        ustepsize: [1.0e-6, 1.2e-6, 0.9e-6], # m/µstep
+        # inverted: ["y"],
+    },
+}
+
+
