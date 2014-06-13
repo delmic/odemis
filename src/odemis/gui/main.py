@@ -109,13 +109,11 @@ class OdemisGUIApp(wx.App):
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
 
-        #self.main_frame.Bind(wx.EVT_CHAR, self.on_key)
+        self.init_gui()
 
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug)
         logging.info("\n\n************  Starting Odemis GUI  ************\n")
         logging.info(wx.version())
-
-        self.init_gui()
 
         # Application successfully launched
         return True
