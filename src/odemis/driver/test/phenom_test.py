@@ -32,7 +32,7 @@ import time
 import unittest
 from unittest.case import skip
 
-from odemis.driver.phenom import phenom_sem
+from odemis.driver import phenom
 
 # logging.getLogger().setLevel(logging.DEBUG)
 
@@ -44,7 +44,7 @@ CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus", "axes": ["z"]}
 CONFIG_NC_FOCUS = {"name": "navcam_focus", "role": "overview-focus", "axes": ["z"]}
 CONFIG_STAGE = {"name": "stage", "role": "stage"}
 CONFIG_NAVCAM = {"name": "camera", "role": "overview-ccd"}
-CONFIG_PRESSURE = {"name": "pressure", "role": "pressure"}
+CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080.local:8888",
               "username": "delmic", "password" : "6526AM9688B1",
               "children": {"detector": CONFIG_SED, "scanner": CONFIG_SCANNER,
@@ -61,7 +61,7 @@ class TestSEMStatic(unittest.TestCase):
         """
         Doesn't even try to acquire an image, just create and delete components
         """
-        sem = phenom_sem.PhenomSEM(**CONFIG_SEM)
+        sem = phenom.SEM(**CONFIG_SEM)
         self.assertEqual(len(sem.children), 7)
 
         for child in sem.children:
@@ -79,12 +79,12 @@ class TestSEMStatic(unittest.TestCase):
     def test_error(self):
         wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["device"] = "/dev/comdeeeee"
-        self.assertRaises(Exception, phenom_sem.PhenomSEM, **wrong_config)
+        self.assertRaises(Exception, phenom.SEM, **wrong_config)
 
 
         wrong_config = copy.deepcopy(CONFIG_SEM)
         wrong_config["children"]["scanner"]["channels"] = [1, 1]
-        self.assertRaises(Exception, phenom_sem.PhenomSEM, **wrong_config)
+        self.assertRaises(Exception, phenom.SEM, **wrong_config)
 
     def test_pickle(self):
         try:
@@ -93,7 +93,7 @@ class TestSEMStatic(unittest.TestCase):
             pass
         daemon = Pyro4.Daemon(unixsocket="test")
 
-        sem = phenom_sem.PhenomSEM(daemon=daemon, **CONFIG_SEM)
+        sem = phenom.SEM(daemon=daemon, **CONFIG_SEM)
 
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
@@ -107,7 +107,7 @@ class TestSEM(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        cls.sem = phenom_sem.PhenomSEM(**CONFIG_SEM)
+        cls.sem = phenom.SEM(**CONFIG_SEM)
 
         for child in cls.sem.children:
             if child.name == CONFIG_SED["name"]:
@@ -448,7 +448,7 @@ class TestSEM(unittest.TestCase):
         Check it's possible to move the stage
         """
         # Exposure time is fixed, time is mainly spent on the image transfer
-        expected_duration = 5  # s
+        expected_duration = 0.5  # s
         start = time.time()
         img = self.camera.data.get()
         duration = time.time() - start

@@ -42,7 +42,7 @@ Spectra: {
 #}
 
 "SEM ExtXY": {
-    class: phenom.phenom_sem.PhenomSEM,
+    class: phenom_sem.PhenomSEM,
     role: none,
     init: {host: "http://Phenom-MVE0206151080.local:8888", 
            username: "delmic",
@@ -58,14 +58,14 @@ Spectra: {
 }
 
 "EBeam ExtXY": {
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SEM ExtXY, so no class
     role: e-beam,
     init: {},
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
 
 "SED ExtXY": { # aka ETD
-    # Internal child of Quanta ExtXY, so no class
+    # Internal child of SEM ExtXY, so no class
     role: se-detector,
     init: {}
 }
@@ -146,6 +146,7 @@ Spectra: {
 }
 
 "ChamberPressure": {
+    #Used to move between SEM and NavCam or to unload the sample
     role: chamber,
     init: {},
 }

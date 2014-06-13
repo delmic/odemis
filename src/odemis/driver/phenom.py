@@ -1,4 +1,4 @@
-  # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 '''
 Created on 30 April 2014
 
@@ -23,37 +23,27 @@ from __future__ import division
 
 import suds
 from suds.client import Client
-import Image
 import base64
-import urllib2
-import os
 import logging
 import math
 import numpy
+import time
 from odemis import model, util
-from odemis.dataio import hdf5
-from odemis.util import img
 from odemis.model import isasync
-import os.path
 from odemis.model._futures import CancellableThreadPoolExecutor
 from odemis.acq._futures import executeTask
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 import threading
-import time
-from random import randint
 import weakref
-import time
-import Image
-import re
 
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
-#Fixed max number of frames per acquisition
+# Fixed max number of frames per acquisition
 MAX_FRAMES = 255
 SOCKET_TIMEOUT = 1000  # timeout for suds client
 
-class PhenomSEM(model.HwComponent):
+class SEM(model.HwComponent):
     '''
     This is an extension of the model.HwComponent class. It instantiates the scanner 
     and se-detector children components and provides an update function for its 
@@ -85,7 +75,7 @@ class PhenomSEM(model.HwComponent):
         self._metadata = {model.MD_HW_NAME: "PhenomSEM"}
         info = self._device.VersionInfo().versionInfo
         start = info.index("'Version'>") + len("'Version'>")
-        end = info.index( "</Property", start )
+        end = info.index("</Property", start)
         self._swVersion = "SEM sw %s" % (info[start:end])
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
@@ -136,7 +126,7 @@ class PhenomSEM(model.HwComponent):
             raise KeyError("PhenomSEM was not given a 'navcam_focus' child")
         self._navcam_focus = NavCamFocus(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._navcam_focus)
-#
+
         # create the pressure child
         try:
             kwargs = children["pressure"]
@@ -228,8 +218,8 @@ class Scanner(model.Emitter):
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
 
-        #Compute dwellTime range based on max number of frames and the fixed
-        #phenom dwellTime        
+        # Compute dwellTime range based on max number of frames and the fixed
+        # phenom dwellTime
         dt_range = [DWELL_TIME, DWELL_TIME * MAX_FRAMES]
         dt = DWELL_TIME
         # Corresponding nr of frames for initial DWELL_TIME
@@ -243,18 +233,6 @@ class Scanner(model.Emitter):
         volt = self.parent._device.SEMGetHighTension()
         self.accelVoltage = model.FloatContinuous(-volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
-
-        # 0 turns off the e-beam, 1 turns it on
-        power_choices = set([0, 1])
-        self._spotSize = self.parent._device.SEMGetSpotSize()
-        # Don't change state
-        if self._spotSize == 0:
-            self._power = 0
-        else:
-            self._power = 1
-        
-        self.power = model.IntEnumerated(self._power, power_choices, unit="",
-                                  setter=self._setPower)
 
         # 16 or 8 bits image
         self.quality = model.VAEnumerated(True, choices={True: "high", False: "low"},
@@ -270,6 +248,7 @@ class Scanner(model.Emitter):
         # Convert A/sqrt(V) to just A
         pc_range = [(range.min * math.sqrt(volt_range[1])), (range.max * math.sqrt(volt_range[1]))]
         # Calculate current pc
+        self._spotSize = parent._device.SEMGetSpotSize()
         self._probeCurrent = self._spotSize * math.sqrt(-volt)
         self.probeCurrent = model.FloatContinuous(self._probeCurrent, pc_range, unit="A",
                                                   setter=self._setPC)
@@ -322,7 +301,7 @@ class Scanner(model.Emitter):
             self.parent._device.SEMAbortImageAcquisition()
         except suds.WebFault:
             logging.debug("No acquisition in progress to be aborted.")
-            
+
         # Calculate number of frames
         self.nr_frames = int(math.ceil(dt / DWELL_TIME))
 
@@ -335,10 +314,6 @@ class Scanner(model.Emitter):
         self.parent._device.SEMSetHighTension(-volt)
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
-
-    def _setPower(self, value):
-        # TODO, blank the ebeam does not work as expected
-        pass
 
     def _setQuality(self, value):
         with self.parent._acquisition_init_lock:
@@ -460,11 +435,6 @@ class Detector(model.Detector):
         """
         Note: parent should have a child "scanner" already initialised
         """
-        # Check if Phenom is in the proper mode
-        area = self.parent._device.GetProgressAreaSelection().target
-        if area != "LOADING-WORK-AREA-SEM":
-            raise IOError("Cannot initiate SE-Detector, Phenom is not in SEM mode.")
-
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
         self.acq_shape = self.parent._scanner._shape
@@ -475,13 +445,13 @@ class Detector(model.Detector):
         # use all detector segments
         detectorMode = 'SEM-DETECTOR-MODE-ALL'
         self._scanParams.detector = detectorMode
-        #always acquire to the center of FOV
+        # always acquire to the center of FOV
         self._scanParams.center.x = 0
         self._scanParams.center.y = 0
         self._scanParams.scale = 1
 
         # adjust brightness and contrast
-        self.parent._device.SEMACB()
+        # self.parent._device.SEMACB()
 
         self.data = SEMDataFlow(self, parent)
         self._acquisition_thread = None
@@ -507,9 +477,14 @@ class Detector(model.Detector):
         return status
 
     def start_acquire(self, callback):
-        assert(self.GetStatus() == 1)  # Just to be sure
+        # Check if Phenom is in the proper mode
+        area = self.parent._device.GetProgressAreaSelection().target
+        if area != "LOADING-WORK-AREA-SEM":
+            raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
 
         with self._acquisition_lock:
+            # "Unblank" the beam
+            self.parent._device.SetSEMSourceTilt(0, 0, True)
             self._wait_acquisition_stopped()
             target = self._acquire_thread
             self._acquisition_thread = threading.Thread(target=target,
@@ -523,6 +498,8 @@ class Detector(model.Detector):
                 self.parent._device.SEMAbortImageAcquisition()
             except suds.WebFault:
                 logging.debug("No acquisition in progress to be aborted.")
+            # "Blank" the beam
+            self.parent._device.SetSEMSourceTilt(-1, -1, True)
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -563,7 +540,7 @@ class Detector(model.Detector):
             metadata[model.MD_POS] = updated_phy_pos
             metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value,
+            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
 
             self._scanParams.resolution.width = res[0]
@@ -711,15 +688,15 @@ class Stage(model.Actuator):
             self._stageRel.x, self._stageRel.y = rel["x"], rel["y"]
             self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
 
-        # Obtain the finally reached position after move is performed.
-        # This is mainly in order to keep the correct position in case the
-        # move we tried to perform was greater than the maximum possible
-        # one.
-        # with self.parent._acquisition_init_lock:
-        mode_pos = self.parent._device.GetStageModeAndPosition()
-        self._position["x"] = mode_pos.position.x
-        self._position["y"] = mode_pos.position.y
-        self._updatePosition()
+            # Obtain the finally reached position after move is performed.
+            # This is mainly in order to keep the correct position in case the
+            # move we tried to perform was greater than the maximum possible
+            # one.
+            # with self.parent._acquisition_init_lock:
+            mode_pos = self.parent._device.GetStageModeAndPosition()
+            self._position["x"] = mode_pos.position.x
+            self._position["y"] = mode_pos.position.y
+            self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
@@ -810,14 +787,14 @@ class EbeamFocus(model.Actuator):
         with self.parent._acquisition_init_lock:
             self.parent._device.SetSEMWD(self._position["z"])
 
-        # Obtain the finally reached position after move is performed.
-        wd = self.parent._device.GetSEMWD()
-        self._position["z"] = wd
+            # Obtain the finally reached position after move is performed.
+            wd = self.parent._device.GetSEMWD()
+            self._position["z"] = wd
 
-        # Changing WD results to change in fov
-        self.parent._scanner.updateHorizontalFoV()
+            # Changing WD results to change in fov
+            self.parent._scanner.updateHorizontalFoV()
 
-        self._updatePosition()
+            self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
@@ -872,11 +849,6 @@ class NavCam(model.DigitalCamera):
         Initialises the device.
         Raise an exception if the device cannot be opened.
         """
-        # Check if Phenom is in the proper mode
-        area = self.parent._device.GetProgressAreaSelection().target
-        if area != "LOADING-WORK-AREA-NAVCAM":
-            raise IOError("Cannot initiate NavCam, Phenom is not in NAVCAM mode.")
-
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
 
         resolution = NAVCAM_RESOLUTION
@@ -884,6 +856,7 @@ class NavCam(model.DigitalCamera):
         self._shape = resolution + (3, 2 ** 8)
         self.resolution = model.ResolutionVA(resolution, [(1, 1), (2048, 2048)],
                                             readonly=True)
+        self.exposureTime = model.FloatVA(1.0, unit="s", readonly=True)
 
         # setup camera
         self._camParams = self.parent._objects.create('ns0:camParams')
@@ -919,12 +892,15 @@ class NavCam(model.DigitalCamera):
         callback (callable (DataArray) no return):
          function called for each image acquired
         """
+        # Check if Phenom is in the proper mode
+        area = self.parent._device.GetProgressAreaSelection().target
+        if area != "LOADING-WORK-AREA-NAVCAM":
+            raise IOError("Cannot initiate stream, Phenom is not in NAVCAM mode.")
+
         # if there is a very quick unsubscribe(), subscribe(), the previous
         # thread might still be running
         self.wait_stopped_flow()  # no-op is the thread is not running
         self.acquisition_lock.acquire()
-
-        assert(self.GetStatus() == 1)  # Just to be sure
 
         target = self._acquire_thread_continuous
         self.acquire_thread = threading.Thread(target=target,
@@ -955,7 +931,6 @@ class NavCam(model.DigitalCamera):
                     img_str = self.parent._device.NavCamAcquireImageCopy(self._camParams)
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
                 sem_img.shape = (self._camParams.height, self._camParams.width, 3)
-                hdf5.export("navcam.h5", model.DataArray(sem_img))
 
                 # Obtain pixel size and position as metadata
                 pixelSize = (img_str.aAcqState.pixelHeight, img_str.aAcqState.pixelWidth)
@@ -968,10 +943,6 @@ class NavCam(model.DigitalCamera):
                 self.resolution._value = sem_img.shape
                 self.resolution.notify(sem_img.shape)
 
-                # first we wait ourselves the typical time (which might be very long)
-                # while detecting requests for stop
-                if self.acquire_must_stop.wait(10):
-                    break
                 callback(self._transposeDAToUser(array))
 
         except:
@@ -1070,14 +1041,15 @@ class NavCamFocus(model.Actuator):
         with self.parent._acquisition_init_lock:
             self.parent._device.SetNavCamWD(self._position["z"])
 
-        # Obtain the finally reached position after move is performed.
-        wd = self.parent._device.GetNavCamWD()
-        self._position["z"] = wd
+            # Obtain the finally reached position after move is performed.
+            wd = self.parent._device.GetNavCamWD()
+            self._position["z"] = wd
 
-        # Changing WD results to change in fov
-        self.parent._scanner.updateHorizontalFoV()
-
-        self._updatePosition()
+            self._updatePosition()
+            # FIXME
+            # Although we are already on the correct position, if we acquire an
+            # image just after a move, server raises a fault thus we wait a bit.
+            time.sleep(1)
 
     @isasync
     def moveRel(self, shift):
@@ -1129,18 +1101,18 @@ class ChamberPressure(model.Actuator):
     """
     def __init__(self, name, role, parent, ranges=None, **kwargs):
         axes = {"pressure": model.Axis(unit="",
-                                       choices={PRESSURE_UNLOADED: "unloaded", 
+                                       choices={PRESSURE_UNLOADED: "unloaded",
                                                 PRESSURE_NAVCAM: "NavCam",
                                                 PRESSURE_SEM: "SEM"})}
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
         self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
 
-        #Handle the cases of stand-by and hibernate mode
-        mode = self.parent._device.GetInstrumentMode()   
+        # Handle the cases of stand-by and hibernate mode
+        mode = self.parent._device.GetInstrumentMode()
         if mode == 'INSTRUMENT-MODE-HIBERNATE' or mode == 'INSTRUMENT-MODE-STANDBY':
             self.parent._device.SetInstrumentMode('INSTRUMENT-MODE-OPERATIONAL')
             self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
-        
+
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
 
         if area == "LOADING-WORK-AREA-SEM":
@@ -1269,11 +1241,10 @@ class ChamberPressure(model.Actuator):
             self.parent = parent
             self.future = future
             self.target = target
-     
+
         def run(self):
             time.sleep(1)  # To make sure that the procedure has been started
             while self.target != self.parent._pressure.position.value["pressure"]:
                 remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
                 self.future.set_end_time(time.time() + remainingTime)
 
-        
