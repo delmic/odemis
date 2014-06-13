@@ -226,9 +226,15 @@ class VigilantAttribute(VigilantAttributeBase):
         daemon = getattr(self, "_pyroDaemon", None)
         if daemon:
             daemon.unregister(self)
-        if hasattr(self, "_ctx") and self._ctx: # no ._ctx if exception during init
-            self.pipe.close()
-            self._ctx.term()
+        try:
+            if self.pipe:
+                self.pipe.close()
+                self.pipe = None
+            if self._ctx: # no ._ctx if exception during init
+                self._ctx.term()
+                self._ctx = None
+        except Exception:
+            pass # we've done our best
 
     @oneway
     def subscribe(self, listener, init=False, **kwargs):
@@ -388,15 +394,18 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
 
     def __del__(self):
         # end the thread (but it will stop as soon as it notices we are gone anyway)
-        if self._thread:
-            if self._thread.is_alive():
-                if len(self._listeners):
-                    logging.warning("Stopping subscription while there are still subscribers because VA '%s' is going out of context", self._global_name)
-                    Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
-                self._commands.send("STOP")
-                self._thread.join()
-            self._commands.close()
-            self._ctx.term()
+        try:
+            if self._thread:
+                if self._thread.is_alive():
+                    if len(self._listeners):
+                        logging.warning("Stopping subscription while there are still subscribers because VA '%s' is going out of context", self._global_name)
+                        Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._global_name)
+                    self._commands.send("STOP")
+                    self._thread.join(1)
+                self._commands.close()
+#             self._ctx.term()
+        except Exception:
+            pass
 
         try:
             Pyro4.Proxy.__del__(self)
