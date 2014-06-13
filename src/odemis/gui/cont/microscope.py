@@ -186,15 +186,15 @@ class ChamberButtonController(HardwareButtonController):
         venting.
 
         """
+
         if self.btn.GetToggle():
-            print "pumping"
             return model.CHAMBER_PUMPING
         else:
-            print "venting"
             return model.CHAMBER_VENTING
 
     def _update_label(self, pressure_val):
         """ Set a formatted pressure value as the label of the button """
+
         str_value = units.readable_str(pressure_val, sig=1, unit=self.pressure_va.unit)
         self.btn.SetLabel(str_value)
         self.btn.Refresh()

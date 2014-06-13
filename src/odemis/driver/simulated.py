@@ -266,7 +266,6 @@ class Chamber(model.Actuator):
         self._time_start = now
         self._time_goal = now + duration # s
         self._goal = p
-        print "---------------------------------------------------------------"
 
         time.sleep(duration)
 

@@ -308,36 +308,40 @@ class MainGUIData(object):
         pass
 
     def on_chamber_state(self, chamber_state):
-        """ Pump or vent the chamber when it's actual state does not match the chamber_state value
+        """ Set the desired pressure on the chamber when the chamber's state changes
+
+        Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING) will allow for a
+        change in pressure.
+
         """
 
         vented_pressure, vacuum_pressure = self.chamber.axes["pressure"].choices.keys()
 
         if chamber_state == CHAMBER_PUMPING:
-            print "Moving to", vacuum_pressure
-            self.chamber.moveAbs(vacuum_pressure)
+            self.chamber.moveAbs({"pressure": vacuum_pressure})
         elif chamber_state == CHAMBER_VENTING:
-            print "Moving to", vented_pressure
-            self.chamber.moveAbs(vented_pressure)
+            self.chamber.moveAbs({"pressure": vented_pressure})
 
     def on_chamber_pressure(self, current_pressure):
-        """ Determine the state of the chamber when the pressure changes """
+        """ Determine the state of the chamber when the pressure changes
+
+        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM or from
+        CHAMBER_VENTING to CHAMBER_VENTED.
+
+        """
 
         if self.chamber_state.value == CHAMBER_PUMPING:
 
-            _, vacuum_pressure = self.chamber.axes["pressure"].choices.keys()
+            vacuum_pressure = min(self.chamber.axes["pressure"].choices.keys())
 
             if current_pressure <= vacuum_pressure:
-                print "vacuum", current_pressure
                 self.chamber_state.value = CHAMBER_VACUUM
 
         elif self.chamber_state.value == CHAMBER_VENTING:
 
-            vented_pressure, _ = self.chamber.axes["pressure"].choices.keys()
+            vented_pressure = max(self.chamber.axes["pressure"].choices.keys())
 
             if current_pressure >= vented_pressure:
-
-                print "vented", current_pressure
                 self.chamber_state.value = CHAMBER_VENTED
 
     def stopMotion(self):
