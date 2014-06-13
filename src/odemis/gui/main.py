@@ -223,8 +223,8 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.pnl_tab_secom_align
                 ),
                 (
-                    ("secom", "sem", "optical"),
-                    ("STREAMS", "STREAMS", "STREAMS"),
+                    ("secom", "secommini", "sem", "optical"),
+                    ("STREAMS", "STREAMS", "STREAMS", "STREAMS"),
                     "secom_live",
                     tabs.SecomStreamsTab,
                     self.main_frame.btn_tab_secom_streams,
@@ -247,8 +247,8 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.pnl_tab_sparc_acqui
                 ),
                 (
-                    (None, "secom", "sem", "optical", "sparc"),
-                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS"),
+                    (None, "secom", "secommini", "sem", "optical", "sparc"),
+                    ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS"),
                     "analysis",
                     tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,
