@@ -182,7 +182,7 @@ class Scanner(model.Emitter):
         self.probeCurrent = model.FloatEnumerated(1.3e-9,
                           {0.1e-9, 1.3e-9, 2.6e-9, 3.4e-9, 11.564e-9, 23e-9},
                           unit="A")
-        self.accelVoltage = model.FloatContinuous(10e6, (1e6, 30e6), unit="V")
+        self.accelVoltage = model.FloatContinuous(10e3, (1e3, 30e3), unit="V")
 
     def updateMetadata(self, md):
         # we share metadata with our parent
