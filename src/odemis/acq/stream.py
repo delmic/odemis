@@ -40,7 +40,7 @@ import numpy
 from odemis.acq import calibration, _futures
 from odemis.acq import drift as acq_drift
 from odemis.acq import align
-from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, MD_DESCRIPTION
+from odemis.model import VigilantAttribute, MD_POS, MD_PIXEL_SIZE, MD_DESCRIPTION, MD_ROTATION
 from odemis.util import TimeoutError, limit_invocation, polar, spectrum
 import random
 import threading
@@ -322,14 +322,14 @@ class Stream(object):
         return (dict MD_* -> value)
         """
         try:
-            pos = md[model.MD_POS]
+            pos = md[MD_POS]
         except KeyError:
             # Note: this log message is disabled to prevent log flooding
             # logging.warning("Position of image unknown")
             pos = (0, 0)
 
         try:
-            pxs = md[model.MD_PIXEL_SIZE]
+            pxs = md[MD_PIXEL_SIZE]
         except KeyError:
             # Hopefully it'll be within the same magnitude
             # default to typical sensor size
@@ -340,7 +340,7 @@ class Stream(object):
             # msg = "Pixel density of image unknown, using sensor size"
             # logging.warning(msg)
 
-        rot = md.get(model.MD_ROTATION, 0)
+        rot = md.get(MD_ROTATION, 0)
 
         # Not necessary, but handy to debug latency problems
         try:
@@ -348,9 +348,9 @@ class Stream(object):
         except KeyError:
             date = time.time()
 
-        return {model.MD_PIXEL_SIZE: pxs,
-                model.MD_POS: pos,
-                model.MD_ROTATION: rot,
+        return {MD_PIXEL_SIZE: pxs,
+                MD_POS: pos,
+                MD_ROTATION: rot,
                 model.MD_ACQ_DATE: date}
 
     @limit_invocation(0.1) # Max 10 Hz
@@ -864,6 +864,9 @@ class CameraNoLightStream(CameraStream):
         """
         # Override the normal metadata by using the ._position we know
         md = super(CameraNoLightStream, self)._find_metadata(md)
+
+        # No rotation to be displayed when aligning the lenses
+        md[MD_ROTATION] = 0
 
         try:
             if self._position:

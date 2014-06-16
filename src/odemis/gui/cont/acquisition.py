@@ -882,7 +882,7 @@ class FineAlignController(object):
                 # the worse is the rotation, the longer it's displayed
                 timeout = max(2, min(abs(rot), 10))
                 Message.show_message(self._main_frame,
-                                     u"Rotation needed: %s" % (
+                                     u"Rotation applied: %s" % (
                                       units.readable_str(rot, unit="°", sig=3)),
                                      timeout=timeout)
                 logging.warning("Fine alignment computed rotation needed of %f°",
