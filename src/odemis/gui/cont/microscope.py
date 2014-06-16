@@ -72,7 +72,7 @@ class MicroscopeStateController(object):
 
 class HardwareButtonController(object):
     """
-    Default button controller that on handles ON and Off states
+    Default button controller that on handles ON and OFF states
     """
 
     def __init__(self, btn_ctrl, va, _):
@@ -90,7 +90,9 @@ class HardwareButtonController(object):
 
 
 class ChamberButtonController(HardwareButtonController):
-    """ Controller that allows for the more complex state updates required by the chamber button """
+    """
+    Controller that allows for the more complex state updates required by the chamber button
+    """
 
     def __init__(self, btn_ctrl, va, main_data):
         """
@@ -175,8 +177,16 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetBitmapHover(self.btn_faces['normal']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['normal']['active'])
 
-        # The the chamber is pumping, or a vacuum has been reached, the buttons should be down
-        #self.btn.SetToggle(state in (model.CHAMBER_PUMPING, model.CHAMBER_VACUUM))
+        # Set the tooltip
+        if state == model.CHAMBER_PUMPING:
+            self.btn.SetToolTipString("Pumping...")
+        elif state == model.CHAMBER_VENTING:
+            self.btn.SetToolTipString("Venting...")
+        elif state == model.CHAMBER_VENTED:
+            self.btn.SetToolTipString("Pump the chamber")
+        elif state == model.CHAMBER_VACUUM:
+            self.btn.SetToolTipString("Vent the chamber")
+
 
     def _btn_to_va(self):
         """ Return the hardware state associated with the current button toggle state

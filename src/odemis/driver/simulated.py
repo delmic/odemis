@@ -250,6 +250,10 @@ class Chamber(model.Actuator):
 
     @isasync
     def moveAbs(self, pos):
+
+        if not isinstance(pos, dict):
+            raise ValueError("Dictionary required")
+
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
