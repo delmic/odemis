@@ -43,10 +43,11 @@ STATE_ON = 1
 STATE_PAUSE = 2
 
 # Chamber states
-CHAMBER_VENTED = 0   # Chamber can be opened
-CHAMBER_VACUUM = 1   # Chamber ready for imaging
-CHAMBER_PUMPING = 2  # Decreasing chamber pressure
-CHAMBER_VENTING = 3  # Pressurizing chamber
+CHAMBER_UNKNOWN = 0  # Chamber in an unknown state
+CHAMBER_VENTED = 1   # Chamber can be opened
+CHAMBER_VACUUM = 2   # Chamber ready for imaging
+CHAMBER_PUMPING = 3  # Decreasing chamber pressure
+CHAMBER_VENTING = 4  # Pressurizing chamber
 
 # The different types of view layouts
 VIEW_LAYOUT_ONE = 0 # one big view
@@ -208,8 +209,9 @@ class MainGUIData(object):
 
         # Chamber vacuum states
         if self.chamber:
-            chamber_states = {CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM, CHAMBER_VENTING}
-            self.chamber_state = model.IntEnumerated(CHAMBER_VENTED, chamber_states)
+            chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM,
+                              CHAMBER_VENTING}
+            self.chamber_state = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
             self.chamber_state.subscribe(self.on_chamber_state)
 
             if hasattr(self.chamber, 'pressure'):
@@ -329,15 +331,14 @@ class MainGUIData(object):
         CHAMBER_VENTING to CHAMBER_VENTED.
 
         """
-
-        if self.chamber_state.value == CHAMBER_PUMPING:
+        if self.chamber_state.value in (CHAMBER_PUMPING, CHAMBER_UNKNOWN):
 
             vacuum_pressure = min(self.chamber.axes["pressure"].choices.keys())
 
             if current_pressure <= vacuum_pressure:
                 self.chamber_state.value = CHAMBER_VACUUM
 
-        elif self.chamber_state.value == CHAMBER_VENTING:
+        elif self.chamber_state.value in (CHAMBER_VENTING, CHAMBER_UNKNOWN):
 
             vented_pressure = max(self.chamber.axes["pressure"].choices.keys())
 

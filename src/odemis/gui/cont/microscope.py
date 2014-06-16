@@ -176,6 +176,9 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetBitmapLabel(self.btn_faces['vacuum']['normal'])
             self.btn.SetBitmapHover(self.btn_faces['vacuum']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['vacuum']['active'])
+            # In case the GUI is launched with the chamber pump turned on already, we need to
+            # toggle the button by code.
+            self.btn.SetToggle(True)
         else:
             self.btn.SetBitmapLabel(self.btn_faces['normal']['normal'])
             self.btn.SetBitmapHover(self.btn_faces['normal']['hover'])
