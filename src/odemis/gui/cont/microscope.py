@@ -19,6 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 from odemis.gui import model
+from odemis.model import getVAs
 import odemis.util.units as units
 from odemis.gui.util.widgets import VigilantAttributeConnector
 import odemis.gui.img.data as imgdata
@@ -111,9 +112,12 @@ class ChamberButtonController(HardwareButtonController):
         self.pressure_va = None
 
         if self.chamber_act:
-            self.pressure_va = getattr(self.chamber_act, 'pressure', None)
-            if self.pressure_va:
+            if 'pressure' in getVAs(self.chamber_act):
+                self.pressure_va = getattr(self.chamber_act, 'pressure')
                 self.pressure_va.subscribe(self._update_label, init=True)
+            else:
+                self.btn.SetLabel("Chamber")
+                self.btn.Refresh()
 
     def _determine_button_faces(self, role):
         """ Determine what button faces to use depending on values found in main_data """
@@ -186,7 +190,6 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetToolTipString("Pump the chamber")
         elif state == model.CHAMBER_VACUUM:
             self.btn.SetToolTipString("Vent the chamber")
-
 
     def _btn_to_va(self):
         """ Return the hardware state associated with the current button toggle state
