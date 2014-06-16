@@ -25,10 +25,9 @@ import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.model import isasync
+from odemis.model import isasync, CancellableThreadPoolExecutor
 import threading
 import time
-from odemis.model._futures import CancellableThreadPoolExecutor
 import weakref
 from odemis.util import TimeoutError
 from tescan import sem, CancelledError

@@ -22,8 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 from numpy.polynomial import polynomial
 from odemis import model
-from odemis.model._components import ComponentBase
-from odemis.model._dataflow import DataFlowBase
+from odemis.model import ComponentBase, DataFlowBase
 import logging
 import math
 

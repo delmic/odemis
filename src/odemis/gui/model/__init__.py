@@ -28,8 +28,8 @@ import math
 from odemis import model
 from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
-from odemis.model import FloatContinuous, VigilantAttribute
-from odemis.model._vattributes import IntEnumerated, NotSettableError, StringVA
+from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
+                          NotSettableError, StringVA)
 import os
 import threading
 import time

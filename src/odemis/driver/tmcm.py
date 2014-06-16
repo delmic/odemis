@@ -24,15 +24,13 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from __future__ import division
 
-from Pyro4.core import isasync
 from concurrent.futures._base import CancelledError
 import glob
 import logging
 import numpy
 from odemis import model
 import odemis
-from odemis.model._futures import CancellableThreadPoolExecutor, \
-    CancellableFuture
+from odemis.model import isasync, CancellableThreadPoolExecutor, CancellableFuture
 from odemis.util import driver
 import os
 import serial

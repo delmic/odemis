@@ -32,7 +32,7 @@ from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model import VigilantAttributeBase
 from odemis.util import units
 import threading
 import time

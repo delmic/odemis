@@ -23,7 +23,7 @@ import glob
 import logging
 from odemis import model
 import odemis
-from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.model import CancellableThreadPoolExecutor
 from odemis.util import driver
 import os
 import re

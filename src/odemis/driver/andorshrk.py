@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-from Pyro4.core import isasync
 from ctypes import *
 import ctypes
 import logging
@@ -24,8 +23,7 @@ import math
 from odemis import model
 import odemis
 from odemis.driver import andorcam2
-from odemis.driver.andorcam2 import AndorV2DLL
-from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor
 import os
 import time
 
@@ -776,7 +774,7 @@ class FakeShamrockDLL(object):
         Simulate hw connection failure if the CCD is acquiring, like the
         SR303i via the I²C connection of the iDus
         """
-        if self._ccd and self._ccd.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+        if self._ccd and self._ccd.GetStatus() == andorcam2.AndorV2DLL.DRV_ACQUIRING:
             raise ShamrockError(20201, ShamrockDLL.err_code[20201])
 
     def ShamrockInitialize(self, path):

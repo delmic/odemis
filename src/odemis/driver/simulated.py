@@ -28,8 +28,7 @@ from __future__ import division
 
 import logging
 from odemis import model, util
-from odemis.model import isasync
-from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor
 import random
 import time
 
