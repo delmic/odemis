@@ -125,7 +125,7 @@ Spectra: {
     class: simulated.Chamber,
     role: chamber,
     init: {
-        positions: ["vented", "overview", "vacuum"],
+        positions: ["vented", "vacuum"],
     },
 }
 

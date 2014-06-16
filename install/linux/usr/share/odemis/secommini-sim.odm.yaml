@@ -75,7 +75,7 @@ Spectra: {
     role: chamber,
     init: {
         positions: ["vented", "overview", "vacuum"],
-    }
+    },
 }
 
 "NavCam": {
