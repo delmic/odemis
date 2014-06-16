@@ -147,22 +147,35 @@ class Stage(model.Actuator):
 
 
 PRESSURE_VENTED = 100e3 # Pa
+PRESSURE_OVERVIEW = PRESSURE_VENTED - 1 # fake
+PRESSURE_LOW = 20e3 # Pa
 PRESSURE_PUMPED = 5e3 # Pa
+
+PRESSURES={"vented": PRESSURE_VENTED,
+           "overview": PRESSURE_OVERVIEW,
+           "low-vacuum": PRESSURE_LOW,
+           "vacuum": PRESSURE_PUMPED}
 class Chamber(model.Actuator):
     """
     Simulated chamber component. Just pretends to be able to change pressure
     """
-    def __init__(self, name, role, **kwargs):
+    def __init__(self, name, role, positions, **kwargs):
         """
         Initialises the component
+        positions (list of str): each pressure positions supported by the 
+          component (among the allowed ones)
         """
         # TODO: or just provide .targetPressure (like .targetTemperature) ?
         # Or maybe provide .targetPosition: position that would be reached if
         # all the requested move were instantly applied?
-        # TODO: support multiple pressures (low vacuum, high vacuum)
-        axes = {"pressure": model.Axis(unit="Pa", 
-                                       choices={PRESSURE_VENTED: "vented",
-                                                PRESSURE_PUMPED: "vacuum"})}
+        
+        chp = {}
+        for p in positions:
+            try:
+                chp[PRESSURES[p]] = p
+            except KeyError:
+                raise ValueError("Pressure position %s is unknown", p)
+        axes = {"pressure": model.Axis(unit="Pa", choices=chp)}
         model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
         # For simulating moves
         self._position = PRESSURE_PUMPED # last official position

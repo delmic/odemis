@@ -73,7 +73,9 @@ Spectra: {
 "SEM Chamber": {
     class: simulated.Chamber,
     role: chamber,
-    # TODO: overview position
+    init: {
+        positions: ["vented", "overview", "vacuum"],
+    }
 }
 
 "NavCam": {

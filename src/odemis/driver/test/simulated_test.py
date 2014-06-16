@@ -189,7 +189,7 @@ class ChamberTest(unittest.TestCase):
 
     actuator_type = simulated.Chamber
     # name, role, children (must be None)
-    _kwargs = dict(name="c", role="chamber")
+    _kwargs = dict(name="c", role="chamber", positions=["vented", "vacuum"])
 
     def setUp(self):
         self.dev = self.actuator_type(**self._kwargs)
