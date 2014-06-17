@@ -30,6 +30,7 @@ from numpy.polynomial import polynomial
 from odemis import model, util
 import odemis
 from odemis.util import spectrum
+import os
 import re
 import sys
 import time
@@ -392,7 +393,7 @@ def _findElementByID(root, eid, tag=None):
 
     return None
 
-def _updateMDFromOME(root, das):
+def _updateMDFromOME(root, das, basename):
     """
     Updates the metadata of DAs according to OME XML
     root (ET.Element): the root (i.e., OME) element of the XML description
@@ -460,7 +461,7 @@ def _updateMDFromOME(root, das):
         except (KeyError, ValueError):
             pass
 
-        ctz_2_ifd = _getIFDsFromOME(pxe)
+        ctz_2_ifd = _getIFDsFromOME(pxe, basename)
 
         # Channels are a bit tricky, because apparently they are associated to
         # each C only by the order they are specified.
@@ -620,11 +621,12 @@ def _updateMDFromOME(root, das):
                     # First apply the global MD, then per-channel
                     da.metadata.update(md)
 
-def _getIFDsFromOME(pixele):
+def _getIFDsFromOME(pixele, basename):
     """
     Return the IFD containing the 2D data for each high dimension of an array.
     Note: this doesn't take into account if the data is 3D.
     pixele (ElementTree): the element to Pixels of an image
+    basename (unicode): the (base) name of the current file
     return (numpy.array of int): shape is the shape of the 3 high dimensions CTZ,
      the value is the IFD number of -1 if not specified.
     """
@@ -636,6 +638,18 @@ def _getIFDsFromOME(pixele):
     imsetn = numpy.empty(hdshape, dtype="int")
     imsetn[:] = -1
     for tfe in pixele.findall("TiffData"):
+        # UUID: can indicate data from a different file. For now, we only load
+        # data from this specific file.
+        # TODO: have an option to either drop these data, or load the other
+        # file (if it exists). cf tiff series.
+
+        uuide = tfe.find("UUID") # zero or one
+        if uuide is not None:
+            fn = uuide.get("FileName", "")
+            if fn not in {basename, ""}:
+                logging.debug("Skipping metadata for file %s", fn)
+                continue
+
         ifd = int(tfe.get("IFD", "0"))
         pos = []
         for d in "CTZ": # that's our fixed order
@@ -644,12 +658,9 @@ def _getIFDsFromOME(pixele):
         # TODO: if no IFD specified, PC should default to all the IFDs
         pc = int(tfe.get("PlaneCount", "1"))
 
-        # TODO: If has UUID tag, it means it's actually in a separate document
-        # (cf tiff series) => load it and add it to the data as a new IFD?
-        # Or raise an Error if it's not this current document?
 
         # If PlaneCount is > 1: it's in the same order as DimensionOrder
-        # TODO: for now fixed to ZTC, but that should as DimensionOrder
+        # TODO: for now fixed to ZTC, but that should be same as DimensionOrder
         for i in range(pc):
             imsetn[tuple(pos)] = ifd + i
             if i == (pc - 1): # don't compute next position if it's over
@@ -715,7 +726,7 @@ def _mergeDA(das, hdim_index):
     return model.DataArray(imset, metadata=fim.metadata)
 
 
-def _foldArraysFromOME(root, das):
+def _foldArraysFromOME(root, das, basename):
     """
     Reorganize DataArrays with more than 2 dimensions according to OME XML
     Note: it expects _updateMDFromOME has been run before and so each array
@@ -728,7 +739,9 @@ def _foldArraysFromOME(root, das):
     """
     omedas = []
 
+    n = 0 # just for logging
     for ime in root.findall("Image"):
+        n += 1
         pxe = ime.find("Pixels") # there must be only one per Image
 
         # The relation between channel and planes is not very clear. Each channel
@@ -740,9 +753,14 @@ def _foldArraysFromOME(root, das):
         # and Plane refers to the C dimension.
 #        spp = int(pxe.get("Channel/SamplesPerPixel", "1"))
 
-        imsetn = _getIFDsFromOME(pxe)
+        imsetn = _getIFDsFromOME(pxe, basename)
         # For now we expect RGB as (SPP=3,) SizeC=3, PlaneCount=1, and 1 3D IFD,
         # or as (SPP=3,) SizeC=3, PlaneCount=3 and 3 2D IFDs.
+
+        fifd = imsetn[0, 0, 0]
+        if fifd == -1:
+            logging.debug("Skipping metadata update for image %d", n)
+            continue
 
         # Read the complete shape of the dataset
         dshape = list(imsetn.shape)
@@ -751,9 +769,6 @@ def _foldArraysFromOME(root, das):
             dshape.append(ds)
 
         # Check if the IFDs are 2D or 3D, based on the first one
-        fifd = imsetn[0, 0, 0]
-        if fifd == -1:
-            raise ValueError("Not all IFDs defined for image %d" % len(omedas) + 1)
 
         fim = das[fifd]
         if fim == None:
@@ -775,7 +790,7 @@ def _foldArraysFromOME(root, das):
             continue
 
         if -1 in imsetn:
-            raise ValueError("Not all IFDs defined for image %d" % len(omedas) + 1)
+            raise ValueError("Not all IFDs defined for image %d" % (len(omedas) + 1,))
 
         # TODO: Position might also be different. Probably should be grouped
         # by position too, as Odemis doesn't support such case.
@@ -1320,7 +1335,7 @@ def _thumbsFromTIFF(filename):
 
     return data
 
-def _reconstructFromOMETIFF(xml, data):
+def _reconstructFromOMETIFF(xml, data, basename):
     """
     Update DAs to reflect shape and metadata contained in OME XML
     xml (string): String containing the OME XML declaration
@@ -1336,8 +1351,8 @@ def _reconstructFromOMETIFF(xml, data):
     xml = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
                  "", xml)
     root = ET.fromstring(xml)
-    _updateMDFromOME(root, data)
-    omedata = _foldArraysFromOME(root, data)
+    _updateMDFromOME(root, data, basename)
+    omedata = _foldArraysFromOME(root, data, basename)
 
     return omedata
 
@@ -1368,7 +1383,7 @@ def _dataFromTIFF(filename):
     if (desc and ((desc.startswith("<?xml") and "<ome " in desc.lower())
                   or desc[:4].lower() == '<ome')):
         try:
-            data = _reconstructFromOMETIFF(desc, data)
+            data = _reconstructFromOMETIFF(desc, data, os.path.basename(filename))
         except Exception:
             # fallback to pretend there was no OME XML
             logging.exception("Failed to decode OME XML string: '%s'", desc)
