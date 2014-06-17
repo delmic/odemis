@@ -1,4 +1,4 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 
 """
 @author: Rinze de Laat
@@ -24,13 +24,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from collections import OrderedDict
 import collections
 import logging
 import math
 import numpy
+import os.path
+import pkg_resources
+import weakref
+
+import scipy.misc
+
 from odemis import dataio, model
 from odemis.acq import calibration
+import odemis.acq.stream as streammod
+from odemis.gui import FG_COLOUR_HIGHLIGHT
+
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
@@ -42,29 +50,40 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController, FineAlignController, AutoCenterController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
-from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
-    call_after, align, call_after_wrapper
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
 import pkg_resources
 import scipy.misc
 import weakref
-from wx import html  # pylint: disable=W0611
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
+from wx import html  #pylint: disable=W0611
 import wx
 
 import odemis.acq.stream as streammod
+from odemis.gui.comp.popup import Message
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
+import odemis.gui.util as guiutil
+import odemis.gui.util.align as align
 
 
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
     def __init__(self, name, button, panel, main_frame, tab_data, label=None):
+        """
+        :type name: str
+        :type button: odemis.gui.comp.buttons.TabButton
+        :type panel: wx.Panel
+        :type main_frame: odemis.gui.main_xrc.xrcfr_main
+        :type tab_data: odemis.gui.model.LiveViewGUIData
+        :type label: str or None
+
+        """
+
         self.name = name
         self.label = label
         self.button = button
@@ -72,11 +91,16 @@ class Tab(object):
         self.main_frame = main_frame
         self.tab_data_model = tab_data
 
+        self._button_col_cache = self.button.ForegroundColour
+        self.notification = False
+
     def Show(self, show=True):
         self.button.SetToggle(show)
         if show:
             self._connect_22view_event()
             self._connect_crosshair_event()
+
+            self._clear_notification()
 
         self.panel.Show(show)
 
@@ -111,7 +135,7 @@ class Tab(object):
         else:
             self.main_frame.menu_item_22view.Enable(False)
             self.main_frame.menu_item_22view.Check(False)
-            self.main_frame.menu_item_22view.vamethod = None # drop VA subscr.
+            self.main_frame.menu_item_22view.vamethod = None  # drop VA subscr.
 
     def _connect_crosshair_event(self):
         """ Connect the cross hair menu event to the focused view and its
@@ -124,8 +148,8 @@ class Tab(object):
                 """Called when focused view changes"""
                 if hasattr(fv, "show_crosshair"):
                     fv.show_crosshair.subscribe(
-                            self.main_frame.menu_item_cross.Check,
-                            init=True)
+                        self.main_frame.menu_item_cross.Check,
+                        init=True)
                     self.main_frame.menu_item_cross.Enable(True)
                 else:
                     self.main_frame.menu_item_cross.Enable(False)
@@ -154,7 +178,7 @@ class Tab(object):
             # If the right elements are not found, simply disable the menu item
             self.main_frame.menu_item_cross.Enable(False)
             self.main_frame.menu_item_cross.Check(False)
-            self.main_frame.menu_item_cross.vamethod = None # drop VA subscr.
+            self.main_frame.menu_item_cross.vamethod = None  # drop VA subscr.
 
     def Hide(self):
         self.Show(False)
@@ -174,14 +198,23 @@ class Tab(object):
     def get_label(self):
         return self.button.GetLabel()
 
-class SecomStreamsTab(Tab):
+    def notify(self):
+        if not self.notification:
+            self.button.set_colour(FG_COLOUR_HIGHLIGHT)
+            self.notification = True
 
+    def _clear_notification(self):
+        if self.notification:
+            self.button.reset_colour()
+            self.notification = False
+
+
+class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
 
         tab_data = guimod.LiveViewGUIData(main_data)
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
-
 
         # Toolbar
         self.tb = self.main_frame.secom_toolbar
@@ -192,57 +225,57 @@ class SecomStreamsTab(Tab):
         # Order matters!
         # First we create the views, then the streams
         self._view_controller = viewcont.ViewController(
-                                    self.tab_data_model,
-                                    self.main_frame,
-                                    [self.main_frame.vp_secom_tl,
-                                     self.main_frame.vp_secom_tr,
-                                     self.main_frame.vp_secom_bl,
-                                     self.main_frame.vp_secom_br],
-                                    self.tb
-                                )
+            self.tab_data_model,
+            self.main_frame,
+            [self.main_frame.vp_secom_tl,
+             self.main_frame.vp_secom_tr,
+             self.main_frame.vp_secom_bl,
+             self.main_frame.vp_secom_br],
+            self.tb
+        )
 
         self._settings_controller = settings.SecomSettingsController(
-                                        self.main_frame,
-                                        self.tab_data_model
-                                    )
+            self.main_frame,
+            self.tab_data_model
+        )
 
         self._stream_controller = streamcont.StreamController(
-                                        self.tab_data_model,
-                                        self.main_frame.pnl_secom_streams
-                                  )
-        buttons = OrderedDict([
-                (self.main_frame.btn_secom_view_all,
-                        (None, self.main_frame.lbl_secom_view_all)),
-                (self.main_frame.btn_secom_view_tl,
-                        (self.main_frame.vp_secom_tl,
-                         self.main_frame.lbl_secom_view_tl)),
-                (self.main_frame.btn_secom_view_tr,
-                        (self.main_frame.vp_secom_tr,
-                         self.main_frame.lbl_secom_view_tr)),
-                (self.main_frame.btn_secom_view_bl,
-                        (self.main_frame.vp_secom_bl,
-                         self.main_frame.lbl_secom_view_bl)),
-                (self.main_frame.btn_secom_view_br,
-                        (self.main_frame.vp_secom_br,
-                         self.main_frame.lbl_secom_view_br))
-                   ])
+            self.tab_data_model,
+            self.main_frame.pnl_secom_streams
+        )
+        buttons = collections.OrderedDict([
+            (self.main_frame.btn_secom_view_all,
+             (None, self.main_frame.lbl_secom_view_all)),
+            (self.main_frame.btn_secom_view_tl,
+             (self.main_frame.vp_secom_tl,
+              self.main_frame.lbl_secom_view_tl)),
+            (self.main_frame.btn_secom_view_tr,
+             (self.main_frame.vp_secom_tr,
+              self.main_frame.lbl_secom_view_tr)),
+            (self.main_frame.btn_secom_view_bl,
+             (self.main_frame.vp_secom_bl,
+              self.main_frame.lbl_secom_view_bl)),
+            (self.main_frame.btn_secom_view_br,
+             (self.main_frame.vp_secom_br,
+              self.main_frame.lbl_secom_view_br))
+        ])
 
         self._view_selector = viewcont.ViewSelector(
-                                    self.tab_data_model,
-                                    self.main_frame,
-                                    buttons
-                              )
+            self.tab_data_model,
+            self.main_frame,
+            buttons
+        )
 
-        self._acquisition_controller = SecomAcquiController(
-                                            self.tab_data_model,
-                                            self.main_frame
-                                       )
+        self._acquisition_controller = acqcont.SecomAcquiController(
+            self.tab_data_model,
+            self.main_frame
+        )
 
         self._state_controller = MicroscopeStateController(
-                                            self.tab_data_model,
-                                            self.main_frame,
-                                            "live_btn_"
-                                      )
+            self.tab_data_model,
+            self.main_frame,
+            "live_btn_"
+        )
 
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
@@ -250,7 +283,7 @@ class SecomStreamsTab(Tab):
         # on
         if hasattr(main_data, 'opticalState'):
             self._opt_streams_enabled = False
-            self._opt_stream_to_restart = set() # weakref set of Streams
+            self._opt_stream_to_restart = set()  # weakref set of Streams
             main_data.opticalState.subscribe(self.onOpticalState)
 
         if hasattr(main_data, 'emState'):
@@ -277,14 +310,14 @@ class SecomStreamsTab(Tab):
     def onOpticalState(self, state):
         enabled = (state == guimod.STATE_ON) and self.IsShown()
         if self._opt_streams_enabled == enabled:
-            return # no change
+            return  # no change
         else:
             self._opt_streams_enabled = enabled
 
         if enabled:
             # check whether we need to create a (first) fluo stream
             has_opt = any(isinstance(s, streammod.OPTICAL_STREAMS)
-                            for s in self.tab_data_model.streams.value)
+                          for s in self.tab_data_model.streams.value)
             if not has_opt:
                 sp = self._stream_controller.addFluo(add_to_all_views=True)
                 self._view_controller.focusViewWithStream(sp.stream)
@@ -297,14 +330,14 @@ class SecomStreamsTab(Tab):
     def onEMState(self, state):
         enabled = (state == guimod.STATE_ON) and self.IsShown()
         if self._sem_streams_enabled == enabled:
-            return # no change
+            return  # no change
         else:
             self._sem_streams_enabled = enabled
 
         if enabled:
             # check whether we need to create a (first) SEM stream
             has_sem = any(isinstance(s, streammod.EM_STREAMS)
-                            for s in self.tab_data_model.streams.value)
+                          for s in self.tab_data_model.streams.value)
             if not has_sem:
                 sp = self._stream_controller.addSEMSED(add_to_all_views=True)
                 sp.show_remove_btn(False)
@@ -327,7 +360,6 @@ class SecomStreamsTab(Tab):
 
 
 class SparcAcquisitionTab(Tab):
-
     def __init__(self, name, button, panel, main_frame, main_data):
         tab_data = guimod.ScannedAcquisitionGUIData(main_data)
         super(SparcAcquisitionTab, self).__init__(name, button, panel,
@@ -359,32 +391,32 @@ class SparcAcquisitionTab(Tab):
 
         acq_view = self.tab_data_model.acquisitionView
         sem_stream = streammod.SEMStream(
-                        "SEM survey",
-                        main_data.sed,
-                        main_data.sed.data,
-                        main_data.ebeam)
+            "SEM survey",
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam)
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
-        acq_view.addStream(sem_stream) # it should also be saved
+        acq_view.addStream(sem_stream)  # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
         semcl_stream = streammod.SEMStream(
-                "SEM CL", # name matters, used to find the stream for the ROI
-                main_data.sed,
-                main_data.sed.data,
-                main_data.ebeam
+            "SEM CL",  # name matters, used to find the stream for the ROI
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam
         )
         self._sem_cl_stream = semcl_stream
         self.tab_data_model.semStream = semcl_stream
 
-        vas_settings = [] # VAs that can affect the acquisition time
+        vas_settings = []  # VAs that can affect the acquisition time
 
         if main_data.spectrometer:
             spec_stream = streammod.SpectrumStream(
-                                        "Spectrum",
-                                        main_data.spectrometer,
-                                        main_data.spectrometer.data,
-                                        main_data.ebeam)
+                "Spectrum",
+                main_data.spectrometer,
+                main_data.spectrometer.data,
+                main_data.ebeam)
             spec_stream.roi.subscribe(self.onSpecROI)
             vas_settings.append(spec_stream.repetition)
             self._spec_stream = spec_stream
@@ -394,18 +426,18 @@ class SparcAcquisitionTab(Tab):
             acq_view.addStream(self._sem_spec_stream)
 
             self._scount_stream = streammod.CameraCountStream("Spectrum count",
-                                              main_data.spectrometer,
-                                              main_data.spectrometer.data,
-                                              main_data.ebeam)
+                                                              main_data.spectrometer,
+                                                              main_data.spectrometer.data,
+                                                              main_data.ebeam)
             self._scount_stream.should_update.value = True
-            self._scount_stream.windowPeriod.value = 30 # s
+            self._scount_stream.windowPeriod.value = 30  # s
 
         if main_data.ccd:
             ar_stream = streammod.ARStream(
-                                "Angular",
-                                main_data.ccd,
-                                main_data.ccd.data,
-                                main_data.ebeam)
+                "Angular",
+                main_data.ccd,
+                main_data.ccd.data,
+                main_data.ebeam)
             ar_stream.roi.subscribe(self.onARROI)
             vas_settings.append(ar_stream.repetition)
             self._ar_stream = ar_stream
@@ -430,11 +462,11 @@ class SparcAcquisitionTab(Tab):
 
         # create a view on the tab model
         self._view_controller = viewcont.ViewController(
-                                    self.tab_data_model,
-                                    self.main_frame,
-                                    [self.main_frame.vp_sparc_acq_view],
-                                    self.tb
-                                )
+            self.tab_data_model,
+            self.main_frame,
+            [self.main_frame.vp_sparc_acq_view],
+            self.tb
+        )
         # Add the SEM stream to the focussed (only) view
         self.tab_data_model.streams.value.append(sem_stream)
         mic_view = self.tab_data_model.focussedView.value
@@ -442,11 +474,11 @@ class SparcAcquisitionTab(Tab):
 
         # needs to have the AR and Spectrum streams on the acquisition view
         self._settings_controller = settings.SparcSettingsController(
-                                        self.main_frame,
-                                        self.tab_data_model,
-                                        spec_stream=self._spec_stream,
-                                        ar_stream=self._ar_stream
-                                    )
+            self.main_frame,
+            self.tab_data_model,
+            spec_stream=self._spec_stream,
+            ar_stream=self._ar_stream
+        )
         # Bind the Spectrometer/Angle resolved buttons to add/remove the
         # streams. Both from the setting panels and the acquisition view.
         if self._ar_stream and self._spec_stream:
@@ -456,14 +488,14 @@ class SparcAcquisitionTab(Tab):
                 # use the current position to select the default instrument
                 # TODO: or just don't select anything, as if the GUI was closed
                 # in the alignment tab, it will always end up in AR.
-                if main_data.ar_spec_sel.position.value["rx"] == 0: # AR on
+                if main_data.ar_spec_sel.position.value["rx"] == 0:  # AR on
                     self.main_frame.acq_btn_angular.SetToggle(True)
                     self._show_spec(False)
-                else: # Spec on
+                else:  # Spec on
                     self.main_frame.acq_btn_spectrometer.SetToggle(True)
                     self._scount_stream.should_update.value = True
                     self._show_ar(False)
-                # Show() will take care of setting the lenses
+                    # Show() will take care of setting the lenses
             else:
                 # disable everything
                 self._show_ar(False)
@@ -475,16 +507,16 @@ class SparcAcquisitionTab(Tab):
         main_data.is_acquiring.subscribe(self.on_acquisition)
 
         # needs settings_controller
-        self._acquisition_controller = SparcAcquiController(
-                                            self.tab_data_model,
-                                            self.main_frame,
-                                            self.settings_controller,
-                                            semcl_stream.roi,
-                                            vas_settings,
-                                       )
+        self._acquisition_controller = acqcont.SparcAcquiController(
+            self.tab_data_model,
+            self.main_frame,
+            self.settings_controller,
+            semcl_stream.roi,
+            vas_settings,
+        )
 
         # Repetition visualisation
-        self._hover_stream = None # stream for which the repetition must be displayed
+        self._hover_stream = None  # stream for which the repetition must be displayed
 
         # Grab the repetition entries, so we can use it to hook extra event
         # handlers to it.
@@ -517,7 +549,7 @@ class SparcAcquisitionTab(Tab):
             self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
-    @call_after
+    @guiutil.call_after
     def _on_spec_count(self, scount):
         """
         Called when a new spectrometer data comes in (and so the whole intensity
@@ -530,11 +562,11 @@ class SparcAcquisitionTab(Tab):
             if v < 1:
                 txt = units.readable_str(float(scount[-1]), sig=6)
             else:
-                txt = "%d" % round(v) # to make it clear what is small/big
+                txt = "%d" % round(v)  # to make it clear what is small/big
             self._txt_mean.SetValue(txt)
 
             # fit min/max between 0 and 1
-            ndcount = scount.view(numpy.ndarray) # standard NDArray to get scalars
+            ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
             vmin, vmax = ndcount.min(), ndcount.max()
             b = vmax - vmin
             if b == 0:
@@ -544,8 +576,8 @@ class SparcAcquisitionTab(Tab):
             # insert 0s at the beginning if the window is not (yet) full
             dates = scount.metadata[model.MD_ACQ_DATE]
             dur = dates[-1] - dates[0]
-            if dur == 0: # only one tick?
-                dur = 1 # => make it 1s large
+            if dur == 0:  # only one tick?
+                dur = 1  # => make it 1s large
             exp_dur = self._scount_stream.windowPeriod.value
             missing_dur = exp_dur - dur
             nb0s = int(missing_dur * len(scount) / dur)
@@ -593,7 +625,7 @@ class SparcAcquisitionTab(Tab):
         if self._hover_stream:
             stream = self._hover_stream
         elif (self.spec_rep and
-              (self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus())):
+                  (self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus())):
             stream = self._spec_stream
         elif self.angu_rep and self.angu_rep.ctrl.HasFocus():
             stream = self._ar_stream
@@ -660,7 +692,7 @@ class SparcAcquisitionTab(Tab):
 
         if show:
             self._set_lenses()
-        # don't put switches back when hiding, to avoid unnecessary moves
+            # don't put switches back when hiding, to avoid unnecessary moves
 
     def terminate(self):
         # ensure we are not acquiring anything
@@ -712,11 +744,11 @@ class SparcAcquisitionTab(Tab):
         """
         # Enable the lens and put the mirror to the right position
         streams = self.tab_data_model.acquisitionView.getStreams()
-        if self._sem_ar_stream in streams: # AR on
+        if self._sem_ar_stream in streams:  # AR on
             ar_spec_pos = 0
-        elif self._sem_spec_stream in streams: # Spec on
+        elif self._sem_spec_stream in streams:  # Spec on
             ar_spec_pos = math.radians(90)
-        else: # no stream => nothing to do (yet)
+        else:  # no stream => nothing to do (yet)
             return
 
         if self.tab_data_model.main.lens_switch:
@@ -750,7 +782,7 @@ class SparcAcquisitionTab(Tab):
 
         if show:
             self._set_lenses()
-        # don't put switches back when hiding, to avoid unnecessary moves
+            # don't put switches back when hiding, to avoid unnecessary moves
 
     def _show_ar(self, show=True):
         """
@@ -771,7 +803,7 @@ class SparcAcquisitionTab(Tab):
 
         if show:
             self._set_lenses()
-        # don't put switches back when hiding, to avoid unnecessary moves
+            # don't put switches back when hiding, to avoid unnecessary moves
 
     def onToggleSpec(self, evt):
         """
@@ -801,8 +833,8 @@ class SparcAcquisitionTab(Tab):
         if show:
             self._ar_stream.roi.value = self._sem_cl_stream.roi.value
 
-class AnalysisTab(Tab):
 
+class AnalysisTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
         """
         microscope will be used only to select the type of views
@@ -832,11 +864,11 @@ class AnalysisTab(Tab):
         # The view controller also has special code for the sparc to create the
         # right type of view.
         self._view_controller = viewcont.ViewController(
-                                    self.tab_data_model,
-                                    self.main_frame,
-                                    viewports,
-                                    self.tb
-                                )
+            self.tab_data_model,
+            self.main_frame,
+            viewports,
+            self.tb
+        )
 
         # FIXME: Way too hacky approach to get the right viewport shown,
         # so we need to rethink and re-do it. Might involve letting the
@@ -846,7 +878,7 @@ class AnalysisTab(Tab):
         if main_data.role == "sparc":
             vp_bottom_left = self.main_frame.vp_angular
             ar_view = vp_bottom_left.microscope_view
-            tab_data.visible_views.value[2] = ar_view # switch views
+            tab_data.visible_views.value[2] = ar_view  # switch views
         else:
             vp_bottom_left = self.main_frame.vp_inspection_bl
 
@@ -854,50 +886,46 @@ class AnalysisTab(Tab):
         self._def_views = list(tab_data.visible_views.value)
 
         self._stream_controller = streamcont.StreamController(
-                                        self.tab_data_model,
-                                        self.main_frame.pnl_inspection_streams,
-                                        static=True
-                                  )
-
+            self.tab_data_model,
+            self.main_frame.pnl_inspection_streams,
+            static=True
+        )
 
         self._settings_controller = settings.AnalysisSettingsController(
-                                        self.main_frame,
-                                        self.tab_data_model
-                                    )
+            self.main_frame,
+            self.tab_data_model
+        )
         self._settings_controller.setter_ar_file = self.set_ar_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
-        buttons = OrderedDict([
+        buttons = collections.OrderedDict([
             (self.main_frame.btn_sparc_view_all,
-                    (None, self.main_frame.lbl_sparc_view_all)),
+             (None, self.main_frame.lbl_sparc_view_all)),
             (self.main_frame.btn_sparc_view_tl,
-                    (self.main_frame.vp_inspection_tl,
-                     self.main_frame.lbl_sparc_view_tl)),
+             (self.main_frame.vp_inspection_tl,
+              self.main_frame.lbl_sparc_view_tl)),
             (self.main_frame.btn_sparc_view_tr,
-                    (self.main_frame.vp_inspection_tr,
-                     self.main_frame.lbl_sparc_view_tr)),
+             (self.main_frame.vp_inspection_tr,
+              self.main_frame.lbl_sparc_view_tr)),
             (self.main_frame.btn_sparc_view_bl,
-                    (vp_bottom_left,
-                     self.main_frame.lbl_sparc_view_bl)),
+             (vp_bottom_left,
+              self.main_frame.lbl_sparc_view_bl)),
             (self.main_frame.btn_sparc_view_br,
-                    (self.main_frame.vp_inspection_br,
-                     self.main_frame.lbl_sparc_view_br))
-               ])
+             (self.main_frame.vp_inspection_br,
+              self.main_frame.lbl_sparc_view_br))
+        ])
 
         self._view_selector = viewcont.ViewSelector(
-                                    self.tab_data_model,
-                                    self.main_frame,
-                                    buttons,
-                                    viewports
-                              )
-
-        self.main_frame.btn_open_image.Bind(
-                            wx.EVT_BUTTON,
-                            self.on_file_open_button
+            self.tab_data_model,
+            self.main_frame,
+            buttons,
+            viewports
         )
 
-
-
+        self.main_frame.btn_open_image.Bind(
+            wx.EVT_BUTTON,
+            self.on_file_open_button
+        )
 
         self.tab_data_model.tool.subscribe(self._onTool)
 
@@ -920,7 +948,7 @@ class AnalysisTab(Tab):
             config = get_acqui_conf()
             path = config.last_path
 
-        wildcards, formats = formats_to_wildcards(formats_to_ext, include_all=True)
+        wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
         dialog = wx.FileDialog(self.panel,
                                message="Choose a file to load",
                                defaultDir=path,
@@ -961,7 +989,7 @@ class AnalysisTab(Tab):
         converter = dataio.get_exporter(fmt)
         try:
             data = converter.read_data(fn)
-        except Exception: #pylint: disable=W0703
+        except Exception:  #pylint: disable=W0703
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self.display_new_data(fn, data)
@@ -1002,8 +1030,8 @@ class AnalysisTab(Tab):
             try:
                 im_acq_date = d.metadata[model.MD_ACQ_DATE]
                 acq_date = min(acq_date or im_acq_date, im_acq_date)
-            except KeyError: # no MD_ACQ_DATE
-                pass # => don't update the acq_date
+            except KeyError:  # no MD_ACQ_DATE
+                pass  # => don't update the acq_date
 
             # Streams only support 2D data (e.g., no multiple channels like RGB)
             # excepted for spectrums which have a 3rd dimensions on dim 5.
@@ -1013,8 +1041,8 @@ class AnalysisTab(Tab):
             for cd in cdata:
                 # TODO: be more clever to detect the type of stream
                 if (model.MD_WL_LIST in cd.metadata or
-                    model.MD_WL_POLYNOMIAL in cd.metadata or
-                    (len(cd.shape) >= 5 and cd.shape[-5] > 1)):
+                            model.MD_WL_POLYNOMIAL in cd.metadata or
+                        (len(cd.shape) >= 5 and cd.shape[-5] > 1)):
                     desc = cd.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     cls = streammod.StaticSpectrumStream
                 elif model.MD_AR_POLE in cd.metadata:
@@ -1022,15 +1050,15 @@ class AnalysisTab(Tab):
                     ar_data.append(cd)
                     continue
                 elif ((model.MD_IN_WL in cd.metadata and
-                      model.MD_OUT_WL in cd.metadata) or
-                      model.MD_USER_TINT in cd.metadata):
+                               model.MD_OUT_WL in cd.metadata) or
+                              model.MD_USER_TINT in cd.metadata):
                     # No explicit way to distinguish between Brightfield and Fluo,
                     # so guess it's Brightfield iif:
                     # * No tint
                     # * (and) Large band for excitation wl (> 100 nm)
                     in_wl = d.metadata[model.MD_IN_WL]
                     if (model.MD_USER_TINT in cd.metadata or
-                        in_wl[1] - in_wl[0] < 100e-9):
+                                    in_wl[1] - in_wl[0] < 100e-9):
                         # Fluo
                         desc = cd.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
                         cls = streammod.StaticFluoStream
@@ -1038,7 +1066,7 @@ class AnalysisTab(Tab):
                         # Brigthfield
                         desc = cd.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                         cls = streammod.StaticBrightfieldStream
-                elif model.MD_IN_WL in cd.metadata: # no MD_OUT_WL
+                elif model.MD_IN_WL in cd.metadata:  # no MD_OUT_WL
                     desc = cd.metadata.get(model.MD_DESCRIPTION, "Brightfield")
                     cls = streammod.StaticBrightfieldStream
                 else:
@@ -1051,10 +1079,10 @@ class AnalysisTab(Tab):
         # Add one global AR stream
         if ar_data:
             stream_panel = self._stream_controller.addStatic(
-                                        "Angular",
-                                        ar_data,
-                                        cls=streammod.StaticARStream,
-                                        add_to_all_views=True)
+                "Angular",
+                ar_data,
+                cls=streammod.StaticARStream,
+                add_to_all_views=True)
 
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
@@ -1083,10 +1111,10 @@ class AnalysisTab(Tab):
                         height, width = iimg.shape[0:2]
 
                         ol.set_values(
-                                    iimg.metadata[model.MD_PIXEL_SIZE][0],
-                                    iimg.metadata[model.MD_POS],
-                                    (width, height),
-                                    strm.selected_pixel
+                            iimg.metadata[model.MD_PIXEL_SIZE][0],
+                            iimg.metadata[model.MD_POS],
+                            (width, height),
+                            strm.selected_pixel
                         )
                 strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 self.tb.enable_button(tools.TOOL_POINT, True)
@@ -1115,7 +1143,7 @@ class AnalysisTab(Tab):
             except ValueError:
                 logging.warning(u"Calibration file not accepted any more '%s'",
                                 self.tab_data_model.ar_cal.value)
-                self.tab_data_model.ar_cal.value = u"" # remove the calibration
+                self.tab_data_model.ar_cal.value = u""  # remove the calibration
 
         if spec_found:
             try:
@@ -1123,7 +1151,7 @@ class AnalysisTab(Tab):
             except ValueError:
                 logging.warning(u"Calibration file not accepted any more '%s'",
                                 self.tab_data_model.spec_cal.value)
-                self.tab_data_model.spec_cal.value = u"" # remove the calibration
+                self.tab_data_model.spec_cal.value = u""  # remove the calibration
 
         # Only show the panels that fit the current streams
         self._settings_controller.ShowCalibrationPanel(ar_found, spec_found)
@@ -1146,7 +1174,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_ar_data(data)
 
             # Apply data to the relevant streams
-            ar_strms = [s for s in  self.tab_data_model.streams.value
+            ar_strms = [s for s in self.tab_data_model.streams.value
                         if isinstance(s, streammod.AR_STREAMS)]
 
             # This might raise more exceptions if calibration is not compatible
@@ -1154,8 +1182,8 @@ class AnalysisTab(Tab):
             for strm in ar_strms:
                 strm.background.value = cdata
 
-        except Exception, err: #pylint: disable=W0703
-#            logging.exception("Problem loading file")
+        except Exception, err:  #pylint: disable=W0703
+            #            logging.exception("Problem loading file")
             msg = "File '%s' not suitable as angular resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1190,7 +1218,7 @@ class AnalysisTab(Tab):
             for strm in spec_strms:
                 strm.efficiencyCompensation.value = cdata
 
-        except Exception, err: #pylint: disable=W0703
+        except Exception, err:  #pylint: disable=W0703
             msg = "File '%s' not suitable for spectrum efficiency compensation:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1202,7 +1230,7 @@ class AnalysisTab(Tab):
 
         return fn
 
-    @call_after
+    @guiutil.call_after
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
@@ -1236,7 +1264,7 @@ class AnalysisTab(Tab):
                 # .., but go for the bottom right one when the spec pixel was
                 # selected in the top right viewport
                 if (self.tab_data_model.focussedView.value ==
-                    self.main_frame.vp_inspection_tr.microscope_view):
+                        self.main_frame.vp_inspection_tr.microscope_view):
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
@@ -1260,7 +1288,7 @@ class AnalysisTab(Tab):
             # multiple channels => split
             das = []
             for c in range(data.shape[-3]):
-                das.append(data[..., c, :, :]) # metadata ref is copied
+                das.append(data[..., c, :, :])  # metadata ref is copied
             return das
         else:
             # return just one DA
@@ -1277,12 +1305,11 @@ class LensAlignTab(Tab):
         super(LensAlignTab, self).__init__(name, button, panel,
                                            main_frame, tab_data)
 
-
         # TODO: we should actually display the settings of the streams (...once they have it)
         self._settings_controller = settings.LensAlignSettingsController(
-                                        self.main_frame,
-                                        self.tab_data_model
-                                    )
+            self.main_frame,
+            self.tab_data_model
+        )
 
         main_frame.vp_align_sem.ShowLegend(False)
 
@@ -1294,28 +1321,28 @@ class LensAlignTab(Tab):
         # could behave in a more expected way to the user, but the current
         # approximation is enough to do the calibration relatively quickly.
         self._stage_ab = align.InclinedStage("converter-ab", "stage",
-                                       children={"aligner": main_data.aligner},
-                                       axes=["b", "a"],
-                                       angle=135)
+                                             children={"aligner": main_data.aligner},
+                                             axes=["b", "a"],
+                                             angle=135)
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
-                (main_frame.vp_align_ccd,  # focused view
-                 {"name": "Optical CL",
-                  "stage": self._stage_ab,
-                  "focus1": main_data.focus,
-                  "stream_classes": (streammod.CameraNoLightStream,),
-                  }),
-                (main_frame.vp_align_sem,
-                 {"name": "SEM",
-                  "stage": main_data.stage,
-                  "stream_classes": streammod.EM_STREAMS,
-                  },
-                 )
-                                       ])
+            (main_frame.vp_align_ccd,  # focused view
+             {"name": "Optical CL",
+              "stage": self._stage_ab,
+              "focus1": main_data.focus,
+              "stream_classes": (streammod.CameraNoLightStream,),
+             }),
+            (main_frame.vp_align_sem,
+             {"name": "SEM",
+              "stage": main_data.stage,
+              "stream_classes": streammod.EM_STREAMS,
+             },
+            )
+        ])
         self._view_controller = viewcont.ViewController(
-                                    self.tab_data_model,
-                                    self.main_frame,
-                                    vpv)
+            self.tab_data_model,
+            self.main_frame,
+            vpv)
 
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
@@ -1337,10 +1364,10 @@ class LensAlignTab(Tab):
 
         # create CCD stream
         ccd_stream = streammod.CameraNoLightStream("Optical CL",
-                                     main_data.ccd,
-                                     main_data.ccd.data,
-                                     main_data.light,
-                                     position=self._stage_ab.position)
+                                                   main_data.ccd,
+                                                   main_data.ccd.data,
+                                                   main_data.light,
+                                                   position=self._stage_ab.position)
         self.tab_data_model.streams.value.append(ccd_stream)
         self._ccd_stream = ccd_stream
         self._ccd_view = main_frame.vp_align_ccd.microscope_view
@@ -1349,7 +1376,7 @@ class LensAlignTab(Tab):
         stream_bar = self.main_frame.pnl_secom_align_streams
         ccd_spe = StreamPanel(stream_bar, ccd_stream, self.tab_data_model)
         stream_bar.add_stream(ccd_spe, True)
-        ccd_spe.flatten() # removes the expander header
+        ccd_spe.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
         main_frame.vp_align_ccd.canvas.allowedModes = set([guimod.TOOL_NONE])
 
@@ -1366,37 +1393,41 @@ class LensAlignTab(Tab):
 
         # Dicho mode: during this mode, the label & button "move to center" are
         # shown. If the sequence is empty, or a move is going, it's disabled.
-        self._ab_move = None # the future of the move (to know if it's over)
+        self._ab_move = None  # the future of the move (to know if it's over)
         main_frame.lens_align_btn_to_center.Bind(wx.EVT_BUTTON,
                                                  self._on_btn_to_center)
 
         # Fine alignment panel
-        pnl_sem_toolbar = main_frame.pnl_sem_toolbar
-        fa_sizer = pnl_sem_toolbar.GetSizer()
-        scale_win = ScaleWindow(pnl_sem_toolbar)
-        self._on_mpp = call_after_wrapper(scale_win.SetMPP) # need to keep ref
+        pnl_fine_align = main_frame.pnl_align_controls
+        fa_sizer = pnl_fine_align.GetSizer()
+        scale_win = ScaleWindow(pnl_fine_align)
+        self._on_mpp = guiutil.call_after_wrapper(scale_win.SetMPP)  # need to keep ref
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
-        fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
+        fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
         fa_sizer.Layout()
-        self._fa_controller = FineAlignController(self.tab_data_model,
-                                                  main_frame,
-                                                  self._settings_controller)
+        self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
+                                                          main_frame,
+                                                          self._settings_controller)
 
         self._ac_controller = AutoCenterController(self.tab_data_model,
                                                   main_frame,
                                                   self._settings_controller)
 
         # Documentation text on the left panel
-        path = os.path.join(get_installation_folder(), "doc/alignment.html")
-        main_frame.html_alignment.SetBorders(0) # sizer already give us borders
+        path = os.path.join(guiutil.get_installation_folder(), "doc/alignment.html")
+        main_frame.html_alignment.SetBorders(0)  # sizer already give us borders
         main_frame.html_alignment.LoadPage(path)
 
         # Trick to allow easy html editing: double click to reload
         def reload_page(evt):
             evt.GetEventObject().LoadPage(path)
+
         main_frame.html_alignment.Bind(wx.EVT_LEFT_DCLICK, reload_page)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
+
+        self.button.Disable()
+        self.activate()
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -1416,13 +1447,25 @@ class LensAlignTab(Tab):
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
 
+        # TODO: save and restore SEM state (for now, it does nothing anyway)
+        # Turn on (or off) SEM
+        # main_data = self.tab_data_model.main
+        # state = guimod.STATE_ON if show else guimod.STATE_PAUSE
+        # main_data.emState.value = state
+
     def terminate(self):
         super(LensAlignTab, self).terminate()
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
 
-    @call_after
+    def activate(self):
+        """ Acitvate the tab using a visual notification if it's currently disabled """
+        if not self.button.Enabled:
+            self.button.Enable()
+            self.notify()
+
+    @guiutil.call_after
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
@@ -1503,7 +1546,7 @@ class LensAlignTab(Tab):
 
 
     # "Move to center" functions
-    @call_after
+    @guiutil.call_after
     def _update_to_center(self):
         # Enable a special "move to SEM center" button iif:
         # * seq is not empty
@@ -1564,7 +1607,7 @@ class LensAlignTab(Tab):
         # compute center in X/Y coordinates
         pxs = self.tab_data_model.main.ebeam.pixelSize.value
         eshape = self.tab_data_model.main.ebeam.shape
-        fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1]) # m
+        fov_size = (eshape[0] * pxs[0], eshape[1] * pxs[1])  # m
         l, t, r, b = roi
         xc, yc = (fov_size[0] * ((l + r) / 2 - 0.5),
                   fov_size[1] * ((t + b) / 2 - 0.5))
@@ -1594,14 +1637,15 @@ class LensAlignTab(Tab):
         self._update_to_center()
 
         eshape = self.tab_data_model.main.ebeam.shape
-        fov_size = (eshape[0] * pixel_size[0], eshape[1] * pixel_size[1]) # m
-        semv_size = self.main_frame.vp_align_sem.Size # px
+        fov_size = (eshape[0] * pixel_size[0], eshape[1] * pixel_size[1])  # m
+        semv_size = self.main_frame.vp_align_sem.Size  # px
 
         # compute MPP to fit exactly the whole FoV
         mpp = (fov_size[0] / semv_size[0], fov_size[1] / semv_size[1])
-        best_mpp = max(mpp) # to fit everything if not same ratio
+        best_mpp = max(mpp)  # to fit everything if not same ratio
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
+
 
 class MirrorAlignTab(Tab):
     """
@@ -1616,29 +1660,28 @@ class MirrorAlignTab(Tab):
         super(MirrorAlignTab, self).__init__(name, button, panel,
                                              main_frame, tab_data)
 
-
         self._stream_controller = streamcont.StreamController(
-                                        self.tab_data_model,
-                                        self.main_frame.pnl_sparc_align_streams,
-                                        locked=True
-                                  )
+            self.tab_data_model,
+            self.main_frame.pnl_sparc_align_streams,
+            locked=True
+        )
         self._ccd_stream = None
         # TODO: add on/off button for the CCD and connect the MicroscopeStateController
 
         self._settings_controller = settings.SparcAlignSettingsController(
-                                        self.main_frame,
-                                        self.tab_data_model,
-                                    )
+            self.main_frame,
+            self.tab_data_model,
+        )
 
         # create the stream to the AR image + goal image
         if main_data.ccd:
             # Not ARStream as this is for multiple repetitions, and we just care
             # about what's on the CCD
             ccd_stream = streammod.CameraStream(
-                                    "Angular resolved sensor",
-                                     main_data.ccd,
-                                     main_data.ccd.data,
-                                     main_data.ebeam)
+                "Angular resolved sensor",
+                main_data.ccd,
+                main_data.ccd.data,
+                main_data.ebeam)
             self._ccd_stream = ccd_stream
 
             # The mirror center (with the lens set) is defined as pole position
@@ -1650,20 +1693,20 @@ class MirrorAlignTab(Tab):
             vpv = collections.OrderedDict([
                 (main_frame.vp_sparc_align,
                  {"name": "Optical",
-                  "stream_classes": None, # everything is good
+                  "stream_classes": None,  # everything is good
                   # no stage, or would need a fake stage to control X/Y of the
                   # mirror
                   # no focus, or could control yaw/pitch?
-                  }),
-                                       ])
+                 }),
+            ])
             self._view_controller = viewcont.ViewController(
-                                        self.tab_data_model,
-                                        self.main_frame,
-                                        vpv
-                                    )
+                self.tab_data_model,
+                self.main_frame,
+                vpv
+            )
             mic_view = self.tab_data_model.focussedView.value
-            mic_view.show_crosshair.value = False    #pylint: disable=E1103
-            mic_view.merge_ratio.value = 1           #pylint: disable=E1103
+            mic_view.show_crosshair.value = False  #pylint: disable=E1103
+            mic_view.merge_ratio.value = 1  #pylint: disable=E1103
 
             ccd_spe = self._stream_controller.addStream(ccd_stream)
             ccd_spe.flatten()
@@ -1682,11 +1725,11 @@ class MirrorAlignTab(Tab):
         if main_data.spectrometer:
             # Only add the average count stream
             self._scount_stream = streammod.CameraCountStream("Spectrum count",
-                                              main_data.spectrometer,
-                                              main_data.spectrometer.data,
-                                              main_data.ebeam)
+                                                              main_data.spectrometer,
+                                                              main_data.spectrometer.data,
+                                                              main_data.ebeam)
             self._scount_stream.should_update.value = True
-            self._scount_stream.windowPeriod.value = 30 # s
+            self._scount_stream.windowPeriod.value = 30  # s
             self._spec_graph = self._settings_controller.spec_graph
             self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
@@ -1707,7 +1750,7 @@ class MirrorAlignTab(Tab):
         # Save the current filter
         if main_data.light_filter:
             self._prev_filter = main_data.light_filter.position.value["band"]
-            self._move_filter_f = model.InstantaneousFuture() # "fake" move
+            self._move_filter_f = model.InstantaneousFuture()  # "fake" move
 
         self._actuator_controller = ActuatorController(self.tab_data_model,
                                                        main_frame,
@@ -1717,7 +1760,7 @@ class MirrorAlignTab(Tab):
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
 
     # TODO: factorize with SparcAcquisitionTab
-    @call_after
+    @guiutil.call_after
     def _on_spec_count(self, scount):
         """
         Called when a new spectrometer data comes in (and so the whole intensity
@@ -1730,11 +1773,11 @@ class MirrorAlignTab(Tab):
             if v < 1:
                 txt = units.readable_str(float(scount[-1]), sig=6)
             else:
-                txt = "%d" % round(v) # to make it clear what is small/big
+                txt = "%d" % round(v)  # to make it clear what is small/big
             self._txt_mean.SetValue(txt)
 
             # fit min/max between 0 and 1
-            ndcount = scount.view(numpy.ndarray) # standard NDArray to get scalars
+            ndcount = scount.view(numpy.ndarray)  # standard NDArray to get scalars
             vmin, vmax = ndcount.min(), ndcount.max()
             b = vmax - vmin
             if b == 0:
@@ -1744,8 +1787,8 @@ class MirrorAlignTab(Tab):
             # insert 0s at the beginning if the window is not (yet) full
             dates = scount.metadata[model.MD_ACQ_DATE]
             dur = dates[-1] - dates[0]
-            if dur == 0: # only one tick?
-                dur = 1 # => make it 1s large
+            if dur == 0:  # only one tick?
+                dur = 1  # => make it 1s large
             exp_dur = self._scount_stream.windowPeriod.value
             missing_dur = exp_dur - dur
             nb0s = int(missing_dur * len(scount) / dur)
@@ -1774,13 +1817,13 @@ class MirrorAlignTab(Tab):
         ccd_sz = tuple(int(p * l * 1e6) for p, l in zip(pxs, ccd_res))
         try:
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
-                       "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
+                                                    "calibration/ma_goal_5_13_sensor_%d_%d.png" % ccd_sz)
         except IOError:
             logging.warning(u"Failed to find a fitting goal image for sensor "
                             u"of %dx%d µm" % ccd_sz)
             # pick a known file, it's better than nothing
             goal_rs = pkg_resources.resource_stream("odemis.gui.img",
-                       "calibration/ma_goal_5_13_sensor_13312_13312.png")
+                                                    "calibration/ma_goal_5_13_sensor_13312_13312.png")
         goal_im = model.DataArray(scipy.misc.imread(goal_rs))
         # No need to swap bytes for goal_im. Alpha needs to be fixed though
         goal_im = scale_to_alpha(goal_im)
@@ -1791,7 +1834,7 @@ class MirrorAlignTab(Tab):
 
         # The resolution is the same as the maximum sensor resolution, if not,
         # we adapt the pixel size
-        im_res = (goal_im.shape[1], goal_im.shape[0]) #pylint: disable=E1101,E1103
+        im_res = (goal_im.shape[1], goal_im.shape[0])  #pylint: disable=E1101,E1103
         scale = ccd_res[0] / im_res[0]
         if scale != 1:
             logging.warning("Goal image has resolution %s while CCD has %s",
@@ -1799,8 +1842,8 @@ class MirrorAlignTab(Tab):
 
         # Pxs = sensor pxs / lens mag
         mag = lens.magnification.value
-        goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag), # m
-                   model.MD_POS:(0, 0)}
+        goal_md = {model.MD_PIXEL_SIZE: (scale * pxs[0] / mag, scale * pxs[1] / mag),  # m
+                   model.MD_POS: (0, 0)}
 
         goal_im.metadata = goal_md
         return goal_im
@@ -1861,7 +1904,6 @@ class MirrorAlignTab(Tab):
 
 
 class TabBarController(object):
-
     def __init__(self, tab_rules, main_frame, main_data):
         """
         tab_rules (list of 5-tuples (string, string, Tab class, button, panel):
@@ -1873,10 +1915,12 @@ class TabBarController(object):
                 - tab panel.
             If role is None, it will match when there is no microscope
             (main_data.microscope is None).
-            TODO: support "*" for matching anything?
+
+        TODO: support "*" for matching anything?
+
         """
         self.main_frame = main_frame
-        self._tab = main_data.tab # VA that we take care of
+        self._tab = main_data.tab  # VA that we take care of
         self.main_data = main_data
 
         # create all the tabs that fit the microscope role
@@ -1892,7 +1936,7 @@ class TabBarController(object):
         # To bootstrap, we set the new value without check
         self._tab._value = tab_list[0]
         # Choices is a dict tab -> name of the tab
-        choices = dict([(t, t.name) for t in tab_list])
+        choices = {t: t.name for t in tab_list}
         self._tab.choices = choices
         self._tab.subscribe(self._on_tab_change)
         # force the switch to the first tab
@@ -1927,7 +1971,7 @@ class TabBarController(object):
         logging.debug("Creating tabs belonging to the '%s' interface",
                       role or "no backend")
 
-        tabs = [] # Tabs
+        tabs = []  # Tabs
         for troles, tlabels, tname, tclass, tbtn, tpnl in tab_defs:
 
             if role in troles:
@@ -1938,7 +1982,7 @@ class TabBarController(object):
                 # hide the widgets of the tabs not needed
                 logging.debug("Discarding tab %s", tname)
 
-                tbtn.Hide() # this actually removes the tab
+                tbtn.Hide()  # this actually removes the tab
                 tpnl.Hide()
 
         return tabs

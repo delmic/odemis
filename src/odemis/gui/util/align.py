@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 14 Jan 2014
 
 @author: Éric Piel
@@ -13,7 +13,8 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
+
 from __future__ import division
 
 from Pyro4.core import isasync
@@ -26,6 +27,8 @@ TOP_LEFT = 0
 TOP_RIGHT = 1
 BOTTOM_LEFT = 2
 BOTTOM_RIGHT = 3
+
+
 def dichotomy_to_region(seq):
     """
     Converts a dichotomy sequence into a region

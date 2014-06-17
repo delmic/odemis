@@ -111,7 +111,7 @@ dist = setup(name='Odemis',
                           },
             ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
              scripts=scripts,
-             data_files=data_files, requires=['numpy'], # not officially in setuptools, but works as for distutils
+             data_files=data_files, requires=['numpy', 'scipy', 'Pyro4'], # not officially in setuptools, but works as for distutils
             )
 
 if ROOT and dist != None:

@@ -652,6 +652,7 @@ class FileInfo(object):
     def __repr__(self):
         return "%s (%s)" % (self.__class__, self.file_name)
 
+
 class View(object):
 
     def __init__(self, name):
@@ -671,7 +672,10 @@ class View(object):
     def __str__(self):
         return "{}".format(self.name.value)
 
+
 MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
+
+
 class MicroscopeView(View):
     """ Represents a view from a microscope and ways to alter it.
 

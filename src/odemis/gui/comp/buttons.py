@@ -30,8 +30,11 @@ from __future__ import division
 from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
     GenBitmapTextToggleButton, GenBitmapTextButton
 import logging
+from odemis.gui import FG_COLOUR_HIGHLIGHT
 import odemis.gui.img.data as img
 import wx
+from odemis.util.conversion import change_brightness, hex_to_frgb, wxcol_to_frgb, hex_to_wxcol, \
+    frgb_to_wxcol
 
 
 def resize_bmp(btn_size, bmp):
@@ -838,21 +841,26 @@ class TabButton(ImageTextToggleButton):
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
 
-        self.fg_color_cache = "#FFFFFF"
+        self.fg_col_default = self.GetForegroundColour()
+        self.fg_col_cache = None
 
-    def highlight(self, on):
+    def _highlight(self, on):
         if on:
-            self.fg_color_cache = self.GetForegroundColour()
-            self.SetForegroundColour("#FFFFFF")
+            highlight_col = frgb_to_wxcol(change_brightness(wxcol_to_frgb(self.ForegroundColour),
+                                                            0.5))
+            if not self.fg_col_cache:
+                self.fg_col_cache = self.ForegroundColour
+            self.SetForegroundColour(highlight_col)
         else:
-            self.SetForegroundColour(self.fg_color_cache)
+            self.SetForegroundColour(self.fg_col_cache)
+            self.fg_col_cache = None
 
     def on_focus(self, evt):
-        self.highlight(True)
+        self._highlight(True)
         evt.Skip()
 
     def on_kill_focus(self, evt):
-        self.highlight(False)
+        self._highlight(False)
         evt.Skip()
 
     def OnLeftDown(self, event):
@@ -866,6 +874,12 @@ class TabButton(ImageTextToggleButton):
         self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
+    def set_colour(self, colour):
+        self.SetForegroundColour(colour)
+
+    def reset_colour(self):
+        self.SetForegroundColour(self.fg_col_default)
 
 
 class GraphicRadioButton(ImageTextToggleButton):
@@ -889,6 +903,7 @@ class GraphicRadioButton(ImageTextToggleButton):
         self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
 
 class ColourButton(ImageButton):
     """ An ImageButton that has a single colour  background that can be altered.

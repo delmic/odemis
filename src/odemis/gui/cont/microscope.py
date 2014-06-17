@@ -110,6 +110,7 @@ class ChamberButtonController(HardwareButtonController):
 
         self.chamber_act = getattr(main_data, 'chamber', None)
         self.pressure_va = None
+        self.main_data = main_data
 
         if self.chamber_act:
             if 'pressure' in getVAs(self.chamber_act):
@@ -176,6 +177,10 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetBitmapLabel(self.btn_faces['vacuum']['normal'])
             self.btn.SetBitmapHover(self.btn_faces['vacuum']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['vacuum']['active'])
+
+            tabs = self.main_data.tab.choices
+            tabs.keys()[tabs.values().index('secom_align')].activate()
+
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.
             self.btn.SetToggle(True)
@@ -192,6 +197,7 @@ class ChamberButtonController(HardwareButtonController):
         elif state == model.CHAMBER_VENTED:
             self.btn.SetToolTipString("Pump the chamber")
         elif state == model.CHAMBER_VACUUM:
+
             self.btn.SetToolTipString("Vent the chamber")
 
     def _btn_to_va(self):

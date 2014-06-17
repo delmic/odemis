@@ -24,6 +24,7 @@ import logging
 import re
 import yaml
 
+import wx
 
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
@@ -69,20 +70,136 @@ def wave2rgb(wavelength):
 
     return int(round(255 * r)), int(round(255 * g)), int(round(255 * b))
 
+
 def hex_to_rgb(hex_str):
+    """  Convert a Hexadecimal colour representation into a 3-tuple of RGB integers
+
+    :param hex_str: str  Colour value of the form '#FFFFFF'
+    :rtype : (int, int int)
+
     """
-    Convert a Hexadecimal colour representation into an 3-tuple of ints
-    return (tuple of 3 (0<int<255): R, G, and B
-    """
+
+    if len(hex_str) != 7:
+        raise ValueError("Invalid HEX colour %s", hex_str)
     hex_str = hex_str[-6:]
     return tuple(int(hex_str[i:i + 2], 16) for i in [0, 2, 4])
 
+
 def hex_to_rgba(hex_str, af=255):
-    """ Convert a Hexadecimal colour representation into an 4-tuple of ints """
+    """ Convert a Hexadecimal colour representation into a 4-tuple of RGBA ints
+
+    :param hex_str: str  Colour value of the form '#FFFFFF'
+    :param af: int  Alpha value in the range [0..255]
+    :rtype : (int, int int, int)
+
+    """
+
+    if len(hex_str) != 7:
+        raise ValueError("Invalid HEX colour %s", hex_str)
     return hex_to_rgb(hex_str) + (af,)
 
+
+def rgb_to_frgb(rgb):
+    """ Convert an integer RGB value into a float RGB value
+
+    :param rgb: (int, int, int) RGB values in the range [0..255]
+    :return: (float, float, float)
+
+    """
+
+    if len(rgb) != 3:
+        raise ValueError("Illegal RGB colour %s" % rgb)
+    return tuple([v / 255.0 for v in rgb])
+
+
+def rgba_to_frgba(rgba):
+    """ Convert an integer RGBA value into a float RGBA value
+
+    :param rgba: (int, int, int, int) RGBA values in the range [0..255]
+    :return: (float, float, float, float)
+
+    """
+
+    if len(rgba) != 4:
+        raise ValueError("Illegal RGB colour %s" % rgba)
+    return tuple([v / 255.0 for v in rgba])
+
+
+def frgb_to_rgb(frgb):
+    """ Convert an float RGB value into an integer RGB value
+
+    :param frgb: (float, float, float) RGB values in the range [0..1]
+    :return: (int, int, int)
+
+    """
+
+    if len(frgb) != 3:
+        raise ValueError("Illegal RGB colour %s" % frgb)
+    return tuple([int(v * 255) for v in frgb])
+
+
+def frgba_to_rgba(frgba):
+    """ Convert an float RGBA value into an integer RGBA value
+
+    :param rgba: (float, float, float, float) RGBA values in the range [0..1]
+    :return: (int, int, int, int)
+
+    """
+
+    if len(frgba) != 4:
+        raise ValueError("Illegal RGB colour %s" % frgba)
+    return tuple([int(v * 255) for v in frgba])
+
+
+def hex_to_frgb(hex_str):
+    """ Convert a Hexadecimal colour representation into a 3-tuple of floats
+    :rtype : (float, float, float)
+    """
+    return rgb_to_frgb(hex_to_rgb(hex_str))
+
+
+def hex_to_frgba(hex_str, af=1.0):
+    """ Convert a Hexadecimal colour representation into a 4-tuple of floats
+    :rtype : (float, float, float, float)
+    """
+    return rgba_to_frgba(hex_to_rgba(hex_str, int(af * 255)))
+
+
 def wxcol_to_rgb(wxcol):
-    return (wxcol.Red(), wxcol.Green(), wxcol.Blue())
+    """ Convert a wx.Colour to an RGB int tuple
+    :param wxcol:
+    :return:
+    """
+    return wxcol.Red(), wxcol.Green(), wxcol.Blue()
+
+
+def wxcol_to_rgba(wxcol):
+    """ Convert a wx.Colour to an RGBA int tuple
+    :param wxcol:
+    :return:
+    """
+    return wxcol.Red(), wxcol.Green(), wxcol.Blue(), wxcol.Alpha()
+
+
+def rgb_to_wxcol(rgb):
+    """
+    :param rgb: (int, int, int)
+    :return: wx.Colour
+    """
+    if len(rgb) != 3:
+        raise ValueError("Illegal RGB colour %s" % rgb)
+    return wx.Colour(*rgb)
+
+
+def rgba_to_wxcol(rgba):
+    """
+    :param rgba: (int, int, int, int)
+    :return: wx.Colour
+    """
+    if len(rgba) != 4:
+        raise ValueError("Illegal RGB colour %s" % rgba)
+    return wx.Colour(*rgba)
+
 
 def rgb_to_hex(rgb):
     """ Convert a RGB(A) colour to hexadecimal colour representation
@@ -93,30 +210,51 @@ def rgb_to_hex(rgb):
     return hex_str
 
 
-# To handle RGB as floats (for Cairo, etc.)
-def hex_to_frgb(hex_str):
-    """
-    Convert a Hexadecimal colour representation into an 3-tuple of floats
-    return (tuple of 3 (0<float<1): R, G, and B
-    """
-    hex_str = hex_str[-6:]
-    return tuple(int(hex_str[i:i + 2], 16) / 255 for i in [0, 2, 4])
+def hex_to_wxcol(hex_str):
+    rgb = hex_to_rgb(hex_str)
+    return wx.Colour(*rgb)
 
-def hex_to_frgba(hex_str, af=1.0):
-    """ Convert a Hexadecimal colour representation into an 4-tuple of floats """
-    return hex_to_frgb(hex_str) + (af,)
 
 def wxcol_to_frgb(wxcol):
-    return (wxcol.Red() / 255, wxcol.Green() / 255, wxcol.Blue() / 255)
+    return wxcol.Red() / 255.0, wxcol.Green() / 255.0, wxcol.Blue() / 255.0
 
-def change_brightness(colf, weight):
-    """
-    Brighten (or darken) a given colour
+
+def frgb_to_wxcol(frgb):
+    return rgb_to_wxcol(frgb_to_rgb(frgb))
+
+
+def change_brightness(colour, weight):
+    """ Brighten or darken a given colour
+
     See also wx.lib.agw.aui.aui_utilities.StepColour() and Colour.ChangeLightness() from 3.0
+
     colf (tuple of 3+ 0<float<1): RGB colour (and alpha)
     weight (-1<float<1): how much to brighten (>0) or darken (<0)
     return (tuple of 3+ 0<float<1): new RGB colour
+
+    :type colf: tuple
+    :type weight: float
+    :rtype : tuple
     """
+
+    if isinstance(colour, basestring):
+        _col = hex_to_frgb(colour)
+        _alpha = None
+    elif isinstance(colour, tuple):
+        if all([isinstance(v, float) for v in colour]):
+            _col = colour[:3]
+            _alpha = _col[-1] if len(_col) == 4 else None
+        elif all([isinstance(v, int) for v in colour]):
+            _col = rgb_to_frgb(colour[:3])
+            _alpha = _col[-1] if len(_col) == 3 else None
+        else:
+            raise ValueError("Unknown colour format")
+    elif isinstance(colour, wx.Colour):
+        _col = wxcol_to_frgb(colour)
+        _alpha = None
+    else:
+        raise ValueError("Unknown colour format")
+
     if weight > 0:
         # blend towards white
         f, lim = min, 1.0
@@ -125,13 +263,13 @@ def change_brightness(colf, weight):
         f, lim = max, 0.0
         weight = -weight
 
-    new_col = tuple(f(c * (1 - weight) + lim * weight, lim) for c in colf[:3])
+    new_fcol = tuple(f(c * (1 - weight) + lim * weight, lim) for c in _col[:3])
 
-    return new_col + colf[3:]
+    return new_fcol + _alpha if _alpha else new_fcol
 
 def convertToObject(s):
     """
-    Tries to convert a string to a (simple) object. 
+    Tries to convert a string to a (simple) object.
     s (str): string that will be converted
     return (object) the value contained in the string with the type of the real value
     raises

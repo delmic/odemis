@@ -267,6 +267,7 @@ def formats_to_wildcards(formats2ext, include_all=False, include_any=False):
 
 # Data container
 
+
 class DictObj(dict):
     """ Dict like object that allows the values to be accessed like attributes
     """
