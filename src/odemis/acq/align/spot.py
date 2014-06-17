@@ -259,8 +259,8 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
 
     # Center of optical image
     pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-    center_pxs = ((image.shape[0] / 2),
-                 (image.shape[1] / 2))
+    center_pxs = ((image.shape[1] / 2),
+                 (image.shape[0] / 2))
 
     # Coordinates of found spot
     hdf5.export("FindSpot.h5", model.DataArray(image))

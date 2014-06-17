@@ -29,6 +29,7 @@ import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.dataio import hdf5
+from scipy import ndimage
 from scipy import signal
 import threading
 import time
@@ -48,6 +49,7 @@ def MeasureFocus(image):
     image (model.DataArray): Optical image
     returns (float):    The focus level of the optical image
     """
+    return ndimage.standard_deviation(image)
     # Handle RGB image
     if len(image.shape) == 3:
         # TODO find faster solution
