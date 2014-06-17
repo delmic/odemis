@@ -42,7 +42,7 @@ Spectra: {
 #}
 
 "SEM ExtXY": {
-    class: phenom_sem.PhenomSEM,
+    class: phenom.SEM,
     role: none,
     init: {host: "http://Phenom-MVE0206151080.local:8888", 
            username: "delmic",
