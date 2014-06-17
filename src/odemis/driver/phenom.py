@@ -42,6 +42,8 @@ DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
 MAX_FRAMES = 255
 SOCKET_TIMEOUT = 1000  # timeout for suds client
+TILT_UNBLANK = 0.045, -0.015  # source tilt in order to have a visible image
+TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 class SEM(model.HwComponent):
     '''
@@ -484,7 +486,7 @@ class Detector(model.Detector):
 
         with self._acquisition_lock:
             # "Unblank" the beam
-            self.parent._device.SetSEMSourceTilt(0, 0, True)
+            self.parent._device.SetSEMSourceTilt(TILT_UNBLANK, True)
             self._wait_acquisition_stopped()
             target = self._acquire_thread
             self._acquisition_thread = threading.Thread(target=target,
@@ -499,7 +501,7 @@ class Detector(model.Detector):
             except suds.WebFault:
                 logging.debug("No acquisition in progress to be aborted.")
             # "Blank" the beam
-            self.parent._device.SetSEMSourceTilt(-1, -1, True)
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK, True)
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -549,6 +551,7 @@ class Detector(model.Detector):
             self._scanParams.HDR = self.parent._scanner.quality.value
             self._scanParams.center.x = trans[0]
             self._scanParams.center.y = trans[1]
+
             img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
 
             # image to ndarray

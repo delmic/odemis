@@ -156,7 +156,7 @@ class TestSEM(unittest.TestCase):
         settle = 5.e-6
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
-    @skip("skip")
+    # @skip("skip")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
@@ -244,12 +244,12 @@ class TestSEM(unittest.TestCase):
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
         # only one point
-        self.scanner.resolution.value = (1, 1)
-        print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
-        im = self.sed.data.get()
-        hdf5.export("test3.h5", model.DataArray(im))
-        self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
+#         self.scanner.resolution.value = (1, 1)
+#         print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
+#         im = self.sed.data.get()
+#         hdf5.export("test3.h5", model.DataArray(im))
+#         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
+#         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
     @skip("faster")
     def test_acquire_high_osr(self):
@@ -427,7 +427,7 @@ class TestSEM(unittest.TestCase):
         # restore original position
         f = self.focus.moveAbs(pos)
         f.result()
-        self.assertAlmostEqual(self.focus.position.value, pos)
+        self.assertAlmostEqual(self.focus.position.value, pos, 5)
 
     @skip("skip")
     def test_move(self):
@@ -443,6 +443,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertTupleAlmostEqual(self.stage.position.value, pos)
 
+    @skip("skip")
     def test_navcam(self):
         """
         Check it's possible to move the stage
@@ -451,6 +452,7 @@ class TestSEM(unittest.TestCase):
         expected_duration = 0.5  # s
         start = time.time()
         img = self.camera.data.get()
+        print img.metadata
         duration = time.time() - start
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
 
