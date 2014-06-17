@@ -237,8 +237,8 @@ class Scanner(model.Emitter):
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 16 or 8 bits image
-        self.quality = model.VAEnumerated(True, choices={True: "high", False: "low"},
-                                          unit="", setter=self._setQuality)
+        self.bpp = model.VAEnumerated(True, choices={8, 16},
+                                          unit="", setter=self._setBpp)
         self.dataType = "uint16"
 
         # Set maximum voltage just to get the min range of spot size (the
@@ -317,14 +317,12 @@ class Scanner(model.Emitter):
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
 
-    def _setQuality(self, value):
+    def _setBpp(self, value):
         with self.parent._acquisition_init_lock:
-            if value == True:
+            if value == 16:
                 self.dataType = "uint16"
-                self.parent._detector.ResetShape(16)
             else:
                 self.dataType = "uint8"
-                self.parent._detector.ResetShape(8)
         return value
 
     def _setPC(self, value):
@@ -463,9 +461,6 @@ class Detector(model.Detector):
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
 
-    def ResetShape(self, value):
-        self._shape = (2 ** value,)
-
     def GetStatus(self):
         """
         return int: SEM status, 0 - off, 1 - on
@@ -544,11 +539,12 @@ class Detector(model.Detector):
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
             metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+            metadata[model.MD_BPP] = self.parent._scanner.bpp.value
 
             self._scanParams.resolution.width = res[0]
             self._scanParams.resolution.height = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
-            self._scanParams.HDR = self.parent._scanner.quality.value
+            self._scanParams.HDR = self.parent._scanner.bpp.value == 16
             self._scanParams.center.x = trans[0]
             self._scanParams.center.y = trans[1]
 
