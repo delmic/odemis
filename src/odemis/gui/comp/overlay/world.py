@@ -712,7 +712,6 @@ class PointsOverlay(WorldOverlay):
         self.cursor_over_point = None
         # The box over which the mouse is hovering, or None
         self.b_hover_box = None
-        self.offset = None
 
         self.enabled = False
 
@@ -723,7 +722,6 @@ class PointsOverlay(WorldOverlay):
         self.point.subscribe(self._on_point_selected)
         self._calc_choices()
         self.cnvs.microscope_view.mpp.subscribe(self._on_mpp, init=True)
-        self.offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
 
     def _on_point_selected(self, selected_point):
         """ Update the overlay when a point has been selected """
@@ -758,11 +756,12 @@ class PointsOverlay(WorldOverlay):
         if not self.cnvs.left_dragging and self.choices and self.enabled:
             v_x, v_y = evt.GetPositionTuple()
             b_x, b_y = self.cnvs.view_to_buffer((v_x, v_y))
+            offset = self.cnvs.get_half_buffer_size()
 
             b_hover_box = None
 
             for w_pos in self.choices.keys():
-                b_box_x, b_box_y = self.cnvs.world_to_buffer(w_pos, self.offset)
+                b_box_x, b_box_y = self.cnvs.world_to_buffer(w_pos, offset)
 
                 if (abs(b_box_x - b_x) <= self.dot_size
                     and abs(b_box_y - b_y) <= self.dot_size):
@@ -781,9 +780,6 @@ class PointsOverlay(WorldOverlay):
             self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
         else:
             self.cnvs.SetCursor(wx.STANDARD_CURSOR)
-
-    def on_size(self, evt=None):
-        self.offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
 
     def _calc_choices(self):
         """ Create a mapping between world coordinates and physical points
@@ -830,9 +826,10 @@ class PointsOverlay(WorldOverlay):
             b_l, b_t, b_r, b_b = self.b_hover_box
 
         w_cursor_over = None
+        offset = self.cnvs.get_half_buffer_size()
 
         for w_pos in self.choices.keys():
-            b_x, b_y = self.cnvs.world_to_buffer(w_pos, self.offset)
+            b_x, b_y = self.cnvs.world_to_buffer(w_pos, offset)
 
             ctx.move_to(b_x, b_y)
             ctx.arc(b_x, b_y, self.dot_size, 0, 2*math.pi)
