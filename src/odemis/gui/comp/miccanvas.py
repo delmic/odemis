@@ -25,7 +25,6 @@ from __future__ import division
 
 from decorator import decorator
 import logging
-import math
 import numpy
 from odemis import util, model
 from odemis.acq import stream

@@ -712,11 +712,11 @@ class BitmapCanvas(BufferedCanvas):
         self._draw_merged_images(self.ctx)
         self.ctx.identity_matrix()
 
-        # # Each overlay draws itself
-        # # Remember that the device context being passed belongs to the *buffer*
-        # for o in self.world_overlays:
-        #     o.Draw(ctx, self.w_buffer_center, self.scale)
-        #     ctx.identity_matrix()
+        # Each overlay draws itself
+        # Remember that the device context being passed belongs to the *buffer*
+        for o in self.world_overlays:
+            o.Draw(self.ctx, self.w_buffer_center, self.scale)
+            self.ctx.identity_matrix()
 
     def _draw_merged_images(self, ctx):
         """ Draw the two images on the buffer DC, centred around their
