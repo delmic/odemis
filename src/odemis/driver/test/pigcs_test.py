@@ -341,6 +341,27 @@ class TestActuator(unittest.TestCase):
         dur = time.time() - start
         self.assertGreaterEqual(dur, expected_time)
 
+    def test_moveAbs(self):
+        stage = CLASS(**self.kwargs)
+
+        # It's optional
+        if not hasattr(stage, "moveAbs"):
+            self.skipTest("Actuator doesn't support absolute move")
+
+        orig_pos = stage.position.value
+        move = {}
+        # move to the centre
+        for axis in stage:
+            rng = stage.axes[axis].range
+            move[axis] = (rng[0] + rng[1]) / 2
+        f = stage.moveAbs(move)
+        f.result() # wait
+        # TODO: almost equal
+        self.assertDictEqual(move, stage.position.value,
+                             "Actuator didn't move to the requested position")
+
+        stage.moveAbs(orig_pos)
+
 #    @skip("faster")
     def test_cancel(self):
         stage = CLASS(**self.kwargs)

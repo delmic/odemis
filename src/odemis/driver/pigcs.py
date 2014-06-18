@@ -962,6 +962,20 @@ class Controller(object):
         """
         raise NotImplementedError("This method must be overridden by a subclass")
 
+    def moveAbs(self, axis, position):
+        """
+        Move on a given axis to a given position.
+        It's asynchronous: the method might return before the move is complete.
+        axis (1<=int<=16): the axis
+        position (float): the target position in m (can be negative)
+        returns (float): approximate distance actually moved
+        """
+        # This is a default implementation relying on the moveRel
+        # It should be overriden, if it can be done directly
+        old_pos = self.getPosition(axis)
+        shift = position - old_pos
+        return self.moveRel(axis, shift)
+
     def isMoving(self, axes=None):
         """
         Indicate whether the motors are moving. 
@@ -1185,6 +1199,20 @@ class CLController(Controller):
         # (worst case the hardware will not go further)
         self.MoveRel(axis, distance)
 
+        return distance
+
+    def moveAbs(self, axis, position):
+        """
+        See Controller.moveAbs
+        """
+        assert(axis in self._channels)
+        self._updateSpeedAccel(axis)
+        # We trust the caller that it knows it's in range
+        # (worst case the hardware will not go further)
+        old_pos = self.getPosition(axis)
+        self.MoveAbs(axis, position)
+
+        distance = position - old_pos
         return distance
 
     def getPosition(self, axis):
@@ -2366,13 +2394,13 @@ class ActionFuture(object):
     def _moveAbs(self, axes):
         """
         axes (dict: Controller -> list (tuple(int, double)): 
-            controller to list of channel/distance to move (m)
+            controller to list of channel/position to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
         max_duration = 0 #s
         for controller, channels in axes.items():
-            for channel, distance in channels:
-                actual_dist = controller.moveAbs(channel, distance)
+            for channel, pos in channels:
+                actual_dist = controller.moveAbs(channel, pos)
                 duration = abs(actual_dist) / controller.getSpeed(channel)
                 max_duration = max(max_duration, duration)
 
