@@ -55,7 +55,7 @@ def AngleResolved2Polar(data, output_size, hole=True, dtype=None):
     except KeyError:
         raise ValueError("Metadata required: MD_PIXEL_SIZE, MD_AR_POLE.")
 
-    if dtype == None :
+    if dtype is None:
         dtype = numpy.float64
 
     # Crop the input image to half circle
