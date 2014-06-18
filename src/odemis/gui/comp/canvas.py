@@ -366,17 +366,17 @@ class BufferedCanvas(wx.Panel):
         # Ensure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
 
+        # any displayed overlay might need to redraw itself
+        self._pass_event_to_all_overlays('on_size', evt)
+
         if min_size != self._bmp_buffer_size:
             logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(min_size)
             self.update_drawing()
         else:
             # logging.debug("Buffer size didn't change, refreshing...")
-            # eraseBackground=False prevenst flicker
+            # eraseBackground=False prevents flicker
             self.Refresh(eraseBackground=False)
-
-        # any displayed overlay might need to redraw itself
-        self._pass_event_to_all_overlays('on_size', evt)
 
     def on_draw_timer(self):
         """ Update the drawing when the on draw timer fires """
@@ -1244,11 +1244,6 @@ class DraggableCanvas(BitmapCanvas):
                 min(max(drag_shift[1], -self.margins[1]), self.margins[1])
             )
 
-            # TODO: request_drawing_update seem to make more sense here, but
-            # maybe there was a good reason to use update_drawing instead?
-            # Eric will know the answer for sure!
-            # self.update_drawing()
-            # self.request_drawing_update()
             self.Refresh()
 
         elif self._rdragging:
