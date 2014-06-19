@@ -32,6 +32,7 @@ from odemis.acq._futures import executeTask
 from odemis.dataio import hdf5
 from scipy import ndimage
 import threading
+import numpy 
 import time
 
 import coordinates
@@ -40,11 +41,23 @@ from . import autofocus
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move
-FOV_MARGIN = 150  # pixels
+FOV_MARGIN = 250  # pixels
 
 _alignment_lock = threading.Lock()
 _center_lock = threading.Lock()
 
+
+def MeasureSNR(image):
+    # Estimate noise
+    bl = image.metadata[model.MD_BASELINE]
+    m = ndimage.mean(image)-bl
+    sdn = ndimage.standard_deviation(image[image < (bl* 1.1)])
+    ms = ndimage.mean(image[image >= (bl * 1.1)])-bl
+    snr = ms / sdn
+    #logging.debug("Mean %f and standard deviation %f and sum %f, sdn %f, ms=%f", #ndimage.mean(image),
+#    ndimage.standard_deviation(image), numpy.sum(image), sdn, ms)
+    
+    return snr
 
 def _DoAlignSpot(future, ccd, stage, escan, focus):
     """
@@ -77,18 +90,20 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         logging.debug("Configure CCD and set ebeam to spot mode...")
         ccd.binning.value = (1, 1)
         ccd.resolution.value = ccd.resolution.range[1]
-        ccd.exposureTime.value = 650e-03
+        ccd.exposureTime.value = 600e-03
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
 
         # Estimate noise and adjust exposure time based on "Rose criterion"
         logging.debug("Adjust exposure time...")
         image = ccd.data.get()
-        snr = (ndimage.mean(image) / ndimage.standard_deviation(image))
-        while (snr < 5 and ccd.exposureTime.value < 1500e-03):
-            ccd.exposureTime.value = ccd.exposureTime.value + 150e-03
+        snr = MeasureSNR(image)
+        while (snr < 5 and ccd.exposureTime.value < 800e-03):
+            ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
+            time.sleep(1)
             image = ccd.data.get()
-            snr = (ndimage.mean(image) / ndimage.standard_deviation(image))
+            snr = MeasureSNR(image)
+            print snr
 
         # Try to find spot
         logging.debug("Trying to find spot...")
@@ -98,8 +113,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         if dist is None:
             logging.debug("Spot not found, try to autofocus...")
             try:
+                ccd.binning.value=(8, 8)
                 future._autofocusf = autofocus.AutoFocus(ccd, None, focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 lens_pos, fm_level = future._autofocusf.result()
+                ccd.binning.value=(1, 1)
             except IOError:
                 raise IOError('Spot alignment failure. AutoFocus failed.')
             future._centerspotf = CenterSpot(ccd, stage, ROUGH_MOVE)
@@ -114,8 +131,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         # Autofocus
         logging.debug("Autofocusing...")
         try:
+            ccd.binning.value=(8, 8)
             future._autofocusf = autofocus.AutoFocus(ccd, None, focus, autofocus.FINE_SPOTMODE_ACCURACY)
             lens_pos, fm_level = future._autofocusf.result()
+            ccd.binning.value=(1, 1)
         except IOError:
             raise IOError('Spot alignment failure. AutoFocus failed.')
         if future._spot_alignment_state == CANCELLED:
@@ -175,13 +194,15 @@ def FindSpot(image):
     image (model.DataArray): Optical image
     returns (tuple of floats):    The spot center coordinates
     """
-    subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 0)
+    subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20)
     if subimages == []:
         return None
 
     spot_coordinates = coordinates.FindCenterCoordinates(subimages)
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
     print optical_coordinates
+    if len(optical_coordinates) > 1:
+        return None
     return optical_coordinates[0]
 
 def CropFoV(ccd):
@@ -190,18 +211,25 @@ def CropFoV(ccd):
     on AutoFocus process.
     ccd (model.DigitalCamera): The CCD
     """
+    time.sleep(3)
     image = ccd.data.get()
-    center_pxs = ((image.shape[0] / 2),
-                 (image.shape[1] / 2))
+    center_pxs = ((image.shape[1] / 2),
+                 (image.shape[0] / 2))
+    print center_pxs
     spot_pxs = FindSpot(image)
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
+    print tab_pxs
     max_dim = int(max(abs(tab_pxs[0]), abs(tab_pxs[1])))
+    print max_dim
     range_x = (ccd.resolution.range[0][0], ccd.resolution.range[1][0])
     range_y = (ccd.resolution.range[0][1], ccd.resolution.range[1][1])
-    ccd.binning.value = (8, 8)
+    print range_x, range_y
+    qu = 2 * max_dim + FOV_MARGIN
     ccd.resolution.value = (sorted((range_x[0], 2 * max_dim + FOV_MARGIN, range_x[1]))[1],
                             sorted((range_y[0], 2 * max_dim + FOV_MARGIN, range_y[1]))[1])
     print ccd.resolution.value
+    ccd.binning.value = (1, 1)
+    #print ccd.resolution.value
     # Make sure acquired images have the correct resolution
     image = ccd.data.get()
     while image.shape != (ccd.resolution.value[1], ccd.resolution.value[0]):
@@ -255,6 +283,7 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
                         children={"aligner": stage},
                         axes=["b", "a"],
                         angle=135)
+    time.sleep(4)
     image = ccd.data.get()
 
     # Center of optical image
@@ -265,20 +294,20 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
     # Coordinates of found spot
     hdf5.export("FindSpot.h5", model.DataArray(image))
     spot_pxs = FindSpot(image)
-    print image.metadata
-    print spot_pxs
+    #print image.metadata
+    #print spot_pxs
     if spot_pxs is None:
         return None
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
     tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-    print tab_pxs
-    print pixelSize
+    #print tab_pxs
+    #print pixelSize
     dist = math.hypot(*tab)
 
     # Epsilon distance below which the lens is considered centered. The worse of:
     # * 1 pixels (because the CCD resolution cannot give us better)
     # * 1 µm (because that's the best resolution of our actuators)
-    err_mrg = max(1 * pixelSize[0], 1e-06)  # m
+    err_mrg = max(1.5 * pixelSize[0], 1e-06)  # m
     steps = 0
 
     # Stop once spot is found on the center of the optical image
@@ -293,6 +322,8 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
         f.result()
 
+        #Wait to make sure no previous spot is detected
+        time.sleep(4)
         image = ccd.data.get()
         spot_pxs = FindSpot(image)
         if spot_pxs is None:
@@ -302,7 +333,7 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         dist = math.hypot(*tab)
         steps += 1
 
-    print dist
+    #print dist
     return dist
 
 def _CancelCenterSpot(future):

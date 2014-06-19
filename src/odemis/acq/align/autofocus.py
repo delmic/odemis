@@ -29,17 +29,17 @@ import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.dataio import hdf5
-from scipy import ndimage
 from scipy import signal
 import threading
 import time
+from scipy import ndimage
 
 
-FINE_SPOTMODE_ACCURACY = 10e-6  # fine focus accuracy in spot mode #m
-ROUGH_SPOTMODE_ACCURACY = 15e-6  # rough focus accuracy in spot mode #m
+FINE_SPOTMODE_ACCURACY = 5e-6  # fine focus accuracy in spot mode #m
+ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
 
-MAX_STEPS_NUMBER = 3  # Max steps to perform autofocus
-MAX_TRIALS_NUMBER = 2
+MAX_STEPS_NUMBER = 40  # Max steps to perform autofocus
+MAX_TRIALS_NUMBER = 1
 
 
 def MeasureFocus(image):
@@ -49,7 +49,6 @@ def MeasureFocus(image):
     image (model.DataArray): Optical image
     returns (float):    The focus level of the optical image
     """
-    return ndimage.standard_deviation(image)
     # Handle RGB image
     if len(image.shape) == 3:
         # TODO find faster solution
@@ -60,6 +59,7 @@ def MeasureFocus(image):
         gray += b
     else:
         gray = image
+    return ndimage.standard_deviation(image)
 
     m = numpy.array([[-1], [2], [-1]])
     Lx = signal.correlate(gray, m, 'valid')
@@ -90,30 +90,41 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
     logging.debug("Starting Autofocus...")
 
     try:
+        diff_factor = 0.02
         rng = focus.axes["z"].range
 
         # Keep the initial focus position
         init_pos = focus.position.value.get('z')
+        print "Init pos focus"
+        print init_pos
 
-        # Determine focus direction
+        # Set a proper step
         # TODO check if out of bounds
-        step = 20e-6
+        px_size = device.pixelSize.value
+
+        step = accuracy
+        cur_pos = focus.position.value.get('z')
+        print cur_pos
+        time.sleep(1)
         image = device.data.get()
         fm_cur = MeasureFocus(image)
         hdf5.export("firstimg.h5", model.DataArray(image))
         init_fm = fm_cur
         f = focus.moveRel({"z": step})
         f.result()
+        time.sleep(1)
         image = device.data.get()
         fm_test = MeasureFocus(image)
         hdf5.export("secimg.h5", model.DataArray(image))
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
-        print fm_test
+        cur_pos = focus.position.value.get('z')
+        print fm_cur,fm_test
         # Check if we our completely out of focus
-        if abs(fm_cur - fm_test) < (0.05 * fm_cur):
+        if abs(fm_cur - fm_test) < (0.04 * fm_cur):
             logging.warning("Completely out of focus, retrying...")
+            step = 19e-6
             fm_new = 0
             sign = 1
             factor = 1
@@ -121,7 +132,8 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
             cur_pos = focus.position.value.get('z')
 
             steps = 0
-            while fm_new < 1.02 * fm_test:
+            count_fails = 0
+            while fm_new < 1.08 * fm_test:
                 if steps >= MAX_STEPS_NUMBER:
                     break
                 sign = -sign
@@ -136,13 +148,25 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
                     shift = cur_pos - pos
                     f = focus.moveRel({"z":shift})
                     f.result()
+                    time.sleep(1)
                     image = device.data.get()
                     fm_new = MeasureFocus(image)
                     print fm_new
+                    if (1.04*fm_new) < fm_test:
+                        count_fails+=1
+                        if (steps == 1) and (count_fails == 2):
+                            # Return to initial position
+                            logging.info("Binary search does not improve focus.")
+                            pos = focus.position.value.get('z')
+                            shift = init_pos - pos
+                            f = focus.moveRel({"z":shift})
+                            f.result()
+                            break
                     if future._autofocus_state == CANCELLED:
                         raise CancelledError()
                 steps += 1
 
+            time.sleep(1)
             image = device.data.get()
             fm_cur = MeasureFocus(image)
             print fm_cur
@@ -150,6 +174,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
             f.result()
             image = device.data.get()
             fm_test = MeasureFocus(image)
+            print fm_test
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
 
@@ -157,7 +182,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
         future.set_end_time(time.time() +
                             estimateAutoFocusTime(et,
                                                 MAX_STEPS_NUMBER - 10))
-
+        # Determine focus direction
         if fm_cur > fm_test:
             sign = -1
             f = focus.moveRel({"z":-step})
@@ -173,12 +198,13 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
         step = accuracy
         fm_old, fm_new = fm_test, fm_test
         steps = 0
-        while (0.98 * fm_old) <= fm_new:
+        while (0.96 * fm_old) <= fm_new:
             if steps >= MAX_STEPS_NUMBER:
                 break
             fm_old = fm_new
             f = focus.moveRel({"z":sign * step})
             f.result()
+            time.sleep(1)
             image = device.data.get()
             fm_new = MeasureFocus(image)
             if future._autofocus_state == CANCELLED:
@@ -199,7 +225,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
             return focus.position.value.get('z'), fm_final
 
         print init_fm, fm_final
-        if init_fm < 0.95 * fm_final:
+        if init_fm < 0.98 * fm_final:
             return focus.position.value.get('z'), fm_final
         else:
             # Return to initial position

@@ -70,14 +70,19 @@ def main(args):
                 ccd = c
             elif c.role == "focus":
                 focus = c
-        if not all([ebeam_focus, detector, escan, ccd, focus]):
+        if not all([detector, escan, ccd, focus]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
     
         # Measure current focus
+        print ccd.pixelSize.value
+        #logging.debug("CCD PixelSize: %f Proper step: %f", px_size[0], 2*px_size[0])
+        #px_size=escan.pixelSize.value
         img = ccd.data.get()
+        #hdf5.export("bin8_3.h5",model.DataArray(img))
         fm_cur = autofocus.MeasureFocus(img)
         logging.debug("Current focus level: %f", fm_cur)
+        print focus.position.value.get('z')
 
         # Apply autofocus
         future_focus = align.AutoFocus(ccd, escan, focus, accuracy)
