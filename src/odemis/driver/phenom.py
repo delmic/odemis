@@ -28,7 +28,7 @@ import logging
 import math
 import numpy
 import time
-from odemis import model, util
+from odemis import model
 from odemis.model import isasync
 from odemis.model._futures import CancellableThreadPoolExecutor
 from odemis.acq._futures import executeTask
@@ -237,7 +237,7 @@ class Scanner(model.Emitter):
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 16 or 8 bits image
-        self.bpp = model.VAEnumerated(True, choices={8, 16},
+        self.bpp = model.IntEnumerated(16, set([8, 16]),
                                           unit="", setter=self._setBpp)
         self.dataType = "uint16"
 
@@ -481,7 +481,7 @@ class Detector(model.Detector):
 
         with self._acquisition_lock:
             # "Unblank" the beam
-            self.parent._device.SetSEMSourceTilt(TILT_UNBLANK, True)
+            self.parent._device.SetSEMSourceTilt(TILT_UNBLANK[0], TILT_UNBLANK[1], True)
             self._wait_acquisition_stopped()
             target = self._acquire_thread
             self._acquisition_thread = threading.Thread(target=target,
@@ -496,7 +496,7 @@ class Detector(model.Detector):
             except suds.WebFault:
                 logging.debug("No acquisition in progress to be aborted.")
             # "Blank" the beam
-            self.parent._device.SetSEMSourceTilt(TILT_BLANK, True)
+            self.parent._device.SetSEMSourceTilt(TILT_UNBLANK[0], TILT_UNBLANK[1], True)
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -545,15 +545,14 @@ class Detector(model.Detector):
             self._scanParams.resolution.height = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
             self._scanParams.HDR = self.parent._scanner.bpp.value == 16
-            self._scanParams.center.x = trans[0]
-            self._scanParams.center.y = trans[1]
+            self._scanParams.center.x = 0
+            self._scanParams.center.y = 0
 
             img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
 
             # image to ndarray
             sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
                                        dtype=self.parent._scanner.dataType)
-
             sem_img.shape = res[::-1]
 
             return model.DataArray(sem_img, metadata)

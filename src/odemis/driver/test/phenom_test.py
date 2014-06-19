@@ -156,7 +156,7 @@ class TestSEM(unittest.TestCase):
         settle = 5.e-6
         size = self.scanner.resolution.value
         return size[0] * size[1] * dwell + size[1] * settle
-    # @skip("skip")
+    @skip("skip")
     def test_acquire(self):
         self.scanner.dwellTime.value = 10e-6  # s
         expected_duration = self.compute_expected_duration()
@@ -164,7 +164,8 @@ class TestSEM(unittest.TestCase):
         start = time.time()
         im = self.sed.data.get()
         duration = time.time() - start
-
+        print im.metadata
+        hdf5.export("PhenomTest", im)
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
@@ -224,9 +225,7 @@ class TestSEM(unittest.TestCase):
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
 
         # normal acquisition
-        print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
         im = self.sed.data.get()
-        hdf5.export("test1.h5", model.DataArray(im))
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], center)
 
@@ -237,9 +236,7 @@ class TestSEM(unittest.TestCase):
         pxs = self.scanner.pixelSize.value
         exp_pos = (center[0] + (-1.26 * pxs[0]),
                    center[1] - (10 * pxs[1]))  # because translation Y is opposite from physical one
-        print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
         im = self.sed.data.get()
-        hdf5.export("test2.h5", model.DataArray(im))
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
@@ -258,7 +255,7 @@ class TestSEM(unittest.TestCase):
         """
         self.scanner.resolution.value = (256, 200)
         self.size = self.scanner.resolution.value
-        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 1000
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 100
         expected_duration = self.compute_expected_duration()  # about 1 min
 
         start = time.time()
@@ -276,7 +273,7 @@ class TestSEM(unittest.TestCase):
         """
         self.scanner.resolution.value = self.scanner.resolution.range[0]
         self.size = self.scanner.resolution.value
-        self.scanner.dwellTime.value = 10  # DPR should be 3
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[1]  # DPR should be 3
         expected_duration = self.compute_expected_duration()  # same as dwell time
 
         start = time.time()
@@ -429,7 +426,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertAlmostEqual(self.focus.position.value, pos, 5)
 
-    @skip("skip")
+    # @skip("skip")
     def test_move(self):
         """
         Check it's possible to move the stage
@@ -452,7 +449,6 @@ class TestSEM(unittest.TestCase):
         expected_duration = 0.5  # s
         start = time.time()
         img = self.camera.data.get()
-        print img.metadata
         duration = time.time() - start
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
 
