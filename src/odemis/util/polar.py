@@ -31,12 +31,12 @@ import warnings
 #  * We crop the data before rendering it
 #  * The position of the mirror correspond to the center of the hole, instead of
 #    the lowest mirror position
-#  * the pixel size is given already with the magnigication and binning
+#  * the pixel size is given already with the magnification and binning
 # Variables to be used in CropMirror and AngleResolved2Polar
 # These values correspond to SPARC 2014
 AR_XMAX = 13.25e-3  # m, the distance between the parabola origin and the cutoff position
 AR_HOLE_DIAMETER = 0.6e-3  # m, diameter the hole in the mirror
-AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the distance between the mirror and the sample
+AR_FOCUS_DISTANCE = 0.5e-3  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
 AR_PARABOLA_F = 2.5e-3  # m, parabola_parameter=1/4f
 
 
