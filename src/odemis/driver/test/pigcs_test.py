@@ -351,7 +351,7 @@ class TestActuator(unittest.TestCase):
         orig_pos = stage.position.value
         move = {}
         # move to the centre
-        for axis in stage:
+        for axis in stage.axes:
             rng = stage.axes[axis].range
             move[axis] = (rng[0] + rng[1]) / 2
         f = stage.moveAbs(move)
