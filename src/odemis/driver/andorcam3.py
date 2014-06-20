@@ -1157,6 +1157,7 @@ class AndorCam3(model.DigitalCamera):
         # Baseline depends on the other settings
         if self.isImplemented(u"BaselineLevel"):
             self._metadata[model.MD_BASELINE] = self.GetInt(u"BaselineLevel")
+            # TODO: check if must be multiplied by binning?
 
         self._prev_settings = [self._binning, self._resolution, self._translation,
                                self._exp_time, readout_rate, gain, synchronised]
