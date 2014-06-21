@@ -841,21 +841,29 @@ class TabButton(ImageTextToggleButton):
         self.Bind(wx.EVT_SET_FOCUS, self.on_focus)
         self.Bind(wx.EVT_KILL_FOCUS, self.on_kill_focus)
 
-        self.fg_col_default = self.GetForegroundColour()
-        self.fg_col_cache = None
+        self.fg_color_def = "#E5E5E5"
+        self.fg_color_high = "#FFFFFF"
+        self.fg_color_notify = FG_COLOUR_HIGHLIGHT
+
+        self.notification = False
+        self.notify_timer = wx.Timer(self)
+        self.notify_count = 0
 
     def _highlight(self, on):
         if on:
-            highlight_col = frgb_to_wxcol(change_brightness(wxcol_to_frgb(self.ForegroundColour),
-                                                            0.5))
-            if not self.fg_col_cache:
-                self.fg_col_cache = self.ForegroundColour
-            self.SetForegroundColour(highlight_col)
+            if self.notification:
+                self.SetForegroundColour(self.fg_color_notify)
+            else:
+                self.SetForegroundColour(self.fg_color_high)
         else:
-            self.SetForegroundColour(self.fg_col_cache)
-            self.fg_col_cache = None
+            if self.notification:
+                self.SetForegroundColour(self.fg_color_notify)
+            else:
+                self.SetForegroundColour(self.fg_color_def)
 
     def on_focus(self, evt):
+        if self.notification:
+            self.notification = False
         self._highlight(True)
         evt.Skip()
 
@@ -875,12 +883,29 @@ class TabButton(ImageTextToggleButton):
         self.SetFocus()
         self.Refresh()
 
-    def set_colour(self, colour):
-        self.SetForegroundColour(colour)
+    def notify(self, on):
+        """ Indicate a change to the button's related tab by visually altering it """
+        if on:
+            self.notification = True
+            self.notify_count = 20
+            self.Bind(wx.EVT_TIMER, self._set_colour, self.notify_timer)
+            self.notify_timer.Start(100)
+        else:
+            self.SetForegroundColour(self.fg_color_def)
+            self.notification = False
+            self.Refresh()
 
-    def reset_colour(self):
-        self.SetForegroundColour(self.fg_col_default)
+    def _set_colour(self, colour):
+        if self.notify_count:
+            if self.notify_count % 2 == 1:
+                self.SetForegroundColour(self.fg_color_notify)
+            else:
+                self.SetForegroundColour(self.fg_color_def)
 
+            self.notify_count -= 1
+            self.Refresh()
+        else:
+            self.notify_timer.Stop()
 
 class GraphicRadioButton(ImageTextToggleButton):
     """ Simple graphical button that can be used to construct radio button sets

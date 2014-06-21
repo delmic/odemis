@@ -178,8 +178,8 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetBitmapHover(self.btn_faces['vacuum']['hover'])
             self.btn.SetBitmapSelected(self.btn_faces['vacuum']['active'])
 
-            tabs = self.main_data.tab.choices
-            tabs.keys()[tabs.values().index('secom_align')].activate()
+            # tabs = self.main_data.tab.choices
+            # tabs.keys()[tabs.values().index('secom_align')].activate()
 
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.

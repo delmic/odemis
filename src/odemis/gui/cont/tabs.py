@@ -50,6 +50,7 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
     SparcAcquiController, FineAlignController, AutoCenterController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
+from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
@@ -90,8 +91,6 @@ class Tab(object):
         self.panel = panel
         self.main_frame = main_frame
         self.tab_data_model = tab_data
-
-        self._button_col_cache = self.button.ForegroundColour
         self.notification = False
 
     def Show(self, show=True):
@@ -199,13 +198,15 @@ class Tab(object):
         return self.button.GetLabel()
 
     def notify(self):
+        """ Put the tab in 'notification' mode to indicate a change has occured """
         if not self.notification:
-            self.button.set_colour(FG_COLOUR_HIGHLIGHT)
+            self.button.notify(True)
             self.notification = True
 
     def _clear_notification(self):
+        """ Clear the notification mode if it's active """
         if self.notification:
-            self.button.reset_colour()
+            self.button.notify(False)
             self.notification = False
 
 
@@ -1426,8 +1427,8 @@ class LensAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
-        self.button.Disable()
-        self.activate()
+        if hasattr(main_data, "chamber_state"):
+            main_data.chamber_state.subscribe(self.on_chamber_state, init=True)
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -1459,11 +1460,15 @@ class LensAlignTab(Tab):
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
 
-    def activate(self):
-        """ Acitvate the tab using a visual notification if it's currently disabled """
-        if not self.button.Enabled:
+    @guiutil.call_after
+    def on_chamber_state(self, chamber_state):
+        """ Lock or enable this Tab according to the current chamber state"""
+        if chamber_state == CHAMBER_VACUUM:
             self.button.Enable()
             self.notify()
+        else:
+            self.button.Disable()
+            self._clear_notification()
 
     @guiutil.call_after
     def _onTool(self, tool):

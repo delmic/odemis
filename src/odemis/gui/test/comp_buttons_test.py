@@ -31,8 +31,12 @@ import odemis.gui.comp.buttons as buttons
 import odemis.gui.test as test
 import unittest
 import wx
+from odemis.gui.test import gui_loop
+
 
 test.goto_manual()
+# test.goto_inspect()
+
 
 class ButtonsTestCase(test.GuiTestCase):
 
@@ -41,6 +45,7 @@ class ButtonsTestCase(test.GuiTestCase):
     @classmethod
     def setUpClass(cls):
         super(ButtonsTestCase, cls).setUpClass()
+        cls.frame.SetSize((400, 600))
 
         cls.buttons = OrderedDict()
         panel = cls.app.panel_finder()
@@ -94,8 +99,21 @@ class ButtonsTestCase(test.GuiTestCase):
                                                 style=wx.ALIGN_CENTER)
         cls.buttons['PopupImageButton'].SetBitmaps(data.getbtn_128x24_hBitmap())
 
+        cls.buttons['TabButton'] = buttons.TabButton(panel, -1,
+                                                data.gettab_inactiveBitmap(),
+                                                "Tab Test",
+                                                style=wx.ALIGN_CENTER)
+
+        cls.buttons['TabButton'].SetBitmaps(data.gettab_hoverBitmap(),
+                                            data.gettab_activeBitmap())
+        cls.buttons['TabButton'].Enable()
+
         for btn in cls.buttons.values():
             cls.add_control(btn, wx.ALL|wx.ALIGN_CENTER_HORIZONTAL)
+
+    def test_tab_button(self):
+        self.buttons['TabButton'].notify(True)
+        gui_loop()
 
     def test_buttons(self):
         # colour button
