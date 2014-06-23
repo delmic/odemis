@@ -93,6 +93,7 @@ component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
 ### gui.comp.viewport.MicroscopeViewport and subclasses
 
 msvps  = [
+    ('OverviewViewport', xh_delmic.OverviewViewportXmlHandler),
     ('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
     ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
     ('SparcAcquisitionViewport', xh_delmic.SparcAcquisitionViewportXmlHandler),

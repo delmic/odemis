@@ -167,26 +167,29 @@ class ViewController(object):
                     (self._viewports[0],  # focused view
                      {"name": "SEM",
                       "stream_classes": EM_STREAMS,
-                      }),
+                     }),
                     (self._viewports[1],
                      {"name": "Optical",
                       "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                      }),
+                     }),
                     (self._viewports[2],
                      {"name": "Combined 1",
                       "stream_classes":
-                            EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                      }),
+                          EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                     }),
                     (self._viewports[3],
                      {"name": "Combined 2",
                       "stream_classes":
-                            EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
-                      }),
+                          EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                     }),
                     (self._viewports[4],
                      {"name": "Spectrum plot",
                       "stream_classes": SPECTRUM_STREAMS
                      }),
-                    # TODO: currently, no way to display AR_STREAMS
+                    (self._viewports[5],
+                     {"name": "Overview",
+                      "stream_classes": SPECTRUM_STREAMS
+                     }),
                 ])
 
         # If SEM only: all SEM

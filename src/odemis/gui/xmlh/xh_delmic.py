@@ -638,6 +638,34 @@ HANDLER_CLASS_LIST.append(UnitFloatCtrlHandler)
 # Canvas Handlers
 ##################################
 
+class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
+
+    klass = vport.OverviewVierport
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+        # Specify the styles recognized by objects of this type
+        self.AddStyle("wxTAB_TRAVERSAL", wx.TAB_TRAVERSAL)
+        self.AddWindowStyles()
+
+    # This method and the next one are required for XmlResourceHandlers
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "OverviewViewport")
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        # Now create the object
+        panel = self.klass(self.GetParentAsWindow(),
+                           id=self.GetID(),
+                           pos=self.GetPosition(),
+                           size=self.GetSize(),
+                           style=self.GetStyle())
+        self.SetupWindow(panel)
+        return panel
+HANDLER_CLASS_LIST.append(OverviewViewportXmlHandler)
+
+
 class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
 
     klass = vport.MicroscopeViewport

@@ -184,6 +184,15 @@ class ViewPort(wx.Panel):
         evt.Skip() # processed also by the parent
 
 
+class OverviewVierport(ViewPort):
+    def setView(self, microscope_view, tab_data):
+        print self.canvas.abilities
+        # self._microscope_view.stream_tree.should_update.subscribe(
+        #                                                 self.hide_pause,
+        #                                                 init=True
+        # )
+
+
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 

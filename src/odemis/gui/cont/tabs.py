@@ -223,17 +223,20 @@ class SecomStreamsTab(Tab):
         #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
         #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
 
-        main_frame.vp_overview_sem.ShowLegend(False)
+        # main_frame.vp_overview_sem.ShowLegend(False)
 
         # Order matters!
         # First we create the views, then the streams
         self._view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
-            [self.main_frame.vp_secom_tl,
-             self.main_frame.vp_secom_tr,
-             self.main_frame.vp_secom_bl,
-             self.main_frame.vp_secom_br],
+            [
+                self.main_frame.vp_secom_tl,
+                 self.main_frame.vp_secom_tr,
+                 self.main_frame.vp_secom_bl,
+                 self.main_frame.vp_secom_br,
+                 self.main_frame.vp_overview_sem
+            ],
             self.tb
         )
 
