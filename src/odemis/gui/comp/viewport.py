@@ -181,16 +181,19 @@ class ViewPort(wx.Panel):
         evt.Skip()
 
     def OnSize(self, evt):
-        evt.Skip() # processed also by the parent
+        evt.Skip()  # processed also by the parent
 
 
 class OverviewVierport(ViewPort):
+    """ A Viewport containing a downscaled overview image of the loaded sample
+    """
     def setView(self, microscope_view, tab_data):
-        print self.canvas.abilities
-        # self._microscope_view.stream_tree.should_update.subscribe(
-        #                                                 self.hide_pause,
-        #                                                 init=True
-        # )
+        #Remove all abilities, because the overview should have none
+        self.canvas.abilities = set()
+        # Hide the cross hair overlay
+        microscope_view.show_crosshair.value = False
+        self.canvas.setView(microscope_view, tab_data)
+
 
 
 class MicroscopeViewport(ViewPort):

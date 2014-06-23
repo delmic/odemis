@@ -132,6 +132,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.anchor_overlay = None
         self.pixel_overlay = None
         self.points_overlay = None
+        # TODO: create special area view overlay
+        self.area_overlay = None  # Mark rectangular area which can only be altered programmatically
 
         # play/pause icon
         self.icon_overlay = view_overlay.StreamIconOverlay(self)
@@ -309,7 +311,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.view_overlays.remove(self._crosshair_ol)
                 self.Refresh(eraseBackground=False)
             except ValueError:
-                pass # it was already not displayed
+                pass  # it was already not displayed
 
     def _showSpotMode(self, activated=True):
         if activated:
