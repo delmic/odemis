@@ -337,7 +337,7 @@ def rescale_hq(data, shape):
         out = model.DataArray(out, dict(data.metadata))
         # update each metadata which is linked to the pixel size
         # Metadata that needs to be divided by the scale (zoom => decrease)
-        for k in [model.MD_PIXEL_SIZE, model.MD_BINNING]:
+        for k in {model.MD_PIXEL_SIZE, model.MD_BINNING}:
             try:
                 ov = data.metadata[k]
             except KeyError:
@@ -348,7 +348,7 @@ def rescale_hq(data, shape):
                 logging.exception("Failed to update metadata '%s' when rescaling by %s",
                                   k, scale)
         # Metadata that needs to be multiplied by the scale (zoom => increase)
-        for k in [model.MD_AR_POLE]:
+        for k in {model.MD_AR_POLE}:
             try:
                 ov = data.metadata[k]
             except KeyError:
@@ -369,10 +369,11 @@ def Subtract(a, b):
     return (DataArray): a - b, with same dtype and metadata as a
     """
     # TODO: see if it is more useful to upgrade the type to a bigger if overflow
-    if a.dtype.kind in "biu":
-        # avoid overflow so that 1 - 2 = 0 (and not 65536)
+    if a.dtype.kind in "bu":
+        # avoid underflow so that 1 - 2 = 0 (and not 65536)
         return numpy.maximum(a, b) - b
     else:
+        # TODO handle under/over-flows with integer types (127 - (-1) => -128)
         return (a - b)
 
 # TODO: use VIPS to be fast?
@@ -431,7 +432,7 @@ def mergeMetadata(current, correction=None):
         logging.debug("Cannot correct pixel size of data with unknown pixel size")
 
     # remove correction metadata (to make it clear the correction has been applied)
-    for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
+    for k in (model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR):
         if k in current:
             del current[k]
 
