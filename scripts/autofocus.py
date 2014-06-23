@@ -85,7 +85,7 @@ def main(args):
         print focus.position.value.get('z')
 
         # Apply autofocus
-        future_focus = align.AutoFocus(ccd, escan, focus, accuracy)
+        future_focus = align.AutoFocus(ccd, None, focus, accuracy)
         foc_pos, fm_final = future_focus.result()
         logging.debug("Focus level after applying autofocus: %f", fm_final)
 
