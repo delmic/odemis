@@ -117,6 +117,7 @@ class MainGUIData(object):
         self.lens_switch = None # actuator to (de)activate the lens (SPARC)
         self.chamber = None # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None # view of inside the chamber
+        self.chamber_light = None  # Light illuminating the chamber
         self.overview_ccd = None # global view from above the sample
 
         # Indicates whether the microscope is acquiring a high quality image
@@ -134,9 +135,9 @@ class MainGUIData(object):
                     self.bsd = d
                 elif d.role == "spectrometer":
                     self.spectrometer = d
-                elif d.role == "ccd-chamber":
+                elif d.role == "chamber-ccd":
                     self.chamber_ccd = d
-                elif d.role == "ccd-overview":
+                elif d.role == "overview-ccd":
                     self.overview_ccd = d
 
             for a in microscope.actuators:
@@ -173,6 +174,8 @@ class MainGUIData(object):
                     self.lens = e
                 elif e.role == "e-beam":
                     self.ebeam = e
+                elif e.role == "chamber-light" and self.chamber_ccd:  # No use without a ccd
+                    self.chamber_light = e
 
             # Do some typical checks on expectations from an actual microscope
             if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
