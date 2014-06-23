@@ -37,11 +37,14 @@ from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
 import threading
 import weakref
 
+# Avoid unecessary logging from suds.client
+logging.getLogger().setLevel(logging.INFO)
+
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
 MAX_FRAMES = 255
-SOCKET_TIMEOUT = 1000  # timeout for suds client
+SOCKET_TIMEOUT = 1e03  # timeout for suds client
 TILT_UNBLANK = 0.045, -0.015  # source tilt in order to have a visible image
 TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
