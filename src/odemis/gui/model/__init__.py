@@ -116,8 +116,8 @@ class MainGUIData(object):
         self.ar_spec_sel = None # actuator to select AR/Spectrometer (SPARC)
         self.lens_switch = None # actuator to (de)activate the lens (SPARC)
         self.chamber = None # actuator to control the chamber (has vacuum, pumping etc.)
-        self.ccd_chamber = None # view of inside the chamber
-        self.ccd_overview = None # global view from above the sample
+        self.chamber_ccd = None # view of inside the chamber
+        self.overview_ccd = None # global view from above the sample
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
@@ -135,9 +135,9 @@ class MainGUIData(object):
                 elif d.role == "spectrometer":
                     self.spectrometer = d
                 elif d.role == "ccd-chamber":
-                    self.ccd_chamber = d
+                    self.chamber_ccd = d
                 elif d.role == "ccd-overview":
-                    self.ccd_overview = d
+                    self.overview_ccd = d
 
             for a in microscope.actuators:
                 if a.role == "stage":
