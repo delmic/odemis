@@ -44,8 +44,8 @@ MAX_TRIALS_NUMBER = 1
 
 def MeasureFocus(image):
     """
-    Given an image, focus measure is calculated using the modified Laplacian
-    method. See http://www.sayonics.com/publications/pertuz_PR2013.pdf
+    Given an image, focus measure is calculated using the standard deviation of
+    the raw data.
     image (model.DataArray): Optical image
     returns (float):    The focus level of the optical image
     """
@@ -60,14 +60,6 @@ def MeasureFocus(image):
     else:
         gray = image
     return ndimage.standard_deviation(image)
-
-    m = numpy.array([[-1], [2], [-1]])
-    Lx = signal.correlate(gray, m, 'valid')
-    Ly = signal.correlate(gray, m.reshape(-1, 1), 'valid')
-    Fm = numpy.abs(Lx) + abs(Ly)
-    Fm = numpy.mean(Fm)
-
-    return Fm
 
 
 def _DoAutoFocus(future, device, et, focus, accuracy):
@@ -133,7 +125,8 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
 
             steps = 0
             count_fails = 0
-            while fm_new < 1.08 * fm_test:
+            # while fm_new < 1.08 * fm_test:
+            while fm_new - fm_test < 0.08 * fm_test:
                 if steps >= MAX_STEPS_NUMBER:
                     break
                 sign = -sign
@@ -152,7 +145,7 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
                     image = device.data.get()
                     fm_new = MeasureFocus(image)
                     print fm_new
-                    if (1.04*fm_new) < fm_test:
+                    if fm_test - fm_new > 0.04 * fm_new:
                         count_fails+=1
                         if (steps == 1) and (count_fails == 2):
                             # Return to initial position
@@ -198,7 +191,8 @@ def _DoAutoFocus(future, device, et, focus, accuracy):
         step = accuracy
         fm_old, fm_new = fm_test, fm_test
         steps = 0
-        while (0.96 * fm_old) <= fm_new:
+        # while (0.96 * fm_old) <= fm_new:
+        while fm_old - fm_new <= 0.04 * fm_old:
             if steps >= MAX_STEPS_NUMBER:
                 break
             fm_old = fm_new
