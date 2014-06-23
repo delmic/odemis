@@ -28,7 +28,7 @@ import logging
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, \
-    SPECTRUM_STREAMS, AR_STREAMS
+    SPECTRUM_STREAMS, AR_STREAMS, CameraStream
 from odemis.gui.util import call_after
 import wx
 
@@ -254,6 +254,16 @@ class ViewController(object):
               "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
               }),
             ])
+
+            # if self._main_data_model.chamber_ccd and self._main_data_model.chamber_light:
+            if True:
+                vpv[self._viewports[2]] = {
+                    "name": "Chamber",
+                    "stage": None,
+                    "focus0": None,
+                    "focus1": None,
+                    "stream_classes": (CameraStream,),
+                }
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
