@@ -70,6 +70,10 @@ EXTENSIONS = [u".h5", u".hdf5"]
 # on the center of the data. For example, to rotate a 2D image by 0.7 rad
 # counter clockwise, the rotation vector would be 0, 0, 0.7
 
+# Data is normally always recoded as 5 dimensions in order CTZYX. One exception
+# is for the RGB (looking) data, in which case it's recorded only in 3
+# dimensions, CYX (that allows to easily open it in hdfview).
+
 # h5py doesn't implement explicitly HDF5 image, and is not willing to cf:
 # http://code.google.com/p/h5py/issues/detail?id=157
 def _create_image_dataset(group, dataset_name, image, **kwargs):
@@ -88,11 +92,11 @@ def _create_image_dataset(group, dataset_name, image, **kwargs):
     # numpy.string_ is to force fixed-length string (necessary for compatibility)
     image_dataset.attrs["CLASS"] = numpy.string_("IMAGE")
     # Colour image?
-    if len(image.shape) == 3 and (image.shape[0] == 3 or image.shape[2] == 3):
+    if image.ndim == 3 and (image.shape[-3] == 3 or image.shape[-1] == 3):
         # TODO: check dtype is int?
         image_dataset.attrs["IMAGE_SUBCLASS"] = numpy.string_("IMAGE_TRUECOLOR")
         image_dataset.attrs["IMAGE_COLORMODEL"] = numpy.string_("RGB")
-        if image.shape[0] == 3:
+        if image.shape[-3] == 3:
             # Stored as [pixel components][height][width]
             image_dataset.attrs["INTERLACE_MODE"] = numpy.string_("INTERLACE_PLANE")
         else: # This is the numpy standard
@@ -112,7 +116,7 @@ def _read_image_dataset(dataset):
     """
     Get a numpy array from a dataset respecting the HDF5 image specification.
     returns (numpy.ndimage): it has at least 2 dimensions and if RGB, it has
-     a shape of (Y, X, 3).
+     a 3 dimensions and the metadata MD_DIMS indicates the order.
     raises
      IOError: if it doesn't conform to the standard
      NotImplementedError: if the image uses so fancy standard features
@@ -127,8 +131,9 @@ def _read_image_dataset(dataset):
     # conversion is almost entirely different depending on subclass
     subclass = dataset.attrs.get("IMAGE_SUBCLASS", "IMAGE_GRAYSCALE")
 
+    image = model.DataArray(dataset[...])
     if subclass == "IMAGE_GRAYSCALE":
-        image = dataset[...]
+        pass
     elif subclass == "IMAGE_TRUECOLOR":
         if len(dataset.shape) != 3:
             raise IOError("Truecolor image has a shape of %s" % (dataset.shape,))
@@ -140,61 +145,44 @@ def _read_image_dataset(dataset):
             raise IOError("Interlace mode missing")
 
         cm = dataset.attrs.get("IMAGE_COLORMODEL", "RGB") # optional attr
-        if cm == "RGB":
-            image = dataset[...]
-        else:
+        if cm != "RGB":
             raise NotImplementedError("Unable to handle images of colormodel '%s'" % cm)
 
         if il_mode == "INTERLACE_PLANE":
-            # move colour from first to last dim
-            image = numpy.rollaxis(image, 2)
+            # colour is first dim
+            image.metadata[model.MD_DIMS] = "CYX"
         elif il_mode == "INTERLACE_PIXEL":
-            pass # nothing to do
+            image.metadata[model.MD_DIMS] = "YXC"
         else:
             raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
     else:
         raise NotImplementedError("Unable to handle images of subclass '%s'" % subclass)
 
-
+    
     # TODO: support DISPLAY_ORIGIN
+    dorig = dataset.attrs.get("DISPLAY_ORIGIN", "UL") 
+    if dorig != "UL":
+        logging.warning("Image rotation %d not handled", dorig)
+    
     return image
 
-
-def _add_image_info(group, dataset, image, rgb=False):
+def _add_image_info(group, dataset, image):
     """
     Adds the basic metadata information about an image (scale, offset, and rotation)
     group (HDF Group): the group that contains the dataset
     dataset (HDF Dataset): the image dataset
     image (DataArray >= 2D): image with metadata, the last 2 dimensions are Y and X (H,W)
-    rgb (bool): If True, will consider the dimension of length 3 as channel
     """
     # Note: DimensionScale support is only part of h5py since v2.1
     
     # Dimensions
-    if rgb:
-        # expect 3 dimensions, with one of len==3 (=> C)
-        left_dim = ["X", "Y"]
-        for i, d in enumerate(dataset.dims):
-            if image.shape[i] == 3:
-                dname = "C"
-            else:
-                dname = left_dim.pop()
-            d.label = dname
-        l = 2 # trick to force to only put info for X and Y
-    else:
-        # The order of the dimension is reversed (the slowest changing is last)
-        l = len(dataset.dims)
-        dataset.dims[l - 1].label = "X"
-        dataset.dims[l - 2].label = "Y"
-        # support more dimensions if available:
-        if l >= 3:
-            dataset.dims[l - 3].label = "Z"
-        if l >= 4:
-            dataset.dims[l - 4].label = "T"
-        if l >= 5:
-            dataset.dims[l - 5].label = "C"
-
+    l = image.ndim
+    dims = image.metadata.get(model.MD_DIMS, "CTZYX"[-l::])
+            
+    for i, d in enumerate(dataset.dims):
+        d.label = dims[i]
+    
     # Offset
     if model.MD_POS in image.metadata:
         pos = image.metadata[model.MD_POS]
@@ -241,6 +229,8 @@ def _add_image_info(group, dataset, image, rgb=False):
         # understand what they are supposed to represent. Surprisingly, there
         # is no official way to attach a unit.
         # Huygens seems to consider it's in m
+        xpos = dims.index("X")
+        ypos = dims.index("Y")
         pxs = image.metadata[model.MD_PIXEL_SIZE]
         group["DimensionScaleX"] = pxs[0]
         group["DimensionScaleX"].attrs["UNIT"] = "m" # our extension
@@ -251,18 +241,19 @@ def _add_image_info(group, dataset, image, rgb=False):
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleX"], "X")
         dataset.dims.create_scale(group["DimensionScaleY"], "Y")
-        dataset.dims[l - 1].attach_scale(group["DimensionScaleX"])
-        dataset.dims[l - 2].attach_scale(group["DimensionScaleY"])
+        dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
+        dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
 
     # Unknown data, but SVI needs them to take the scales into consideration
-    if l >= 3:
+    if "Z" in dims:
+        zpos = dims.index("Z")
         group["ZOffset"] = 0.0
         _h5svi_set_state(group["ZOffset"], ST_DEFAULT)
         group["DimensionScaleZ"] = 1e-3 # m
         group["DimensionScaleZ"].attrs["UNIT"] = "m"
         dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
         _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
-        dataset.dims[l - 3].attach_scale(group["DimensionScaleZ"])
+        dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
 
         # Put here to please Huygens
         # Seems to be the coverslip position, ie, the lower and upper glass of
@@ -272,16 +263,17 @@ def _add_image_info(group, dataset, image, rgb=False):
         group["SecondaryGlassMediumInterfacePosition"] = 1.0 # m?
         _h5svi_set_state(group["SecondaryGlassMediumInterfacePosition"], ST_DEFAULT)
 
-    if l >= 4:
+    if "T" in dims:
+        tpos = dims.index("T")
         group["DimensionScaleT"] = 1.0 # s
         group["DimensionScaleT"].attrs["UNIT"] = "s"
         # No clear what's the relation between this name and the label
         dataset.dims.create_scale(group["DimensionScaleT"], "T")
         _h5svi_set_state(group["DimensionScaleT"], ST_DEFAULT)
-        dataset.dims[l - 4].attach_scale(group["DimensionScaleT"])
+        dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
 
     # Wavelength (for spectrograms)
-    if (l >= 5 and
+    if ("C" in dims and
         set(image.metadata.keys()) & {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
         try:
             # polynomial of degree = 2 => linear, so use compact notation
@@ -301,7 +293,8 @@ def _add_image_info(group, dataset, image, rgb=False):
             group["DimensionScaleC"].attrs["UNIT"] = "m"
             dataset.dims.create_scale(group["DimensionScaleC"], "C")
             _h5svi_set_state(group["DimensionScaleC"], ST_REPORTED)
-            dataset.dims[l - 5].attach_scale(group["DimensionScaleC"])
+            cpos = dims.index("C")
+            dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
         except Exception:
             logging.warning("Failed to record wavelength information, "
                             "it will not be saved.")
@@ -575,37 +568,41 @@ def _h5py_enum_commit(group, name, dtype):
     enum_type.commit(group.id, name)
     #TODO: return the TypeEnumID created?
 
-def _add_image_metadata(group, images):
+def _add_image_metadata(group, image, mds):
     """
     Adds the basic metadata information about an image (scale and offset)
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
-    images (list of DataArray): list of images with metadata
+    image (DataArray): image (with global metadata)
+    mds (None or list of dict): metadata for each channel
     """
     gp = group.create_group("PhysicalData")
 
     dtvlen_str = h5py.special_dtype(vlen=str)
     # TODO indicate correctly the State of the information (especially if it's unknown)
 
+    if mds is None:
+        mds = [image.metadata]
+
     # All values are duplicated by channel, excepted for Title
-    gdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
+    gdesc = [md.get(model.MD_DESCRIPTION, "") for md in mds]
     gp["Title"] = ", ".join(gdesc)
 
-    cdesc = [i.metadata.get(model.MD_DESCRIPTION, "") for i in images]
+    cdesc = [md.get(model.MD_DESCRIPTION, "") for md in mds]
     gp["ChannelDescription"] = numpy.array(cdesc, dtype=dtvlen_str)
     _h5svi_set_state(gp["ChannelDescription"], ST_ESTIMATED)
 
     # Wavelengths are not a band, but a single value, so we pick the center
-    xwls = [i.metadata.get(model.MD_IN_WL) for i in images]
+    xwls = [md.get(model.MD_IN_WL) for md in mds]
     gp["ExcitationWavelength"] = [1e-9 if v is None else numpy.mean(v) for v in xwls] # in m
     state = [ST_INVALID if v is None else ST_REPORTED for v in xwls]
     _h5svi_set_state(gp["ExcitationWavelength"], state)
 
-    ewls = [i.metadata.get(model.MD_OUT_WL) for i in images]
+    ewls = [md.get(model.MD_OUT_WL) for md in mds]
     gp["EmissionWavelength"] = [1e-9 if v is None else numpy.mean(v) for v in ewls] # in m
     state = [ST_INVALID if v is None else ST_REPORTED for v in ewls]
     _h5svi_set_state(gp["EmissionWavelength"], state)
 
-    mags = [i.metadata.get(model.MD_LENS_MAG) for i in images]
+    mags = [md.get(model.MD_LENS_MAG) for md in mds]
     gp["Magnification"] = [1.0 if m is None else m for m in mags]
     state = [ST_INVALID if v is None else ST_REPORTED for v in mags]
     _h5svi_set_state(gp["Magnification"], state)
@@ -618,10 +615,10 @@ def _add_image_metadata(group, images):
     _h5py_enum_commit(gp, "ImagingDirectionEnumeration", _dtid)
     mm, mt, id = [], [], []
     # MicroscopeMode: if IN_WL => fluorescence/brightfield, otherwise SEM (=Reflection?)
-    for i in images:
+    for md in mds:
         # FIXME: this is true only for the SECOM
-        if model.MD_IN_WL in i.metadata:
-            iwl = i.metadata[model.MD_IN_WL]
+        if model.MD_IN_WL in md:
+            iwl = md[model.MD_IN_WL]
             if abs(iwl[1] - iwl[0]) < 100e-9:
                 mm.append("Fluorescence")
                 mt.append("WideField")
@@ -643,56 +640,56 @@ def _add_image_metadata(group, images):
     # For the *Str, Huygens expects a space separated string (scalar), _but_
     # still wants an array for the state of each channel.
     gp["MicroscopeModeStr"] = " ".join([m.lower() for m in mm])
-    _h5svi_set_state(gp["MicroscopeModeStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
+    _h5svi_set_state(gp["MicroscopeModeStr"], numpy.array([ST_REPORTED] * len(mds), dtype=_dtstate))
     gp["MicroscopeType"] = numpy.array([_dictmt[t] for t in mt], dtype=_dtmt)
     _h5svi_set_state(gp["MicroscopeType"], ST_REPORTED)
     gp["MicroscopeTypeStr"] = " ".join([t.lower() for t in mt])
-    _h5svi_set_state(gp["MicroscopeTypeStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
+    _h5svi_set_state(gp["MicroscopeTypeStr"], numpy.array([ST_REPORTED] * len(mds), dtype=_dtstate))
     gp["ImagingDirection"] = numpy.array([_dictid[d] for d in id], dtype=_dtid)
     _h5svi_set_state(gp["ImagingDirection"], ST_REPORTED)
     gp["ImagingDirectionStr"] = " ".join([d.lower() for d in id])
-    _h5svi_set_state(gp["ImagingDirectionStr"], numpy.array([ST_REPORTED] * len(images), dtype=_dtstate))
+    _h5svi_set_state(gp["ImagingDirectionStr"], numpy.array([ST_REPORTED] * len(mds), dtype=_dtstate))
 
     # Below are almost entirely made-up values, present just to please Huygens
     # TODO: should allow the user to specify it in the preferences: 1=>vacuum, 1.5 => glass/oil
-    gp["RefractiveIndexLensImmersionMedium"] = [1.515] * len(images) # ratio (no unit)
+    gp["RefractiveIndexLensImmersionMedium"] = [1.515] * len(mds) # ratio (no unit)
     _h5svi_set_state(gp["RefractiveIndexLensImmersionMedium"], ST_DEFAULT)
-    gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(images) # ratio (no unit)
+    gp["RefractiveIndexSpecimenEmbeddingMedium"] = [1.515] * len(mds) # ratio (no unit)
     _h5svi_set_state(gp["RefractiveIndexSpecimenEmbeddingMedium"], ST_DEFAULT)
 
     # Only for confocal microscopes
-    gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(images) # unit? m?
+    gp["BackprojectedIlluminationPinholeSpacing"] = [2.53e-6] * len(mds) # unit? m?
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeSpacing"], ST_DEFAULT)
-    gp["BackprojectedIlluminationPinholeRadius"] = [280e-9] * len(images) # unit? m?
+    gp["BackprojectedIlluminationPinholeRadius"] = [280e-9] * len(mds) # unit? m?
     _h5svi_set_state(gp["BackprojectedIlluminationPinholeRadius"], ST_DEFAULT)
-    gp["BackprojectedPinholeRadius"] = [280e-9] * len(images) # unit? m?
+    gp["BackprojectedPinholeRadius"] = [280e-9] * len(mds) # unit? m?
     _h5svi_set_state(gp["BackprojectedPinholeRadius"], ST_DEFAULT)
 
     # TODO: should come from the microscope model?
-    gp["NumericalAperture"] = [1.4] * len(images) # ratio (no unit)
+    gp["NumericalAperture"] = [1.4] * len(mds) # ratio (no unit)
     _h5svi_set_state(gp["NumericalAperture"], ST_DEFAULT)
-    gp["ObjectiveQuality"] = [80] * len(images) # unit? int [0->100] = percentage of respect to the theory?
+    gp["ObjectiveQuality"] = [80] * len(mds) # unit? int [0->100] = percentage of respect to the theory?
     _h5svi_set_state(gp["ObjectiveQuality"], ST_DEFAULT)
 
     # Only for confocal microscopes?
-    gp["ExcitationBeamOverfillFactor"] = [2.0] * len(images) # unit?
+    gp["ExcitationBeamOverfillFactor"] = [2.0] * len(mds) # unit?
     _h5svi_set_state(gp["ExcitationBeamOverfillFactor"], ST_DEFAULT)
 
     # Only for fluorescence acquisitions. Almost always 1, excepted for super fancy techniques.
     # Number of simultaneously absorbed photons by a fluorophore in a fluorescence event
-    gp["ExcitationPhotonCount"] = [1] * len(images) # photons
+    gp["ExcitationPhotonCount"] = [1] * len(mds) # photons
     _h5svi_set_state(gp["ExcitationPhotonCount"], ST_DEFAULT)
 
 
     # Below are additional metadata from us (Delmic)
     # IntegrationTime: time spent by each pixel to receive energy (in s)
     its, st_its = [], []
-    for i in images:
-        if model.MD_DWELL_TIME in i.metadata:
-            its.append(i.metadata[model.MD_DWELL_TIME])
+    for md in mds:
+        if model.MD_DWELL_TIME in md:
+            its.append(md[model.MD_DWELL_TIME])
             st_its.append(ST_REPORTED)
-        elif model.MD_EXP_TIME in i.metadata:
-            its.append(i.metadata[model.MD_EXP_TIME])
+        elif model.MD_EXP_TIME in md:
+            its.append(md[model.MD_EXP_TIME])
             st_its.append(ST_REPORTED)
         else:
             its.append(0)
@@ -704,9 +701,9 @@ def _add_image_metadata(group, images):
     # PolePosition: position (in floating px) of the pole in the image
     # (only meaningful for AR/SPARC)
     pp, st_pp = [], []
-    for i in images:
-        if model.MD_AR_POLE in i.metadata:
-            pp.append(i.metadata[model.MD_AR_POLE])
+    for md in mds:
+        if model.MD_AR_POLE in md:
+            pp.append(md[model.MD_AR_POLE])
             st_pp.append(ST_REPORTED)
         else:
             pp.append((0, 0))
@@ -729,60 +726,38 @@ def _add_svi_info(group):
     gi["ImageHistory"] = ""
     gi["URL"] = "www.delmic.com"
 
-def _add_acquistion_svi(group, images, **kwargs):
+def _add_acquistion_svi(group, data, mds, **kwargs):
     """
     Adds the acquisition data according to the sub-format by SVI
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
-    images (list of DataArray): set of images with metadata, all the images must
+    data (DataArray): image with (global) metadata, all the images must
       have the same shape.
+    mds (None or list of dict): metadata for each C of the image (if different) 
     """
-    # all image have the same shape?
-    assert all([images[0].shape == im.shape for im in images])
-
     gi = group.create_group("ImageData")
-    # The data must always be with 5 dimensions, in this order: CTZYX
-    # => so we add dimensions to data if needed
-    images5d = []
-    for d in images:
-        if len(d.shape) < 5:
-            shape5d = [1] * (5 - len(d.shape)) + list(d.shape)
-            d = d.reshape(shape5d)
-        images5d.append(d)
-
-    # Then find a dimension along which they can be concatenated. That's a
-    # dimension which is of size 1.
-    # For now, if there are many possibilities, we pick the first one.
-    # TODO: be more clever in choosing which dimension to pick using metadata
-    if len(images5d) > 1:
-        if not 1 in images5d[0].shape:
-            raise ValueError("No dimension found to concatenate images: %s" % images5d[0].shape)
-        concat_axis = images5d[0].shape.index(1)
-        gdata = numpy.concatenate(images5d, axis=concat_axis)
-    else:
-        gdata = images5d[0]
 
     # StateEnumeration
     # FIXME: should be done by _h5svi_set_state (and used)
     _h5py_enum_commit(group, "StateEnumeration", _dtstate)
 
     # TODO: use scaleoffset to store the number of bits used (MD_BPP)
-    ids = _create_image_dataset(gi, "Image", gdata, **kwargs)
+    ids = _create_image_dataset(gi, "Image", data, **kwargs)
     # FIXME: if ids.CLASS=IMAGE on 64 bits => attach_scale doesn't work
     # as a workaround, we temporarily change it
+    # Reported to h5py on 03-02-2014 -> it's a bug in HDF5 lib, but works on 32 bits.
     ids.attrs["CLASS"] = numpy.string_("BOOO")
-    _add_image_info(gi, ids, images[0]) # all images should have the same info (but channel)
+    _add_image_info(gi, ids, data)
     ids.attrs["CLASS"] = numpy.string_("IMAGE")
-    _add_image_metadata(group, images)
+    _add_image_metadata(group, data, mds)
     _add_svi_info(group)
-
 
 def _findImageGroups(das):
     """
     Find groups of images which should be considered part of the same acquisition
     (be a channel of an Image in HDF5 SVI).
-    das (list of DataArray): all the images
-    returns (list of list of int): a set of "groups", each group is represented
-      by a set of indexes (of the images being part of the group)
+    das (list of DataArray): all the images, with dimensions ordered C(TZ)YX
+    returns (list of list of DataArray): a list of "groups", each group is a list
+     of DataArrays
     Note: it's a slightly different function from tiff._findImageGroups()
     """
     # We consider images to be part of the same group if they have:
@@ -796,6 +771,9 @@ def _findImageGroups(das):
     for i, da in enumerate(das):
         # try to find a matching group (compare just to the first picture)
         for g in groups:
+            # If C != 1 => not possible to merge
+            if da.shape[0] != 1: # C is always first dimension
+                continue
             da0 = das[g[0]]
             if da0.shape != da.shape:
                 continue
@@ -814,8 +792,115 @@ def _findImageGroups(das):
             # Not found => create a new group
             groups.append([i])
 
-    return groups
+    gdata = [[das[i] for i in g] for g in groups]
+    return gdata
 
+def _adjustDimensions(da):
+    """
+    Ensure the DataArray has 5 dimensions ordered CTZXY (as dictated by the HDF5 
+    SVI convention). If it seems to contain RGB data, an exception is made to
+    return just CYX data.
+    da (DataArray)
+    returns (DataArray): a new DataArray (possibly just a view) 
+    """
+    # Dimension names (default to CTZYX)
+    l = da.ndim
+    dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-l::])
+    md = dict(da.metadata)
+
+    # Special cases for RGB
+    if dims == "YXC":
+        # convert to CYX
+        da = numpy.rollaxis(da, 2)
+        dims = "CYX"
+
+    if dims == "CYX" and da.shape[0] in {3, 4}:
+        md.update({model.MD_DIMS: dims})
+        da = model.DataArray(da, md)
+        return da
+
+    dim_goal = "CTZYX"
+    # Extend the missing dimensions to 1
+    if l < 5:
+        shape5d = (1,) * (5 - l) + da.shape
+        da = da.reshape(shape5d)
+
+    # fill up the dimensions by adding the missing ones
+    while len(dims) < 5:
+        for d in reversed(dim_goal):
+            if d not in dims:
+                dims = d + dims
+                break
+
+    # reorder dimensions so that they are in the expected order
+    if dims != dim_goal:
+        # roll the axes until they fit
+        for i, d in enumerate(dim_goal):
+            p = dims.index(d)
+            da = numpy.rollaxis(da, p, i)
+            dims[:i] + d + dims[i:p] + dims[p + 1:] # roll dims
+
+    md.update({model.MD_DIMS: dims})
+    da = model.DataArray(da, md)
+    return da
+
+def _groupImages(das):
+    """
+    Group images into larger ndarray, to follow the HDF5 SVI flavour.
+    In practice, this only consists in merging data for multiple channels into
+    one, and ordering/extending the shape to CTZYX.
+    das (list of DataArray): all the images
+    returns :
+      acq (list of DataArrays): each group of data, with the (general) metadata 
+      metadatas (list of (list of dict, or None)): for each item of acq, either
+       None if the metadata is fully in acq or one metadata per channel.
+    """
+    # For each image: adjust dimensions
+    adas = [_adjustDimensions(da) for da in das]
+    
+    # For each image, if C = 1, try to merge it to an existing group
+    groups = _findImageGroups(adas)
+    
+    acq, mds = [], []
+    
+    # For each group:
+    # * if alone, do nothing
+    # * if many, merge along C
+    for g in groups:
+        if len(g) == 1:
+            acq.append(g[0])
+            mds.append(None)
+        else:
+            # merge along C (always axis 0)
+            gdata = numpy.concatenate(g, axis=0)
+            md = [d.metadata for d in g]
+            # merge metadata
+            # TODO: might need to be more clever for some metadata (eg, ACQ_DATE)
+            gmd = {}
+            map(gmd.update, md)
+            gdata = model.DataArray(gdata, gmd)
+
+            acq.append(gdata)
+            mds.append(md)
+
+    return acq, mds
+
+def _updateRGBMD(da):
+    """
+    update MD_DIMS of the DataArray containing RGB if needed. Trying to guess
+     according to the shape if necessary.
+    da (DataArray): DataArray to update
+    """
+    if da.ndim != 3 or model.MD_DIMS in da.metadata:
+        return
+
+    # C dim is the one with 3 (or 4) elements
+    if da.shape[0] in {3, 4}:
+        dims = "CYX"
+    elif da.shape[2] in {3, 4}:
+        dims = "YXC"
+
+    da.metadata[model.MD_DIMS] = dims
 
 def _thumbFromHDF5(filename):
     """
@@ -838,7 +923,7 @@ def _thumbFromHDF5(filename):
         # an image? (== has the attribute CLASS: IMAGE)
         if isinstance(ds, h5py.Dataset) and ds.attrs.get("CLASS") == "IMAGE":
             try:
-                da = model.DataArray(_read_image_dataset(ds))
+                da = _read_image_dataset(ds)
             except Exception:
                 logging.info("Skipping image '%s' which couldn't be read.", name)
                 continue
@@ -875,13 +960,13 @@ def _dataFromSVIHDF5(f):
 
         # Read the raw data
         try:
-            nd = _read_image_dataset(image)
+            da = _read_image_dataset(image)
         except Exception:
             logging.exception("Failed to read data of acquisition '%s'", obj.name)
 
         # TODO: read more metadata
         try:
-            da = model.DataArray(nd, metadata=_read_image_info(imagedata))
+            da.metadata.update(_read_image_info(imagedata))
         except Exception:
             logging.exception("Failed to parse metadata of acquisition '%s'", obj.name)
         
@@ -924,8 +1009,6 @@ def _dataFromHDF5(filename):
     f.visititems(addIfWorthy)
     return data
 
-
-
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
     Saves a list of DataArray as a HDF5 (SVI) file.
@@ -952,21 +1035,21 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     if thumbnail is not None:
         # Save the image as-is in a special group "Preview"
         prevg = f.create_group("Preview")
+        _updateRGBMD(thumbnail) # ensure RGB info is there if needed
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
-        _add_image_info(prevg, ids, thumbnail, rgb=(len(thumbnail.shape) == 3))
+        _add_image_info(prevg, ids, thumbnail)
 
-    # for each set of images from the same instrument, add them
-    groups = _findImageGroups(ldata)
-
-    for g in groups:
-        ga = f.create_group("Acquisition%d" % min(g)) # smallest ID of the images
-        gdata = [ldata[i] for i in g]
-        _add_acquistion_svi(ga, gdata, compression=compression)
+    # list ndarray/list of list of metadata (one per channel)
+    acq, mds = _groupImages(ldata)
+    for i, da in enumerate(acq):
+        ga = f.create_group("Acquisition%d" % i)
+        _add_acquistion_svi(ga, da, mds[i], compression=compression)
 
     f.close()
 
 
-
+# TODO: allow to append data to a file, or any other way to allow saving large
+# data without having everything in memory simultaneously.
 def export(filename, data, thumbnail=None):
     '''
     Write an HDF5 file with the given image and metadata
@@ -983,13 +1066,11 @@ def export(filename, data, thumbnail=None):
       be dropped silently.
     '''
     # TODO: add an argument to not do any clever data aggregation?
-    if isinstance(data, list):
-        _saveAsHDF5(filename, data, thumbnail)
-    else:
+    if not isinstance(data, (list, tuple)):
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
-        _saveAsHDF5(filename, [data], thumbnail)
-
+        data = [data]
+    _saveAsHDF5(filename, data, thumbnail)
 
 def read_data(filename):
     """
