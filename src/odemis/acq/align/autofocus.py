@@ -84,6 +84,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
     logging.debug("Starting Autofocus...")
 
     try:
+        # Clip accuracy within reasonable limits
         accuracy = numpy.clip(accuracy, max_step / 3, max_step)
         print accuracy
         rng = focus.axes["z"].range
@@ -96,14 +97,14 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
         step = accuracy
         cur_pos = focus.position.value.get('z')
         print cur_pos
-        time.sleep(1)
-        image = detector.data.get()
+        # time.sleep(1)
+        image = detector.data.get(False)
         fm_cur = MeasureFocus(image)
         init_fm = fm_cur
         f = focus.moveRel({"z": step})
         f.result()
-        time.sleep(1)
-        image = detector.data.get()
+        # time.sleep(1)
+        image = detector.data.get(False)
         fm_test = MeasureFocus(image)
 
         if future._autofocus_state == CANCELLED:
@@ -138,8 +139,8 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                     shift = cur_pos - pos
                     f = focus.moveRel({"z":shift})
                     f.result()
-                    time.sleep(1)
-                    image = detector.data.get()
+                    # time.sleep(1)
+                    image = detector.data.get(False)
                     fm_new = MeasureFocus(image)
                     print fm_new
                     if fm_test - fm_new > thres_factor * fm_new:
@@ -156,13 +157,13 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                         raise CancelledError()
                 steps += 1
 
-            time.sleep(1)
-            image = detector.data.get()
+            # time.sleep(1)
+            image = detector.data.get(False)
             fm_cur = MeasureFocus(image)
             print fm_cur
             f = focus.moveRel({"z": step})
             f.result()
-            image = detector.data.get()
+            image = detector.data.get(False)
             fm_test = MeasureFocus(image)
             print fm_test
             if future._autofocus_state == CANCELLED:
@@ -195,8 +196,8 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
             fm_old = fm_new
             f = focus.moveRel({"z":sign * step})
             f.result()
-            time.sleep(1)
-            image = detector.data.get()
+            # time.sleep(1)
+            image = detector.data.get(False)
             fm_new = MeasureFocus(image)
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()

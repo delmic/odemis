@@ -96,12 +96,12 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
 
         # Estimate noise and adjust exposure time based on "Rose criterion"
         logging.debug("Adjust exposure time...")
-        image = ccd.data.get()
+        image = ccd.data.get(False)
         snr = MeasureSNR(image)
         while (snr < 5 and ccd.exposureTime.value < 800e-03):
             ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
-            time.sleep(1)
-            image = ccd.data.get()
+            # time.sleep(1)
+            image = ccd.data.get(False)
             snr = MeasureSNR(image)
             print snr
 
@@ -141,10 +141,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
             raise CancelledError()
 
         ccd.binning.value = (1, 1)
-        image = ccd.data.get()
+        image = ccd.data.get(False)
         # Make sure you have the correct resolution
         while image.shape != (ccd.resolution.value[1], ccd.resolution.value[0]):
-            image = ccd.data.get()
+            image = ccd.data.get(False)
 
         # Center spot
         logging.debug("Aligning spot...")
@@ -211,8 +211,8 @@ def CropFoV(ccd):
     on AutoFocus process.
     ccd (model.DigitalCamera): The CCD
     """
-    time.sleep(3)
-    image = ccd.data.get()
+    # time.sleep(3)
+    image = ccd.data.get(False)
     center_pxs = ((image.shape[1] / 2),
                  (image.shape[0] / 2))
     print center_pxs
@@ -231,9 +231,9 @@ def CropFoV(ccd):
     ccd.binning.value = (1, 1)
     #print ccd.resolution.value
     # Make sure acquired images have the correct resolution
-    image = ccd.data.get()
+    image = ccd.data.get(False)
     while image.shape != (ccd.resolution.value[1], ccd.resolution.value[0]):
-        image = ccd.data.get()
+        image = ccd.data.get(False)
 
 
 def CenterSpot(ccd, stage, mx_steps):
@@ -283,8 +283,8 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
                         children={"aligner": stage},
                         axes=["b", "a"],
                         angle=135)
-    time.sleep(4)
-    image = ccd.data.get()
+    # time.sleep(4)
+    image = ccd.data.get(False)
 
     # Center of optical image
     pixelSize = image.metadata[model.MD_PIXEL_SIZE]
@@ -323,8 +323,8 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         f.result()
 
         #Wait to make sure no previous spot is detected
-        time.sleep(4)
-        image = ccd.data.get()
+        # time.sleep(4)
+        image = ccd.data.get(False)
         spot_pxs = FindSpot(image)
         if spot_pxs is None:
             return None
