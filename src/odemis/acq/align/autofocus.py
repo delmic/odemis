@@ -85,7 +85,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
 
     try:
         # Clip accuracy within reasonable limits
-        accuracy = numpy.clip(accuracy, max_step / 3, max_step)
+        accuracy = numpy.clip(accuracy, max_step / 5, max_step)
         print accuracy
         rng = focus.axes["z"].range
 
@@ -289,6 +289,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
     elif role == "overview-ccd":  # NAVCAM
         max_step = 100 * detector.pixelSize.value[0]
     elif role == "se-detector":  # SEM
+        thres_factor = 5 * thres_factor
         max_step = 15e03 * scanner.pixelSize.value[0]
 
     f = model.ProgressiveFuture(start=est_start,
