@@ -187,13 +187,16 @@ class ViewPort(wx.Panel):
 class OverviewVierport(ViewPort):
     """ A Viewport containing a downscaled overview image of the loaded sample
     """
-    def setView(self, microscope_view, tab_data):
+
+    def __init__(self, *args, **kwargs):
+        super(OverviewVierport, self).__init__(*args, **kwargs)
         #Remove all abilities, because the overview should have none
         self.canvas.abilities = set()
+
+    def setView(self, microscope_view, tab_data):
         # Hide the cross hair overlay
         microscope_view.show_crosshair.value = False
         self.canvas.setView(microscope_view, tab_data)
-
 
 
 class MicroscopeViewport(ViewPort):

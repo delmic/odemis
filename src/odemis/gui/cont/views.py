@@ -36,21 +36,24 @@ import odemis.gui.util.widgets as util
 
 
 class ViewController(object):
-    """ Manages the microscope view updates, change of viewport focus, etc.
+    """ Manage the display of various viewports in a tab
+
+
     """
 
     def __init__(self, tab_data, main_frame, viewports, toolbar=None):
         """
-        tab_data (MicroscopyGUIData) -- the representation of the microscope GUI
-        main_frame: (wx.Frame) -- the frame which contains the 4 viewports
-        viewports (list of MicroscopeViewport or
-                   OrderedDict (MicroscopeViewport -> kwargs)): the viewports to
-          update. The first one is the one focused. If it's an OrderedDict, the
-          kwargs are passed to the MicroscopeView creation. If there are more
-          than 4 viewports, only the first 4 will be made visible and any others
-          will be hidden.
-        toolbar (ToolBar or None): toolbar to manage the TOOL_ZOOM_FIT tool.
+        :param tab_data: MicroscopyGUIData -- the representation of the microscope GUI
+        :param main_frame: wx.Frame -- the frame which contains the 4 viewports
+        :param viewports: [MicroscopeViewport] or OrderedDict(MicroscopeViewport -> {}) -- the
+            viewports to update. The first one is the one focused. If it's an OrderedDict, the
+            kwargs are passed to the MicroscopeView creation.
+            If there are more than 4 viewports, only the first 4 will be made visible and any others
+            will be hidden.
+        :param toolbar: ToolBar or None-- toolbar to manage the TOOL_ZOOM_FIT tool.
+
         """
+
         self._data_model = tab_data
         self._main_data_model = tab_data.main
         self.main_frame = main_frame
@@ -124,8 +127,9 @@ class ViewController(object):
         # When .visible_views changes, but the viewports in the right order
         # in the sizer.
 
+        assert not self._data_model.views.value  # should still be empty
+
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
-        assert not self._data_model.views.value # should still be empty
         if isinstance(self._data_model, model.AnalysisGUIData):
             assert len(self._viewports) >= 4
             # TODO: should be dependent on the type of acquisition, and so
@@ -221,49 +225,58 @@ class ViewController(object):
                                  }
                 i += 1
 
-        # If both SEM and Optical (=SECOM): SEM/Optical/2x combined
-        elif (self._main_data_model.ebeam and
-              self._main_data_model.light and
-              len(self._viewports) == 4):
+        # If both SEM and Optical are present (= SECOM & SECOMMINI)
+        # If 5 viewports are present, the last will be considered to be an overview
+        elif (
+                self._main_data_model.ebeam and
+                self._main_data_model.light and
+                len(self._viewports) in (4, 5)
+        ):
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
-            (self._viewports[0],  # focused view
-             {"name": "SEM",
-              "stage": self._main_data_model.stage,
-              "focus1":  self._main_data_model.ebeam_focus,
-              "stream_classes": EM_STREAMS,
-              }),
-            (self._viewports[1],
-             {"name": "Optical",
-              "stage": self._main_data_model.stage,
-              "focus1": self._main_data_model.focus,
-              "stream_classes": OPTICAL_STREAMS,
-              }),
-            (self._viewports[2],
-             {"name": "Combined 1",
-              "stage": self._main_data_model.stage,
-              "focus0": None, # TODO: SEM focus when em stream on
-              "focus1": self._main_data_model.focus,
-              "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
-              }),
-            (self._viewports[3],
-             {"name": "Combined 2",
-              "stage": self._main_data_model.stage,
-              "focus0": None, # TODO: SEM focus when em stream on
-              "focus1": self._main_data_model.focus,
-              "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
-              }),
+                (self._viewports[0],  # focused view
+                 {"name": "SEM",
+                  "stage": self._main_data_model.stage,
+                  "focus1":  self._main_data_model.ebeam_focus,
+                  "stream_classes": EM_STREAMS,
+                  }),
+                (self._viewports[1],
+                 {"name": "Optical",
+                  "stage": self._main_data_model.stage,
+                  "focus1": self._main_data_model.focus,
+                  "stream_classes": OPTICAL_STREAMS,
+                  }),
+                (self._viewports[2],
+                 {"name": "Combined 1",
+                  "stage": self._main_data_model.stage,
+                  "focus0": None, # TODO: SEM focus when em stream on
+                  "focus1": self._main_data_model.focus,
+                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+                  }),
+                (self._viewports[3],
+                 {"name": "Combined 2",
+                  "stage": self._main_data_model.stage,
+                  "focus0": None, # TODO: SEM focus when em stream on
+                  "focus1": self._main_data_model.focus,
+                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+                  }),
             ])
 
-            # if self._main_data_model.chamber_ccd and self._main_data_model.chamber_light:
-            if True:
+            # Insert a Chamber viewport into the lower left position if a chamber camera is present
+            if self._main_data_model.chamber_ccd and self._main_data_model.chamber_light:
+                logging.debug("Inserting Chamber viewport")
                 vpv[self._viewports[2]] = {
                     "name": "Chamber",
                     "stage": None,
                     "focus0": None,
                     "focus1": None,
-                    "stream_classes": (CameraStream,),
+                    "stream_classes": (CameraStream,), # TODO: replace with a different stream type?
                 }
+
+            # If there are 5 viewports, we'll assume that the last one is an overview video stream
+            if len(self._viewports) == 5:
+                pass
+
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
@@ -373,8 +386,10 @@ class ViewController(object):
 
         # Only make the 'hidden_vp' visible when we're in 2x2 view or if it's
         # the focussed view in a 1x1 view.
-        if (self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
-            self._data_model.focussedView.value == visible_vp.microscope_view):
+        if (
+            self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
+            self._data_model.focussedView.value == visible_vp.microscope_view
+        ):
             # Flip the visibility
             visible_vp.Hide()
             logging.debug("Hiding %s", visible_vp)
@@ -431,7 +446,7 @@ class ViewController(object):
                         viewport.Hide()
 
             if layout == model.VIEW_LAYOUT_ONE:
-                self._viewports[0].Parent.Layout() # resize viewport
+                self._viewports[0].Parent.Layout()  # resize viewport
         finally:
             self._viewports[0].Parent.Thaw()
 
@@ -450,11 +465,11 @@ class ViewController(object):
             if layout == model.VIEW_LAYOUT_ONE:
                 logging.debug("Showing only one view")
                 for viewport in self._viewports:
-                    if (viewport.microscope_view ==
-                        self._data_model.focussedView.value):
+                    if viewport.microscope_view == self._data_model.focussedView.value:
                         viewport.Show()
                     else:
                         viewport.Hide()
+
             elif layout == model.VIEW_LAYOUT_22:
                 logging.debug("Showing all views")
                 # We limit the showing of viewports to the first 4, because more

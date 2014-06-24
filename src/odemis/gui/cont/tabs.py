@@ -232,10 +232,10 @@ class SecomStreamsTab(Tab):
             self.main_frame,
             [
                 self.main_frame.vp_secom_tl,
-                 self.main_frame.vp_secom_tr,
-                 self.main_frame.vp_secom_bl,
-                 self.main_frame.vp_secom_br,
-                 self.main_frame.vp_overview_sem
+                self.main_frame.vp_secom_tr,
+                self.main_frame.vp_secom_bl,
+                self.main_frame.vp_secom_br,
+                self.main_frame.vp_overview_sem
             ],
             self.tb
         )
