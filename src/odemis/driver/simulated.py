@@ -154,6 +154,8 @@ PRESSURES={"vented": PRESSURE_VENTED,
            "overview": PRESSURE_OVERVIEW,
            "low-vacuum": PRESSURE_LOW,
            "vacuum": PRESSURE_PUMPED}
+
+
 class Chamber(model.Actuator):
     """
     Simulated chamber component. Just pretends to be able to change pressure
@@ -161,7 +163,7 @@ class Chamber(model.Actuator):
     def __init__(self, name, role, positions, has_pressure=True, **kwargs):
         """
         Initialises the component
-        positions (list of str): each pressure positions supported by the 
+        positions (list of str): each pressure positions supported by the
           component (among the allowed ones)
         has_pressure (boolean): if True, has a pressure VA with the current
          pressure.
@@ -169,6 +171,8 @@ class Chamber(model.Actuator):
         # TODO: or just provide .targetPressure (like .targetTemperature) ?
         # Or maybe provide .targetPosition: position that would be reached if
         # all the requested move were instantly applied?
+
+        chp = {}
         for p in positions:
             try:
                 chp[PRESSURES[p]] = p

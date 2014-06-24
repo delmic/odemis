@@ -320,7 +320,9 @@ class MainGUIData(object):
 
         """
 
-        vented_pressure, vacuum_pressure = self.chamber.axes["pressure"].choices.keys()
+        pressure_choices = self.chamber.axes["pressure"].choices.keys()
+        vented_pressure = max(pressure_choices)
+        vacuum_pressure = min(pressure_choices)
 
         if chamber_state == CHAMBER_PUMPING:
             self.chamber.moveAbs({"pressure": vacuum_pressure})
