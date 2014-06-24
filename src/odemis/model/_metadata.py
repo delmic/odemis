@@ -35,6 +35,7 @@ MD_SW_VERSION = "Software version" # str
 MD_HW_NAME = "Hardware name" # str, product name of the hardware component (and s/n)
 MD_GAIN = "Gain" # no unit (ratio) voltage multiplication provided by the gain (for CCD/CMOS)
 MD_BPP = "Bits per pixel" # bit
+MD_DIMS = "Dimension names" # str, name of each dimension in the order of the shape. The default is CTZYX (with the first dimensions dropped if shape is smaller). YXC is useful for RGB(A) data
 MD_BASELINE = "Baseline value" # ADU, int or float (same as image data) representing the average value when no signal is received (default is the lowest representable number or 0 for floats)
 MD_READOUT_TIME = "Pixel readout time" # s, time to read one pixel (on a CCD/CMOS)
 MD_SENSOR_PIXEL_SIZE = "Sensor pixel size" # (m, m), distance between the centre of 2 pixels on the detector sensor
