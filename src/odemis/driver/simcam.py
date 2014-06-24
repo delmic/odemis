@@ -21,17 +21,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from odemis.model import isasync
 import logging
-import math
 import numpy
 from odemis import model, util, dataio
-from odemis.util import img
+from odemis.model import isasync
 import os.path
 from scipy import ndimage
-import threading
 import time
-import weakref
 
 
 class Camera(model.DigitalCamera):
@@ -42,7 +38,7 @@ class Camera(model.DigitalCamera):
     settings but exposureTime.
     '''
 
-    def __init__(self, name, role, children, image=None, daemon=None, **kwargs):
+    def __init__(self, name, role, image, children=None, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
             The only possible child is "focus".
@@ -50,49 +46,51 @@ class Camera(model.DigitalCamera):
         image (str or None): path to a file to use as fake image (relative to
          the directory of this class)
         '''
+        # TODO: support transpose? If not, warn that it's not accepted
         # fake image setup
         image = unicode(image)
         # change to this directory to ensure relative path is from this file
         os.chdir(os.path.dirname(unicode(__file__)))
         exporter = dataio.find_fittest_exporter(image)
         self._img = exporter.read_data(image)[0] # can be RGB or greyscale          
+
+        # we will fill the set of children with Components later in ._children
+        model.DigitalCamera.__init__(self, name, role, daemon=daemon, **kwargs)
+
         imshp = self._img.shape
-        
-        # If RGB with colour as last dim, still indicate it as higher dimension
-        # to ensure shape always starts with X, Y
-        # TODO: review if it makes sense, and how can we handle this case more 
-        # gratefully in Odemis (-> format metadata?)
-        if len(imshp) >= 3 and imshp[-1] in {3, 4}:
-            self._shape = imshp[-2::-1] + imshp[-1::] # X, Y..., C
+        if len(imshp) == 3 and imshp[0] in {3, 4}:
+            # CYX, change it to XYC, to simulate a RGB detector
+            self._img = numpy.rollaxis(self._img, 1) # YCX
+            self._img = numpy.rollaxis(self._img, 2) # XYC
+            imshp = self._img.shape
+
+        # For RGB, the colour is last dim, but we still indicate it as higher
+        # dimension to ensure shape always starts with X, Y
+        if len(imshp) == 3 and imshp[-1] in {3, 4}:
+            # resolution doesn't affect RGB dim
+            res = imshp[-2::-1]
+            self._shape = res + imshp[-1::] # X, Y, C
+            self._img.metadata[model.MD_DIMS] = "XYC" # indicate it's RGB pixel-
         else:
-            self._shape = imshp[::-1] # X, Y,...
-        # if 
+            res = imshp[::-1]
+            self._shape = res # X, Y,...
         # TODO: handle non integer dtypes
         depth = 2 ** (self._img.dtype.itemsize * 8) - 1
         self._shape += (depth,)
         
-        # we will fill the set of children with Components later in ._children
-        model.DigitalCamera.__init__(self, name, role, daemon=daemon, **kwargs)
-        
         # TODO: don't provide range? or don't make it readonly?
-        res = self._shape[:-1]
-        self.resolution = model.ResolutionVA(res, [res, res], readonly=True)
+        self.resolution = model.ResolutionVA(res, [res, res])# , readonly=True)
 
         exp = 0.1 # s
         self.exposureTime = model.FloatContinuous(exp, [1e-3, 1e3], unit="s")
 
-        pxs = self._img.metadata.get(model.MD_PIXEL_SIZE, 10e-6)
-        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
-        
-        # Simple implementation of the flow: we keep generating images and if
-        # there are subscribers, they'll receive it.
-        self.data = DataFlow(self)
-        self._generator = util.RepeatingTimer(exp, self._generate,
-                                              "SimCam image generator")
-        self._generator.start()
+        pxs = self._img.metadata.get(model.MD_PIXEL_SIZE, (10e-6, 10e-6))
+        mag = self._img.metadata.get(model.MD_LENS_MAG, 1)
+        spxs = tuple(s * mag for s in pxs)
+        self.pixelSize = model.VigilantAttribute(spxs, unit="m", readonly=True)
         
         self._metadata = {model.MD_HW_NAME: "FakeCam",
-                          model.MD_SENSOR_PIXEL_SIZE: pxs}
+                          model.MD_SENSOR_PIXEL_SIZE: spxs}
 
         try:
             kwargs = children["focus"]
@@ -102,6 +100,13 @@ class Camera(model.DigitalCamera):
         else:
             self._focus = CamFocus(parent=self, daemon=daemon, **kwargs)
             self.children.add(self._focus)
+
+        # Simple implementation of the flow: we keep generating images and if
+        # there are subscribers, they'll receive it.
+        self.data = model.DataFlow(self)
+        self._generator = util.RepeatingTimer(exp, self._generate,
+                                              "SimCam image generator")
+        self._generator.start()
 
     def updateMetadata(self, md):
         self._metadata.update(md)
@@ -113,32 +118,32 @@ class Camera(model.DigitalCamera):
         """
         self._generator.cancel()
 
-    def _simulate_image(self):
+    def _generate(self):
         """
         Generates the fake output based on the translation, resolution and
         current drift.
         """
-            metadata = dict(self._img.metadata)
-            metadata.update(self._metadata)
-            
-            # update fake output metadata
-            exp = self._generator.period
-            metadata[model.MD_ACQ_DATE] = time.time() - exp
-            metadata[model.MD_EXP_TIME] = exp
+        metadata = dict(self._img.metadata)
+        metadata.update(self._metadata)
 
-            img = model.DataArray(self._img, metadata)
+        # update fake output metadata
+        exp = self._generator.period
+        metadata[model.MD_ACQ_DATE] = time.time() - exp
+        metadata[model.MD_EXP_TIME] = exp
 
-            if self._focus:
-                # apply the defocus
-                pos = self._focus.position.value['z']
-                dist = abs(pos) * 1e4
-                img = ndimage.gaussian_filter(img, sigma=dist)
+        img = model.DataArray(self._img, metadata)
 
-            # send the new image (if anyone is interested)            
-            self.data.notify(d)
-            
-            # simulate exposure time
-            self._generator.period = self.exposureTime.value
+        if self._focus:
+            # apply the defocus
+            pos = self._focus.position.value['z']
+            dist = abs(pos) * 1e4
+            img = ndimage.gaussian_filter(img, sigma=dist)
+
+        # send the new image (if anyone is interested)
+        self.data.notify(img)
+
+        # simulate exposure time
+        self._generator.period = self.exposureTime.value
     
 class CamFocus(model.Actuator):
     """
