@@ -66,6 +66,8 @@ class VirtualStaticTestCam(object):
         Check that we can do a scan. It can pass only if we are
         connected to at least one camera.
         """
+        if not hasattr(self.camera_type, "scan"):
+            self.skipTest("Camera class doesn't support scanning")
         cameras = self.camera_type.scan()
         self.assertGreater(len(cameras), 0)
     
@@ -100,8 +102,11 @@ class VirtualTestCam(object):
  
     def setUp(self):
         # reset size and binning
-        self.camera.binning.value = (1, 1)
-        self.size = self.camera.shape[0:2]
+        try:
+            self.camera.binning.value = (1, 1)
+        except AttributeError:
+            pass # no binning
+        self.size = self.camera.shape[:-1]
         self.camera.resolution.value = self.size
         self.acq_dates = (set(), set()) # 2 sets of dates, one for each receiver 
            
@@ -131,8 +136,8 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
     def test_translation(self):
@@ -194,8 +199,8 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
         # just to check it still works
@@ -205,8 +210,8 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
 #    @unittest.skip("simple")
@@ -269,8 +274,8 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
-        self.assertGreaterEqual(duration, exposure/2, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, exposure / 2, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
         for i in range(number):
@@ -333,7 +338,7 @@ class VirtualTestCam(object):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size[-1:-3:-1])
+        self.assertEqual(image.shape, self.size[::-1])
         self.assertIn(model.MD_EXP_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image"
@@ -346,7 +351,7 @@ class VirtualTestCam(object):
         """
         callback for df of test_acquire_flow()
         """
-        self.assertEqual(image.shape, self.size[-1:-3:-1])
+        self.assertEqual(image.shape, self.size[::-1])
         self.assertIn(model.MD_EXP_TIME, image.metadata)
         self.acq_dates[1].add(image.metadata[model.MD_ACQ_DATE])
 #        print "Received an image in 2"
@@ -378,8 +383,8 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
     
-        self.assertEqual(im.shape, self.size[-1:-3:-1]) # TODO a small size diff is fine if bigger than requested
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertEqual(im.shape, self.size[::-1]) # TODO a small size diff is fine if bigger than requested
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         self.assertEqual(im.metadata[model.MD_BINNING], new_binning)
         
@@ -406,8 +411,8 @@ class VirtualTestCam(object):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[-1:-3:-1])
-        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %d." % (duration, exposure))
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         
 #    @unittest.skip("simple")
