@@ -145,42 +145,43 @@ class OdemisGUIApp(wx.App):
             if gc.get_manual(self.main_data.role):
                 self.main_frame.menu_item_manual.Enable(True)
 
-            # TODO: rename htmldoc to devmanual and change from
-            # "Source code documentation" to "Developper documentation"
             if gc.get_dev_manual():
-                self.main_frame.menu_item_htmldoc.Enable(True)
+                self.main_frame.menu_item_devmanual.Enable(True)
 
-            # TODO:
-            # File/Open... Ctrl+O -> same as "select image..." in analysis tab
-            # (but can be called from anywhere and will automatically switch to
-            # analysis tab if not cancelled)
+            # TODO: Assign 'Open...' method
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_item_open.GetId(),
+            #             <function>)
 
-            # TODO:
-            # View/Play stream F6 -> toggle menu that play/pause the current
-            # stream (defaulting to optical stream in SECOM)
-            # Disabled if current stream is None or is StaticStream
+            # TODO: Assign 'Play Stream' functionality
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_item_play_stream.GetId(),
+            #             <function>)
 
-            # TODO:
-            # View/Auto brightness/contrast F9 -> toggle menu that enable/
-            # disable the auto BC of the current stream. Disabled if current
-            # stream is None or has no .AutoBC VA.
+            # TODO: Assign 'Auto Brightness/Contrast' functionality
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_item_cont.GetId(),
+            #             <function>)
 
-            # TODO:
-            # View/Auto focus F10 -> run auto focus on the current stream
-            # Disabled if the current stream is None
+            # TODO: Assign 'Auto Focus' functionality
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_auto_focus.GetId(),
+            #             <function>)
 
             # Note: "snapshot" menu is handled by acquisition controller
-            # TODO: change snapshot shortcuts to Ctrl+S and Shift+Ctrl+S
 
-            # TODO: re-organise the Help menu:
+            # TODO: Assign 'Bug report' functionality
             # * Report a bug... (Opens a mail client to send an email to us?)
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_bugreport.GetId(),
+            #             <function>)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_manual.GetId(),
                         self.on_manual)
 
             wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_htmldoc.GetId(),
+                        self.main_frame.menu_item_devmanual.GetId(),
                         self.on_dev_manual)
 
             wx.EVT_MENU(self.main_frame,
@@ -192,7 +193,7 @@ class OdemisGUIApp(wx.App):
                         self.on_about)
 
             # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
-            # seem to like it)
+            # seem to like it). For now [ESC] is mentioned in the menu item text
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)

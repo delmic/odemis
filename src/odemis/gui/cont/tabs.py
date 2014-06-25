@@ -1371,9 +1371,9 @@ class LensAlignTab(Tab):
                                                  self._on_btn_to_center)
 
         # Fine alignment panel
-        pnl_fine_align = main_frame.pnl_align_controls
-        fa_sizer = pnl_fine_align.GetSizer()
-        scale_win = ScaleWindow(pnl_fine_align)
+        pnl_sem_toolbar = main_frame.pnl_sem_toolbar
+        fa_sizer = pnl_sem_toolbar.GetSizer()
+        scale_win = ScaleWindow(pnl_sem_toolbar)
         self._on_mpp = call_after_wrapper(scale_win.SetMPP) # need to keep ref
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT|wx.TOP|wx.LEFT, border=10)
@@ -1454,6 +1454,8 @@ class LensAlignTab(Tab):
             # changes reactivate the SEM stream and subscribe to an image, when image
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
+
+        self.main_frame.lens_align_btn_to_center.Parent.Layout()
 
     def _onDichoSeq(self, seq):
         roi = align.dichotomy_to_region(seq)
