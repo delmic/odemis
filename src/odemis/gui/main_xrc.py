@@ -44,7 +44,9 @@ class xrcfr_main(wx.Frame):
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
         self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
         self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
+        self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
+        self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
@@ -234,21 +236,21 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_snapshot">
           <label>Save Snapshot</label>
-          <accel>Ctrl+P</accel>
+          <accel>Ctrl+S</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_snapshot_as">
           <label>Save Snapshot as...</label>
-          <accel>Ctrl+Shift+P</accel>
+          <accel>Ctrl+Shift+S</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
-          <label>Stop all axes</label>
-          <accel>Esc</accel>
+          <label>Stop all Axes [ESC]</label>
+          <accel>ESC</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -291,6 +293,14 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_auto_focus">
+          <label>Auto Focus</label>
+          <accel>F10</accel>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_cross">
           <label>Show Cross Hair</label>
@@ -303,6 +313,13 @@ def __init_resources():
         <label>View</label>
       </object>
       <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_bugreport">
+          <label>Report a Bug</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_manual">
           <label>User manual</label>
           <accel>F1</accel>

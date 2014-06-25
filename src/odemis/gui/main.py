@@ -158,20 +158,23 @@ class OdemisGUIApp(wx.App):
             #             self.main_frame.menu_item_play_stream.GetId(),
             #             <function>)
 
-            # TODO:
-            # View/Auto brightness/contrast F9 -> toggle menu that enable/
-            # disable the auto BC of the current stream. Disabled if current
-            # stream is None or has no .AutoBC VA.
+            # TODO: Assign 'Auto Brightness/Contrast' functionality
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_item_cont.GetId(),
+            #             <function>)
 
-            # TODO:
-            # View/Auto focus F10 -> run auto focus on the current stream
-            # Disabled if the current stream is None
+            # TODO: Assign 'Auto Focus' functionality
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_auto_focus.GetId(),
+            #             <function>)
 
             # Note: "snapshot" menu is handled by acquisition controller
-            # TODO: change snapshot shortcuts to Ctrl+S and Shift+Ctrl+S
 
-            # TODO: re-organise the Help menu:
+            # TODO: Assign 'Bug report' functionality
             # * Report a bug... (Opens a mail client to send an email to us?)
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_bugreport.GetId(),
+            #             <function>)
 
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_manual.GetId(),
@@ -190,7 +193,7 @@ class OdemisGUIApp(wx.App):
                         self.on_about)
 
             # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
-            # seem to like it)
+            # seem to like it). For now [ESC] is mentioned in the menu item text
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)

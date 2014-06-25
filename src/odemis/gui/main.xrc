@@ -13,21 +13,21 @@
         </object>
         <object class="wxMenuItem" name="menu_item_snapshot">
           <label>Save Snapshot</label>
-          <accel>Ctrl+P</accel>
+          <accel>Ctrl+S</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_snapshot_as">
           <label>Save Snapshot as...</label>
-          <accel>Ctrl+Shift+P</accel>
+          <accel>Ctrl+Shift+S</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
-          <label>Stop all axes</label>
-          <accel>Esc</accel>
+          <label>Stop all Axes [ESC]</label>
+          <accel>ESC</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -70,6 +70,14 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_auto_focus">
+          <label>Auto Focus</label>
+          <accel>F10</accel>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_cross">
           <label>Show Cross Hair</label>
@@ -82,6 +90,13 @@
         <label>View</label>
       </object>
       <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_bugreport">
+          <label>Report a Bug</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_manual">
           <label>User manual</label>
           <accel>F1</accel>
