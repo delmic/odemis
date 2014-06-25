@@ -362,9 +362,13 @@ class BrightfieldStream(CameraStream):
 class CameraNoLightStream(CameraStream):
     """ Stream containing images obtained via optical CCD but without any light
      source on. Used for the SECOM lens alignment tab.
+    In practice, the emitter is the ebeam, but it's already handled by a 
+    separate stream, so in practice, it needs no emitter.
 
-    It basically knows how to turn off light and remove position information.
+    It basically knows how to turn off light and override position information.
     """
+    # TODO: pass the stage, and not the position VA of the stage, to be more
+    # consistent?
     def __init__(self, name, detector, dataflow, emitter, position=None):
         """
         position (VA of dict str -> float): stage position to use instead of the
@@ -374,6 +378,7 @@ class CameraNoLightStream(CameraStream):
         CameraStream.__init__(self, name, detector, dataflow, emitter)
         self._prev_light_power = self._emitter.power.value
 
+    # TODO: don't turn off light, as it should always be off anyway?
     def onActive(self, active):
         # TODO: use _stop_light()
         if active:
@@ -694,3 +699,48 @@ class FluoStream(CameraStream):
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
+
+class RGBCameraStream(CameraStream):
+    """
+    Stream for RGB camera.
+    If a light is given, it will turn it on during acquisition.
+    """
+
+    def __init__(self, name, detector, dataflow, emitter):
+        """
+        name (string): user-friendly name of this stream
+        detector (Detector): the detector which has the dataflow
+        dataflow (Dataflow): the dataflow from which to get the data
+        emitter (Light or None): the HwComponent to turn on the light
+        """
+        CameraStream.__init__(self, name, detector, dataflow, emitter)
+        if len(detector.shape) != 4:
+            logging.warning("RGBCameraStream expects detector with shape of "
+                            "length 4, but shape is %s", detector.shape)
+
+    def onActive(self, active):
+        if not self._emitter is None:
+            if active:
+                # set the light to max
+                # TODO: allows to define the power via a VA on the stream
+                self._emitter.power.value = self._emitter.power.range[1]
+            else:
+                # turn off the light
+                self._emitter.power.value = self._emitter.power.range[0]
+        Stream.onActive(self, active)
+
+    def _updateImage(self):
+        # Just pass the RGB data on
+        if not self.raw:
+            return
+
+        try:
+            data = self.raw[0]
+            rgbim = img.ensureYXC(data)
+            rgbim.flags.writeable = False
+            # merge and ensures all the needed metadata is there
+            rgbim.metadata = self._find_metadata(rgbim.metadata)
+            self.image.value = rgbim
+        except Exception:
+            logging.exception("Updating %s image", self.__class__.__name__)
+

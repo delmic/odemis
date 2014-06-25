@@ -151,6 +151,10 @@ class Stream(object):
     def emitter(self):
         return self._emitter
 
+    @property
+    def detector(self):
+        return self._detector
+
     def __str__(self):
         return "%s %s" % (self.__class__.__name__, self.name.value)
 

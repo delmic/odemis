@@ -70,7 +70,7 @@ class Camera(model.DigitalCamera):
             # resolution doesn't affect RGB dim
             res = imshp[-2::-1]
             self._shape = res + imshp[-1::] # X, Y, C
-            self._img.metadata[model.MD_DIMS] = "XYC" # indicate it's RGB pixel-
+            self._img.metadata[model.MD_DIMS] = "XYC" # indicate it's RGB pixel-last ordered
         else:
             res = imshp[::-1]
             self._shape = res # X, Y,...
