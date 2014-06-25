@@ -282,7 +282,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
     role = detector.role
     if role == "ccd":  # CCD
         max_step = 3 * detector.pixelSize.value[0]
-        if detector.binning.value[0] > 1:
+        if detector.binning.value[0] > 2:
             thres_factor = 10 * thres_factor  # better snr
         else:
             thres_factor = 5 * thres_factor
