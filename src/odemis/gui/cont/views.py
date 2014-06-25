@@ -52,6 +52,10 @@ class ViewController(object):
             will be hidden.
         :param toolbar: ToolBar or None-- toolbar to manage the TOOL_ZOOM_FIT tool.
 
+        .. note::
+            If a 2x2 viewport grid is present, the first four viewports in the _viewports attribute
+            are expected to belong to this grid.
+
         """
 
         self._data_model = tab_data
@@ -431,7 +435,7 @@ class ViewController(object):
         self._viewports[0].Parent.Freeze()
 
         try:
-            for viewport in self._viewports:
+            for viewport in self._viewports[:4]:
                 if viewport.microscope_view == view:
                     viewport.SetFocus(True)
                     if layout == model.VIEW_LAYOUT_ONE:
@@ -464,7 +468,7 @@ class ViewController(object):
         try:
             if layout == model.VIEW_LAYOUT_ONE:
                 logging.debug("Showing only one view")
-                for viewport in self._viewports:
+                for viewport in self._viewports[:4]:
                     if viewport.microscope_view == self._data_model.focussedView.value:
                         viewport.Show()
                     else:

@@ -51,6 +51,7 @@ from odemis.gui.cont.acquisition import SecomAcquiController, \
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model import CHAMBER_VACUUM
+from odemis.gui.util import call_after_wrapper
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
