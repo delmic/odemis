@@ -145,20 +145,18 @@ class OdemisGUIApp(wx.App):
             if gc.get_manual(self.main_data.role):
                 self.main_frame.menu_item_manual.Enable(True)
 
-            # TODO: rename htmldoc to devmanual and change from
-            # "Source code documentation" to "Developper documentation"
             if gc.get_dev_manual():
-                self.main_frame.menu_item_htmldoc.Enable(True)
+                self.main_frame.menu_item_devmanual.Enable(True)
 
-            # TODO:
-            # File/Open... Ctrl+O -> same as "select image..." in analysis tab
-            # (but can be called from anywhere and will automatically switch to
-            # analysis tab if not cancelled)
+            # TODO: Assign 'Open...' method
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_item_open.GetId(),
+            #             <function>)
 
-            # TODO:
-            # View/Play stream F6 -> toggle menu that play/pause the current
-            # stream (defaulting to optical stream in SECOM)
-            # Disabled if current stream is None or is StaticStream
+            # TODO: Assign 'Play Stream' functionality
+            # wx.EVT_MENU(self.main_frame,
+            #             self.main_frame.menu_item_play_stream.GetId(),
+            #             <function>)
 
             # TODO:
             # View/Auto brightness/contrast F9 -> toggle menu that enable/
@@ -180,7 +178,7 @@ class OdemisGUIApp(wx.App):
                         self.on_manual)
 
             wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_htmldoc.GetId(),
+                        self.main_frame.menu_item_devmanual.GetId(),
                         self.on_dev_manual)
 
             wx.EVT_MENU(self.main_frame,

@@ -839,7 +839,7 @@ class FineAlignController(object):
         # Set up progress bar
         self._main_frame.lbl_fine_align.Hide()
         self._main_frame.gauge_fine_align.Show()
-        fa_sizer = self._main_frame.pnl_align_controls.GetSizer()
+        fa_sizer = self._main_frame.pnl_fine_align.GetSizer()
         fa_sizer.Layout()
         self._faf_connector = ProgessiveFutureConnector(f,
                                             self._main_frame.gauge_fine_align)
@@ -898,5 +898,5 @@ class FineAlignController(object):
 
         self._main_frame.lbl_fine_align.Show()
         self._main_frame.gauge_fine_align.Hide()
-        fa_sizer = self._main_frame.pnl_align_controls.GetSizer()
+        fa_sizer = self._main_frame.pnl_fine_align.GetSizer()
         fa_sizer.Layout()

@@ -36,14 +36,17 @@ class xrcfr_main(wx.Frame):
         self.PostCreate(pre)
 
         # Define variables for the controls, bind event handlers
+        self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
         self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))
         self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
+        self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
+        self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
-        self.menu_item_htmldoc = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_htmldoc"))
+        self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
@@ -60,10 +63,14 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_p_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_b")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
-        self.pnl_align_controls = xrc.XRCCTRL(self, "pnl_align_controls")
+        self.pnl_auto_center = xrc.XRCCTRL(self, "pnl_auto_center")
+        self.btn_auto_center = xrc.XRCCTRL(self, "btn_auto_center")
+        self.gauge_auto_center = xrc.XRCCTRL(self, "gauge_auto_center")
+        self.lbl_auto_center = xrc.XRCCTRL(self, "lbl_auto_center")
+        self.pnl_fine_align = xrc.XRCCTRL(self, "pnl_fine_align")
         self.btn_fine_align = xrc.XRCCTRL(self, "btn_fine_align")
-        self.lbl_fine_align = xrc.XRCCTRL(self, "lbl_fine_align")
         self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
+        self.lbl_fine_align = xrc.XRCCTRL(self, "lbl_fine_align")
         self.html_alignment = xrc.XRCCTRL(self, "html_alignment")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
@@ -73,6 +80,7 @@ class xrcfr_main(wx.Frame):
         self.fp_lens_sem_settings = xrc.XRCCTRL(self, "fp_lens_sem_settings")
         self.fp_lens_opt_settings = xrc.XRCCTRL(self, "fp_lens_opt_settings")
         self.pnl_secom_align_streams = xrc.XRCCTRL(self, "pnl_secom_align_streams")
+        self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
@@ -217,6 +225,13 @@ def __init_resources():
     <object class="wxMenuBar">
       <object class="wxMenu">
         <label>File</label>
+        <object class="wxMenuItem" name="menu_item_open">
+          <label>Open...</label>
+          <accel>Ctrl+O</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_snapshot">
           <label>Save Snapshot</label>
           <accel>Ctrl+P</accel>
@@ -257,8 +272,28 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_play_stream">
+          <label>Play Stream</label>
+          <accel>F6</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_auto_cont">
+          <label>Auto Brightness/Contrast</label>
+          <accel>F9</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_cross">
-          <label>Cross hair</label>
+          <label>Show Cross Hair</label>
           <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>
@@ -278,8 +313,8 @@ def __init_resources():
         </object>
         <object class="wxMenu">
           <label>Development</label>
-          <object class="wxMenuItem" name="menu_item_htmldoc">
-            <label>Source Code Documentation</label>
+          <object class="wxMenuItem" name="menu_item_devmanual">
+            <label>Developer Documentation</label>
             <enabled>0</enabled>
             <XRCED>
               <assign_var>1</assign_var>
@@ -678,7 +713,7 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="lens_align_btn_to_center">
-                          <label>Move to center...</label>
+                          <label>Move to center</label>
                           <bitmap>img_btn_128x24_png</bitmap>
                           <hover>img_btn_128x24_h_png</hover>
                           <selected>img_btn_128x24_a_png</selected>
@@ -687,65 +722,127 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxTOP|wxALIGN_RIGHT</flag>
+                        <flag>wxTOP</flag>
                         <border>16</border>
                       </object>
                       <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <object class="wxPanel" name="pnl_align_controls">
+                        <object class="wxPanel" name="pnl_auto_center">
                           <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_fine_align">
-                                <label>Fine alignment...</label>
+                              <object class="ImageTextButton" name="btn_auto_center">
+                                <label>Auto center</label>
                                 <delta>1</delta>
                                 <bitmap>img_btn_128x24_png</bitmap>
                                 <hover>img_btn_128x24_h_png</hover>
                                 <selected>img_btn_128x24_a_png</selected>
-                                <fg>#333333</fg>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <flag>wxTOP|wxLEFT|wxRIGHT</flag>
-                              <border>4</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_fine_align">
-                                <label/>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxGauge" name="gauge_auto_center">
+                                    <size>128,10</size>
+                                    <range>100</range>
+                                    <value>0</value>
+                                    <style>wxGA_SMOOTH</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxTOP</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_auto_center">
+                                    <label>~ 30 seconds</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxTOP|wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>5</border>
+                                  <minsize>100,-1</minsize>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
                               </object>
-                              <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                              <border>11</border>
-                              <minsize>100,-1</minsize>
+                              <flag>wxEXPAND</flag>
                             </object>
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="gauge_fine_align">
-                                <hidden>1</hidden>
-                                <size>100,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxTOP|wxLEFT|wxRIGHT</flag>
-                              <border>11</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
                           </object>
-                          <fg>#BBBBBB</fg>
+                          <fg>#E5E5E5</fg>
                           <bg>#333333</bg>
+                          <hidden>1</hidden>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
                         <flag>wxTOP|wxEXPAND</flag>
-                        <border>5</border>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxPanel" name="pnl_fine_align">
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_fine_align">
+                                <label>Fine align</label>
+                                <delta>1</delta>
+                                <bitmap>img_btn_128x24_png</bitmap>
+                                <hover>img_btn_128x24_h_png</hover>
+                                <selected>img_btn_128x24_a_png</selected>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxGauge" name="gauge_fine_align">
+                                    <size>128,10</size>
+                                    <range>100</range>
+                                    <value>0</value>
+                                    <style>wxGA_SMOOTH</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxTOP</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_fine_align">
+                                    <label>~ 30 seconds</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxTOP|wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>5</border>
+                                  <minsize>100,-1</minsize>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxEXPAND</flag>
+                            </object>
+                          </object>
+                          <fg>#E5E5E5</fg>
+                          <bg>#333333</bg>
+                          <hidden>1</hidden>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxEXPAND</flag>
+                        <border>10</border>
                       </object>
                     </object>
                     <flag>wxALL|wxEXPAND</flag>
@@ -757,7 +854,7 @@ def __init_resources():
                   </object>
                   <object class="sizeritem">
                     <object class="wxHtmlWindow" name="html_alignment">
-                      <size>-1,400</size>
+                      <size>-1,700</size>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>
                       <style>wxHW_SCROLLBAR_NEVER|wxHW_NO_SELECTION</style>
@@ -940,7 +1037,7 @@ def __init_resources():
                   </object>
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxPanel">
+                    <object class="wxPanel" name="pnl_sem_toolbar">
                       <object class="wxBoxSizer">
                         <object class="sizeritem">
                           <object class="ToolBar" name="lens_align_tb">
@@ -956,6 +1053,9 @@ def __init_resources():
                       </object>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
                     <flag>wxTOP|wxEXPAND</flag>
                     <border>5</border>
