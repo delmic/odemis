@@ -79,21 +79,20 @@ Spectra: {
 }
 
 "NavCam": {
-    class: andorcam2.FakeAndorCam2,
+    class: simcam.Camera,
     role: overview-ccd,
-    init: {device: 0,
-           image: "andorcam2-fake-clara.tiff", # TODO: should have an RGB 8-bit overview fake image
+    children: {
+        focus: "NavCam focus",
+    },
+    init: {
+        image: "simcam-fake-overview.h5", # RGB 8-bits
     },
 }
 
 "NavCam focus": {
-    class: simulated.Stage,
+    # child of NavCam
     role: overview-focus,
-    init: {axes: ["z"]},
-    affects: ["NavCam"],
-    properties: {
-        speed: {"z": 0.01} #m/s
-    }
+    #affects: ["NavCam"],
 }
 
 "Nikon Lens": {
