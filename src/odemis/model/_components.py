@@ -245,6 +245,7 @@ class HwComponent(Component):
 
     # FIXME: a cyclic dependency (e.g. affects a component that affects this component,
     # or affect the parent) leads to nice deadlock over Pyro
+    # => just use strings = names of the components?
     def _set_affects(self, comps):
         """
         comps (set of HwComponents): list of the affected components

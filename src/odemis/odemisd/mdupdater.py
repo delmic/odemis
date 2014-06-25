@@ -61,9 +61,6 @@ class MetadataUpdater(model.Component):
                     # update the image position
                     self.observeStage(a, d)
                     #TODO : support more metadata
-#                elif a.role == "focus":
-#                    # update the image focus
-#                    self.observeFocus(a, d)
                 elif a.role == "lens":
                     # update the pixel size, mag, and pole position
                     self.observeLens(a, d)
