@@ -131,13 +131,15 @@ class Camera(model.DigitalCamera):
         metadata[model.MD_ACQ_DATE] = time.time() - exp
         metadata[model.MD_EXP_TIME] = exp
 
-        img = model.DataArray(self._img, metadata)
-
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
             dist = abs(pos) * 1e4
-            img = ndimage.gaussian_filter(img, sigma=dist)
+            img = ndimage.gaussian_filter(self._img, sigma=dist)
+        else:
+            img = self._img
+
+        img = model.DataArray(img, metadata)
 
         # send the new image (if anyone is interested)
         self.data.notify(img)

@@ -29,13 +29,20 @@ from unittest.case import skip
 logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS = simcam.Camera
-KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
+CONFIG_FOCUS = {"name": "focus", "role": "overview-focus"}
+KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5",
+              children={"focus": CONFIG_FOCUS})
+
+# TODO focus
 
 class TestSimCam(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         cls.camera = CLASS(**KWARGS)
+        for child in cls.camera.children:
+            if child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
 
     @classmethod
     def tearDownClass(cls):
@@ -237,6 +244,25 @@ class TestSimCam(unittest.TestCase):
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)
 
+    def test_focus(self):
+        """
+        Check it's possible to change the focus
+        """
+        pos = self.focus.position.value
+        f = self.focus.moveRel({"z": 1e-3}) # 1 mm
+        f.result()
+        self.assertNotEqual(self.focus.position.value, pos)
+        self.camera.data.get()
+
+        f = self.focus.moveRel({"z":-10e-3}) # 10 mm
+        f.result()
+        self.assertNotEqual(self.focus.position.value, pos)
+        self.camera.data.get()
+
+        # restore original position
+        f = self.focus.moveAbs(pos)
+        f.result()
+        self.assertEqual(self.focus.position.value, pos)
 
 if __name__ == '__main__':
     unittest.main()
