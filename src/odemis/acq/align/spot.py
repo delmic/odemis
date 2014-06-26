@@ -45,7 +45,7 @@ _center_lock = threading.Lock()
 
 def MeasureSNR(image):
     # Estimate noise
-    bl = image.metadata[model.MD_BASELINE]
+    bl = image.metadata.get(model.MD_BASELINE, 0)
     sdn = ndimage.standard_deviation(image[image < (bl* 1.1)])
     ms = ndimage.mean(image[image >= (bl * 1.1)])-bl
     snr = ms / sdn
