@@ -67,62 +67,70 @@ TOOL_DICHO = 6 # Dichotomy mode to select a sub-quadrant (for SECOM lens alignme
 TOOL_SPOT = 7 # Activate spot mode on the SEM
 TOOL_RO_ANCHOR = 8
 
+
 class MainGUIData(object):
     """
     Contains all the data corresponding to the entire GUI.
 
     In the MVC terminology, it's a model. It contains attributes to directly
     access the microscope components, and data to be used or represented in the
-    entire GUI. Normally, there is only one instance of this object per
-    execution (only one microscope manipulated at a time by the interface).
+    entire GUI.
 
-    It contains mainly:
-    .microscope:
-        The HwComponent root of all the other components (can be None
-        if there is no microscope available, like an interface to display
-        recorded acquisition).
-    .role (string): copy of .microscope.role (string) should be used to find out
-        the generic type of microscope connected.
+    Normally, there is only one instance of this object per running GUI, so only one microscope
+    can be manipulated at a time by the interface. An instance of this class will normally be
+    created in the `main.py` module during startup of the GUI.
 
-    There are also many .ccd, .stage, etc, which can be used to directly access
-    the sub-components.
+    The two main attributes are:
+
+        .microscope:
+            The HwComponent root of all the other components (can be None
+            if there is no microscope available, like an interface to display
+            recorded acquisition).
+        .role (string): copy of .microscope.role (string) should be used to find out
+            the generic type of microscope connected.
+
+    There are also many .ccd, .stage, etc. attributes which can be used to access
+    the sub-components directly.
+
     """
 
     def __init__(self, microscope):
         """
-        microscope (model.Microscope or None): the root of the HwComponent tree
-         provided by the back-end. If None, it means the interface is not
-         connected to a microscope (and displays a recorded acquisition).
+        :param microscope: (model.Microscope or None): the root of the HwComponent tree
+            provided by the back-end. If None, it means the interface is not
+            connected to a microscope (and displays a recorded acquisition).
+
         """
 
         self.microscope = microscope
         self.role = None
 
-        # These are either HwComponents or None (if not available)
+        # The following attributes are either HwComponents or None (if not available)
         self.ccd = None
         self.stage = None
-        self.focus = None # actuator to change the camera focus
-        self.aligner = None # actuator to align ebeam/ccd
-        self.mirror = None # actuator to change the mirror position (on SPARC)
+        self.focus = None  # actuator to change the camera focus
+        self.aligner = None  # actuator to align ebeam/ccd
+        self.mirror = None  # actuator to change the mirror position (on SPARC)
         self.light = None
-        self.light_filter = None # emission light filter for SECOM/output filter for SPARC
+        self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
         self.lens = None
         self.ebeam = None
-        self.ebeam_focus = None # change the e-beam focus
-        self.sed = None # secondary electron detector
-        self.bsd = None # back-scatter electron detector
-        self.spectrometer = None # spectrometer
-        self.spectrograph = None # actuator to change the wavelength
-        self.ar_spec_sel = None # actuator to select AR/Spectrometer (SPARC)
-        self.lens_switch = None # actuator to (de)activate the lens (SPARC)
-        self.chamber = None # actuator to control the chamber (has vacuum, pumping etc.)
-        self.chamber_ccd = None # view of inside the chamber
-        self.chamber_light = None  # Light illuminating the chamber
-        self.overview_ccd = None # global view from above the sample
+        self.ebeam_focus = None  # change the e-beam focus
+        self.sed = None  # secondary electron detector
+        self.bsd = None  # back-scatter electron detector
+        self.spectrometer = None  # spectrometer
+        self.spectrograph = None  # actuator to change the wavelength
+        self.ar_spec_sel = None  # actuator to select AR/Spectrometer (SPARC)
+        self.lens_switch = None  # actuator to (de)activate the lens (SPARC)
+        self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
+        self.chamber_ccd = None  # view of inside the chamber
+        self.chamber_light = None   # Light illuminating the chamber
+        self.overview_ccd = None  # global view from above the sample
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
 
+        # The microscope object will be probed for common detectors, actuators, emitters etc.
         if microscope:
             self.role = microscope.role
 
@@ -177,7 +185,9 @@ class MainGUIData(object):
                 elif e.role == "chamber-light" and self.chamber_ccd:  # No use without a ccd
                     self.chamber_light = e
 
-            # Do some typical checks on expectations from an actual microscope
+            # Check that the components that can be expected to be present on an actual microscope
+            # have been correctly detected.
+
             if not any((self.ccd, self.sed, self.bsd, self.spectrometer)):
                 raise KeyError("No detector found in the microscope")
 
@@ -193,6 +203,7 @@ class MainGUIData(object):
 
         # Handle turning on/off the instruments
         hw_states = {STATE_OFF, STATE_ON, STATE_PAUSE}
+
         if self.ccd:
             # not so nice to hard code it here, but that should do it for now...
             if self.role == "sparc":
