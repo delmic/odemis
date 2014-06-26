@@ -25,6 +25,7 @@ from __future__ import division
 
 import collections
 import logging
+from odemis.acq.stream._live import RGBCameraStream
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, \
@@ -274,12 +275,18 @@ class ViewController(object):
                     "stage": None,
                     "focus0": None,
                     "focus1": None,
-                    "stream_classes": (CameraStream,), # TODO: replace with a different stream type?
+                    "stream_classes": (RGBCameraStream,),
                 }
 
             # If there are 5 viewports, we'll assume that the last one is an overview video stream
             if len(self._viewports) == 5:
-                pass
+                vpv[self._viewports[4]] = {
+                    "name": "Overview",
+                    # "stage": None,
+                    # "focus0": None,
+                    # "focus1": None,
+                    "stream_classes": (RGBCameraStream,),
+                }
 
         else:
             logging.warning("No known microscope configuration, creating %d "

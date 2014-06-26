@@ -134,7 +134,6 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         stream1 = RGBStream("s1", im1)
 
         im2 = model.DataArray(numpy.zeros((201, 201, 3), dtype="uint8"))
-        #pylint: disable=E1101
         px2_cent = tuple((s - 1) // 2 for s in im2.shape[:2])
         # Blue pixel at center (100,100)
         im2[px2_cent] = [0, 0, 255]

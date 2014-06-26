@@ -362,7 +362,7 @@ class BrightfieldStream(CameraStream):
 class CameraNoLightStream(CameraStream):
     """ Stream containing images obtained via optical CCD but without any light
      source on. Used for the SECOM lens alignment tab.
-    In practice, the emitter is the ebeam, but it's already handled by a 
+    In practice, the emitter is the ebeam, but it's already handled by a
     separate stream, so in practice, it needs no emitter.
 
     It basically knows how to turn off light and override position information.
@@ -699,6 +699,7 @@ class FluoStream(CameraStream):
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
+
 
 class RGBCameraStream(CameraStream):
     """

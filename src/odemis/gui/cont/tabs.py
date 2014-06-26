@@ -213,7 +213,16 @@ class Tab(object):
 
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
+        """
 
+        :type name: str
+        :type button: odemis.gui.comp.buttons.TabButton
+        :type panel: wx._windows.Panel
+        :type main_frame: odemis.gui.main_xrc.xrcfr_main
+        :type main_data: odemis.gui.model.MainGUIData
+        :return:
+
+        """
         tab_data = guimod.LiveViewGUIData(main_data)
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
@@ -223,8 +232,6 @@ class SecomStreamsTab(Tab):
         # TODO: Add the buttons when the functionality is there
         #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
         #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-
-        # main_frame.vp_overview_sem.ShowLegend(False)
 
         # Order matters!
         # First we create the views, then the streams
@@ -241,6 +248,14 @@ class SecomStreamsTab(Tab):
             self.tb
         )
 
+        # FIXME: RGBCameraStream complains that the detector shape has length 3 instead of 4??
+
+        # overview_stream = streammod.RGBCameraStream("Overview", main_data.overview_ccd,
+        #                                             main_data.overview_ccd.data,
+        #                                             main_data.chamber_light)
+        #
+        # self.tab_data_model.views.value[-1].addStream(overview_stream)
+
         self._settings_controller = settings.SecomSettingsController(
             self.main_frame,
             self.tab_data_model
@@ -250,6 +265,7 @@ class SecomStreamsTab(Tab):
             self.tab_data_model,
             self.main_frame.pnl_secom_streams
         )
+
         buttons = collections.OrderedDict([
             (self.main_frame.btn_secom_view_all,
              (None, self.main_frame.lbl_secom_view_all)),
