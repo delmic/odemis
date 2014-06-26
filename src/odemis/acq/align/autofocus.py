@@ -28,12 +28,9 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.dataio import hdf5
-from scipy import signal
 import threading
 import time
 from scipy import ndimage
-
 
 FINE_SPOTMODE_ACCURACY = 5e-6  # fine focus accuracy in spot mode #m
 ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
@@ -86,17 +83,12 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
     try:
         # Clip accuracy within reasonable limits
         accuracy = numpy.clip(accuracy, max_step / 5, max_step)
-        print accuracy
         rng = focus.axes["z"].range
 
         # Keep the initial focus position
         init_pos = focus.position.value.get('z')
-        print "Init pos focus"
-        print init_pos
-
         step = accuracy
         cur_pos = focus.position.value.get('z')
-        print cur_pos
         image = detector.data.get(False)
         fm_cur = MeasureFocus(image)
         init_fm = fm_cur
@@ -108,7 +100,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
         cur_pos = focus.position.value.get('z')
-        print fm_cur,fm_test
+
         # Check if we our completely out of focus
         if abs(fm_cur - fm_test) < (thres_factor * fm_cur):
             logging.warning("Completely out of focus, retrying...")
@@ -121,7 +113,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
 
             steps = 0
             count_fails = 0
-            # while fm_new < 1.08 * fm_test:
             while fm_new - fm_test < (thres_factor * 2) * fm_test:
                 if steps >= MAX_STEPS_NUMBER:
                     break
@@ -130,8 +121,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                 if sign == 1:
                     factor += 1
                 new_step += factor * step
-                # Increase factor every 2 times
-                print cur_pos, rng
                 if rng[0] <= cur_pos <= rng[1]:
                     pos = focus.position.value.get('z')
                     shift = cur_pos - pos
@@ -139,7 +128,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                     f.result()
                     image = detector.data.get(False)
                     fm_new = MeasureFocus(image)
-                    print fm_new
                     if fm_test - fm_new > thres_factor * fm_new:
                         count_fails+=1
                         if (steps == 1) and (count_fails == 2):
@@ -156,12 +144,10 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
 
             image = detector.data.get(False)
             fm_cur = MeasureFocus(image)
-            print fm_cur
             f = focus.moveRel({"z": step})
             f.result()
             image = detector.data.get(False)
             fm_test = MeasureFocus(image)
-            print fm_test
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
 
@@ -178,13 +164,11 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
             fm_test = fm_cur
         else:
             sign = 1
-        print sign
 
         # Move the lens in the correct direction until focus measure is decreased
         step = accuracy
         fm_old, fm_new = fm_test, fm_test
         steps = 0
-        # while (0.96 * fm_old) <= fm_new:
         while fm_old - fm_new <= thres_factor * fm_old:
             if steps >= MAX_STEPS_NUMBER:
                 break
@@ -195,24 +179,18 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
             fm_new = MeasureFocus(image)
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
-            print "step"
-            print fm_new, focus.position.value.get('z')
             steps += 1
-        # print step, focus.position.value.get('z')
+
         f = focus.moveRel({"z":-sign * step})
         f.result()
-        print step, focus.position.value.get('z')
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
         fm_final = fm_old
         if steps == 1:
-            print "Already well focused."
             logging.info("Already well focused.")
-            print fm_final
             return focus.position.value.get('z'), fm_final
 
-        print init_fm, fm_final
         if init_fm - fm_final < -thres_factor * fm_final:
             return focus.position.value.get('z'), fm_final
         else:

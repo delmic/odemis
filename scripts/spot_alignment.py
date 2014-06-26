@@ -44,8 +44,6 @@ def main(args):
                      "Automated spot alignment procedure")
 
     try:
-        ebeam_focus = None
-        detector = None
         escan = None
         ccd = None
         focus = None
@@ -53,11 +51,7 @@ def main(args):
 
         # find components by their role
         for c in model.getComponents():
-            if c.role == "ebeam-focus":
-                ebeam_focus = c
-            elif c.role == "se-detector":
-                detector = c
-            elif c.role == "e-beam":
+            if c.role == "e-beam":
                 escan = c
             elif c.role == "ccd":
                 ccd = c
@@ -65,7 +59,7 @@ def main(args):
                 focus = c
             elif c.role == "align":
                 stage = c
-        if not all([detector, escan, ccd, focus, stage]):
+        if not all([escan, ccd, focus, stage]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
 

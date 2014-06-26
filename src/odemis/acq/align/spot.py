@@ -29,14 +29,10 @@ import logging
 import math
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.dataio import hdf5
 from scipy import ndimage
 import threading
-import numpy 
 import time
-
 import coordinates
-
 from . import autofocus
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
@@ -50,12 +46,9 @@ _center_lock = threading.Lock()
 def MeasureSNR(image):
     # Estimate noise
     bl = image.metadata[model.MD_BASELINE]
-    m = ndimage.mean(image)-bl
     sdn = ndimage.standard_deviation(image[image < (bl* 1.1)])
     ms = ndimage.mean(image[image >= (bl * 1.1)])-bl
     snr = ms / sdn
-    #logging.debug("Mean %f and standard deviation %f and sum %f, sdn %f, ms=%f", #ndimage.mean(image),
-#    ndimage.standard_deviation(image), numpy.sum(image), sdn, ms)
     
     return snr
 
@@ -102,7 +95,6 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
             ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
             image = ccd.data.get(False)
             snr = MeasureSNR(image)
-            print snr
         et = ccd.exposureTime.value
 
         # Try to find spot
@@ -212,7 +204,6 @@ def FindSpot(image):
 
     spot_coordinates = coordinates.FindCenterCoordinates(subimages)
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
-    print optical_coordinates
     if len(optical_coordinates) > 1:
         return None
     return optical_coordinates[0]
@@ -226,21 +217,16 @@ def CropFoV(ccd):
     image = ccd.data.get(False)
     center_pxs = ((image.shape[1] / 2),
                  (image.shape[0] / 2))
-    print center_pxs
+
     spot_pxs = FindSpot(image)
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
-    print tab_pxs
     max_dim = int(max(abs(tab_pxs[0]), abs(tab_pxs[1])))
-    print max_dim
     range_x = (ccd.resolution.range[0][0], ccd.resolution.range[1][0])
     range_y = (ccd.resolution.range[0][1], ccd.resolution.range[1][1])
-    print range_x, range_y
-    qu = 2 * max_dim + FOV_MARGIN
     ccd.resolution.value = (sorted((range_x[0], 2 * max_dim + FOV_MARGIN, range_x[1]))[1],
                             sorted((range_y[0], 2 * max_dim + FOV_MARGIN, range_y[1]))[1])
-    print ccd.resolution.value
     ccd.binning.value = (1, 1)
-    #print ccd.resolution.value
+
     # Make sure acquired images have the correct resolution
     image = ccd.data.get(False)
     while image.shape != (ccd.resolution.value[1], ccd.resolution.value[0]):
@@ -259,7 +245,6 @@ def CenterSpot(ccd, stage, mx_steps):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    # Dummy value
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateCenterTime(ccd.exposureTime.value))
     f._spot_center_state = RUNNING
@@ -303,20 +288,15 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
                  (image.shape[0] / 2))
 
     # Coordinates of found spot
-    hdf5.export("FindSpot.h5", model.DataArray(image))
     spot_pxs = FindSpot(image)
-    #print image.metadata
-    #print spot_pxs
     if spot_pxs is None:
         return None
     tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
     tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-    #print tab_pxs
-    #print pixelSize
     dist = math.hypot(*tab)
 
     # Epsilon distance below which the lens is considered centered. The worse of:
-    # * 1 pixels (because the CCD resolution cannot give us better)
+    # * 1.5 pixels (because the CCD resolution cannot give us better)
     # * 1 µm (because that's the best resolution of our actuators)
     err_mrg = max(1.5 * pixelSize[0], 1e-06)  # m
     steps = 0
@@ -333,7 +313,7 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
         f.result()
 
-        #Wait to make sure no previous spot is detected
+        # Wait to make sure no previous spot is detected
         image = ccd.data.get(False)
         spot_pxs = FindSpot(image)
         if spot_pxs is None:
@@ -346,7 +326,6 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         future.set_end_time(time.time() +
                             estimateCenterTime(ccd.exposureTime.value, dist))
 
-    #print dist
     return dist
 
 def _CancelCenterSpot(future):
