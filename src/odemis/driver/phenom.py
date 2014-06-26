@@ -499,7 +499,7 @@ class Detector(model.Detector):
             except suds.WebFault:
                 logging.debug("No acquisition in progress to be aborted.")
             # "Blank" the beam
-            self.parent._device.SetSEMSourceTilt(TILT_UNBLANK[0], TILT_UNBLANK[1], True)
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], True)
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -548,8 +548,15 @@ class Detector(model.Detector):
             self._scanParams.resolution.height = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner.nr_frames
             self._scanParams.HDR = self.parent._scanner.bpp.value == 16
+            # TODO beam shift
             self._scanParams.center.x = 0
             self._scanParams.center.y = 0
+
+            # Check if spot mode is required
+            if res == (1, 1):
+                self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
+            else:
+                self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
 
             img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
 

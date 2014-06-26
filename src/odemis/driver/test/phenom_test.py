@@ -164,8 +164,6 @@ class TestSEM(unittest.TestCase):
         start = time.time()
         im = self.sed.data.get()
         duration = time.time() - start
-        print im.metadata
-        hdf5.export("PhenomTest", im)
         self.assertEqual(im.shape, self.size[::-1])
         self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
@@ -241,12 +239,11 @@ class TestSEM(unittest.TestCase):
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
         # only one point
-#         self.scanner.resolution.value = (1, 1)
-#         print self.scanner.resolution.value, self.scanner.scale.value, self.scanner.dwellTime.value
-#         im = self.sed.data.get()
-#         hdf5.export("test3.h5", model.DataArray(im))
-#         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-#         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
+        self.scanner.resolution.value = (1, 1)
+        im = self.sed.data.get()
+        hdf5.export("test3.h5", model.DataArray(im))
+        self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
+        self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
     @skip("faster")
     def test_acquire_high_osr(self):
@@ -400,7 +397,6 @@ class TestSEM(unittest.TestCase):
         self.assertEqual(image.shape, self.size[-1:-3:-1])
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates[0].add(image.metadata[model.MD_ACQ_DATE])
-#        print "Received an image"
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
@@ -476,7 +472,7 @@ class TestSEM(unittest.TestCase):
         f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
         f.result()
         new_pos = self.pressure.position.value["pressure"]
-        self.assertEqual({'pressure': 10000.0}, new_pos)
+        self.assertEqual({'pressure': 1e04}, new_pos)
 
 
 if __name__ == "__main__":
