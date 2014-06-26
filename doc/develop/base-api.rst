@@ -136,7 +136,7 @@ metadata.
 
 Be aware that it mostly behaves like a normal ndarray, but in some corner cases 
 (such as .min() returning a DataArray of empty shape, instead of a scalar), 
-it might be safer to first cast it to an ndarray (ex: ``nd = numpy.ndarray(da)``).
+it might be safer to first cast it to an ndarray (ex: ``nd = da.view(numpy.ndarray)``).
 
 .. py:class:: model.DataArray(data[, metadata=None])
 

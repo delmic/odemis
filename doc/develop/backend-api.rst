@@ -392,6 +392,30 @@ attribute (e.g., switch).
     	approximate the move by a relative one. 
     	
 
+Data and Metadata
+=================
+
+In Odemis, all the instrument data is represented via a :py:class:`DataArray`.
+The attributes :py:attr:`DataArray.shape` and :py:attr:`DataArray.dtype` contains the basic information on this data: 
+the size of each dimension of the array and the type of the elements in the array.
+Additional information about this data, the metadata, can be recorded in the 
+:py:attr:`DataArray.metadata` attribute. It is a dictionary which allows to record information such as
+the date of acquisition, the exposure time, the type of hardware used, the 
+wavelength of the energy received, etc. For the list of metadata, refer to the 
+model.MD_* constants. The file ``odemis/model/_metadata.py`` contains description of
+each metadata. 
+
+The convention for the dimensions of the DataArray is to always record the data
+in the order CTZYX, where C is channel (i.e., energy wavelength), T is time, 
+and ZYX are the 3 standard axes dimensions. If a DataArray has less than 5 
+dimensions, the available dimensions are the last dimensions and the missing 
+dimensions are considered of size 1. For example, a 2D DataArray is considered
+by default of dimensions YX. In some cases, it is more convenient or efficient 
+to store dimensions in a different order. It is possible to override the default
+dimension order by using the ``MD_DIMS`` metadata. For instance, RGB data is often
+stored with the channel as last dimension for display. Such case can be indicated
+with "YXC".
+
 Convention about measurement units
 ==================================
 
@@ -404,5 +428,3 @@ measurement units whenever it can be applied.
 For example, distance and wavelengths are expressed in meters (m), 
 angles in radians (rad), and times in seconds (s).
 Never express anything in multiples of a official unit (e.g., never put anything in nm).
-
-

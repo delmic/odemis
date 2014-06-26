@@ -9,11 +9,13 @@ component does what in the microscope.
 
 Syntax
 ======
+
 A microscope file is a series of component descriptions in the `YAML format <http://www.yaml.org/spec/1.2/spec.html>`_.
 For edition, if your editor doesn't support explicitly YAML, you can select Python for correct syntax highlighting.
 
-The basic idea is to describe the model as set of named components (a mapping of a name (str) to a mapping).
-Each component description has the following information:
+The basic idea is to describe the model as set of named components (a mapping of
+a name (str) to a mapping). Each component description has the following information:
+
  * Name of component
  * class: python class of the component. If it is a child provided by another component, this is not a required key.
  * role (str): compulsory string representing the role of the component in the system
