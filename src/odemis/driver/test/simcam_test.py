@@ -91,7 +91,7 @@ class TestSimCam(unittest.TestCase):
         self.assertGreater(time.time(), md[model.MD_ACQ_DATE])
 
         if self.is_rgb:
-            self.assertEqual(md[model.MD_DIMS], "XYC")
+            self.assertEqual(md[model.MD_DIMS], "YXC")
 
         spxs = self.camera.pixelSize.value
         self.assertEqual(spxs, md[model.MD_SENSOR_PIXEL_SIZE])

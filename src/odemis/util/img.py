@@ -325,10 +325,11 @@ def ensureYXC(data):
     if data.ndim != 3:
         raise ValueError("data has not 3 dimensions (%d dimensions)" % data.ndim)
 
+    md = data.metadata.copy()
     dims = data.metadata.get(model.MD_DIMS, "CYX")
 
     if dims == "CYX":
-        # CYX, change it to XYC, by rotating axes
+        # CYX, change it to YXC, by rotating axes
         data = numpy.rollaxis(data, 1) # YCX
         data = numpy.rollaxis(data, 2) # XYC
         dims = "YXC"
@@ -343,8 +344,8 @@ def ensureYXC(data):
         logging.warning("RGB data should be uint8, but is %s type", data.dtype)
 
     data = numpy.ascontiguousarray(data) # force memory placement
-    data.metadata[model.MD_DIMS] = dims
-    return data
+    md[model.MD_DIMS] = dims
+    return model.DataArray(data, md)
 
 # FIXME: test it
 def rescale_hq(data, shape):

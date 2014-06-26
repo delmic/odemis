@@ -59,9 +59,9 @@ class Camera(model.DigitalCamera):
 
         imshp = self._img.shape
         if len(imshp) == 3 and imshp[0] in {3, 4}:
-            # CYX, change it to XYC, to simulate a RGB detector
-            self._img = numpy.rollaxis(self._img, 1) # YCX
-            self._img = numpy.rollaxis(self._img, 2) # XYC
+            # CYX, change it to YXC, to simulate a RGB detector
+            self._img = numpy.rollaxis(self._img, 2) # XCY
+            self._img = numpy.rollaxis(self._img, 2) # YXC
             imshp = self._img.shape
 
         # For RGB, the colour is last dim, but we still indicate it as higher
@@ -70,7 +70,8 @@ class Camera(model.DigitalCamera):
             # resolution doesn't affect RGB dim
             res = imshp[-2::-1]
             self._shape = res + imshp[-1::] # X, Y, C
-            self._img.metadata[model.MD_DIMS] = "XYC" # indicate it's RGB pixel-last ordered
+            # indicate it's RGB pixel-per-pixel ordered
+            self._img.metadata[model.MD_DIMS] = "YXC"
         else:
             res = imshp[::-1]
             self._shape = res # X, Y,...

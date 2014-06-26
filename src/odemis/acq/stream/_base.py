@@ -357,6 +357,7 @@ class Stream(object):
             # if model.MD_ACQ_DATE in data.metadata:
             #     logging.debug("Computed RGB projection %g s after acquisition",
             #                    time.time() - data.metadata[model.MD_ACQ_DATE])
+            rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
             self.image.value = model.DataArray(rgbim, self._find_metadata(data.metadata))
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)

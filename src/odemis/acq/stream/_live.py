@@ -718,6 +718,20 @@ class RGBCameraStream(CameraStream):
             logging.warning("RGBCameraStream expects detector with shape of "
                             "length 4, but shape is %s", detector.shape)
 
+
+    # TODO: handle brightness and contrast VAs
+    def _onAutoBC(self, enabled):
+        pass
+
+    def _onOutliers(self, outliers):
+        pass
+
+    def _setIntensityRange(self, irange):
+        pass
+
+    def _onIntensityRange(self, irange):
+        pass
+
     def onActive(self, active):
         if not self._emitter is None:
             if active:
@@ -740,7 +754,15 @@ class RGBCameraStream(CameraStream):
             rgbim.flags.writeable = False
             # merge and ensures all the needed metadata is there
             rgbim.metadata = self._find_metadata(rgbim.metadata)
+            rgbim.metadata[model.MD_DIMS] = "YXC" # RGB format
             self.image.value = rgbim
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
+    def onNewImage(self, dataflow, data):
+        # simple version, without drange computation
+        if not self.raw:
+            self.raw.append(data)
+        else:
+            self.raw[0] = data
+        self._updateImage()

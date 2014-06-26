@@ -23,7 +23,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import numpy
 from odemis import model
+import odemis
 from odemis.acq import stream
+from odemis.driver import simcam
 from odemis.util import driver
 import os
 import subprocess
@@ -39,9 +41,12 @@ logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
+
+RGBCAM_CLASS = simcam.Camera
+RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
 
 class FakeEBeam(model.Emitter):
     """
@@ -180,7 +185,43 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(old_roi, ss.roi.value)
         self._check_square_pixel(ss)
 
-#@skip("faster")
+
+    def test_rgb_camera_stream(self):
+        cam = RGBCAM_CLASS(**RGBCAM_KWARGS)
+        rgbs = stream.RGBCameraStream("rgb", cam, cam.data, None) # no emitter
+        
+        dur = 0.1
+        cam.exposureTime.value = dur
+        
+        # at start, no data
+        img = rgbs.image.value
+        self.assertIsNone(img)
+
+        # acquire for a few seconds
+        rgbs.should_update.value = True
+        rgbs.is_active.value = True
+
+        time.sleep(3 * dur)
+
+        # Should have received a few images
+        img = rgbs.image.value
+        # check it looks like RGB
+        self.assertEqual(img.metadata[model.MD_DIMS], "YXC")
+        self.assertEqual(img.dtype, numpy.uint8)
+        self.assertEqual(img.ndim, 3)
+        self.assertEqual(img.shape, tuple(cam.resolution.value) + (3,))
+        
+        rgbs.is_active.value = False
+        rgbs.should_update.value = False
+
+        # Check it stopped updating
+        img = rgbs.image.value
+        time.sleep(2 * dur)
+        img2 = rgbs.image.value
+        self.assertIs(img, img2)
+
+        
+@skip("faster")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
