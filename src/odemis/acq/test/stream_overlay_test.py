@@ -35,8 +35,10 @@ import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
-ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
+# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
+# -m doesn't work when run from PyDev... not entirely sure why
+ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
+ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-sim-lens-align.odm.yaml" # 7x7
 
@@ -54,6 +56,7 @@ class TestOverlayStream(unittest.TestCase):
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
         cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
+        print os.environ
         ret = subprocess.call(cmd)
         if ret != 0:
             logging.error("Failed starting backend with '%s'", cmd)

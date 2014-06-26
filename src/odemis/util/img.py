@@ -314,6 +314,38 @@ def ensure2DImage(data):
 
     return d
 
+# TODO: add test
+def ensureYXC(data):
+    """
+    Ensure that a RGB image is in YXC order in memory, to fit RGB24 or RGB32
+    format.
+    data (DataArray): 3 dimensions RGB data
+    return (DataArray): same data, if necessary reordered in YXC order
+    """
+    if data.ndim != 3:
+        raise ValueError("data has not 3 dimensions (%d dimensions)" % data.ndim)
+
+    dims = data.metadata.get(model.MD_DIMS, "CYX")
+
+    if dims == "CYX":
+        # CYX, change it to XYC, by rotating axes
+        data = numpy.rollaxis(data, 1) # YCX
+        data = numpy.rollaxis(data, 2) # XYC
+        dims = "YXC"
+
+    if not dims == "YXC":
+        raise NotImplementedError("Don't know how to handle dim order %s", dims)
+
+    if not data.shape[-1] in {3, 4}:
+        logging.warning("RGB data should has C dimension of length %d", data.shape[-1])
+
+    if data.dtype != numpy.uint8:
+        logging.warning("RGB data should be uint8, but is %s type", data.dtype)
+
+    data = numpy.ascontiguousarray(data) # force memory placement
+    data.metadata[model.MD_DIMS] = dims
+    return data
+
 # FIXME: test it
 def rescale_hq(data, shape):
     """
