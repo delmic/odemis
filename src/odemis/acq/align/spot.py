@@ -100,10 +100,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         snr = MeasureSNR(image)
         while (snr < 5 and ccd.exposureTime.value < 800e-03):
             ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
-            # time.sleep(1)
             image = ccd.data.get(False)
             snr = MeasureSNR(image)
             print snr
+        et = ccd.exposureTime.value
 
         # Try to find spot
         logging.debug("Trying to find spot...")
@@ -116,6 +116,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
                 ccd.binning.value=(8, 8)
                 future._autofocusf = autofocus.AutoFocus(ccd, None, focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 lens_pos, fm_level = future._autofocusf.result()
+                # Update progress of the future
+                future.set_end_time(time.time() +
+                                    estimateAlignmentTime(et, dist, 1))
                 ccd.binning.value=(1, 1)
             except IOError:
                 raise IOError('Spot alignment failure. AutoFocus failed.')
@@ -124,6 +127,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
             if dist is None:
                 raise IOError('Spot alignment failure. Spot not found')
 
+        # Update progress of the future
+        future.set_end_time(time.time() +
+                            estimateAlignmentTime(et, dist, 1))
         # Limitate FoV to save time
         logging.debug("Crop FoV...")
         CropFoV(ccd)
@@ -139,6 +145,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
             raise IOError('Spot alignment failure. AutoFocus failed.')
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
+        # Update progress of the future
+        future.set_end_time(time.time() +
+                            estimateAlignmentTime(et, dist, 0))
 
         ccd.binning.value = (1, 1)
         image = ccd.data.get(False)
@@ -178,12 +187,15 @@ def _CancelAlignSpot(future):
     return True
 
 
-def estimateAlignmentTime():
+def estimateAlignmentTime(et, dist=None, n_autofocus=2):
     """
     Estimates spot alignment procedure duration
+    et (float): exposure time #s
+    dist (float): distance from center #m
+    n_autofocus (int): number of autofocus procedures
+    returns (float):  process estimated time #s
     """
-    # TODO
-    return 60  # s
+    return estimateCenterTime(et, dist) + n_autofocus * autofocus.estimateAutoFocusTime(et)  # s
 
 
 def FindSpot(image):
@@ -211,7 +223,6 @@ def CropFoV(ccd):
     on AutoFocus process.
     ccd (model.DigitalCamera): The CCD
     """
-    # time.sleep(3)
     image = ccd.data.get(False)
     center_pxs = ((image.shape[1] / 2),
                  (image.shape[0] / 2))
@@ -248,8 +259,9 @@ def CenterSpot(ccd, stage, mx_steps):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
+    # Dummy value
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateCenterTime())
+                                end=est_start + estimateCenterTime(ccd.exposureTime.value))
     f._spot_center_state = RUNNING
 
     # Task to run
@@ -283,7 +295,6 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
                         children={"aligner": stage},
                         axes=["b", "a"],
                         angle=135)
-    # time.sleep(4)
     image = ccd.data.get(False)
 
     # Center of optical image
@@ -323,7 +334,6 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         f.result()
 
         #Wait to make sure no previous spot is detected
-        # time.sleep(4)
         image = ccd.data.get(False)
         spot_pxs = FindSpot(image)
         if spot_pxs is None:
@@ -332,6 +342,9 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
         tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
         dist = math.hypot(*tab)
         steps += 1
+        # Update progress of the future
+        future.set_end_time(time.time() +
+                            estimateCenterTime(ccd.exposureTime.value, dist))
 
     #print dist
     return dist
@@ -351,12 +364,13 @@ def _CancelCenterSpot(future):
     return True
 
 
-def estimateCenterTime():
+def estimateCenterTime(et, dist=(FINE_MOVE * 1e-06)):
     """
     Estimates duration of reaching the center
     """
-    # TODO
-    return 10  # s
+    if dist is None:
+        dist = FINE_MOVE * 1e-06
+    return (dist / 1e-06) * (et + 2)  # s
 
 class InclinedStage(model.Actuator):
     """

@@ -91,7 +91,7 @@ def AlignSpot(ccd, stage, escan, focus):
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateAlignmentTime())
+                                end=est_start + estimateAlignmentTime(ccd.exposureTime.value))
     f._spot_alignment_state = RUNNING
 
     # Task to run

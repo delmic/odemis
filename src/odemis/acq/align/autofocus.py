@@ -97,13 +97,11 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
         step = accuracy
         cur_pos = focus.position.value.get('z')
         print cur_pos
-        # time.sleep(1)
         image = detector.data.get(False)
         fm_cur = MeasureFocus(image)
         init_fm = fm_cur
         f = focus.moveRel({"z": step})
         f.result()
-        # time.sleep(1)
         image = detector.data.get(False)
         fm_test = MeasureFocus(image)
 
@@ -139,7 +137,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                     shift = cur_pos - pos
                     f = focus.moveRel({"z":shift})
                     f.result()
-                    # time.sleep(1)
                     image = detector.data.get(False)
                     fm_new = MeasureFocus(image)
                     print fm_new
@@ -157,7 +154,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                         raise CancelledError()
                 steps += 1
 
-            # time.sleep(1)
             image = detector.data.get(False)
             fm_cur = MeasureFocus(image)
             print fm_cur
@@ -169,10 +165,9 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
 
-        # Update progress of the future (approx. 10 steps less)
+        # Update progress of the future
         future.set_end_time(time.time() +
-                            estimateAutoFocusTime(et,
-                                                MAX_STEPS_NUMBER - 10))
+                            estimateAutoFocusTime(et, MAX_STEPS_NUMBER / 2))
         # Determine focus direction
         if fm_cur > fm_test:
             sign = -1
@@ -196,7 +191,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
             fm_old = fm_new
             f = focus.moveRel({"z":sign * step})
             f.result()
-            # time.sleep(1)
             image = detector.data.get(False)
             fm_new = MeasureFocus(image)
             if future._autofocus_state == CANCELLED:
@@ -254,7 +248,7 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     """
     Estimates overlay procedure duration
     """
-    return steps * (exposure_time + 3)  # 3 sec approx. for focus actuator to move
+    return steps * exposure_time
 
 
 def AutoFocus(detector, scanner, focus, accuracy):
