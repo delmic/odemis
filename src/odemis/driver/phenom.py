@@ -846,6 +846,7 @@ class EbeamFocus(model.Actuator):
 # resolution of 912x912 pixels. When requesting a different size, the image is
 # scaled by the Phenom to the requested resolution
 NAVCAM_RESOLUTION = (912, 912)
+NAVCAM_DIMS = 'YXC'
 
 class NavCam(model.DigitalCamera):
     """
@@ -944,7 +945,8 @@ class NavCam(model.DigitalCamera):
                 pixelSize = (img_str.aAcqState.pixelHeight, img_str.aAcqState.pixelWidth)
                 pos = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata = {model.MD_POS: pos,
-                            model.MD_PIXEL_SIZE: pixelSize}
+                            model.MD_PIXEL_SIZE: pixelSize,
+                            model.MD_DIMS: NAVCAM_DIMS}
                 array = model.DataArray(sem_img, metadata)
 
                 # update resolution
