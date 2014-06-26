@@ -29,6 +29,7 @@ import math
 
 import cairo
 import wx
+import wx.lib.wxcairo as wxcairo
 
 from .base import WorldOverlay, SelectionMixin, DragMixin
 import odemis.gui as gui
@@ -247,11 +248,10 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self._repetition = val
         self._bmp = None
 
-    def _draw_points(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+    def _draw_points(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
         # top left op the buffer
-        offset = tuple(v // 2 for v in self.cnvs._bmp_buffer_size)
+        offset = self.cnvs.get_half_buffer_size()
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
@@ -281,8 +281,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         step_y = height / rep_y
 
         if width // 3 < rep_x or height // 3 < rep_y:
-            # If we cannot fit enough 3x3 bitmaps into either direction,
-            # then we just fill a rectangle
+            # If we cannot fit enough 3 bitmaps into either direction,
+            # then we just fill a semi transparent rectangle
             logging.debug("simple fill")
             r, g, b, _ = self.colour
             ctx.set_source_rgba(r, g, b, 0.5)
@@ -303,6 +303,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 # clipped selection
                 buf_rep_x = int((end_x - start_x) / step_x)
                 buf_rep_y = int((end_y - start_y) / step_y)
+
                 # TODO: need to take into account shift, like drawGrid
                 logging.debug(
                         "Rendering %sx%s points",
@@ -342,15 +343,14 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._bmp.SetMaskColour(wx.BLACK)
                 self._bmp_bpos = cl_pos
 
-            dc_buffer.DrawBitmapPoint(self._bmp,
-                    wx.Point(int(start_x), int(start_y)),
-                    useMask=True)
+            self.cnvs._dc_buffer.DrawBitmapPoint(self._bmp,
+                                                 wx.Point(int(start_x), int(start_y)),
+                                                 useMask=True)
 
-    def _draw_grid(self, dc_buffer):
-        ctx = wx.lib.wxcairo.ContextFromDC(dc_buffer)
+    def _draw_grid(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
         # top left op the buffer
-        offset = tuple(v // 2 for v in self.cnvs._bmp_buffer_size)
+        offset = self.cnvs.get_half_buffer_size()
 
         # The start and end position, in buffer coordinates. The return
         # values may extend beyond the actual buffer when zoomed in.
@@ -410,7 +410,6 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 ctx.line_to(end_x, start_y - buf_shift_y + i * step_y)
 
             ctx.stroke()
-
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
