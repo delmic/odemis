@@ -346,7 +346,7 @@ class OverlayTestCase(test.GuiTestCase):
                        msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
 
         rsol.repetition = (3, 2)
-        rsol.fill = wol.FILL_GRID
+        rsol.fill = wol.FILL_POINT
 
         pos = cnvs.margins[0] + 10,  cnvs.margins[1] + 10
         rsol.add_label("Repetition fill will change in 3 seconds.",
