@@ -326,12 +326,12 @@ def ensureYXC(data):
         raise ValueError("data has not 3 dimensions (%d dimensions)" % data.ndim)
 
     md = data.metadata.copy()
-    dims = data.metadata.get(model.MD_DIMS, "CYX")
+    dims = md.get(model.MD_DIMS, "CYX")
 
     if dims == "CYX":
         # CYX, change it to YXC, by rotating axes
-        data = numpy.rollaxis(data, 1) # YCX
-        data = numpy.rollaxis(data, 2) # XYC
+        data = numpy.rollaxis(data, 2) # XCY
+        data = numpy.rollaxis(data, 2) # YXC
         dims = "YXC"
 
     if not dims == "YXC":

@@ -414,6 +414,48 @@ class TestMergeMetadata(unittest.TestCase):
         for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
             self.assertNotIn(k, simpl_md)
 
+class TestEnsureYXC(unittest.TestCase):
+
+    def test_simple(self):
+        cyxim = numpy.zeros((3, 512, 256), dtype=numpy.uint8)
+        cyxim = model.DataArray(cyxim)
+        orig_shape = cyxim.shape
+        orig_md = cyxim.metadata.copy()
+        for i in range(3):
+            cyxim[i] = i
+
+        yxcim = img.ensureYXC(cyxim)
+        self.assertEqual(yxcim.shape, (512, 256, 3))
+        self.assertEqual(yxcim.metadata[model.MD_DIMS], "YXC")
+
+        # check original da was not changed
+        self.assertEqual(cyxim.shape, orig_shape)
+        self.assertDictEqual(orig_md, cyxim.metadata)
+
+        # try again with explicit metadata
+        cyxim.metadata[model.MD_DIMS] = "CYX"
+        orig_md = cyxim.metadata.copy()
+
+        yxcim = img.ensureYXC(cyxim)
+        self.assertEqual(yxcim.shape, (512, 256, 3))
+        self.assertEqual(yxcim.metadata[model.MD_DIMS], "YXC")
+
+        # check no metadata was changed
+        self.assertDictEqual(orig_md, cyxim.metadata)
+
+        for i in range(3):
+            self.assertEqual(yxcim[0, 0, i], i)
+
+    def test_no_change(self):
+        yxcim = numpy.zeros((512, 256, 3), dtype=numpy.uint8)
+        yxcim = model.DataArray(yxcim)
+        yxcim.metadata[model.MD_DIMS] = "YXC"
+
+        newim = img.ensureYXC(yxcim)
+        self.assertEqual(newim.shape, (512, 256, 3))
+        self.assertEqual(newim.metadata[model.MD_DIMS], "YXC")
+
+
 if __name__ == "__main__":
     unittest.main()
 
