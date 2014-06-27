@@ -37,7 +37,6 @@ ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
 INIT_THRES_FACTOR = 4e-3  # initial autofocus threshold factor
 
 MAX_STEPS_NUMBER = 40  # Max steps to perform autofocus
-MAX_TRIALS_NUMBER = 1
 
 
 def MeasureFocus(image):
