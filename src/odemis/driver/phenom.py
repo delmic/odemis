@@ -846,6 +846,7 @@ class EbeamFocus(model.Actuator):
 # resolution of 912x912 pixels. When requesting a different size, the image is
 # scaled by the Phenom to the requested resolution
 NAVCAM_RESOLUTION = (912, 912)
+# Order of dimensions in NAVCAM, colour per-pixel
 NAVCAM_DIMS = 'YXC'
 
 class NavCam(model.DigitalCamera):
@@ -862,9 +863,10 @@ class NavCam(model.DigitalCamera):
 
         resolution = NAVCAM_RESOLUTION
         # RGB
-        self._shape = resolution + (3, 2 ** 8)
-        self.resolution = model.ResolutionVA(resolution, [(1, 1), (2048, 2048)],
-                                            readonly=True)
+        self._shape = resolution + (3, 2 ** 8 - 1)
+        self.resolution = model.ResolutionVA(resolution,
+                                      [NAVCAM_RESOLUTION, NAVCAM_RESOLUTION])
+                                    # , readonly=True)
         self.exposureTime = model.FloatVA(1.0, unit="s", readonly=True)
 
         # setup camera
