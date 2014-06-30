@@ -1077,6 +1077,10 @@ def __init_resources():
                           <flag>wxRIGHT</flag>
                           <border>10</border>
                         </object>
+                        <object class="spacer">
+                          <option>1</option>
+                          <flag>wxEXPAND</flag>
+                        </object>
                         <orient>wxHORIZONTAL</orient>
                       </object>
                       <fg>#BBBBBB</fg>
