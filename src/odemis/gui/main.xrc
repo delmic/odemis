@@ -499,26 +499,41 @@
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                        <object class="wxPanel" name="pnl_move_to_center">
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxEXPAND</flag>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="lens_align_btn_to_center">
+                                <label>Move to center</label>
+                                <bitmap>img/btn_128x24.png</bitmap>
+                                <hover>img/btn_128x24_h.png</hover>
+                                <selected>img/btn_128x24_a.png</selected>
+                                <tooltip>Move the axes based on the dichotomy search result.</tooltip>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALIGN_RIGHT</flag>
+                            </object>
+                          </object>
+                          <fg>#E5E5E5</fg>
+                          <bg>#333333</bg>
+                          <hidden>1</hidden>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_to_center">
-                          <label>Move to center</label>
-                          <bitmap>img/btn_128x24.png</bitmap>
-                          <hover>img/btn_128x24_h.png</hover>
-                          <selected>img/btn_128x24_a.png</selected>
-                          <tooltip>Move the axes based on the dichotomy search result.</tooltip>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxTOP</flag>
-                        <border>16</border>
+                        <flag>wxTOP|wxEXPAND</flag>
+                        <border>10</border>
                       </object>
                       <object class="sizeritem">
                         <object class="wxPanel" name="pnl_align_tools">

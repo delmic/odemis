@@ -63,6 +63,7 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_p_aligner_a = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_a")
         self.lens_align_btn_m_aligner_a = xrc.XRCCTRL(self, "lens_align_btn_m_aligner_a")
         self.lens_align_btn_p_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_b")
+        self.pnl_move_to_center = xrc.XRCCTRL(self, "pnl_move_to_center")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
         self.pnl_align_tools = xrc.XRCCTRL(self, "pnl_align_tools")
@@ -221,7 +222,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -721,26 +722,41 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                        <object class="wxPanel" name="pnl_move_to_center">
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxEXPAND</flag>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="lens_align_btn_to_center">
+                                <label>Move to center</label>
+                                <bitmap>img_btn_128x24_png</bitmap>
+                                <hover>img_btn_128x24_h_png</hover>
+                                <selected>img_btn_128x24_a_png</selected>
+                                <tooltip>Move the axes based on the dichotomy search result.</tooltip>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALIGN_RIGHT</flag>
+                            </object>
+                          </object>
+                          <fg>#E5E5E5</fg>
+                          <bg>#333333</bg>
+                          <hidden>1</hidden>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_to_center">
-                          <label>Move to center</label>
-                          <bitmap>img_btn_128x24_png</bitmap>
-                          <hover>img_btn_128x24_h_png</hover>
-                          <selected>img_btn_128x24_a_png</selected>
-                          <tooltip>Move the axes based on the dichotomy search result.</tooltip>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxTOP</flag>
-                        <border>16</border>
+                        <flag>wxTOP|wxEXPAND</flag>
+                        <border>10</border>
                       </object>
                       <object class="sizeritem">
                         <object class="wxPanel" name="pnl_align_tools">

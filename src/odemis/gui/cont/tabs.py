@@ -1433,8 +1433,7 @@ class LensAlignTab(Tab):
         if tool != guimod.TOOL_DICHO:
             # reset the sequence
             self.tab_data_model.dicho_seq.value = []
-            self.main_frame.lens_align_btn_to_center.Show(False)
-            self.main_frame.lens_align_lbl_approc_center.Show(False)
+            self.main_frame.pnl_move_to_center.Show(False)
             self.main_frame.pnl_align_tools.Show(True)
 
         if tool != guimod.TOOL_SPOT:
@@ -1442,8 +1441,7 @@ class LensAlignTab(Tab):
 
         # Set new mode
         if tool == guimod.TOOL_DICHO:
-            self.main_frame.lens_align_btn_to_center.Show(True)
-            self.main_frame.lens_align_lbl_approc_center.Show(True)
+            self.main_frame.pnl_move_to_center.Show(True)
             self.main_frame.pnl_align_tools.Show(False)
         elif tool == guimod.TOOL_SPOT:
             self._sem_stream.spot.value = True
@@ -1457,7 +1455,7 @@ class LensAlignTab(Tab):
             # is received, stop stream and move back to spot-mode. (need to be careful
             # to handle when the user disables the spot mode during this moment)
 
-        self.main_frame.lens_align_btn_to_center.Parent.Layout()
+        self.main_frame.pnl_move_to_center.Parent.Layout()
 
     def _onDichoSeq(self, seq):
         roi = align.dichotomy_to_region(seq)
