@@ -90,13 +90,6 @@
         <label>View</label>
       </object>
       <object class="wxMenu">
-        <object class="wxMenuItem" name="menu_item_bugreport">
-          <label>Report a Bug</label>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
         <object class="wxMenuItem" name="menu_item_manual">
           <label>User manual</label>
           <accel>F1</accel>
@@ -128,6 +121,13 @@
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+        </object>
+        <object class="wxMenuItem" name="menu_item_bugreport">
+          <label>Report a Bug</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_about">
@@ -512,6 +512,7 @@
                           <hover>img/btn_128x24_h.png</hover>
                           <selected>img/btn_128x24_a.png</selected>
                           <style>wxALIGN_CENTRE</style>
+                          <tooltip>Move the axes based on the dichotomy search result.</tooltip>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -526,12 +527,13 @@
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_auto_center">
-                                <label>Auto center</label>
+                                <label>Auto centering...</label>
                                 <delta>1</delta>
                                 <bitmap>img/btn_128x24.png</bitmap>
                                 <hover>img/btn_128x24_h.png</hover>
                                 <selected>img/btn_128x24_a.png</selected>
                                 <style>wxALIGN_CENTRE</style>
+                                <tooltip>Automatically adjust image setting and mechanically center the optical lens on the spot.</tooltip>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
@@ -585,12 +587,13 @@
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_fine_align">
-                                <label>Fine align</label>
+                                <label>Fine alignment...</label>
                                 <delta>1</delta>
                                 <bitmap>img/btn_128x24.png</bitmap>
                                 <hover>img/btn_128x24_h.png</hover>
                                 <selected>img/btn_128x24_a.png</selected>
                                 <style>wxALIGN_CENTRE</style>
+                                <tooltip>Measure and apply software adjustment for the alignment using a spot grid.</tooltip>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>

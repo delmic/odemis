@@ -1435,6 +1435,8 @@ class LensAlignTab(Tab):
             self.tab_data_model.dicho_seq.value = []
             self.main_frame.lens_align_btn_to_center.Show(False)
             self.main_frame.lens_align_lbl_approc_center.Show(False)
+            self.main_frame.pnl_auto_center.Show(True)
+            self.main_frame.pnl_fine_align.Show(True)
 
         if tool != guimod.TOOL_SPOT:
             self._sem_stream.spot.value = False
@@ -1443,6 +1445,8 @@ class LensAlignTab(Tab):
         if tool == guimod.TOOL_DICHO:
             self.main_frame.lens_align_btn_to_center.Show(True)
             self.main_frame.lens_align_lbl_approc_center.Show(True)
+            self.main_frame.pnl_auto_center.Show(False)
+            self.main_frame.pnl_fine_align.Show(False)
         elif tool == guimod.TOOL_SPOT:
             self._sem_stream.spot.value = True
             # TODO: until the settings are directly connected to the hardware,
