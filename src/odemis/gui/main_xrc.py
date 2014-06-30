@@ -46,11 +46,11 @@ class xrcfr_main(wx.Frame):
         self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
         self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
-        self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
         self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_tab_secom_align = xrc.XRCCTRL(self, "btn_tab_secom_align")
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
@@ -65,14 +65,13 @@ class xrcfr_main(wx.Frame):
         self.lens_align_btn_p_aligner_b = xrc.XRCCTRL(self, "lens_align_btn_p_aligner_b")
         self.lens_align_lbl_approc_center = xrc.XRCCTRL(self, "lens_align_lbl_approc_center")
         self.lens_align_btn_to_center = xrc.XRCCTRL(self, "lens_align_btn_to_center")
-        self.pnl_auto_center = xrc.XRCCTRL(self, "pnl_auto_center")
+        self.pnl_align_tools = xrc.XRCCTRL(self, "pnl_align_tools")
         self.btn_auto_center = xrc.XRCCTRL(self, "btn_auto_center")
-        self.gauge_auto_center = xrc.XRCCTRL(self, "gauge_auto_center")
         self.lbl_auto_center = xrc.XRCCTRL(self, "lbl_auto_center")
-        self.pnl_fine_align = xrc.XRCCTRL(self, "pnl_fine_align")
+        self.gauge_auto_center = xrc.XRCCTRL(self, "gauge_auto_center")
         self.btn_fine_align = xrc.XRCCTRL(self, "btn_fine_align")
-        self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
         self.lbl_fine_align = xrc.XRCCTRL(self, "lbl_fine_align")
+        self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
         self.html_alignment = xrc.XRCCTRL(self, "html_alignment")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
@@ -222,7 +221,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -313,13 +312,6 @@ def __init_resources():
         <label>View</label>
       </object>
       <object class="wxMenu">
-        <object class="wxMenuItem" name="menu_item_bugreport">
-          <label>Report a Bug</label>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
         <object class="wxMenuItem" name="menu_item_manual">
           <label>User manual</label>
           <accel>F1</accel>
@@ -351,6 +343,13 @@ def __init_resources():
               <assign_var>1</assign_var>
             </XRCED>
           </object>
+        </object>
+        <object class="wxMenuItem" name="menu_item_bugreport">
+          <label>Report a Bug</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
         </object>
         <object class="separator"/>
         <object class="wxMenuItem" name="menu_item_about">
@@ -734,6 +733,7 @@ def __init_resources():
                           <bitmap>img_btn_128x24_png</bitmap>
                           <hover>img_btn_128x24_h_png</hover>
                           <selected>img_btn_128x24_a_png</selected>
+                          <tooltip>Move the axes based on the dichotomy search result.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
@@ -742,37 +742,25 @@ def __init_resources():
                         <flag>wxTOP</flag>
                         <border>16</border>
                       </object>
-                      <orient>wxVERTICAL</orient>
                       <object class="sizeritem">
-                        <object class="wxPanel" name="pnl_auto_center">
+                        <object class="wxPanel" name="pnl_align_tools">
                           <object class="wxBoxSizer">
-                            <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_auto_center">
-                                <label>Auto center</label>
-                                <delta>1</delta>
-                                <bitmap>img_btn_128x24_png</bitmap>
-                                <hover>img_btn_128x24_h_png</hover>
-                                <selected>img_btn_128x24_a_png</selected>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                            </object>
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxGauge" name="gauge_auto_center">
-                                    <size>128,10</size>
-                                    <range>100</range>
-                                    <value>0</value>
-                                    <style>wxGA_SMOOTH</style>
+                                  <object class="ImageTextButton" name="btn_auto_center">
+                                    <label>Auto centering...</label>
+                                    <delta>1</delta>
+                                    <bitmap>img_btn_128x24_png</bitmap>
+                                    <hover>img_btn_128x24_h_png</hover>
+                                    <selected>img_btn_128x24_a_png</selected>
+                                    <tooltip>Automatically adjust image setting and mechanically center the optical lens on the spot.</tooltip>
+                                    <style>wxALIGN_CENTRE</style>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
-                                  <flag>wxTOP</flag>
+                                  <flag>wxRIGHT</flag>
                                   <border>10</border>
                                 </object>
                                 <object class="sizeritem">
@@ -783,55 +771,46 @@ def __init_resources():
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
-                                  <flag>wxTOP|wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>5</border>
-                                  <minsize>100,-1</minsize>
+                                  <flag>wxTOP</flag>
+                                  <border>3</border>
                                 </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxEXPAND</flag>
-                            </object>
-                          </object>
-                          <fg>#E5E5E5</fg>
-                          <bg>#333333</bg>
-                          <hidden>1</hidden>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxTOP|wxEXPAND</flag>
-                        <border>10</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxPanel" name="pnl_fine_align">
-                          <object class="wxBoxSizer">
-                            <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_fine_align">
-                                <label>Fine align</label>
-                                <delta>1</delta>
-                                <bitmap>img_btn_128x24_png</bitmap>
-                                <hover>img_btn_128x24_h_png</hover>
-                                <selected>img_btn_128x24_a_png</selected>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
                                 <object class="sizeritem">
-                                  <object class="wxGauge" name="gauge_fine_align">
-                                    <size>128,10</size>
+                                  <object class="wxGauge" name="gauge_auto_center">
+                                    <size>-1,10</size>
                                     <range>100</range>
                                     <value>0</value>
-                                    <style>wxGA_SMOOTH</style>
+                                    <hidden>1</hidden>
+                                    <style>wxGA_HORIZONTAL|wxGA_SMOOTH</style>
                                     <XRCED>
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
+                                  <option>1</option>
                                   <flag>wxTOP</flag>
+                                  <border>7</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxBOTTOM|wxEXPAND</flag>
+                              <border>14</border>
+                            </object>
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_fine_align">
+                                    <label>Fine alignment...</label>
+                                    <delta>1</delta>
+                                    <bitmap>img_btn_128x24_png</bitmap>
+                                    <hover>img_btn_128x24_h_png</hover>
+                                    <selected>img_btn_128x24_a_png</selected>
+                                    <tooltip>Measure and apply software adjustment for the alignment using a spot grid.</tooltip>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxRIGHT</flag>
                                   <border>10</border>
                                 </object>
                                 <object class="sizeritem">
@@ -842,13 +821,28 @@ def __init_resources():
                                       <assign_var>1</assign_var>
                                     </XRCED>
                                   </object>
-                                  <flag>wxTOP|wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>5</border>
-                                  <minsize>100,-1</minsize>
+                                  <flag>wxTOP</flag>
+                                  <border>3</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxGauge" name="gauge_fine_align">
+                                    <size>-1,10</size>
+                                    <range>100</range>
+                                    <value>0</value>
+                                    <hidden>1</hidden>
+                                    <style>wxGA_SMOOTH</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <option>1</option>
+                                  <flag>wxTOP</flag>
+                                  <border>7</border>
                                 </object>
                                 <orient>wxHORIZONTAL</orient>
                               </object>
-                              <flag>wxEXPAND</flag>
+                              <flag>wxBOTTOM|wxEXPAND</flag>
+                              <border>14</border>
                             </object>
                           </object>
                           <fg>#E5E5E5</fg>
@@ -861,9 +855,10 @@ def __init_resources():
                         <flag>wxTOP|wxEXPAND</flag>
                         <border>10</border>
                       </object>
+                      <orient>wxVERTICAL</orient>
                     </object>
                     <flag>wxALL|wxEXPAND</flag>
-                    <border>10</border>
+                    <border>5</border>
                   </object>
                   <object class="spacer">
                     <option>1</option>
