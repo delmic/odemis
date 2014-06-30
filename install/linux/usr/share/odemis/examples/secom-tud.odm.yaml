@@ -164,7 +164,8 @@ PIGCS: {
                "x": [4, 1, False], "y": [5, 1, False]},
         vmin: {"x": 2.4, "y": 2.8}, # V : lowest voltage which moves the actuators
         speed_base: {"x": 0.02, "y": 0.02}, # m/s : speed at 3.5V
-        #dist_to_steps: {"a": 100000, "b": 100000}, # step/m
+        # Z axis is linked to the lens with a ratio of ~4
+        dist_to_steps: {"a": 100000, "b": 100000, "z": 400000}, # steps/m
     },
 }
 
