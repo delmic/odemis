@@ -724,13 +724,14 @@ class FineAlignController(object):
     def __init__(self, tab_data, main_frame, settings_controller):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
-        main_frame: (wx.Frame): the frame which contains the 4 viewports
+        main_frame: (wx.Frame): the frame which contains the viewports
         settings_controller (SettingController)
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._main_frame = main_frame
         self._settings_controller = settings_controller
+        self._sizer = self._main_frame.pnl_align_tools.GetSizer()
 
         main_frame.btn_fine_align.Bind(wx.EVT_BUTTON, self._on_fine_align)
         self._fa_btn_label = self._main_frame.btn_fine_align.Label
@@ -788,8 +789,8 @@ class FineAlignController(object):
         self._settings_controller.enable(False)
         self._settings_controller.pause()
 
-        # TODO: disable every control (eg. actuator buttons)
         self._main_frame.lens_align_tb.enable(False)
+        self._main_frame.btn_auto_center.Enable(False)
 
         # make sure to not disturb the acquisition
         for s in self._tab_data_model.streams.value:
@@ -805,6 +806,7 @@ class FineAlignController(object):
         self._settings_controller.enable(True)
 
         self._main_frame.lens_align_tb.enable(True)
+        self._main_frame.btn_auto_center.Enable(True)
 
         # Restart the streams (which were being played)
         for s in self._tab_data_model.streams.value:
@@ -839,8 +841,7 @@ class FineAlignController(object):
         # Set up progress bar
         self._main_frame.lbl_fine_align.Hide()
         self._main_frame.gauge_fine_align.Show()
-        fa_sizer = self._main_frame.pnl_align_tools.GetSizer()
-        fa_sizer.Layout()
+        self._sizer.Layout()
         self._faf_connector = ProgessiveFutureConnector(f,
                                             self._main_frame.gauge_fine_align)
 
@@ -856,7 +857,6 @@ class FineAlignController(object):
             return
 
         self._acq_future.cancel()
-#        self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by _on_fa_done()
 
 
@@ -898,5 +898,154 @@ class FineAlignController(object):
 
         self._main_frame.lbl_fine_align.Show()
         self._main_frame.gauge_fine_align.Hide()
-        fa_sizer = self._main_frame.pnl_align_tools.GetSizer()
-        fa_sizer.Layout()
+        self._sizer.Layout()
+
+
+class AutoCenterController(object):
+    """
+    Takes care of the auto centering button and process on the SECOM lens
+    alignment tab.
+    Not an "acquisition" process per-se but actually very similar, the main
+    difference being that the result is not saved as a file, but directly
+    applied to the microscope
+    """
+
+    def __init__(self, tab_data, main_frame, settings_controller):
+        """
+        tab_data (MicroscopyGUIData): the representation of the microscope GUI
+        main_frame: (wx.Frame): the frame which contains the viewports
+        settings_controller (SettingController)
+        """
+        self._tab_data_model = tab_data
+        self._main_data_model = tab_data.main
+        self._main_frame = main_frame
+        self._settings_controller = settings_controller
+        self._sizer = self._main_frame.pnl_align_tools.GetSizer()
+
+        main_frame.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
+        self._ac_btn_label = self._main_frame.btn_auto_center.Label
+        self._acf_connector = None
+
+        # TODO: find out which settings affect the estimated time, and connect
+        # to them to update the estimated time
+        self._main_data_model.ccd.exposureTime.subscribe(self._update_est_time, init=True)
+
+    @call_after
+    def _update_est_time(self, unused):
+        """
+        Compute and displays the estimated time for the auto centering
+        """
+        # FIXME
+        # t = align.find_overlay.estimateOverlayTime(dt)
+        t = 30
+        t = math.ceil(t) # round a bit pessimistic
+        txt = u"~ %s" % units.readable_time(t, full=False)
+        self._main_frame.lbl_auto_center.Label = txt
+
+    def _pause(self):
+        """
+        Pause the settings and the streams of the GUI
+        """
+        # save the original settings
+        self._settings_controller.enable(False)
+        self._settings_controller.pause()
+
+        self._main_frame.lens_align_tb.enable(False)
+        self._main_frame.btn_fine_align.Enable(False)
+
+        # make sure to not disturb the acquisition
+        for s in self._tab_data_model.streams.value:
+            s.is_active.value = False
+
+        # Prevent moving the stages
+        for c in [self._main_frame.vp_align_ccd.canvas,
+                  self._main_frame.vp_align_sem.canvas]:
+            c.abilities -= set([CAN_DRAG, CAN_FOCUS])
+
+    def _resume(self):
+        self._settings_controller.resume()
+        self._settings_controller.enable(True)
+
+        self._main_frame.lens_align_tb.enable(True)
+        # Spot mode should always be active, so it's fine to directly enable FA
+        self._main_frame.btn_fine_align.Enable(True)
+
+        # Restart the streams (which were being played)
+        for s in self._tab_data_model.streams.value:
+            s.is_active.value = s.should_update.value
+
+        # Allow moving the stages
+        for c in [self._main_frame.vp_align_ccd.canvas,
+                  self._main_frame.vp_align_sem.canvas]:
+            c.abilities |= set([CAN_DRAG, CAN_FOCUS])
+
+    def _on_auto_center(self, event):
+        """
+        Called when the "Auto centering" button is clicked
+        """
+        # Force spot mode: not needed by the code, but makes sense for the user
+        self._tab_data_model.tool.value = guimod.TOOL_SPOT
+
+        self._pause()
+        main_data = self._main_data_model
+        main_data.is_acquiring.value = True
+
+        logging.debug("Starting auto centering procedure")
+        f = align.FindOverlay(main_data.ebeam, # FIXME
+                                     main_data.ccd,
+                                     main_data.sed)
+        logging.debug("Auto centering is running...")
+        self._acq_future = f
+        # Transform auto centering button into cancel
+        self._main_frame.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_cancel)
+        self._main_frame.btn_auto_center.Label = "Cancel"
+
+        # Set up progress bar
+        self._main_frame.lbl_auto_center.Hide()
+        self._main_frame.gauge_auto_center.Show()
+        self._sizer.Layout()
+        self._acf_connector = ProgessiveFutureConnector(f,
+                                            self._main_frame.gauge_auto_center)
+
+        f.add_done_callback(self._on_ac_done)
+
+    def _on_cancel(self, evt):
+        """
+        Called during acquisition when pressing the cancel button
+        """
+        if not self._acq_future:
+            msg = "Tried to cancel acquisition while it was not started"
+            logging.warning(msg)
+            return
+
+        self._acq_future.cancel()
+        # all the rest will be handled by _on_ac_done()
+
+    @call_after
+    def _on_ac_done(self, future):
+        logging.debug("End of auto centering procedure")
+        main_data = self._main_data_model
+        try:
+            dist = future.result() # returns distance to center
+        except CancelledError:
+            self._main_frame.lbl_auto_center.Label = "Cancelled"
+        except Exception:
+            # FIXME: don't display a really exception, but just put it in
+            # info log level?
+            logging.exception("Failed to run the centering procedure")
+            self._main_frame.lbl_auto_center.Label = "Failed"
+        else:
+            self._main_frame.lbl_auto_center.Label = "Successful"
+
+        # As the CCD image might have different pixel size, force to fit
+        self._main_frame.vp_align_ccd.canvas.fit_view_to_next_image = True
+
+        main_data.is_acquiring.value = False
+        self._main_frame.btn_auto_center.Bind(wx.EVT_BUTTON, self._on_auto_center)
+        self._main_frame.btn_auto_center.Label = self._ac_btn_label
+        self._resume()
+
+        self._main_frame.lbl_auto_center.Show()
+        self._main_frame.gauge_auto_center.Hide()
+        self._sizer.Layout()
+

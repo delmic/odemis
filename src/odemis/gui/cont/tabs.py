@@ -33,12 +33,13 @@ from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
+from odemis.gui.comp.popup import Message
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.acquisition import SecomAcquiController, \
-    SparcAcquiController, FineAlignController
+    SparcAcquiController, FineAlignController, AutoCenterController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.util import formats_to_wildcards, get_installation_folder, \
@@ -49,18 +50,17 @@ import os.path
 import pkg_resources
 import scipy.misc
 import weakref
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-from wx import html  #pylint: disable=W0611
+from wx import html  # pylint: disable=W0611
 import wx
 
 import odemis.acq.stream as streammod
-from odemis.gui.comp.popup import Message
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 
 
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
@@ -1382,6 +1382,10 @@ class LensAlignTab(Tab):
                                                   main_frame,
                                                   self._settings_controller)
 
+        self._ac_controller = AutoCenterController(self.tab_data_model,
+                                                  main_frame,
+                                                  self._settings_controller)
+
         # Documentation text on the left panel
         path = os.path.join(get_installation_folder(), "doc/alignment.html")
         main_frame.html_alignment.SetBorders(0) # sizer already give us borders
@@ -1406,17 +1410,11 @@ class LensAlignTab(Tab):
         # update the fine alignment dwell time when CCD settings change
         main_data = self.tab_data_model.main
         if show:
-            # as we excepted no acquisition when changing tab, it will always
+            # as we expect no acquisition active when changing tab, it will always
             # lead to subscriptions to VA
             main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
         else:
             main_data.is_acquiring.unsubscribe(self._on_acquisition)
-
-        # TODO: save and restore SEM state (for now, it does nothing anyway)
-        # Turn on (or off) SEM
-        # main_data = self.tab_data_model.main
-        # state = guimod.STATE_ON if show else guimod.STATE_PAUSE
-        # main_data.emState.value = state
 
     def terminate(self):
         super(LensAlignTab, self).terminate()
@@ -1446,7 +1444,8 @@ class LensAlignTab(Tab):
         elif tool == guimod.TOOL_SPOT:
             self._sem_stream.spot.value = True
             # TODO: until the settings are directly connected to the hardware,
-            # we need to disable/freeze the SEM settings in spot mode.
+            # or part of the stream, we need to disable/freeze the SEM settings
+            # in spot mode.
 
             # TODO: support spot mode and automatically update the survey image each
             # time it's updated.

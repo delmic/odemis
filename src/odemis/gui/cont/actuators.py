@@ -99,6 +99,7 @@ class ActuatorController(object):
             logging.warning("No slider found for tab %s", tab_prefix)
 
         # Bind buttons
+        self._btns = []
         for actuator, axis in tab_data.axes:
             for suffix, factor in [("m", -1), ("p", 1)]:
                 # something like "lens_align_btn_p_mirror_rz"
@@ -116,7 +117,13 @@ class ActuatorController(object):
                     tab_data.step(actuator, axis, factor)
 
                 btn.Bind(wx.EVT_BUTTON, btn_action)
-
+                self._btns.append(btn)
+        
+        tab_data.main.is_acquiring.subscribe(self._on_acquisition)
+    
+    def _on_acquisition(self, acquiring):
+        for b in self._btns:
+            b.Enable(not acquiring)
 
     def bind_keyboard(self, tab_frame):
         """
@@ -150,11 +157,14 @@ class ActuatorController(object):
             focusedWin = wx.Window.FindFocus()
             # TODO: need to check for more widget types?
             if not isinstance(focusedWin, (wx.TextCtrl, ComboBox)):
-                actuator, axis, size = self.key_bindings[key]
-                if event.ShiftDown():
-                    size /= 10
-                self._tab_data_model.step(actuator, axis, size)
-                return # keep it for ourselves
+                if self._tab_data_model.main.is_acquiring.value:
+                    logging.debug("Skipping key event due to acquisition in progress")
+                else:
+                    actuator, axis, size = self.key_bindings[key]
+                    if event.ShiftDown():
+                        size /= 10
+                    self._tab_data_model.step(actuator, axis, size)
+                    return # keep it for ourselves
 
         # everything else we don't process
         event.Skip()

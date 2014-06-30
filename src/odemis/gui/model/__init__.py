@@ -478,14 +478,14 @@ class ActuatorGUIData(MicroscopyGUIData):
 
         # Step size name -> val, range, actuator, axes (None if all)
         # str -> float, [float, float], str, (str, ...)
-        ss_def = {"stage": (1e-6, [1e-8, 1e-3], "stage", None),
-                  "focus": (1e-7, [1e-8, 1e-4], "focus", None),
-                  "aligner": (1e-6, [1e-8, 1e-4], "aligner", None),
+        ss_def = {"stage": (1e-6, [100e-9, 1e-3], "stage", None),
+                  "focus": (100e-9, [10e-9, 1e-4], "focus", None),
+                  "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   # Mirror is a bit more complicated as it has 4 axes and Y
                   # usually needs to be 10x bigger than X
-                  "mirror_x": (1e-6, [1e-8, 1e-3], "mirror", ("x",)),
-                  "mirror_y": (10e-6, [1e-8, 1e-3], "mirror", ("y",)),
-                  "mirror_r": (10e-6, [1e-8, 1e-3], "mirror", ("ry", "rz"))
+                  "mirror_x": (1e-6, [100e-9, 1e-3], "mirror", ("x",)),
+                  "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", ("y",)),
+                  "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", ("ry", "rz"))
                   }
         # str -> VA: name (as the name of the attribute) -> step size (m)
         self.stepsizes = {}
