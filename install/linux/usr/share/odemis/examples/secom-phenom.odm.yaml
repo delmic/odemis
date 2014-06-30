@@ -52,7 +52,7 @@ Spectra: {
                stage: "OLStage",
                focus: "Ebeam-focus actuator",
                camera: "NavCam",
-               navcam_focus: "NavCam-focus actuator",
+               navcam-focus: "NavCam-focus actuator",
                pressure: "ChamberPressure"
     }
 }
