@@ -857,6 +857,7 @@ class FineAlignController(object):
             return
 
         self._acq_future.cancel()
+        # self._main_data_model.is_acquiring.value = False
         # all the rest will be handled by _on_fa_done()
 
 

@@ -82,12 +82,15 @@ class InfoLegend(wx.Panel):
         self.scale_win = ScaleWindow(self)
 
         # Horizontal Field Width text
-        # TODO: allow the user to select/copy the text
-        self.hfw_text = wx.StaticText(self)
+        self.hfw_text = wx.TextCtrl(self, size=(100, -1), style=wx.NO_BORDER|wx.CB_READONLY)
+        self.hfw_text.SetBackgroundColour(parent.GetBackgroundColour())
+        self.hfw_text.SetForegroundColour(parent.GetForegroundColour())
         self.hfw_text.SetToolTipString("Horizontal Field Width")
 
         # Magnification text
-        self.magnification_text = wx.StaticText(self)
+        self.magnification_text = wx.TextCtrl(self, size=(100, -1), style=wx.NO_BORDER|wx.CB_READONLY)
+        self.magnification_text.SetBackgroundColour(parent.GetBackgroundColour())
+        self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
         self.magnification_text.SetToolTipString("Magnification")
 
 
@@ -183,11 +186,11 @@ class InfoLegend(wx.Panel):
         evt.Skip()
 
     def set_hfw_label(self, label):
-        self.hfw_text.SetLabel(label)
+        self.hfw_text.SetValue(label)
         self.Layout()
 
     def set_mag_label(self, label):
-        self.magnification_text.SetLabel(label)
+        self.magnification_text.SetValue(label)
         self.Layout()
 
     def set_stream_type(self, side, stream_class):
