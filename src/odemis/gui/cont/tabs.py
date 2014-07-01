@@ -28,17 +28,8 @@ import collections
 import logging
 import math
 import numpy
-import os.path
-import pkg_resources
-import weakref
-
-import scipy.misc
-
 from odemis import dataio, model
 from odemis.acq import calibration
-import odemis.acq.stream as streammod
-from odemis.gui import FG_COLOUR_HIGHLIGHT
-
 from odemis.gui.comp import overlay
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.popup import Message
@@ -46,12 +37,9 @@ from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
-from odemis.gui.cont.acquisition import SecomAcquiController, \
-    SparcAcquiController, FineAlignController, AutoCenterController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model import CHAMBER_VACUUM
-from odemis.gui.util import call_after_wrapper
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
@@ -60,11 +48,11 @@ import scipy.misc
 import weakref
 # IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-from wx import html  #pylint: disable=W0611
+from wx import html  # pylint: disable=W0611
 import wx
 
 import odemis.acq.stream as streammod
-from odemis.gui.comp.popup import Message
+import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
@@ -1425,7 +1413,7 @@ class LensAlignTab(Tab):
                                                  self._on_btn_to_center)
 
         # Fine alignment panel
-        pnl_fine_align = main_frame.pnl_align_controls
+        pnl_fine_align = main_frame.pnl_align_tools
         fa_sizer = pnl_fine_align.GetSizer()
         scale_win = ScaleWindow(pnl_fine_align)
         self._on_mpp = guiutil.call_after_wrapper(scale_win.SetMPP)  # need to keep ref
@@ -1436,7 +1424,7 @@ class LensAlignTab(Tab):
                                                           main_frame,
                                                           self._settings_controller)
 
-        self._ac_controller = AutoCenterController(self.tab_data_model,
+        self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
                                                   main_frame,
                                                   self._settings_controller)
 
