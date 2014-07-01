@@ -446,9 +446,12 @@ class Detector(model.Detector):
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
 
         with self._acquisition_lock:
-            # "Unblank" the beam
-            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
             self._wait_acquisition_stopped()
+            try:
+                # "Unblank" the beam
+                self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+            except suds.WebFault:
+                logging.warning("Beam might still be blanked!")
             target = self._acquire_thread
             self._acquisition_thread = threading.Thread(target=target,
                     name="PhenomSEM acquire flow thread",
@@ -459,10 +462,10 @@ class Detector(model.Detector):
         with self._acquisition_lock:
             try:
                 self.parent._device.SEMAbortImageAcquisition()
+                # "Blank" the beam
+                self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             except suds.WebFault:
                 logging.debug("No acquisition in progress to be aborted.")
-            # "Blank" the beam
-            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -485,57 +488,51 @@ class Detector(model.Detector):
         Acquires the SEM image based on the translation, resolution and
         current drift.
         """
+        pxs = self.parent._scanner.pixelSize.value  # m/px
+        scale = self.parent._scanner.scale.value
+        res = (self.parent._scanner.resolution.value[0],
+               self.parent._scanner.resolution.value[1])
+
+        # Set dataType based on current bpp value
+        bpp = self.parent._scanner.bpp.value
+        if bpp == 16:
+            dataType = numpy.uint16
+        else:
+            dataType = numpy.uint8
+
+        metadata = dict(self.parent._metadata)
+
+        # update changed metadata
+        metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
+        metadata[model.MD_ACQ_DATE] = time.time()
+        metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
+        metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
+        metadata[model.MD_BPP] = bpp
+
+        self._scanParams.resolution.width = res[0]
+        self._scanParams.resolution.height = res[1]
+        self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
+        self._scanParams.HDR = bpp == 16
+        # TODO beam shift
+        self._scanParams.center.x = 0
+        self._scanParams.center.y = 0
 
         with self.parent._acq_progress_lock:
-            pxs = self.parent._scanner.pixelSize.value  # m/px
-
-            pxs_pos = self.parent._scanner.translation.value
-            scale = self.parent._scanner.scale.value
-            res = (self.parent._scanner.resolution.value[0],
-                   self.parent._scanner.resolution.value[1])
-
-            # Set dataType based on current bpp value
-            bpp = self.parent._scanner.bpp.value
-            if bpp == 16:
-                dataType = numpy.uint16
-            else:
-                dataType = numpy.uint8
-
-            metadata = dict(self.parent._metadata)
-            phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = self.parent._scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
-
-            # update changed metadata
-            metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
-            metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
-            metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
-            metadata[model.MD_BPP] = bpp
-
-            self._scanParams.resolution.width = res[0]
-            self._scanParams.resolution.height = res[1]
-            self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
-            self._scanParams.HDR = bpp == 16
-            # TODO beam shift
-            self._scanParams.center.x = 0
-            self._scanParams.center.y = 0
-
             # Check if spot mode is required
             if res == (1, 1):
                 self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
+                # MD_POS is hopefully set via updateMetadata
+                return model.DataArray(numpy.array([], dtype=dataType), metadata)
             else:
                 self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
-
-            img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
-
-            # image to ndarray
-            sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
-                                       dtype=dataType)
-            sem_img.shape = res[::-1]
-
-            return model.DataArray(sem_img, metadata)
+                img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
+                # get MD_POS from metadata returned from Phenom
+                metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+                # image to ndarray
+                sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
+                                           dtype=dataType)
+                sem_img.shape = res[::-1]
+                return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
         """
@@ -549,12 +546,22 @@ class Detector(model.Detector):
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
+            # "Blank" the beam
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
+
+    def terminate(self):
+        logging.info("Terminating SEM stream...")
+        try:
+            # "Unblank" the beam
+            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+        except suds.WebFault:
+            logging.warning("Beam might still be blanked!")
 
 class SEMDataFlow(model.DataFlow):
     """
@@ -608,6 +615,7 @@ class Stage(model.Actuator):
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
 
+        # TODO, may be needed in case setting a referencial point is required
         # First calibrate
 #         calib_pos = parent._device.GetStageCenterCalib()
 #         if calib_pos.x != 0 or calib_pos.y != 0:
@@ -715,48 +723,66 @@ class PhenomFocus(model.Actuator):
     def __init__(self, name, role, parent, axes, rng, pos, **kwargs):
         assert len(axes) > 0
         axes_def = {}
-        self._position = {}
 
         # Just z axis
         a = axes[0]
         axes_def[a] = model.Axis(unit="m", range=rng)
 
-        # start at the centre
-        self._position[a] = pos
-
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
+        self.position = model.VigilantAttribute({},
                                     unit="m", readonly=True)
+        self._updatePosition()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
     @abstractmethod
+    def GetWD(self):
+        pass
+        
+    @abstractmethod
+    def SetWD(self, wd):
+        pass
+            
     def _updatePosition(self):
         """
         update the position VA
         """
-        pass
+        # Obtain the finally reached position after move is performed.
+        wd = self.GetWD()
+        pos = {"z": wd}
 
-    @abstractmethod
+        # it's read-only, so we change it via _value
+        self.position._value = self._applyInversionAbs(pos)
+        self.position.notify(self.position.value)
+
     def _doMoveAbs(self, pos):
         """
         move to the position 
         """
-        pass
+        with self.parent._acq_progress_lock:
+            # Perform move through Phenom API
+            self.SetWD(pos["z"])
 
-    @abstractmethod
+            self._updatePosition()
+
     def _doMoveRel(self, shift):
         """
         move by the shift
         """
-        pass
+        with self.parent._acq_progress_lock:
+            # Perform move through Phenom API
+            wd = self.GetWD()
+            pos = wd + shift["z"]
+            self.SetWD(pos)
+
+            self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
+        logging.info("Focus relative move...")
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
@@ -765,6 +791,7 @@ class PhenomFocus(model.Actuator):
 
     @isasync
     def moveAbs(self, pos):
+        logging.info("Focus absolute move...")
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
@@ -800,42 +827,16 @@ class EbeamFocus(PhenomFocus):
         """
         update the position VA
         """
-        # Obtain the finally reached position after move is performed.
-        wd = self.parent._device.GetSEMWD()
-        self._position["z"] = wd
+        super(EbeamFocus, self)._updatePosition()
 
         # Changing WD results to change in fov
         self.parent._scanner.horizontalFoV._value = self.parent._device.GetSEMHFW()
 
-        # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
-        self.position.notify(self.position.value)
+    def GetWD(self):
+        return self.parent._device.GetSEMWD()
 
-    def _doMoveAbs(self, pos):
-        """
-        move to the position 
-        """
-        # Perform move through Phenom API
-        with self.parent._acq_progress_lock:
-            next_pos = {}
-            for axis, new_pos in pos.items():
-                next_pos[axis] = new_pos
-            self.parent._device.SetSEMWD(next_pos)
-
-            self._updatePosition()
-
-    def _doMoveRel(self, shift):
-        """
-        move by the shift
-        """
-        # Perform move through Phenom API
-        with self.parent._acq_progress_lock:
-            pos = self._position
-            for axis, change in shift.items():
-                pos[axis] += change
-            self.parent._device.SetSEMWD(pos)
-
-            self._updatePosition()
+    def SetWD(self, wd):
+        return self.parent._device.SetSEMWD(wd)
 
 # The improved NavCam in Phenom G2 and onwards delivers images with a native
 # resolution of 912x912 pixels. When requesting a different size, the image is
@@ -876,9 +877,6 @@ class NavCam(model.DigitalCamera):
         self.data = NavCamDataFlow(self)
 
         logging.debug("Camera component ready to use.")
-
-    def Shutdown(self):
-        self.req_stop_flow()
 
     def start_flow(self, callback):
         """
@@ -959,7 +957,7 @@ class NavCam(model.DigitalCamera):
         """
         Must be called at the end of the usage
         """
-        self.Shutdown()
+        self.req_stop_flow()
 
 class NavCamDataFlow(model.DataFlow):
     def __init__(self, camera):
@@ -995,51 +993,35 @@ class NavCamFocus(PhenomFocus):
         PhenomFocus.__init__(self, name, role, parent=parent, axes=axes, rng=rng,
                              pos=pos, **kwargs)
 
-    def _updatePosition(self):
-        """
-        update the position VA
-        """
-        # Obtain the finally reached position after move is performed.
-        wd = self.parent._device.GetNavCamWD()
-        self._position["z"] = wd
+    def GetWD(self):
+        return self.parent._device.GetNavCamWD()
 
-        # it's read-only, so we change it via _value
-        self.position._value = self._applyInversionAbs(self._position)
-        self.position.notify(self.position.value)
+    def SetWD(self, wd):
+        return self.parent._device.SetNavCamWD(wd)
 
     def _doMoveAbs(self, pos):
         """
         move to the position 
         """
-        # Perform move through Phenom API
-        with self.parent._acq_progress_lock:
-            next_pos = {}
-            for axis, new_pos in pos.items():
-                next_pos[axis] = new_pos
-            self.parent._device.SetNavCamWD(next_pos)
+        super(NavCamFocus, self)._doMoveAbs(pos)
 
-            self._updatePosition()
-            # FIXME
-            # Although we are already on the correct position, if we acquire an
-            # image just after a move, server raises a fault thus we wait a bit.
-            time.sleep(1)
+        # FIXME
+        # Although we are already on the correct position, if we acquire an
+        # image just after a move, server raises a fault thus we wait a bit.
+        # TODO polling until move is done, probably while loop with try-except
+        time.sleep(1)
 
     def _doMoveRel(self, shift):
         """
         move by the shift
         """
-        # Perform move through Phenom API
-        with self.parent._acq_progress_lock:
-            pos = self._position
-            for axis, change in shift.items():
-                pos[axis] += change
-            self.parent._device.SetNavCamWD(pos)
+        super(NavCamFocus, self)._doMoveRel(shift)
 
-            self._updatePosition()
-            # FIXME
-            # Although we are already on the correct position, if we acquire an
-            # image just after a move, server raises a fault thus we wait a bit.
-            time.sleep(1)
+        # FIXME
+        # Although we are already on the correct position, if we acquire an
+        # image just after a move, server raises a fault thus we wait a bit.
+        # TODO polling until move is done, probably while loop with try-except
+        time.sleep(1)
 
 PRESSURE_UNLOADED = 1e05  # Pa
 PRESSURE_NAVCAM = 1e04  # Pa
