@@ -274,7 +274,8 @@ class MicroscopeViewport(ViewPort):
     def UpdateMagnification(self):
         # TODO: shall we use the real density of the screen?
         # We could use real density but how much important is it?
-        mppScreen = 0.00025 # 0.25 mm/px
+        # The 24" @ 1920x1200 screens from Dell have an mpp value of 0.000270213
+        mpp_screen = 0.00025 # 0.25 mm/px
         label = u"Mag: "
 
         # three possibilities:
@@ -282,7 +283,7 @@ class MicroscopeViewport(ViewPort):
         # * all images have same mpp => mag instrument * mag digital
         # * >1 mpp => total mag
 
-        # get all the mpps
+        # Gather all different image mpp values
         mpps = set()
         for im in self._microscope_view.stream_tree.getImages():
             try:
@@ -290,22 +291,31 @@ class MicroscopeViewport(ViewPort):
             except KeyError:
                 pass
 
+        # If there's only one mpp value (i.e. there's only one image, or they all have the same
+        # mpp value)...
         if len(mpps) == 1:
-            # two magnifications
-            im_mpp = mpps.pop()
-            magIm = mppScreen / im_mpp # as if 1 im.px == 1 sc.px
-            if magIm >= 1:
-                label += u"×" + units.readable_str(units.round_significant(magIm, 3))
+            # Two magnifications:
+            #
+            # 1st: The magnification that occurs by rendering the image to the screen
+            mpp_im = mpps.pop()
+            mag_im = mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
+
+            if mag_im >= 1:
+                label += u"×" + units.readable_str(units.round_significant(mag_im, 3))
             else:
-                label += u"÷" + units.readable_str(units.round_significant(1.0 / magIm, 3))
-            magDig = im_mpp / self._microscope_view.mpp.value
-            if magDig >= 1:
-                label += u" ×" + units.readable_str(units.round_significant(magDig, 3))
+                label += u"÷" + units.readable_str(units.round_significant(1.0 / mag_im, 3))
+
+            # 2nd: The magnification that occurs by changing the mpp value of the view (i.e digitial
+            # zoom)
+            mag_dig = mpp_im / self._microscope_view.mpp.value
+
+            if mag_dig >= 1:
+                label += u" ×" + units.readable_str(units.round_significant(mag_dig, 3))
             else:
-                label += u" ÷" + units.readable_str(units.round_significant(1.0 / magDig, 3))
+                label += u" ÷" + units.readable_str(units.round_significant(1.0 / mag_dig, 3))
         else:
-            # one magnification
-            mag = mppScreen / self._microscope_view.mpp.value
+            # One magnification: The image mpp is ignored
+            mag = mpp_screen / self._microscope_view.mpp.value
             if mag >= 1:
                 label += u"×" + units.readable_str(units.round_significant(mag, 3))
             else:
