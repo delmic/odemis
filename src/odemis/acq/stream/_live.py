@@ -284,6 +284,8 @@ class CameraStream(Stream):
     """ Abstract class representing streams which have a digital camera as a
     detector.
 
+    If Emitter is None, no emitter is used.
+
     Mostly used to share time estimation only.
     """
     def estimateAcquisitionTime(self):
@@ -309,6 +311,8 @@ class CameraStream(Stream):
         """
         Ensures the light is turned off (temporarily)
         """
+        if self._emitter is None:
+            return
         # Just change the intensity of each wavelengths, so that the power is
         # recorded.
         emissions = [0.] * len(self._emitter.emissions.value)
@@ -352,6 +356,8 @@ class BrightfieldStream(CameraStream):
     #         raise NotImplementedError("Do not know how to change filter band")
 
     def _setup_excitation(self):
+        if self._emitter is None:
+            return
         # TODO: how to select white light??? We need a brightlight hardware?
         # Turn on all the sources? Does this always mean white?
         # At least we should set a warning if the final emission range is quite
@@ -369,6 +375,7 @@ class CameraNoLightStream(CameraStream):
     """
     # TODO: pass the stage, and not the position VA of the stage, to be more
     # consistent?
+    # TODO: merge into CameraStream or BrightfieldStream?
     def __init__(self, name, detector, dataflow, emitter, position=None):
         """
         position (VA of dict str -> float): stage position to use instead of the
@@ -376,20 +383,6 @@ class CameraNoLightStream(CameraStream):
         """
         self._position = position
         CameraStream.__init__(self, name, detector, dataflow, emitter)
-        self._prev_light_power = self._emitter.power.value
-
-    # TODO: don't turn off light, as it should always be off anyway?
-    def onActive(self, active):
-        # TODO: use _stop_light()
-        if active:
-            # turn off the light
-            self._prev_light_power = self._emitter.power.value
-            self._emitter.power.value = 0
-        else:
-            # restore the light
-            # TODO: not necessary if each stream had its own hardware settings
-            self._emitter.power.value = self._prev_light_power
-        Stream.onActive(self, active)
 
     def _find_metadata(self, md):
         """
