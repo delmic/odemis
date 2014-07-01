@@ -159,11 +159,13 @@ class Chamber(model.Actuator):
     """
     Simulated chamber component. Just pretends to be able to change pressure
     """
-    def __init__(self, name, role, positions, **kwargs):
+    def __init__(self, name, role, positions, has_pressure=True, **kwargs):
         """
         Initialises the component
         positions (list of str): each pressure positions supported by the 
           component (among the allowed ones)
+        has_pressure (boolean): if True, has a pressure VA with the current
+         pressure.
         """
         # TODO: or just provide .targetPressure (like .targetTemperature) ?
         # Or maybe provide .targetPosition: position that would be reached if
@@ -187,13 +189,16 @@ class Chamber(model.Actuator):
         self.position = model.VigilantAttribute(
                                     {"pressure": self._position},
                                     unit="Pa", readonly=True)
-        # Almost the same as position, but gives the current position
-        self.pressure = model.VigilantAttribute(self._position,
-                                    unit="Pa", readonly=True)
+        if has_pressure:
+            # Almost the same as position, but gives the current position
+            self.pressure = model.VigilantAttribute(self._position,
+                                        unit="Pa", readonly=True)
 
-        self._press_timer = util.RepeatingTimer(1, self._updatePressure,
-                                         "Simulated pressure update")
-        self._press_timer.start()
+            self._press_timer = util.RepeatingTimer(1, self._updatePressure,
+                                             "Simulated pressure update")
+            self._press_timer.start()
+        else:
+            self._press_timer = None
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time

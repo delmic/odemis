@@ -75,6 +75,7 @@ Spectra: {
     role: chamber,
     init: {
         positions: ["vented", "overview", "vacuum"],
+        has_pressure: False,
     },
 }
 
