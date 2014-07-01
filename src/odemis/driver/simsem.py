@@ -142,6 +142,7 @@ class Scanner(model.Emitter):
                                                    unit="m")
         self.magnification = model.VigilantAttribute(self._hfw_nomag / hfv,
                                                      unit="", readonly=True)
+        self.horizontalFoV.subscribe(self._onHFV)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
@@ -188,7 +189,7 @@ class Scanner(model.Emitter):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
 
-    def _onHFV(self, mag):
+    def _onHFV(self, hfv):
         self._updatePixelSize()
 
     def _onScale(self, s):
