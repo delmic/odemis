@@ -844,9 +844,9 @@ class MicroscopeView(View):
         if not isinstance(stream, self.stream_classes):
             msg = "Adding incompatible stream '%s' to view '%s'. %s needed"
             logging.warning(msg,
-                          stream.name.value,
-                          self.name.value,
-                          self.stream_classes)
+                            stream.name.value,
+                            self.name.value,
+                            self.stream_classes)
 
         # Find out where the stream should go in the streamTree
         # FIXME: manage sub-trees, with different merge operations

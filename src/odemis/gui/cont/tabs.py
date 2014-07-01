@@ -257,6 +257,8 @@ class SecomStreamsTab(Tab):
             overview_stream.should_update.value = True
             overview_stream.is_active.value = True
             self.tab_data_model.views.value[-1].addStream(overview_stream)
+        else:
+            self.main_frame.vp_overview_sem.Hide()
 
         self._settings_controller = settings.SecomSettingsController(
             self.main_frame,

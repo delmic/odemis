@@ -88,7 +88,8 @@ class InfoLegend(wx.Panel):
         self.hfw_text.SetToolTipString("Horizontal Field Width")
 
         # Magnification text
-        self.magnification_text = wx.TextCtrl(self, size=(100, -1), style=wx.NO_BORDER|wx.CB_READONLY)
+        self.magnification_text = wx.TextCtrl(self, size=(100, -1),
+                                              style=wx.NO_BORDER | wx.CB_READONLY)
         self.magnification_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
         self.magnification_text.SetToolTipString("Magnification")
