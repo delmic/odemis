@@ -60,9 +60,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     raised.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The CCD
-    stage (model.CombinedActuator): The stage
+    stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
-    focus (model.CombinedActuator): The optical focus
+    focus (model.Actuator): The optical focus
     returns (float):    Final distance to the center #m 
     raises:    
             CancelledError() if cancelled
@@ -116,6 +116,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
                 ccd.binning.value=(1, 1)
             except IOError:
                 raise IOError('Spot alignment failure. AutoFocus failed.')
+            logging.debug("Trying again to find spot...")
             future._centerspotf = CenterSpot(ccd, stage, ROUGH_MOVE)
             dist = future._centerspotf.result()
             if dist is None:
@@ -249,13 +250,13 @@ def CenterSpot(ccd, stage, mx_steps):
     f._spot_center_state = RUNNING
 
     # Task to run
-    doCenterSpot = _DoCenterSpot
     f.task_canceller = _CancelCenterSpot
+    f._center_lock = threading.Lock()
 
     # Run in separate thread
     center_thread = threading.Thread(target=executeTask,
                   name="Spot center",
-                  args=(f, doCenterSpot, f, ccd, stage, mx_steps))
+                  args=(f, _DoCenterSpot, f, ccd, stage, mx_steps))
 
     center_thread.start()
     return f
@@ -271,7 +272,7 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
     stage (model.CombinedActuator): The stage
     mx_steps (int): Maximum number of steps to reach the center
     returns (float or None):    Final distance to the center #m 
-    raises:    
+    raises:
             CancelledError() if cancelled
     """
     try:
@@ -283,8 +284,7 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
     
         # Center of optical image
         pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-        center_pxs = ((image.shape[1] / 2),
-                     (image.shape[0] / 2))
+        center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
     
         # Epsilon distance below which the lens is considered centered. The worse of:
         # * 1.5 pixels (because the CCD resolution cannot give us better)
