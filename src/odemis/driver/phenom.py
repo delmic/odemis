@@ -520,6 +520,10 @@ class Detector(model.Detector):
         with self.parent._acq_progress_lock:
             # Check if spot mode is required
             if res == (1, 1):
+                # FIXME
+                # Avoid setting resolution to 1,1
+                self._scanParams.resolution.width = 512
+                self._scanParams.resolution.height = 512
                 self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([], dtype=dataType), metadata)

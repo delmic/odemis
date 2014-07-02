@@ -22,9 +22,7 @@ from __future__ import division
 
 import Pyro4
 import copy
-import logging
 from odemis import model
-from odemis.dataio import hdf5
 import os
 import pickle
 import threading
@@ -41,7 +39,7 @@ CONFIG_SED = {"name": "sed", "role": "sed"}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
 CONFIG_FOCUS = {"name": "focus", "role": "ebeam-focus", "axes": ["z"]}
-CONFIG_NC_FOCUS = {"name": "navcam_focus", "role": "overview-focus", "axes": ["z"]}
+CONFIG_NC_FOCUS = {"name": "navcam-focus", "role": "overview-focus", "axes": ["z"]}
 CONFIG_STAGE = {"name": "stage", "role": "stage"}
 CONFIG_NAVCAM = {"name": "camera", "role": "overview-ccd"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
@@ -49,7 +47,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080
               "username": "delmic", "password" : "6526AM9688B1",
               "children": {"detector": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STAGE, "focus": CONFIG_FOCUS,
-                           "camera": CONFIG_NAVCAM, "navcam_focus": CONFIG_NC_FOCUS,
+                           "camera": CONFIG_NAVCAM, "navcam-focus": CONFIG_NC_FOCUS,
                            "pressure": CONFIG_PRESSURE}
               }
 @skip("skip")
@@ -241,7 +239,6 @@ class TestSEM(unittest.TestCase):
         # only one point
         self.scanner.resolution.value = (1, 1)
         im = self.sed.data.get()
-        hdf5.export("test3.h5", model.DataArray(im))
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
         self.assertTupleAlmostEqual(im.metadata[model.MD_POS], exp_pos)
 
