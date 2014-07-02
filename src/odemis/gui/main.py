@@ -126,6 +126,8 @@ class OdemisGUIApp(wx.App):
             ib.AddIcon(imgdata.catalog['icon128'].GetIcon())
             self.main_frame.SetIcons(ib)
 
+            self.main_data.debug.subscribe(self.on_debug_va, init=True)
+
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
