@@ -25,7 +25,7 @@ from __future__ import division
 
 import collections
 import logging
-from odemis.acq.stream._live import RGBCameraStream
+from odemis.acq.stream._live import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, \
@@ -285,7 +285,7 @@ class ViewController(object):
                     # "stage": None,
                     # "focus0": None,
                     # "focus1": None,
-                    "stream_classes": (RGBCameraStream,),
+                    "stream_classes": (RGBCameraStream, BrightfieldStream),
                 }
 
         else:
