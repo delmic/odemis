@@ -54,41 +54,39 @@ class InfoLegend(wx.Panel):
 
         # Merge slider
         # TODO: should be possible to use VAConnector
-        self.merge_slider = Slider(
-                    self,
-                    wx.ID_ANY,
-                    50, # val
-                    0, 100,
-                    size=(100, 12),
-                    style=(wx.SL_HORIZONTAL |
-                           wx.SL_AUTOTICKS |
-                           wx.SL_TICKS |
-                           wx.NO_BORDER))
+        self.merge_slider = Slider(self,
+                                   wx.ID_ANY,
+                                   50,  # val
+                                   0, 100,
+                                   size=(100, 12),
+                                   style=(wx.SL_HORIZONTAL |
+                                          wx.SL_AUTOTICKS |
+                                          wx.SL_TICKS |
+                                          wx.NO_BORDER)
+        )
 
         self.merge_slider.SetBackgroundColour(parent.GetBackgroundColour())
         self.merge_slider.SetForegroundColour("#4d4d4d")
         self.merge_slider.SetToolTipString("Merge ratio")
 
-        self.bmp_slider_left = wx.StaticBitmap(
-                                    self,
-                                    wx.ID_ANY,
-                                    imgdata.getico_blending_optBitmap())
-        self.bmp_slider_right = wx.StaticBitmap(
-                                    self,
-                                    wx.ID_ANY,
-                                    imgdata.getico_blending_semBitmap())
+        self.bmp_slider_left = wx.StaticBitmap(self,
+                                               wx.ID_ANY,
+                                               imgdata.getico_blending_optBitmap())
+        self.bmp_slider_right = wx.StaticBitmap(self,
+                                                wx.ID_ANY,
+                                                imgdata.getico_blending_semBitmap())
 
         # Scale window
         self.scale_win = ScaleWindow(self)
 
         # Horizontal Field Width text
-        self.hfw_text = wx.TextCtrl(self, size=(100, -1), style=wx.NO_BORDER|wx.CB_READONLY)
+        self.hfw_text = wx.TextCtrl(self, size=(130, -1), style=wx.NO_BORDER|wx.CB_READONLY)
         self.hfw_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.hfw_text.SetForegroundColour(parent.GetForegroundColour())
         self.hfw_text.SetToolTipString("Horizontal Field Width")
 
         # Magnification text
-        self.magnification_text = wx.TextCtrl(self, size=(100, -1),
+        self.magnification_text = wx.TextCtrl(self, size=(130, -1),
                                               style=wx.NO_BORDER | wx.CB_READONLY)
         self.magnification_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
@@ -143,9 +141,9 @@ class InfoLegend(wx.Panel):
         legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
         legendSizer.AddStretchSpacer(1)
         legendSizer.Add(self.scale_win,
-                      2,
-                      border=2,
-                      flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
+                        2,
+                        border=2,
+                        flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
         legendSizer.AddStretchSpacer(1)
         legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
 

@@ -197,6 +197,11 @@ CONFIG = {
             "type": "float",
             "accuracy": 2,
         },
+        "horizontalFoV":
+        {
+            "label": "Horiz. field width",
+            "accuracy": 2,
+        },
         "resolution":
         {
             "control_type": odemis.gui.CONTROL_COMBO,

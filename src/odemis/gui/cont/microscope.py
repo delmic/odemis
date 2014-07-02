@@ -117,7 +117,9 @@ class ChamberButtonController(HardwareButtonController):
                 self.pressure_va = getattr(self.chamber_act, 'pressure')
                 self.pressure_va.subscribe(self._update_label, init=True)
             else:
-                self.btn.SetLabel("Chamber")
+                # TODO: Increase button image size so the full 'CHAMBER' test will fit (also
+                # slightly decrease the size of the 'eject' symbol.
+                self.btn.SetLabel("CHMBR")
                 self.btn.Refresh()
 
     def _determine_button_faces(self, role):
