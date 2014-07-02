@@ -57,6 +57,9 @@ class Camera(model.DigitalCamera):
         # we will fill the set of children with Components later in ._children
         model.DigitalCamera.__init__(self, name, role, daemon=daemon, **kwargs)
 
+        if self._img.ndim > 3:  # remove dims of length 1
+            self._img = numpy.squeeze(self._img)
+
         imshp = self._img.shape
         if len(imshp) == 3 and imshp[0] in {3, 4}:
             # CYX, change it to YXC, to simulate a RGB detector
@@ -76,11 +79,13 @@ class Camera(model.DigitalCamera):
             res = imshp[::-1]
             self._shape = res # X, Y,...
         # TODO: handle non integer dtypes
-        depth = 2 ** (self._img.dtype.itemsize * 8) - 1
+        depth = 2 ** (self._img.dtype.itemsize * 8)
         self._shape += (depth,)
         
         # TODO: don't provide range? or don't make it readonly?
         self.resolution = model.ResolutionVA(res, [res, res])# , readonly=True)
+        # TODO: support (simulated) binning
+        self.binning = model.ResolutionVA((1, 1), [(1, 1), (1, 1)])
 
         exp = 0.1 # s
         self.exposureTime = model.FloatContinuous(exp, [1e-3, 1e3], unit="s")
