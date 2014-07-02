@@ -1413,9 +1413,9 @@ class LensAlignTab(Tab):
                                                  self._on_btn_to_center)
 
         # Fine alignment panel
-        pnl_fine_align = main_frame.pnl_align_tools
-        fa_sizer = pnl_fine_align.GetSizer()
-        scale_win = ScaleWindow(pnl_fine_align)
+        pnl_sem_toolbar = main_frame.pnl_sem_toolbar
+        fa_sizer = pnl_sem_toolbar.GetSizer()
+        scale_win = ScaleWindow(pnl_sem_toolbar)
         self._on_mpp = guiutil.call_after_wrapper(scale_win.SetMPP)  # need to keep ref
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
         fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
