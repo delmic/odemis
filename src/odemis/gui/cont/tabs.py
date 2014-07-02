@@ -954,10 +954,12 @@ class AnalysisTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
-    def on_file_open_button(self, evt):
+    def select_acq_file(self):
         """ Open an image file using a file dialog box
-        """
 
+        return (boolean): True if the user did pick a file, False if it was
+        cancelled.
+        """
         # Find the available formats (and corresponding extensions)
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
@@ -979,7 +981,7 @@ class AnalysisTab(Tab):
 
         # Show the dialog and check whether is was accepted or cancelled
         if dialog.ShowModal() != wx.ID_OK:
-            return
+            return False
 
 
         # Detect the format to use
@@ -1004,7 +1006,10 @@ class AnalysisTab(Tab):
         self.main_frame.Update()
 
         wx.CallAfter(self.load_data, fmt, fn)
+        return True
 
+    def on_file_open_button(self, evt):
+        self.select_acq_file()
 
     def load_data(self, fmt, fn):
         converter = dataio.get_exporter(fmt)

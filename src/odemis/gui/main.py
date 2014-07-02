@@ -24,21 +24,19 @@ import Pyro4.errors
 import argparse
 import logging
 from odemis import model
+import odemis
 from odemis.gui import main_xrc, log
-import odemis.gui.conf
 from odemis.gui.cont import acquisition
-from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_after
 from odemis.gui.xmlh import odemis_get_resources
 from odemis.util import driver
-import os.path
-import subprocess
 import sys
 import threading
 import traceback
 import wx
 from wx.lib.pubsub import pub
 
+from odemis.gui.cont.menu import MenuController
 import odemis.gui.cont.tabs as tabs
 import odemis.gui.img.data as imgdata
 import odemis.gui.model as guimodel
@@ -128,88 +126,6 @@ class OdemisGUIApp(wx.App):
             ib.AddIcon(imgdata.catalog['icon128'].GetIcon())
             self.main_frame.SetIcons(ib)
 
-            # TODO: move to menu controller?
-            # Menu events
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_quit.GetId(),
-                        self.on_close_window)
-
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_debug.GetId(),
-                        self.on_debug_menu)
-            # no need for init as we know debug is False at init.
-            self.main_data.debug.subscribe(self.on_debug_va)
-
-            gc = odemis.gui.conf.get_general_conf()
-
-            if gc.get_manual(self.main_data.role):
-                self.main_frame.menu_item_manual.Enable(True)
-
-            if gc.get_dev_manual():
-                self.main_frame.menu_item_devmanual.Enable(True)
-
-            # TODO: Assign 'Open...' method
-            # wx.EVT_MENU(self.main_frame,
-            #             self.main_frame.menu_item_open.GetId(),
-            #             <function>)
-
-            # TODO: Assign 'Play Stream' functionality
-            # wx.EVT_MENU(self.main_frame,
-            #             self.main_frame.menu_item_play_stream.GetId(),
-            #             <function>)
-
-            # TODO: Assign 'Auto Brightness/Contrast' functionality
-            # wx.EVT_MENU(self.main_frame,
-            #             self.main_frame.menu_item_cont.GetId(),
-            #             <function>)
-
-            # TODO: Assign 'Auto Focus' functionality
-            # wx.EVT_MENU(self.main_frame,
-            #             self.main_frame.menu_auto_focus.GetId(),
-            #             <function>)
-
-            # Note: "snapshot" menu is handled by acquisition controller
-
-            # TODO: Assign 'Bug report' functionality
-            # * Report a bug... (Opens a mail client to send an email to us?)
-            # wx.EVT_MENU(self.main_frame,
-            #             self.main_frame.menu_bugreport.GetId(),
-            #             <function>)
-
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_manual.GetId(),
-                        self.on_manual)
-
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_devmanual.GetId(),
-                        self.on_dev_manual)
-
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_inspect.GetId(),
-                        self.on_inspect)
-
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_about.GetId(),
-                        self.on_about)
-
-            # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
-            # seem to like it). For now [ESC] is mentioned in the menu item text
-            wx.EVT_MENU(self.main_frame,
-                        self.main_frame.menu_item_halt.GetId(),
-                        self.on_stop_axes)
-
-            # The escape accelerator has to be added manually, because for some
-            # reason, the 'ESC' key will not register using XRCED.
-            accel_tbl = wx.AcceleratorTable([
-                (wx.ACCEL_NORMAL, wx.WXK_ESCAPE,
-                 self.main_frame.menu_item_halt.GetId())
-            ])
-
-            self.main_frame.SetAcceleratorTable(accel_tbl)
-
-            self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
-            self.main_frame.Maximize() # must be done before Show()
-
             # List of all possible tabs used in Odemis' main GUI
             # microscope role(s), internal name, class, tab btn, tab panel
             # order matters, as the first matching tab is be the default one
@@ -264,11 +180,21 @@ class OdemisGUIApp(wx.App):
                             self.main_data)
             self._tab_controller = tc
 
+            self._menu_controller = MenuController(self.main_data,
+                                                   self.main_frame)
+            # Menu events
+            wx.EVT_MENU(self.main_frame,
+                        self.main_frame.menu_item_quit.GetId(),
+                        self.on_close_window)
+
+            self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
+
             # To handle "Save snapshot" menu
             self._snapshot_controller = acquisition.SnapshotController(
                                                         self.main_data,
                                                         self.main_frame)
 
+            self.main_frame.Maximize() # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
             logging.debug("Frame will be displayed soon")
@@ -279,83 +205,10 @@ class OdemisGUIApp(wx.App):
             # the program keeps running in the background.
             raise
 
-
-    def init_config(self):
-        """ Initialize GUI configuration """
-        # TODO: Process GUI configuration here
-        pass
-
-    def _module_path(self):
-        encoding = sys.getfilesystemencoding()
-        return os.path.dirname(unicode(__file__, encoding))
-
-    def on_stop_axes(self, evt):
-        if self.main_data:
-            self.main_data.stopMotion()
-        else:
-            evt.Skip()
-
-    def on_about(self, evt):
-
-        info = wx.AboutDialogInfo()
-        info.SetIcon(imgdata.catalog['icon128'].GetIcon())
-        info.Name = odemis.__shortname__
-        info.Version = odemis.__version__
-        info.Description = odemis.__fullname__
-        info.Copyright = odemis.__copyright__
-        info.WebSite = ("http://delmic.com", "delmic.com")
-        info.Licence = odemis.__licensetxt__
-        info.Developers = odemis.__authors__
-        # info.DocWriter = '???'
-        # info.Artist = '???'
-        # info.Translator = '???'
-
-        if DyeDatabase:
-            info.Developers += ["", "Dye database from http://fluorophores.org"]
-            info.Licence += ("""
-The dye database is provided as-is, from the Fluorobase consortium.
-The Fluorobase consortium provides this data and software in good faith, but
-akes no warranty, expressed or implied, nor assumes any legal liability or
-responsibility for any purpose for which they are used. For further information
-see http://www.fluorophores.org/disclaimer/.
-""")
-        wx.AboutBox(info)
-
-    def on_manual(self, evt):
-        gc = odemis.gui.conf.get_general_conf()
-        subprocess.Popen(['xdg-open', gc.get_manual(self.main_data.role)])
-
-    def on_dev_manual(self, evt):
-        gc = odemis.gui.conf.get_general_conf()
-        subprocess.Popen(['xdg-open', gc.get_dev_manual()])
-
-    def on_inspect(self, evt):
-        from wx.lib.inspection import InspectionTool
-        InspectionTool().Show()
-#
-#     def on_htmldoc(self, evt):
-#         """ Launch Python's SimpleHTTPServer in a separate process and have it
-#         serve the source code documentation as created by Sphinx
-#         """
-#         self.http_proc = subprocess.Popen(
-#             ["python", "-m", "SimpleHTTPServer"],
-#             stderr=subprocess.STDOUT,
-#             stdout=subprocess.PIPE,
-#             cwd=os.path.dirname(odemis.gui.conf.get_general_conf().html_dev_doc))
-#
-#         import webbrowser
-#         webbrowser.open('http://localhost:8000')
-
-    def on_debug_menu(self, evt):
-        """ Update the debug VA according to the menu
-        """
-        self.main_data.debug.value = self.main_frame.menu_item_debug.IsChecked()
-
     @call_after
     def on_debug_va(self, enabled):
         """ This method (un)sets the application into debug mode, setting the
         log level and opening the log panel. """
-        self.main_frame.menu_item_debug.Check(enabled)
         self.main_frame.pnl_log.Show(enabled)
         self.main_frame.Layout()
 
