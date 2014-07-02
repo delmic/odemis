@@ -127,7 +127,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                     f.result()
                     image = detector.data.get(asap=False)
                     fm_new = MeasureFocus(image)
-                    if fm_test - fm_new > thres_factor * fm_new:
+                    if fm_test - fm_new > (thres_factor / 2) * fm_new:
                         count_fails+=1
                         if (steps == 1) and (count_fails == 2):
                             # Return to initial position

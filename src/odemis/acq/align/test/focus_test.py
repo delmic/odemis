@@ -107,11 +107,9 @@ class TestAutofocus(unittest.TestCase):
         for i in range(1, 10, 1):
             input = ndimage.gaussian_filter(input, sigma=i)
             res = autofocus.MeasureFocus(input)
-            print res
             self.assertGreater(prev_res, res)
             prev_res = res
 
-    @unittest.skip("skip")
     def test_autofocus(self):
         """
         Test AutoFocus
@@ -119,9 +117,9 @@ class TestAutofocus(unittest.TestCase):
         focus = self.focus
         ebeam = self.ebeam
         ccd = self.ccd
+        focus.moveAbs({"z": 60e-06})
         future_focus = align.AutoFocus(ccd, ebeam, focus, 10e-06)
         foc_pos, fm_final = future_focus.result()
-        print foc_pos
         self.assertAlmostEqual(foc_pos, 0, 4)
 
 if __name__ == '__main__':
