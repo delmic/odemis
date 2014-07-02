@@ -1030,10 +1030,8 @@ class AutoCenterController(object):
             dist = future.result() # returns distance to center
         except CancelledError:
             self._main_frame.lbl_auto_center.Label = "Cancelled"
-        except Exception:
-            # FIXME: don't display a really exception, but just put it in
-            # info log level?
-            logging.exception("Failed to run the centering procedure")
+        except Exception as exp:
+            logging.info("Centering procedure failed: %s", exp)
             self._main_frame.lbl_auto_center.Label = "Failed"
         else:
             self._main_frame.lbl_auto_center.Label = "Successful"
