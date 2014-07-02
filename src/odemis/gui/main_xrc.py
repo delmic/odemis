@@ -502,9 +502,6 @@ def __init_resources():
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
-            
-            
-            
             <object class="spacer">
               <size>32,-1</size>
             </object>
@@ -535,8 +532,8 @@ def __init_resources():
                       </XRCED>
                     </object>
                     <option>1</option>
-                    <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>32</border>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>10</border>
                     <minsize>200,150</minsize>
                   </object>
                   <object class="sizeritem">
