@@ -24,15 +24,18 @@ updated. Typically it is used to transmit video (sequence of images). It does it
 losslessly and with metadata attached (see _metadata for the conventional ones).
 '''
 
-from . import _core
-from ._core import WeakMethod, WeakRefLostError
 import Pyro4
 import inspect
 import logging
 import numpy
+from odemis.model import _metadata
 import threading
 import time
 import zmq
+
+from . import _core
+from ._core import WeakMethod, WeakRefLostError
+
 
 class DataArray(numpy.ndarray):
     """
@@ -272,20 +275,28 @@ class DataFlow(DataFlowBase):
     def _count_listeners(self):
         return len(self._listeners) + len(self._remote_listeners)
 
-    def get(self):
+    def get(self, asap=True):
         """
         Acquires one image and return it
+        asap (boolean): if True, returns the first image received, otherwise
+         ensures that the image has been acquired after the call to this function 
         return (DataArray)
         Default implementation: it subscribes and, after receiving the first
          image, unsubscribes. It's inefficient but simple and works in every case.
         """
+        if asap:
+            min_time = 0
+        else:
+            min_time = time.time()
+
         is_received = threading.Event()
         data_shared = [None] # in python2 we need to create a new container object
 
-        def receive_one_image(df, data):
-            df.unsubscribe(receive_one_image)
-            data_shared[0] = data
-            is_received.set()
+        def receive_one_image(df, data, min_time=min_time):
+            if data.metadata.get(_metadata.MD_ACQ_DATE, 0) >= min_time:
+                df.unsubscribe(receive_one_image)
+                data_shared[0] = data
+                is_received.set()
 
         self.subscribe(receive_one_image)
         is_received.wait()
