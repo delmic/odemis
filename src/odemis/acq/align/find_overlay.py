@@ -187,9 +187,12 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
 
         # Also indicate which dwell time eventually worked
         transform_data[model.MD_DWELL_TIME] = dwell_time
-    
+
         logging.debug("Overlay done.")
         return ret, transform_data
+    except Exception as exp:
+        logging.exception("Finding overlay failed")
+        raise exp
     finally:
         with future._overlay_lock:
             if future._find_overlay_state == CANCELLED:

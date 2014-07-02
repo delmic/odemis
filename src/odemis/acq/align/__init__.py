@@ -61,7 +61,6 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     f._overlay_lock = threading.Lock()
 
     # Task to run
-    doFindOverlay = _DoFindOverlay
     f.task_canceller = _CancelFindOverlay
 
     # Create scanner for scan grid
@@ -70,7 +69,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     # Run in separate thread
     overlay_thread = threading.Thread(target=executeTask,
                   name="SEM/CCD overlay",
-                  args=(f, doFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
+                  args=(f, _DoFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
 
     overlay_thread.start()
     return f
