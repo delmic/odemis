@@ -29,7 +29,7 @@ from odemis import model
 from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
-                          NotSettableError, StringVA)
+                          NotSettableError, StringVA, getVAs)
 import os
 import threading
 import time
@@ -228,7 +228,7 @@ class MainGUIData(object):
             self.chamber_state = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
             self.chamber_state.subscribe(self.on_chamber_state)
 
-            if hasattr(self.chamber, 'pressure'):
+            if 'pressure' in getVAs(self.chamber):
                 self.chamber.pressure.subscribe(self.on_chamber_pressure)
 
         # Used when doing fine alignment, based on the value used by the user
