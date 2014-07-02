@@ -99,8 +99,8 @@ class TestAlignment(unittest.TestCase):
         focus = self.focus
 
         f = align.AlignSpot(ccd, stage, escan, focus)
-
-        t = f.result()
+        with self.assertRaises(IOError):
+            f.result()
 
     @unittest.skip("skip")
     def test_spot_alignment_cancelled(self):

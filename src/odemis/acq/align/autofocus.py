@@ -88,12 +88,12 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
         init_pos = focus.position.value.get('z')
         step = accuracy
         cur_pos = focus.position.value.get('z')
-        image = detector.data.get(False)
+        image = detector.data.get(asap=False)
         fm_cur = MeasureFocus(image)
         init_fm = fm_cur
         f = focus.moveRel({"z": step})
         f.result()
-        image = detector.data.get(False)
+        image = detector.data.get(asap=False)
         fm_test = MeasureFocus(image)
 
         if future._autofocus_state == CANCELLED:
@@ -125,7 +125,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                     shift = cur_pos - pos
                     f = focus.moveRel({"z":shift})
                     f.result()
-                    image = detector.data.get(False)
+                    image = detector.data.get(asap=False)
                     fm_new = MeasureFocus(image)
                     if fm_test - fm_new > thres_factor * fm_new:
                         count_fails+=1
@@ -141,11 +141,11 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                         raise CancelledError()
                 steps += 1
 
-            image = detector.data.get(False)
+            image = detector.data.get(asap=False)
             fm_cur = MeasureFocus(image)
             f = focus.moveRel({"z": step})
             f.result()
-            image = detector.data.get(False)
+            image = detector.data.get(asap=False)
             fm_test = MeasureFocus(image)
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -174,7 +174,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
             fm_old = fm_new
             f = focus.moveRel({"z":sign * step})
             f.result()
-            image = detector.data.get(False)
+            image = detector.data.get(asap=False)
             fm_new = MeasureFocus(image)
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
