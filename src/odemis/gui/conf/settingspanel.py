@@ -202,6 +202,10 @@ CONFIG = {
             "control_type": odemis.gui.CONTROL_COMBO,
             "choices": _resolution_from_range,
         },
+        "power":
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
         # force using just a text field => it's for copy-paste
         "magnification":
         {
