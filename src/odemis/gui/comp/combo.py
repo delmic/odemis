@@ -69,12 +69,13 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         """ Force the TextCtrl to cover the white 'border' at the bottom
         on each resize.
         """
-
         # If the ComboBox if given the wx.CB_READONLY style, it does not contain
         # a child TextCtrl, so it seems.
+        # Note: The height is fixed (as in, not related to the ComboBox itself) because that
+        # would cause 'jumping' text in certain use cases, where the text would be displayed at
+        # positions that differed 1 px in the vertical direction.
         if self.txt_ctrl:
-            p_size = self.GetSize()
-            wx.CallAfter(self.txt_ctrl.SetSize, (-1, p_size[1] + 1))
+            wx.CallAfter(self.txt_ctrl.SetSize, (-1, 16))
         evt.Skip()
 
     def on_key(self, evt):
