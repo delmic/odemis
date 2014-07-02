@@ -172,17 +172,19 @@ class LLE(model.Emitter):
     def getMetadata(self):
         metadata = {}
         # MD_IN_WL expects just min/max => if multiple sources, we need to combine
-        wl_range = (None, None) # min, max in m
         power = 0
+        wls = []
         for i, intens in enumerate(self._intensities):
             if intens > 0:
-                wl_range = (min(wl_range[0], self.spectra.value[i][0]),
-                            max(wl_range[1], self.spectra.value[i][4]))
+                wls.append((self.spectra.value[i][0], self.spectra.value[i][4]))
                 # FIXME: not sure how to combine
                 power += intens
         
-        if wl_range == (None, None):
-            wl_range = (0, 0) # TODO: needed?
+        if wls:
+            wl_range = (min(w[0] for w in wls),
+                        max(w[1] for w in wls))
+        else:
+            wl_range = (0, 0)
         metadata[model.MD_IN_WL] = wl_range
         metadata[model.MD_LIGHT_POWER] = power
         return metadata
