@@ -1,6 +1,6 @@
 SECOM: {
     class: Microscope,
-    role: secom,
+    role: secommini,
     emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
     detectors: ["Andor SimCam", "SED ExtXY", "NavCam"
                ],

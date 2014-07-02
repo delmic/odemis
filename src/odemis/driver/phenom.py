@@ -1064,6 +1064,9 @@ class ChamberPressure(model.Actuator):
         self.position = model.VigilantAttribute(
                                     {"pressure": self._position},
                                     unit="Pa", readonly=True)
+        self.pressure = model.VigilantAttribute(
+                                    0,
+                                    unit="Pa", readonly=True)
 
         # Tuple containing sample holder ID and type
         self.sampleHolder = model.TupleVA((0, 0), unit="", readonly=True)
@@ -1169,13 +1172,16 @@ class ChamberPressure(model.Actuator):
             TimeUpdater = self.TimeUpdater(self.parent, future, p)
             TimeUpdater.start()
 
-            if p["pressure"] == PRESSURE_SEM:
-                self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
-            elif p["pressure"] == PRESSURE_NAVCAM:
-                self._updateSampleHolder()  # in case new sample holder was loaded
-                self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
-            else:
-                self.parent._device.UnloadSample()
+            try:
+                if p["pressure"] == PRESSURE_SEM:
+                    self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                elif p["pressure"] == PRESSURE_NAVCAM:
+                    self._updateSampleHolder()  # in case new sample holder was loaded
+                    self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+                else:
+                    self.parent._device.UnloadSample()
+            except suds.WebFault:
+                raise IOError("Acquisition in progress, cannot move to another state.")
 
             self._updatePosition()
             TimeUpdater.join(VACUUM_TIMEOUT)
