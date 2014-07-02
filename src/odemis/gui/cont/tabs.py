@@ -240,8 +240,14 @@ class SecomStreamsTab(Tab):
             # FIXME: RGBCameraStream complains that the detector shape has length 3 instead of 4,
             # with the static image used by the full SECOM sim configuration
 
-            overview_stream = streammod.RGBCameraStream("Overview", main_data.overview_ccd,
-                                                        main_data.overview_ccd.data, None)
+            if len(main_data.overview_ccd.shape) == 4:
+                overview_stream = streammod.RGBCameraStream("Overview", main_data.overview_ccd,
+                                                            main_data.overview_ccd.data, None)
+            else:
+                overview_stream = streammod.BrightfieldStream("Overview", main_data.overview_ccd,
+                                                              main_data.overview_ccd.data, None)
+
+
             overview_stream.should_update.value = True
             overview_stream.is_active.value = True
             self.tab_data_model.views.value[-1].addStream(overview_stream)
