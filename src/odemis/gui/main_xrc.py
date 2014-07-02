@@ -53,10 +53,10 @@ class xrcfr_main(wx.Frame):
         self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
         self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
-        self.btn_tab_secom_align = xrc.XRCCTRL(self, "btn_tab_secom_align")
-        self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
+        self.btn_tab_secom_align = xrc.XRCCTRL(self, "btn_tab_secom_align")
+        self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
         self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
@@ -394,60 +394,6 @@ def __init_resources():
               <border>20</border>
             </object>
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_align">
-                <size>160,30</size>
-                <default>1</default>
-                <label>LENS ALIGNMENT</label>
-                <bitmap>img_tab_inactive_png</bitmap>
-                <hover>img_tab_hover_png</hover>
-                <selected>img_tab_active_png</selected>
-                <disabled>img_tab_hover_png</disabled>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_align">
-                <size>160,30</size>
-                <label>MIRROR ALIGNMENT</label>
-                <bitmap>img_tab_inactive_png</bitmap>
-                <hover>img_tab_hover_png</hover>
-                <selected>img_tab_active_png</selected>
-                <disabled>img_tab_hover_png</disabled>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <style>normal</style>
-                  <weight>normal</weight>
-                  <underlined>0</underlined>
-                  <family>default</family>
-                  <face>Ubuntu</face>
-                  <encoding>UTF-8</encoding>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
               <object class="TabButton" name="btn_tab_sparc_acqui">
                 <size>160,30</size>
                 <label>ACQUISITION</label>
@@ -504,6 +450,62 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_secom_align">
+                <size>160,30</size>
+                <default>1</default>
+                <label>LENS ALIGNMENT</label>
+                <bitmap>img_tab_inactive_png</bitmap>
+                <hover>img_tab_hover_png</hover>
+                <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_sparc_align">
+                <size>160,30</size>
+                <label>MIRROR ALIGNMENT</label>
+                <bitmap>img_tab_inactive_png</bitmap>
+                <hover>img_tab_hover_png</hover>
+                <selected>img_tab_active_png</selected>
+                <disabled>img_tab_hover_png</disabled>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <style>normal</style>
+                  <weight>normal</weight>
+                  <underlined>0</underlined>
+                  <family>default</family>
+                  <face>Ubuntu</face>
+                  <encoding>UTF-8</encoding>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="spacer">
+              <size>32,-1</size>
+            </object>
+            <object class="sizeritem">
               <object class="wxStaticBitmap">
                 <bitmap>img_logo_h30_png</bitmap>
               </object>
@@ -530,8 +532,8 @@ def __init_resources():
                       </XRCED>
                     </object>
                     <option>1</option>
-                    <flag>wxBOTTOM|wxEXPAND</flag>
-                    <border>32</border>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>10</border>
                     <minsize>200,150</minsize>
                   </object>
                   <object class="sizeritem">
