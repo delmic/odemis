@@ -846,8 +846,6 @@ class TabButton(ImageTextToggleButton):
         self.fg_color_notify = FG_COLOUR_HIGHLIGHT
 
         self.notification = False
-        self.notify_timer = wx.Timer(self)
-        self.notify_count = 0
 
     def _highlight(self, on):
         if on:
@@ -885,27 +883,21 @@ class TabButton(ImageTextToggleButton):
 
     def notify(self, on):
         """ Indicate a change to the button's related tab by visually altering it """
+
+        f = self.GetFont()
+
         if on:
+            self.SetForegroundColour(self.fg_color_notify)
+            f.SetWeight(wx.BOLD)
             self.notification = True
-            self.notify_count = 20
-            self.Bind(wx.EVT_TIMER, self._set_colour, self.notify_timer)
-            self.notify_timer.Start(100)
         else:
             self.SetForegroundColour(self.fg_color_def)
+            f.SetWeight(wx.NORMAL)
             self.notification = False
-            self.Refresh()
 
-    def _set_colour(self, colour):
-        if self.notify_count:
-            if self.notify_count % 2 == 1:
-                self.SetForegroundColour(self.fg_color_notify)
-            else:
-                self.SetForegroundColour(self.fg_color_def)
+        self.SetFont(f)
+        self.Refresh()
 
-            self.notify_count -= 1
-            self.Refresh()
-        else:
-            self.notify_timer.Stop()
 
 class GraphicRadioButton(ImageTextToggleButton):
     """ Simple graphical button that can be used to construct radio button sets
