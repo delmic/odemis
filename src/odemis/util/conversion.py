@@ -237,18 +237,20 @@ def change_brightness(colour, weight):
     :rtype : tuple
     """
 
+    _alpha = None
+
     if isinstance(colour, basestring):
         _col = hex_to_frgb(colour)
         _alpha = None
     elif isinstance(colour, tuple):
         if all([isinstance(v, float) for v in colour]):
             _col = colour[:3]
-            _alpha = _col[-1] if len(_col) == 4 else None
+            _alpha = colour[-1] if len(colour) == 4 else None
         elif all([isinstance(v, int) for v in colour]):
             _col = rgb_to_frgb(colour[:3])
-            _alpha = _col[-1] if len(_col) == 3 else None
+            _alpha = colour[-1] if len(colour) == 4 else None
         else:
-            raise ValueError("Unknown colour format")
+            raise ValueError("Unknown colour format (%s)", colour)
     elif isinstance(colour, wx.Colour):
         _col = wxcol_to_frgb(colour)
         _alpha = None
@@ -265,7 +267,7 @@ def change_brightness(colour, weight):
 
     new_fcol = tuple(f(c * (1 - weight) + lim * weight, lim) for c in _col[:3])
 
-    return new_fcol + _alpha if _alpha else new_fcol
+    return new_fcol + (_alpha,) if _alpha is not None else new_fcol
 
 def convertToObject(s):
     """

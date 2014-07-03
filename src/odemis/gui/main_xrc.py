@@ -794,8 +794,8 @@ def __init_resources():
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="live_btn_press">
-                            <size>92,48</size>
-                            <label>kPa</label>
+                            <size>110,48</size>
+                            <label>CHAMBER</label>
                             <delta>1</delta>
                             <bitmap>img_btn_press_png</bitmap>
                             <hover>img_btn_press_h_png</hover>

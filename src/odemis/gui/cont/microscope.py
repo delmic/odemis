@@ -119,8 +119,7 @@ class ChamberButtonController(HardwareButtonController):
             else:
                 # TODO: Increase button image size so the full 'CHAMBER' text will fit (also
                 # slightly decrease the size of the 'eject' symbol.
-                self.btn.SetLabel("CHMBR")
-                self.btn.Refresh()
+                self.btn.SetLabel("CHAMBER")
 
     def _determine_button_faces(self, role):
         """ Determine what button faces to use depending on values found in main_data """
@@ -173,23 +172,26 @@ class ChamberButtonController(HardwareButtonController):
         # When the chamber is pumping or venting, it's considered to be working
         if state in (model.CHAMBER_PUMPING, model.CHAMBER_VENTING):
             self.btn.SetBitmapLabel(self.btn_faces['working']['normal'])
-            self.btn.SetBitmapHover(self.btn_faces['working']['hover'])
-            self.btn.SetBitmapSelected(self.btn_faces['working']['active'])
+            self.btn.SetBitmaps(
+                bmp_h=self.btn_faces['working']['hover'],
+                bmp_sel=self.btn_faces['working']['active']
+            )
         elif state == model.CHAMBER_VACUUM:
             self.btn.SetBitmapLabel(self.btn_faces['vacuum']['normal'])
-            self.btn.SetBitmapHover(self.btn_faces['vacuum']['hover'])
-            self.btn.SetBitmapSelected(self.btn_faces['vacuum']['active'])
-
-            # tabs = self.main_data.tab.choices
-            # tabs.keys()[tabs.values().index('secom_align')].activate()
+            self.btn.SetBitmaps(
+                bmp_h=self.btn_faces['vacuum']['hover'],
+                bmp_sel=self.btn_faces['vacuum']['active']
+            )
 
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.
             self.btn.SetToggle(True)
         else:
             self.btn.SetBitmapLabel(self.btn_faces['normal']['normal'])
-            self.btn.SetBitmapHover(self.btn_faces['normal']['hover'])
-            self.btn.SetBitmapSelected(self.btn_faces['normal']['active'])
+            self.btn.SetBitmaps(
+                bmp_h=self.btn_faces['normal']['hover'],
+                bmp_sel=self.btn_faces['normal']['active']
+            )
 
         # Set the tooltip
         if state == model.CHAMBER_PUMPING:

@@ -81,6 +81,8 @@ def DarkenImage(anImage):
     if alpha:
         anImage.SetAlphaData(alpha)
 
+# The normal SetBitmapLabel method of the GenBitmapButton class is called from the constructor,
+# before the actual wx.Window is created. Therefore the size cannot be probed yet.
 def SetBitmapLabel(self, bitmap, createOthers=True):
     """
     Set the bitmap to display normally. This is the only one that is required.
@@ -88,7 +90,11 @@ def SetBitmapLabel(self, bitmap, createOthers=True):
     fly.  Currently, only the disabled bitmap is generated.
     """
 
-    self.bmpLabel = bitmap
+    try:
+        self.bmpLabel = resize_bmp(self.GetSize(), bitmap)
+    except TypeError:
+        self.bmpLabel = bitmap
+
     if bitmap is not None and createOthers:
         image = wx.ImageFromBitmap(bitmap)
         DarkenImage(image)

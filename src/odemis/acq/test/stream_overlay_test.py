@@ -56,10 +56,13 @@ class TestOverlayStream(unittest.TestCase):
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
         cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
+        # FIXME: give an informative warning when the comedi module has not been loaded
         print os.environ
         ret = subprocess.call(cmd)
+
         if ret != 0:
             logging.error("Failed starting backend with '%s'", cmd)
+
         time.sleep(1) # time to start
 
         # find components by their role
@@ -156,8 +159,8 @@ class TestOverlayStream(unittest.TestCase):
             for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
                 self.assertNotIn(k, d.metadata)
 
-#        thumb = acq.computeThumbnail(st, f)
-#        self.assertIsInstance(thumb, model.DataArray)
+        # thumb = acq.computeThumbnail(st, f)
+        # self.assertIsInstance(thumb, model.DataArray)
 
         self.assertGreaterEqual(self.updates, 1) # at least one update at end
         self.assertEqual(self.left, 0)

@@ -9,15 +9,15 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from odemis.util import conversion
@@ -42,22 +42,22 @@ class TestConversion(unittest.TestCase):
 
     def test_change_brightness(self):
         # no change
-        col = (0.2, 0.5, 1, 0.8)
+        col = (0.2, 0.5, 1.0, 0.8)
         ncol = conversion.change_brightness(col, 0)
         self.assertEqual(col, ncol)
 
         # brighten
-        col = (0.2, 0.5, 1, 0.8)
+        col = (0.2, 0.5, 1.0, 0.8)
         ncol = conversion.change_brightness(col, 0.3)
         self.assertTrue(all(n >= o for o, n in zip(col, ncol)))
 
         # darken
-        col = (0.2, 0.5, 1)
+        col = (0.2, 0.5, 1.0)
         ncol = conversion.change_brightness(col, -0.6)
         self.assertTrue(all(n < o for o, n in zip(col, ncol)))
 
         # full black
-        col = (0.2, 0.5, 1, 1)
+        col = (0.2, 0.5, 1.0, 1.0)
         ncol = conversion.change_brightness(col, -1)
         self.assertTrue(ncol, (0, 0, 0, 1))
 
@@ -77,8 +77,8 @@ class TestConversion(unittest.TestCase):
               ("0.1", 0.1),
               ("[aa,bb]", ["aa", "bb"]),
               # TODO: more complicated but nice to support for the user
-#               ("256 x 256 px", (256, 256)),
-#               ("21 x 0.2 m", (21, 0.2)),
+              # ("256 x 256 px", (256, 256)),
+              # ("21 x 0.2 m", (21, 0.2)),
               ("", None),
               ("{5: }", {5: None}), # Should it fail?
               ("-1, 63, 12", [-1, 63, 12]), # NotifyingList becomes a list

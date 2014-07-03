@@ -102,7 +102,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         self.frame.Destroy()
         self.app.MainLoop()
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_CrossHair(self):
         # crosshair
         show_crosshair = self.view.show_crosshair #pylint: disable=E1103
@@ -174,7 +174,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         px1 = GetRGB(resultIm,
                      resultIm.Width // 2 + shift[0],
                      resultIm.Height // 2 + shift[1])
-        self.assertEqual(px1, (127, 0, 0))
+        self.assertEqual(px1, (128, 0, 0))
 
         px2 = GetRGB(resultIm,
                      resultIm.Width // 2 + 200 + shift[0],
@@ -192,7 +192,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
          resultIm.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_BasicMove(self):
         mpp = 0.0001
         self.view.mpp.value = mpp
@@ -241,12 +241,12 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
 
         px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0],
                      resultIm.Height / 2 + shift[1])
-        self.assertEqual(px1, (127, 0, 0))
+        self.assertEqual(px1, (128, 0, 0))
         px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0],
                      resultIm.Height / 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
-    @unittest.skip("simple")
+    # @unittest.skip("simple")
     def test_ZoomMove(self):
         mpp = 0.0001
         self.view.mpp.value = mpp

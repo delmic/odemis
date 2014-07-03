@@ -571,8 +571,8 @@
                         <orient>wxHORIZONTAL</orient>
                         <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="live_btn_press">
-                            <size>92,48</size>
-                            <label>kPa</label>
+                            <size>110,48</size>
+                            <label>CHAMBER</label>
                             <delta>1</delta>
                             <bitmap>img/btn_press.png</bitmap>
                             <hover>img/btn_press_h.png</hover>
