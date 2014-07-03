@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 from odemis.gui import comp
-from odemis.gui.model import STATE_OFF, STATE_PAUSE, STATE_ON
+from odemis.gui.model import STATE_OFF, STATE_ON
 from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
     StaticStream, Stream
 from wx.lib.pubsub import pub
@@ -146,7 +146,7 @@ class StreamController(object):
                                     sem_capable)
 
 
-    def addFluo(self, add_to_all_views=True, visible=True):
+    def addFluo(self, **kwargs):
         """
         Creates a new fluorescence stream and a stream panel in the stream bar
         returns (StreamPanel): the panel created
@@ -165,9 +165,9 @@ class StreamController(object):
                 name,
                 self._main_data_model.ccd, self._main_data_model.ccd.data,
                 self._main_data_model.light, self._main_data_model.light_filter)
-        return self._addStream(s, add_to_all_views, visible)
+        return self._addStream(s, **kwargs)
 
-    def addBrightfield(self, add_to_all_views=True, visible=True):
+    def addBrightfield(self, **kwargs):
         """
         Creates a new brightfield stream and panel in the stream bar
         returns (StreamPanel): the stream panel created
@@ -175,9 +175,9 @@ class StreamController(object):
         s = BrightfieldStream("Bright-field",
                   self._main_data_model.ccd, self._main_data_model.ccd.data,
                   self._main_data_model.light)
-        return self._addStream(s, add_to_all_views, visible)
+        return self._addStream(s, **kwargs)
 
-    def addSEMSED(self, add_to_all_views=True, visible=True):
+    def addSEMSED(self, **kwargs):
         """
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
@@ -185,10 +185,10 @@ class StreamController(object):
         s = SEMStream("Secondary electrons",
                   self._main_data_model.sed, self._main_data_model.sed.data,
                   self._main_data_model.ebeam)
-        return self._addStream(s, add_to_all_views, visible)
+        return self._addStream(s, **kwargs)
 
     def addStatic(self, name, image,
-                  cls=StaticStream, add_to_all_views=True, visible=True):
+                  cls=StaticStream, **kwargs):
         """
         Creates a new static stream and panel in the stream bar
 
@@ -198,16 +198,16 @@ class StreamController(object):
         :param returns: (StreamPanel): the panel created
         """
         s = cls(name, image)
-        return self.addStream(s, add_to_all_views, visible)
+        return self.addStream(s, **kwargs)
 
-    def addStream(self, stream, add_to_all_views=False, visible=True):
+    def addStream(self, stream, **kwargs):
         """ Create a stream entry for the given existing stream
 
         :return StreamPanel: the panel created for the stream
         """
-        return self._addStream(stream, add_to_all_views, visible)
+        return self._addStream(stream, **kwargs)
 
-    def _addStream(self, stream, add_to_all_views=False, visible=True):
+    def _addStream(self, stream, add_to_all_views=False, visible=True, play=True):
         """
         Adds a stream.
 
@@ -216,6 +216,7 @@ class StreamController(object):
             compatible views, otherwise add only to the current view.
         visible (boolean): If True, create a stream entry, otherwise adds the
           stream but do not create any entry.
+        play (boolean): If True, immediately start it
         returns (StreamPanel or Stream): stream entry or stream (if visible
          is False) that was created
         """
@@ -237,12 +238,12 @@ class StreamController(object):
                 logging.warning(warn)
             v.addStream(stream)
 
-        # TODO: create a StreamScheduler
-        # call it like self._scheduler.addStream(stream)
+        # TODO: create a StreamScheduler call it like self._scheduler.addStream(stream)
+        # ... or simplify to only support a stream at a time
         self._scheduleStream(stream)
 
-        # show the stream right now
-        stream.should_update.value = True # TODO: allow to change via arg?
+        # start the stream right now (if requested)
+        stream.should_update.value = play
 
         if visible:
             spanel = comp.stream.StreamPanel(
@@ -372,15 +373,18 @@ class StreamController(object):
             stream.should_update.unsubscribe(callback)
 
     def onOpticalState(self, state):
+        # TODO: link the current optical stream to the state
+        # TODO: also need to add optical stream if all were deleted?
         # TODO: disable/enable add stream actions
-        if state == STATE_OFF or state == STATE_PAUSE:
+        if state == STATE_OFF:
             pass
         elif state == STATE_ON:
             pass
 
     def onEMState(self, state):
+        # TODO: link the current SEM stream to the state
         # TODO: disable/enable add stream actions
-        if state == STATE_OFF or state == STATE_PAUSE:
+        if state == STATE_OFF:
             pass
         elif state == STATE_ON:
             pass

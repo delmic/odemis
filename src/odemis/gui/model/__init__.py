@@ -46,8 +46,8 @@ STATE_PAUSE = 2
 CHAMBER_UNKNOWN = 0  # Chamber in an unknown state
 CHAMBER_VENTED = 1   # Chamber can be opened
 CHAMBER_VACUUM = 2   # Chamber ready for imaging
-CHAMBER_PUMPING = 3  # Decreasing chamber pressure
-CHAMBER_VENTING = 4  # Pressurizing chamber
+CHAMBER_PUMPING = 3  # Decreasing chamber pressure (set it to request pumping)
+CHAMBER_VENTING = 4  # Pressurizing chamber (set it to request venting)
 
 # The different types of view layouts
 VIEW_LAYOUT_ONE = 0 # one big view
@@ -126,6 +126,8 @@ class MainGUIData(object):
         self.chamber_ccd = None  # view of inside the chamber
         self.chamber_light = None   # Light illuminating the chamber
         self.overview_ccd = None  # global view from above the sample
+        self.overview_focus = None # focus of the overview CCD
+        self.overview_light = None # light of the overview CCD
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
@@ -155,6 +157,8 @@ class MainGUIData(object):
                     self.focus = a
                 elif a.role == "ebeam-focus":
                     self.ebeam_focus = a
+                elif a.role == "overview-focus":
+                    self.overview_focus = a
                 elif a.role == "mirror":
                     self.mirror = a
                 elif a.role == "align":
@@ -175,15 +179,16 @@ class MainGUIData(object):
             for e in microscope.emitters:
                 if e.role == "light":
                     self.light = e
-                    self._light_power_on = None # None = unknown
                 elif e.role == "filter":
                     self.light_filter = e
                 elif e.role == "lens":
                     self.lens = e
                 elif e.role == "e-beam":
                     self.ebeam = e
-                elif e.role == "chamber-light" and self.chamber_ccd:  # No use without a ccd
+                elif e.role == "chamber-light":
                     self.chamber_light = e
+                elif e.role == "overview-light":
+                    self.overview_light = e
 
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
@@ -208,28 +213,36 @@ class MainGUIData(object):
             # not so nice to hard code it here, but that should do it for now...
             if self.role == "sparc":
                 self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-                self.arState.subscribe(self.onARState)
             else:
                 self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
                 self.opticalState.subscribe(self.onOpticalState)
 
         if self.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-            self.emState.subscribe(self.onEMState)
 
         if self.spectrometer:
             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-            self.specState.subscribe(self.onSpecState)
 
         # Chamber vacuum states
         if self.chamber:
-            chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING, CHAMBER_VACUUM,
-                              CHAMBER_VENTING}
-            self.chamber_state = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
-            self.chamber_state.subscribe(self.on_chamber_state)
+            chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
+                              CHAMBER_VACUUM, CHAMBER_VENTING}
+            self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
+            self.chamberState.subscribe(self.onChamberState)
 
-            if 'pressure' in getVAs(self.chamber):
-                self.chamber.pressure.subscribe(self.on_chamber_pressure)
+            pressures = self.chamber.axes["pressure"].choices
+            self._vacuum_pressure = min(pressures.keys())
+            self._vented_pressure = max(pressures.keys())
+
+            # if there is an overview camera, _and_ it has to be reached via a
+            # special "pressure" state => note it down
+            if self.overview_ccd and "overview" in pressures.values():
+                po = [i[0] for i in pressures.items() if i[1] == "overview"][0]
+                self._overview_pressure = po
+            else:
+                self._overview_pressure = None
+
+            self.chamber.position.subscribe(self.on_chamber_pressure, init=True)
 
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
@@ -249,118 +262,110 @@ class MainGUIData(object):
         # do directly access additional GUI information.
         self.tab = model.VAEnumerated(None, choices={None: ""})
 
+
+    # TODO: move to LiveViewGUIData tab model? The rest don't need to handle that
+    # + we would get access to the streams (ex, for the overview)
     def onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
         """
-        # only called when it changes
+        # In general, the streams are in charge of turning on/off the emitters
+        # However, as a "trick", for the light with .emissions they leave the
+        # power as-is so that the power is the same between all streams.
+        # So we need to turn it on the first time.
+        if state == STATE_ON:
+            # if power is above 0 already, it's probably the user who wants
+            # to force to a specific value, respect that.
+            if self.light is None or self.light.power.value != 0:
+                return
 
-        if state in (STATE_OFF, STATE_PAUSE):
-            # Turn off the optical path. All the streams using it should be
-            # already deactivated.
-            if self.light:
-                if self.light.power.value > 0:
-                    # save the value only if it makes sense
-                    self._light_power_on = self.light.power.value
-                self.light.power.value = 0
-        elif state == STATE_ON:
-            # the image acquisition from the camera is handled solely by the streams
-            if self.light:
-                # if power is above 0 already, it's probably the user who wants
-                # to force to a specific value, respect that.
-                if self.light.power.value == 0:
-                    if self._light_power_on: # re-use previous value
-                        self.light.power.value = self._light_power_on
-                    else:
-                        # pick a nice value (= slighty more than 0), if not already on
-                        try:
-                            # if continuous: 10 %
-                            self.light.power.value = self.light.power.range[1] * 0.1
-                        except (AttributeError, model.NotApplicableError):
-                            try:
-                                # if enumerated: the second lowest
-                                self.light.power.value = sorted(self.light.power.choices)[1]
-                            except (AttributeError, model.NotApplicableError):
-                                logging.error("Unknown light power range, setting to 1 W")
-                                self.light.power.value = 1
+            # pick a nice value (= slightly more than 0), if not already on
+            try:
+                # if continuous: 10 %
+                self.light.power.value = self.light.power.range[1] * 0.1
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    # if enumerated: the second lowest
+                    self.light.power.value = sorted(self.light.power.choices)[1]
+                except (AttributeError, model.NotApplicableError):
+                    logging.error("Unknown light power range, setting to 1 W")
+                    self.light.power.value = 1
 
-    def onEMState(self, state):
-        """ Event handler for when the state of the electron microscope changes
+    def _setEbeamPower(self, on):
+        """ Set the ebeam power (if there is an ebeam that can be controlled)
+        on (boolean): if True, we set the power on, other will turn it off
         """
-        if state == STATE_OFF:
-            # TODO: actually turn off the ebeam and detector
+        if self.ebeam is None:
+            return
+
+        power = self.ebeam.power
+        if not isinstance(power, model.VigilantAttributeBase):
+            # We cannot change the power => nothing else to try
+            logging.debug("Ebeam doesn't support setting power")
+            return
+
+        if on:
             try:
-                # TODO save the previous value
-                # blank the ebeam
-                self.ebeam.energy.value = 0
-            except NotSettableError:
-                # Too bad. let's just do nothing then.
-                logging.debug("Ebeam doesn't support setting energy to 0")
-        elif state == STATE_PAUSE:
-            try:
-                # TODO save the previous value
-                # blank the ebeam
-                self.ebeam.energy.value = 0
-            except NotSettableError:
-                # Too bad. let's just do nothing then.
-                logging.debug("Ebeam doesn't support setting energy to 0")
+                power.value = power.range[1] # max!
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    # if enumerated: the second lowest
+                    power.value = sorted(power.choices)[1]
+                except (AttributeError, model.NotApplicableError):
+                    logging.error("Unknown ebeam power range, setting to 1")
+                    power.value = 1
+        else:
+            power.value = 0
 
-        elif state == STATE_ON:
-            try:
-                # TODO use the previous value
-                if hasattr(self.ebeam.energy, "choice"):
-                    if isinstance(self.ebeam.energy.choices,
-                                  collections.Iterable):
-                        self.ebeam.energy.value = max(self.ebeam.energy.choices)
-            except NotSettableError:
-                # Too bad. let's just do nothing then (and hope it's on)
-                logging.debug("Ebeam doesn't support setting energy")
-
-    def onARState(self, state):
-        # nothing to do here, the settings controller will just hide the stream/settings
-        pass
-
-    def onSpecState(self, state):
-        # nothing to do here, the settings controller will just hide the stream/settings
-        pass
-
-    def on_chamber_state(self, chamber_state):
+    def onChamberState(self, chamber_state):
         """ Set the desired pressure on the chamber when the chamber's state changes
 
         Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING) will allow for a
         change in pressure.
 
         """
-
-        pressure_choices = self.chamber.axes["pressure"].choices.keys()
-        vented_pressure = max(pressure_choices)
-        vacuum_pressure = min(pressure_choices)
-
         if chamber_state == CHAMBER_PUMPING:
-            self.chamber.moveAbs({"pressure": vacuum_pressure})
+            new_pressure = self._vacuum_pressure
+            if self._overview_pressure is not None:
+                # TODO: check if we already are in overview state ?
+                new_pressure = self._overview_pressure
+                # on_chamber_pressure() will take care of going further
+            f = self.chamber.moveAbs({"pressure": new_pressure})
         elif chamber_state == CHAMBER_VENTING:
-            self.chamber.moveAbs({"pressure": vented_pressure})
+            # TODO: make sure no SEM stream is playing
 
-    def on_chamber_pressure(self, current_pressure):
-        """ Determine the state of the chamber when the pressure changes
+            self._setEbeamPower(False)
+            f = self.chamber.moveAbs({"pressure": self._vented_pressure})
+
+        # TODO: if the future is a progressiveFuture, it will provide info
+        # on when it will finish => display that (in the tooltip of the chamber
+        # button)
+
+    def on_chamber_pressure(self, position):
+        """ Determine the state of the chamber when the pressure changes, and
+        set up the 
 
         This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM or from
         CHAMBER_VENTING to CHAMBER_VENTED.
 
         """
-        if self.chamber_state.value in (CHAMBER_PUMPING, CHAMBER_UNKNOWN):
-
-            vacuum_pressure = min(self.chamber.axes["pressure"].choices.keys())
-
-            if current_pressure <= vacuum_pressure:
-                self.chamber_state.value = CHAMBER_VACUUM
-
-        elif self.chamber_state.value in (CHAMBER_VENTING, CHAMBER_UNKNOWN):
-
-            vented_pressure = max(self.chamber.axes["pressure"].choices.keys())
-
-            if current_pressure >= vented_pressure:
-                self.chamber_state.value = CHAMBER_VENTED
-
+        currentp = position["pressure"]
+        if currentp <= self._vacuum_pressure:
+            # Vacuum reached
+            self.chamberState.value = CHAMBER_VACUUM
+            self._setEbeamPower(True)
+        elif currentp == self._overview_pressure:
+            # in overview state => take an image and go on
+            # TODO: autofocus
+            # TODO: get overview stream & activate for one image
+            
+            # move further to fully under vacuum
+            f = self.chamber.moveAbs({"pressure": self._vacuum_pressure})
+        elif currentp >= self._vented_pressure:
+            # Chamber is opened
+            self.chamberState.value = CHAMBER_VENTED
+        else:
+            logging.debug("Pressure position unknown: %s", currentp)
+        
     def stopMotion(self):
         """
         Stops immediately every axis

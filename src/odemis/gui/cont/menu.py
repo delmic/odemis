@@ -84,6 +84,8 @@ class MenuController(object):
         #             self.main_frame.menu_auto_focus.GetId(),
         #             <function>)
 
+        # TODO: add fit to view (cf toolbar)
+
         # /Help
         gc = odemis.gui.conf.get_general_conf()
 
