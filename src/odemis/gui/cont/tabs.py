@@ -247,7 +247,6 @@ class SecomStreamsTab(Tab):
                 overview_stream = streammod.BrightfieldStream("Overview", main_data.overview_ccd,
                                                               main_data.overview_ccd.data, None)
 
-
             overview_stream.should_update.value = True
             overview_stream.is_active.value = True
             self.tab_data_model.views.value[-1].addStream(overview_stream)
