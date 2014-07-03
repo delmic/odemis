@@ -40,6 +40,7 @@ from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import MicroscopeStateController
 from odemis.gui.model import CHAMBER_VACUUM
+from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
 import os.path
@@ -187,7 +188,7 @@ class Tab(object):
         return self.button.GetLabel()
 
     def notify(self):
-        """ Put the tab in 'notification' mode to indicate a change has occured """
+        """ Put the tab in 'notification' mode to indicate a change has occurred """
         if not self.notification:
             self.button.notify(True)
             self.notification = True
@@ -237,9 +238,7 @@ class SecomStreamsTab(Tab):
         )
 
         if main_data.overview_ccd:
-            # FIXME: RGBCameraStream complains that the detector shape has length 3 instead of 4,
-            # with the static image used by the full SECOM sim configuration
-
+            # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
                 overview_stream = streammod.RGBCameraStream("Overview", main_data.overview_ccd,
                                                             main_data.overview_ccd.data, None)
@@ -247,8 +246,10 @@ class SecomStreamsTab(Tab):
                 overview_stream = streammod.BrightfieldStream("Overview", main_data.overview_ccd,
                                                               main_data.overview_ccd.data, None)
 
-            overview_stream.should_update.value = True
-            overview_stream.is_active.value = True
+            # TODO: acquire _one_ overview image everytime the chamber is pumped
+            # cf main_data.on_chamber_pressure
+#             overview_stream.should_update.value = True
+#             overview_stream.is_active.value = True
             self.tab_data_model.views.value[-1].addStream(overview_stream)
         else:
             self.main_frame.vp_overview_sem.Hide()
@@ -297,19 +298,22 @@ class SecomStreamsTab(Tab):
             "live_btn_"
         )
 
+        # Add the first streams
+        self._streams_to_restart = set() # set of weakref to the streams
+        self._ensure_base_streams()
+        
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
-        # Note: weakref, so that if a stream is removed, we don't turn it back
-        # on
         if hasattr(main_data, 'opticalState'):
-            self._opt_streams_enabled = False
-            self._opt_stream_to_restart = set()  # weakref set of Streams
             main_data.opticalState.subscribe(self.onOpticalState)
 
         if hasattr(main_data, 'emState'):
-            self._sem_streams_enabled = False
-            self._sem_stream_to_restart = set()
             main_data.emState.subscribe(self.onEMState)
+
+        if hasattr(main_data, "chamberState"):
+            main_data.chamberState.subscribe(self.on_chamber_state, init=True)        
+
+        # TODO: state == play/pause of current opt/sem stream (+focus view with stream)
 
     @property
     def settings_controller(self):
@@ -319,64 +323,127 @@ class SecomStreamsTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
-    # TODO: also pause the streams when leaving the tab
-
-    # TODO: how to prevent the user from turning on camera/light again from the
-    #   stream panel when the microscope is off? => either stream panel "update"
-    #   icon is disabled/enable (decided by the stream controller), or the event
-    #   handler checks first that the appropriate microscope is On or Off.
-
-
-    def onOpticalState(self, state):
-        enabled = (state == guimod.STATE_ON) and self.IsShown()
-        if self._opt_streams_enabled == enabled:
-            return  # no change
-        else:
-            self._opt_streams_enabled = enabled
-
-        if enabled:
-            # check whether we need to create a (first) fluo stream
+    def _ensure_base_streams(self):
+        """
+        Make sure there is at least one optical and one SEM stream present
+        """
+        main_data = self.tab_data_model.main
+        if hasattr(main_data, 'opticalState'):
             has_opt = any(isinstance(s, streammod.OPTICAL_STREAMS)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
-                sp = self._stream_controller.addFluo(add_to_all_views=True)
-                self._view_controller.focusViewWithStream(sp.stream)
+                self._stream_controller.addFluo(add_to_all_views=True, play=False)
+                # don't forbid to remove it, as for the user it can be easier to
+                # remove than change all the values
 
-            self._stream_controller.resumeStreams(self._opt_stream_to_restart)
-        else:
-            paused_st = self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
-            self._opt_stream_to_restart = weakref.WeakSet(paused_st)
-
-    def onEMState(self, state):
-        enabled = (state == guimod.STATE_ON) and self.IsShown()
-        if self._sem_streams_enabled == enabled:
-            return  # no change
-        else:
-            self._sem_streams_enabled = enabled
-
-        if enabled:
-            # check whether we need to create a (first) SEM stream
+        if hasattr(main_data, 'emState'):
             has_sem = any(isinstance(s, streammod.EM_STREAMS)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
+                sp = self._stream_controller.addSEMSED(add_to_all_views=True, play=False)
+                sp.show_remove_btn(False)
+
+    @call_after
+    def on_chamber_state(self, state):
+        if state == guimod.CHAMBER_PUMPING:
+            # reset the streams to avoid having data from the previous sample
+            for s in self.tab_data_model.streams.value:
+                # Don't reset if the user is still/already playing it (eg: optical stream)
+                if s.should_update.value:
+                    continue
+                # TODO: be even more careful, and don't reset streams which
+                # have been played since the the chamber is vented?
+                # TODO: better way to reset streams? => create new ones and copy just what we care about?
+                if s.raw:
+                    s.raw = []
+                    s.image.value = None
+                    s.histogram._value = numpy.empty(0)
+                    s.histogram.notify(s.histogram._value)
+
+            # Ensure we still have both optical and SEM streams
+            self._ensure_base_streams()
+
+        elif state == guimod.CHAMBER_VENTING:
+            # TODO: how to ensure that we are called before model, which expects
+            # all the streams to be paused (to ensure the ebeam is blanked).
+
+            # We stop all streams, even if in theory it'd still be possible to
+            # play optical streams, it's better to turn off the light when
+            # opening the chamber. The user can still turn them back on (if it's
+            # possible with the hardware).
+            self._stream_controller.pauseStreams() # will turn off both microscopes buttons
+
+        # In any case, make sure the streams cannot be started
+        if state == guimod.CHAMBER_VACUUM:
+            self.main_frame.live_btn_sem.Enable(True)
+            self.main_frame.live_btn_sem.SetToolTip(None)
+            self.main_frame.live_btn_opt.Enable(True)
+            self.main_frame.live_btn_opt.SetToolTip(None)
+        else:
+            # TODO: prevent the user from turning on camera/light again from the
+            #   stream panel when the microscope is off? => stream panel "update"
+            #   icon is disabled/enabled (decided by the stream controller)
+            # => Have a "disable SEM/Optical" function in stream controller?
+            # Disable SEM button
+            self.main_frame.live_btn_sem.Enable(False)
+            self.main_frame.live_btn_sem.SetToolTipString("Chamber must be under vacuum to activate the SEM")
+            
+            # Disable Optical button (if SECOMmini)
+            if self.tab_data_model.main.role == "secommini":
+                self.main_frame.live_btn_opt.Enable(False)
+                self.main_frame.live_btn_opt.SetToolTipString("Chamber must be under vacuum to activate the optical view")
+
+    # TODO: move to stream controller?
+    # => we need to update the state of optical/sem when the streams are play/paused
+    # Listen to this event to just add (back) a stream if none is left when turning on?
+    def onOpticalState(self, state):
+        if state == guimod.STATE_ON:
+            # TODO: Use the last stream paused, and fallback here only if empty?
+            # TODO: just first opt stream?
+            for s in self.tab_data_model.streams.value:
+                if isinstance(s, streammod.OPTICAL_STREAMS):
+                    opts = s
+                    break
+            else: # Could happen if the user has deleted all the optical streams
+                sp = self._stream_controller.addFluo(add_to_all_views=True)
+                opts = sp.stream
+
+            self._stream_controller.resumeStreams({opts})
+            # focus the view
+            self._view_controller.focusViewWithStream(opts)
+        else:
+            self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
+
+    def onEMState(self, state):
+        if state == guimod.STATE_ON:
+            # TODO: Use the last stream paused
+            for s in self.tab_data_model.streams.value:
+                if isinstance(s, streammod.EM_STREAMS):
+                    sems = s
+                    break
+            else: # Could happen if the user has deleted all the optical streams
                 sp = self._stream_controller.addSEMSED(add_to_all_views=True)
                 sp.show_remove_btn(False)
-                self._view_controller.focusViewWithStream(sp.stream)
+                sems = sp.stream
 
-            self._stream_controller.resumeStreams(self._sem_stream_to_restart)
+            self._stream_controller.resumeStreams({sems})
+            # focus the view
+            self._view_controller.focusViewWithStream(sems)
         else:
-            paused_st = self._stream_controller.pauseStreams(streammod.EM_STREAMS)
-            self._sem_stream_to_restart = weakref.WeakSet(paused_st)
-
+            self._stream_controller.pauseStreams(streammod.EM_STREAMS)
+        
     def Show(self, show=True):
+        assert (show != self.IsShown()) # we assume it's only called when changed
         Tab.Show(self, show=show)
 
-        # Force the check for the stream update
-        main_data = self.tab_data_model.main
-        if hasattr(main_data, 'opticalState'):
-            self.onOpticalState(main_data.opticalState.value)
-        if hasattr(main_data, 'emState'):
-            self.onEMState(main_data.emState.value)
+        # pause / restart streams when not displayed
+        if show:
+            # TODO: double check the chamber state hasn't changed in between
+            # We should never turn on the streams if the chamber is not in vacuum
+            self._stream_controller.resumeStreams(self._streams_to_restart)
+        else:
+            paused_st = self._stream_controller.pauseStreams()
+            self._streams_to_restart = weakref.WeakSet(paused_st)
 
 
 class SparcAcquisitionTab(Tab):
@@ -569,7 +636,7 @@ class SparcAcquisitionTab(Tab):
             self._txt_mean = self._settings_controller.txt_mean
             self._scount_stream.image.subscribe(self._on_spec_count, init=True)
 
-    @guiutil.call_after
+    @call_after
     def _on_spec_count(self, scount):
         """
         Called when a new spectrometer data comes in (and so the whole intensity
@@ -1451,8 +1518,8 @@ class LensAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
 
-        if hasattr(main_data, "chamber_state"):
-            main_data.chamber_state.subscribe(self.on_chamber_state, init=True)
+        if hasattr(main_data, "chamberState"):
+            main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -1484,7 +1551,7 @@ class LensAlignTab(Tab):
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
 
-    @guiutil.call_after
+    @call_after
     def on_chamber_state(self, chamber_state):
         """ Lock or enable this Tab according to the current chamber state"""
         if chamber_state == CHAMBER_VACUUM:
@@ -1494,7 +1561,7 @@ class LensAlignTab(Tab):
             self.button.Disable()
             self._clear_notification()
 
-    @guiutil.call_after
+    @call_after
     def _onTool(self, tool):
         """
         Called when the tool (mode) is changed
@@ -1575,7 +1642,7 @@ class LensAlignTab(Tab):
 
 
     # "Move to center" functions
-    @guiutil.call_after
+    @call_after
     def _update_to_center(self):
         # Enable a special "move to SEM center" button iif:
         # * seq is not empty
@@ -1789,7 +1856,7 @@ class MirrorAlignTab(Tab):
         self._actuator_controller.bind_keyboard(main_frame.pnl_tab_sparc_align)
 
     # TODO: factorize with SparcAcquisitionTab
-    @guiutil.call_after
+    @call_after
     def _on_spec_count(self, scount):
         """
         Called when a new spectrometer data comes in (and so the whole intensity

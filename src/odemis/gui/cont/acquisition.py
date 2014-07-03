@@ -936,9 +936,8 @@ class AutoCenterController(object):
         """
         Compute and displays the estimated time for the auto centering
         """
-        # FIXME
-        # t = align.find_overlay.estimateOverlayTime(dt)
-        t = 30
+        et = self._main_data_model.ccd.exposureTime.value
+        t = align.spot.estimateAlignmentTime(et)
         t = math.ceil(t) # round a bit pessimistic
         txt = u"~ %s" % units.readable_time(t, full=False)
         self._main_frame.lbl_auto_center.Label = txt
@@ -992,9 +991,10 @@ class AutoCenterController(object):
         main_data.is_acquiring.value = True
 
         logging.debug("Starting auto centering procedure")
-        f = align.FindOverlay(main_data.ebeam, # FIXME
-                                     main_data.ccd,
-                                     main_data.sed)
+        f = align.AlignSpot(main_data.ccd,
+                            main_data.aligner,
+                            main_data.ebeam,
+                            main_data.focus)
         logging.debug("Auto centering is running...")
         self._acq_future = f
         # Transform auto centering button into cancel
@@ -1030,10 +1030,8 @@ class AutoCenterController(object):
             dist = future.result() # returns distance to center
         except CancelledError:
             self._main_frame.lbl_auto_center.Label = "Cancelled"
-        except Exception:
-            # FIXME: don't display a really exception, but just put it in
-            # info log level?
-            logging.exception("Failed to run the centering procedure")
+        except Exception as exp:
+            logging.info("Centering procedure failed: %s", exp)
             self._main_frame.lbl_auto_center.Label = "Failed"
         else:
             self._main_frame.lbl_auto_center.Label = "Successful"

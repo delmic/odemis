@@ -59,6 +59,7 @@ class TestWithoutBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --help"
@@ -87,6 +88,7 @@ class TestWithoutBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --log-level=2 --scan"
@@ -101,25 +103,41 @@ class TestWithoutBackend(unittest.TestCase):
     
 #@skip("Simple")
 class TestWithBackend(unittest.TestCase):
-    def setUp(self):
-        # reset the logging (because otherwise it accumulates)
-        if logging.root:
-            del logging.root.handlers[:]
-            
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
         if driver.get_backend_status() == driver.BACKEND_RUNNING:
-            self.skipTest("Running backend found")
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
 
         # run the backend as a daemon
         # we cannot run it normally as the child would also think he's in a unittest
         cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
         ret = subprocess.call(cmd)
-        self.assertEqual(ret, 0, "trying to run '%s'" % cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
         time.sleep(1) # time to start
 
-    def tearDown(self):
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+        # reset the logging (because otherwise it accumulates)
+        if logging.root:
+            del logging.root.handlers[:]
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
         # end the backend
         cmd = ODEMISD_CMD + ["--kill"]
         subprocess.call(cmd)
+        time.sleep(1) # time to stop
+
+    def tearDown(self):
         model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
 
@@ -127,6 +145,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list"
@@ -151,6 +170,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list-prop Spectra"
@@ -181,6 +201,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list-prop Spectra"
@@ -197,6 +218,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --set-attr Spectra power 0"
@@ -209,6 +231,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list-prop Spectra"
@@ -226,10 +249,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
-            cmdline = "cli --set-attr OLStage speed x:0.5,y:0.2"
-            ret = main.main(cmdline.split())
+            cmdline = ["cli", "--set-attr", "OLStage", "speed", "x: 0.5, y: 0.2"]
+            ret = main.main(cmdline)
         except SystemExit, exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -240,6 +264,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --move OLStage x 5 --move OLStage y -0.2"
@@ -252,6 +277,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
+            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --stop"

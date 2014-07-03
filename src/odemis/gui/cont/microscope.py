@@ -18,13 +18,15 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from odemis.gui import model
-from odemis.model import getVAs
-import odemis.util.units as units
-from odemis.gui.util.widgets import VigilantAttributeConnector
-import odemis.gui.img.data as imgdata
 import logging
+from odemis.gui import model
+from odemis.gui.util import call_after
+from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.model import getVAs
 import wx
+
+import odemis.gui.img.data as imgdata
+import odemis.util.units as units
 
 
 class MicroscopeStateController(object):
@@ -98,7 +100,6 @@ class ChamberButtonController(HardwareButtonController):
     def __init__(self, btn_ctrl, va, main_data):
         """
         :type btn_ctrl: odemis.gui.comp.buttons.ImageTextToggleButton
-        :type btn_ctrl: odemis.gui.comp.buttons.ImageTextToggleButton
 
         """
         super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
@@ -108,16 +109,15 @@ class ChamberButtonController(HardwareButtonController):
         self.btn_faces = {}
         self._determine_button_faces(main_data.role)
 
-        self.chamber_act = getattr(main_data, 'chamber', None)
         self.pressure_va = None
         self.main_data = main_data
 
-        if self.chamber_act:
-            if 'pressure' in getVAs(self.chamber_act):
-                self.pressure_va = getattr(self.chamber_act, 'pressure')
+        if main_data.chamber:
+            if 'pressure' in getVAs(main_data.chamber):
+                self.pressure_va = getattr(main_data.chamber, 'pressure')
                 self.pressure_va.subscribe(self._update_label, init=True)
             else:
-                # TODO: Increase button image size so the full 'CHAMBER' test will fit (also
+                # TODO: Increase button image size so the full 'CHAMBER' text will fit (also
                 # slightly decrease the size of the 'eject' symbol.
                 self.btn.SetLabel("CHAMBER")
 
@@ -201,7 +201,6 @@ class ChamberButtonController(HardwareButtonController):
         elif state == model.CHAMBER_VENTED:
             self.btn.SetToolTipString("Pump the chamber")
         elif state == model.CHAMBER_VACUUM:
-
             self.btn.SetToolTipString("Vent the chamber")
 
     def _btn_to_va(self):
@@ -218,19 +217,21 @@ class ChamberButtonController(HardwareButtonController):
         else:
             return model.CHAMBER_VENTING
 
+    @call_after
     def _update_label(self, pressure_val):
         """ Set a formatted pressure value as the label of the button """
 
         str_value = units.readable_str(pressure_val, sig=1, unit=self.pressure_va.unit)
-        self.btn.SetLabel(str_value)
-        self.btn.Refresh()
+        if self.btn.Label != str_value:
+            self.btn.Label = str_value
+            self.btn.Refresh()
 
 
 # GUI toggle button (suffix) name -> VA name
 BTN_TO_VA = {
     "sem": ("emState", HardwareButtonController),
     "opt": ("opticalState", HardwareButtonController),
-    "press": ("chamber_state", ChamberButtonController),
+    "press": ("chamberState", ChamberButtonController),
     "spectrometer": ("specState", HardwareButtonController),
     "angular": ("arState", HardwareButtonController),
 }

@@ -89,6 +89,8 @@ class Camera(model.DigitalCamera):
 
         exp = 0.1 # s
         self.exposureTime = model.FloatContinuous(exp, [1e-3, 1e3], unit="s")
+        # Some code care about the readout rate to know how long an acquisition will take
+        self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
 
         pxs = self._img.metadata.get(model.MD_PIXEL_SIZE, (10e-6, 10e-6))
         mag = self._img.metadata.get(model.MD_LENS_MAG, 1)
@@ -116,6 +118,9 @@ class Camera(model.DigitalCamera):
 
     def updateMetadata(self, md):
         self._metadata.update(md)
+
+    def getMetadata(self):
+        return self._metadata
 
     def terminate(self):
         """

@@ -61,7 +61,6 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     f._overlay_lock = threading.Lock()
 
     # Task to run
-    doFindOverlay = _DoFindOverlay
     f.task_canceller = _CancelFindOverlay
 
     # Create scanner for scan grid
@@ -70,7 +69,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     # Run in separate thread
     overlay_thread = threading.Thread(target=executeTask,
                   name="SEM/CCD overlay",
-                  args=(f, doFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
+                  args=(f, _DoFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
 
     overlay_thread.start()
     return f
@@ -81,9 +80,9 @@ def AlignSpot(ccd, stage, escan, focus):
     Wrapper for DoAlignSpot. It provides the ability to check the progress of
     spot mode procedure or even cancel it.
     ccd (model.DigitalCamera): The CCD
-    stage (model.CombinedActuator): The stage
+    stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
-    focus (model.CombinedActuator): The optical focus
+    focus (model.Actuator): The optical focus
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns (float):    Final distance to the center #m 
@@ -95,12 +94,8 @@ def AlignSpot(ccd, stage, escan, focus):
     f._spot_alignment_state = RUNNING
 
     # Task to run
-    doAlignSpot = _DoAlignSpot
     f.task_canceller = _CancelAlignSpot
-
-    # Locks
     f._alignment_lock = threading.Lock()
-    f._center_lock = threading.Lock()
 
     # Create autofocus and centerspot module
     f._autofocusf = model.InstantaneousFuture()
@@ -109,7 +104,7 @@ def AlignSpot(ccd, stage, escan, focus):
     # Run in separate thread
     alignment_thread = threading.Thread(target=executeTask,
                   name="Spot alignment",
-                  args=(f, doAlignSpot, f, ccd, stage, escan, focus))
+                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus))
 
     alignment_thread.start()
     return f
