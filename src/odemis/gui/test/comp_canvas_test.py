@@ -174,7 +174,7 @@ class TestDblMicroscopeCanvas(unittest.TestCase):
         px1 = GetRGB(resultIm,
                      resultIm.Width // 2 + shift[0],
                      resultIm.Height // 2 + shift[1])
-        self.assertEqual(px1, (127, 0, 0))
+        self.assertEqual(px1, (128, 0, 0))
 
         px2 = GetRGB(resultIm,
                      resultIm.Width // 2 + 200 + shift[0],

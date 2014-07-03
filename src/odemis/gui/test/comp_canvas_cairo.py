@@ -14,12 +14,12 @@ from __future__ import division
 import unittest
 import logging
 import numpy
-import random
 
 import wx
 
 from odemis import model
 from odemis.gui import test
+from odemis.gui.test import generate_img_data
 from odemis.model import DataArray, FloatContinuous
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
@@ -559,68 +559,6 @@ class TestCanvas(test.GuiTestCase):
 
     # @unittest.skip("simple")
 
-
-
-# Utility functions
-
-def set_img_meta(img, pixel_size, pos):
-    img.metadata[model.MD_PIXEL_SIZE] = pixel_size
-    img.metadata[model.MD_POS] = pos
-
-def generate_img_data(width, height, depth, alpha=255):
-    """ Create an image of the given dimensions """
-
-    shape = (height, width, depth)
-    rgb = numpy.empty(shape, dtype=numpy.uint8)
-
-    if width > 1000 or height > 1000:
-        tl = random_color(alpha=alpha)
-        tr = random_color(alpha=alpha)
-        bl = random_color(alpha=alpha)
-        br = random_color(alpha=alpha)
-
-        rgb = numpy.zeros(shape, dtype=numpy.uint8)
-
-        rgb[..., -1, 0] = numpy.linspace(tr[0], br[0], height)
-        rgb[..., -1, 1] = numpy.linspace(tr[1], br[1], height)
-        rgb[..., -1, 2] = numpy.linspace(tr[2], br[2], height)
-
-        rgb[..., 0, 0] = numpy.linspace(tl[0], bl[0], height)
-        rgb[..., 0, 1] = numpy.linspace(tl[1], bl[1], height)
-        rgb[..., 0, 2] = numpy.linspace(tl[2], bl[2], height)
-
-        for i in xrange(height):
-            sr, sg, sb = rgb[i, 0, :3]
-            er, eg, eb = rgb[i, -1, :3]
-
-            rgb[i, :, 0] = numpy.linspace(int(sr), int(er), width)
-            rgb[i, :, 1] = numpy.linspace(int(sg), int(eg), width)
-            rgb[i, :, 2] = numpy.linspace(int(sb), int(eb), width)
-
-        if depth == 4:
-            rgb[..., 3] = min(255, max(alpha, 0))
-
-    else:
-        for w in xrange(width):
-            for h in xrange(height):
-                rgb[h, w] = random_color((230, 230, 255), alpha)
-
-    return DataArray(rgb)
-
-def random_color(mix_color=None, alpha=255):
-    """ Generate a random color, possibly tinted using mix_color """
-    red = random.randint(0, 255)
-    green = random.randint(0, 255)
-    blue = random.randint(0, 255)
-
-    if mix_color:
-        red = (red - mix_color[0]) / 2
-        green = (green - mix_color[1]) / 2
-        blue = (blue - mix_color[2]) / 2
-
-    a = alpha / 255.0
-
-    return red * a, green * a, blue * a, alpha
 
 if __name__ == "__main__":
     unittest.main()

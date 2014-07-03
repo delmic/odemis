@@ -30,15 +30,14 @@ import unittest
 import math
 import logging
 
-
 import wx
 
-import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.viewport as viewport
-import odemis.gui.img.data as data
 import odemis.gui.test as test
+from odemis.gui.test import generate_img_data
+
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -107,6 +106,7 @@ def gen_test_data():
             print "\n(%s, %s)," % (x_axis, y_axis)
         print "\n"
 
+
 class PlotCanvasTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
@@ -122,7 +122,8 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.SetBackgroundColour("#00599B")
         self.add_control(cnvs, wx.EXPAND, proportion=1)
 
-        img = (data.gettest_pattern_sImage(), (0.0, 0.0), 1.0, True, None)
+        im_data = generate_img_data(300, 300, 4)
+        img = (im_data, (0.0, 0.0), 1.0, True, None)
 
         cnvs.set_images([img, None])
         cnvs.update_drawing()
@@ -140,7 +141,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
 
         # cnvs.fit_view_to_content()
         test.gui_loop()
-        test.sleep(500)
+        test.sleep(5)
 
         # for i in range(500):
         #     cnvs.bg_offset = (i % 40, i % 40)
