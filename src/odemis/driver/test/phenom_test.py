@@ -419,7 +419,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertAlmostEqual(self.focus.position.value, pos, 5)
 
-    # @skip("skip")
+    @skip("skip")
     def test_move(self):
         """
         Check it's possible to move the stage
@@ -469,7 +469,7 @@ class TestSEM(unittest.TestCase):
         f = self.pressure.moveAbs({"pressure":1e04})  # move to NavCam
         f.result()
         new_pos = self.pressure.position.value["pressure"]
-        self.assertEqual({'pressure': 1e04}, new_pos)
+        self.assertEqual(1e04, new_pos)
 
 
 if __name__ == "__main__":
