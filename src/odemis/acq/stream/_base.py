@@ -128,7 +128,7 @@ class Stream(object):
 
         # Histogram of the current image _or_ slightly older image.
         # Note it's an ndarray. Use .tolist() to get a python list.
-        self.histogram = model.VigilantAttribute(numpy.ndarray(0), readonly=True)
+        self.histogram = model.VigilantAttribute(numpy.empty(0), readonly=True)
         self.histogram._full_hist = numpy.ndarray(0) # for finding the outliers
         self.histogram._edges = None
 
