@@ -275,10 +275,18 @@ class GridScanner(object):
 
         spot_dist = (scale[0] * escan.pixelSize.value[0],
                      scale[1] * escan.pixelSize.value[1])
+
+        # Check if the exposure time to be used in the grid scan is
+        # within the range of the camera
+        # TODO handle similar case in the SpotAcquisition
+        dwell_time = self.dwell_time
+        et = numpy.prod(self.repetitions) * dwell_time
+        max_et = self.ccd.exposureTime.range[1]
+
         try:
             # If the distance between e-beam spots is below the size of a spot,
             # use the “one image per spot” procedure
-            if (spot_dist[0] < SPOT_SIZE) or (spot_dist[1] < SPOT_SIZE):
+            if (spot_dist[0] < SPOT_SIZE) or (spot_dist[1] < SPOT_SIZE) or (et > max_et):
                 return self._doSpotAcquisition(electron_coordinates, scale)
             else:
                 return self._doWholeAcquisition(electron_coordinates, scale)
