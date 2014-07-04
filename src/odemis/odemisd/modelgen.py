@@ -225,6 +225,9 @@ class Instantiator(object):
         #  * delegation: (dict str -> dict) internal name -> init arguments
         # anything else is passed as is
         args = self.make_args(name)
+
+        logging.debug("Going to instantiate %s (%s) with args %s",
+                      name, class_name, args)
     
         if self.dry_run and not class_name == "Microscope":
             # mock class for everything but Microscope (because it is safe)
@@ -249,7 +252,7 @@ class Instantiator(object):
         self.components |= getattr(comp, "children", set())
         
         return comp
-        
+
     def get_component_by_name(self, name):
         """
         Find a component by its name in the set of instantiated components
@@ -262,7 +265,7 @@ class Instantiator(object):
             if comp.name == name:
                 return comp
         raise LookupError("No component named '%s' found" % name)
-    
+
     def get_or_instantiate_comp(self, name):
         """
         returns a component for the given name, either from the components already
@@ -439,7 +442,7 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
     instantiator = Instantiator(inst_model, container, create_sub_containers, dry_run)
     try:
         instantiator.instantiate_model()
-    except Exception:
+    except Exception as exp:
         logging.error("Failed to instantiate the model")
         # clean up by stopping everything which we had started
         for comp in instantiator.components:
