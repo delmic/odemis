@@ -354,7 +354,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                 trigger.notify()
 
                 if not self._acq_ccd_complete.wait(ccd_time * 2 + 5):
-                    raise TimeoutError("Acquisition of CCD for pixel %s timed out" % (i,))
+                    raise TimeoutError("Acquisition of CCD for pixel %s timed out after %g s"
+                                       % (i, ccd_time * 2 + 5))
                 if self._acq_state == CANCELLED:
                     raise CancelledError()
                 dur = time.time() - start
@@ -362,9 +363,11 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     logging.warning("CCD acquisition took less that %g s: %g s",
                                     ccd_time, dur)
 
+                # FIXME: with the semcomedi, it fails if exposure time > 30s ?!
                 # Normally, the SEM acquisition has already completed
                 if not self._acq_sem_complete.wait(dwell_time * 1.5 + 1):
-                    raise TimeoutError("Acquisition of SEM pixel %s timed out" % (i,))
+                    raise TimeoutError("Acquisition of SEM pixel %s timed out after %g s"
+                                       % (i, dwell_time * 1.5 + 1))
                 # TODO: we don't really need to stop it, we could have a small
                 # dwell time, move the ebeam to the new position, and as soon as
                 # we get next acquisition we can expect the spot has moved. The
