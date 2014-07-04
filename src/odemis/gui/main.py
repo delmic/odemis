@@ -57,9 +57,6 @@ class OdemisGUIApp(wx.App):
         # Declare attributes BEFORE calling the super class constructor
         # because it will call 'OnInit' which uses them.
 
-        # HTTP documentation http server process
-        self.http_proc = None
-
         self.main_data = None
         self.main_frame = None
         self._tab_controller = None
@@ -171,7 +168,8 @@ class OdemisGUIApp(wx.App):
                     "analysis",
                     tabs.AnalysisTab,
                     self.main_frame.btn_tab_inspection,
-                    self.main_frame.pnl_tab_inspection),
+                    self.main_frame.pnl_tab_inspection
+                ),
             ]
 
             # Create the main tab controller and store a global reference
@@ -228,25 +226,10 @@ class OdemisGUIApp(wx.App):
             return
 
         try:
-            # Put cleanup actions here (like disconnect from odemisd)
-
             pub.unsubAll()
-
-            # Stop live view
-            try:
-                self.main_data.opticalState.value = guimodel.STATE_OFF
-            except AttributeError:
-                pass # just no such microscope present
-            try:
-                self.main_data.emState.value = guimodel.STATE_OFF
-            except AttributeError:
-                pass
 
             # let all the tabs know we are stopping
             self._tab_controller.terminate()
-
-            if self.http_proc:
-                self.http_proc.terminate()  #pylint: disable=E1101
         except Exception:
             logging.exception("Error during GUI shutdown")
 

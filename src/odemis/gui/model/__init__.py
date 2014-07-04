@@ -26,6 +26,7 @@ import collections
 import logging
 import math
 from odemis import model
+from odemis.acq import align
 from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
@@ -199,51 +200,6 @@ class MainGUIData(object):
             if not self.light and not self.ebeam:
                 raise KeyError("No emitter found in the microscope")
 
-        # TODO: all that on/off thing is crazy:
-        # * we cannot do it (for now)
-        # * we'd better turn on/off the hardware when streams need it
-        # * pause and off are the same things but for SEM (blank/off)
-        # * optical on in live view means light on, while in lens align it means light off
-        # => we'd be better with just one global pause button (and pressure)
-
-        # Handle turning on/off the instruments
-        hw_states = {STATE_OFF, STATE_ON, STATE_PAUSE}
-
-        if self.ccd:
-            # not so nice to hard code it here, but that should do it for now...
-            if self.role == "sparc":
-                self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-            else:
-                self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-                self.opticalState.subscribe(self.onOpticalState)
-
-        if self.ebeam:
-            self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-
-        if self.spectrometer:
-            self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-
-        # Chamber vacuum states
-        if self.chamber:
-            chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
-                              CHAMBER_VACUUM, CHAMBER_VENTING}
-            self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
-            self.chamberState.subscribe(self.onChamberState)
-
-            pressures = self.chamber.axes["pressure"].choices
-            self._vacuum_pressure = min(pressures.keys())
-            self._vented_pressure = max(pressures.keys())
-
-            # if there is an overview camera, _and_ it has to be reached via a
-            # special "pressure" state => note it down
-            if self.overview_ccd and "overview" in pressures.values():
-                po = [i[0] for i in pressures.items() if i[1] == "overview"][0]
-                self._overview_pressure = po
-            else:
-                self._overview_pressure = None
-
-            self.chamber.position.subscribe(self.on_chamber_pressure, init=True)
-
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
         # hasn't specified anything (yet).
@@ -262,110 +218,6 @@ class MainGUIData(object):
         # do directly access additional GUI information.
         self.tab = model.VAEnumerated(None, choices={None: ""})
 
-
-    # TODO: move to LiveViewGUIData tab model? The rest don't need to handle that
-    # + we would get access to the streams (ex, for the overview)
-    def onOpticalState(self, state):
-        """ Event handler for when the state of the optical microscope changes
-        """
-        # In general, the streams are in charge of turning on/off the emitters
-        # However, as a "trick", for the light with .emissions they leave the
-        # power as-is so that the power is the same between all streams.
-        # So we need to turn it on the first time.
-        if state == STATE_ON:
-            # if power is above 0 already, it's probably the user who wants
-            # to force to a specific value, respect that.
-            if self.light is None or self.light.power.value != 0:
-                return
-
-            # pick a nice value (= slightly more than 0), if not already on
-            try:
-                # if continuous: 10 %
-                self.light.power.value = self.light.power.range[1] * 0.1
-            except (AttributeError, model.NotApplicableError):
-                try:
-                    # if enumerated: the second lowest
-                    self.light.power.value = sorted(self.light.power.choices)[1]
-                except (AttributeError, model.NotApplicableError):
-                    logging.error("Unknown light power range, setting to 1 W")
-                    self.light.power.value = 1
-
-    def _setEbeamPower(self, on):
-        """ Set the ebeam power (if there is an ebeam that can be controlled)
-        on (boolean): if True, we set the power on, other will turn it off
-        """
-        if self.ebeam is None:
-            return
-
-        power = self.ebeam.power
-        if not isinstance(power, model.VigilantAttributeBase):
-            # We cannot change the power => nothing else to try
-            logging.debug("Ebeam doesn't support setting power")
-            return
-
-        if on:
-            try:
-                power.value = power.range[1] # max!
-            except (AttributeError, model.NotApplicableError):
-                try:
-                    # if enumerated: the second lowest
-                    power.value = sorted(power.choices)[1]
-                except (AttributeError, model.NotApplicableError):
-                    logging.error("Unknown ebeam power range, setting to 1")
-                    power.value = 1
-        else:
-            power.value = 0
-
-    def onChamberState(self, chamber_state):
-        """ Set the desired pressure on the chamber when the chamber's state changes
-
-        Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING) will allow for a
-        change in pressure.
-
-        """
-        if chamber_state == CHAMBER_PUMPING:
-            new_pressure = self._vacuum_pressure
-            if self._overview_pressure is not None:
-                # TODO: check if we already are in overview state ?
-                new_pressure = self._overview_pressure
-                # on_chamber_pressure() will take care of going further
-            f = self.chamber.moveAbs({"pressure": new_pressure})
-        elif chamber_state == CHAMBER_VENTING:
-            # TODO: make sure no SEM stream is playing
-
-            self._setEbeamPower(False)
-            f = self.chamber.moveAbs({"pressure": self._vented_pressure})
-
-        # TODO: if the future is a progressiveFuture, it will provide info
-        # on when it will finish => display that (in the tooltip of the chamber
-        # button)
-
-    def on_chamber_pressure(self, position):
-        """ Determine the state of the chamber when the pressure changes, and
-        set up the 
-
-        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM or from
-        CHAMBER_VENTING to CHAMBER_VENTED.
-
-        """
-        currentp = position["pressure"]
-        if currentp <= self._vacuum_pressure:
-            # Vacuum reached
-            self.chamberState.value = CHAMBER_VACUUM
-            self._setEbeamPower(True)
-        elif currentp == self._overview_pressure:
-            # in overview state => take an image and go on
-            # TODO: autofocus
-            # TODO: get overview stream & activate for one image
-            
-            # move further to fully under vacuum
-            f = self.chamber.moveAbs({"pressure": self._vacuum_pressure})
-        elif currentp >= self._vented_pressure:
-            # Chamber is opened
-            self.chamberState.value = CHAMBER_VENTED
-        else:
-            logging.debug("Pressure position unknown: %s", currentp)
-        
     def stopMotion(self):
         """
         Stops immediately every axis
@@ -469,6 +321,182 @@ class LiveViewGUIData(MicroscopyGUIData):
         tools = set([TOOL_NONE, TOOL_ZOOM, TOOL_ROI])
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
+        # Handle turning on/off the instruments
+        hw_states = {STATE_OFF, STATE_ON}
+
+        if self.main.ccd:
+            self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+            self.opticalState.subscribe(self.onOpticalState)
+
+        if self.main.ebeam:
+            self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
+        # Chamber vacuum states
+        if self.main.chamber:
+            chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
+                              CHAMBER_VACUUM, CHAMBER_VENTING}
+            self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
+            self.chamberState.subscribe(self.onChamberState)
+
+            pressures = self.main.chamber.axes["pressure"].choices
+            self._vacuum_pressure = min(pressures.keys())
+            self._vented_pressure = max(pressures.keys())
+
+            # if there is an overview camera, _and_ it has to be reached via a
+            # special "pressure" state => note it down
+            if self.main.overview_ccd and "overview" in pressures.values():
+                po = [i[0] for i in pressures.items() if i[1] == "overview"][0]
+                self._overview_pressure = po
+            else:
+                self._overview_pressure = None
+
+            self.main.chamber.position.subscribe(self.on_chamber_pressure, init=True)
+
+
+    def onOpticalState(self, state):
+        """ Event handler for when the state of the optical microscope changes
+        """
+        # In general, the streams are in charge of turning on/off the emitters
+        # However, as a "trick", for the light with .emissions they leave the
+        # power as-is so that the power is the same between all streams.
+        # So we need to turn it on the first time.
+        if state == STATE_ON:
+            light = self.main.light
+            # if power is above 0 already, it's probably the user who wants
+            # to force to a specific value, respect that.
+            if light is None or light.power.value != 0:
+                return
+
+            # pick a nice value (= slightly more than 0), if not already on
+            try:
+                # if continuous: 10 %
+                light.power.value = light.power.range[1] * 0.1
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    # if enumerated: the second lowest
+                    light.power.value = sorted(light.power.choices)[1]
+                except (AttributeError, model.NotApplicableError):
+                    logging.error("Unknown light power range, setting to 1 W")
+                    light.power.value = 1
+
+    def _setEbeamPower(self, on):
+        """ Set the ebeam power (if there is an ebeam that can be controlled)
+        on (boolean): if True, we set the power on, other will turn it off
+        """
+        if self.main.ebeam is None:
+            return
+
+        power = self.main.ebeam.power
+        if not isinstance(power, model.VigilantAttributeBase):
+            # We cannot change the power => nothing else to try
+            logging.debug("Ebeam doesn't support setting power")
+            return
+
+        if on:
+            try:
+                power.value = power.range[1] # max!
+            except (AttributeError, model.NotApplicableError):
+                try:
+                    # if enumerated: the second lowest
+                    power.value = sorted(power.choices)[1]
+                except (AttributeError, model.NotApplicableError):
+                    logging.error("Unknown ebeam power range, setting to 1")
+                    power.value = 1
+        else:
+            power.value = 0
+
+    def onChamberState(self, chamber_state):
+        """ Set the desired pressure on the chamber when the chamber's state changes
+
+        Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING) will allow for a
+        change in pressure.
+
+        """
+        if chamber_state == CHAMBER_PUMPING:
+            new_pressure = self._vacuum_pressure
+            if self._overview_pressure is not None:
+                # TODO: check if we already are in overview state ?
+                new_pressure = self._overview_pressure
+                # on_chamber_pressure() will take care of going further
+            f = self.main.chamber.moveAbs({"pressure": new_pressure})
+        elif chamber_state == CHAMBER_VENTING:
+            # TODO: make sure no SEM stream is playing
+
+            self._setEbeamPower(False)
+            f = self.main.chamber.moveAbs({"pressure": self._vented_pressure})
+
+        # TODO: if the future is a progressiveFuture, it will provide info
+        # on when it will finish => display that (in the tooltip of the chamber
+        # button)
+
+    def on_chamber_pressure(self, position):
+        """ Determine the state of the chamber when the pressure changes, and
+        do the overview imaging if possible.  
+
+        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM 
+        or from CHAMBER_VENTING to CHAMBER_VENTED.
+        """
+        currentp = position["pressure"]
+        if currentp <= self._vacuum_pressure:
+            # Vacuum reached
+            self.chamberState.value = CHAMBER_VACUUM
+            self._setEbeamPower(True)
+            # TODO, if no _overview_pressure, and overview ccd is present,
+            # acquire an image now
+        elif currentp == self._overview_pressure:
+            # in overview state => take an image and go on
+            # Start autofocus, and the rest will be done asynchronously
+            if self.main.overview_focus:
+                # TODO: what's a good accuracy?
+                f = align.autofocus.AutoFocus(self.main.overview_ccd, None,
+                                              self.main.overview_focus, 10e-6)
+                f.add_done_callback(self._on_overview_focused)
+            else:
+                self._on_overview_focused(None)
+
+        elif currentp >= self._vented_pressure:
+            # Chamber is opened
+            self.chamberState.value = CHAMBER_VENTED
+        else:
+            logging.warning("Pressure position unknown: %s", currentp)
+            self.chamberState.value = CHAMBER_UNKNOWN
+
+    def _get_overview_stream(self):
+        """
+        return (Stream): the overview stream
+        raise LookupError: if there is not such a stream
+        """
+        # For now, it's very ad-hoc: it's the only stream of the last view
+        if len(self.views.value) < 5:
+            raise LookupError("Views don't contain overview stream")
+        ovv = self.views.value[-1]
+        return ovv.getStreams()[0]
+        
+    def _on_overview_focused(self, future):
+        """
+        Called when the overview image is focused
+        """
+        # We cannot do much if the focus failed, so always go on...
+
+        # now acquire one image
+        ovs = self._get_overview_stream()
+        ovs.image.subscribe(self._on_overview_image)
+        # start acquisition
+        ovs.should_update.value = True
+        ovs.is_active.value = True
+        
+    def _on_overview_image(self, image):
+        """
+        Called once the overview image has been acquired
+        """
+        # Stop the stream (the image is immediately displayed in the view)
+        ovs = self._get_overview_stream()
+        ovs.is_active.value = False
+        ovs.should_update.value = False
+        
+        # move further to fully under vacuum
+        f = self.main.chamber.moveAbs({"pressure": self._vacuum_pressure})
+
 
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
@@ -498,6 +526,17 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         # The SEM CL stream that is used to select the acquisition settings
         # It will be set at start up by the tab controller
         self.semStream = None
+
+        # TODO: unused for now => get rid of them? cf tab controller
+#         # Handle turning on/off the instruments
+#         hw_states = {STATE_OFF, STATE_ON}
+#
+#         if self.main.ccd:
+#             self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+#
+#         if self.main.spectrometer:
+#             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
 
 class AnalysisGUIData(MicroscopyGUIData):
     """

@@ -89,7 +89,7 @@ class Tab(object):
             self._connect_22view_event()
             self._connect_crosshair_event()
 
-            self._clear_notification()
+            self.clear_notification()
 
         self.panel.Show(show)
 
@@ -193,7 +193,7 @@ class Tab(object):
             self.button.notify(True)
             self.notification = True
 
-    def _clear_notification(self):
+    def clear_notification(self):
         """ Clear the notification mode if it's active """
         if self.notification:
             self.button.notify(False)
@@ -246,10 +246,6 @@ class SecomStreamsTab(Tab):
                 overview_stream = streammod.BrightfieldStream("Overview", main_data.overview_ccd,
                                                               main_data.overview_ccd.data, None)
 
-            # TODO: acquire _one_ overview image everytime the chamber is pumped
-            # cf main_data.on_chamber_pressure
-#             overview_stream.should_update.value = True
-#             overview_stream.is_active.value = True
             self.tab_data_model.views.value[-1].addStream(overview_stream)
         else:
             self.main_frame.vp_overview_sem.Hide()
@@ -301,17 +297,17 @@ class SecomStreamsTab(Tab):
         # Add the first streams
         self._streams_to_restart = set() # set of weakref to the streams
         self._ensure_base_streams()
-        
+
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
-        if hasattr(main_data, 'opticalState'):
-            main_data.opticalState.subscribe(self.onOpticalState)
+        if hasattr(tab_data, 'opticalState'):
+            tab_data.opticalState.subscribe(self.onOpticalState)
 
-        if hasattr(main_data, 'emState'):
-            main_data.emState.subscribe(self.onEMState)
+        if hasattr(tab_data, 'emState'):
+            tab_data.emState.subscribe(self.onEMState)
 
-        if hasattr(main_data, "chamberState"):
-            main_data.chamberState.subscribe(self.on_chamber_state, init=True)        
+        if hasattr(tab_data, "chamberState"):
+            tab_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
         # TODO: state == play/pause of current opt/sem stream (+focus view with stream)
 
@@ -323,12 +319,17 @@ class SecomStreamsTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
+    def terminate(self):
+        super(SecomStreamsTab, self).terminate()
+        # make sure the streams are stopped
+        for s in self.tab_data_model.streams.value:
+            s.is_active.value = False
+
     def _ensure_base_streams(self):
         """
         Make sure there is at least one optical and one SEM stream present
         """
-        main_data = self.tab_data_model.main
-        if hasattr(main_data, 'opticalState'):
+        if hasattr(self.tab_data_model, 'opticalState'):
             has_opt = any(isinstance(s, streammod.OPTICAL_STREAMS)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
@@ -336,7 +337,7 @@ class SecomStreamsTab(Tab):
                 # don't forbid to remove it, as for the user it can be easier to
                 # remove than change all the values
 
-        if hasattr(main_data, 'emState'):
+        if hasattr(self.tab_data_model, 'emState'):
             has_sem = any(isinstance(s, streammod.EM_STREAMS)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
@@ -392,6 +393,18 @@ class SecomStreamsTab(Tab):
             if self.tab_data_model.main.role == "secommini":
                 self.main_frame.live_btn_opt.Enable(False)
                 self.main_frame.live_btn_opt.SetToolTipString("Chamber must be under vacuum to activate the optical view")
+
+        # Lock or enable lens alignment
+        # Note: it's a bit tricky code as at initialisation, secom_align might
+        # not yet be available... but thanks to @call_after, we should never
+        # reach here before it has been created.
+        la_tab = self.tab_data_model.main.getTabByName("secom_align")
+        if state == CHAMBER_VACUUM:
+            la_tab.button.Enable()
+            la_tab.notify()
+        else:
+            la_tab.button.Disable()
+            la_tab.clear_notification()
 
     # TODO: move to stream controller?
     # => we need to update the state of optical/sem when the streams are play/paused
@@ -569,6 +582,9 @@ class SparcAcquisitionTab(Tab):
         # Bind the Spectrometer/Angle resolved buttons to add/remove the
         # streams. Both from the setting panels and the acquisition view.
         if self._ar_stream and self._spec_stream:
+            # TODO: probably cleaner to listen to arState and specState VAs +
+            # instantiate a MicroscopeStateController?
+            # Or get rid of the MicroscopeStateController?
             main_frame.acq_btn_spectrometer.Bind(wx.EVT_BUTTON, self.onToggleSpec)
             main_frame.acq_btn_angular.Bind(wx.EVT_BUTTON, self.onToggleAR)
             if main_data.ar_spec_sel:
@@ -1550,16 +1566,6 @@ class LensAlignTab(Tab):
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
-
-    @call_after
-    def on_chamber_state(self, chamber_state):
-        """ Lock or enable this Tab according to the current chamber state"""
-        if chamber_state == CHAMBER_VACUUM:
-            self.button.Enable()
-            self.notify()
-        else:
-            self.button.Disable()
-            self._clear_notification()
 
     @call_after
     def _onTool(self, tool):

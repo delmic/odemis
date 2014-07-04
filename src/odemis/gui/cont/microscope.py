@@ -58,7 +58,7 @@ class MicroscopeStateController(object):
             if not btn:
                 continue
 
-            va = getattr(tab_data.main, va_name, None)
+            va = getattr(tab_data, va_name, None)
             if not va:
                 btn.Hide()
                 continue
