@@ -429,6 +429,8 @@ class LiveViewGUIData(MicroscopyGUIData):
         # on when it will finish => display that (in the tooltip of the chamber
         # button)
 
+    # TODO: move this to ChamberController, so that overview acquisition is not
+    # done in the model?
     def on_chamber_pressure(self, position):
         """ Determine the state of the chamber when the pressure changes, and
         do the overview imaging if possible.  
@@ -439,27 +441,36 @@ class LiveViewGUIData(MicroscopyGUIData):
         currentp = position["pressure"]
         if currentp <= self._vacuum_pressure:
             # Vacuum reached
+            if self.main.overview_ccd and self._overview_pressure is None:
+                # if no special place for overview, then we do it once after
+                # the chamber is ready.
+                # TODO: maybe could be done before full vacuum, but we need a
+                # way to know from the hardware.
+                self._start_overview_acquisition()
+
             self.chamberState.value = CHAMBER_VACUUM
             self._setEbeamPower(True)
-            # TODO, if no _overview_pressure, and overview ccd is present,
-            # acquire an image now
         elif currentp == self._overview_pressure:
             # in overview state => take an image and go on
-            # Start autofocus, and the rest will be done asynchronously
-            if self.main.overview_focus:
-                # TODO: what's a good accuracy?
-                f = align.autofocus.AutoFocus(self.main.overview_ccd, None,
-                                              self.main.overview_focus, 10e-6)
-                f.add_done_callback(self._on_overview_focused)
-            else:
-                self._on_overview_focused(None)
-
+            self._start_overview_acquisition()
         elif currentp >= self._vented_pressure:
             # Chamber is opened
             self.chamberState.value = CHAMBER_VENTED
         else:
             logging.warning("Pressure position unknown: %s", currentp)
             self.chamberState.value = CHAMBER_UNKNOWN
+
+    def _start_overview_acquisition(self):
+        logging.debug("Starting overview acquisition")
+
+        # Start autofocus, and the rest will be done asynchronously
+        if self.main.overview_focus:
+            # TODO: what's a good accuracy?
+            f = align.autofocus.AutoFocus(self.main.overview_ccd, None,
+                                          self.main.overview_focus, 10e-6)
+            f.add_done_callback(self._on_overview_focused)
+        else:
+            self._on_overview_focused(None)
 
     def _get_overview_stream(self):
         """
@@ -470,27 +481,39 @@ class LiveViewGUIData(MicroscopyGUIData):
         if len(self.views.value) < 5:
             raise LookupError("Views don't contain overview stream")
         ovv = self.views.value[-1]
-        return ovv.getStreams()[0]
-        
+        return list(ovv.getStreams())[0]
+
     def _on_overview_focused(self, future):
         """
         Called when the overview image is focused
         """
         # We cannot do much if the focus failed, so always go on...
+        logging.debug("Overview focused")
 
         # now acquire one image
-        ovs = self._get_overview_stream()
+        try:
+            ovs = self._get_overview_stream()
+        except LookupError:
+            logging.exception("Failed to acquire overview image")
+            return
+
         ovs.image.subscribe(self._on_overview_image)
         # start acquisition
         ovs.should_update.value = True
         ovs.is_active.value = True
-        
+
     def _on_overview_image(self, image):
         """
         Called once the overview image has been acquired
         """
+        logging.debug("New overview image acquired")
         # Stop the stream (the image is immediately displayed in the view)
-        ovs = self._get_overview_stream()
+        try:
+            ovs = self._get_overview_stream()
+        except LookupError:
+            logging.exception("Failed to acquire overview image")
+            return
+
         ovs.is_active.value = False
         ovs.should_update.value = False
         
