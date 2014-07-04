@@ -144,6 +144,9 @@ class SEM(model.HwComponent):
     def updateMetadata(self, md):
         self._metadata.update(md)
 
+    def getMetadata(self):
+        return self._metadata
+
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
@@ -261,6 +264,9 @@ class Scanner(model.Emitter):
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
+
+    def getMetadata(self):
+        return self.parent.getMetadata()
 
     def _onHorizontalFoV(self, s):
         # Update current pixelSize and magnification
@@ -558,6 +564,9 @@ class Detector(model.Detector):
     def updateMetadata(self, md):
         # we share metadata with our parent
         self.parent.updateMetadata(md)
+
+    def getMetadata(self):
+        return self.parent.getMetadata()
 
     def terminate(self):
         logging.info("Terminating SEM stream...")
