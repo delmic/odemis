@@ -37,9 +37,6 @@ import threading
 import time
 import weakref
 
-# Avoid unecessary logging from suds.client
-logging.getLogger().setLevel(logging.INFO)
-
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
@@ -61,6 +58,11 @@ class SEM(model.HwComponent):
             They will be provided back in the .children roattribute
         Raise an exception if the device cannot be opened
         '''
+
+        # TODO: only reduce the logging level for suds
+        # Avoid unnecessary logging from suds.client
+        logging.getLogger().setLevel(logging.INFO)
+
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
