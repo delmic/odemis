@@ -1122,7 +1122,10 @@ class ChamberPressure(model.Actuator):
         update the sampleHolder VA 
         """
         # TODO: set to (None, None) if not sample holder in?
-        self._sampleHolder = (self.parent._device.GetSampleHolder().holderID.id[0],
+        # Convert base64 to long int
+        s = base64.decodestring(self.parent._device.GetSampleHolder().holderID.id[0])
+        holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
+        self._sampleHolder = (holderID,
                               self.parent._device.GetSampleHolder().holderType)
 
         self.sampleHolder._value = self._sampleHolder

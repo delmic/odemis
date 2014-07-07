@@ -255,8 +255,8 @@ class MainGUIData(object):
             if n == name:
                 return t
         else:
-            raise LookupError("Failed to find tab %s in the %d tabs" %
-                              name, len(self.tab.choices))
+            raise LookupError("Failed to find tab %s among %d defined tabs" %
+                              (name, len(self.tab.choices)))
 
 
 class MicroscopyGUIData(object):
