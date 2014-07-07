@@ -38,8 +38,7 @@ from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
-from odemis.gui.cont.microscope import MicroscopeStateController, \
-    SecomStateController
+from odemis.gui.cont.microscope import SecomStateController
 from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
@@ -48,6 +47,8 @@ import os.path
 import pkg_resources
 import scipy.misc
 import weakref
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 from wx import html  # pylint: disable=W0611
 import wx
 
@@ -60,8 +61,6 @@ import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
 
 
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 class Tab(object):
     """ Small helper class representing a tab (tab button + panel) """
 
@@ -358,7 +357,7 @@ class SecomStreamsTab(Tab):
                 cls = (streammod.Stream,)
             else: # SECOM => only SEM as optical might be used even vented
                 cls = (streammod.EM_STREAMS,)
-    
+
             for s in self.tab_data_model.streams.value:
                 if not isinstance(s, cls):
                     continue
@@ -413,7 +412,7 @@ class SecomStreamsTab(Tab):
             self._view_controller.focusViewWithStream(sems)
         else:
             self._stream_controller.pauseStreams(streammod.EM_STREAMS)
-        
+
     def Show(self, show=True):
         assert (show != self.IsShown()) # we assume it's only called when changed
         Tab.Show(self, show=show)
