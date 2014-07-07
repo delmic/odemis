@@ -247,8 +247,8 @@ class MainGUIData(object):
             if n == name:
                 return t
         else:
-            raise LookupError("Failed to find tab %s in the %d tabs" %
-                              name, len(self.tab.choices))
+            raise LookupError("Failed to find tab %s among %d defined tabs" %
+                              (name, len(self.tab.choices)))
 
 
 class MicroscopyGUIData(object):
@@ -433,9 +433,9 @@ class LiveViewGUIData(MicroscopyGUIData):
     # done in the model?
     def on_chamber_pressure(self, position):
         """ Determine the state of the chamber when the pressure changes, and
-        do the overview imaging if possible.  
+        do the overview imaging if possible.
 
-        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM 
+        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM
         or from CHAMBER_VENTING to CHAMBER_VENTED.
         """
         currentp = position["pressure"]
@@ -516,7 +516,7 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         ovs.is_active.value = False
         ovs.should_update.value = False
-        
+
         # move further to fully under vacuum
         f = self.main.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
