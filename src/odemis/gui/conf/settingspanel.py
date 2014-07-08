@@ -229,10 +229,11 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_NONE,
         },
-#         "rotation":
-#         {
-#             "control_type": odemis.gui.CONTROL_NONE,
-#         },
+        # TODO: might be useful iff it's not read-only
+        "rotation":
+        {
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
         "pixelSize":
         {
             "control_type": odemis.gui.CONTROL_NONE,
@@ -280,11 +281,6 @@ CONFIG = {
         "pixelSize":
         {
             "control_type": odemis.gui.CONTROL_FLT,
-        },
-        # For testing purposes only, roi must be hidden in production
-        "roi":
-        {
-            "control_type": odemis.gui.CONTROL_LABEL,
         },
     },
     "streamar":
