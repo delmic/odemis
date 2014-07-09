@@ -185,12 +185,12 @@ class SEMComedi(model.HwComponent):
 
         # TODO only look for 2 output channels and len(detectors) input channels
         self._min_ai_periods, self._min_ao_periods = self._get_min_periods()
-        self._max_ao_period_ns = self._get_max_ao_period_ns()
         # On the NI-6251, according to the doc:
         # AI is 1MHz (aggregate) (or 1.25MHz with only one channel)
         # AO is 2.86/2.0 MHz for one/two channels
         # => that's more or less what we get from comedi :-)
-
+        self._max_ao_period_ns = self._get_max_ao_period_ns()
+        # maximum number of samples that can be acquired by one command
         self._max_bufsz = self._get_max_buffer_size()
 
         # acquisition thread setup
@@ -411,7 +411,7 @@ class SEMComedi(model.HwComponent):
         # There are two limitations to the maximum buffer:
         #  * the size in memory of the sample read (it can be huge if the
         #    oversampling rate is large) => restrict to << 4Gb
-        bufsz = 50 * 2 ** 20 # max 50 MB: big, but no risk to take too much memory
+        bufsz = 64 * 2 ** 20 # max 64 MB: big, but no risk to take too much memory
 
         #  * the maximum amount of samples the DAQ device can read in one shot
         #    (on the NI 652x, it's 2**24 samples)
@@ -420,9 +420,9 @@ class SEMComedi(model.HwComponent):
             cmd = comedi.cmd_struct()
             comedi.get_cmd_generic_timed(self._device, self._ai_subdevice, cmd, 1, 1)
             cmd.stop_src = comedi.TRIG_COUNT
-            cmd.stop_arg = 0xffffffff # 32 bits
+            cmd.stop_arg = 0xffffffff # max of uint32
             self._prepare_command(cmd)
-            bufsz = min(cmd.stop_arg, bufsz)
+            bufsz = min(cmd.stop_arg * self._reader.dtype.itemsize, bufsz)
         except comedi.ComediError:
             # consider it can take the max
             pass
@@ -758,8 +758,9 @@ class SEMComedi(model.HwComponent):
 
         if best_found:
             wperiod_ns, osr = best_found
-            logging.debug("Found over-sampling rate: %g ns x %d = %g ns",
-                           wperiod_ns / osr, osr, wperiod_ns)
+            logging.debug("Found duplication & over-sampling rates: %g ns x %d x %d = %g ns",
+                           wperiod_ns / osr, osr, dpr, dpr * wperiod_ns)
+            # FIXME: if osr * itemsize > _max_bufsz, increase dpr and retry
             return dpr * wperiod_ns / 1e9, osr, dpr
 
         # We ought to never come here, but just in case, don't completely fail
@@ -867,13 +868,25 @@ class SEMComedi(model.HwComponent):
                          period, margin, osr, lines, data)
 
         # fit a pixel
-        pixelsz = nrchans * osr * dpr * self._reader.dtype.itemsize
+        max_dpr = (self._max_bufsz / self._reader.dtype.itemsize) // osr
+        if dpr <= max_dpr:
+            pixelsz = nrchans * osr * dpr * self._reader.dtype.itemsize
+            if pixelsz > self._max_bufsz:
+                # probably going to fail, but let's try...
+                logging.warning("Going to try to read very large buffer of %g MB.",
+                                pixelsz / 2 ** 20)
+
+            return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges,
+                                             period, margin, osr, dpr, data)
+
+        # separate each pixel into #dpr acquisitions
+        pixelsz = nrchans * osr * self._reader.dtype.itemsize
         if pixelsz > self._max_bufsz:
             # probably going to fail, but let's try...
-            logging.warning("Going to try to read very large buffer of %g MB.", pixelsz / 2.**20)
+            logging.warning("Going to try to read very large buffer of %g MB.",
+                            pixelsz / 2 ** 20)
 
-        # TODO: read several pixels at a time => need clever placement
-        return self._write_read_2d_pixel(wchannels, wranges, rchannels, rranges,
+        return self._write_read_2d_subpixel(wchannels, wranges, rchannels, rranges,
                                          period, margin, osr, dpr, data)
 
 
@@ -951,10 +964,7 @@ class SEMComedi(model.HwComponent):
         Implementation of write_read_2d_data_raw by reading the input data one 
           pixel at a time.
         """
-        logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
-                      osr * len(rchannels), period * 1e6)
         rshape = (data.shape[0], data.shape[1] - margin)
-        wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
 
         # allocate one full buffer per channel
         buf = []
@@ -962,6 +972,11 @@ class SEMComedi(model.HwComponent):
             buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
         adtype = get_best_dtype_for_acc(self._reader.dtype, osr)
 
+        # TODO: as we do point per point, we could do the margin (=settle time)
+        # shorter than a standard point
+        logging.debug("Reading one pixel at a time: %d samples/read every %g µs",
+                       dpr * osr * len(rchannels), period * 1e6)
+        wdata = numpy.empty((dpr, data.shape[2]), dtype=data.dtype) # just one pixel
         # read one pixel at a time
         for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
             wdata[:] = data[x, y, :] # copy the same pixel data * dpr
@@ -978,6 +993,48 @@ class SEMComedi(model.HwComponent):
             for i, b in enumerate(buf):
                 self._scan_raw_to_pixel(rshape, margin, osr, dpr, x, y,
                                         rbuf[..., i], b, adtype)
+        return buf
+
+    def _write_read_2d_subpixel(self, wchannels, wranges, rchannels, rranges,
+                            period, margin, osr, dpr, data):
+        """
+        Implementation of write_read_2d_data_raw by reading the input data one 
+         part of a pixel at a time.
+        """
+        nrchans = len(rchannels)
+        rshape = (data.shape[0], data.shape[1] - margin)
+
+        # allocate one full buffer per channel
+        buf = []
+        for c in rchannels:
+            buf.append(numpy.empty(rshape, dtype=self._reader.dtype))
+        adtype = get_best_dtype_for_acc(self._reader.dtype, osr * dpr)
+
+        # even one pixel at a time is too big => cut in several scans
+        # Note: we could optimize slightly more by grouping dpr up to max_dpr
+        # but would make the code more complex and anyway it's already huge
+        # acquisitions.
+        logging.debug("Reading one sub-pixel at a time: %d samples/read every %g µs",
+                       osr * nrchans, (period / dpr) * 1e6)
+        px_rbuf = numpy.empty((dpr, nrchans), dtype=adtype) # intermediary sum for mean
+        for x, y in numpy.ndindex(data.shape[0], data.shape[1]):
+            if y < margin:
+                ss = 1
+            else:
+                ss = 0
+            wdata = data[x, y].reshape(1, data.shape[2]) # add a "time" dimension == 1
+            for d in range(dpr):
+                islast = ((x + 1, y + 1, d + 1) == data.shape + (dpr,))
+                rbuf = self._write_read_raw_one_cmd(wchannels, wranges, rchannels,
+                                        rranges, period / dpr, osr, wdata, ss,
+                                        rest=(islast and self._scanner.fast_park))
+                # decimate into intermediary buffer
+                px_rbuf[d] = numpy.sum(rbuf, axis=0, dtype=adtype) / (osr * dpr)
+
+            # decimate into each buffer
+            for i, b in enumerate(buf):
+                self._scan_raw_to_pixel(rshape, margin, 1, dpr, x, y,
+                                        px_rbuf[..., i], b, adtype)
 
         return buf
 
@@ -1107,6 +1164,7 @@ class SEMComedi(model.HwComponent):
         nwchans = data.shape[1]
         nrscans = nwscans * osr
         nrchans = len(rchannels)
+        # TODO: the period could be so long that floating points will lose precision => keep everything in ns
         period_ns = int(round(period * 1e9))  # in nanoseconds
         rperiod_ns = int(round(period * 1e9) / osr)  # in nanoseconds
         expected_time = nwscans * period # s
