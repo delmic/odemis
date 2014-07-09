@@ -1549,6 +1549,7 @@ class PlotCanvas(BufferedCanvas):
 
         self.data_width = None
         self.data_height = None
+        self.outline = None
 
         self.unit_x = None
         self.unit_y = None
@@ -1566,16 +1567,14 @@ class PlotCanvas(BufferedCanvas):
 
     # Getters and Setters
 
-    def set_1d_data(self, horz, vert,
-                    unit_x=None, unit_y=None, range_x=None, range_y=None):
+    def set_1d_data(self, horz, vert, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Construct the data by zipping the two provided 1D iterables """
         if len(horz) != len(vert):
             msg = "X and Y list are of unequal length. X: %s, Y: %s, Xs: %s..."
             raise ValueError(msg % (len(horz), len(vert), str(horz)[:30]))
         self.set_data(zip(horz, vert), unit_x, unit_y, range_x, range_y)
 
-    def set_data(self, data,
-                 unit_x=None, unit_y=None, range_x=None, range_y=None):
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Set the data to be plotted
 
         The data should be an iterable of numerical 2-tuples.
@@ -1656,7 +1655,7 @@ class PlotCanvas(BufferedCanvas):
             self.range_y = (self.min_y, self.max_y)
             self.data_height = self.max_y - self.min_y
         else:
-            # Make sure the values are valid and calculate the width of the data
+            # Make sure the values are valid and calculate the height of the data
             if self.range_y[0] <= self.min_y <= self.max_y <= self.range_y[1]:
                 self.data_height = self.range_y[1] - self.range_y[0]
             else:
@@ -1710,9 +1709,13 @@ class PlotCanvas(BufferedCanvas):
         :return: (float)
         """
 
-        y = min(max(self.range_y[0], val_y), self.range_y[1])
-        perc_y = float(self.range_y[1] - y) / self.data_height
-        return perc_y * self.ClientSize.y
+        # If the
+        if self.data_height:
+            y = min(max(self.range_y[0], val_y), self.range_y[1])
+            perc_y = float(self.range_y[1] - y) / self.data_height
+            return perc_y * self.ClientSize.y
+        else:
+            return 0
 
     def _pos_x_to_val_x(self, pos_x, snap=False):
         """ Map the given pixel position to an x value from the data

@@ -268,7 +268,7 @@ class AxisLegend(wx.Panel):
         self._unit = val
         self.clear()
 
-    def on_paint(self, event=None):
+    def on_paint(self, evt=None):
 
         if not self.Parent.canvas.has_data():
             self.clear()
@@ -280,11 +280,7 @@ class AxisLegend(wx.Panel):
         ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
 
         font = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT)
-        ctx.select_font_face(
-                font.GetFaceName(),
-                cairo.FONT_SLANT_NORMAL,
-                cairo.FONT_WEIGHT_NORMAL
-        )
+        ctx.select_font_face(font.GetFaceName(), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         ctx.set_font_size(font.GetPointSize())
 
         ctx.set_source_rgb(*self.tick_colour)
@@ -337,21 +333,18 @@ class AxisLegend(wx.Panel):
         # least the distance `val_dist`
         val_step = 1e-12
 
-        # Increase the value step tenfold while it fits more tan num_ticks times
+        # Increase the value step tenfold while it fits more than num_ticks times
         # in the range
-        while val_size / val_step > num_ticks:
+        while val_step and val_size / val_step > num_ticks:
             val_step *= 10
-
-        logging.debug("Value step is %s after first iteration with range %s",
-                      val_step, val_size)
+        logging.debug("Value step is %s after first iteration with range %s", val_step, val_size)
 
         # Divide the value step by two,
-        while val_size / val_step < num_ticks:
+        while val_step and val_size / val_step < num_ticks:
             val_step /= 2
-        logging.debug("Value step is %s after second iteration with range %s",
-                      val_step, val_size)
+        logging.debug("Value step is %s after second iteration with range %s", val_step, val_size)
 
-        first_tick = (int(min_val / val_step) + 1) * val_step
+        first_tick = (int(min_val / val_step) + 1) * val_step if val_step else 0
         logging.debug("Setting first tick at value %s", first_tick)
 
         ticks = [first_tick + i * val_step for i in range(2 * num_ticks)]
@@ -360,13 +353,11 @@ class AxisLegend(wx.Panel):
             pos = val_to_pos(tick)
             if (pos, tick) not in self.ticks:
                 if self.orientation == self.HORIZONTAL:
-                    if (0 <= pos <= size - self.tick_pixel_gap / 2):
+                    if 0 <= pos <= size - self.tick_pixel_gap / 2:
                         self.ticks.append((pos, tick))
                 else:
-                    if (10 <= pos <= size):
+                    if 10 <= pos <= size:
                         self.ticks.append((pos, tick))
-
-
 
     def clear(self):
         self.ticks = None

@@ -71,7 +71,7 @@ class ViewPort(wx.Panel):
 
         self.legend = None
 
-        mainSizer = wx.BoxSizer(wx.VERTICAL)
+        main_sizer = wx.BoxSizer(wx.VERTICAL)
 
         if self.legend_class is not None:
             if isinstance(self.legend_class, collections.Iterable):
@@ -98,15 +98,14 @@ class ViewPort(wx.Panel):
                 grid_sizer.AddGrowableCol(1, 1)
                 # grid_sizer.RemoveGrowableCol(0)
 
-
                 # Focus the view when a child element is clicked
                 for lp in self.legend:
                     lp.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-                mainSizer.Add(grid_sizer, 1,
+                main_sizer.Add(grid_sizer, 1,
                         border=2, flag=wx.EXPAND | wx.ALL)
             else:
-                mainSizer.Add(self.canvas, 1,
+                main_sizer.Add(self.canvas, 1,
                     border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
                 # It's made of multiple controls positioned via sizers
                 # TODO: allow the user to pick which information is displayed
@@ -115,14 +114,13 @@ class ViewPort(wx.Panel):
                 self.legend = self.legend_class(self)
                 self.legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-                mainSizer.Add(self.legend, 0,
-                        border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
+                main_sizer.Add(self.legend, 0, border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
         else:
-            mainSizer.Add(self.canvas, 1,
+            main_sizer.Add(self.canvas, 1,
                 border=2, flag=wx.EXPAND | wx.ALL)
 
-        self.SetSizerAndFit(mainSizer)
-        mainSizer.Fit(self)
+        self.SetSizerAndFit(main_sizer)
+        main_sizer.Fit(self)
         self.SetAutoLayout(True)
 
         self.Bind(wx.EVT_CHILD_FOCUS, self.OnChildFocus)
@@ -184,6 +182,14 @@ class ViewPort(wx.Panel):
 
     def OnSize(self, evt):
         evt.Skip()  # processed also by the parent
+
+    def Refresh(self, *args, **kwargs):
+        """ Refresh the ViewPort while making sure the legends get redrawn as well """
+        if self.legend:
+            for legend in self.legend:
+                    legend.clear()
+
+        super(ViewPort, self).Refresh(*args, **kwargs)
 
 
 class OverviewVierport(ViewPort):
@@ -424,7 +430,7 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        if(evt.GetEventObject() == self.legend.bmp_slider_left):
+        if evt.GetEventObject() == self.legend.bmp_slider_left:
             self.legend.merge_slider.set_to_min_val()
         else:
             self.legend.merge_slider.set_to_max_val()
@@ -446,10 +452,7 @@ class SecomViewport(MicroscopeViewport):
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
         self._orig_abilities = self.canvas.abilities & set([CAN_DRAG, CAN_FOCUS])
-        self._microscope_view.stream_tree.should_update.subscribe(
-                                                        self.hide_pause,
-                                                        init=True
-        )
+        self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
 
     def hide_pause(self, is_playing):
         #pylint: disable=E1101
@@ -468,7 +471,7 @@ class SecomViewport(MicroscopeViewport):
         has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)
         has_em = any(isinstance(s, EM_STREAMS) for s in streams)
 
-        if (has_opt and has_em):
+        if has_opt and has_em:
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
@@ -513,8 +516,6 @@ class PlotViewport(ViewPort):
     def clear(self):
         #pylint: disable=E1103, E1101
         self.canvas.clear()
-        for l in self.legend:
-            l.clear()
         self.Refresh()
 
     def OnSize(self, evt):
@@ -549,10 +550,8 @@ class PlotViewport(ViewPort):
         domain = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit
         self.legend[0].unit = unit_x
-        self.canvas.set_1d_data(domain, data, unit_x)  #pylint: disable=E1101
-        for l in self.legend:
-            l.clear()
-            l.Refresh()
+        self.canvas.set_1d_data(domain, data, unit_x)
+        self.Refresh()
 
     def setView(self, microscope_view, tab_data):
         """
@@ -580,8 +579,7 @@ class PlotViewport(ViewPort):
         self.canvas.setView(microscope_view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        microscope_view.stream_tree.should_update.subscribe(
-                                                        self.connect_stream)
+        microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
 
 
 class AngularResolvedViewport(ViewPort):
@@ -592,7 +590,6 @@ class AngularResolvedViewport(ViewPort):
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
-
 
     def setView(self, microscope_view, tab_data):
         """

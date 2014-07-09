@@ -1312,10 +1312,12 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         # Skip DblMicroscopeCanvas.on_size which plays with mpp
         canvas.DraggableCanvas.on_size(self, event)
 
-# TODO: change name?
+
 class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     """ A plotable canvas with a vertical 'focus line', that shows the x and y
     values of the selected position.
+
+    TODO: change name?
     """
 
     def __init__(self, *args, **kwargs):

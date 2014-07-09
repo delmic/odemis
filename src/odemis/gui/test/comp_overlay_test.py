@@ -48,6 +48,7 @@ def do_stuff(value):
     """ Test function that can be used to subscribe to VAs """
     print "Testing VA subscriber received value ", value
 
+
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
@@ -140,7 +141,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         ol.add_label("bottom right",
                      pos=(ol.view_width, ol.view_height),
-                     align=wx.ALIGN_RIGHT|wx.ALIGN_BOTTOM,
+                     align=wx.ALIGN_RIGHT | wx.ALIGN_BOTTOM,
                      flip=False,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
@@ -158,7 +159,6 @@ class OverlayTestCase(test.GuiTestCase):
                      flip=True,
                      colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
         test.gui_loop(50)
-
 
     def test_text_view_overlay_rotate(self):
         cnvs = canvas.BitmapCanvas(self.panel)
@@ -187,12 +187,11 @@ class OverlayTestCase(test.GuiTestCase):
 
         ol.clear()
 
-
-        sl = ol.add_label(u"█ no rotate",
-                          pos=(200, 0),
-                          font_size=20,
-                          colour=(1, 0, 0),
-                          align=wx.ALIGN_LEFT)
+        ol.add_label(u"█ no rotate",
+                     pos=(200, 0),
+                     font_size=20,
+                     colour=(1, 0, 0),
+                     align=wx.ALIGN_LEFT)
 
         tl = ol.add_label(u"█ rotate left",
                           pos=(200, 25),
@@ -223,7 +222,6 @@ class OverlayTestCase(test.GuiTestCase):
             l.deg = 15
             test.gui_loop(500)
             cnvs.Refresh()
-
 
     # @unittest.skip("simple")
     def test_polar_overlay(self):
@@ -265,10 +263,7 @@ class OverlayTestCase(test.GuiTestCase):
         phys_points = product(xrange(-200, 201, 50), xrange(-200, 201, 50))
         phys_points = [(a / 1.0e5, b / 1.0e5) for a, b in phys_points]
 
-        point = omodel.VAEnumerated(
-                    phys_points[0],
-                    choices=frozenset(phys_points))
-
+        point = omodel.VAEnumerated(phys_points[0], choices=frozenset(phys_points))
 
         pol.set_point(point)
         test.gui_loop()
@@ -280,9 +275,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.sleep(1000)
 
-        point = omodel.VAEnumerated(
-                    phys_points[0],
-                    choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
+        point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
 
         pol.set_point(point)
 
@@ -337,13 +330,13 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.current_mode = gmodel.TOOL_ROA
 
         test.gui_loop()
-        wroi = [-0.1, 0.3, 0.2, 0.4] # in m
+        wroi = [-0.1, 0.3, 0.2, 0.4]  # in m
         rsol.set_physical_sel(wroi)
         test.gui_loop()
         wroi_back = rsol.get_physical_sel()
+
         for o, b in zip(wroi, wroi_back):
-            self.assertAlmostEqual(o, b,
-                       msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
+            self.assertAlmostEqual(o, b, msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
 
         rsol.repetition = (3, 2)
         rsol.fill = wol.FILL_POINT
@@ -393,7 +386,6 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.view_overlays.append(sol)
 
         test.gui_loop()
-
 
 
 if __name__ == "__main__":
