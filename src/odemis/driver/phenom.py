@@ -1067,7 +1067,7 @@ class ChamberPressure(model.Actuator):
     def __init__(self, name, role, parent, ranges=None, **kwargs):
         axes = {"pressure": model.Axis(unit="",
                                        choices={PRESSURE_UNLOADED: "unloaded",
-                                                PRESSURE_NAVCAM: "NavCam",
+                                                PRESSURE_NAVCAM: "overview",
                                                 PRESSURE_SEM: "SEM"})}
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
         self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
@@ -1091,6 +1091,7 @@ class ChamberPressure(model.Actuator):
         self.position = model.VigilantAttribute(
                                     {"pressure": self._position},
                                     unit="Pa", readonly=True)
+        logging.debug("Chamber in position: %s", self.position)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -1116,6 +1117,7 @@ class ChamberPressure(model.Actuator):
         # it's read-only, so we change it via _value
         self.position._value = {"pressure": self._position}
         self.position.notify(self.position.value)
+        logging.debug("Chamber in position: %s", self.position)
 
     def _updateSampleHolder(self):
         """
