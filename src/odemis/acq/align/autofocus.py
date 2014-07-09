@@ -262,6 +262,8 @@ def AutoFocus(detector, scanner, focus, accuracy):
     elif role == "se-detector":  # SEM
         thres_factor = 5 * thres_factor
         max_step = 15e03 * scanner.pixelSize.value[0]
+    else:
+        raise IOError("The given detector does not support autofocus.")
 
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateAutoFocusTime(et))
