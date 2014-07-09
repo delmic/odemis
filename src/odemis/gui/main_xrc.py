@@ -39,6 +39,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
         self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))
         self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
+        self.menu_item_reset_finealign = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_finealign"))
         self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
@@ -244,6 +245,13 @@ def __init_resources():
         <object class="wxMenuItem" name="menu_item_snapshot_as">
           <label>Save Snapshot as...</label>
           <accel>Ctrl+Shift+S</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_reset_finealign">
+          <label>Reset Fine Alignment</label>
+          <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

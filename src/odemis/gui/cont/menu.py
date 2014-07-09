@@ -84,6 +84,11 @@ class MenuController(object):
         #             self.main_frame.menu_auto_focus.GetId(),
         #             <function>)
 
+        # TODO: Assign 'Reset fine alignment' functionality
+        # wx.EVT_MENU(self.main_frame,
+        #             self.main_frame.menu_item_reset_finealign.GetId(),
+        #             <function>)
+
         # TODO: add fit to view (cf toolbar)
 
         # /Help

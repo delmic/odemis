@@ -31,8 +31,10 @@ from odemis import gui, model
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
+from odemis.gui.comp.overlay.view import PointSelectOverlay
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
+from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
 from odemis.util import units
 import wx
@@ -186,17 +188,45 @@ class ViewPort(wx.Panel):
 
 class OverviewVierport(ViewPort):
     """ A Viewport containing a downscaled overview image of the loaded sample
+
+    If a chamber state can be tracked,
     """
 
     def __init__(self, *args, **kwargs):
         super(OverviewVierport, self).__init__(*args, **kwargs)
         #Remove all abilities, because the overview should have none
         self.canvas.abilities = set()
+        self.tab_data = None
 
     def setView(self, microscope_view, tab_data):
+        """ Attach the MicroscopeView associated with the overview """
         # Hide the cross hair overlay
         microscope_view.show_crosshair.value = False
         self.canvas.setView(microscope_view, tab_data)
+
+        self.tab_data = tab_data
+
+        # Track chamber state if possible
+        if tab_data.main.chamber:
+            tab_data.main.chamberState.subscribe(self._on_chamber_state_change)
+
+    def _on_chamber_state_change(self, chamber_state):
+        """ Watch position changes in the PointSelectOverlay if the chamber is ready """
+
+        if chamber_state == CHAMBER_VACUUM:
+            self.canvas.active_overlay = PointSelectOverlay(self.canvas)
+            self.canvas.active_overlay.p_pos.subscribe(self._on_position_select)
+        elif self.canvas.active_overlay:
+            self.canvas.active_overlay.p_pos.unsubscribe(self._on_position_select)
+            self.canvas.active_overlay = None
+
+    def _on_position_select(self, p_pos):
+        """ Set the physical view position """
+
+        if self.tab_data:
+            focussed_view = self.tab_data.focussedView.value
+            focussed_view.view_pos.value = p_pos
+            focussed_view.moveStageToView()
 
 
 class MicroscopeViewport(ViewPort):
@@ -405,6 +435,7 @@ class MicroscopeViewport(ViewPort):
 
     ## END Event handling
 
+
 class SecomViewport(MicroscopeViewport):
 
     canvas_class = miccanvas.SecomCanvas
@@ -442,12 +473,14 @@ class SecomViewport(MicroscopeViewport):
         else:
             self.ShowMergeSlider(False)
 
+
 class SparcAcquisitionViewport(MicroscopeViewport):
 
     canvas_class = miccanvas.SparcAcquiCanvas
 
     def __init__(self, *args, **kwargs):
         super(SparcAcquisitionViewport, self).__init__(*args, **kwargs)
+
 
 class SparcAlignViewport(MicroscopeViewport):
     """
@@ -549,6 +582,7 @@ class PlotViewport(ViewPort):
         # Keep an eye on the stream tree, so we can (re)connect when it changes
         microscope_view.stream_tree.should_update.subscribe(
                                                         self.connect_stream)
+
 
 class AngularResolvedViewport(ViewPort):
 

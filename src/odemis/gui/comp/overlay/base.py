@@ -40,6 +40,7 @@ import odemis.gui as gui
 import odemis.util as util
 import odemis.util.conversion as conversion
 
+
 class Label(object):
     """ Small helper class that stores label properties """
     def __init__(self, text, pos, font_size, flip, align, colour, opacity, deg):
@@ -113,6 +114,7 @@ class Label(object):
         self.render_pos = None
         self.text_size = None
 
+
 class Overlay(object):
     """ This abstract Overlay class forms the base for a series of classes that
     allow for the drawing of images, text and shapes on top of a Canvas, while
@@ -142,15 +144,15 @@ class Overlay(object):
         :return: (Label) The created label
         """
         label = Label(
-                    text,
-                    pos,
-                    font_size,
-                    flip,
-                    align,
-                    colour or (1.0, 1.0, 1.0), # default to white
-                    opacity,
-                    deg
-                )
+            text,
+            pos,
+            font_size,
+            flip,
+            align,
+            colour or (1.0, 1.0, 1.0),  # default to white
+            opacity,
+            deg
+        )
         self.labels.append(label)
         self.cnvs.Refresh() # Refresh the canvas, so the text will be drawn
         return label
@@ -312,6 +314,7 @@ class Overlay(object):
     def clear(self):
         self.labels = []
 
+
 class DragMixin(object):
     """ This mixin class can be used to add dragging functionality
 
@@ -357,6 +360,7 @@ class DragMixin(object):
     def dragging(self):
         return self._ldragging or self._rdragging
 
+
 class SelectionMixin(object):
     """ This mix-in class can be used on an Overlay to draw rectangular
     selection areas. These areas are always expressed in view port coordinates.
@@ -399,7 +403,6 @@ class SelectionMixin(object):
         self.dragging = True
         self.v_start_pos = self.v_end_pos = list(start_pos)
 
-
     def update_selection(self, current_pos):
         """ Update the selection to reflect the given mouse position.
 
@@ -428,7 +431,6 @@ class SelectionMixin(object):
             self.dragging = False
             self.edit = False
             self.edit_edge = None
-
 
     def clear_selection(self):
         """ Clear the selection """
