@@ -795,7 +795,7 @@ class BitmapCanvas(BufferedCanvas):
 
         # Determine the rectangle the image would occupy in the buffer
         b_im_rect = self._calc_img_buffer_rect(im_data, im_scale, w_im_center)
-#         logging.debug("Image on buffer %s", b_im_rect)
+        # logging.debug("Image on buffer %s", b_im_rect)
 
         # To small to see, so no need to draw
         if b_im_rect[2] < 1 or b_im_rect[3] < 1:
@@ -813,7 +813,7 @@ class BitmapCanvas(BufferedCanvas):
             logging.debug("Skipping draw: no intersection with buffer")
             return
 
-#         logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
+        # logging.debug("Intersection (%s, %s, %s, %s)", *intersection)
         # Cache the current transformation matrix
         ctx.save()
 
@@ -821,7 +821,7 @@ class BitmapCanvas(BufferedCanvas):
         total_scale = im_scale * self.scale
         if abs(total_scale - 1) < 1e-8: # in case of small floating errors
             total_scale = 1
-#         logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
+        # logging.debug("Total scale: %s x %s = %s", im_scale, self.scale, total_scale)
 
         # Rotate if needed
         if rotation is not None and abs(rotation) >= 0.008: # > 0.5°
@@ -837,13 +837,13 @@ class BitmapCanvas(BufferedCanvas):
             ctx.translate(-rot_x, -rot_y)
 
         if total_scale == 1.0:
-#             logging.debug("No scaling required")
+            # logging.debug("No scaling required")
             pass
         elif total_scale < 1.0:
-#             logging.debug("Down scaling required")
+            # logging.debug("Down scaling required")
             pass
         elif total_scale > 1.0:
-#             logging.debug("Up scaling required")
+            # logging.debug("Up scaling required")
 
             # Make clipping a bit smarter: if very little data is trimmed, it's
             # better to scale the entire image than to create a slightly smaller
@@ -897,7 +897,7 @@ class BitmapCanvas(BufferedCanvas):
         # Debug print statement
         # print ctx.get_matrix(), im_data.shape
 
-        # The following method, because we need to
+        # The following method won't work, because we need to
         # set the filter used for scaling. Using set_source instead
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)

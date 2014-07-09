@@ -29,6 +29,7 @@ import math
 
 import cairo
 import wx
+import wx.lib.wxcairo as wxcairo
 
 from .base import ViewOverlay, DragMixin, SelectionMixin
 import odemis.gui as gui
@@ -48,6 +49,7 @@ class TextViewOverlay(ViewOverlay):
     def Draw(self, ctx):
         if self.labels:
             self._write_labels(ctx)
+
 
 class CrossHairOverlay(ViewOverlay):
     def __init__(self, cnvs,
@@ -87,6 +89,7 @@ class CrossHairOverlay(ViewOverlay):
 
         ctx.restore()
 
+
 class SpotModeOverlay(ViewOverlay):
     """ This overlay displays a circle marker in the center of
     the canvas, indicating that the spot mode has been activated.
@@ -96,19 +99,28 @@ class SpotModeOverlay(ViewOverlay):
 
         self.marker_bmp = img.getspot_markerBitmap()
         marker_size = self.marker_bmp.GetSize()
-        self._marker_offset = (marker_size.GetWidth() // 2 - 1,
-                               marker_size.GetHeight() // 2 - 1)
-        self.center = (0, 0)
+        self._marker_offset = (marker_size.GetWidth() // 2 - 1, marker_size.GetHeight() // 2 - 1)
+        self.center = self.cnvs.get_half_view_size()
 
     def Draw(self, ctx):
-        pass
-        # raise NotImplementedError
-        # dc_buffer.DrawBitmapPoint(
-        #     self.marker_bmp,
-        #     wx.Point(
-        #         self.center[0] - self._marker_offset[0],
-        #         self.center[1] - self._marker_offset[1]),
-        #     useMask=False)
+        # TODO: Replace the wxPython code with the following Cairo code
+        # The problem with the code is that the fully transparent background of the image used
+        # is *not* fully transparent.
+
+        # img_surface = wxcairo.ImageSurfaceFromBitmap(self.marker_bmp)
+        # ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0) # transparent black
+        # ctx.translate(self.center[0] - self._marker_offset[0],
+        #               self.center[1] - self._marker_offset[1])
+        # ctx.set_source_surface(img_surface)
+        # ctx.paint()
+
+        view_dc = wx.PaintDC(self.cnvs)
+        view_dc.DrawBitmapPoint(
+            self.marker_bmp,
+            wx.Point(
+                self.center[0] - self._marker_offset[0],
+                self.center[1] - self._marker_offset[1]),
+            useMask=False)
 
 
 class StreamIconOverlay(ViewOverlay):
@@ -117,14 +129,13 @@ class StreamIconOverlay(ViewOverlay):
     """
 
     opacity = 0.8
+
     def __init__(self, cnvs):
         super(StreamIconOverlay, self).__init__(cnvs)
         self.pause = False # if True: displayed
-        self.play = 0 # opacity of the play icon
+        self.play = 0  # opacity of the play icon
 
-        self.colour = conversion.hex_to_frgba(
-                                        gui.FG_COLOUR_HIGHLIGHT,
-                                        self.opacity)
+        self.colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, self.opacity)
 
     def hide_pause(self, hidden=True):
         """
@@ -283,7 +294,6 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
         self.position_label = self.add_label("")
 
-
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.v_start_pos and self.v_end_pos:
@@ -324,6 +334,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
 HORIZONTAL = 1
 VERTICAL = 2
+
 
 class MarkingLineOverlay(ViewOverlay, DragMixin):
     """ Draw a vertical line at the given view position.
@@ -446,6 +457,7 @@ TOP_LEFT = 0
 TOP_RIGHT = 1
 BOTTOM_LEFT = 2
 BOTTOM_RIGHT = 3
+
 
 class DichotomyOverlay(ViewOverlay):
     """ This overlay allows the user to select a sequence of nested quadrants
@@ -629,7 +641,6 @@ class DichotomyOverlay(ViewOverlay):
             y += h
 
         return x, y, w, h
-
 
     def Draw(self, ctx):
 
@@ -976,7 +987,6 @@ class PolarOverlay(ViewOverlay):
 
         ctx.set_dash([])
 
-
         ### Draw angle markings ###
 
         # Draw frame that covers everything outside the center circle
@@ -1021,3 +1031,30 @@ class PolarOverlay(ViewOverlay):
 
             self.intensity_label.pos = (x, y)
             self._write_label(ctx, self.intensity_label)
+
+
+class PointSelectOverlay(ViewOverlay):
+
+    def __init__(self, cnvs):
+        super(PointSelectOverlay, self).__init__(cnvs)
+        # Prevent the cursor from resetting on clicks
+        self.cnvs.previous_cursor = wx.CROSS_CURSOR
+
+        # Physical position of the last click
+        self.p_pos = model.VigilantAttribute(None)
+
+    def on_enter(self, evt):
+        self.cnvs.SetCursor(wx.CROSS_CURSOR)
+        super(PointSelectOverlay, self).on_enter(evt)
+
+    def on_leave(self, evt):
+        self.cnvs.SetCursor(wx.STANDARD_CURSOR)
+        super(PointSelectOverlay, self).on_leave(evt)
+
+    def on_left_up(self, evt):
+        v_pos = evt.GetPositionTuple()
+        w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_view_size())
+        self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+
+    def Draw(self, ctx):
+        pass

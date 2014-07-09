@@ -315,6 +315,7 @@ class MicroscopyGUIData(object):
         # This attribute is also handled and manipulated by the ViewController.
         self.visible_views = model.ListVA()
 
+
 class LiveViewGUIData(MicroscopyGUIData):
     """ Represent an interface used to only show the current data from the
     microscope. It should be able to handle SEM-only, optical-only, and SECOM
@@ -337,6 +338,7 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         if self.main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
 
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
@@ -370,14 +372,15 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         # TODO: unused for now => get rid of them? cf tab controller
         # It'd better to actually use them, and move some of the code to its own
         # controller
-#         # Handle turning on/off the instruments
-#         hw_states = {STATE_OFF, STATE_ON}
-#
-#         if self.main.ccd:
-#             self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-#
-#         if self.main.spectrometer:
-#             self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        # # Handle turning on/off the instruments
+        # hw_states = {STATE_OFF, STATE_ON}
+        #
+        # if self.main.ccd:
+        #     self.arState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        #
+        # if self.main.spectrometer:
+        #     self.specState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+
 
 class AnalysisGUIData(MicroscopyGUIData):
     """
@@ -494,7 +497,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         f = a.moveRel(move)
 
         if sync:
-            f.result() # wait until the future is complete
+            f.result()  # wait until the future is complete
 
 
 class FileInfo(object):

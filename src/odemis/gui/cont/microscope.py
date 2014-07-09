@@ -227,16 +227,17 @@ class ChamberButtonController(HardwareButtonController):
     def _update_label(self, pressure_val):
         """ Set a formatted pressure value as the label of the button """
 
-        str_value = units.readable_str(pressure_val, sig=2, 
+        str_value = units.readable_str(pressure_val, sig=2,
                                        unit=self.main_data.chamber.pressure.unit)
         if self.btn.Label != str_value:
             self.btn.Label = str_value
             self.btn.Refresh()
 
+
 class SecomStateController(MicroscopeStateController):
     """
     This controller controls the main microscope buttons (ON/OFF,
-    Pause, vacuum...) and updates the model. 
+    Pause, vacuum...) and updates the model.
     """
     # GUI toggle button (suffix) name -> VA name
     btn_to_va = {
@@ -250,7 +251,7 @@ class SecomStateController(MicroscopeStateController):
 
         self._tab_data = tab_data
         self._main_data = tab_data.main
-        
+
         self._sem_btn = getattr(main_frame, btn_prefix + "sem")
         self._opt_btn = getattr(main_frame, btn_prefix + "opt")
 
@@ -258,14 +259,14 @@ class SecomStateController(MicroscopeStateController):
         # light power we still handle it globally
         if hasattr(tab_data, "opticalState"):
             tab_data.opticalState.subscribe(self._onOpticalState)
-        
+
         # Manage the chamber
         if hasattr(self._main_data, "chamberState"):
             pressures = self._main_data.chamber.axes["pressure"].choices
             ch_pos = self._main_data.chamber.position
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
-    
+
             # if there is an overview camera, _and_ it has to be reached via a
             # special "pressure" state => note it down
             if self._main_data.overview_ccd:
@@ -340,7 +341,7 @@ class SecomStateController(MicroscopeStateController):
     def onChamberState(self, state):
         """ Set the desired pressure on the chamber when the chamber's state changes
 
-        Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING) 
+        Only 'active' states (i.e. either CHAMBER_PUMPING or CHAMBER_VENTING)
         will start a change in pressure.
         """
         logging.debug("Chamber state changed to %d", state)
@@ -406,11 +407,11 @@ class SecomStateController(MicroscopeStateController):
     # CHAMBER_OVERVIEW_POST_VACUUM ?
     def on_chamber_pressure(self, position):
         """ Determine the state of the chamber when the pressure changes, and
-        do the overview imaging if possible.  
+        do the overview imaging if possible.
 
-        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM 
+        This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM
         or from CHAMBER_VENTING to CHAMBER_VENTED.
-        
+
         Note, this can be called even if the pressure value hasn't changed.
         """
         currentp = position["pressure"]
