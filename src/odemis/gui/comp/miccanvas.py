@@ -71,6 +71,7 @@ def microscope_view_check(f, self, *args, **kwargs):
 # Note: a Canvas with a fit_view_to_content method indicates that the view
 # can be adapted. (Some other components of the GUI will use this information)
 
+
 class DblMicroscopeCanvas(canvas.DraggableCanvas):
     """ A draggable, flicker-free window class adapted to show pictures of two
     microscope simultaneously.
@@ -328,8 +329,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 self.view_overlays.remove(self._spotmode_ol)
                 self.Refresh(eraseBackground=False)
             except ValueError:
-                pass # it was already not displayed
-
+                pass  # it was already not displayed
 
     # FIXME: seems like it might still be called while the Canvas has been
     # destroyed
@@ -496,7 +496,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # This will call _onViewPos() -> recenter_buffer()
             self.microscope_view.view_pos.value = physical_pos
 
-            self.microscope_view.moveStageToView() # will do nothing if no stage
+            self.microscope_view.moveStageToView()  # will do nothing if no stage
             # stage_pos will be updated once the move is completed
 
     def fit_view_to_content(self, recenter=None):

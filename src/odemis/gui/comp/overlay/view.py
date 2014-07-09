@@ -987,7 +987,6 @@ class PolarOverlay(ViewOverlay):
 
         ctx.set_dash([])
 
-
         ### Draw angle markings ###
 
         # Draw frame that covers everything outside the center circle
@@ -1032,3 +1031,30 @@ class PolarOverlay(ViewOverlay):
 
             self.intensity_label.pos = (x, y)
             self._write_label(ctx, self.intensity_label)
+
+
+class PointSelectOverlay(ViewOverlay):
+
+    def __init__(self, cnvs):
+        super(PointSelectOverlay, self).__init__(cnvs)
+        # Prevent the cursor from resetting on clicks
+        self.cnvs.previous_cursor = wx.CROSS_CURSOR
+
+        # Physical position of the last click
+        self.p_pos = model.VigilantAttribute(None)
+
+    def on_enter(self, evt):
+        self.cnvs.SetCursor(wx.CROSS_CURSOR)
+        super(PointSelectOverlay, self).on_enter(evt)
+
+    def on_leave(self, evt):
+        self.cnvs.SetCursor(wx.STANDARD_CURSOR)
+        super(PointSelectOverlay, self).on_leave(evt)
+
+    def on_left_up(self, evt):
+        v_pos = evt.GetPositionTuple()
+        w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_view_size())
+        self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+
+    def Draw(self, ctx):
+        pass
