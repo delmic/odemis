@@ -216,7 +216,7 @@ class OverviewVierport(ViewPort):
         if chamber_state == CHAMBER_VACUUM:
             self.canvas.active_overlay = PointSelectOverlay(self.canvas)
             self.canvas.active_overlay.p_pos.subscribe(self._on_position_select)
-        else:
+        elif self.canvas.active_overlay:
             self.canvas.active_overlay.p_pos.unsubscribe(self._on_position_select)
             self.canvas.active_overlay = None
 

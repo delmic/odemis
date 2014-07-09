@@ -1038,16 +1038,17 @@ class PointSelectOverlay(ViewOverlay):
     def __init__(self, cnvs):
         super(PointSelectOverlay, self).__init__(cnvs)
         # Prevent the cursor from resetting on clicks
-        self.cnvs.previous_cursor = wx.CROSS_CURSOR
 
         # Physical position of the last click
         self.p_pos = model.VigilantAttribute(None)
 
     def on_enter(self, evt):
+        self.cnvs.previous_cursor = wx.CROSS_CURSOR
         self.cnvs.SetCursor(wx.CROSS_CURSOR)
         super(PointSelectOverlay, self).on_enter(evt)
 
     def on_leave(self, evt):
+        self.cnvs.previous_cursor = None
         self.cnvs.SetCursor(wx.STANDARD_CURSOR)
         super(PointSelectOverlay, self).on_leave(evt)
 
