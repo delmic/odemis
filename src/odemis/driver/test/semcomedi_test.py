@@ -340,6 +340,25 @@ class TestSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
 
 
+    def test_very_long_dwell_time(self):
+        """
+        one pixel only, but long dwell time (> 30s), which means it uses 
+        duplication rate and per dpr acquisition.
+        """
+        self.scanner.resolution.value = (2, 2)
+        self.size = self.scanner.resolution.value
+        self.scanner.dwellTime.value = 33 # DPR should be 8 and each pixel acquisition > max_bufsz
+        expected_duration = self.compute_expected_duration() # same as dwell time
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+
+
 #    @unittest.skip("too long")
     def test_acquire_long_short(self):
         """
