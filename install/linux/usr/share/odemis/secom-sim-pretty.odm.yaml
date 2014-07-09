@@ -6,15 +6,6 @@ SimSECOM: {
     actuators: ["OLStage", "SEM-Optical Alignment", "OpticalZ actuator", "EBeam Focus"],
 }
 
-#Light: {
-#    class: simulated.Light,
-#    role: light,
-#    affects: ["Andor SimCam"],
-#    properties: {
-#        power: 100 # W
-#    }
-#}
-
 Spectra: {
     class: lle.FakeLLE,
     role: light,
@@ -38,6 +29,7 @@ Spectra: {
     role: none,
     init: {
            image: "songbird-sim-sem.h5", # any large 16 bit image is fine
+#           drift_period: 5, # s, comment out to disable drift
     },
     children: {scanner: "EBeam ExtXY",
                detector0: "SED ExtXY",
@@ -58,9 +50,7 @@ Spectra: {
 "SED ExtXY": { # aka ETD
     # Internal child of SimSEM, so no class
     role: se-detector,
-    init: {
-#            drift_period: 5, # s, comment out to disable drift
-    },
+    init: {},
 }
 
 "EBeam Focus": {
