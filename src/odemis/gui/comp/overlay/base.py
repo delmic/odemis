@@ -113,6 +113,7 @@ class Label(object):
         self.render_pos = None
         self.text_size = None
 
+
 class Overlay(object):
     """ This abstract Overlay class forms the base for a series of classes that
     allow for the drawing of images, text and shapes on top of a Canvas, while

@@ -226,6 +226,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.abilities.add(canvas.CAN_DRAG)
         elif self.current_mode == guimodel.TOOL_SPOT:
             self._showSpotMode(False)
+            self.microscope_view.show_crosshair.value = True
 
         # TODO: fix with the rest of the todos
         if self.pixel_overlay:
@@ -285,6 +286,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.current_mode = tool
             # the only thing the view does is to indicate the mode
             self._showSpotMode(True)
+            self.microscope_view.show_crosshair.value = False
         elif tool == guimodel.TOOL_NONE:
             self.current_mode = None
             self.active_overlay = None

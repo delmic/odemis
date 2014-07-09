@@ -29,7 +29,6 @@ import math
 
 import cairo
 import wx
-import wx.lib.wxcairo as wxcairo
 
 from .base import WorldOverlay, SelectionMixin, DragMixin
 import odemis.gui as gui
