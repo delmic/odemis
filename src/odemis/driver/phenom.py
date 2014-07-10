@@ -46,7 +46,7 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
-HFW_RANGE = [0.00201666666667, 0.0121]
+HFW_RANGE = [2.5e-06, 0.00188476474953]
 TENSION_RANGE = [4797.56, 20006.84]
 SPOT_RANGE = [0.0, 5.73018379531]
 
@@ -451,8 +451,7 @@ class Detector(model.Detector):
         # Update all the Scanner VAs upon stream start
         # Get current field of view and compute magnification
         fov = self.parent._device.GetSEMHFW()
-        mag = self.parent._scanner._hfw_nomag / fov
-        self.parent._scanner.magnification.value = mag
+        self.parent._scanner.horizontalFoV.value = fov
 
         rotation = self.parent._device.GetSEMRotation()
         self.parent._scanner.rotation.value = rotation
