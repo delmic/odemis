@@ -44,6 +44,12 @@ MAX_FRAMES = 255
 SOCKET_TIMEOUT = 1e03  # timeout for suds client
 TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
+# SEM ranges in order to allow scanner initialization even if Phenom is in
+# unloaded state
+HFW_RANGE = [2.5e-06, 0.00188476474953]
+TENSION_RANGE = [4797.56, 20006.84]
+SPOT_RANGE = [0.0, 5.73018379531]
+
 class SEM(model.HwComponent):
     '''
     This is an extension of the model.HwComponent class. It instantiates the scanner 
@@ -176,14 +182,13 @@ class Scanner(model.Emitter):
         # via calibration. We assume that image is square, i.e., VFW = HFW
         self._hfw_nomag = 0.268128  # m
 
-        # Get current field of view and compute magnification
-        fov = self.parent._device.GetSEMHFW()
+        # Just the initialization of the FoV. The actual value will be acquired
+        # once we start the stream
+        fov = numpy.mean(HFW_RANGE)
         mag = self._hfw_nomag / fov
 
         self.magnification = model.VigilantAttribute(mag, unit="", readonly=True)
-
-        range = self.parent._device.GetSEMHFWRange()
-        fov_range = [range.min, range.max]
+        fov_range = HFW_RANGE
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)  # to update metadata
@@ -222,7 +227,9 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
         # (float) in rad => rotation of the image compared to the original axes
-        rotation = parent._device.GetSEMRotation()
+        # Just the initialization of rotation. The actual value will be acquired
+        # once we start the stream
+        rotation = 0
         rot_range = (0, 2 * math.pi)
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
@@ -237,27 +244,22 @@ class Scanner(model.Emitter):
         self.dwellTime.subscribe(self._onDwellTime)
 
         # Range is according to min and max voltages accepted by Phenom API
-        range = parent._device.SEMGetHighTensionRange()
-        volt_range = [-range.max, -range.min]
-        volt = self.parent._device.SEMGetHighTension()
-        self.accelVoltage = model.FloatContinuous(-volt, volt_range, unit="V")
+        volt_range = TENSION_RANGE
+        # Just the initialization of voltage. The actual value will be acquired
+        # once we start the stream
+        volt = numpy.mean(TENSION_RANGE)
+        self.accelVoltage = model.FloatContinuous(volt, volt_range, unit="V")
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 16 or 8 bits image
         self.bpp = model.IntEnumerated(16, set([8, 16]),
                                           unit="", setter=self._setBpp)
 
-        # Set maximum voltage just to get the min range of spot size (the
-        # difference with max range is trivial, we just want to avoid out of
-        # bounds when we reach the limits)
-        parent._device.SEMSetHighTension(-volt_range[1])
-        range = parent._device.SEMGetSpotSizeRange()
-        parent._device.SEMSetHighTension(volt)
+        range = SPOT_RANGE
         # Convert A/sqrt(V) to just A
-        pc_range = [(range.min * math.sqrt(volt_range[1])), (range.max * math.sqrt(volt_range[1]))]
-        # Calculate current pc
-        self._spotSize = parent._device.SEMGetSpotSize()
-        self._probeCurrent = self._spotSize * math.sqrt(-volt)
+        pc_range = [(range[0] * math.sqrt(volt_range[1])), (range[1] * math.sqrt(volt_range[1]))]
+        self._spotSize = numpy.mean(SPOT_RANGE)
+        self._probeCurrent = self._spotSize * math.sqrt(volt)
         self.probeCurrent = model.FloatContinuous(self._probeCurrent, pc_range, unit="A",
                                                   setter=self._setPC)
 
@@ -446,6 +448,22 @@ class Detector(model.Detector):
         self._tilt_unblank = self.parent._device.GetSEMSourceTilt()
 
     def start_acquire(self, callback):
+        # Update all the Scanner VAs upon stream start
+        # Get current field of view and compute magnification
+        fov = self.parent._device.GetSEMHFW()
+        self.parent._scanner.horizontalFoV.value = fov
+
+        rotation = self.parent._device.GetSEMRotation()
+        self.parent._scanner.rotation.value = rotation
+
+        volt = self.parent._device.SEMGetHighTension()
+        self.parent._scanner.accelVoltage.value = -volt
+
+        # Calculate current pc
+        self.parent._scanner._spotSize = self.parent._device.SEMGetSpotSize()
+        self.parent._scanner._probeCurrent = self.parent._scanner._spotSize * math.sqrt(-volt)
+        self.parent._scanner.probeCurrent.value = self.parent._scanner._probeCurrent
+
         # Check if Phenom is in the proper mode
         area = self.parent._device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-SEM":
@@ -636,9 +654,9 @@ class Stage(model.Actuator):
 #             self._stagePos.x, self._stagePos.y = 0, 0
 #             parent._device.SetStageCenterCalib(self._stagePos)
 
-        mode_pos = parent._device.GetStageModeAndPosition()
-        self._position["x"] = mode_pos.position.x
-        self._position["y"] = mode_pos.position.y
+        # Just initialization, actual position updated once stage is moved
+        self._position["x"] = 0
+        self._position["y"] = 0
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
@@ -746,7 +764,6 @@ class PhenomFocus(model.Actuator):
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({},
                                     unit="m", readonly=True)
-        self._updatePosition()
 
         # Queue maintaining moves to be done
         self._moves_queue = collections.deque()
@@ -1076,7 +1093,6 @@ class ChamberPressure(model.Actuator):
         mode = self.parent._device.GetInstrumentMode()
         if mode == 'INSTRUMENT-MODE-HIBERNATE' or mode == 'INSTRUMENT-MODE-STANDBY':
             self.parent._device.SetInstrumentMode('INSTRUMENT-MODE-OPERATIONAL')
-            self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
 
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
 
@@ -1192,6 +1208,8 @@ class ChamberPressure(model.Actuator):
             if p["pressure"] == PRESSURE_SEM:
                 self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
             elif p["pressure"] == PRESSURE_NAVCAM:
+                if self.parent._device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+                    self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
                 self._updateSampleHolder()  # in case new sample holder was loaded
                 self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
             else:

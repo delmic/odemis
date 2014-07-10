@@ -63,6 +63,7 @@ def choice_to_str(choice):
         choice = [unicode(choice)]
     return u" x ".join([unicode(c) for c in choice])
 
+
 def traverse(seq_val):
     if isinstance(seq_val, collections.Iterable):
         for value in seq_val:
@@ -70,6 +71,7 @@ def traverse(seq_val):
                 yield subvalue
     else:
         yield seq_val
+
 
 def bind_menu(se):
     """
@@ -414,7 +416,6 @@ class SettingsPanel(object):
                 border=5
         )
         self.num_entries += 1
-
 
     def add_value(self, name, vigil_attr, comp, conf=None):
         """ Add a name/value pair to the settings panel.
@@ -1224,7 +1225,7 @@ class SparcSettingsController(SettingsBarController):
 
         # Create the entries:
         choices = [(1, 1)] # 1 x 1 should always be there
-        
+
         # Add a couple values below/above the current repetition
         for m in [1/4, 1/2, 1, 2, 4, 10]:
             x = int(round(rep[0] * m))
