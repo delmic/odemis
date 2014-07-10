@@ -41,7 +41,7 @@ import odemis.dataio as dataio
 # The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
-STATE_PAUSE = 2
+STATE_PAUSE = 2 # TODO: remove this state and add a STATE_DISABLED?
 
 # Chamber states
 CHAMBER_UNKNOWN = 0  # Chamber in an unknown state

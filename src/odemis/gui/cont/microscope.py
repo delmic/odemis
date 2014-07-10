@@ -166,14 +166,14 @@ class ChamberButtonController(HardwareButtonController):
                 CHAMBER_VENTING: "Ejecting...",
                 CHAMBER_VENTED: "Load the sample",
                 CHAMBER_VACUUM: "Eject the sample",
-                }
+            }
         else:
-            return{
+            return {
                 CHAMBER_PUMPING: "Pumping...",
                 CHAMBER_VENTING: "Venting...",
                 CHAMBER_VENTED: "Pump the chamber",
                 CHAMBER_VACUUM: "Vent the chamber",
-                }
+            }
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state

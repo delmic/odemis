@@ -23,9 +23,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
-    StaticStream, Stream, OPTICAL_STREAMS
+    StaticStream, Stream, OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui import comp
-from odemis.gui.model import STATE_OFF, STATE_ON
+from odemis.gui.model import STATE_OFF, STATE_ON, CHAMBER_VACUUM, \
+    CHAMBER_UNKNOWN
 from wx.lib.pubsub import pub
 
 
@@ -102,17 +103,22 @@ class StreamController(object):
         # Basically one action per type of stream
 
         # TODO: always display the action (if it's compatible), but update
-        # the disable/enable depending on the state of the microscope
+        # the disable/enable depending on the state of the chamber (iow if SEM
+        # or optical button is enabled)
 
         # First: Fluorescent stream (for dyes)
         if (self._main_data_model.light and self._main_data_model.light_filter
             and self._main_data_model.ccd):
 
             def fluor_capable():
-                on = self._main_data_model.opticalState.value == STATE_ON
+                # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
+                if hasattr(self._main_data_model, "chamberState"):
+                    enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+                else:
+                    enabled = True
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(FluoStream)
-                return on and compatible
+                return enabled and compatible
 
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
@@ -124,10 +130,13 @@ class StreamController(object):
         if self._main_data_model.light and self._main_data_model.ccd:
 
             def brightfield_capable():
-                on = self._main_data_model.opticalState.value == STATE_ON
+                if hasattr(self._main_data_model, "chamberState"):
+                    enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+                else:
+                    enabled = True
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(BrightfieldStream)
-                return on and compatible
+                return enabled and compatible
 
             self._stream_bar.add_action("Bright-field",
                                     self.addBrightfield,
@@ -137,10 +146,13 @@ class StreamController(object):
         if self._main_data_model.ebeam and self._main_data_model.sed:
 
             def sem_capable():
-                on = self._main_data_model.emState.value == STATE_ON
+                if hasattr(self._main_data_model, "chamberState"):
+                    enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+                else:
+                    enabled = True
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(SEMStream)
-                return on and compatible
+                return enabled and compatible
 
             self._stream_bar.add_action("Secondary electrons",
                                     self.addSEMSED,
@@ -356,6 +368,7 @@ class StreamController(object):
         # create an adapted subscriber for the scheduler
         def detectUpdate(updated, stream=stream):
             self._onStreamUpdate(stream, updated)
+            self._updateMicroscopeStates()
 
         self._scheduler_subscriptions[stream] = detectUpdate
         stream.should_update.subscribe(detectUpdate)
@@ -374,8 +387,6 @@ class StreamController(object):
             stream.should_update.unsubscribe(callback)
 
     def onOpticalState(self, state):
-        # TODO: link the current optical stream to the state
-        # TODO: also need to add optical stream if all were deleted?
         # TODO: disable/enable add stream actions
         if state == STATE_OFF:
             pass
@@ -383,12 +394,35 @@ class StreamController(object):
             pass
 
     def onEMState(self, state):
-        # TODO: link the current SEM stream to the state
         # TODO: disable/enable add stream actions
         if state == STATE_OFF:
             pass
         elif state == STATE_ON:
             pass
+
+    def _updateMicroscopeStates(self):
+        """
+        Update the SEM/optical states based on the stream currently playing
+        """
+        streams = set() # streams currently playing
+        for s in self._tab_data_model.streams.value:
+            if s.should_update.value:
+                streams.add(s)
+
+        # optical state = at least one stream playing is optical
+        if hasattr(self._tab_data_model, 'opticalState'):
+            if any(isinstance(s, OPTICAL_STREAMS) for s in streams):
+                self._tab_data_model.opticalState.value = STATE_ON
+            else:
+                self._tab_data_model.opticalState.value = STATE_OFF
+
+        # sem state = at least one stream playing is sem
+        if hasattr(self._tab_data_model, 'emState'):
+            if any(isinstance(s, EM_STREAMS) for s in streams):
+                self._tab_data_model.emState.value = STATE_ON
+            else:
+                self._tab_data_model.emState.value = STATE_OFF
+
 
     # TODO: shall we also have a suspend/resume streams that directly changes
     # is_active, and used when the tab/window is hidden?
