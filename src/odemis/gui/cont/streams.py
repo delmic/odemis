@@ -235,7 +235,8 @@ class StreamController(object):
         """
 
         if stream not in self._tab_data_model.streams.value:
-            self._tab_data_model.streams.value.append(stream)
+            # Insert it as first, so it's considered the latest stream used
+            self._tab_data_model.streams.value.insert(0, stream)
 
 
         if add_to_all_views:
@@ -340,6 +341,11 @@ class StreamController(object):
         # * when a stream is just set to be "should_update" (by the user) it
         #   should be scheduled as soon as possible
 
+        # TODO: reorganise .tab_data.streams so that the new playing stream is the
+        # first one in the list. This would mean that .streams is LRU sorted,
+        # and so when changing the state of the microscope, we play that one.
+        # It could also be used as the current stream information.
+
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
             if not updated:
@@ -360,6 +366,20 @@ class StreamController(object):
             stream.is_active.value = updated
         else:
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
+
+        if updated:
+            # put it back to the beginning of the list to indicate it's the
+            # latest stream used
+            l = self._tab_data_model.streams.value
+            try:
+                i = l.index(stream)
+            except ValueError:
+                logging.info("Stream %s is not in the stream list", stream.name)
+                return
+            if i == 0:
+                return # fast path
+            l = [stream] + l[:i] + l[i + 1:] # new list reordered
+            self._tab_data_model.streams.value = l
 
     def _scheduleStream(self, stream):
         """ Add a stream to be managed by the update scheduler.
