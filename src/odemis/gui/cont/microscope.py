@@ -20,8 +20,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from abc import ABCMeta
 import logging
+import numpy
 from odemis import model
-from odemis.acq import align
+from odemis.acq import align, stream
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_after
@@ -116,8 +117,6 @@ class ChamberButtonController(HardwareButtonController):
         if 'pressure' in getVAs(main_data.chamber):
             main_data.chamber.pressure.subscribe(self._update_label, init=True)
         else:
-            # TODO: Increase button image size so the full 'CHAMBER' text will fit (also
-            # slightly decrease the size of the 'eject' symbol.
             self.btn.SetLabel("CHAMBER")
 
     def _determine_button_faces(self, role):
@@ -178,11 +177,7 @@ class ChamberButtonController(HardwareButtonController):
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state
-
-        If the va indicates an 'ON' state, we subscribe to the pressure va and unsubscribe if it's
-        off.
         """
-
         # When the chamber is pumping or venting, it's considered to be working
         if state in {CHAMBER_PUMPING, CHAMBER_VENTING}:
             self.btn.SetBitmapLabel(self._btn_faces['working']['normal'])
@@ -218,6 +213,7 @@ class ChamberButtonController(HardwareButtonController):
         create a vacuum. When the button is up (i.e. un-toggled), the chamber is expected to be
         venting.
         """
+        logging.debug("Requesting change of chamber pressure")
         if self.btn.GetToggle():
             return CHAMBER_PUMPING
         else:
@@ -246,14 +242,22 @@ class SecomStateController(MicroscopeStateController):
         "press": ("chamberState", ChamberButtonController)
     }
 
-    def __init__(self, tab_data, main_frame, btn_prefix):
+    def __init__(self, tab_data, main_frame, btn_prefix, st_ctrl):
         super(SecomStateController, self).__init__(tab_data, main_frame, btn_prefix)
 
         self._tab_data = tab_data
         self._main_data = tab_data.main
+        self._stream_controller = st_ctrl
 
+        # Just to be able to disable the buttons when the chamber is vented
         self._sem_btn = getattr(main_frame, btn_prefix + "sem")
         self._opt_btn = getattr(main_frame, btn_prefix + "opt")
+
+        # The classes of streams that are afffected by the chamber
+        if tab_data.main.role == "secommini":
+            self._cls_streams_involved = stream.Stream
+        else: # SECOM => only SEM as optical might be used even vented
+            self._cls_streams_involved = stream.EM_STREAMS
 
         # Optical state is almost entirely handled by the streams, but for the
         # light power we still handle it globally
@@ -263,7 +267,6 @@ class SecomStateController(MicroscopeStateController):
         # Manage the chamber
         if hasattr(self._main_data, "chamberState"):
             pressures = self._main_data.chamber.axes["pressure"].choices
-            ch_pos = self._main_data.chamber.position
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
 
@@ -278,6 +281,7 @@ class SecomStateController(MicroscopeStateController):
                     self._overview_pressure = None
 
             self._main_data.chamberState.subscribe(self.onChamberState)
+            ch_pos = self._main_data.chamber.position
             ch_pos.subscribe(self.on_chamber_pressure, init=True)
 
             # at init, if chamber is in overview position, start by pumping
@@ -337,6 +341,24 @@ class SecomStateController(MicroscopeStateController):
         else:
             power.value = 0
 
+    def _reset_streams(self):
+        """
+        Empty the data of the streams which might have no more meaning after 
+          loading a new sample.
+        """
+        for s in self._tab_data.streams.value:
+            if not isinstance(s, self._cls_streams_involved):
+                continue
+            # Don't reset if the user is still/already playing it (eg: optical stream)
+            if s.should_update.value:
+                continue
+            # TODO: better way to reset streams? => create new ones and copy just what we care about?
+            if s.raw:
+                s.raw = []
+                s.image.value = None
+                s.histogram._value = numpy.empty(0)
+                s.histogram.notify(s.histogram._value)
+
     @call_after
     def onChamberState(self, state):
         """ Set the desired pressure on the chamber when the chamber's state changes
@@ -352,11 +374,9 @@ class SecomStateController(MicroscopeStateController):
             self._opt_btn.Enable(True)
             self._opt_btn.SetToolTip(None)
             # TODO: enable overview move
+            self._stream_controller.enableStreams(True)
         else:
-            # TODO: prevent the user from turning on camera/light again from the
-            #   stream panel when the microscope is off? => stream panel "update"
-            #   icon is disabled/enabled (decided by the stream controller)
-            # => Have a "disable SEM/Optical" function in stream controller?
+            # TODO: disable overview move
             # Disable SEM button
             self._sem_btn.Enable(False)
             self._sem_btn.SetToolTipString("Chamber must be under vacuum to activate the SEM")
@@ -366,12 +386,20 @@ class SecomStateController(MicroscopeStateController):
                 self._opt_btn.Enable(False)
                 self._opt_btn.SetToolTipString("Chamber must be under vacuum to activate the optical view")
 
+            self._stream_controller.enableStreams(False, self._cls_streams_involved)
+
         # TODO: handle the "cancellation" (= the user click on the button while
         # it was in a *ING state = the latest move is not yet done or overview
         # acquisition is happening)
 
+        # TODO: add warning/info message if the chamber move fails
+
         # Actually start the pumping/venting
         if state == CHAMBER_PUMPING:
+            # in case the chamber was venting, or has several queued move, will
+            # reset everything
+            self._main_data.chamber.stop()
+
             if self._overview_pressure is not None:
                 # TODO: check if we already are in overview state ?
                 # _start_overview_acquisition() will take care of going further
@@ -379,7 +407,12 @@ class SecomStateController(MicroscopeStateController):
                 f.add_done_callback(self._start_overview_acquisition)
             else:
                 f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+
+            # reset the streams to avoid having data from the previous sample
+            self._reset_streams()
         elif state == CHAMBER_VENTING:
+            self._main_data.chamber.stop()
+
             # Pause all streams (SEM streams are most important, but it's
             # simpler for the user to stop all of them)
             for s in self._tab_data.streams.value:
@@ -411,10 +444,13 @@ class SecomStateController(MicroscopeStateController):
 
         This method can change the state from CHAMBER_PUMPING to CHAMBER_VACUUM
         or from CHAMBER_VENTING to CHAMBER_VENTED.
-
-        Note, this can be called even if the pressure value hasn't changed.
         """
+        # Note, this can be called even if the pressure value hasn't changed.
         currentp = position["pressure"]
+        pressures = self._main_data.chamber.axes["pressure"].choices
+        logging.debug("Chamber reached pressure %s (%g Pa)",
+                      pressures.get(currentp, "unknown"), currentp)
+
         if currentp <= self._vacuum_pressure:
             # Vacuum reached
             self._main_data.chamberState.value = CHAMBER_VACUUM
@@ -423,6 +459,9 @@ class SecomStateController(MicroscopeStateController):
             self._main_data.chamberState.value = CHAMBER_VENTED
         elif currentp == self._overview_pressure:
             # It's all fine, it should automatically reach vacuum eventually
+            # The advantage of not putting the call to _start_overview_acquisition()
+            # here is that if the previous pressure was identical, we are not
+            # doing it twice.
             pass
         else:
             # This can happen at initialisation if the chamber pressure is changing
@@ -458,7 +497,11 @@ class SecomStateController(MicroscopeStateController):
         Called when the overview image is focused
         """
         # We cannot do much if the focus failed, so always go on...
-        logging.debug("Overview focused")
+        try:
+            future.result()
+            logging.debug("Overview focused")
+        except Exception:
+            logging.info("Auto-focus on overview failed")
 
         # now acquire one image
         try:
@@ -471,6 +514,9 @@ class SecomStateController(MicroscopeStateController):
         # start acquisition
         ovs.should_update.value = True
         ovs.is_active.value = True
+
+        # TODO: have a timer to detect if no image ever comes, give up and move
+        # to final pressure
 
     def _on_overview_image(self, image):
         """
@@ -492,7 +538,7 @@ class SecomStateController(MicroscopeStateController):
                             self._main_data.chamberState.value)
             return # don't ask for vacuum
 
-        # move further to fully under vacuum
+        # move further to fully under vacuum (should do nothing if already there)
         f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
 

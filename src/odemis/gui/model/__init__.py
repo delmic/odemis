@@ -577,7 +577,7 @@ class View(object):
         return "{}".format(self.name.value)
 
 
-MAX_SAFE_MOVE_DISTANCE = 10e-3 # 1 cm
+MAX_SAFE_MOVE_DISTANCE = 1000e-3 # 100 cm
 
 
 class MicroscopeView(View):
@@ -673,12 +673,14 @@ class MicroscopeView(View):
         if not self._stage:
             return
 
-        # TODO: a way to know if it can do absolute move? => .capabilities!
-        # if hasattr(self.stage, "moveAbs"):
-        #     # absolute
+        # Absolute move would work too, but by using relative move we can do a
+        # couple more checks, to be sure we will not do crazy things.
         #     move = {"x": pos[0], "y": pos[1]}
         #     self._stage.moveAbs(move)
-        # else:
+
+        # TODO: Use the max FoV of the streams to determine what's a big
+        # distance (because on the overview cam a  move can be much bigger than
+        # on a SEM image at high mag).
 
         view_pos = self.view_pos.value
         # relative

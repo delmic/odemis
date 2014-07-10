@@ -248,6 +248,7 @@ class Expander(wx.PyControl):
 
     ###### Methods needed for layout and painting
 
+    # TODO: rename to GetBestSize(), or does it cause problems?
     def DoGetBestSize(self, *args, **kwargs):
         """ Return the best size, which is the width of the parent and the
         height or the content (determined through the sizer).
@@ -284,10 +285,7 @@ class Expander(wx.PyControl):
     ###### Methods to show and hide the default buttons
 
     def _show_item(self, item, show):
-        if show:
-            self._sz.Show(item)
-        else:
-            self._sz.Hide(item)
+        self._sz.Show(item, show)
         self._sz.Layout()
 
     def show_remove_btn(self, show):
@@ -297,6 +295,10 @@ class Expander(wx.PyControl):
     def show_updated_btn(self, show):
         """ This method show or hides the play button """
         self._show_item(self._btn_updated, show)
+
+    def enable_updated_btn(self, enabled):
+        """ This method enable or disable the play button """
+        self._btn_updated.Enable(enabled)
 
     def show_visible_btn(self, show):
         """ This method show or hides the visible button """
@@ -320,9 +322,9 @@ class Expander(wx.PyControl):
         self.to_static_mode()
         self.show_visible_btn(False)
 
-    # VA subscriptions: reflect the changes on the stream to the GUI
-    def _on_update_change(self, updated):
-        self._btn_updated.SetToggle(self._stream.should_update.value)
+#     # VA subscriptions: reflect the changes on the stream to the GUI
+#     def _on_update_change(self, updated):
+#         self._btn_updated.SetToggle(self._stream.should_update.value)
 
     # GUI event handlers
     def _on_label_change(self, evt):
@@ -626,6 +628,9 @@ class StreamPanel(wx.PyPanel):
 
     def show_updated_btn(self, show):
         self._expander.show_updated_btn(show)
+
+    def enable_updated_btn(self, enabled):
+        self._expander.enable_updated_btn(enabled)
 
     def show_remove_btn(self, show):
         self._expander.show_remove_btn(show)

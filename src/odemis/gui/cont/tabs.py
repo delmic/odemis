@@ -294,7 +294,8 @@ class SecomStreamsTab(Tab):
         self._state_controller = SecomStateController(
             self.tab_data_model,
             self.main_frame,
-            "live_btn_"
+            "live_btn_",
+            self._stream_controller
         )
 
         # For remembering which streams are paused when hiding the tab
@@ -352,25 +353,6 @@ class SecomStreamsTab(Tab):
     @call_after
     def on_chamber_state(self, state):
         if state == guimod.CHAMBER_PUMPING:
-            # reset the streams to avoid having data from the previous sample
-            if self.tab_data_model.main.role == "secommini":
-                cls = (streammod.Stream,)
-            else: # SECOM => only SEM as optical might be used even vented
-                cls = (streammod.EM_STREAMS,)
-
-            for s in self.tab_data_model.streams.value:
-                if not isinstance(s, cls):
-                    continue
-                # Don't reset if the user is still/already playing it (eg: optical stream)
-                if s.should_update.value:
-                    continue
-                # TODO: better way to reset streams? => create new ones and copy just what we care about?
-                if s.raw:
-                    s.raw = []
-                    s.image.value = None
-                    s.histogram._value = numpy.empty(0)
-                    s.histogram.notify(s.histogram._value)
-
             # Ensure we still have both optical and SEM streams
             self._ensure_base_streams()
 

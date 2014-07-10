@@ -21,12 +21,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+import logging
+from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
+    StaticStream, Stream, OPTICAL_STREAMS
 from odemis.gui import comp
 from odemis.gui.model import STATE_OFF, STATE_ON
-from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
-    StaticStream, Stream
 from wx.lib.pubsub import pub
-import logging
+
 
 # Stream scheduling policies: decides which streams which are with .should_update
 # get .is_active
@@ -67,11 +68,11 @@ class StreamController(object):
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
 
-        if hasattr(tab_data.main, 'opticalState'):
-            tab_data.main.opticalState.subscribe(self.onOpticalState, init=True)
+        if hasattr(tab_data, 'opticalState'):
+            tab_data.opticalState.subscribe(self.onOpticalState, init=True)
 
-        if hasattr(tab_data.main, 'emState'):
-            tab_data.main.emState.subscribe(self.onEMState, init=True)
+        if hasattr(tab_data, 'emState'):
+            tab_data.emState.subscribe(self.onEMState, init=True)
 
         # This attribute indicates whether live data is processed by the streams
         # in the controller, or that they just display static data.
@@ -380,6 +381,8 @@ class StreamController(object):
             pass
         elif state == STATE_ON:
             pass
+        # XXX test
+        self.enableStreams((state == STATE_ON), OPTICAL_STREAMS)
 
     def onEMState(self, state):
         # TODO: link the current SEM stream to the state
@@ -391,6 +394,26 @@ class StreamController(object):
 
     # TODO: shall we also have a suspend/resume streams that directly changes
     # is_active, and used when the tab/window is hidden?
+
+    def enableStreams(self, enabled, classes=Stream):
+        """
+        Enable/disable the play/pause button of all the streams of the given class
+        
+        enabled (boolean): True if the buttons should be enabled, False to
+         disable them.
+        classes (class or list of class): classes of streams that should be
+          disabled.
+
+        Returns (set of Stream): streams which were actually enabled/disabled
+        """
+        streams = set() # stream changed
+        for e in self._stream_bar.stream_panels:
+            s = e.stream
+            if isinstance(s, classes):
+                streams.add(s)
+                e.enable_updated_btn(enabled)
+
+        return streams
 
     def pauseStreams(self, classes=Stream):
         """
