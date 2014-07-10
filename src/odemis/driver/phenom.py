@@ -46,7 +46,7 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
-HFW_RANGE = [2.5e-06, 0.00188476474953]
+HFW_RANGE = [2.5e-06, 0.003]
 TENSION_RANGE = [4797.56, 20006.84]
 SPOT_RANGE = [0.0, 5.73018379531]
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
@@ -277,9 +277,12 @@ class Scanner(model.Emitter):
         self._updateMagnification()
 
     def _setHorizontalFoV(self, value):
-        self.parent._device.SetSEMHFW(value)
+        #Make sure you are in the current range
+        rng = self.parent._device.GetSEMHFWRange()
+        new_fov = numpy.clip(value, rng.min, rng.max)
+        self.parent._device.SetSEMHFW(new_fov)
 
-        return value
+        return new_fov
 
     def _updateMagnification(self):
 
@@ -449,6 +452,9 @@ class Detector(model.Detector):
         self._tilt_unblank = self.parent._device.GetSEMSourceTilt()
 
     def start_acquire(self, callback):
+        # Update stage position
+        self.parent._stage._updatePosition()
+
         # Update all the Scanner VAs upon stream start
         # Get current field of view and compute magnification
         fov = self.parent._device.GetSEMHFW()
@@ -464,6 +470,7 @@ class Detector(model.Detector):
         self.parent._scanner._spotSize = self.parent._device.SEMGetSpotSize()
         self.parent._scanner._probeCurrent = self.parent._scanner._spotSize * math.sqrt(-volt)
         self.parent._scanner.probeCurrent.value = self.parent._scanner._probeCurrent
+
 
         # Check if Phenom is in the proper mode
         area = self.parent._device.GetProgressAreaSelection().target
@@ -501,10 +508,11 @@ class Detector(model.Detector):
         # "if" is to not wait if it's already finished
         if self._acquisition_must_stop.is_set():
             logging.debug("Waiting for thread to stop.")
-            self._acquisition_thread.join(10)  # 10s timeout for safety
-            if self._acquisition_thread.isAlive():
-                logging.exception("Failed to stop the acquisition thread")
-                # Now let's hope everything is back to normal...
+            if not self._acquisition_thread is None:
+                self._acquisition_thread.join(10)  # 10s timeout for safety
+                if self._acquisition_thread.isAlive():
+                    logging.exception("Failed to stop the acquisition thread")
+                    # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
 
@@ -811,9 +819,7 @@ class PhenomFocus(model.Actuator):
                         wd += mov["z"]
                     else:
                         wd = mov["z"]
-                logging.info("Start move...")
                 self.SetWD(wd)
-                logging.info("Move completed...")
                 self._updatePosition()
 
     @isasync
@@ -1051,29 +1057,17 @@ class NavCamFocus(PhenomFocus):
     def SetWD(self, wd):
         return self.parent._device.SetNavCamWD(wd)
 
-    def _doMoveAbs(self, pos):
+    def _checkQueue(self):
         """
-        move to the position 
+        accumulates the focus actuator moves
         """
-        super(NavCamFocus, self)._doMoveAbs(pos)
-
+        super(NavCamFocus, self)._checkQueue()
         # FIXME
         # Although we are already on the correct position, if we acquire an
         # image just after a move, server raises a fault thus we wait a bit.
         # TODO polling until move is done, probably while loop with try-except
         time.sleep(1)
 
-    def _doMoveRel(self, shift):
-        """
-        move by the shift
-        """
-        super(NavCamFocus, self)._doMoveRel(shift)
-
-        # FIXME
-        # Although we are already on the correct position, if we acquire an
-        # image just after a move, server raises a fault thus we wait a bit.
-        # TODO polling until move is done, probably while loop with try-except
-        time.sleep(1)
 
 PRESSURE_UNLOADED = 1e05  # Pa
 PRESSURE_NAVCAM = 1e04  # Pa
@@ -1203,26 +1197,30 @@ class ChamberPressure(model.Actuator):
         Change of the pressure
         p (float): target pressure
         """
-        # Keep remaining time up to date
-        updater = functools.partial(self._updateTime, future, p)
-        TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
-        TimeUpdater.start()
+        with self.parent._acq_progress_lock:
+            # Keep remaining time up to date
+            updater = functools.partial(self._updateTime, future, p)
+            TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
+            TimeUpdater.start()
 
-        try:
-            if p["pressure"] == PRESSURE_SEM:
-                self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
-            elif p["pressure"] == PRESSURE_NAVCAM:
-                if self.parent._device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
-                    self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
-                self._updateSampleHolder()  # in case new sample holder was loaded
-                self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
-            else:
-                self.parent._device.UnloadSample()
-        except suds.WebFault:
-            raise IOError("Acquisition in progress, cannot move to another state.")
+            try:
+                if p["pressure"] == PRESSURE_SEM:
+                    self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                elif p["pressure"] == PRESSURE_NAVCAM:
+                    if self.parent._device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+                        self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
+                    self._updateSampleHolder()  # in case new sample holder was loaded
+                    self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+                else:
+                    self.parent._device.UnloadSample()
+            except suds.WebFault:
+                raise IOError("Acquisition in progress, cannot move to another state.")
 
-        self._updatePosition()
-        TimeUpdater.cancel()
+            # FIXME
+            # Enough time before we start an acquisition
+            time.sleep(7)
+            self._updatePosition()
+            TimeUpdater.cancel()
 
     def _updateTime(self, future, target):
         remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
