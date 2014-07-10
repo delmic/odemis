@@ -381,8 +381,6 @@ class StreamController(object):
             pass
         elif state == STATE_ON:
             pass
-        # XXX test
-        self.enableStreams((state == STATE_ON), OPTICAL_STREAMS)
 
     def onEMState(self, state):
         # TODO: link the current SEM stream to the state
