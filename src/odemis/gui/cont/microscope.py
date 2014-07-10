@@ -475,9 +475,14 @@ class SecomStateController(MicroscopeStateController):
         if self._main_data.overview_focus:
             # TODO: center the sample to the view
             # We are using the best accuracy possible: 0
-            f = align.autofocus.AutoFocus(self._main_data.overview_ccd, None,
-                                          self._main_data.overview_focus, 0)
-            f.add_done_callback(self._on_overview_focused)
+            try:
+                f = align.autofocus.AutoFocus(self._main_data.overview_ccd, None,
+                                              self._main_data.overview_focus, 0)
+            except Exception:
+                logging.exception("Failed to start auto-focus")
+                self._on_overview_focused(None)
+            else:
+                f.add_done_callback(self._on_overview_focused)
         else:
             self._on_overview_focused(None)
 

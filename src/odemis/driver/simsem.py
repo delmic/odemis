@@ -141,7 +141,7 @@ class Scanner(model.Emitter):
 
         # the horizontalFoV VA indicates that it's possible to control the zoom
         hfv = pxs[0] * self._shape[0]
-        self.horizontalFoV = model.FloatContinuous(hfv, range=[1e-6, 10e-3],
+        self.horizontalFoV = model.FloatContinuous(hfv, range=[10e-9, 10e-3],
                                                    unit="m")
         self.magnification = model.VigilantAttribute(self._hfw_nomag / hfv,
                                                      unit="", readonly=True)
