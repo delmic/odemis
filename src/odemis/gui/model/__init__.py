@@ -127,8 +127,8 @@ class MainGUIData(object):
         self.chamber_ccd = None  # view of inside the chamber
         self.chamber_light = None   # Light illuminating the chamber
         self.overview_ccd = None  # global view from above the sample
-        self.overview_focus = None # focus of the overview CCD
-        self.overview_light = None # light of the overview CCD
+        self.overview_focus = None  # focus of the overview CCD
+        self.overview_light = None  # light of the overview CCD
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)

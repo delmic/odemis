@@ -36,6 +36,7 @@ import odemis.gui
 # The following function can be used to set dynamic configuration values
 # ==============================================================================
 
+
 def _resolution_from_range(comp, va, conf):
     """ Construct a list of resolutions depending on range values """
 
@@ -59,6 +60,7 @@ def _resolution_from_range(comp, va, conf):
         return sorted(choices) # return a list, to be sure it's in order
     except NotApplicableError:
         return [cur_val]
+
 
 def _binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings available in one dimension (pixel always square)
@@ -90,6 +92,7 @@ def _binning_1d_from_2d(comp, va, conf):
     except NotApplicableError:
         return [cur_val[0]]
 
+
 def _binning_firstd_only(comp, va, conf):
     """ Find simple binnings available in the first dimension
     (second dimension stays fixed size).
@@ -116,6 +119,25 @@ def _binning_firstd_only(comp, va, conf):
     except NotApplicableError:
         return [cur_val]
 
+
+def _hfw_choices(comp, va, conf):
+    """ Return a list of HFW choices
+
+    If the VA has predefined choices, return those. Otherwise calculate the choices using the
+    range of the VA.
+
+    """
+
+    try:
+        choices = va.choices
+    except NotApplicableError:
+        mi, ma, = va.range
+        choices = [mi]
+        while choices[-1] < ma:
+            choices.append(choices[-1] * 2)
+        choices.append(ma)
+
+    return choices
 
 # ==============================================================================
 # All values in CONFIG are optional
@@ -199,8 +221,14 @@ CONFIG = {
         },
         "horizontalFoV":
         {
-            "label": "Horiz. field width",
-            "accuracy": 2,
+            "label": "Horiz field width",
+            "control_type": odemis.gui.CONTROL_COMBO,
+            "choices": _hfw_choices,
+        },
+        # force using just a text field => it's for copy-paste
+        "magnification":
+        {
+            "control_type": odemis.gui.CONTROL_FLT,
         },
         "resolution":
         {
@@ -210,11 +238,6 @@ CONFIG = {
         "power":
         {
             "control_type": odemis.gui.CONTROL_NONE,
-        },
-        # force using just a text field => it's for copy-paste
-        "magnification":
-        {
-            "control_type": odemis.gui.CONTROL_FLT,
         },
         "scale":
         {

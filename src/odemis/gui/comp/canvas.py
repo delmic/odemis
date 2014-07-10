@@ -99,7 +99,7 @@ Canvas scale:
 BufferedCanvas
 ~~~~~~~~~~~~~~
 
-This canvas class is an abstract base class on which all after canvasses used
+This canvas class is an abstract base class on which all other canvasses used
 by Odemis are based. It uses an internal bitmap as a buffer from which graphical
 data is displayed on the screen.
 

@@ -39,7 +39,7 @@ import odemis.gui.test as test
 from odemis.gui.test import generate_img_data
 
 
-test.goto_manual()
+# test.goto_manual()
 # test.goto_inspect()
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -211,7 +211,7 @@ class PlotCanvasTestCase(test.GuiTestCase):
         vwp = viewport.PlotViewport(self.panel)
         self.add_control(vwp, wx.EXPAND, proportion=1)
 
-        for horz, vert in PLOTS[:1]:
+        for horz, vert in PLOTS:
             vwp.canvas.set_1d_data( horz, vert)
             vwp.Refresh()
             test.gui_loop(500)
