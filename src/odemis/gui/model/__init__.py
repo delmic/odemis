@@ -28,6 +28,7 @@ import math
 from odemis import model
 from odemis.acq import align
 from odemis.acq.stream import Stream, StreamTree
+from odemis.acq.stream._live import SEMStream
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
                           NotSettableError, StringVA, getVAs)
@@ -587,8 +588,7 @@ class MicroscopeView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None,
-                 focus0=None, focus1=None, stream_classes=None):
+    def __init__(self, name, stage=None, focus0=None, focus1=None, stream_classes=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -646,6 +646,8 @@ class MicroscopeView(View):
 
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
+
+        self.horizontal_field_width = model.FloatVA()
 
     def get_focus(self, i):
         return self._focus[i]
