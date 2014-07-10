@@ -147,13 +147,14 @@ class Stage(model.Actuator):
 
 
 PRESSURE_VENTED = 100e3 # Pa
-PRESSURE_OVERVIEW = PRESSURE_VENTED - 1 # fake
+PRESSURE_OVERVIEW = 90e3 # fake
 PRESSURE_LOW = 20e3 # Pa
 PRESSURE_PUMPED = 5e3 # Pa
 PRESSURES={"vented": PRESSURE_VENTED,
            "overview": PRESSURE_OVERVIEW,
            "low-vacuum": PRESSURE_LOW,
            "vacuum": PRESSURE_PUMPED}
+SPEED_PUMP = 5e3 # Pa/s
 
 
 class Chamber(model.Actuator):
@@ -270,7 +271,7 @@ class Chamber(model.Actuator):
         """
         # TODO: allow to cancel during the change
         now = time.time()
-        duration = 15 # s
+        duration = abs(self._position - p) / SPEED_PUMP # s
         self._time_start = now
         self._time_goal = now + duration # s
         self._goal = p
