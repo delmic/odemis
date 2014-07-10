@@ -49,6 +49,7 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 HFW_RANGE = [2.5e-06, 0.00188476474953]
 TENSION_RANGE = [4797.56, 20006.84]
 SPOT_RANGE = [0.0, 5.73018379531]
+NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 class SEM(model.HwComponent):
     '''
@@ -385,7 +386,7 @@ class Scanner(model.Emitter):
     def _setTranslation(self, value):
         """
         value (float, float): shift from the center. It will always ensure that
-          the whole ROI fits the screen.
+          the whole ROI fitself.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)s the screen.
         returns actual shift accepted
         """
         # compute the min/max of the shift. It's the same as the margin between
@@ -905,6 +906,8 @@ class NavCam(model.DigitalCamera):
                                       [NAVCAM_RESOLUTION, NAVCAM_RESOLUTION])
                                     # , readonly=True)
         self.exposureTime = model.FloatVA(1.0, unit="s", readonly=True)
+        self.pixelSize = model.VigilantAttribute(NAVCAM_PIXELSIZE, unit="m",
+                                                 readonly=True)
 
         # setup camera
         self._camParams = self.parent._objects.create('ns0:camParams')
@@ -977,7 +980,8 @@ class NavCam(model.DigitalCamera):
                 pos = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata = {model.MD_POS: pos,
                             model.MD_PIXEL_SIZE: pixelSize,
-                            model.MD_DIMS: NAVCAM_DIMS}
+                            model.MD_DIMS: NAVCAM_DIMS,
+                            model.MD_ACQ_DATE: time.time()}
                 array = model.DataArray(sem_img, metadata)
                 callback(self._transposeDAToUser(array))
 

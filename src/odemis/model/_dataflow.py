@@ -293,7 +293,7 @@ class DataFlow(DataFlowBase):
         data_shared = [None] # in python2 we need to create a new container object
 
         def receive_one_image(df, data, min_time=min_time):
-            if data.metadata.get(_metadata.MD_ACQ_DATE, 0) >= min_time:
+            if data.metadata.get(_metadata.MD_ACQ_DATE, float("inf")) >= min_time:
                 df.unsubscribe(receive_one_image)
                 data_shared[0] = data
                 is_received.set()
