@@ -30,6 +30,7 @@ from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
+from odemis.gui.model import MicroscopeView, SEMStream
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -522,7 +523,19 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         Called when the view.mpp is updated
         """
         self.scale = self.mpwu / mpp
+        self.microscope_view.horizontal_field_width.value = self.horizontal_field_width
         wx.CallAfter(self.request_drawing_update)
+
+    @property
+    def horizontal_field_width(self):
+        """ Return the field width of the canvas in meters
+
+        :return: Field width in meters
+        """
+        if self.microscope_view:
+            return self.microscope_view.mpp.value * self.ClientSize.x
+
+        return None
 
     def on_size(self, event):
         new_size = event.Size
@@ -540,11 +553,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def Zoom(self, inc, block_on_zero=False):
         """ Zoom by the given factor
 
-        inc (float): scale the current view by 2^inc
-        block_on_zero (boolean): if True, and the zoom goes from software
-          downscaling to software upscaling, it will stop at no software scaling
-        ex:  # 1 => *2 ; -1 => /2; 2 => *4...
+        :param inc (float): scale the current view by 2^inc
+        :param block_on_zero (boolean): if True, and the zoom goes from software
+            downscaling to software upscaling, it will stop at no software scaling
+            ex:  # 1 => *2 ; -1 => /2; 2 => *4...
+
         """
+
         scale = 2.0 ** inc
         prev_mpp = self.microscope_view.mpp.value
         # Clip within the range
@@ -571,7 +586,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if evt.ShiftDown():
             change *= 0.2 # softer
 
-        if evt.CmdDown(): # = Ctrl on Linux/Win or Cmd on Mac
+        if evt.CmdDown():  # = Ctrl on Linux/Win or Cmd on Mac
             ratio = self.microscope_view.merge_ratio.value + (change * 0.1)
             # clamp
             ratio = sorted(self.microscope_view.merge_ratio.range + (ratio,))[1]
@@ -589,7 +604,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             change = 1
             if evt.ShiftDown():
                 block_on_zero = True
-                change *= 0.2 # softer
+                change *= 0.2  # softer
             else:
                 block_on_zero = False
 
@@ -775,7 +790,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         # pattern
         self.background_brush = wx.SOLID
 
-
     # Special version which put the SEM images first, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed
     # together last
@@ -846,7 +860,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         else:
             super(SecomCanvas, self).on_left_down(event)
 
-
     def on_left_up(self, event):
         if self.current_mode in SECOM_MODES:
             if self._ldragging:
@@ -907,6 +920,30 @@ class SecomCanvas(DblMicroscopeCanvas):
     def on_right_up(self, event):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).on_right_up(event)
+
+    def setView(self, microscope_view, tab_data):
+        super(SecomCanvas, self).setView(microscope_view, tab_data)
+        microscope_view.horizontal_field_width.subscribe(self.on_view_em_hfw_change, init=True)
+
+    def on_view_em_hfw_change(self, hfw):
+        """ Adjust the SEM horizontal field width when the view HFW changes
+
+        """
+
+        if self._tab_data_model.emState.value == guimodel.STATE_ON:
+            em_streams = self.microscope_view.stream_tree.get_streams_by_type(SEMStream)
+
+            for em_stream in em_streams:
+                if em_stream.is_active.value:
+                    mi, ma = self._tab_data_model.main.ebeam.horizontalFoV.range
+                    if not mi <= hfw <= ma:
+                        hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+                    self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
+
+                    for view in self._tab_data_model.visible_views.value:
+                        if view.stream_tree.get_streams_by_type(SEMStream):
+                            view.horizontal_field_width.value = hfw
+                    break
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):

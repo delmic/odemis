@@ -252,7 +252,6 @@ class BufferedCanvas(wx.Panel):
 
         # END Event Biding
 
-
         # Timer used to set a maximum of frames per second
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 

@@ -32,6 +32,7 @@ import time
 # to identify a ROI which must still be defined by the user
 UNDEFINED_ROI = (0, 0, 0, 0)
 
+
 class Stream(object):
     """ A stream combines a Detector, its associated Dataflow and an Emitter.
 
