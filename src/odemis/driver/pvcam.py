@@ -1081,9 +1081,6 @@ class PVCam(model.DigitalCamera):
                     readout = self.get_param(pv.PARAM_READOUT_TIME) * 1e-3 # s
                     logging.debug("Exposure of %g s, readout %g s (expected %g s)",
                                   exp_ms * 1e-3, readout, readout_sw)
-                    # FIXME: if readout > exposure/10 (and readout + exposure >~ 0.1,
-                    # to make sure it's not too fast) => activate
-                    # shutter per exposure? Or just allow the user to decide?
                     duration = exposure + readout # seems it actually takes +40ms
                     need_init = False
 
@@ -1213,8 +1210,8 @@ class PVCam(model.DigitalCamera):
             self.pvcam.pl_exp_start_seq(self._handle, cbuf)
             return
 
+        self._cbuffer = cbuf
         try:
-            self._cbuffer = cbuf
             # wait until onEvent was called (it will directly start acquisition)
             # or must stop
             while not self.acquire_must_stop.is_set():
@@ -1239,6 +1236,13 @@ class PVCam(model.DigitalCamera):
         Called by the Event when it is triggered
         """
         cbuf = self._cbuffer
+        # FIXME: there is a small chance for race conditions:
+        # (onEvent) cbuf is None
+        # (start acq) no late_events
+        # (start acq) set cbuf
+        # (start acq) wait
+        # (onEvent) add late events & return
+        # => need lock (or something else?)
         if not cbuf:
             if self.acquire_thread and self.acquire_thread.isAlive():
                 logging.warning("Received synchronization event but acquisition not ready")
