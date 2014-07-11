@@ -491,14 +491,13 @@ class Detector(model.Detector):
             self._acquisition_thread.start()
 
     def stop_acquire(self):
-        with self._acquisition_lock:
-            try:
-                self.parent._device.SEMAbortImageAcquisition()
-                # "Blank" the beam
-                self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-            except suds.WebFault:
-                logging.debug("No acquisition in progress to be aborted.")
-            self._acquisition_must_stop.set()
+        try:
+            # "Blank" the beam
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+            self.parent._device.SEMAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
+        self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
         """
