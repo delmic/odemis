@@ -884,6 +884,7 @@ class FineAlignController(object):
             self._main_frame.lbl_fine_align.Label = "Failed"
         else:
             self._main_frame.lbl_fine_align.Label = "Successful"
+            self._main_frame.menu_item_reset_finealign.Enable(True)
             # Temporary info until the GUI can actually rotate the images
             if model.MD_ROTATION_COR in cor_md:
                 rot = math.degrees(cor_md[model.MD_ROTATION_COR])

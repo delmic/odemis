@@ -446,6 +446,7 @@ class SparcAcquisitionTab(Tab):
             main_data.ebeam)
         self._sem_live_stream = sem_stream
         sem_stream.should_update.value = True
+        sem_stream.should_update.subscribe(self._on_sem_update)
         acq_view.addStream(sem_stream)  # it should also be saved
 
         # the SEM acquisition simultaneous to the CCDs
@@ -639,6 +640,10 @@ class SparcAcquisitionTab(Tab):
             disp = []
         self._spec_graph.SetContent(disp)
 
+    def _on_sem_update(self, update):
+        # very simple version of a stream scheduler
+        self._sem_live_stream.is_active.value = update
+
     def on_acquisition(self, is_acquiring):
         # We don't call set_lenses() now, so that if the user thinks he's more
         # clever he can change the switches manually beforehand (and it's faster).
@@ -737,7 +742,7 @@ class SparcAcquisitionTab(Tab):
         Tab.Show(self, show=show)
 
         # Turn on the SEM stream only when displaying this tab
-        self._sem_live_stream.is_active.value = show
+        self._sem_live_stream.should_update.value = show
         if self._scount_stream:
             active = self._scount_stream.should_update.value and show
             self._scount_stream.is_active.value = active
@@ -748,7 +753,7 @@ class SparcAcquisitionTab(Tab):
 
     def terminate(self):
         # ensure we are not acquiring anything
-        self._sem_live_stream.is_active.value = False
+        self._sem_live_stream.should_update.value = False
         if self._scount_stream:
             self._scount_stream.is_active.value = False
 
@@ -1425,7 +1430,7 @@ class LensAlignTab(Tab):
                                                    main_data.ccd.data,
                                                    main_data.light,
                                                    position=self._stage_ab.position)
-        self.tab_data_model.streams.value.append(ccd_stream)
+        self.tab_data_model.streams.value.insert(0, ccd_stream) # current stream
         self._ccd_stream = ccd_stream
         self._ccd_view = main_frame.vp_align_ccd.microscope_view
         self._ccd_view.addStream(ccd_stream)

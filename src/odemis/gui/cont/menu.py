@@ -14,6 +14,9 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import logging
+from odemis import model
+from odemis.acq import stream, align
 import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_after
@@ -47,20 +50,35 @@ class MenuController(object):
 
         # /File/Save (as), is handled by the snapshot controller
 
-        # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
-        # seem to like it). For now [ESC] is mentioned in the menu item text
-        wx.EVT_MENU(main_frame,
-                    main_frame.menu_item_halt.GetId(),
-                    self.on_stop_axes)
+        # Assign 'Reset fine alignment' functionality (if the tab exists)
+        try:
+            main_data.getTabByName("secom_align")
+        except LookupError:
+            menu_file = main_frame.GetMenuBar().GetMenu(0)
+            menu_file.RemoveItem(main_frame.menu_item_reset_finealign)
+        else:
+            wx.EVT_MENU(main_frame,
+                        main_frame.menu_item_reset_finealign.GetId(),
+                        self._on_reset_align)
 
-        # The escape accelerator has to be added manually, because for some
-        # reason, the 'ESC' key will not register using XRCED.
-        accel_tbl = wx.AcceleratorTable([
-            (wx.ACCEL_NORMAL, wx.WXK_ESCAPE,
-             main_frame.menu_item_halt.GetId())
-        ])
+        if main_data.microscope:
+            # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
+            # seem to like it). For now [ESC] is mentioned in the menu item text
+            wx.EVT_MENU(main_frame,
+                        main_frame.menu_item_halt.GetId(),
+                        self.on_stop_axes)
 
-        main_frame.SetAcceleratorTable(accel_tbl)
+            # The escape accelerator has to be added manually, because for some
+            # reason, the 'ESC' key will not register using XRCED.
+            accel_tbl = wx.AcceleratorTable([
+                (wx.ACCEL_NORMAL, wx.WXK_ESCAPE,
+                 main_frame.menu_item_halt.GetId())
+            ])
+
+            main_frame.SetAcceleratorTable(accel_tbl)
+        else:
+            menu_file = main_frame.GetMenuBar().GetMenu(0)
+            menu_file.RemoveItem(main_frame.menu_item_halt)
 
         # /File/Quit is handled by main
 
@@ -69,26 +87,34 @@ class MenuController(object):
         # /View/2x2 is handled by the tab controllers
         # /View/cross hair is handled by the tab controllers
 
-        # TODO: Assign 'Play Stream' functionality
-        # wx.EVT_MENU(self.main_frame,
-        #             self.main_frame.menu_item_play_stream.GetId(),
-        #             <function>)
+        # TODO: disable next 3 if no current stream
+        self._prev_streams = None  # latest tab.streams VA represented
+        self._prev_stream = None  # latest stream represented by the menu
+        self._autofocus_f = model.InstantaneousFuture() # future of the autofocus
 
-        # TODO: Assign 'Auto Brightness/Contrast' functionality
-        # wx.EVT_MENU(self.main_frame,
-        #             self.main_frame.menu_item_cont.GetId(),
-        #             <function>)
+        # /View/Play Stream
+        wx.EVT_MENU(main_frame,
+                    main_frame.menu_item_play_stream.GetId(),
+                    self._on_play_stream)
+        # TODO: toggle when tab changes/stream changes/play changes
+        main_frame.menu_item_play_stream.Enable(True)
 
-        # TODO: Assign 'Auto Focus' functionality
-        # wx.EVT_MENU(self.main_frame,
-        #             self.main_frame.menu_auto_focus.GetId(),
-        #             <function>)
+        # View/Auto Brightness/Contrast
+        wx.EVT_MENU(main_frame,
+                    main_frame.menu_item_auto_cont.GetId(),
+                    self._on_auto_bc)
+        main_frame.menu_item_auto_cont.Enable(True)
+        # TODO: toggle when tab changes/stream changes/auto_bc changes
 
-        # TODO: Assign 'Reset fine alignment' functionality
-        # wx.EVT_MENU(self.main_frame,
-        #             self.main_frame.menu_item_reset_finealign.GetId(),
-        #             <function>)
+        # View/Auto Focus
+        wx.EVT_MENU(main_frame,
+                    main_frame.menu_item_auto_focus.GetId(),
+                    self._on_auto_focus)
+        # TODO: enable only if focuser is available
+        main_frame.menu_item_auto_focus.Enable(True)
+        main_data.tab.subscribe(self._on_tab_change, init=True)
 
+        # TODO: add auto focus to toolbar
         # TODO: add fit to view (cf toolbar)
 
         # /Help
@@ -135,6 +161,157 @@ class MenuController(object):
             self._main_data.stopMotion()
         else:
             evt.Skip()
+
+    def _on_reset_align(self, evt):
+        """
+        Removes metadata info for the alignment
+        """
+        # Technically, we cannot "remove" metadata, but we can set it to the
+        # default value
+        md = {model.MD_POS_COR: (0, 0),
+              model.MD_ROTATION_COR: 0,
+              model.MD_PIXEL_SIZE_COR: (1, 1)}
+
+        self._main_data.ccd.updateMetadata(md)
+
+        # Will be enabled next time fine alignment is set
+        self._main_frame.menu_item_reset_finealign.Enable(False)
+
+    def _get_current_stream(self):
+        """
+        Find the current stream of the current tab
+        return (Stream): the current stream
+        raises:
+            LookupError: if no stream present at all
+        """
+        tab = self._main_data.tab.value
+        tab_data = tab.tab_data_model
+        try:
+            return tab_data.streams.value[0]
+        except IndexError:
+            raise LookupError("No stream")
+
+    def _on_tab_change(self, tab):
+        tab_data = tab.tab_data_model
+        if self._prev_streams:
+            self._prev_streams.unsubscribe(self._on_current_stream)
+        self._prev_streams = tab_data.streams
+        tab_data.streams.subscribe(self._on_current_stream, init=True)
+        
+    def _on_current_stream(self, streams):
+        """
+        Called when some VAs affecting the current stream change
+        """
+        # Try to get the current stream, if it fails, it means we should
+        # disable the related menu items
+        try:
+            curr_s = streams[0]
+        except IndexError:
+            curr_s = None
+        enable = not curr_s is None
+
+        if self._prev_stream:
+            self._prev_stream.should_update.unsubscribe(self._on_stream_update)
+            if hasattr(self._prev_stream, "auto_bc"):
+                self._prev_stream.auto_bc.unsubscribe(self._on_stream_autobc)
+        self._prev_stream = curr_s
+
+        static = isinstance(curr_s, stream.StaticStream)
+        pp_enable = enable and not static
+        self._main_frame.menu_item_play_stream.Enable(pp_enable)
+        if not pp_enable:
+            self._main_frame.menu_item_play_stream.Check(False)
+
+        self._main_frame.menu_item_auto_cont.Enable(enable)
+        if not enable:
+            self._main_frame.menu_item_auto_cont.Check(False)
+
+        self._main_frame.menu_item_auto_focus.Enable(pp_enable)
+
+        if curr_s:
+            curr_s.should_update.subscribe(self._on_stream_update, init=True)
+            if hasattr(curr_s, "auto_bc"):
+                curr_s.auto_bc.subscribe(self._on_stream_autobc, init=True)
+
+    def _on_stream_update(self, updated):
+        """
+        Called when the current stream changes play/pause
+        """
+        try:
+            curr_s = self._get_current_stream()
+        except LookupError:
+            return
+
+        static = isinstance(curr_s, stream.StaticStream)
+        self._main_frame.menu_item_play_stream.Check(updated and not static)
+
+    def _on_stream_autobc(self, autobc):
+        """
+        Called when the current stream changes Auto BC
+        """
+        self._main_frame.menu_item_auto_cont.Check(autobc)
+
+    def _on_play_stream(self, evt):
+        try:
+            curr_s = self._get_current_stream()
+        except LookupError:
+            return
+
+        # inverse the current status
+        curr_s.should_update.value = not curr_s.should_update.value
+
+    def _on_auto_bc(self, evt):
+        try:
+            curr_s = self._get_current_stream()
+        except LookupError:
+            return
+
+        if hasattr(curr_s, "auto_bc"):
+            # inverse the current status
+            curr_s.auto_bc.value = not curr_s.auto_bc.value
+
+    def _on_auto_focus(self, evt):
+        try:
+            curr_s = self._get_current_stream()
+        except LookupError:
+            return
+
+        # Slightly different depending on the stream type, especially as the
+        # stream doesn't have information on the focus, we need to "guess"
+        if isinstance(curr_s, stream.StaticStream):
+            logging.debug("Will not focus on a static stream")
+            return
+        elif isinstance(curr_s, stream.SEMStream):
+            detector = curr_s.detector
+            emitter = curr_s.emitter
+            focus = self._main_data.ebeam_focus
+        elif isinstance(curr_s, stream.CameraStream):
+            detector = curr_s.detector
+            emitter = None
+            focus = self._main_data.focus
+        # TODO: handle overview stream
+        else:
+            logging.info("Doesn't know how to focus stream %s", type(curr_s).__name__)
+            return
+
+        if focus is None or detector is None:
+            logging.debug("Cannot focus stream %s, focus axis unknown", curr_s.name.value)
+
+        try:
+            f = align.autofocus.AutoFocus(detector, emitter, focus, 0)
+        except Exception:
+            logging.exception("Failed to start auto-focus for stream %s",
+                              curr_s.name.value)
+            return
+
+        self._main_frame.menu_item_auto_focus.Enable(False)
+        f.add_done_callback(self._on_auto_focus_done)
+
+        # TODO: make sure autofocus menu stays disable until auto focus is over
+        # (have a common future and check if it's over?)
+
+    def _on_auto_focus_done(self, future):
+        self._main_frame.menu_item_auto_focus.Enable()
 
     def _on_open(self, evt):
         """
