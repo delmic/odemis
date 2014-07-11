@@ -87,7 +87,7 @@ class Camera(model.DigitalCamera):
         # TODO: support (simulated) binning
         self.binning = model.ResolutionVA((1, 1), [(1, 1), (1, 1)])
 
-        exp = 0.1 # s
+        exp = self._img.metadata.get(model.MD_EXP_TIME, 0.1) # s
         self.exposureTime = model.FloatContinuous(exp, [1e-3, 1e3], unit="s")
         # Some code care about the readout rate to know how long an acquisition will take
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
