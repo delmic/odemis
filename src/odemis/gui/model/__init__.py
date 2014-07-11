@@ -201,12 +201,11 @@ class MainGUIData(object):
                 raise KeyError("No emitter found in the microscope")
 
         # Chamber is complex so we provide a "simplified state"
-        # It's managed by the ChamberController. Setting to *PUMPING or VENTING
+        # It's managed by the ChamberController. Setting to PUMPING or VENTING
         # state will request a pressure change.
-        if self.chamber:
-            chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
-                              CHAMBER_VACUUM, CHAMBER_VENTING}
-            self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
+        chamber_states = {CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
+                          CHAMBER_VACUUM, CHAMBER_VENTING}
+        self.chamberState = model.IntEnumerated(CHAMBER_UNKNOWN, chamber_states)
 
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
@@ -288,14 +287,10 @@ class MicroscopyGUIData(object):
         self.main = main
 
         # Streams available (handled by StreamController)
+        # It should be LRU sorted, so that the latest stream is first in the list.
         # Note: we need to make sure ourselves that each stream in this
         # attribute is unique (i.e. only occurs once in the list).
         self.streams = model.ListVA()
-
-        # TODO: the latest stream used... or change .streams to be always
-        # LRU sorted, so the current stream is the first entry.
-        # IOW, either the active one, or the last stream which was paused.
-        self.currentStream = VigilantAttribute(None)
 
         # Available Views. The are handled by the ViewController.
         # The `views` list basically keeps track of the relevant references.

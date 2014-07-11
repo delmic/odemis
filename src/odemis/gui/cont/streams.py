@@ -4,7 +4,7 @@ Created on 26 Sep 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -112,10 +112,7 @@ class StreamController(object):
 
             def fluor_capable():
                 # TODO: need better way to check, maybe opticalState == STATE_DISABLED?
-                if hasattr(self._main_data_model, "chamberState"):
-                    enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
-                else:
-                    enabled = True
+                enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(FluoStream)
                 return enabled and compatible
@@ -130,10 +127,7 @@ class StreamController(object):
         if self._main_data_model.light and self._main_data_model.ccd:
 
             def brightfield_capable():
-                if hasattr(self._main_data_model, "chamberState"):
-                    enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
-                else:
-                    enabled = True
+                enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(BrightfieldStream)
                 return enabled and compatible
@@ -146,10 +140,7 @@ class StreamController(object):
         if self._main_data_model.ebeam and self._main_data_model.sed:
 
             def sem_capable():
-                if hasattr(self._main_data_model, "chamberState"):
-                    enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
-                else:
-                    enabled = True
+                enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
                 view = self._tab_data_model.focussedView.value
                 compatible = view.is_compatible(SEMStream)
                 return enabled and compatible

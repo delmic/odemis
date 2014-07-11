@@ -360,13 +360,20 @@ class SecomAcquiController(object):
         # Listen to "acquire image" button
         self._main_frame.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
 
-        pub.subscribe(self.on_stream_changed, 'stream.ctrl')
+        # Only possible to acquire if there are streams, and the chamber is
+        # under vacuum
+        tab_data.streams.subscribe(self.on_stream_chamber)
+        tab_data.main.chamberState.subscribe(self.on_stream_chamber, init=True)
 
-    def on_stream_changed(self, streams_present, streams_visible, tab):
-        """ Handler for pubsub 'stream.changed' messages """
-        if tab != self._tab_data_model:
-            return
-        self._main_frame.btn_secom_acquire.Enable(streams_present and streams_visible)
+    def on_stream_chamber(self, unused):
+        """
+        Called when chamber state or streams change.
+        Used to update the acquire button state
+        """
+        st_present = not not self._tab_data_model.streams.value
+        ch_vacuum = (self._tab_data_model.main.chamberState.value
+                        in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN})
+        self._main_frame.btn_secom_acquire.Enable(st_present and ch_vacuum)
 
     def on_acquire(self, evt):
         self.open_acquisition_dialog()

@@ -252,8 +252,9 @@ class SecomStateController(MicroscopeStateController):
         # Just to be able to disable the buttons when the chamber is vented
         self._sem_btn = getattr(main_frame, btn_prefix + "sem")
         self._opt_btn = getattr(main_frame, btn_prefix + "opt")
+        self._acq_btn = getattr(main_frame, btn_prefix + "opt")
 
-        # The classes of streams that are afffected by the chamber
+        # The classes of streams that are affected by the chamber
         if tab_data.main.role == "secommini":
             self._cls_streams_involved = stream.Stream
         else: # SECOM => only SEM as optical might be used even vented
@@ -265,7 +266,7 @@ class SecomStateController(MicroscopeStateController):
             tab_data.opticalState.subscribe(self._onOpticalState)
 
         # Manage the chamber
-        if hasattr(self._main_data, "chamberState"):
+        if self._main_data.chamber:
             pressures = self._main_data.chamber.axes["pressure"].choices
             self._vacuum_pressure = min(pressures.keys())
             self._vented_pressure = max(pressures.keys())
@@ -369,6 +370,7 @@ class SecomStateController(MicroscopeStateController):
         logging.debug("Chamber state changed to %d", state)
         # In any case, make sure the streams cannot be started
         if state == CHAMBER_VACUUM:
+            # disabling the acquire button is done in the acquisition controller
             self._sem_btn.Enable(True)
             self._sem_btn.SetToolTip(None)
             self._opt_btn.Enable(True)

@@ -39,7 +39,6 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.microscope import SecomStateController
-from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
@@ -301,7 +300,6 @@ class SecomStreamsTab(Tab):
         # For remembering which streams are paused when hiding the tab
         self._streams_to_restart = set() # set of weakref to the streams
 
-        # Add the first streams
         self._ensure_base_streams()
 
         # To automatically play/pause a stream when turning on/off a microscope,
@@ -312,8 +310,9 @@ class SecomStreamsTab(Tab):
         if hasattr(tab_data, 'emState'):
             tab_data.emState.subscribe(self.onEMState)
 
-        if hasattr(main_data, "chamberState"):
-            main_data.chamberState.subscribe(self.on_chamber_state, init=True)
+        main_data.chamberState.subscribe(self.on_chamber_state, init=True)
+        if not main_data.chamber:
+            main_frame.live_btn_press.Hide()
 
         # TODO: state == play/pause of current opt/sem stream (+focus view with stream)
 
@@ -1477,18 +1476,13 @@ class LensAlignTab(Tab):
         main_frame.html_alignment.LoadPage(path)
 
         # Trick to allow easy html editing: double click to reload
-        def reload_page(evt):
-            evt.GetEventObject().LoadPage(path)
+#         def reload_page(evt):
+#             evt.GetEventObject().LoadPage(path)
 
-        main_frame.html_alignment.Bind(wx.EVT_LEFT_DCLICK, reload_page)
+        # main_frame.html_alignment.Bind(wx.EVT_LEFT_DCLICK, reload_page)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
-
-        if hasattr(main_data, "chamberState"):
-            main_data.chamberState.subscribe(self.on_chamber_state, init=True)
-        else:
-            # TODO: only if no correction metadata in the CCD?
-            self.notify()
+        main_data.chamberState.subscribe(self.on_chamber_state, init=True)
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
@@ -1517,7 +1511,7 @@ class LensAlignTab(Tab):
     @call_after
     def on_chamber_state(self, state):
         # Lock or enable lens alignment
-        if state == CHAMBER_VACUUM:
+        if state in {guimod.CHAMBER_VACUUM, guimod.CHAMBER_UNKNOWN}:
             self.button.Enable()
             self.notify()
         else:
