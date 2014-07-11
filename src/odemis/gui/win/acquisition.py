@@ -84,6 +84,9 @@ class AcquisitionDialog(xrcfr_acq):
         # Presets which have been confirmed on the hardware
         self._presets_confirmed = set() # (string)
 
+        # To turn on/off the fan
+        self._orig_fan_speed = None
+
         orig_view = orig_tab_data.focussedView.value
         view = self._tab_data_model.focussedView.value
 
@@ -133,8 +136,8 @@ class AcquisitionDialog(xrcfr_acq):
         # TODO: we should actually listen to the stream tree, but it's not
         # currently possible.
         # Currently just use view.last_update which should be "similar"
+        # (but doesn't work if the stream contains no image)
         view.lastUpdate.subscribe(self.on_streams_changed)
-
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -372,6 +375,23 @@ class AcquisitionDialog(xrcfr_acq):
         self._settings_controller.resume()
         self._settings_controller.enable(True)
 
+    def _set_fan(self, enable):
+        """
+        Turn on/off the fan of the CCD
+        enable (boolean): True to turn on/restore the fan, and False to turn if off
+        """
+        main_data = self._tab_data_model.main
+        if not "fanSpeed" in model.getVAs(main_data.ccd):
+            return
+
+        fs = main_data.ccd.fanSpeed
+        if enable:
+            if not self._orig_fan_speed is None:
+                fs.value = max(fs.value, self._orig_fan_speed)
+        else:
+            self._orig_fan_speed = fs.value
+            fs.value = 0
+
     def on_acquire(self, evt):
         """
         Start the acquisition (really)
@@ -394,6 +414,9 @@ class AcquisitionDialog(xrcfr_acq):
         # Add the overlay stream if the fine alignment check box is checked
         if self.chkbox_fine_align.Value:
             streams.add(self._ovrl_stream)
+
+        # Turn off the fan to avoid vibrations (in all acquisitions)
+        self._set_fan(False)
 
         # It should never be possible to reach here with no streams
         self.acq_future = acq.acquire(streams)
@@ -422,6 +445,8 @@ class AcquisitionDialog(xrcfr_acq):
         Callback called when the acquisition is finished (either successfully or
         cancelled)
         """
+        self._set_fan(True)  # Turn the fan back on
+
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self._resume_settings()
