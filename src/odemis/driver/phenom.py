@@ -491,14 +491,13 @@ class Detector(model.Detector):
             self._acquisition_thread.start()
 
     def stop_acquire(self):
-        with self._acquisition_lock:
-            try:
-                self.parent._device.SEMAbortImageAcquisition()
-                # "Blank" the beam
-                self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-            except suds.WebFault:
-                logging.debug("No acquisition in progress to be aborted.")
-            self._acquisition_must_stop.set()
+        try:
+            # "Blank" the beam
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+            self.parent._device.SEMAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
+        self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
         """
@@ -697,7 +696,7 @@ class Stage(model.Actuator):
             next_pos = {}
             for axis, new_pos in pos.items():
                 next_pos[axis] = new_pos
-            self._stagePos.x, self._stagePos.y = next_pos["x"], next_pos["y"]
+            self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
             self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
@@ -715,7 +714,7 @@ class Stage(model.Actuator):
             rel = {}
             for axis, change in shift.items():
                 rel[axis] = change
-            self._stageRel.x, self._stageRel.y = rel["x"], rel["y"]
+            self._stageRel.x, self._stageRel.y = rel.get("x", 0), rel.get("y", 0)
             self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
