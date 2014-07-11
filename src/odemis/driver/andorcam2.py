@@ -1118,7 +1118,9 @@ class AndorCam2(model.DigitalCamera):
                 logging.error("Failed to change fan speed due to acquisition in progress")
                 return self.targetTemperature.value
             raise
-        return val / max(values)
+
+        speed = 1 - (val / max(values))
+        return speed
 
     def getModelName(self):
         self.select()
