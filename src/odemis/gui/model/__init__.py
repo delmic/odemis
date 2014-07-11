@@ -41,7 +41,7 @@ import odemis.dataio as dataio
 # The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
-STATE_PAUSE = 2
+STATE_PAUSE = 2 # TODO: remove this state and add a STATE_DISABLED?
 
 # Chamber states
 CHAMBER_UNKNOWN = 0  # Chamber in an unknown state
@@ -292,7 +292,8 @@ class MicroscopyGUIData(object):
         # attribute is unique (i.e. only occurs once in the list).
         self.streams = model.ListVA()
 
-        # TODO: the latest stream used.
+        # TODO: the latest stream used... or change .streams to be always
+        # LRU sorted, so the current stream is the first entry.
         # IOW, either the active one, or the last stream which was paused.
         self.currentStream = VigilantAttribute(None)
 

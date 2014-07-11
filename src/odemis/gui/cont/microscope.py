@@ -166,14 +166,14 @@ class ChamberButtonController(HardwareButtonController):
                 CHAMBER_VENTING: "Ejecting...",
                 CHAMBER_VENTED: "Load the sample",
                 CHAMBER_VACUUM: "Eject the sample",
-                }
+            }
         else:
-            return{
+            return {
                 CHAMBER_PUMPING: "Pumping...",
                 CHAMBER_VENTING: "Venting...",
                 CHAMBER_VENTED: "Pump the chamber",
                 CHAMBER_VACUUM: "Vent the chamber",
-                }
+            }
 
     def _va_to_btn(self, state):
         """ Change the button toggle state according to the given hardware state
@@ -377,12 +377,16 @@ class SecomStateController(MicroscopeStateController):
             self._stream_controller.enableStreams(True)
         else:
             # TODO: disable overview move
-            # Disable SEM button
+            # Stop SEM streams & disable SEM button
+            if hasattr(self._main_data, "semState"):
+                self._main_data.semState = STATE_OFF
             self._sem_btn.Enable(False)
             self._sem_btn.SetToolTipString("Chamber must be under vacuum to activate the SEM")
 
             # Disable Optical button (if SECOMmini)
             if self._main_data.role == "secommini":
+                if hasattr(self._main_data, "opticalState"):
+                    self._main_data.opticalState = STATE_OFF
                 self._opt_btn.Enable(False)
                 self._opt_btn.SetToolTipString("Chamber must be under vacuum to activate the optical view")
 
