@@ -23,18 +23,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from Pyro4.core import isasync
-import math
+from odemis.acq import ConvertStage
 from odemis import model
+import math
 import numpy
 
-
-class ConvertStage(model.Actuator):
+class CombinedStage(model.Actuator):
     """
-    Fake stage component with X/Y axis that converts the target sample stage 
-    position coordinates to the objective lens position based one a given scale, 
-    offset and rotation. This way it takes care of maintaining the alignment of 
-    the two stages, as for each SEM stage move it is able to perform the 
-    corresponding “compensate” move in objective lens.
+    Wrapper stage that takes as children the SEM sample stage and the 
+    ConvertStage. For each move to be performed CombinedStage moves, at the same 
+    time, both stages.
     """
     def __init__(self, name, role, children, axes, scale, rotation, offset):
         """
@@ -54,6 +52,15 @@ class ConvertStage(model.Actuator):
         self._rotation = math.radians(rotation)
         self._offset = offset
 
+        # Axis rotation
+        self._R = numpy.array([[math.cos(self._rotation), -math.sin(self._rotation)],
+                         [math.sin(self._rotation), math.cos(self._rotation)]])
+        # Scaling between the axis
+        self._L = numpy.array([[self._scale[0], 0],
+                         [0, self._scale[1]]])
+        # Offset between origins of the coordinate systems
+        self._O = numpy.transpose([self._offset[0], self._offset[1]])
+
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}
         model.Actuator.__init__(self, name, role, axes=axes_def)
@@ -69,21 +76,17 @@ class ConvertStage(model.Actuator):
         # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
     def _convertPosFromChild(self, pos_child):
-        X
+        # Object lens position vector
+        Q = numpy.transpose([pos_child[0], pos_child[1]])
+        # Transform to coordinates in the reference frame of the sample stage
+        p = numpy.add(self._O, numpy.invert(self._R).dot(numpy.invert(self._L)).dot(Q))
+        return p.tolist()
 
     def _convertPosToChild(self, pos):
-        # Axis rotation
-        R = numpy.array([[math.cos(self._rotation), -math.sin(self._rotation)],
-                         [math.sin(self._rotation), math.cos(self._rotation)]])
-        # Scaling between the axis
-        L = numpy.array([[self._scale[0], 0],
-                         [0, self._scale[1]]])
-        # Offset between origins of the coordinate systems
-        O = numpy.transpose([self._offset[0], self._offset[1]])
         # Sample stage position vector
         P = numpy.transpose([pos[0], pos[1]])
         # Transform to coordinates in the reference frame of the objective stage
-        q = L.dot(R).dot(numpy.subtract(P, O))
+        q = self._L.dot(self._R).dot(numpy.subtract(P, self._O))
         return q.tolist()
 
     def _updatePosition(self, pos_child):
