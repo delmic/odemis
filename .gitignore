@@ -52,3 +52,7 @@ magic.odm.yaml
 #HTML documentation files
 doc/code/_build
 doc/code/_gen
+
+# This directory contains the database from fluorophores.org
+# To fill it, run ./util/getfluodb.py
+install/linux/usr/share/odemis/fluodb/
