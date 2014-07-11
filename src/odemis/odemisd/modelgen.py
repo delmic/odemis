@@ -444,6 +444,7 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
         instantiator.instantiate_model()
     except Exception as exp:
         logging.error("Failed to instantiate the model")
+        logging.info("Full traceback of the error follows", exc_info=1)
         # clean up by stopping everything which we had started
         for comp in instantiator.components:
             try:

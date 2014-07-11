@@ -191,7 +191,7 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
         logging.debug("Overlay done.")
         return ret, transform_data
     except Exception as exp:
-        logging.exception("Finding overlay failed")
+        logging.debug("Finding overlay failed", exc_info=1)
         raise exp
     finally:
         with future._overlay_lock:
