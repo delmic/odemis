@@ -696,7 +696,7 @@ class Stage(model.Actuator):
             next_pos = {}
             for axis, new_pos in pos.items():
                 next_pos[axis] = new_pos
-            self._stagePos.x, self._stagePos.y = next_pos["x"], next_pos["y"]
+            self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
             self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
@@ -714,7 +714,7 @@ class Stage(model.Actuator):
             rel = {}
             for axis, change in shift.items():
                 rel[axis] = change
-            self._stageRel.x, self._stageRel.y = rel["x"], rel["y"]
+            self._stageRel.x, self._stageRel.y = rel.get("x", 0), rel.get("y", 0)
             self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
