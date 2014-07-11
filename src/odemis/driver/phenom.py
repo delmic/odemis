@@ -1189,7 +1189,7 @@ class ChamberPressure(model.Actuator):
         """
         # Just an indicative time. It will be updated by polling the remaining
         # time.
-        timeRemaining = 15
+        timeRemaining = 20
         return timeRemaining  # s
 
     def _changePressure(self, future, p):
@@ -1218,10 +1218,10 @@ class ChamberPressure(model.Actuator):
 
             # FIXME
             # Enough time before we start an acquisition
-            time.sleep(7)
+            time.sleep(5)
             self._updatePosition()
             TimeUpdater.cancel()
 
     def _updateTime(self, future, target):
         remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-        future.set_end_time(time.time() + remainingTime)
+        future.set_end_time(time.time() + remainingTime + 5)
