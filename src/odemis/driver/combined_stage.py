@@ -34,90 +34,140 @@ class CombinedStage(model.Actuator):
     ConvertStage. For each move to be performed CombinedStage moves, at the same 
     time, both stages.
     """
-    def __init__(self, name, role, children, axes, scale, rotation, offset):
+    def __init__(self, name, role, children, **kwargs):
         """
-        children (dict str -> actuator): name to objective lens actuator
-        axes (list of string): names of the axes for x and y
-        scale (tuple of floats): scale factor from SEM to optical
-        rotation (float in degrees): rotation factor
-        offset (tuple of floats): offset factor #m, m
+        children (dict str -> actuator): names to ConvertStage and SEM sample stage
         """
-        assert len(axes) == 2
-        if len(children) != 1:
-            raise ValueError("StageConverted needs 1 child")
+        axes_def = {}
+        self._position = {}
 
-        self._child = children.values()[0]
-        self._axes_child = {"x": axes[0], "y": axes[1]}
-        self._scale = scale
-        self._rotation = math.radians(rotation)
-        self._offset = offset
+        # SEM stage
+        self._sem = None
+        # Optical stage
+        self._lens = None
 
-        # Axis rotation
-        self._R = numpy.array([[math.cos(self._rotation), -math.sin(self._rotation)],
-                         [math.sin(self._rotation), math.cos(self._rotation)]])
-        # Scaling between the axis
-        self._L = numpy.array([[self._scale[0], 0],
-                         [0, self._scale[1]]])
-        # Offset between origins of the coordinate systems
-        self._O = numpy.transpose([self._offset[0], self._offset[1]])
+        for type, child in children.items():
+            child.parent = self
 
-        axes_def = {"x": self._child.axes[axes[0]],
-                    "y": self._child.axes[axes[1]]}
-        model.Actuator.__init__(self, name, role, axes=axes_def)
+            # Check if children are actuators
+            if not isinstance(child, model.ComponentBase):
+                raise ValueError("Child %s is not a component." % str(child))
+            if not hasattr(child, "axes") or not isinstance(child.axes, dict):
+                raise ValueError("Child %s is not an actuator." % str(child))
+            if type == "lens":
+                self._lens = child
+            elif type == "stage":
+                self._sem = child
+            else:
+                raise IOError("Child given to CombinedStage is not a stage.")
+
+        self._stage_conv = ConvertStage("converter-xy", "align",
+                            children={"aligner": self._lens},
+                            axes=["x", "y"],
+                            scale=(1, 1), rotation=0, offset=(0, 0))
+
+        rng = [-0.5, 0.5]
+        axes_def["x"] = model.Axis(unit="m", range=rng)
+        axes_def["y"] = model.Axis(unit="m", range=rng)
+
+        # TODO, may be needed in case setting a referencial point is required
+        # First calibrate
+#         calib_pos = parent._device.GetStageCenterCalib()
+#         if calib_pos.x != 0 or calib_pos.y != 0:
+#             logging.warning("Stage was not calibrated. We are performing calibration now.")
+#             self._stagePos.x, self._stagePos.y = 0, 0
+#             parent._device.SetStageCenterCalib(self._stagePos)
+
+        # Just initialization, actual position updated once stage is moved
+        self._position["x"] = 0
+        self._position["y"] = 0
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, children=children
+                                , **kwargs)
+
+        # will take care of executing axis move asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
-                                    {"x": 0, "y": 0},
+                                    self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
-        # it's just a conversion from the child's position
-        self._child.position.subscribe(self._updatePosition, init=True)
 
-        # No speed, not needed
-        # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
-
-    def _convertPosFromChild(self, pos_child):
-        # Object lens position vector
-        Q = numpy.transpose([pos_child[0], pos_child[1]])
-        # Transform to coordinates in the reference frame of the sample stage
-        p = numpy.add(self._O, numpy.invert(self._R).dot(numpy.invert(self._L)).dot(Q))
-        return p.tolist()
-
-    def _convertPosToChild(self, pos):
-        # Sample stage position vector
-        P = numpy.transpose([pos[0], pos[1]])
-        # Transform to coordinates in the reference frame of the objective stage
-        q = self._L.dot(self._R).dot(numpy.subtract(P, self._O))
-        return q.tolist()
-
-    def _updatePosition(self, pos_child):
+    def _updatePosition(self):
         """
-        update the position VA when the child's position is updated
+        update the position VA
         """
+        mode_pos = self.parent._device.GetStageModeAndPosition()
+        self._position["x"] = mode_pos.position.x
+        self._position["y"] = mode_pos.position.y
+
         # it's read-only, so we change it via _value
-        vpos_child = [pos_child[self._axes_child["x"]],
-                      pos_child[self._axes_child["y"]]]
-        vpos = self._convertPosFromChild(vpos_child)
-        self.position._value = {"x": vpos[0],
-                                "y": vpos[1]}
+        self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
+
+    def _doMoveAbs(self, pos):
+        """
+        move to the position 
+        """
+        with self.parent._acq_progress_lock:
+            next_pos = {}
+            for axis, new_pos in pos.items():
+                next_pos[axis] = new_pos
+            self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
+            self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
+
+            # Obtain the finally reached position after move is performed.
+            # This is mainly in order to keep the correct position in case the
+            # move we tried to perform was greater than the maximum possible
+            # one.
+            # with self.parent._acq_progress_lock:
+            self._updatePosition()
+
+    def _doMoveRel(self, shift):
+        """
+        move by the shift 
+        """
+        with self.parent._acq_progress_lock:
+            rel = {}
+            for axis, change in shift.items():
+                rel[axis] = change
+            self._stageRel.x, self._stageRel.y = rel.get("x", 0), rel.get("y", 0)
+            self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
+
+            # Obtain the finally reached position after move is performed.
+            # This is mainly in order to keep the correct position in case the
+            # move we tried to perform was greater than the maximum possible
+            # one.
+            # with self.parent._acq_progress_lock:
+            self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
 
-        # shift is a vector, conversion is identical to a point
-        vshift = [shift.get("x", 0), shift.get("y", 0)]
-        vshift_child = self._convertPosToChild(vshift)
+        shift = self._applyInversionRel(shift)
+        return self._executor.submit(self._doMoveRel, shift)
 
-        shift_child = {self._axes_child["x"]: vshift_child[0],
-                       self._axes_child["y"]: vshift_child[1]}
-        f = self._child.moveRel(shift_child)
-        return f
-
-    # For now we don't support moveAbs(), not needed
+    @isasync
     def moveAbs(self, pos):
-        raise NotImplementedError("Do you really need that??")
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+        pos = self._applyInversionAbs(pos)
+
+        # self._doMove(pos)
+        return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
-        # This is normally never used (child is directly stopped)
-        self._child.stop()
+        # Empty the queue for the given axes
+        self._executor.cancel()
+        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
 
