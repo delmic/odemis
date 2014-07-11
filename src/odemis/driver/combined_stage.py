@@ -25,6 +25,7 @@ from __future__ import division
 from Pyro4.core import isasync
 import math
 from odemis import model
+import numpy
 
 
 class ConvertStage(model.Actuator):
@@ -50,7 +51,7 @@ class ConvertStage(model.Actuator):
         self._child = children.values()[0]
         self._axes_child = {"x": axes[0], "y": axes[1]}
         self._scale = scale
-        self._rotation = rotation
+        self._rotation = math.radians(rotation)
         self._offset = offset
 
         axes_def = {"x": self._child.axes[axes[0]],
@@ -68,20 +69,22 @@ class ConvertStage(model.Actuator):
         # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
     def _convertPosFromChild(self, pos_child):
-        a = math.radians(self._angle)
-        xc, yc = pos_child
-        pos = [xc * math.cos(a) - yc * math.sin(a),
-               xc * math.sin(a) + yc * math.cos(a)]
-        return pos
+        X
 
     def _convertPosToChild(self, pos):
-        R = [math.cos(self._rotation) - math.sin(self._rotation),
-             math.sin(self._rotation) + math.cos(self._rotation)]
-        a = math.radians(-self._angle)
-        x, y = pos
-        posc = [x * math.cos(a) - y * math.sin(a),
-                x * math.sin(a) + y * math.cos(a)]
-        return posc
+        # Axis rotation
+        R = numpy.array([[math.cos(self._rotation), -math.sin(self._rotation)],
+                         [math.sin(self._rotation), math.cos(self._rotation)]])
+        # Scaling between the axis
+        L = numpy.array([[self._scale[0], 0],
+                         [0, self._scale[1]]])
+        # Offset between origins of the coordinate systems
+        O = numpy.transpose([self._offset[0], self._offset[1]])
+        # Sample stage position vector
+        P = numpy.transpose([pos[0], pos[1]])
+        # Transform to coordinates in the reference frame of the objective stage
+        q = L.dot(R).dot(numpy.subtract(P, O))
+        return q.tolist()
 
     def _updatePosition(self, pos_child):
         """
