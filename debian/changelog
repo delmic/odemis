@@ -1,3 +1,30 @@
+odemis (1.7-1ubuntu1) precise; urgency=low
+
+  * New version: 1.7
+  * Main new features:
+    * Rotate optical images based on the fine alignment result (SECOM)
+    * Automatic spot alignment method (SECOM)
+    * Autofocus function (SECOM)
+    * Support changing filters on the SPARC
+    * Display average spectrum count over the last 30s (SPARC)
+    * Support for Thorlabs lens mount (SPARC)
+    * Add more menu entries and shortcut to manipulate the streams
+    * Simplify Optical/SEM on/off buttons (SECOM)
+    * Turn off camera fan during high quality acquisition (SECOM)
+    * Beta support for managing SEM chamber pressure
+    * Beta support for Phenom SEMs
+    * Alpha suport for Tescan SEMs
+    * Support for Trinamic stages
+  * Main bug fixed and improvements:
+    * Allow dwell time > 30s on SEM external scanner (semcomedi)
+    * Fine alignment handles very small and very large SEM magnification
+      (SECOM)
+    * Allow to reset the fine alignment data
+    * Handle very large AR polar projections (SPARC)
+    * Rotation metadata saved in TIFF and HDF5 format (SECOM)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 14 Jul 2014 15:37:23 +0200
+
 odemis (1.6-1ubuntu1) precise; urgency=low
 
   * New version: 1.6
