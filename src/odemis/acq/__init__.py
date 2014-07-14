@@ -360,7 +360,7 @@ class ConvertStage(model.Actuator):
         # Object lens position vector
         Q = numpy.transpose([pos_child[0], pos_child[1]])
         # Transform to coordinates in the reference frame of the sample stage
-        p = numpy.add(self._O, numpy.invert(self._R).dot(numpy.invert(self._L)).dot(Q))
+        p = numpy.add(self._O, numpy.linalg.inv(self._R).dot(numpy.linalg.inv(self._L)).dot(Q))
         return p.tolist()
 
     def _convertPosToChild(self, pos):

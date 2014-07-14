@@ -23,10 +23,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 from Pyro4.core import isasync
-from odemis.acq import ConvertStage
-from odemis import model
+import logging
 import math
 import numpy
+from odemis import model
+from odemis.acq import ConvertStage
+from odemis.model._futures import CancellableThreadPoolExecutor
+
 
 class CombinedStage(model.Actuator):
     """
@@ -63,20 +66,12 @@ class CombinedStage(model.Actuator):
 
         self._stage_conv = ConvertStage("converter-xy", "align",
                             children={"aligner": self._lens},
-                            axes=["x", "y"],
-                            scale=(1, 1), rotation=0, offset=(0, 0))
+                            axes=["a", "b"],
+                            scale=(5, 5), rotation=0, offset=(0, 0))
 
         rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
-
-        # TODO, may be needed in case setting a referencial point is required
-        # First calibrate
-#         calib_pos = parent._device.GetStageCenterCalib()
-#         if calib_pos.x != 0 or calib_pos.y != 0:
-#             logging.warning("Stage was not calibrated. We are performing calibration now.")
-#             self._stagePos.x, self._stagePos.y = 0, 0
-#             parent._device.SetStageCenterCalib(self._stagePos)
 
         # Just initialization, actual position updated once stage is moved
         self._position["x"] = 0
@@ -97,9 +92,9 @@ class CombinedStage(model.Actuator):
         """
         update the position VA
         """
-        mode_pos = self.parent._device.GetStageModeAndPosition()
-        self._position["x"] = mode_pos.position.x
-        self._position["y"] = mode_pos.position.y
+        mode_pos = self._sem.position.value
+        self._position["x"] = mode_pos[0]
+        self._position["y"] = mode_pos[1]
 
         # it's read-only, so we change it via _value
         self.position._value = self._applyInversionAbs(self._position)
@@ -109,37 +104,35 @@ class CombinedStage(model.Actuator):
         """
         move to the position 
         """
-        with self.parent._acq_progress_lock:
-            next_pos = {}
-            for axis, new_pos in pos.items():
-                next_pos[axis] = new_pos
-            self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
-            self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
-
-            # Obtain the finally reached position after move is performed.
-            # This is mainly in order to keep the correct position in case the
-            # move we tried to perform was greater than the maximum possible
-            # one.
-            # with self.parent._acq_progress_lock:
-            self._updatePosition()
+        # Not yet implemented
+#         with self.parent._acq_progress_lock:
+#             next_pos = {}
+#             for axis, new_pos in pos.items():
+#                 next_pos[axis] = new_pos
+#             self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
+#             self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
+#
+#             # Obtain the finally reached position after move is performed.
+#             # This is mainly in order to keep the correct position in case the
+#             # move we tried to perform was greater than the maximum possible
+#             # one.
+#             # with self.parent._acq_progress_lock:
+#             self._updatePosition()
 
     def _doMoveRel(self, shift):
         """
         move by the shift 
         """
-        with self.parent._acq_progress_lock:
-            rel = {}
-            for axis, change in shift.items():
-                rel[axis] = change
-            self._stageRel.x, self._stageRel.y = rel.get("x", 0), rel.get("y", 0)
-            self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
+        rel = {}
+        for axis, change in shift.items():
+            rel[axis] = change
+        relMove = rel.get("x", 0), rel.get("y", 0)
+        # Move SEM sample stage
+        self._sem.moveRel({"x":relMove[0], "y":relMove[1]})
+        # Move objective lens
+        self._stage_conv.moveRel({"x":relMove[0], "y":relMove[1]})
 
-            # Obtain the finally reached position after move is performed.
-            # This is mainly in order to keep the correct position in case the
-            # move we tried to perform was greater than the maximum possible
-            # one.
-            # with self.parent._acq_progress_lock:
-            self._updatePosition()
+        self._updatePosition()
 
     @isasync
     def moveRel(self, shift):
