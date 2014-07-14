@@ -30,6 +30,7 @@ from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
+from odemis.gui.comp.overlay.view import HistoryOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -766,6 +767,34 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         #                    time.time() - self._latest)
 
 
+class OverviewCanvas(DblMicroscopeCanvas):
+    """ Canvas for displaying the overview stream
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(OverviewCanvas, self).__init__(*args, **kwargs)
+
+        self.abilities = set()
+        self.background_brush = wx.SOLID
+
+        # This canvas has a special overlay for tracking position history
+        self.history_overlay = HistoryOverlay(self)
+        self.view_overlays.append(self.history_overlay)
+
+    def setView(self, microscope_view, tab_data):
+        super(OverviewCanvas, self).setView(microscope_view, tab_data)
+        # Keep track of old stage positions
+        if tab_data.main.stage:
+            tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
+
+    def on_stage_pos_change(self, p_pos):
+        self.history_overlay.add_location(
+            (p_pos['x'], p_pos['y']),
+            (self.microscope_view.mpp.value * self.ClientSize.x,
+             self.microscope_view.mpp.value * self.ClientSize.y))
+        wx.CallAfter(self.Refresh)
+
+
 class SecomCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
@@ -774,7 +803,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         # TODO: once the StreamTrees can render fully, reactivate the background
         # pattern
         self.background_brush = wx.SOLID
-
 
     # Special version which put the SEM images first, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed

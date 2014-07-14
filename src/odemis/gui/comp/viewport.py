@@ -198,10 +198,11 @@ class OverviewVierport(ViewPort):
     If a chamber state can be tracked,
     """
 
+    canvas_class = miccanvas.OverviewCanvas
+
     def __init__(self, *args, **kwargs):
         super(OverviewVierport, self).__init__(*args, **kwargs)
         #Remove all abilities, because the overview should have none
-        self.canvas.abilities = set()
         self.tab_data = None
 
     def setView(self, microscope_view, tab_data):
