@@ -1059,3 +1059,53 @@ class PointSelectOverlay(ViewOverlay):
 
     def Draw(self, ctx):
         pass
+
+
+class HistoryOverlay(ViewOverlay):
+    """ This overlay displays rectangles on locations that the microscope was previously positioned
+    1at
+
+    """
+
+    def __init__(self, cnvs):
+        super(HistoryOverlay, self).__init__(cnvs)
+
+        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.fade = True  # Fade older positions in the history list
+        self.length = 20  # Number of positions to track
+        self.history = []  # List of (center, size) tuples
+        self.maker_size = 5
+
+    def add_location(self, p_center, p_size=None):
+        """ Add a view location to the history list
+
+        :param p_center: Physical coordinates of the view center
+        :param p_size: Physical size of the the view
+        """
+        # If the 'new' position is identical to the last one in the history, ignore
+        if self.history and p_center == self.history[-1][0]:
+            return
+
+        # If max length reached, remove the oldest
+        if len(self.history) == self.length:
+            self.history.pop(0)
+
+        self.history.append((p_center, p_size))
+
+    def Draw(self, ctx):
+
+        ctx.set_line_width(1)
+        offset = self.cnvs.get_half_view_size()
+        half_size = self.maker_size / 2.0
+
+        for i, (p_topleft, _) in enumerate(self.history):
+            alpha = i * (0.8 / len(self.history)) + 0.2 if self.fade else 1.0
+            v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_topleft), offset)
+            ctx.set_source_rgba(self.colour[0], self.colour[1], self.colour[2], alpha)
+            # Render rectangles of 3 pixels wide
+            ctx.rectangle(int(v_center[0]) - half_size,
+                          int(v_center[1]) - half_size,
+                          self.maker_size,
+                          self.maker_size)
+            ctx.stroke()
+

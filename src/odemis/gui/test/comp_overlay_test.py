@@ -387,6 +387,16 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
+    def test_history_overlay(self):
+        cnvs = miccanvas.SecomCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        hol = vol.HistoryOverlay(cnvs)
+        cnvs.view_overlays.append(hol)
+        cnvs.active_overlay = hol
+
+        test.gui_loop()
+
 
 if __name__ == "__main__":
     unittest.main()
