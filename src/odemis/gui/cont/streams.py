@@ -358,6 +358,10 @@ class StreamController(object):
         else:
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
 
+        # TODO: that works nicely for live tabs, but in analysis tab, this
+        # never happens so the current stream never changes.
+        # => need more ways to change current stream (at least pick one from the
+        # current view?)
         if updated:
             # put it back to the beginning of the list to indicate it's the
             # latest stream used

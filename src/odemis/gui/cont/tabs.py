@@ -223,7 +223,7 @@ class SecomStreamsTab(Tab):
 
         # Order matters!
         # First we create the views, then the streams
-        self._view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
             [
@@ -372,7 +372,7 @@ class SecomStreamsTab(Tab):
 
             self._stream_controller.resumeStreams({opts})
             # focus the view
-            self._view_controller.focusViewWithStream(opts)
+            self.view_controller.focusViewWithStream(opts)
         else:
             self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
 
@@ -390,7 +390,7 @@ class SecomStreamsTab(Tab):
 
             self._stream_controller.resumeStreams({sems})
             # focus the view
-            self._view_controller.focusViewWithStream(sems)
+            self.view_controller.focusViewWithStream(sems)
         else:
             self._stream_controller.pauseStreams(streammod.EM_STREAMS)
 
@@ -511,7 +511,7 @@ class SparcAcquisitionTab(Tab):
         main_data.ebeam.dwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
         # create a view on the tab model
-        self._view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
             [self.main_frame.vp_sparc_acq_view],
@@ -920,7 +920,7 @@ class AnalysisTab(Tab):
 
         # The view controller also has special code for the sparc to create the
         # right type of view.
-        self._view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
             viewports,
@@ -1162,7 +1162,7 @@ class AnalysisTab(Tab):
                 spec_found = True
                 iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
-                for viewport in self._view_controller.viewports:
+                for viewport in self.view_controller.viewports:
                     if hasattr(viewport.canvas, "pixel_overlay"):
                         ol = viewport.canvas.pixel_overlay
 
@@ -1186,7 +1186,7 @@ class AnalysisTab(Tab):
             elif isinstance(strm, streammod.AR_STREAMS):
                 ar_found = True
                 # ... set the PointOverlay values for each viewport
-                for viewport in self._view_controller.viewports:
+                for viewport in self.view_controller.viewports:
                     if hasattr(viewport.canvas, "points_overlay"):
                         ol = viewport.canvas.points_overlay
                         ol.set_point(strm.point)
@@ -1401,7 +1401,7 @@ class LensAlignTab(Tab):
              },
             )
         ])
-        self._view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
             vpv)
@@ -1757,7 +1757,7 @@ class MirrorAlignTab(Tab):
                   # no focus, or could control yaw/pitch?
                  }),
             ])
-            self._view_controller = viewcont.ViewController(
+            self.view_controller = viewcont.ViewController(
                 self.tab_data_model,
                 self.main_frame,
                 vpv
@@ -1772,7 +1772,7 @@ class MirrorAlignTab(Tab):
             self._stream_controller.addStream(goal_stream, visible=False)
             ccd_stream.should_update.value = True
         else:
-            self._view_controller = None
+            self.view_controller = None
             logging.warning("No CCD available for mirror alignment feedback")
 
         # One of the goal of changing the raw/pitch is to optimise the light

@@ -303,7 +303,7 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_auto_cont">
           <label>Auto Brightness/Contrast</label>
-          <accel>F9</accel>
+          <accel>F8</accel>
           <checkable>1</checkable>
           <enabled>0</enabled>
           <XRCED>

@@ -43,6 +43,7 @@ TOOL_LINE = 6 # Select a line
 TOOL_DICHO = 7 # Dichotomy mode to select a sub-quadrant
 TOOL_SPOT = 8 # Select spot mode on the SEM
 TOOL_RO_ANCHOR = 9 # Select the region of the anchor region for drift correction
+TOOL_AUTO_FOCUS = 10 # Run auto focus procedure on the (active) stream
 
 # Two types of tools:
 # * mode: they are toggle buttons, changing the tool mode of the GUIModel
@@ -132,6 +133,7 @@ TOOLS = {TOOL_RO_ZOOM:
                 "btn_view_resize",
                 "Zoom to fit content"
             ),
+         # TODO: AUTO_FOCUS
         }
 
 

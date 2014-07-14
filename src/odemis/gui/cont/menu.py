@@ -96,26 +96,24 @@ class MenuController(object):
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_play_stream.GetId(),
                     self._on_play_stream)
-        # TODO: toggle when tab changes/stream changes/play changes
-        main_frame.menu_item_play_stream.Enable(True)
 
         # View/Auto Brightness/Contrast
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_auto_cont.GetId(),
                     self._on_auto_bc)
-        main_frame.menu_item_auto_cont.Enable(True)
-        # TODO: toggle when tab changes/stream changes/auto_bc changes
 
         # View/Auto Focus
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_auto_focus.GetId(),
                     self._on_auto_focus)
-        # TODO: enable only if focuser is available
-        main_frame.menu_item_auto_focus.Enable(True)
-        main_data.tab.subscribe(self._on_tab_change, init=True)
 
         # TODO: add auto focus to toolbar
-        # TODO: add fit to view (cf toolbar)
+
+        # View/fit to content
+        wx.EVT_MENU(main_frame,
+                    main_frame.menu_item_fit_content.GetId(),
+                    self._on_fit_content)
+        main_data.tab.subscribe(self._on_tab_change, init=True)
 
         # /Help
         gc = odemis.gui.conf.get_general_conf()
@@ -197,7 +195,13 @@ class MenuController(object):
             self._prev_streams.unsubscribe(self._on_current_stream)
         self._prev_streams = tab_data.streams
         tab_data.streams.subscribe(self._on_current_stream, init=True)
+
+        # Handle fit to content
+        fit_enable = hasattr(tab, "view_controller") and tab.view_controller is not None
+        self._main_frame.menu_item_fit_content.Enable(fit_enable)
+
         
+    @call_after
     def _on_current_stream(self, streams):
         """
         Called when some VAs affecting the current stream change
@@ -226,12 +230,20 @@ class MenuController(object):
         if not enable:
             self._main_frame.menu_item_auto_cont.Check(False)
 
-        self._main_frame.menu_item_auto_focus.Enable(pp_enable)
+        # enable only if focuser is available, and no autofocus happening
+        d, e, f = self._get_focus_hw(curr_s)
+        f_enable = all((enable, d, f, self._autofocus_f.done()))
+        self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
         if curr_s:
             curr_s.should_update.subscribe(self._on_stream_update, init=True)
             if hasattr(curr_s, "auto_bc"):
                 curr_s.auto_bc.subscribe(self._on_stream_autobc, init=True)
+
+    def _on_auto_focus_done(self, future):
+        tab = self._main_data.tab.value
+        streams = tab.tab_data_model.streams.value
+        self._on_current_stream(streams)
 
     def _on_stream_update(self, updated):
         """
@@ -261,6 +273,9 @@ class MenuController(object):
         curr_s.should_update.value = not curr_s.should_update.value
 
     def _on_auto_bc(self, evt):
+        """
+        Toggle the AutoBC of the current stream
+        """
         try:
             curr_s = self._get_current_stream()
         except LookupError:
@@ -270,48 +285,62 @@ class MenuController(object):
             # inverse the current status
             curr_s.auto_bc.value = not curr_s.auto_bc.value
 
+    def _on_fit_content(self, evt):
+        """
+        Adjust the MPP of the current view to have the content just fit
+        """
+        tab = self._main_data.tab.value
+        if hasattr(tab, "view_controller") and tab.view_controller is not None:
+            tab.view_controller.fitViewToContent()
+
+    def _get_focus_hw(self, s):
+        """
+        Finds the hardware required to focus a given stream
+        s (Stream)
+        return:
+             (HwComponent) detector
+             (HwComponent) emitter
+             (HwComponent) focus
+        """
+        detector = None
+        emitter = None
+        focus = None
+        # Slightly different depending on the stream type, especially as the
+        # stream doesn't have information on the focus, we need to "guess"
+        if isinstance(s, stream.StaticStream):
+            pass
+        elif isinstance(s, stream.SEMStream):
+            detector = s.detector
+            emitter = s.emitter
+            focus = self._main_data.ebeam_focus
+        elif isinstance(s, stream.CameraStream):
+            detector = s.detector
+            focus = self._main_data.focus
+        # TODO: handle overview stream
+        else:
+            logging.info("Doesn't know how to focus stream %s", type(s).__name__)
+
+        return detector, emitter, focus
+
     def _on_auto_focus(self, evt):
         try:
             curr_s = self._get_current_stream()
         except LookupError:
             return
 
-        # Slightly different depending on the stream type, especially as the
-        # stream doesn't have information on the focus, we need to "guess"
-        if isinstance(curr_s, stream.StaticStream):
-            logging.debug("Will not focus on a static stream")
-            return
-        elif isinstance(curr_s, stream.SEMStream):
-            detector = curr_s.detector
-            emitter = curr_s.emitter
-            focus = self._main_data.ebeam_focus
-        elif isinstance(curr_s, stream.CameraStream):
-            detector = curr_s.detector
-            emitter = None
-            focus = self._main_data.focus
-        # TODO: handle overview stream
-        else:
-            logging.info("Doesn't know how to focus stream %s", type(curr_s).__name__)
-            return
-
+        detector, emitter, focus = self._get_focus_hw(curr_s)
         if focus is None or detector is None:
             logging.debug("Cannot focus stream %s, focus axis unknown", curr_s.name.value)
 
         try:
-            f = align.autofocus.AutoFocus(detector, emitter, focus, 0)
+            self._autofocus_f = align.autofocus.AutoFocus(detector, emitter, focus, 0)
         except Exception:
             logging.exception("Failed to start auto-focus for stream %s",
                               curr_s.name.value)
             return
 
         self._main_frame.menu_item_auto_focus.Enable(False)
-        f.add_done_callback(self._on_auto_focus_done)
-
-        # TODO: make sure autofocus menu stays disable until auto focus is over
-        # (have a common future and check if it's over?)
-
-    def _on_auto_focus_done(self, future):
-        self._main_frame.menu_item_auto_focus.Enable()
+        self._autofocus_f.add_done_callback(self._on_auto_focus_done)
 
     def _on_open(self, evt):
         """

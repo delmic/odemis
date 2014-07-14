@@ -29,7 +29,7 @@ from odemis.acq.stream._live import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, \
-    SPECTRUM_STREAMS, AR_STREAMS, CameraStream
+    SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
 import wx
 
@@ -38,7 +38,6 @@ import odemis.gui.util.widgets as util
 
 class ViewController(object):
     """ Manage the display of various viewports in a tab
-
 
     """
 
@@ -74,7 +73,7 @@ class ViewController(object):
 
         # Add fit view to content to toolbar
         if toolbar:
-            toolbar.add_tool(tools.TOOL_ZOOM_FIT, self._onFitViewToContent)
+            toolbar.add_tool(tools.TOOL_ZOOM_FIT, self.fitViewToContent)
 
         # First view is focused
         tab_data.focussedView.value = tab_data.visible_views.value[0]
@@ -497,7 +496,7 @@ class ViewController(object):
         finally:
             containing_window.Thaw()
 
-    def _onFitViewToContent(self, evt):
+    def fitViewToContent(self, unused=None):
         """
         Adapts the scale (MPP) of the current view to the content
         """
