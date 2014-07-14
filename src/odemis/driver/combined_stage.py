@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Created on 9 Jul 2014
+Created on 9 Aug 2014
 
 @author: Kimon Tsitsikas
 
@@ -67,7 +67,7 @@ class CombinedStage(model.Actuator):
         self._stage_conv = ConvertStage("converter-xy", "align",
                             children={"aligner": self._lens},
                             axes=["a", "b"],
-                            scale=(5, 5), rotation=0, offset=(0, 0))
+                            scale=(1, 1), rotation=0, offset=(0, 0))
 
         rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)

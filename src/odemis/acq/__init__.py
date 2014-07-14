@@ -357,6 +357,7 @@ class ConvertStage(model.Actuator):
         # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
     def _convertPosFromChild(self, pos_child):
+        print "Child2Pos"
         # Object lens position vector
         Q = numpy.transpose([pos_child[0], pos_child[1]])
         # Transform to coordinates in the reference frame of the sample stage
@@ -364,6 +365,7 @@ class ConvertStage(model.Actuator):
         return p.tolist()
 
     def _convertPosToChild(self, pos):
+        print "Pos2Child"
         # Sample stage position vector
         P = numpy.transpose([pos[0], pos[1]])
         # Transform to coordinates in the reference frame of the objective stage
@@ -388,6 +390,8 @@ class ConvertStage(model.Actuator):
         # shift is a vector, conversion is identical to a point
         vshift = [shift.get("x", 0), shift.get("y", 0)]
         vshift_child = self._convertPosToChild(vshift)
+        print "RELMOVEOPT"
+        print vshift_child
 
         shift_child = {self._axes_child["x"]: vshift_child[0],
                        self._axes_child["y"]: vshift_child[1]}
