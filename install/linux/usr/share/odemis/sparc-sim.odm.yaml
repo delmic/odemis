@@ -119,10 +119,11 @@ SimSPARC: {
 }
 
 ARCam: {
-    class: simcam.Camera,
+    class: andorcam2.AndorCam2,
     role: ccd,
     init: {
-       image: "sparc-ar-mirror-align.h5",
+       device: "fake",
+       image: "sparc-ar-mirror-align.h5", # only for simulator
     },
 }
 

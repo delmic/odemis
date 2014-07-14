@@ -23,6 +23,7 @@ from concurrent.futures._base import CancelledError
 import logging
 import numpy
 from odemis import model, acq
+import odemis
 from odemis.util import driver
 import os
 import subprocess
@@ -35,7 +36,9 @@ import odemis.acq.stream as stream
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
+# ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
+# -m doesn't work when run from PyDev... not entirely sure why
+ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(__file__) + "/../../../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
@@ -111,16 +114,18 @@ class SECOMTestCase(unittest.TestCase):
         # create a simple streamTree
         st = stream.StreamTree(streams=[self.streams[0]])
         f = acq.acquire(st.getStreams())
-        data = f.result()
+        data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
 
         thumb = acq.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
 
         # let's do it a second time, "just for fun"
         f = acq.acquire(st.getStreams())
-        data = f.result()
+        data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
 
         thumb = acq.computeThumbnail(st, f)
         self.assertIsInstance(thumb, model.DataArray)
@@ -141,8 +146,9 @@ class SECOMTestCase(unittest.TestCase):
         f = acq.acquire(st.getStreams())
         f.add_update_callback(self.on_progress_update)
 
-        data = f.result()
+        data, e = f.result()
         self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
         self.assertGreaterEqual(self.updates, 3) # at least one update per stream
 
     def test_cancel(self):
@@ -172,7 +178,6 @@ class SECOMTestCase(unittest.TestCase):
         self.assertEqual(self.left, 0)
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
-
 
     def on_done(self, future):
         self.done = True
@@ -250,7 +255,9 @@ class SPARCTestCase(unittest.TestCase):
 
         # SEM/AR settings are via the AR stream
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4) # hopefully always supported
+        mx_brng = self.ccd.binning.range[1]
+        binning = tuple(min(4, mx) for mx in mx_brng) # try binning 4x4
+        self.ccd.binning.value = binning
         self.ccd.exposureTime.value = 1 # s
         ars.repetition.value = (2, 3)
         num_ar = numpy.prod(ars.repetition.value)
@@ -269,10 +276,11 @@ class SPARCTestCase(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        data = f.result()
+        data, e = f.result()
         dur = time.time() - start
         self.assertGreaterEqual(dur, est_time / 2) # Estimated time shouldn't be too small
         self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
         self.assertEqual(len(data), num_ar + 2)
 
         thumb = acq.computeThumbnail(st, f)
@@ -290,5 +298,6 @@ class SPARCTestCase(unittest.TestCase):
         self.past = past
         self.left = left
         self.updates += 1
+
 if __name__ == "__main__":
     unittest.main()

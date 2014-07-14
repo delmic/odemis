@@ -654,12 +654,18 @@ class SparcAcquiController(object):
         """
         st = self._tab_data_model.acquisitionView.stream_tree
         thumb = acq.computeThumbnail(st, acq_future)
-        data = acq_future.result()
+        data, exp = acq_future.result()
+
+        # Handle the case acquisition failed "a bit"
+        if exp:
+            logging.error("Acquisition failed (after %d streams): %s",
+                          len(data), exp)
+
         filename = self.filename.value
         exporter = dataio.get_exporter(self.conf.last_format)
         exporter.export(filename, data, thumb)
         logging.info(u"Acquisition saved as file '%s'.", filename)
-        return data, filename
+        return data, exp, filename
 
     @call_after
     def on_acquisition_done(self, future):
@@ -700,14 +706,15 @@ class SparcAcquiController(object):
         self.gauge_acq.Hide()
 
         try:
-            data, filename = future.result()
+            data, exp, filename = future.result()
         except Exception:
             logging.exception("Saving acquisition failed")
             self._reset_acquisition_gui("Saving acquisition file failed")
             return
 
-        # display in the analysis tab
-        self._show_acquisition(data, open(filename))
+        if exp is None:
+            # display in the analysis tab
+            self._show_acquisition(data, open(filename))
         self._reset_acquisition_gui()
 
 

@@ -41,6 +41,7 @@ from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
 from odemis.acq.stream import EM_STREAMS, OPTICAL_STREAMS
+from sys import exc_info
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -456,7 +457,7 @@ class AcquisitionDialog(xrcfr_acq):
         view.lastUpdate.subscribe(self.on_streams_changed)
 
         try:
-            data = future.result(1) # timeout is just for safety
+            data, exp = future.result(1) # timeout is just for safety
         except CancelledError:
             # put back to original state:
             # re-enable the acquire button
@@ -475,6 +476,11 @@ class AcquisitionDialog(xrcfr_acq):
             # leave the gauge, to give a hint on what went wrong.
             return
 
+        # Handle the case acquisition failed "a bit"
+        if exp:
+            logging.error("Acquisition failed (after %d streams): %s",
+                          len(data), exp)
+
         # save result to file
         self.lbl_acqestimate.SetLabel("Saving file...")
         try:
@@ -491,10 +497,16 @@ class AcquisitionDialog(xrcfr_acq):
             self.lbl_acqestimate.SetLabel("Saving acquisition file failed.")
             return
 
-        self.lbl_acqestimate.SetLabel("Acquisition completed.")
+        if exp:
+            self.lbl_acqestimate.SetLabel("Acquisition failed (partially).")
+        else:
+            self.lbl_acqestimate.SetLabel("Acquisition completed.")
+            # As the action is complete, rename "Cancel" to "Close"
+            self.btn_cancel.SetLabel("Close")
 
-        # We don't allow to acquire anymore => change button name
-        self.btn_cancel.SetLabel("Close")
+        # Make sure the file is not overridden
+        self.filename.value = self._get_default_filename()
+        self.btn_secom_acquire.Enable()
 
 def ShowAcquisitionFileDialog(parent, filename):
     """

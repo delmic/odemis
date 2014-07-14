@@ -147,11 +147,12 @@ class TestOverlayStream(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        data = f.result()
+        data, e = f.result()
         dur = time.time() - start
         self.assertGreater(dur, est_time / 2) # Estimated time shouldn't be too small
 
         self.assertIsInstance(data[0], model.DataArray)
+        self.assertIsNone(e)
         self.assertEqual(len(data), len(streams) - 1)
 
         # No overlay correction metadata anywhere (it has all been merged)

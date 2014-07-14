@@ -63,9 +63,9 @@ def acquire(streams):
     :param streams: [Stream] the streams to acquire
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
-        to receive the result of the task, which is:
-        (list of model.DataArray): the raw acquisition data
-
+        to receive the result of the task, which is a tuple:
+            (list of model.DataArray): the raw acquisition data
+            (Exception or None): exception raised during the acquisition
     """
 
     # create a future
@@ -107,7 +107,7 @@ def computeThumbnail(streamTree, acqTask):
       representing an acquisition task
     returns model.DataArray: the thumbnail with metadata
     """
-    raw_data = acqTask.result() # get all the raw data from the acquisition
+    raw_data, e = acqTask.result() # get all the raw data from the acquisition
 
     # FIXME: need to use the raw images of the acqTask as the source in the
     # streams of the streamTree (instead of whatever is the latest content of
@@ -159,11 +159,6 @@ def _weight_stream(stream):
 
 class AcquisitionTask(object):
 
-    # TODO: needs a better handling of the stream dependencies. Also, features
-    # like drift-compensation, find_overlay might need a special handling.
-    #  * drift-compensation => part of the stream VAs (if available)
-    #  * find_overlay => as a special fake stream that is always scheduled last
-    #    and from which we use the output data to update the other streams metadata?
     def __init__(self, streams, future):
         self._future = future
 
@@ -183,7 +178,13 @@ class AcquisitionTask(object):
     def run(self):
         """
         Runs the acquisition
+        returns:
+            (list of DataArrays): all the raw data acquired
+            (Exception or None): exception raised during the acquisition
+        raise:
+            Exception: if it failed before any result were acquired
         """
+        exp = None
         assert(self._current_stream is None) # Task should be used only once
         expected_time = numpy.sum(self._streamTimes.values())
         # no need to set the start time of the future: it's automatically done
@@ -191,44 +192,52 @@ class AcquisitionTask(object):
         self._future.set_end_time(time.time() + expected_time)
 
         raw_images = {} # stream -> list of raw images
-        for s in self._streams:
-            # Get the future of the acquisition, depending on the Stream type
-            if hasattr(s, "acquire"):
-                f = s.acquire()
-            else: # fall-back to old style stream
-                f = _futures.wrapSimpleStreamIntoFuture(s)
-            self._current_future = f
-            self._current_stream = s
-            self._streams_left.discard(s)
+        try:
+            for s in self._streams:
+                # Get the future of the acquisition, depending on the Stream type
+                if hasattr(s, "acquire"):
+                    f = s.acquire()
+                else: # fall-back to old style stream
+                    f = _futures.wrapSimpleStreamIntoFuture(s)
+                self._current_future = f
+                self._current_stream = s
+                self._streams_left.discard(s)
 
-            # in case acquisition was cancelled, before the future was set
-            if self._cancelled:
-                f.cancel()
-                raise CancelledError()
+                # in case acquisition was cancelled, before the future was set
+                if self._cancelled:
+                    f.cancel()
+                    raise CancelledError()
 
-            # If it's a ProgressiveFuture, listen to the time update
-            try:
-                f.add_update_callback(self._on_progress_update)
-            except AttributeError:
-                pass # not a ProgressiveFuture, fine
+                # If it's a ProgressiveFuture, listen to the time update
+                try:
+                    f.add_update_callback(self._on_progress_update)
+                except AttributeError:
+                    pass # not a ProgressiveFuture, fine
 
-            # Wait for the acquisition to be finished.
-            # Will pass down exceptions, included in case it's cancelled
-            raw_images[s] = f.result()
+                # Wait for the acquisition to be finished.
+                # Will pass down exceptions, included in case it's cancelled
+                raw_images[s] = f.result()
 
-            # update the time left
-            expected_time -= self._streamTimes[s]
-            self._future.set_end_time(time.time() + expected_time)
+                # update the time left
+                expected_time -= self._streamTimes[s]
+                self._future.set_end_time(time.time() + expected_time)
 
-        # TODO: if the stream is OverlayStream, apply the metadata to all the
-        # data from an optical stream. => put the data
-        self._adjust_metadata(raw_images)
+            # TODO: if the stream is OverlayStream, apply the metadata to all the
+            # data from an optical stream. => put the data
+            self._adjust_metadata(raw_images)
 
-        # return all the raw data as one large array
-        ret = []
-        for v in raw_images.values():
-            ret.extend(v)
-        return ret
+        except CancelledError:
+            raise
+        except Exception as e:
+            # If no acquisition yet => just raise the exception,
+            # otherwise, the results we got might already be useful
+            if not raw_images:
+                raise
+            exp = e
+
+        # merge all the raw data (= list of DataArrays) into one long list
+        ret = sum(raw_images.values(), [])
+        return ret, exp
 
     def _adjust_metadata(self, raw_data):
         """
