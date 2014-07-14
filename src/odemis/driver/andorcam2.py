@@ -1083,12 +1083,6 @@ class AndorCam2(model.DigitalCamera):
         self.temperature.notify(self.temperature.value)
         logging.debug("temp is %d", temp)
 
-    def _applyFanSpeed(self, val):
-        """
-        Change the fan speed. Will accommodate to whichever speed is possible.
-        val (0 <= int <= 2): 0 = full, 1 = low, 2 = off
-        """
-
     def _setFanSpeed(self, speed, force=False):
         """
         Change the fan speed. Will accommodate to whichever speed is possible.
