@@ -44,6 +44,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
         self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
         self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
+        self.menu_item_fit_content = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_fit_content"))
         self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
         self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
@@ -292,6 +293,14 @@ def __init_resources():
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+        <object class="wxMenuItem" name="menu_item_fit_content">
+          <label>Zoom to fit content</label>
+          <accel>F7</accel>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <object class="wxMenuItem" name="menu_item_auto_cont">
           <label>Auto Brightness/Contrast</label>
           <accel>F9</accel>
@@ -303,7 +312,7 @@ def __init_resources():
         </object>
         <object class="wxMenuItem" name="menu_item_auto_focus">
           <label>Auto Focus</label>
-          <accel>F10</accel>
+          <accel>F4</accel>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
@@ -354,7 +363,7 @@ def __init_resources():
           </object>
         </object>
         <object class="wxMenuItem" name="menu_item_bugreport">
-          <label>Report a Bug</label>
+          <label>Report a Bug...</label>
           <enabled>0</enabled>
           <XRCED>
             <assign_var>1</assign_var>
