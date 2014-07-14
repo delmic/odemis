@@ -31,7 +31,7 @@ from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.overlay.view import HistoryOverlay
-from odemis.gui.model import MicroscopeView, SEMStream
+from odemis.gui.model import MicroscopeView, SEMStream, LiveViewGUIData
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -952,13 +952,14 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def setView(self, microscope_view, tab_data):
         super(SecomCanvas, self).setView(microscope_view, tab_data)
-        microscope_view.horizontal_field_width.subscribe(self.on_view_em_hfw_change, init=True)
+
+        if isinstance(tab_data, LiveViewGUIData):
+            microscope_view.horizontal_field_width.subscribe(self.on_view_em_hfw_change, init=True)
 
     def on_view_em_hfw_change(self, hfw):
         """ Adjust the SEM horizontal field width when the view HFW changes
 
         """
-
         if self._tab_data_model.emState.value == guimodel.STATE_ON:
             em_streams = self.microscope_view.stream_tree.get_streams_by_type(SEMStream)
 

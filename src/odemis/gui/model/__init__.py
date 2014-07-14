@@ -332,9 +332,13 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         if self.main.ccd:
             self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        else:
+            self.opticalState
 
         if self.main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
+        else:
+            self.emState = None
 
 
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
