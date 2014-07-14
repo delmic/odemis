@@ -27,7 +27,6 @@ import logging
 import numpy
 import threading
 import math
-import bisect
 
 from .calculation import CalculateDrift
 from .dc_region import GuessAnchorRegion
@@ -83,10 +82,11 @@ class AnchoredEstimator(object):
             logging.warning("Anchor region too small %s, will be set to %s",
                             old_res, self._res)
 
-        # Adjust the scale to the anchor region resolution
-        # Assume that a 128x128 resolution already guarantees a good estimation.
-        # Get the ratio of the sizes of our anchor region to a 128x128 image and
-        # adjust the scaling so we always get at least a 128x128 anchor region.
+        # Adjust the scale to the anchor region so the resolution has at the
+        # maximum MAX_PIXELS. This way we guarantee that the pixels density of
+        # the anchor region is enough to calculate the drift and at the same
+        # time to avoid prolonged exposure times that extremely increase the
+        # acquisition time
         ratio = math.sqrt(numpy.prod(self._res) / MAX_PIXELS)
         mns, mxs = scanner.scale.range
         scale = tuple(numpy.clip((ratio, ratio), mns, mxs))
