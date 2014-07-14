@@ -22,6 +22,8 @@ odemis (1.7-1ubuntu1) precise; urgency=low
     * Allow to reset the fine alignment data
     * Handle very large AR polar projections (SPARC)
     * Rotation metadata saved in TIFF and HDF5 format (SECOM)
+    * Ensure the anchor region is never too high resolution (SPARC)
+    * If the acquisition fails, all the images already acquired are saved
 
  -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 14 Jul 2014 15:37:23 +0200
 
