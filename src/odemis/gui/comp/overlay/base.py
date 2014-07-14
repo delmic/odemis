@@ -37,6 +37,7 @@ import cairo
 import wx
 
 import odemis.gui as gui
+import odemis.gui.model as guimodel
 import odemis.util as util
 import odemis.util.conversion as conversion
 
@@ -369,7 +370,6 @@ class SelectionMixin(object):
 
     hover_margin = 10 #px
 
-
     def __init__(self, sel_cur=None, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         # The start and end points of the selection rectangle in view port
         # coordinates
@@ -443,9 +443,7 @@ class SelectionMixin(object):
 
         self.edges = {}
 
-
     ##### END selection methods  #####
-
 
     ##### edit methods  #####
 
@@ -539,7 +537,7 @@ class SelectionMixin(object):
             "i_b": i_b
         }
 
-    def is_hovering(self, vpos):  #pylint: disable=R0911
+    def is_hovering(self, vpos):
         """ Check if the given position is on/near a selection edge or inside
         the selection.
 
@@ -581,6 +579,20 @@ class SelectionMixin(object):
 
     def contains_selection(self):
         return None not in (self.v_start_pos, self.v_end_pos)
+
+    def on_left_down(self, evt):
+        v_pos = evt.GetPositionTuple()
+        hover = self.is_hovering(v_pos)
+
+        # Clicked outside selection
+        if not hover:
+            self.start_selection(v_pos)
+        # Clicked on edge
+        elif hover != gui.HOVER_SELECTION:
+            self.start_edit(v_pos, hover)
+        # Clicked inside selection
+        else:
+            self.start_drag(v_pos)
 
 
 class ViewOverlay(Overlay):  #pylint: disable=R0921

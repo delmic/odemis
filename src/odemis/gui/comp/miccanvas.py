@@ -30,8 +30,8 @@ from odemis import util, model
 from odemis.acq import stream
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
-from odemis.gui.comp.overlay.view import HistoryOverlay
 from odemis.gui.model import MicroscopeView, SEMStream, LiveViewGUIData
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -110,7 +110,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # and use listen to .tool (cf SparcCanvas)
         self.current_mode = None
         # None (all allowed) or a set of guimodel.TOOL_* allowed (rest is treated like NONE)
-        self.allowedModes = None
+        self.allowed_modes = None
 
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
@@ -175,7 +175,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # If required, create a DichotomyOverlay
             if guimodel.TOOL_DICHO in tab_data.tool.choices:
                 self.dicho_overlay = view_overlay.DichotomyOverlay(self,
-                                                     tab_data.dicho_seq)
+                                                                   tab_data.dicho_seq)
                 self.view_overlays.append(self.dicho_overlay)
 
             # If required, create a PixelSelectOverlay
@@ -201,26 +201,23 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
-        # handle crosshair
+        # handle cross hair
         self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
 
         tab_data.main.debug.subscribe(self._onDebug, init=True)
 
         if tab_data.tool:
-            tab_data.tool.subscribe(self._onTool, init=True)
+            tab_data.tool.subscribe(self._on_tool, init=True)
 
-    def _onTool(self, tool):
-        """
-        Called when the tool (mode) of the view changes
-        """
+    def _on_tool(self, tool):
+        """ Set the right mode and active overlay when a tool is selected """
+
         if self._ldragging:
             logging.error("Changing to mode (%s) while dragging not implemented", tool)
-            # TODO: queue it until dragging is finished?
-            # Really? Why? I can't think of a scenario.
 
         # filter the tool mode if needed:
-        if self.allowedModes is not None:
-            if tool not in self.allowedModes:
+        if self.allowed_modes is not None:
+            if tool not in self.allowed_modes:
                 tool = guimodel.TOOL_NONE
 
         # TODO: send a .enable/.disable to overlay when becoming the active one
@@ -240,11 +237,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: create the overlay on the fly, the first time it's requested
         if tool == guimodel.TOOL_ROA:
             self.current_mode = MODE_SPARC_SELECT
-            self.active_overlay = self.roi_overlay
+            self.add_active_overlay(self.roi_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_RO_ANCHOR:
             self.current_mode = tool
-            self.active_overlay = self.anchor_overlay
+            self.add_active_overlay(self.anchor_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_POINT:
             # Enable the Spectrum point select overlay when a spectrum stream
@@ -258,27 +255,26 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                   any([isinstance(s, stream.AR_STREAMS) for s
                        in self._tab_data_model.streams.value])):
                 self.current_mode = MODE_SPARC_PICK
-                self.active_overlay = self.points_overlay
+                self.add_active_overlay(self.points_overlay)
                 self.points_overlay.enable(True)
             # TODO: Filtering by the name SEM CL is not desired. There should be
             # a more intelligent way to query the StreamTree about what's
             # present, like how it's done for Spectrum and AR streams
-            elif (self.pixel_overlay and
-                (st.spectrum_streams or st.get_streams_by_name("SEM CL"))):
+            elif self.pixel_overlay and (st.spectrum_streams or st.get_streams_by_name("SEM CL")):
                 self.current_mode = MODE_SPARC_PICK
-                self.active_overlay = self.pixel_overlay
+                self.add_active_overlay(self.pixel_overlay)
                 self.pixel_overlay.enable(True)
         elif tool == guimodel.TOOL_ROI:
             self.current_mode = MODE_SECOM_UPDATE
-            self.active_overlay = self.update_overlay
+            self.add_active_overlay(self.update_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_ZOOM:
             self.current_mode = MODE_SECOM_ZOOM
-            self.active_overlay = self.zoom_overlay
+            self.add_active_overlay(self.zoom_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_DICHO:
             self.current_mode = MODE_SECOM_DICHO
-            self.active_overlay = self.dicho_overlay
+            self.add_active_overlay(self.dicho_overlay)
             #FIXME: cursor handled by .enable()
             # self.cursor = wx.StockCursor(wx.CURSOR_HAND)
             self.dicho_overlay.enable(True)
@@ -292,7 +288,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.microscope_view.show_crosshair.value = False
         elif tool == guimodel.TOOL_NONE:
             self.current_mode = None
-            self.active_overlay = None
+            self.clear_active_overlays()
             self.cursor = wx.STANDARD_CURSOR
             self.request_drawing_update()
         else:
@@ -792,9 +788,16 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.abilities = set()
         self.background_brush = wx.SOLID
 
+        # Point select overlay for stage navigation
+        self.point_select_overlay = PointSelectOverlay(self)
+        self.view_overlays.append(self.point_select_overlay)
+
         # This canvas has a special overlay for tracking position history
         self.history_overlay = HistoryOverlay(self)
         self.view_overlays.append(self.history_overlay)
+
+        self.add_active_overlay(self.history_overlay)
+        self.add_active_overlay(self.point_select_overlay)
 
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
@@ -857,73 +860,65 @@ class SecomCanvas(DblMicroscopeCanvas):
 
         return images
 
-    def on_left_down(self, event):
-        # TODO: move this to the overlay
-        # If one of the Secom tools is activated...
-        if self.current_mode in SECOM_MODES:
-            vpos = event.GetPositionTuple()
-            hover = self.active_overlay.is_hovering(vpos)
+    def on_left_down(self, evt):
 
-            # Clicked outside selection
-            if not hover:
-                self._ldragging = True
-                self.active_overlay.start_selection(vpos)
-                pub.sendMessage('secom.canvas.zoom.start', canvas=self)
-                if not self.HasCapture():
-                    self.CaptureMouse()
-            # Clicked on edge
-            elif hover != gui.HOVER_SELECTION:
-                self._ldragging = True
-                self.active_overlay.start_edit(vpos, hover)
-                if not self.HasCapture():
-                    self.CaptureMouse()
-            # Clicked inside selection
-            elif self.current_mode == MODE_SECOM_ZOOM:
-                self._ldragging = True
-                self.active_overlay.start_drag(vpos)
-                if not self.HasCapture():
-                    self.CaptureMouse()
+        if self.current_mode in SECOM_MODES:  # SECOM specific dragging
+
+            super(SecomCanvas, self).on_left_down(evt)
+
+            self._ldragging = True
+            pub.sendMessage('secom.canvas.zoom.start', canvas=self)
+            if not self.HasCapture():
+                self.CaptureMouse()
 
             self.request_drawing_update()
 
-        else:
-            super(SecomCanvas, self).on_left_down(event)
+        else:  # Canvas dragging
+            super(SecomCanvas, self).on_left_down(evt)
+
+<<<<<<< HEAD
+    def on_left_up(self, event):
+||||||| merged common ancestors
 
     def on_left_up(self, event):
+=======
+    def on_left_up(self, evt):
+
+>>>>>>> Active overlay refactor wip
         if self.current_mode in SECOM_MODES:
             if self._ldragging:
                 self._ldragging = False
-                # Stop selection, edit, or drag
-                self.active_overlay.stop_selection()
+
+                super(SecomCanvas, self).on_left_up(evt)
+
                 if self.HasCapture():
                     self.ReleaseMouse()
             else:
                 # TODO: Put actual zoom function here
-                self.active_overlay.clear_selection()
+                self.active_overlays.clear_selection()
                 pub.sendMessage('secom.canvas.zoom.end')
 
             self.request_drawing_update()
         else:
-            super(SecomCanvas, self).on_left_up(event)
+            super(SecomCanvas, self).on_left_up(evt)
 
     def on_motion(self, event):
-        if self.current_mode in SECOM_MODES and self.active_overlay:
+        if self.current_mode in SECOM_MODES and self.active_overlays:
             vpos = event.GetPositionTuple()
 
             # TODO: Make a better, more natural between the different kinds
             # of dragging (edge vs whole selection)
             if self._ldragging:
-                if self.active_overlay.dragging:
-                    self.active_overlay.update_selection(vpos)
+                if self.active_overlays.dragging:
+                    self.active_overlays.update_selection(vpos)
                 else:
-                    if self.active_overlay.edit_edge:
-                        self.active_overlay.update_edit(vpos)
+                    if self.active_overlays.edit_edge:
+                        self.active_overlays.update_edit(vpos)
                     else:
-                        self.active_overlay.update_drag(vpos)
+                        self.active_overlays.update_drag(vpos)
                 self.request_drawing_update()
-                #self.draw(wx.PaintDC(self))
             else:
-                hover = self.active_overlay.is_hovering(vpos)
+                hover = self.active_overlays.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW)) # A closed hand!
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
@@ -950,6 +945,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).on_right_up(event)
 
+<<<<<<< HEAD
     def setView(self, microscope_view, tab_data):
         super(SecomCanvas, self).setView(microscope_view, tab_data)
 
@@ -975,6 +971,10 @@ class SecomCanvas(DblMicroscopeCanvas):
                             view.horizontal_field_width.value = hfw
                     break
 
+||||||| merged common ancestors
+=======
+
+>>>>>>> Active overlay refactor wip
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
@@ -990,7 +990,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                                             "Anchor region for drift correction",
                                             colour=gui.SELECTION_COLOUR_2ND)
         self.world_overlays.append(self.anchor_overlay)
-
 
     def setView(self, microscope_view, tab_data):
         """
@@ -1047,24 +1046,25 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # turn if activated by a pubsub event
         if self.current_mode in SPARC_MODES:
             vpos = event.GetPositionTuple()
-            hover = self.active_overlay.is_hovering(vpos)
+
+            hover = self.active_overlays.is_hovering(vpos)
 
             # Clicked outside selection
             if not hover:
                 self._ldragging = True
-                self.active_overlay.start_selection(vpos)
+                self.active_overlays.start_selection(vpos)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked on edge
             elif hover != gui.HOVER_SELECTION:
                 self._ldragging = True
-                self.active_overlay.start_edit(vpos, hover)
+                self.active_overlays.start_edit(vpos, hover)
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked inside selection
             elif self.current_mode in [MODE_SPARC_SELECT, guimodel.TOOL_RO_ANCHOR]:
                 self._ldragging = True
-                self.active_overlay.start_drag(vpos)
+                self.active_overlays.start_drag(vpos)
                 if not self.HasCapture():
                     self.CaptureMouse()
             self.request_drawing_update()
@@ -1077,7 +1077,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             if self._ldragging:
                 self._ldragging = False
                 # Stop both selection and edit
-                self.active_overlay.stop_selection()
+                self.active_overlays.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
                 if self.current_mode == MODE_SPARC_SELECT:
@@ -1085,7 +1085,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
                     self._updateDCRegion()
             else:
-                # TODO: set the rect of the active_overlay to None, then do the
+                # TODO: set the rect of the active_overlays to None, then do the
                 # normal _update*. This would avoid redundancy
                 # Simple click => delete ROI
                 if self.current_mode == MODE_SPARC_SELECT:
@@ -1099,22 +1099,22 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             super(SparcAcquiCanvas, self).on_left_up(event)
 
     def on_motion(self, event):
-        if self.current_mode in SPARC_MODES and self.active_overlay:
+        if self.current_mode in SPARC_MODES and self.active_overlays:
             vpos = event.GetPositionTuple()
 
             if self._ldragging:
-                if self.active_overlay.dragging:
-                    self.active_overlay.update_selection(vpos)
+                if self.active_overlays.dragging:
+                    self.active_overlays.update_selection(vpos)
                 else:
-                    if self.active_overlay.edit_edge:
-                        self.active_overlay.update_edit(vpos)
+                    if self.active_overlays.edit_edge:
+                        self.active_overlays.update_edit(vpos)
                     else:
-                        self.active_overlay.update_drag(vpos)
+                        self.active_overlays.update_drag(vpos)
                 self.request_drawing_update()
                 #self.draw(wx.PaintDC(self))
 
             else:
-                hover = self.active_overlay.is_hovering(vpos)
+                hover = self.active_overlays.is_hovering(vpos)
                 if hover == gui.HOVER_SELECTION:
                     self.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW)) # A closed hand!
                 elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
@@ -1414,7 +1414,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
                                                 self,
                                                 orientation=3)
         self.add_overlay(self.markline_overlay)
-        self.active_overlay = self.markline_overlay
+        self.add_active_overlay(self.markline_overlay)
 
     def set_data(self, data,
                  unit_x=None, unit_y=None, range_x=None, range_y=None):
@@ -1537,7 +1537,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self.polar_overlay = view_overlay.PolarOverlay(self)
         self.polar_overlay.canvas_padding = 10
         self.view_overlays.append(self.polar_overlay)
-        self.active_overlay = self.polar_overlay
+        self.add_active_overlay(self.polar_overlay)
 
     # Event handlers
 

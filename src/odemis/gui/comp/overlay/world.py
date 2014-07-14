@@ -96,7 +96,6 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         SelectionMixin.stop_drag(self)
         self._calc_world_pos()
 
-
     # Selection clearing
 
     def clear_selection(self):
@@ -208,6 +207,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 FILL_NONE = 0
 FILL_GRID = 1
 FILL_POINT = 2
+
 
 class RepetitionSelectOverlay(WorldSelectOverlay):
     """
