@@ -122,7 +122,7 @@ class ChamberButtonController(HardwareButtonController):
     def _determine_button_faces(self, role):
         """ Determine what button faces to use depending on values found in main_data """
 
-        if role == "secommini":
+        if role == "delphi":
             return {
                 'normal': {
                     'normal': imgdata.btn_eject.Bitmap,
@@ -160,7 +160,7 @@ class ChamberButtonController(HardwareButtonController):
             }
 
     def _determine_tooltip(self, role):
-        if role == "secommini":
+        if role == "delphi":
             return {
                 CHAMBER_PUMPING: "Loading...",
                 CHAMBER_VENTING: "Ejecting...",
@@ -255,7 +255,7 @@ class SecomStateController(MicroscopeStateController):
         self._acq_btn = getattr(main_frame, btn_prefix + "opt")
 
         # The classes of streams that are affected by the chamber
-        if tab_data.main.role == "secommini":
+        if tab_data.main.role == "delphi":
             self._cls_streams_involved = stream.Stream
         else: # SECOM => only SEM as optical might be used even vented
             self._cls_streams_involved = stream.EM_STREAMS
@@ -385,8 +385,8 @@ class SecomStateController(MicroscopeStateController):
             self._sem_btn.Enable(False)
             self._sem_btn.SetToolTipString("Chamber must be under vacuum to activate the SEM")
 
-            # Disable Optical button (if SECOMmini)
-            if self._main_data.role == "secommini":
+            # Disable Optical button (if DELPHI)
+            if self._main_data.role == "delphi":
                 if hasattr(self._main_data, "opticalState"):
                     self._main_data.opticalState = STATE_OFF
                 self._opt_btn.Enable(False)

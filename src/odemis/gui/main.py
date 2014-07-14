@@ -131,7 +131,7 @@ class OdemisGUIApp(wx.App):
 
             tab_defs = [
                 (
-                    ("secom", "secommini", "sem", "optical"),
+                    ("secom", "delphi", "sem", "optical"),
                     ("STREAMS", "STREAMS", "STREAMS", "STREAMS"),
                     "secom_live",
                     tabs.SecomStreamsTab,
@@ -163,7 +163,7 @@ class OdemisGUIApp(wx.App):
                     self.main_frame.pnl_tab_sparc_acqui
                 ),
                 (
-                    (None, "secom", "secommini", "sem", "optical", "sparc"),
+                    (None, "secom", "delphi", "sem", "optical", "sparc"),
                     ("GALLERY", "GALLERY", "GALLERY", "GALLERY", "GALLERY", "ANALYSIS"),
                     "analysis",
                     tabs.AnalysisTab,

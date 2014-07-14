@@ -1,6 +1,6 @@
-SECOMmini: {
+DELPHI: {
     class: Microscope,
-    role: secommini,
+    role: delphi,
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "SED Phenom", "NavCam"],
     actuators: ["Stage", "Optical stage", "Optical focus",

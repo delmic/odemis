@@ -229,7 +229,7 @@ class ViewController(object):
                                  }
                 i += 1
 
-        # If both SEM and Optical are present (= SECOM & SECOMMINI)
+        # If both SEM and Optical are present (= SECOM & DELPHI)
         # If 5 viewports are present, the last will be considered to be an overview
         elif (
                 self._main_data_model.ebeam and
