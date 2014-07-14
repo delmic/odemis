@@ -86,7 +86,7 @@ class AnchoredEstimator(object):
         # maximum MAX_PIXELS. This way we guarantee that the pixels density of
         # the anchor region is enough to calculate the drift and at the same
         # time to avoid prolonged exposure times that extremely increase the
-        # acquisition time
+        # acquisition time.
         ratio = math.sqrt(numpy.prod(self._res) / MAX_PIXELS)
         mns, mxs = scanner.scale.range
         scale = tuple(numpy.clip((ratio, ratio), mns, mxs))
