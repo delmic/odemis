@@ -26,12 +26,15 @@ import itertools
 import logging
 import numpy
 import threading
+import math
+import bisect
 
 from .calculation import CalculateDrift
 from .dc_region import GuessAnchorRegion
 
 
 MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
+MAX_PIXELS = 128 ** 2 # px 
 
 class AnchoredEstimator(object):
     """
@@ -53,7 +56,6 @@ class AnchoredEstimator(object):
         self._emitter = scanner
         self._semd = detector
         self._dwell_time = dwell_time
-        self._scale = (1, 1) # TODO: allow the user to select different scale
         self.orig_drift = (0, 0)
         self.max_drift = (0, 0)
         self.raw = [] # all the anchor areas acquired (in order)
@@ -80,6 +82,16 @@ class AnchoredEstimator(object):
             self._res = tuple(max(a, b) for a, b in zip(self._res, MIN_RESOLUTION))
             logging.warning("Anchor region too small %s, will be set to %s",
                             old_res, self._res)
+
+        # Adjust the scale to the anchor region resolution
+        # Assume that a 128x128 resolution already guarantees a good estimation.
+        # Get the ratio of the sizes of our anchor region to a 128x128 image and
+        # adjust the scaling so we always get at least a 128x128 anchor region.
+        ratio = math.sqrt(numpy.prod(self._res) / MAX_PIXELS)
+        mns, mxs = scanner.scale.range
+        scale = tuple(numpy.clip((ratio, ratio), mns, mxs))
+        self._scale = scale
+        logging.warning("Anchor region scale set to %s", self._scale)
 
         self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = self._safety_bounds[0] + (max(self._res[0],
