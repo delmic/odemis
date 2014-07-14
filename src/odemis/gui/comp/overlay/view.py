@@ -1076,6 +1076,8 @@ class HistoryOverlay(ViewOverlay):
         self.history = []  # List of (center, size) tuples
         self.maker_size = 5
 
+        self.mouse_over = False
+
     def add_location(self, p_center, p_size=None):
         """ Add a view location to the history list
 
@@ -1092,15 +1094,30 @@ class HistoryOverlay(ViewOverlay):
 
         self.history.append((p_center, p_size))
 
+    def on_enter(self, evt):
+        super(HistoryOverlay, self).on_enter(evt)
+        self.mouse_over = True
+        self.cnvs.Refresh()
+
+    def on_leave(self, evt):
+        super(HistoryOverlay, self).on_leave(evt)
+        self.mouse_over = False
+        self.cnvs.Refresh()
+
     def Draw(self, ctx):
 
         ctx.set_line_width(1)
         offset = self.cnvs.get_half_view_size()
         half_size = self.maker_size / 2.0
 
-        for i, (p_topleft, _) in enumerate(self.history):
-            alpha = i * (0.8 / len(self.history)) + 0.2 if self.fade else 1.0
-            v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_topleft), offset)
+        if self.mouse_over and self.history:
+            history = self.history[-1:]
+        else:
+            history = self.history
+
+        for i, (p_center, _) in enumerate(history):
+            alpha = i * (0.8 / len(history)) + 0.2 if self.fade else 1.0
+            v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
             ctx.set_source_rgba(self.colour[0], self.colour[1], self.colour[2], alpha)
             # Render rectangles of 3 pixels wide
             ctx.rectangle(int(v_center[0]) - half_size,

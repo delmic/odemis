@@ -166,9 +166,7 @@ CAN_ZOOM = 4    # Can adjust scale
 
 @decorator
 def ignore_if_disabled(f, self, *args, **kwargs):
-    """
-    Prevent the given method from executing if the instance is 'disabled'
-    """
+    """ Prevent the given method from executing if the instance is 'disabled' """
     if self.Enabled:
         return f(self, *args, **kwargs)
 
@@ -195,9 +193,8 @@ class BufferedCanvas(wx.Panel):
         self.world_overlays = []
         # Graphical overlays that display in an absolute position
         self.view_overlays = []
-        # The overlay which will receive mouse and keyboard events
-        # TODO: Make this into a list, so multiple overlays can receive events?
-        self.active_overlay = None
+        # The overlay(s) which will receive mouse and keyboard events
+        self.active_overlays = []
 
         # Set default background colour
         self.SetBackgroundColour(wx.BLACK)
@@ -256,6 +253,47 @@ class BufferedCanvas(wx.Panel):
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
         self.background_img = imgdata.getcanvasbgBitmap()
+
+    ############ Overlay Management ###########
+
+    # View overlays
+
+    def add_view_overlay(self, overlay):
+        if overlay not in self.view_overlays:
+            self.view_overlays.append(overlay)
+
+    def remove_view_overlay(self, overlay):
+        if overlay in self.view_overlays:
+            self.view_overlays.remove(overlay)
+
+    def clear_view_overlays(self):
+        self.view_overlays = []
+
+    # World overlays
+
+    def add_world_overlay(self, overlay):
+        if overlay not in self.world_overlays:
+            self.world_overlays.append(overlay)
+
+    def remove_world_overlay(self, overlay):
+        if overlay in self.world_overlays:
+            self.world_overlays.remove(overlay)
+
+    def clear_world_overlays(self):
+        self.world_overlays = []
+
+    # Active overlays
+
+    def add_active_overlay(self, overlay):
+        if overlay not in self.active_overlays:
+            self.active_overlays.append(overlay)
+
+    def remove_active_overlay(self, overlay):
+        if overlay in self.active_overlays:
+            self.active_overlays.remove(overlay)
+
+    def clear_active_overlays(self):
+        self.active_overlays = []
 
     ############ Event Handlers ############
 
@@ -385,12 +423,8 @@ class BufferedCanvas(wx.Panel):
 
     def _pass_event_to_active_overlay(self, evt_name, evt):
         """ Call an event handler with name 'evt_name' on the active overlay """
-        if self.active_overlay:
-            if isinstance(self.active_overlay, collections.Iterable):
-                for ol in self.active_overlay:
-                    getattr(ol, evt_name)(evt)
-            else:
-                getattr(self.active_overlay, evt_name)(evt)
+        for ol in self.active_overlays:
+            getattr(ol, evt_name)(evt)
 
     def _pass_event_to_all_overlays(self, evt_name, evt):
         """ Call an event handler with name 'evt_name' on all the overlays """
@@ -1148,12 +1182,11 @@ class DraggableCanvas(BitmapCanvas):
 
     # END Properties
 
-
     # Event processing
 
     def on_left_down(self, evt): #pylint: disable=W0221
         """ Start a dragging procedure """
-        # Ignore the click if we're aleady dragging
+        # Ignore the click if we're already dragging
         if CAN_DRAG in self.abilities and not self._rdragging:
             cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
 

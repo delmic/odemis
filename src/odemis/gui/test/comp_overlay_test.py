@@ -58,7 +58,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         ol = vol.TextViewOverlay(cnvs)
-        cnvs.view_overlays.append(ol)
+        cnvs.add_view_overlay(ol)
 
         for f in (False, True):
             msg = "TextViewOverlay sizes test {} flip"
@@ -79,7 +79,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         ol = vol.TextViewOverlay(cnvs)
-        cnvs.view_overlays.append(ol)
+        cnvs.add_view_overlay(ol)
 
         ol.add_label("TextViewOverlay left",
                      pos=(ol.view_width / 2, 10),
@@ -165,7 +165,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         ol = vol.TextViewOverlay(cnvs)
         ol.canvas_padding = 0
-        cnvs.view_overlays.append(ol)
+        cnvs.add_view_overlay(ol)
 
         # Text should exactly overlap
 
@@ -250,8 +250,8 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Manually add the overlay
         pol = wol.PointsOverlay(cnvs)
-        cnvs.world_overlays.append(pol)
-        cnvs.active_overlay = pol
+        cnvs.add_world_overlay(pol)
+        cnvs.add_active_overlay(pol)
 
         cnvs.current_mode = gmodel.TOOL_POINT
         pol.enable(True)
@@ -291,8 +291,8 @@ class OverlayTestCase(test.GuiTestCase):
 
         psol = wol.PixelSelectOverlay(cnvs)
         psol.enabled = True
-        cnvs.world_overlays.append(psol)
-        cnvs.active_overlay = psol
+        cnvs.add_world_overlay(psol)
+        cnvs.add_active_overlay(psol)
 
         # psol.set_values(33, (0.0, 0.0), (30, 30))
         psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
@@ -309,8 +309,8 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         vsol = vol.ViewSelectOverlay(cnvs, "test view selection")
-        cnvs.view_overlays.append(vsol)
-        cnvs.active_overlay = vsol
+        cnvs.add_view_overlay(vsol)
+        cnvs.add_active_overlay(vsol)
         cnvs.current_mode = miccanvas.MODE_SECOM_ZOOM
         test.gui_loop()
 
@@ -325,8 +325,8 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         rsol = wol.RepetitionSelectOverlay(cnvs)
-        cnvs.world_overlays.append(rsol)
-        cnvs.active_overlay = rsol
+        cnvs.add_world_overlay(rsol)
+        cnvs.add_active_overlay(rsol)
         cnvs.current_mode = gmodel.TOOL_ROA
 
         test.gui_loop()
@@ -367,8 +367,8 @@ class OverlayTestCase(test.GuiTestCase):
         lva = omodel.ListVA()
 
         dol = vol.DichotomyOverlay(cnvs, lva)
-        cnvs.view_overlays.append(dol)
-        cnvs.active_overlay = dol
+        cnvs.add_view_overlay(dol)
+        cnvs.add_active_overlay(dol)
 
         dol.sequence_va.subscribe(do_stuff, init=True)
         dol.enable()
@@ -383,7 +383,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         sol = vol.SpotModeOverlay(cnvs)
-        cnvs.view_overlays.append(sol)
+        cnvs.add_view_overlay(sol)
 
         test.gui_loop()
 
@@ -392,8 +392,8 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         hol = vol.HistoryOverlay(cnvs)
-        cnvs.view_overlays.append(hol)
-        cnvs.active_overlay = hol
+        cnvs.add_view_overlay(hol)
+        cnvs.add_active_overlay(hol)
 
         test.gui_loop()
 

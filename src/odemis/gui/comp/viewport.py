@@ -221,11 +221,9 @@ class OverviewVierport(ViewPort):
         """ Watch position changes in the PointSelectOverlay if the chamber is ready """
 
         if chamber_state == CHAMBER_VACUUM:
-            self.canvas.active_overlay = PointSelectOverlay(self.canvas)
-            self.canvas.active_overlay.p_pos.subscribe(self._on_position_select)
-        elif self.canvas.active_overlay:
-            self.canvas.active_overlay.p_pos.unsubscribe(self._on_position_select)
-            self.canvas.active_overlay = None
+            self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
+        elif self.canvas.active_overlays:
+            self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
 
     def _on_position_select(self, p_pos):
         """ Set the physical view position """
