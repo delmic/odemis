@@ -190,11 +190,14 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
 
         logging.debug("Overlay done.")
         return ret, transform_data
+    except CancelledError:
+        pass
     except Exception as exp:
         logging.debug("Finding overlay failed", exc_info=1)
         raise exp
     finally:
         with future._overlay_lock:
+            future._done.set()
             if future._find_overlay_state == CANCELLED:
                 raise CancelledError()
             future._find_overlay_state = FINISHED
@@ -212,6 +215,8 @@ def _CancelFindOverlay(future):
         future._scanner.CancelAcquisition()
         logging.debug("Overlay cancelled.")
 
+    # Do not return until we are really done (modulo 10 seconds timeout)
+    future._done.wait(10)
     return True
 
 def _computeGridRatio(coord, shape):

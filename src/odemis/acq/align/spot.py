@@ -76,7 +76,6 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
 
     logging.debug("Starting Spot alignment...")
     try:
-        future._done.clear()
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
 
@@ -191,9 +190,9 @@ def _CancelAlignSpot(future):
         future._autofocusf.cancel()
         future._centerspotf.cancel()
         logging.debug("Spot alignment cancelled.")
-    future._done.wait(10)  # Do not return until we are really done
-                            # 10 seconds timeout
 
+    # Do not return until we are really done (modulo 10 seconds timeout)
+    future._done.wait(10)
     return True
 
 

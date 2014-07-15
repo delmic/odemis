@@ -58,10 +58,11 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateOverlayTime(dwell_time, repetitions))
     f._find_overlay_state = RUNNING
-    f._overlay_lock = threading.Lock()
 
     # Task to run
     f.task_canceller = _CancelFindOverlay
+    f._overlay_lock = threading.Lock()
+    f._done = threading.Event()
 
     # Create scanner for scan grid
     f._scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
@@ -96,7 +97,6 @@ def AlignSpot(ccd, stage, escan, focus):
     # Task to run
     f.task_canceller = _CancelAlignSpot
     f._alignment_lock = threading.Lock()
-    #Do not return from cancel() until future is done
     f._done = threading.Event()
 
     # Create autofocus and centerspot module
