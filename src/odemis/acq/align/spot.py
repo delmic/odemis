@@ -173,10 +173,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         escan.scale.value = init_scale
         escan.resolution.value = init_eres
         with future._alignment_lock:
+            future._done.set()
             if future._spot_alignment_state == CANCELLED:
                 raise CancelledError()
             future._spot_alignment_state = FINISHED
-            future._done.set()
 
 def _CancelAlignSpot(future):
     """
