@@ -47,20 +47,8 @@ import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 
-
-# Various modes canvas elements can go into.
-# TODO: directly use the TOOL_* values
-MODE_SECOM_ZOOM = guimodel.TOOL_ZOOM
-MODE_SECOM_UPDATE = guimodel.TOOL_ROI
-MODE_SECOM_DICHO = guimodel.TOOL_DICHO
-
-SECOM_MODES = (MODE_SECOM_ZOOM, MODE_SECOM_UPDATE)
-
-MODE_SPARC_SELECT = guimodel.TOOL_ROA
-MODE_SPARC_PICK = guimodel.TOOL_POINT
-
-SPARC_MODES = (MODE_SPARC_SELECT, MODE_SPARC_PICK, guimodel.TOOL_RO_ANCHOR)
-
+SECOM_MODES = (guimodel.TOOL_ZOOM, guimodel.TOOL_ROI)
+SPARC_MODES = (guimodel.TOOL_ROA, guimodel.TOOL_POINT, guimodel.TOOL_RO_ANCHOR)
 
 
 @decorator
@@ -69,6 +57,7 @@ def microscope_view_check(f, self, *args, **kwargs):
     """
     if self.microscope_view:
         return f(self, *args, **kwargs)
+
 
 # Note: a Canvas with a fit_view_to_content method indicates that the view
 # can be adapted. (Some other components of the GUI will use this information)
@@ -221,7 +210,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 tool = guimodel.TOOL_NONE
 
         # TODO: send a .enable/.disable to overlay when becoming the active one
-        if self.current_mode == MODE_SECOM_DICHO:
+        if self.current_mode == guimodel.TOOL_DICHO:
             self.dicho_overlay.enable(False)
             self.abilities.add(canvas.CAN_DRAG)
         elif self.current_mode == guimodel.TOOL_SPOT:
@@ -236,7 +225,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # TODO: one mode <-> one overlay (type)
         # TODO: create the overlay on the fly, the first time it's requested
         if tool == guimodel.TOOL_ROA:
-            self.current_mode = MODE_SPARC_SELECT
+            self.current_mode = guimodel.TOOL_ROA
             self.add_active_overlay(self.roi_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_RO_ANCHOR:
@@ -254,26 +243,26 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                   len(self.microscope_view.stream_tree) and
                   any([isinstance(s, stream.AR_STREAMS) for s
                        in self._tab_data_model.streams.value])):
-                self.current_mode = MODE_SPARC_PICK
+                self.current_mode = guimodel.TOOL_POINT
                 self.add_active_overlay(self.points_overlay)
                 self.points_overlay.enable(True)
             # TODO: Filtering by the name SEM CL is not desired. There should be
             # a more intelligent way to query the StreamTree about what's
             # present, like how it's done for Spectrum and AR streams
             elif self.pixel_overlay and (st.spectrum_streams or st.get_streams_by_name("SEM CL")):
-                self.current_mode = MODE_SPARC_PICK
+                self.current_mode = guimodel.TOOL_POINT
                 self.add_active_overlay(self.pixel_overlay)
                 self.pixel_overlay.enable(True)
         elif tool == guimodel.TOOL_ROI:
-            self.current_mode = MODE_SECOM_UPDATE
+            self.current_mode = guimodel.TOOL_ROI
             self.add_active_overlay(self.update_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_ZOOM:
-            self.current_mode = MODE_SECOM_ZOOM
+            self.current_mode = guimodel.TOOL_ZOOM
             self.add_active_overlay(self.zoom_overlay)
             self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
         elif tool == guimodel.TOOL_DICHO:
-            self.current_mode = MODE_SECOM_DICHO
+            self.current_mode = guimodel.TOOL_DICHO
             self.add_active_overlay(self.dicho_overlay)
             #FIXME: cursor handled by .enable()
             # self.cursor = wx.StockCursor(wx.CURSOR_HAND)
@@ -1048,7 +1037,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 if not self.HasCapture():
                     self.CaptureMouse()
             # Clicked inside selection
-            elif self.current_mode in [MODE_SPARC_SELECT, guimodel.TOOL_RO_ANCHOR]:
+            elif self.current_mode in [guimodel.TOOL_ROA, guimodel.TOOL_RO_ANCHOR]:
                 self._ldragging = True
                 self.active_overlays.start_drag(vpos)
                 if not self.HasCapture():
@@ -1066,7 +1055,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 self.active_overlays.stop_selection()
                 if self.HasCapture():
                     self.ReleaseMouse()
-                if self.current_mode == MODE_SPARC_SELECT:
+                if self.current_mode == guimodel.TOOL_ROA:
                     self._updateROA()
                 elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
                     self._updateDCRegion()
@@ -1074,7 +1063,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                 # TODO: set the rect of the active_overlays to None, then do the
                 # normal _update*. This would avoid redundancy
                 # Simple click => delete ROI
-                if self.current_mode == MODE_SPARC_SELECT:
+                if self.current_mode == guimodel.TOOL_ROA:
                     if self._roa:
                         self._roa.value = UNDEFINED_ROI
                 elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
