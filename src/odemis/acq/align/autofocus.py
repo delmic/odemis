@@ -120,6 +120,8 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                 if sign == 1:
                     factor += 1
                 new_step += factor * step
+                if future._autofocus_state == CANCELLED:
+                    raise CancelledError()
                 if rng[0] <= cur_pos <= rng[1]:
                     pos = focus.position.value.get('z')
                     shift = cur_pos - pos
