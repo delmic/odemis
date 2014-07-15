@@ -142,11 +142,12 @@ class SEMStream(Stream):
 
         return roi
 
-    def _onSpot(self, active):
-        if active:
-            self._startSpot()
-        else:
-            self._stopSpot()
+    def _onSpot(self, spot):
+        if self.is_active.value:
+            if spot:
+                self._startSpot()
+            else:
+                self._stopSpot()
 
     def _startSpot(self):
         """
@@ -163,6 +164,7 @@ class SEMStream(Stream):
         self._no_spot_settings = (self._emitter.dwellTime.value,
                                   self._emitter.resolution.value,
                                   self._emitter.translation.value)
+        logging.debug("Previous values : %s", self._no_spot_settings)
 
         # resolution -> translation: order matters
         self._emitter.resolution.value = (1, 1)
@@ -187,6 +189,7 @@ class SEMStream(Stream):
         self._dataflow.unsubscribe(self.onNewImage)
 
         logging.debug("Disabling spot mode")
+        logging.debug("Restoring values : %s", self._no_spot_settings)
 
         (self._emitter.dwellTime.value,
          self._emitter.resolution.value,
