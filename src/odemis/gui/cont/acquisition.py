@@ -36,11 +36,9 @@ import math
 from odemis import model, dataio, acq
 from odemis.acq import align
 from odemis.acq.stream import UNDEFINED_ROI
-from odemis.dataio import get_available_formats
 from odemis.gui import conf, acqmng
 from odemis.gui.acqmng import preset_as_is
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
-from odemis.gui.util import formats_to_wildcards
 from odemis.gui.util import img, get_picture_folder, call_after, \
     wxlimit_invocation
 from odemis.gui.util.widgets import ProgessiveFutureConnector
@@ -133,53 +131,22 @@ class SnapshotController(object):
 
         tab, filepath, exporter = self._main_data_model.tab.value, None, None
 
+        extension = config.last_extension
+        basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
         if dialog:
-            format_info = get_available_formats()
-            wildcards, formats = formats_to_wildcards(format_info)
-            # The default file name should be empty because otherwise the
-            # dialog will add an extension that won't change when the user
-            # selects a different file type in the dialog.
-            dlg = wx.FileDialog(self._main_frame,
-                                "Save Snapshot",
-                                config.last_path,
-                                "",
-                                wildcard=wildcards,
-                                style=wx.FD_SAVE|wx.FD_OVERWRITE_PROMPT)
-
-            # Select the last format used
-            try:
-                idx = formats.index(config.last_format)
-            except ValueError:
-                idx = 0
-            dlg.SetFilterIndex(idx)
-
-            if dlg.ShowModal() == wx.ID_OK:
-                path = dlg.GetPath()
-                fmt = formats[dlg.GetFilterIndex()]
-                extension = format_info[fmt][0]
-
-                # Prevent double extensions when an old file is selected
-                filepath, _ = os.path.splitext(path)
-                filepath = filepath + extension
-
-                config.last_path = os.path.dirname(path)
-                config.last_format = fmt
-                config.last_extension = extension
-                config.write()
-                exporter = dataio.get_exporter(config.last_format)
-
-            dlg.Destroy()
+            filepath = os.path.join(config.last_path, basename + extension)
+            # filepath will be None if cancelled by user
+            filepath = ShowAcquisitionFileDialog(self._main_frame, filepath)
         else:
-            extension = config.last_extension
             dirname = get_picture_folder()
-            basename = time.strftime("%Y%m%d-%H%M%S", time.localtime())
             filepath = os.path.join(dirname, basename + extension)
-            exporter = dataio.get_exporter(config.last_format)
 
             if os.path.exists(filepath):
                 msg = "File '%s' already exists, cancelling snapshot"
                 logging.warning(msg, filepath)
-                tab, filepath, exporter = None, None, None
+                tab, filepath = None, None
+
+        exporter = dataio.get_exporter(config.last_format)
 
         return tab, filepath, exporter
 
@@ -521,7 +488,8 @@ class SparcAcquiController(object):
         returns nothing, but updates .filename and .conf
         """
         new_name = ShowAcquisitionFileDialog(self._main_frame, self.filename.value)
-        self.filename.value = new_name
+        if new_name is not None:
+            self.filename.value = new_name
 
     @wxlimit_invocation(1) # max 1/s
     @call_after

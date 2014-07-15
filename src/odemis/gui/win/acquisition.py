@@ -346,7 +346,8 @@ class AcquisitionDialog(xrcfr_acq):
         returns nothing, but updates .filename and .conf
         """
         new_name = ShowAcquisitionFileDialog(self, self.filename.value)
-        self.filename.value = new_name
+        if new_name is not None:
+            self.filename.value = new_name
 
     def on_close(self, evt):
         """ Close event handler that executes various cleanup actions
@@ -513,7 +514,7 @@ def ShowAcquisitionFileDialog(parent, filename):
     parent (wxFrame): parent window
     filename (string): full filename to propose by default
     Note: updates the acquisition configuration if the user did pick a new file
-    return (string): the new filename (or the old one if the user cancelled)
+    return (string or None): the new filename (or the None if the user cancelled)
     """
     conf = get_acqui_conf()
 
@@ -552,7 +553,7 @@ def ShowAcquisitionFileDialog(parent, filename):
 
     # Show the dialog and check whether is was accepted or cancelled
     if dialog.ShowModal() != wx.ID_OK:
-        return filename
+        return None
 
     # New location and name have been selected...
     # Store the path
