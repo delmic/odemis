@@ -34,7 +34,7 @@ import odemis.gui as gui
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.test as test
-import odemis.gui.model as gmodel
+import odemis.gui.model as guimodel
 import odemis.model as omodel
 import unittest
 import wx
@@ -253,7 +253,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_world_overlay(pol)
         cnvs.add_active_overlay(pol)
 
-        cnvs.current_mode = gmodel.TOOL_POINT
+        cnvs.current_mode = guimodel.TOOL_POINT
         pol.enable(True)
 
         test.gui_loop()
@@ -282,12 +282,12 @@ class OverlayTestCase(test.GuiTestCase):
     # @unittest.skip("simple")
     def test_pixel_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        cnvs.current_mode = gmodel.TOOL_POINT
+        cnvs.current_mode = guimodel.TOOL_POINT
         mmodel = test.FakeMicroscopeModel()
         view = mmodel.focussedView.value
         cnvs.setView(view, mmodel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        cnvs.current_mode = gmodel.TOOL_POINT
+        cnvs.current_mode = guimodel.TOOL_POINT
 
         psol = wol.PixelSelectOverlay(cnvs)
         psol.enabled = True
@@ -311,7 +311,7 @@ class OverlayTestCase(test.GuiTestCase):
         vsol = vol.ViewSelectOverlay(cnvs, "test view selection")
         cnvs.add_view_overlay(vsol)
         cnvs.add_active_overlay(vsol)
-        cnvs.current_mode = miccanvas.MODE_SECOM_ZOOM
+        cnvs.current_mode = guimodel.TOOL_ZOOM
         test.gui_loop()
 
     # @unittest.skip("simple")
@@ -327,7 +327,7 @@ class OverlayTestCase(test.GuiTestCase):
         rsol = wol.RepetitionSelectOverlay(cnvs)
         cnvs.add_world_overlay(rsol)
         cnvs.add_active_overlay(rsol)
-        cnvs.current_mode = gmodel.TOOL_ROA
+        cnvs.current_mode = guimodel.TOOL_ROA
 
         test.gui_loop()
         wroi = [-0.1, 0.3, 0.2, 0.4]  # in m

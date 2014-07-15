@@ -59,14 +59,14 @@ VIEW_LAYOUT_FULLSCREEN = 2 # Fullscreen view (not yet supported)
 # The different tools (selectable in the tool bar). Actually, only the ones which
 # have a mode, the ones which have a direct action don't need to be known
 # explicitly.
-TOOL_NONE = 0 # No tool (normal)
-TOOL_ZOOM = 1 # Select the region to zoom in
-TOOL_ROI = 2 # Select the region of interest (sub-area to be updated)
-TOOL_ROA = 3 # Select the region of acquisition (area to be acquired, SPARC-only)
-TOOL_POINT = 4 # Select a point (to acquire/display)
-TOOL_LINE = 5 # Select a line (to acquire/display)
-TOOL_DICHO = 6 # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
-TOOL_SPOT = 7 # Activate spot mode on the SEM
+TOOL_NONE = 0  # No tool (normal)
+TOOL_ZOOM = 1  # Select the region to zoom in
+TOOL_ROI = 2  # Select the region of interest (sub-area to be updated)
+TOOL_ROA = 3  # Select the region of acquisition (area to be acquired, SPARC-only)
+TOOL_POINT = 4  # Select a point (to acquire/display)
+TOOL_LINE = 5  # Select a line (to acquire/display)
+TOOL_DICHO = 6  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
+TOOL_SPOT = 7  # Activate spot mode on the SEM
 TOOL_RO_ANCHOR = 8
 
 
