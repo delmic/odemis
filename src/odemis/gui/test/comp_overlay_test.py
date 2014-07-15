@@ -72,7 +72,7 @@ class OverlayTestCase(test.GuiTestCase):
                              colour=hex_to_frgb(gui.FG_COLOUR_EDIT))
                 test.gui_loop(50)
 
-            ol.clear()
+            ol.clear_labels()
 
     def test_text_view_overlay_align(self):
         cnvs = canvas.BitmapCanvas(self.panel)
@@ -185,7 +185,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop(100)
         self.assertEqual(rl.render_pos, sl.render_pos)
 
-        ol.clear()
+        ol.clear_labels()
 
         ol.add_label(u"█ no rotate",
                      pos=(200, 0),
@@ -254,7 +254,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.add_active_overlay(pol)
 
         cnvs.current_mode = guimodel.TOOL_POINT
-        pol.enable(True)
+        pol.enable()
 
         test.gui_loop()
 

@@ -44,15 +44,16 @@ import odemis.util.conversion as conversion
 
 class Label(object):
     """ Small helper class that stores label properties """
+
     def __init__(self, text, pos, font_size, flip, align, colour, opacity, deg):
-        self.text = text
-        self.pos = pos
-        self.font_size = font_size
+        self._text = text
+        self._pos = pos
+        self._font_size = font_size
         self.flip = flip
-        self.align = align
+        self._align = align
         self.colour = colour
         self.opacity = opacity
-        self.deg = deg
+        self._deg = deg
 
         # The following attributes are used for caching, so they do not need
         # to be calculated on every redraw.
@@ -68,7 +69,6 @@ class Label(object):
         self._text = u"%s" % val
         self._clear_cache()
 
-
     @property
     def pos(self):
         return self._pos
@@ -77,7 +77,6 @@ class Label(object):
     def pos(self, val):
         self._pos = val
         self._clear_cache()
-
 
     @property
     def font_size(self):
@@ -88,7 +87,6 @@ class Label(object):
         self._font_size = val
         self._clear_cache()
 
-
     @property
     def align(self):
         return self._align
@@ -97,7 +95,6 @@ class Label(object):
     def align(self, val):
         self._align = val
         self._clear_cache()
-
 
     @property
     def deg(self):
@@ -127,19 +124,44 @@ class Overlay(object):
         """
         :param cnvs: (DblMicroscopeCanvas) Canvas to which the overlay belongs
         """
+
         self.cnvs = cnvs
         self.labels = []
         self.canvas_padding = 10
 
-        self._font_name = wx.SystemSettings.GetFont(
-                                        wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
+        self._font_name = wx.SystemSettings.GetFont(wx.SYS_DEFAULT_GUI_FONT).GetFaceName()
 
         if label:
             self.add_label(label)
 
+        # When an overlay is disabled, it will not draw anything and it will ignore all events
+        self.enabled = False
+
+        # Mouse events
+        self.cnvs.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
+        self.cnvs.Bind(wx.EVT_LEFT_UP, self.on_left_up)
+        self.cnvs.Bind(wx.EVT_RIGHT_DOWN, self.on_right_down)
+        self.cnvs.Bind(wx.EVT_RIGHT_UP, self.on_right_up)
+        self.cnvs.Bind(wx.EVT_LEFT_DCLICK, self.on_dbl_click)
+        self.cnvs.Bind(wx.EVT_MOTION, self.on_motion)
+        self.cnvs.Bind(wx.EVT_MOUSEWHEEL, self.on_wheel)
+        self.cnvs.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
+        self.cnvs.Bind(wx.EVT_ENTER_WINDOW, self.on_enter)
+
+        # Keyboard events
+        self.cnvs.Bind(wx.EVT_CHAR, self.on_char)
+
+        # Window events
+        self.cnvs.Bind(wx.EVT_SIZE, self.on_size)
+
+    def enable(self):
+        self.enabled = True
+
+    def disable(self):
+        self.enabled = False
+
     def add_label(self, text, pos=(0, 0), font_size=12, flip=True,
-                    align=wx.ALIGN_LEFT|wx.ALIGN_TOP, colour=None,
-                    opacity=1.0, deg=None):
+                  align=wx.ALIGN_LEFT | wx.ALIGN_TOP, colour=None, opacity=1.0, deg=None):
         """ Create a text label and add it to the list of labels
 
         :return: (Label) The created label
@@ -155,8 +177,11 @@ class Overlay(object):
             deg
         )
         self.labels.append(label)
-        self.cnvs.Refresh() # Refresh the canvas, so the text will be drawn
+        self.cnvs.Refresh()  # Refresh the canvas, so the text will be drawn
         return label
+
+    def clear_labels(self):
+        self.labels = []
 
     def _write_labels(self, ctx):
         """ Render all the defined labels to the screen """
@@ -169,11 +194,7 @@ class Overlay(object):
         ctx.save()
 
         # TODO: Look at ScaledFont for additional caching
-        ctx.select_font_face(
-                self._font_name,
-                cairo.FONT_SLANT_NORMAL,
-                cairo.FONT_WEIGHT_NORMAL
-        )
+        ctx.select_font_face(self._font_name, cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
 
         # For some reason, fonts look a little bit smaller when Cairo
         # plots them at an angle. We compensate for that by increasing the size
@@ -203,15 +224,8 @@ class Overlay(object):
         if not l.render_pos:
             if isinstance(self, ViewOverlay):
                 # Apply padding
-                x = max(
-                        min(x, self.view_width - self.canvas_padding),
-                        self.canvas_padding
-                    )
-
-                y = max(
-                        min(y, self.view_height - self.canvas_padding),
-                        self.canvas_padding
-                    )
+                x = max(min(x, self.view_width - self.canvas_padding), self.canvas_padding)
+                y = max(min(y, self.view_height - self.canvas_padding), self.canvas_padding)
 
             # Cairo renders text from the bottom left, but we want to treat
             # the top left as the origin. So we need to add the hight (lower the
@@ -236,7 +250,7 @@ class Overlay(object):
                     width = self.view_width
                     height = self.view_height
                 else:
-                    width, height = self.cnvs._bmp_buffer_size
+                    width, height = self.cnvs.buffer_size
 
                 # Prevent the text from running off screen
                 if x + lw + self.canvas_padding > width:
@@ -250,7 +264,6 @@ class Overlay(object):
                     y = lh
             l.render_pos = (x, y)
             l.text_size = (lw, lh)
-
 
         # Draw Shadow
         if l.colour:
@@ -272,13 +285,14 @@ class Overlay(object):
 
     @property
     def view_width(self):
-        return self.cnvs.ClientSize.x
+        return self.cnvs.view_width
 
     @property
     def view_height(self):
-        return self.cnvs.ClientSize.y
+        return self.cnvs.view_height
 
     # Default Event handlers
+
     def on_left_down(self, evt):
         evt.Skip()
 
@@ -312,42 +326,42 @@ class Overlay(object):
     def on_size(self, evt):
         evt.Skip()
 
-    def clear(self):
-        self.labels = []
+    # END Default Event handlers
 
 
 class DragMixin(object):
     """ This mixin class can be used to add dragging functionality
 
     Note: Overlay should never capture a mouse, that's the canvas' job
+
     """
 
     def __init__(self):
         self._ldragging = False
         self._rdragging = False
 
-        self.start_pos = None
-        self.end_post = None
+        self.drag_v_start_pos = None
+        self.drag_v_end_pos = None
 
     def on_left_down(self, evt):
         self._ldragging = True
-        self.start_pos = evt.GetPositionTuple()
+        self.drag_v_start_pos = evt.GetPositionTuple()
 
     def on_left_up(self, evt):
         self._ldragging = False
-        self.end_post = evt.GetPositionTuple()
+        self.drag_v_end_pos = evt.GetPositionTuple()
 
     def on_right_down(self, evt):
         self._rdragging = True
-        self.start_pos = evt.GetPositionTuple()
+        self.drag_v_start_pos = evt.GetPositionTuple()
 
     def on_righgt_up(self, evt):
         self._rdragging = False
-        self.end_post = evt.GetPositionTuple()
+        self.drag_v_end_pos = evt.GetPositionTuple()
 
     def reset_drag(self):
-        self.start_pos = None
-        self.end_post = None
+        self.drag_v_start_pos = None
+        self.drag_v_end_pos = None
 
     @property
     def left_dragging(self):
@@ -361,14 +375,22 @@ class DragMixin(object):
     def dragging(self):
         return self._ldragging or self._rdragging
 
+# Modes for creating, changing and dragging selections
+SEL_MODE_NONE = 0
+SEL_MODE_CREATE = 1
+SEL_MODE_EDIT = 2
+SEL_MODE_DRAG = 3
+
 
 class SelectionMixin(object):
-    """ This mix-in class can be used on an Overlay to draw rectangular
-    selection areas. These areas are always expressed in view port coordinates.
-    Conversions to buffer and world coordinates should be done using subclasses.
+    """ This mix-in class can be used on an Overlay to draw rectangular selection areas.
+
+    These areas are always expressed in view port coordinates. Conversions to buffer and world
+    coordinates should be done using subclasses.
+
     """
 
-    hover_margin = 10 #px
+    hover_margin = 10  # px
 
     def __init__(self, sel_cur=None, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         # The start and end points of the selection rectangle in view port
@@ -376,13 +398,11 @@ class SelectionMixin(object):
         self.v_start_pos = None
         self.v_end_pos = None
 
-        # The view port coordinates where a drag/edit originated
-        self.edit_start_pos = None
-        # What edge is being edited
-        self.edit_edge = None # gui.HOVER_*
+        self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
+        self.edit_edge = None  # What edge is being edited (gui.HOVER_*)
 
-        self.dragging = False
-        self.edit = False
+        # Selection modes
+        self.selection_mode = SEL_MODE_NONE
 
         # This attribute can be used to see if the cnvs has shifted or scaled
         self._last_shiftscale = None
@@ -400,7 +420,7 @@ class SelectionMixin(object):
         :param start_pos: (list of 2 floats) Pixel coordinates where the
             selection starts
         """
-        self.dragging = True
+        self.selection_mode = SEL_MODE_CREATE
         self.v_start_pos = self.v_end_pos = list(start_pos)
 
     def update_selection(self, current_pos):
@@ -428,15 +448,13 @@ class SelectionMixin(object):
             self.v_end_pos = v_pos[2:4]
 
             self._calc_edges()
-            self.dragging = False
-            self.edit = False
+            self.selection_mode = SEL_MODE_NONE
             self.edit_edge = None
 
     def clear_selection(self):
         """ Clear the selection """
         logging.debug("Clearing selections")
-        self.dragging = False
-        self.edit = False
+        self.selection_mode = SEL_MODE_NONE
 
         self.v_start_pos = None
         self.v_end_pos = None
@@ -451,9 +469,9 @@ class SelectionMixin(object):
         """ Start an edit to the current selection
         edge (gui.HOVER_*)
         """
-        self.edit_start_pos = start_pos
+        self.edit_v_start_pos = start_pos
         self.edit_edge = edge
-        self.edit = True
+        self.selection_mode = SEL_MODE_EDIT
 
     def update_edit(self, current_pos):
         """ Adjust the selection according to the given position and the current
@@ -481,8 +499,8 @@ class SelectionMixin(object):
     ##### drag methods  #####
 
     def start_drag(self, start_pos):
-        self.edit_start_pos = start_pos
-        self.edit = True
+        self.edit_v_start_pos = start_pos
+        self.selection_mode = SEL_MODE_DRAG
 
     def update_drag(self, current_pos):
         # TODO: The drag range is currently limited by the location of the
@@ -492,13 +510,13 @@ class SelectionMixin(object):
         # of the selection can be dragged off canvas. The commented part was a
         # first attempt at that, but it didn't work.
         current_pos = self.cnvs.clip_to_viewport(current_pos)
-        diff = (current_pos[0] - self.edit_start_pos[0],
-                current_pos[1] - self.edit_start_pos[1])
+        diff = (current_pos[0] - self.edit_v_start_pos[0],
+                current_pos[1] - self.edit_v_start_pos[1])
         self.v_start_pos = [self.v_start_pos[0] + diff[0],
                             self.v_start_pos[1] + diff[1]]
         self.v_end_pos = [self.v_end_pos[0] + diff[0],
                           self.v_end_pos[1] + diff[1]]
-        self.edit_start_pos = current_pos
+        self.edit_v_start_pos = current_pos
 
     def stop_drag(self):
         self.stop_selection()
@@ -543,10 +561,11 @@ class SelectionMixin(object):
 
         :return: (bool) Return False if not hovering, or the type of hover
         """
+
         if self.edges:
             # If position outside outer box
             if (not self.edges["o_l"] < vpos[0] < self.edges["o_r"] or
-                not self.edges["o_t"] < vpos[1] < self.edges["o_b"]):
+                    not self.edges["o_t"] < vpos[1] < self.edges["o_b"]):
                 return False
             # If position inside inner box
             elif (self.edges["i_l"] < vpos[0] < self.edges["i_r"] and
@@ -575,27 +594,54 @@ class SelectionMixin(object):
         return abs(self.v_start_pos[1] - self.v_end_pos[1])
 
     def get_size(self):
-        return (self.get_width(), self.get_height())
+        return self.get_width(), self.get_height()
 
     def contains_selection(self):
         return None not in (self.v_start_pos, self.v_end_pos)
 
-    def on_left_down(self, evt):
+    def _on_left_down(self, evt):
+        """ Call this method from the 'on_left_down' method of super classes """
+
         v_pos = evt.GetPositionTuple()
         hover = self.is_hovering(v_pos)
 
-        # Clicked outside selection
-        if not hover:
-            self.start_selection(v_pos)
-        # Clicked on edge
-        elif hover != gui.HOVER_SELECTION:
-            self.start_edit(v_pos, hover)
-        # Clicked inside selection
+        if not hover:  # Clicked outside selection
+            self.start_selection(v_pos)  # Start dragging
+        elif hover != gui.HOVER_SELECTION:  # Clicked on edge
+            self.start_edit(v_pos, hover)   # Start edit
+        else:  # Clicked inside selection
+            self.start_drag(v_pos)  # Start edit
+
+    def _on_left_up(self, evt):
+        """ Call this method from the 'on_left_up' method of super classes"""
+
+        if self.selection_mode == SEL_MODE_NONE:
+            self.clear_selection()
+        else:  # Editing an existing selection
+            self.stop_selection()
+
+    def _on_motion(self, evt):
+        v_pos = evt.GetPositionTuple()
+
+        if self.selection_mode == SEL_MODE_CREATE:
+            self.update_selection(v_pos)
+        elif self.selection_mode == SEL_MODE_EDIT:
+            self.update_edit(v_pos)
+        elif self.selection_mode == SEL_MODE_DRAG:
+            self.update_drag(v_pos)
         else:
-            self.start_drag(v_pos)
+            hover = self.is_hovering(v_pos)
+            if hover == gui.HOVER_SELECTION:
+                self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW))  # A closed hand!
+            elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
+                self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
+            elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
+                self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+            else:
+                self.cnvs.SetCursor(self.cnvs.cursor)
 
 
-class ViewOverlay(Overlay):  #pylint: disable=R0921
+class ViewOverlay(Overlay):
     """ This class displays an overlay on the view port.
     The Draw method has to be fast, because it's called after every
     refresh of the canvas. The center of the window is at 0,0 (and
@@ -606,7 +652,7 @@ class ViewOverlay(Overlay):  #pylint: disable=R0921
         pass
 
 
-class WorldOverlay(Overlay):  #pylint: disable=R0921
+class WorldOverlay(Overlay):
     """ This class displays an overlay on the buffer.
     It's updated only every time the entire buffer is redrawn."""
 

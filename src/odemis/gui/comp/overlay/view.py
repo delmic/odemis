@@ -331,6 +331,18 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
             # self._write_label(ctx, self.position_label)
 
+    def on_left_down(self, evt):
+        super(ViewSelectOverlay, self).on_left_down(evt)
+        SelectionMixin._on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        super(ViewSelectOverlay, self).on_left_up(evt)
+        SelectionMixin._on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        super(ViewSelectOverlay, self).on_motion(evt)
+        SelectionMixin._on_motion(self, evt)
+
 
 HORIZONTAL = 1
 VERTICAL = 2
@@ -381,7 +393,7 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
         self._y_label.text = lbl
 
 
-    def clear(self):
+    def clear_labels(self):
         self.v_posx.value = None
         self.v_posy.value = None
 

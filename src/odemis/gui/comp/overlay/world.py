@@ -32,6 +32,7 @@ import wx
 
 from .base import WorldOverlay, SelectionMixin, DragMixin
 import odemis.gui as gui
+import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
 import odemis.util as util
 import odemis.util.conversion as conversion
@@ -105,9 +106,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
     def _center_view_origin(self, vpos):
         #view_size = self.cnvs._bmp_buffer_size
-        view_size = self.cnvs.GetSize()
-        return (vpos[0] - (view_size[0] // 2),
-                vpos[1] - (view_size[1] // 2))
+        w, h = self.cnvs.GetSize()
+        return (vpos[0] - (w // 2),
+                vpos[1] - (h // 2))
 
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position
@@ -187,8 +188,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             ctx.stroke()
 
             # Label
-
-            if (self.dragging or self.edit) and self.cnvs.microscope_view:
+            if (self.selection_mode in (base.SEL_MODE_EDIT, base.SEL_MODE_CREATE) and
+                    self.cnvs.microscope_view):
                 w, h = self.cnvs.selection_to_real_size(
                                             self.w_start_pos,
                                             self.w_end_pos
@@ -202,6 +203,18 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 self.position_label.pos = pos
                 self.position_label.text = size_lbl
                 self._write_labels(ctx)
+
+    def on_left_down(self, evt):
+        super(WorldSelectOverlay, self).on_left_down(evt)
+        SelectionMixin._on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        super(WorldSelectOverlay, self).on_left_up(evt)
+        SelectionMixin._on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        super(WorldSelectOverlay, self).on_motion(evt)
+        SelectionMixin._on_motion(self, evt)
 
 
 FILL_NONE = 0
@@ -412,18 +425,17 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        edit_cache = self.edit
+        mode_cache = self.selection_mode
         if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
             if self.fill == FILL_POINT:
                 self._draw_points(ctx)
-                self.edit = True
+                self.selection_mode = base.SEL_MODE_EDIT
             elif self.fill == FILL_GRID:
                 self._draw_grid(ctx)
-                self.edit = True
-            # if FILL_NONE => nothing to do
+                self.selection_mode = base.SEL_MODE_EDIT
 
         super(RepetitionSelectOverlay, self).Draw(ctx, shift, scale)
-        self.edit = edit_cache
+        self.selection_mode = mode_cache
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
@@ -652,36 +664,27 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
     # @profile
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
-        if self.enabled:
+        if (self._pixel_pos and
+            self._selected_pixel.value != self._pixel_pos and
+            self.is_over()):
 
-            if (self._pixel_pos and
-                self._selected_pixel.value != self._pixel_pos and
-                self.is_over()):
+            rect = self.pixel_to_rect(self._pixel_pos, scale)
+            if rect:
+                ctx.set_source_rgba(*self.colour)
+                ctx.rectangle(*rect)
+                ctx.fill()
 
-                rect = self.pixel_to_rect(self._pixel_pos, scale)
-                if rect:
-                    ctx.set_source_rgba(*self.colour)
-                    ctx.rectangle(*rect)
-                    ctx.fill()
+        if self._selected_pixel.value not in (None, (None, None)):
+            rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
-            if self._selected_pixel.value not in (None, (None, None)):
-                rect = self.pixel_to_rect(self._selected_pixel.value, scale)
-
-                if rect:
-                    ctx.set_source_rgba(*self.select_color)
-                    ctx.rectangle(*rect)
-                    ctx.fill()
-
-    def enable(self, enable=True):
-        """ Enable of disable the overlay """
-        if enable and not self.values_are_set():
-            raise ValueError("Not all PixelSelectOverlay values are set!")
-        self.enabled = enable
-        self.cnvs.Refresh()
-
+            if rect:
+                ctx.set_source_rgba(*self.select_color)
+                ctx.rectangle(*rect)
+                ctx.fill()
 
 MAX_DOT_RADIUS = 25.5
 MIN_DOT_RADIUS = 3.5
+
 
 class PointsOverlay(WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one
@@ -711,8 +714,6 @@ class PointsOverlay(WorldOverlay):
         # The box over which the mouse is hovering, or None
         self.b_hover_box = None
 
-        self.enabled = False
-
     def set_point(self, point_va):
         """ Set the available points and connect to the given point VA """
         # Connect the provided VA to the overlay
@@ -738,7 +739,7 @@ class PointsOverlay(WorldOverlay):
         if self.cnvs.was_dragged:
             self.cursor_over_point = None
             self.b_hover_box = None
-        elif self.cursor_over_point and self.enabled:
+        elif self.cursor_over_point: # and self.enabled: FIXME: check
             self.point.value = self.choices[self.cursor_over_point]
             logging.debug("Point %s selected", self.point.value)
             self.cnvs.repaint()
@@ -751,7 +752,7 @@ class PointsOverlay(WorldOverlay):
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
 
-        if not self.cnvs.left_dragging and self.choices and self.enabled:
+        if not self.cnvs.left_dragging and self.choices:
             v_x, v_y = evt.GetPositionTuple()
             b_x, b_y = self.cnvs.view_to_buffer((v_x, v_y))
             offset = self.cnvs.get_half_buffer_size()
@@ -761,8 +762,7 @@ class PointsOverlay(WorldOverlay):
             for w_pos in self.choices.keys():
                 b_box_x, b_box_y = self.cnvs.world_to_buffer(w_pos, offset)
 
-                if (abs(b_box_x - b_x) <= self.dot_size
-                    and abs(b_box_y - b_y) <= self.dot_size):
+                if abs(b_box_x - b_x) <= self.dot_size and abs(b_box_y - b_y) <= self.dot_size:
                     # Calculate box in buffer coordinates
                     b_hover_box = (b_box_x - self.dot_size,
                                    b_box_y - self.dot_size,
@@ -801,10 +801,7 @@ class PointsOverlay(WorldOverlay):
             for p_point in physical_points:
                 w_x, w_y = self.cnvs.physical_to_world_pos(p_point)
                 self.choices[(w_x, w_y)] = p_point
-                min_dist = min(
-                        distance(p_point, d)
-                        for d in physical_points if d != p_point
-                )
+                min_dist = min(distance(p_point, d) for d in physical_points if d != p_point)
         else:
             # can't compute the distance => pick something typical
             min_dist = 100e-9 # m
@@ -833,8 +830,8 @@ class PointsOverlay(WorldOverlay):
             ctx.arc(b_x, b_y, self.dot_size, 0, 2*math.pi)
 
             # If the mouse is hovering over a dot (and we are not dragging)
-            if (self.b_hover_box and (b_l <= b_x <= b_r and b_t <= b_y <= b_b)
-                and not self.cnvs.was_dragged):
+            if (self.b_hover_box and (b_l <= b_x <= b_r and b_t <= b_y <= b_b) and
+                    not self.cnvs.was_dragged):
                 w_cursor_over = w_pos
                 ctx.set_source_rgba(*self.select_colour)
             elif self.point.value == self.choices[w_pos]:
@@ -864,10 +861,3 @@ class PointsOverlay(WorldOverlay):
             # ctx.stroke()
 
         self.cursor_over_point = w_cursor_over
-
-    def enable(self, enable=True):
-        """ Enable of disable the overlay """
-        self.enabled = enable
-        self.cnvs.repaint()
-
-
