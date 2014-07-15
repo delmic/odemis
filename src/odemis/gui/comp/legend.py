@@ -76,22 +76,21 @@ class InfoLegend(wx.Panel):
                                                 wx.ID_ANY,
                                                 imgdata.getico_blending_semBitmap())
 
-        # Scale window
-        self.scale_win = ScaleWindow(self)
-
         # Horizontal Field Width text
-        self.hfw_text = wx.TextCtrl(self, size=(130, -1), style=wx.NO_BORDER|wx.CB_READONLY)
+        self.hfw_text = wx.TextCtrl(self, size=(130, -1), style=wx.NO_BORDER | wx.CB_READONLY)
         self.hfw_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.hfw_text.SetForegroundColour(parent.GetForegroundColour())
         self.hfw_text.SetToolTipString("Horizontal Field Width")
 
         # Magnification text
-        self.magnification_text = wx.TextCtrl(self, size=(130, -1),
+        self.magnification_text = wx.TextCtrl(self, size=(100, -1),
                                               style=wx.NO_BORDER | wx.CB_READONLY)
         self.magnification_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
         self.magnification_text.SetToolTipString("Magnification")
 
+        # Scale window
+        self.scale_win = ScaleWindow(self)
 
         # TODO more...
         # self.LegendWl = wx.StaticText(self.legend)
@@ -103,58 +102,41 @@ class InfoLegend(wx.Panel):
         # self.LegendSpot = wx.StaticText(self.legend)
         # self.LegendHV = wx.StaticText(self.legend)
 
-
         ## Child window layout
-
 
         # Sizer composition:
         #
         # +-------------------------------------------------------+
-        # | +----+-----+ |    |         |    | +----+------+----+ |
-        # | |Mag | HFW | | <> | <Scale> | <> | |Icon|Slider|Icon| |
-        # | +----+-----+ |    |         |    | +----+------+----+ |
+        # | Mag | HFW | <Scale> | <> | [Icon|Slider|Icon] |
         # +-------------------------------------------------------+
 
-        leftColSizer = wx.BoxSizer(wx.HORIZONTAL)
-        leftColSizer.Add(self.magnification_text,
-                         border=10,
-                         flag=wx.ALIGN_CENTER | wx.RIGHT)
-        leftColSizer.Add(self.hfw_text, border=10, flag=wx.ALIGN_CENTER)
-
-
-        sliderSizer = wx.BoxSizer(wx.HORIZONTAL)
+        slider_sizer = wx.BoxSizer(wx.HORIZONTAL)
         # TODO: need to have the icons updated according to the streams type
-        sliderSizer.Add(
+        slider_sizer.Add(
             self.bmp_slider_left,
             border=3,
             flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(
+        slider_sizer.Add(
             self.merge_slider,
             flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
-        sliderSizer.Add(
+        slider_sizer.Add(
             self.bmp_slider_right,
             border=3,
             flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
 
-
-        legendSizer = wx.BoxSizer(wx.HORIZONTAL)
-        legendSizer.Add(leftColSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
-        legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(self.scale_win,
-                        2,
-                        border=2,
-                        flag=wx.EXPAND | wx.ALIGN_CENTER | wx.RIGHT | wx.LEFT)
-        legendSizer.AddStretchSpacer(1)
-        legendSizer.Add(sliderSizer, 0, flag=wx.EXPAND | wx.ALIGN_CENTER)
+        control_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        control_sizer.Add(self.magnification_text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+        control_sizer.Add(self.hfw_text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+        control_sizer.Add(self.scale_win, 1, border=10,flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 
         # legend_panel_sizer is needed to add a border around the legend
-        legend_panel_sizer = wx.BoxSizer(wx.VERTICAL)
-        legend_panel_sizer.Add(legendSizer, border=10, flag=wx.ALL | wx.EXPAND)
-        self.SetSizerAndFit(legend_panel_sizer)
+        border_sizer = wx.BoxSizer(wx.VERTICAL)
+        border_sizer.Add(control_sizer, border=10, flag=wx.ALL | wx.EXPAND)
 
+        self.SetSizerAndFit(border_sizer)
 
         ## Event binding
-
 
         # Dragging the slider should set the focus to the right view
         self.merge_slider.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
@@ -172,8 +154,7 @@ class InfoLegend(wx.Panel):
         self.magnification_text.Bind(wx.EVT_LEFT_DOWN, self.OnLeftDown)
 
         # Explicitly set the
-        self.SetMinSize((-1, 40))
-
+        # self.SetMinSize((-1, 40))
 
     # Make mouse events propagate to the parent
     def OnLeftDown(self, evt):
@@ -243,7 +224,7 @@ class AxisLegend(wx.Panel):
         self.SetForegroundColour(parent.GetForegroundColour())
 
         # Explicitly set the min size
-        self.SetMinSize((-1, 40))
+        # self.SetMinSize((-1, 40))
 
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
