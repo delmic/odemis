@@ -187,7 +187,7 @@ class BufferedCanvas(wx.Panel):
         super(BufferedCanvas, self).__init__(*args, **kwargs)
 
         # Set of features/restrictions dynamically changeable
-        self.abilities = set() # filled by CAN_*
+        self.abilities = set()  # filled by CAN_*
 
         # Graphical overlays that display relative to the canvas
         self.world_overlays = []
@@ -240,10 +240,10 @@ class BufferedCanvas(wx.Panel):
         self.Bind(wx.EVT_LEAVE_WINDOW, self.on_leave)
         self.Bind(wx.EVT_ENTER_WINDOW, self.on_enter)
 
-        # # Keyboard events
+        # Keyboard events
         self.Bind(wx.EVT_CHAR, self.on_char)
 
-        # # Window events
+        # Window events
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
 
@@ -253,6 +253,18 @@ class BufferedCanvas(wx.Panel):
         self.draw_timer = wx.PyTimer(self.on_draw_timer)
 
         self.background_img = imgdata.getcanvasbgBitmap()
+
+    @property
+    def buffer_size(self):
+        return self._bmp_buffer_size
+
+    @property
+    def view_width(self):
+        return self.ClientSize.x
+
+    @property
+    def view_height(self):
+        return self.ClientSize.y
 
     ############ Overlay Management ###########
 
@@ -284,13 +296,15 @@ class BufferedCanvas(wx.Panel):
 
     # Active overlays
 
-    def add_active_overlay(self, overlay):
-        if overlay not in self.active_overlays:
-            self.active_overlays.append(overlay)
+    def add_active_overlay(self, *overlays):
+        for overlay in overlays:
+            if overlay not in self.active_overlays:
+                self.active_overlays.append(overlay)
 
-    def remove_active_overlay(self, overlay):
-        if overlay in self.active_overlays:
-            self.active_overlays.remove(overlay)
+    def remove_active_overlay(self, *overlays):
+        for overlay in overlays:
+            if overlay in self.active_overlays:
+                self.active_overlays.remove(overlay)
 
     def clear_active_overlays(self):
         self.active_overlays = []
@@ -329,60 +343,60 @@ class BufferedCanvas(wx.Panel):
     def on_left_down(self, evt, cursor=None):
         """ Standard left mouse button down processor """
         self._on_mouse_down(cursor)
-        self._pass_event_to_active_overlay('on_left_down', evt)
+        self._pass_event_to_active_overlays('on_left_down', evt)
 
     @ignore_if_disabled
     def on_left_up(self, evt):
         """ Standard left mouse button release processor """
         self._on_mouse_up()
-        self._pass_event_to_active_overlay('on_left_up', evt)
+        self._pass_event_to_active_overlays('on_left_up', evt)
 
     @ignore_if_disabled
     def on_right_down(self, evt, cursor=None):
         """ Standard right mouse button release processor """
         self._on_mouse_down(cursor)
-        self._pass_event_to_active_overlay('on_right_down', evt)
+        self._pass_event_to_active_overlays('on_right_down', evt)
 
     @ignore_if_disabled
     def on_right_up(self, evt):
         """ Standard right mouse button release processor """
         self._on_mouse_up()
-        self._pass_event_to_active_overlay('on_right_up', evt)
+        self._pass_event_to_active_overlays('on_right_up', evt)
 
     @ignore_if_disabled
     def on_dbl_click(self, evt):
         """ Standard left mouse button double click processor """
-        self._pass_event_to_active_overlay('on_dbl_click', evt)
+        self._pass_event_to_active_overlays('on_dbl_click', evt)
 
     @ignore_if_disabled
     def on_motion(self, evt):
         """ Standard mouse motion processor """
-        self._pass_event_to_active_overlay('on_motion', evt)
+        self._pass_event_to_active_overlays('on_motion', evt)
 
     @ignore_if_disabled
     def on_wheel(self, evt):
         """ Standard mouse wheel processor """
-        self._pass_event_to_active_overlay('on_wheel', evt)
+        self._pass_event_to_active_overlays('on_wheel', evt)
 
     def on_enter(self, evt):
         """ Standard mouse enter processor """
-        self._pass_event_to_active_overlay('on_enter', evt)
+        self._pass_event_to_active_overlays('on_enter', evt)
 
     def on_leave(self, evt):
         """ Standard mouse leave processor """
-        self._pass_event_to_active_overlay('on_leave', evt)
+        self._pass_event_to_active_overlays('on_leave', evt)
 
     @ignore_if_disabled
     def on_char(self, evt):
         """ Standard key stroke processor """
-        self._pass_event_to_active_overlay('on_char', evt)
+        self._pass_event_to_active_overlays('on_char', evt)
 
     @ignore_if_disabled
     def on_paint(self, evt):
         """ Copy the buffer to the screen (i.e. the device context) """
 
         # TODO: what was the reason for this to be used instead of blit?
-#         wx.BufferedPaintDC(self, self._bmp_buffer)
+        # wx.BufferedPaintDC(self, self._bmp_buffer)
 
         dc_view = wx.PaintDC(self)
         # Blit the appropriate area from the buffer to the view port
@@ -421,14 +435,19 @@ class BufferedCanvas(wx.Panel):
         # logging.debug("Drawing timer in thread %s", thread_name)
         self.update_drawing()
 
-    def _pass_event_to_active_overlay(self, evt_name, evt):
-        """ Call an event handler with name 'evt_name' on the active overlay """
+    def _pass_event_to_active_overlays(self, evt_name, evt):
+        """ Call an event handler with name 'evt_name' on the enabled overlays
+        """
+
         for ol in self.active_overlays:
             getattr(ol, evt_name)(evt)
 
     def _pass_event_to_all_overlays(self, evt_name, evt):
-        """ Call an event handler with name 'evt_name' on all the overlays """
+        """ Call an event handler with name 'evt_name' on all the overlays
 
+        This method should be used to pass events on to all overlays that are not necesarrily
+        the result of a (direct) user action, e.g. on_size
+        """
         for ol in self.view_overlays:
             getattr(ol, evt_name)(evt)
         for ol in self.world_overlays:
@@ -674,7 +693,7 @@ class BitmapCanvas(BufferedCanvas):
         self.images = [None]
         # Merge ratio for combining the images
         self.merge_ratio = 0.3
-        self.scale = 1.0 # px/wu
+        self.scale = 1.0  # px/wu
 
         self.margins = (0, 0)
 
@@ -900,7 +919,7 @@ class BitmapCanvas(BufferedCanvas):
             im_format = cairo.FORMAT_RGB24
 
         height, width, _ = im_data.shape
-#         logging.debug("Image data shape is %s", im_data.shape)
+        # logging.debug("Image data shape is %s", im_data.shape)
 
         # Note: Stride calculation is done automatically when no stride
         # parameter is provided.
@@ -917,7 +936,6 @@ class BitmapCanvas(BufferedCanvas):
 
         # TEST: Changing the order of translate and scale didn't solve the problem
         # ctx.translate(b_im_rect[0] / total_scale, b_im_rect[1] / total_scale)
-
 
         x, y, _, _ = b_im_rect
 
@@ -1125,10 +1143,11 @@ class DraggableCanvas(BitmapCanvas):
       that (normally) a drag cannot bring it outside of the viewport
     * The viewport, which is what the user sees
 
-    Unit: at scale = 1, 1px = 1 unit. So an image with scale = 1 will be
+    Unit: at scale = 1, 1 px = 1 unit. So an image with scale = 1 will be
       displayed actual size.
 
     """
+
     def __init__(self, *args, **kwargs):
         super(DraggableCanvas, self).__init__(*args, **kwargs)
 
@@ -1143,6 +1162,9 @@ class DraggableCanvas(BitmapCanvas):
         # in buffer-coordinates: = 1px at scale = 1
         self.requested_world_pos = self.w_buffer_center
 
+        # Indicate a left mouse button drag in the canvas
+        # Note: *only* use it indicate that the *canvas* is performing an operation related to
+        # dragging!
         self._ldragging = False
 
         # The amount of pixels shifted in the current drag event
@@ -1150,6 +1172,9 @@ class DraggableCanvas(BitmapCanvas):
         #  initial position of mouse when started dragging
         self.drag_init_pos = (0, 0) # px, px
 
+        # Indicate a right mouse button drag in the canvas
+        # Note: *only* use it indicate that the *canvas* is performing an operation related to
+        # dragging!
         self._rdragging = False
         # (int, int) px
         self._rdrag_init_pos = None
@@ -1158,7 +1183,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # Track if the canvas was dragged. It should be reset to False at the
         # end of button up handlers, giving overlay the change to check if a
-        # drag occured.
+        # drag occurred.
         self.was_dragged = False
 
     # Properties
@@ -1182,12 +1207,29 @@ class DraggableCanvas(BitmapCanvas):
 
     # END Properties
 
+    # Ability manipulation
+
+    def disable_drag(self):
+        self.abilities.remove(CAN_DRAG)
+
+    def enable_drag(self):
+        self.abilities.add(CAN_DRAG)
+
+    def disable_focus(self):
+        self.abilities.remove(CAN_FOCUS)
+
+    def enable_focus(self):
+        self.abilities.add(CAN_FOCUS)
+
+    # END Ability manipulation
+
     # Event processing
 
-    def on_left_down(self, evt): #pylint: disable=W0221
+    def on_left_down(self, evt):
         """ Start a dragging procedure """
+
         # Ignore the click if we're already dragging
-        if CAN_DRAG in self.abilities and not self._rdragging:
+        if CAN_DRAG in self.abilities and not self.dragging:
             cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
 
             # Fixme: only go to drag mode if the mouse moves before a mouse up?
@@ -1207,7 +1249,8 @@ class DraggableCanvas(BitmapCanvas):
 
     def on_left_up(self, evt):
         """ End the dragging procedure """
-        # Ignore the release if we didn't register a left down
+
+        # If the canvas was being dragged
         if self._ldragging:
             self._ldragging = False
             # Update the position of the buffer to where the view is centered
@@ -1224,18 +1267,30 @@ class DraggableCanvas(BitmapCanvas):
         super(DraggableCanvas, self).on_left_up(evt)
         self.was_dragged = False
 
-    def on_right_down(self, evt): #pylint: disable=W0221
-        # Ignore the click if we're aleady dragging
-        if CAN_FOCUS in self.abilities and not self._ldragging:
+    def on_right_down(self, evt, cursor=None):
+        """ Process right mouse button down event
+
+        If the canvas can focus, the data needed for that operation are set
+
+        """
+
+        # Ignore the click if we're already dragging
+        if CAN_FOCUS in self.abilities and not self.dragging:
             self._rdragging = True
             self._rdrag_init_pos = evt.GetPositionTuple()
             self._rdrag_prev_value = [0, 0]
 
             logging.debug("Drag started at %s", self._rdrag_init_pos)
 
-        super(DraggableCanvas, self).on_right_down(evt)
+        super(DraggableCanvas, self).on_right_down(evt, cursor)
 
     def on_right_up(self, evt):
+        """ Process right mouse button release event
+
+        End any right dragging behaviour if present
+
+        """
+
         # Ignore the release if we didn't register a right down
         if self._rdragging:
             self._rdragging = False
@@ -1265,7 +1320,16 @@ class DraggableCanvas(BitmapCanvas):
         super(DraggableCanvas, self).on_dbl_click(evt)
 
     def on_motion(self, evt):
-        if self._ldragging:
+        """ Process mouse motion
+
+        Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
+        down.
+
+        Note: Right button dragging is handled in sub classes
+
+        """
+
+        if CAN_DRAG in self.abilities and self.left_dragging:
             v_pos = evt.GetPositionTuple()
             drag_shift = (v_pos[0] - self.drag_init_pos[0],
                           v_pos[1] - self.drag_init_pos[1])
@@ -1278,64 +1342,16 @@ class DraggableCanvas(BitmapCanvas):
 
             self.Refresh()
 
-        elif self._rdragging:
-            # TODO: Move this to miccanvas
-
-            # Linear when small, non-linear when big.
-            # use 3 points: starting point, previous point, current point
-            #  * if dis < 32 px => min : dis (small linear zone)
-            #  * else: dis + 1/32 * sign* (dis-32)**2 => (square zone)
-            # send diff between value and previous value sent => it should
-            # always be at the same position for the cursor at the same place
-            #
-            # NOTE: The focus overlay is loosely dependant on the values
-            # generated here, because it uses them to guesstimate the maximum
-            # value produced while focussing.
-
-            if evt.ShiftDown():
-                softener = 0.1 # softer
-            else:
-                softener = 1
-
-            linear_zone = 32.0
-            pos = evt.GetPositionTuple()
-            for i in [0, 1]: # x, y
-                shift = pos[i] - self._rdrag_init_pos[i]
-
-                if i:
-                    # Flip the sign for vertical movement, as indicated in the
-                    # on_extra_axis_move docstring: up/right is positive
-                    shift = -shift
-                    # logging.debug("pos %s, shift %s", pos[i], shift)
-
-                if abs(shift) <= linear_zone:
-                    value = shift
-                else:
-                    ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
-                    value = shift + ssquare / linear_zone
-
-                change = value - self._rdrag_prev_value[i]
-
-                # if i:
-                #     logging.debug("shift %s, value %s, change %s",
-                #         shift, value, change)
-
-                if change:
-                    self.on_extra_axis_move(i, change * softener)
-                    self._rdrag_prev_value[i] = value
-
         self.was_dragged = self.dragging
-
         super(DraggableCanvas, self).on_motion(evt)
-
 
     def on_char(self, evt):
         key = evt.GetKeyCode()
 
         if CAN_DRAG in self.abilities:
-            change = 100 # about a 10th of the screen
+            change = 100  # about a 10th of the screen
             if evt.ShiftDown():
-                change //= 8 # softer
+                change //= 8  # softer
 
             if key == wx.WXK_LEFT:
                 self.shift_view((change, 0))
@@ -1797,7 +1813,7 @@ class PlotCanvas(BufferedCanvas):
         if min_size != self._bmp_buffer_size:
             self.resize_buffer(min_size)
 
-        self._pass_event_to_active_overlay('on_size', evt)
+        self._pass_event_to_active_overlays('on_size', evt)
         self.update_drawing()
 
     def draw(self):
