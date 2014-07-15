@@ -76,6 +76,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
 
     logging.debug("Starting Spot alignment...")
     try:
+        future._done.clear()
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
 
@@ -88,6 +89,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         escan.resolution.value = (1, 1)
 
         # Estimate noise and adjust exposure time based on "Rose criterion"
+        if future._spot_alignment_state == CANCELLED:
+            raise CancelledError()
         logging.debug("Adjust exposure time...")
         image = ccd.data.get(asap=False)
         snr = MeasureSNR(image)
@@ -98,12 +101,16 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         et = ccd.exposureTime.value
 
         # Try to find spot
+        if future._spot_alignment_state == CANCELLED:
+            raise CancelledError()
         logging.debug("Trying to find spot...")
         future._centerspotf = CenterSpot(ccd, stage, ROUGH_MOVE)
         dist = future._centerspotf.result()
 
         # If spot not found, autofocus and then retry
         if dist is None:
+            if future._spot_alignment_state == CANCELLED:
+                raise CancelledError()
             logging.debug("Spot not found, try to autofocus...")
             try:
                 # When Autofocus set binning 8 if possible
@@ -116,6 +123,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
                 ccd.binning.value=(1, 1)
             except IOError:
                 raise IOError('Spot alignment failure. AutoFocus failed.')
+            if future._spot_alignment_state == CANCELLED:
+                raise CancelledError()
             logging.debug("Trying again to find spot...")
             future._centerspotf = CenterSpot(ccd, stage, ROUGH_MOVE)
             dist = future._centerspotf.result()
@@ -130,6 +139,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         CropFoV(ccd)
 
         # Autofocus
+        if future._spot_alignment_state == CANCELLED:
+            raise CancelledError()
         logging.debug("Autofocusing...")
         try:
             # When Autofocus set binning 8 if possible
@@ -147,6 +158,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         ccd.binning.value = (1, 1)
 
         # Center spot
+        if future._spot_alignment_state == CANCELLED:
+            raise CancelledError()
         logging.debug("Aligning spot...")
         future._centerspotf = CenterSpot(ccd, stage, FINE_MOVE)
         dist = future._centerspotf.result()
@@ -163,7 +176,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
             if future._spot_alignment_state == CANCELLED:
                 raise CancelledError()
             future._spot_alignment_state = FINISHED
-
+            future._done.set()
 
 def _CancelAlignSpot(future):
     """
@@ -178,6 +191,8 @@ def _CancelAlignSpot(future):
         future._autofocusf.cancel()
         future._centerspotf.cancel()
         logging.debug("Spot alignment cancelled.")
+        future._done.wait(10)  # Do not return until we are really done
+                                # 10 seconds timeout
 
     return True
 

@@ -96,6 +96,8 @@ def AlignSpot(ccd, stage, escan, focus):
     # Task to run
     f.task_canceller = _CancelAlignSpot
     f._alignment_lock = threading.Lock()
+    #Do not return from cancel() until future is done
+    f._done = threading.Event()
 
     # Create autofocus and centerspot module
     f._autofocusf = model.InstantaneousFuture()
