@@ -233,15 +233,12 @@ class MenuController(object):
         if not enable:
             self._main_frame.menu_item_auto_cont.Check(False)
 
-        # enable only if focuser is available, and no autofocus happening
-        d, e, f = self._get_focus_hw(curr_s)
-        f_enable = all((enable, d, f, self._autofocus_f.done()))
-        self._main_frame.menu_item_auto_focus.Enable(f_enable)
-
         if curr_s:
             curr_s.should_update.subscribe(self._on_stream_update, init=True)
             if hasattr(curr_s, "auto_bc"):
                 curr_s.auto_bc.subscribe(self._on_stream_autobc, init=True)
+        else:
+            self._main_frame.menu_item_auto_focus.Enable(False)
 
     def _on_auto_focus_done(self, future):
         tab = self._main_data.tab.value
@@ -259,6 +256,11 @@ class MenuController(object):
 
         static = isinstance(curr_s, stream.StaticStream)
         self._main_frame.menu_item_play_stream.Check(updated and not static)
+
+        # enable only if focuser is available, and no autofocus happening
+        d, e, f = self._get_focus_hw(curr_s)
+        f_enable = all((updated, d, f, self._autofocus_f.done()))
+        self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
     def _on_stream_autobc(self, autobc):
         """

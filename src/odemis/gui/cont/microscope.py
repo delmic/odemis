@@ -290,6 +290,7 @@ class SecomStateController(MicroscopeStateController):
             if ch_pos.value["pressure"] == self._overview_pressure:
                 self._main_data.chamberState.value = CHAMBER_PUMPING
 
+    # TODO: move to acq.stream (because there is nothing we can do better here)
     def _onOpticalState(self, state):
         """ Event handler for when the state of the optical microscope changes
         """

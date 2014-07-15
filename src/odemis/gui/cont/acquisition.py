@@ -717,7 +717,7 @@ class SparcAcquiController(object):
             self._show_acquisition(data, open(filename))
         self._reset_acquisition_gui()
 
-
+# TODO: merge with AutoCenterController because they share too many GUI elements
 class FineAlignController(object):
     """
     Takes care of the fine alignment button and process on the SECOM lens
@@ -762,9 +762,15 @@ class FineAlignController(object):
         """
         Called when the tool (mode) is changed
         """
+        # Don't enable during "acquisition", as we don't want to allow fine
+        # alignment during auto centering. When button is "cancel", the tool
+        # doesn't change so it's never disabled.
+        acquiring = self._main_data_model.is_acquiring.value
         # Only allow fine alignment when spot mode is on (so that the exposure
         # time has /some chances/ to represent the needed dwell time)
-        self._main_frame.btn_fine_align.Enable(tool == guimod.TOOL_SPOT)
+        spot = (tool == guimod.TOOL_SPOT)
+
+        self._main_frame.btn_fine_align.Enable(spot and not acquiring)
         self._update_est_time()
 
     def _on_dwell_time(self, dt):
@@ -942,8 +948,6 @@ class AutoCenterController(object):
         self._ac_btn_label = self._main_frame.btn_auto_center.Label
         self._acf_connector = None
 
-        # TODO: find out which settings affect the estimated time, and connect
-        # to them to update the estimated time
         self._main_data_model.ccd.exposureTime.subscribe(self._update_est_time, init=True)
 
     @call_after
@@ -1000,8 +1004,8 @@ class AutoCenterController(object):
         """
         # Force spot mode: not needed by the code, but makes sense for the user
         self._tab_data_model.tool.value = guimod.TOOL_SPOT
-
         self._pause()
+
         main_data = self._main_data_model
         main_data.is_acquiring.value = True
 
