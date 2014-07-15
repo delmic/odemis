@@ -876,15 +876,8 @@ class SecomCanvas(DblMicroscopeCanvas):
         else:  # Canvas dragging
             super(SecomCanvas, self).on_left_down(evt)
 
-<<<<<<< HEAD
-    def on_left_up(self, event):
-||||||| merged common ancestors
-
-    def on_left_up(self, event):
-=======
     def on_left_up(self, evt):
 
->>>>>>> Active overlay refactor wip
         if self.current_mode in SECOM_MODES:
             if self._ldragging:
                 self._ldragging = False
@@ -945,7 +938,6 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).on_right_up(event)
 
-<<<<<<< HEAD
     def setView(self, microscope_view, tab_data):
         super(SecomCanvas, self).setView(microscope_view, tab_data)
 
@@ -971,10 +963,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                             view.horizontal_field_width.value = hfw
                     break
 
-||||||| merged common ancestors
-=======
 
->>>>>>> Active overlay refactor wip
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
