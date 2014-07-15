@@ -113,7 +113,8 @@ class TestSpotAlignment(unittest.TestCase):
         align = self.align
         escan = self.ebeam
         ccd = self.FakeCCD(self, align)
-        res = spot.CenterSpot(ccd, align, escan, 10, spot.STAGE_MOVE)
+        f = spot.CenterSpot(ccd, align, escan, 10, spot.STAGE_MOVE)
+        res = f.result()
 
         pixelSize = self.fake_img.metadata[model.MD_PIXEL_SIZE]
         err_mrg = max(2 * pixelSize[0], 1e-06)  # m

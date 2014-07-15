@@ -276,7 +276,7 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=STAGE_MOVE):
     # Run in separate thread
     center_thread = threading.Thread(target=executeTask,
                   name="Spot center",
-                  args=(f, _DoCenterSpot, f, ccd, stage, mx_steps, type))
+                  args=(f, _DoCenterSpot, f, ccd, stage, escan, mx_steps, type))
 
     center_thread.start()
     return f
@@ -342,7 +342,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
                 f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
                 f.result()
             else:
-                escan.translation.value(-tab_pxs[0], -tab_pxs[1])
+                escan.translation.value = (-tab_pxs[0], -tab_pxs[1])
             steps += 1
             # Update progress of the future
             future.set_end_time(time.time() +
