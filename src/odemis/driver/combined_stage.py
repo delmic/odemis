@@ -24,8 +24,6 @@ from __future__ import division
 
 from Pyro4.core import isasync
 import logging
-import math
-import numpy
 from odemis import model
 from odemis.acq import ConvertStage
 from odemis.model._futures import CancellableThreadPoolExecutor
@@ -41,6 +39,7 @@ class CombinedStage(model.Actuator):
         """
         children (dict str -> actuator): names to ConvertStage and SEM sample stage
         """
+        self._metadata = {model.MD_HW_NAME: "CombinedStage"}
         axes_def = {}
         self._position = {}
 
@@ -67,7 +66,9 @@ class CombinedStage(model.Actuator):
         self._stage_conv = ConvertStage("converter-xy", "align",
                             children={"aligner": self._lens},
                             axes=["a", "b"],
-                            scale=(1, 1), rotation=0, offset=(0, 0))
+                            scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
+                            rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
+                            offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
 
         rng = [-0.5, 0.5]
         axes_def["x"] = model.Axis(unit="m", range=rng)
@@ -88,13 +89,27 @@ class CombinedStage(model.Actuator):
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
 
+    def updateMetadata(self, md):
+        self._metadata.update(md)
+        # Re-initialiaze ConvertStage with the new transformation values
+        # Called after every sample holder insertion
+        self._stage_conv = ConvertStage("converter-xy", "align",
+                    children={"aligner": self._lens},
+                    axes=["a", "b"],
+                    scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
+                    rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
+                    offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
+
+    def getMetadata(self):
+        return self._metadata
+
     def _updatePosition(self):
         """
         update the position VA
         """
         mode_pos = self._sem.position.value
-        self._position["x"] = mode_pos[0]
-        self._position["y"] = mode_pos[1]
+        self._position["x"] = mode_pos['x']
+        self._position["y"] = mode_pos['y']
 
         # it's read-only, so we change it via _value
         self.position._value = self._applyInversionAbs(self._position)
@@ -104,20 +119,19 @@ class CombinedStage(model.Actuator):
         """
         move to the position 
         """
-        # Not yet implemented
-#         with self.parent._acq_progress_lock:
-#             next_pos = {}
-#             for axis, new_pos in pos.items():
-#                 next_pos[axis] = new_pos
-#             self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
-#             self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
-#
-#             # Obtain the finally reached position after move is performed.
-#             # This is mainly in order to keep the correct position in case the
-#             # move we tried to perform was greater than the maximum possible
-#             # one.
-#             # with self.parent._acq_progress_lock:
-#             self._updatePosition()
+        next_pos = {}
+        for axis, new_pos in pos.items():
+            next_pos[axis] = new_pos
+        absMove = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
+        # Move SEM sample stage
+        f = self._sem.moveAbs({"x":absMove[0], "y":absMove[1]})
+        f.result()
+        abs_pos = self._sem.position.value
+        # Move objective lens
+        f = self._stage_conv.moveAbs(abs_pos)
+        f.result()
+
+        self._updatePosition()
 
     def _doMoveRel(self, shift):
         """
@@ -128,11 +142,15 @@ class CombinedStage(model.Actuator):
             rel[axis] = change
         relMove = rel.get("x", 0), rel.get("y", 0)
         # Move SEM sample stage
-        self._sem.moveRel({"x":relMove[0], "y":relMove[1]})
+        f = self._sem.moveRel({"x":relMove[0], "y":relMove[1]})
+        f.result()
+        abs_pos = self._sem.position.value
         # Move objective lens
-        self._stage_conv.moveRel({"x":relMove[0], "y":relMove[1]})
+        f = self._stage_conv.moveAbs(abs_pos)
+        f.result()
 
         self._updatePosition()
+
 
     @isasync
     def moveRel(self, shift):
@@ -150,12 +168,12 @@ class CombinedStage(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
 
-        # self._doMove(pos)
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
+        self._stage_conv.stop(axes)
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):

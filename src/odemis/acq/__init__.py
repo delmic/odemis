@@ -41,7 +41,6 @@ from odemis.util import img
 import sys
 import threading
 import time
-import numpy
 
 
 # TODO: Move this around so that acq.__init__ doesn't depend on acq.stream,
@@ -320,7 +319,7 @@ class ConvertStage(model.Actuator):
         children (dict str -> actuator): name to objective lens actuator
         axes (list of string): names of the axes for x and y
         scale (tuple of floats): scale factor from SEM to optical
-        rotation (float in degrees): rotation factor
+        rotation (float in degrees): rotation factor #radians
         offset (tuple of floats): offset factor #m, m
         """
         assert len(axes) == 2
@@ -330,7 +329,7 @@ class ConvertStage(model.Actuator):
         self._child = children.values()[0]
         self._axes_child = {"x": axes[0], "y": axes[1]}
         self._scale = scale
-        self._rotation = math.radians(rotation)
+        self._rotation = rotation
         self._offset = offset
 
         # Axis rotation
@@ -357,7 +356,6 @@ class ConvertStage(model.Actuator):
         # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
     def _convertPosFromChild(self, pos_child):
-        print "Child2Pos"
         # Object lens position vector
         Q = numpy.transpose([pos_child[0], pos_child[1]])
         # Transform to coordinates in the reference frame of the sample stage
@@ -365,7 +363,6 @@ class ConvertStage(model.Actuator):
         return p.tolist()
 
     def _convertPosToChild(self, pos):
-        print "Pos2Child"
         # Sample stage position vector
         P = numpy.transpose([pos[0], pos[1]])
         # Transform to coordinates in the reference frame of the objective stage
@@ -386,21 +383,19 @@ class ConvertStage(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
+        # TODO, not implemented
+        pass
 
-        # shift is a vector, conversion is identical to a point
-        vshift = [shift.get("x", 0), shift.get("y", 0)]
-        vshift_child = self._convertPosToChild(vshift)
-        print "RELMOVEOPT"
-        print vshift_child
-
-        shift_child = {self._axes_child["x"]: vshift_child[0],
-                       self._axes_child["y"]: vshift_child[1]}
-        f = self._child.moveRel(shift_child)
-        return f
-
-    # For now we don't support moveAbs(), not needed
+    @isasync
     def moveAbs(self, pos):
-        raise NotImplementedError("Do you really need that??")
+        # shift is a vector, conversion is identical to a point
+        vpos = [pos.get("x", 0), pos.get("y", 0)]
+        vpos_child = self._convertPosToChild(vpos)
+
+        pos_child = {self._axes_child["x"]: vpos_child[0],
+                       self._axes_child["y"]: vpos_child[1]}
+        f = self._child.moveAbs(pos_child)
+        return f
 
     def stop(self, axes=None):
         # This is normally never used (child is directly stopped)

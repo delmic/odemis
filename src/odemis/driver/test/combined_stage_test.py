@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-:created: 14 Mar 2014
+:created: 14 Aug 2014
 :author: kimon
 :copyright: © 2014 Kimon Tsitsikas, Delmic
 
@@ -41,7 +41,7 @@ ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "secom-comb-sim.odm.yaml"  # 7x7
 
-class TestOverlayStream(unittest.TestCase):
+class TestCombinedStage(unittest.TestCase):
     backend_was_running = False
 
     @classmethod
@@ -84,24 +84,132 @@ class TestOverlayStream(unittest.TestCase):
             self.skipTest("Running backend found")
 
     # @unittest.skip("skip")
-    def test_overlay_stream(self):
-        # Create the stream
-        ovrl = stream.OverlayStream("test overlay", self.ccd, self.ebeam, self.sed)
+    def test_move_rel(self):
+        stage = self.stage
+        sem_stage = self.sem_stage
+        align = self.align
 
-        ovrl.dwellTime.value = 0.3
-        ovrl.repetition.value = (7, 7)
-
-        f = ovrl.acquire()
-        das = f.result()
-        cor_md = das[0].metadata
-        for k in [model.MD_ROTATION_COR, model.MD_PIXEL_SIZE_COR, model.MD_POS_COR]:
-            self.assertIn(k, cor_md)
-
-        # Try to cancel
-        f = ovrl.acquire()
+        # no transformation
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (0, 0)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        stage.moveRel({"x":1e-06, "y":2e-06})
         time.sleep(1)
-        f.cancel()
-        self.assertTrue(f.cancelled())
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":1e-06, "b":2e-06})
+        stage.moveRel({"x":-1e-06, "y":-2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+        stage.moveAbs({"x":0, "y":0})
+
+        # scaling
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (0, 0)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
+        stage.moveRel({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":1e-05, "b":2e-05})
+        stage.moveRel({"x":-1e-06, "y":-2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+        stage.moveAbs({"x":0, "y":0})
+
+        # rotation
+        stage.updateMetadata({model.MD_ROTATION_COR: 1.57})
+        stage.updateMetadata({model.MD_POS_COR: (0, 0)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        stage.moveRel({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":-2e-06, "b":1e-06})
+        stage.moveRel({"x":-1e-06, "y":-2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+        stage.moveAbs({"x":0, "y":0})
+
+        # offset
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        stage.moveRel({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+        stage.moveRel({"x":-1e-06, "y":-2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":-1e-06, "b":-2e-06})
+        stage.moveAbs({"x":0, "y":0})
+
+        # offset + scaling
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
+        stage.moveRel({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+        stage.moveRel({"x":-1e-06, "y":-2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":-1e-05, "b":-2e-05})
+        stage.moveAbs({"x":0, "y":0})
+
+    # @unittest.skip("skip")
+    def test_move_abs(self):
+        stage = self.stage
+        sem_stage = self.sem_stage
+        align = self.align
+
+        # no transformation
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (0, 0)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        stage.moveAbs({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":1e-06, "b":2e-06})
+
+        # scaling
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (0, 0)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
+        stage.moveAbs({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":1e-05, "b":2e-05})
+
+        # rotation
+        stage.updateMetadata({model.MD_ROTATION_COR: 1.57})
+        stage.updateMetadata({model.MD_POS_COR: (0, 0)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        stage.moveAbs({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":-2e-06, "b":1e-06})
+
+        # offset
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
+        stage.moveAbs({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+
+        # offset + scaling
+        stage.updateMetadata({model.MD_ROTATION_COR: 0})
+        stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
+        stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
+        stage.moveAbs({"x":1e-06, "y":2e-06})
+        time.sleep(1)
+        self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
+        stage.moveAbs({"x":0, "y":0})
 
     def on_done(self, future):
         self.done += 1
@@ -110,6 +218,18 @@ class TestOverlayStream(unittest.TestCase):
         self.past = past
         self.left = left
         self.updates += 1
+
+    def assertPosAlmostEqual(self, test_case, actual, expected, *args, **kwargs):
+        """
+        Asserts that two stage positions have almost equal coordinates.
+        """
+        try:
+            if expected.viewkeys() != actual.viewkeys():
+                raise AssertionError("Dimensions of coordinates do not match")
+            for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
+                test_case.assertAlmostEqual(actual[dim_act], expected[dim_exp])
+        except AssertionError as exc:
+            raise AssertionError(exc.message)
 
 if __name__ == "__main__":
     unittest.main()
