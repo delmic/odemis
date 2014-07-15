@@ -248,7 +248,7 @@ class MicroscopeViewport(ViewPort):
         """Note: The MicroscopeViewport is not fully initialised until setView()
         has been called.
         """
-        # Call parent constructor at the end, because it needs the legen panel
+        # Call parent constructor at the end, because it needs the legend panel
         ViewPort.__init__(self, *args, **kwargs)
 
         # Bind on EVT_SLIDER to update even while the user is moving

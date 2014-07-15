@@ -132,11 +132,10 @@ class BufferedWindow(wx.Control):
         # size = (0, 0)
         # Thanks to Gerard Grazzini
 
-        if "__WXMAC__" in wx.Platform:
-            if self.Width == 0:
-                self.Width = 1
-            if self.Height == 0:
-                self.Height = 1
+        if self.Width == 0:
+            self.Width = 1
+        if self.Height == 0:
+            self.Height = 1
 
         self._Buffer = wx.EmptyBitmap(self.Width, self.Height)
         self.update_drawing()
