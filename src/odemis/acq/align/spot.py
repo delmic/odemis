@@ -38,6 +38,9 @@ from . import autofocus
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move
 FOV_MARGIN = 250  # pixels
+# Type of move in order to center the spot
+STAGE_MOVE = "Stage move"
+BEAM_SHIFT = "Beam shift"
 
 
 def MeasureSNR(image):
@@ -52,7 +55,7 @@ def MeasureSNR(image):
     
     return snr
 
-def _DoAlignSpot(future, ccd, stage, escan, focus):
+def _DoAlignSpot(future, ccd, stage, escan, focus, type):
     """
     Adjusts settings until we have a clear and well focused optical spot image, 
     detects the spot and manipulates the stage so as to move the spot center to 
@@ -63,6 +66,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
     stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
     focus (model.Actuator): The optical focus
+    type (string): Type of move in order to align
     returns (float):    Final distance to the center #m 
     raises:    
             CancelledError() if cancelled
@@ -103,7 +107,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
         logging.debug("Trying to find spot...")
-        future._centerspotf = CenterSpot(ccd, stage, ROUGH_MOVE)
+        future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type)
         dist = future._centerspotf.result()
 
         # If spot not found, autofocus and then retry
@@ -125,7 +129,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
             if future._spot_alignment_state == CANCELLED:
                 raise CancelledError()
             logging.debug("Trying again to find spot...")
-            future._centerspotf = CenterSpot(ccd, stage, ROUGH_MOVE)
+            future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type)
             dist = future._centerspotf.result()
             if dist is None:
                 raise IOError('Spot alignment failure. Spot not found')
@@ -160,7 +164,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus):
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
         logging.debug("Aligning spot...")
-        future._centerspotf = CenterSpot(ccd, stage, FINE_MOVE)
+        future._centerspotf = CenterSpot(ccd, stage, escan, FINE_MOVE, type)
         dist = future._centerspotf.result()
         if dist is None:
             raise IOError('Spot alignment failure. Cannot reach the center.')
@@ -247,12 +251,14 @@ def CropFoV(ccd):
     ccd.binning.value = (1, 1)
 
 
-def CenterSpot(ccd, stage, mx_steps):
+def CenterSpot(ccd, stage, escan, mx_steps, type=STAGE_MOVE):
     """
     Wrapper for _DoCenterSpot.
     ccd (model.DigitalCamera): The CCD
     stage (model.CombinedActuator): The stage
+    escan (model.Emitter): The e-beam scanner
     mx_steps (int): Maximum number of steps to reach the center
+    type (string): Type of move in order to align
     returns (model.ProgressiveFuture):    Progress of _DoCenterSpot,
                                          whose result() will return:
             returns (float):    Final distance to the center #m 
@@ -270,12 +276,12 @@ def CenterSpot(ccd, stage, mx_steps):
     # Run in separate thread
     center_thread = threading.Thread(target=executeTask,
                   name="Spot center",
-                  args=(f, _DoCenterSpot, f, ccd, stage, mx_steps))
+                  args=(f, _DoCenterSpot, f, ccd, stage, mx_steps, type))
 
     center_thread.start()
     return f
 
-def _DoCenterSpot(future, ccd, stage, mx_steps):
+def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
     """
     Iteratively acquires an optical image, finds the coordinates of the spot 
     (center) and moves the stage to this position. Repeats until the found 
@@ -284,7 +290,9 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The CCD
     stage (model.CombinedActuator): The stage
+    escan (model.Emitter): The e-beam scanner
     mx_steps (int): Maximum number of steps to reach the center
+    type (string): Type of move in order to align
     returns (float or None):    Final distance to the center #m 
     raises:
             CancelledError() if cancelled
@@ -330,8 +338,11 @@ def _DoCenterSpot(future, ccd, stage, mx_steps):
                 break
     
             # Move to the found spot
-            f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
-            f.result()
+            if type == STAGE_MOVE:
+                f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
+                f.result()
+            else:
+                escan.translation.value(-tab_pxs[0], -tab_pxs[1])
             steps += 1
             # Update progress of the future
             future.set_end_time(time.time() +

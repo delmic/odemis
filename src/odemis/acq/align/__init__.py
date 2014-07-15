@@ -35,7 +35,7 @@ from .images import GridScanner
 from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverlay
 from .spot import estimateAlignmentTime, _DoAlignSpot, _CancelAlignSpot
 from .autofocus import AutoFocus
-
+from .spot import BEAM_SHIFT, STAGE_MOVE
 
 def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
     """
@@ -76,7 +76,7 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     return f
 
 
-def AlignSpot(ccd, stage, escan, focus):
+def AlignSpot(ccd, stage, escan, focus, type=STAGE_MOVE):
     """
     Wrapper for DoAlignSpot. It provides the ability to check the progress of
     spot mode procedure or even cancel it.
@@ -84,6 +84,7 @@ def AlignSpot(ccd, stage, escan, focus):
     stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
     focus (model.Actuator): The optical focus
+    type (string): Type of move in order to align
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns (float):    Final distance to the center #m 
@@ -106,7 +107,7 @@ def AlignSpot(ccd, stage, escan, focus):
     # Run in separate thread
     alignment_thread = threading.Thread(target=executeTask,
                   name="Spot alignment",
-                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus))
+                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type))
 
     alignment_thread.start()
     return f
