@@ -139,10 +139,10 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
                             f = focus.moveRel({"z":shift})
                             f.result()
                             break
-                    if future._autofocus_state == CANCELLED:
-                        raise CancelledError()
                 steps += 1
 
+            if future._autofocus_state == CANCELLED:
+                raise CancelledError()
             image = detector.data.get(asap=False)
             fm_cur = MeasureFocus(image)
             f = focus.moveRel({"z": step})

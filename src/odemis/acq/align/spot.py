@@ -191,8 +191,8 @@ def _CancelAlignSpot(future):
         future._autofocusf.cancel()
         future._centerspotf.cancel()
         logging.debug("Spot alignment cancelled.")
-        future._done.wait(10)  # Do not return until we are really done
-                                # 10 seconds timeout
+    future._done.wait(10)  # Do not return until we are really done
+                            # 10 seconds timeout
 
     return True
 
