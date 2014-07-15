@@ -96,6 +96,9 @@ class MenuController(object):
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_play_stream.GetId(),
                     self._on_play_stream)
+        # FIXME: it seems that even disabled, pressing F6 will toggle/untoggle
+        # the entry (but not call _on_play_stream()).
+        # Using wx.EVT_UPDATE_UI doesn't seem to help
 
         # View/Auto Brightness/Contrast
         wx.EVT_MENU(main_frame,
@@ -267,6 +270,10 @@ class MenuController(object):
         try:
             curr_s = self._get_current_stream()
         except LookupError:
+            return
+
+        # StaticStreams have a should_update, but nothing happens
+        if isinstance(curr_s, stream.StaticStream):
             return
 
         # inverse the current status
