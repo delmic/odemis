@@ -28,10 +28,9 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.acq import stream
-from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.overlay.view import HistoryOverlay
-from odemis.gui.model import MicroscopeView, SEMStream, LiveViewGUIData
+from odemis.gui.model import LiveViewGUIData
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -41,6 +40,7 @@ import weakref
 import wx
 from wx.lib.pubsub import pub
 
+from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
@@ -953,27 +953,25 @@ class SecomCanvas(DblMicroscopeCanvas):
     def setView(self, microscope_view, tab_data):
         super(SecomCanvas, self).setView(microscope_view, tab_data)
 
-        if isinstance(tab_data, LiveViewGUIData):
+        # TODO: move this to the view controller
+        if (isinstance(tab_data, LiveViewGUIData)
+            and microscope_view.name.value == "SEM" # TODO do in a cleaner way
+            and isinstance(tab_data.main.ebeam.horizontalFoV, VigilantAttributeBase)):
             microscope_view.horizontal_field_width.subscribe(self.on_view_em_hfw_change, init=True)
 
     def on_view_em_hfw_change(self, hfw):
         """ Adjust the SEM horizontal field width when the view HFW changes
 
         """
-        if self._tab_data_model.emState.value == guimodel.STATE_ON:
-            em_streams = self.microscope_view.stream_tree.get_streams_by_type(SEMStream)
+        em_streams = self.microscope_view.stream_tree.em_streams
 
-            for em_stream in em_streams:
-                if em_stream.is_active.value:
-                    mi, ma = self._tab_data_model.main.ebeam.horizontalFoV.range
-                    if not mi <= hfw <= ma:
-                        hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
-                    self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
+        for em_stream in em_streams:
+            if em_stream.is_active.value:
+                # TODO: handle the case when horizontalFoV has choices (and not range)
+                hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+                self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
 
-                    for view in self._tab_data_model.visible_views.value:
-                        if view.stream_tree.get_streams_by_type(SEMStream):
-                            view.horizontal_field_width.value = hfw
-                    break
+                break
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
