@@ -42,6 +42,7 @@ from odemis.gui.cont.microscope import SecomStateController
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
+from odemis.util.stage import InclinedStage
 import os.path
 import pkg_resources
 import scipy.misc
@@ -1379,7 +1380,7 @@ class LensAlignTab(Tab):
         # fashion). By improving the model (=conversion A/B <-> X/Y), the GUI
         # could behave in a more expected way to the user, but the current
         # approximation is enough to do the calibration relatively quickly.
-        self._stage_ab = align.InclinedStage("converter-ab", "stage",
+        self._stage_ab = InclinedStage("converter-ab", "stage",
                                              children={"aligner": main_data.aligner},
                                              axes=["b", "a"],
                                              angle=135)

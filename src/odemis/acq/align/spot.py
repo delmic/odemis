@@ -28,7 +28,7 @@ import logging
 import math
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.gui.util.align import InclinedStage
+from odemis.util.stage import InclinedStage
 import threading
 import time
 import numpy
