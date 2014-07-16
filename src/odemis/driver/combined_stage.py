@@ -65,7 +65,7 @@ class CombinedStage(model.Actuator):
 
         self._stage_conv = ConvertStage("converter-xy", "align",
                             children={"aligner": self._lens},
-                            axes=["a", "b"],
+                            axes=["x", "y"],
                             scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                             rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
                             offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
@@ -95,7 +95,7 @@ class CombinedStage(model.Actuator):
         # Called after every sample holder insertion
         self._stage_conv = ConvertStage("converter-xy", "align",
                     children={"aligner": self._lens},
-                    axes=["a", "b"],
+                    axes=["x", "y"],
                     scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                     rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
                     offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
