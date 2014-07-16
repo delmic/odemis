@@ -2010,7 +2010,7 @@ class FakeAndorV2DLL(object):
         self.hsspeed = 0 # index in pixelReadout
         self.pixelReadouts = [0.01e-6, 0.1e-6] # s, time to readout one pixel
 
-        self.pixelSize = (20.0, 20.0) # um
+        self.pixelSize = (6.45, 6.45) # µm
 
         if image is not None:
             try:
@@ -2021,6 +2021,10 @@ class FakeAndorV2DLL(object):
                 self._data = img.ensure2DImage(exporter.read_data(image)[0])
                 self.shape = self._data.shape[::-1]
                 self.bpp = 16
+                if model.MD_PIXEL_SIZE in self._data.metadata:
+                    pxs = self._data.metadata[model.MD_PIXEL_SIZE]
+                    mag = self._data.metadata.get(model.MD_LENS_MAG, 1)
+                    self.pixelSize = tuple(1e6 * s * mag for s in pxs)
                 self.maxBinning = (16, 16) # px
             except Exception:
                 logging.exception("Failed to open file %s, will use gradient", image)
