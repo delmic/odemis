@@ -151,7 +151,6 @@ class CombinedStage(model.Actuator):
 
         self._updatePosition()
 
-
     @isasync
     def moveRel(self, shift):
         if not shift:
@@ -176,9 +175,13 @@ class CombinedStage(model.Actuator):
         self._stage_conv.stop(axes)
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
+    def _doReference(self):
+        f = self._stage_conv.reference()
+        f.result()
+
     @isasync
     def reference(self):
-        self._stage_conv.reference()
+        return self._executor.submit(self._doReference)
 
     def terminate(self):
         if self._executor:

@@ -39,7 +39,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
 ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_LENS_CONFIG = CONFIG_PATH + "secom-comb-sim.odm.yaml"  # 7x7
+SECOM_LENS_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"  # 7x7
 
 class TestCombinedStage(unittest.TestCase):
     backend_was_running = False
@@ -89,88 +89,99 @@ class TestCombinedStage(unittest.TestCase):
         sem_stage = self.sem_stage
         align = self.align
 
+        f = stage.reference()
+        f.result()
+
         # no transformation
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (0, 0)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        stage.moveRel({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":1e-06, "b":2e-06})
-        stage.moveRel({"x":-1e-06, "y":-2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":-1e-06, "y":-2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
-        stage.moveAbs({"x":0, "y":0})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
 
         # scaling
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (0, 0)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
-        stage.moveRel({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":1e-05, "b":2e-05})
-        stage.moveRel({"x":-1e-06, "y":-2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":-1e-06, "y":-2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
-        stage.moveAbs({"x":0, "y":0})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
 
         # rotation
         stage.updateMetadata({model.MD_ROTATION_COR: 1.57})
         stage.updateMetadata({model.MD_POS_COR: (0, 0)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        stage.moveRel({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":-2e-06, "b":1e-06})
-        stage.moveRel({"x":-1e-06, "y":-2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":-1e-06, "y":-2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
-        stage.moveAbs({"x":0, "y":0})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
 
         # offset
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        stage.moveRel({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
-        stage.moveRel({"x":-1e-06, "y":-2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":-1e-06, "y":-2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(self, align.position.value, {"a":-1e-06, "b":-2e-06})
-        stage.moveAbs({"x":0, "y":0})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
 
         # offset + scaling
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
-        stage.moveRel({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
-        stage.moveRel({"x":-1e-06, "y":-2e-06})
-        time.sleep(1)
+        f = stage.moveRel({"x":-1e-06, "y":-2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(self, align.position.value, {"a":-1e-05, "b":-2e-05})
-        stage.moveAbs({"x":0, "y":0})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
 
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_move_abs(self):
         stage = self.stage
         sem_stage = self.sem_stage
         align = self.align
 
+        f = stage.reference()
+        f.result()
+
         # no transformation
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (0, 0)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        stage.moveAbs({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveAbs({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":1e-06, "b":2e-06})
 
@@ -178,8 +189,8 @@ class TestCombinedStage(unittest.TestCase):
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (0, 0)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
-        stage.moveAbs({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveAbs({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":1e-05, "b":2e-05})
 
@@ -187,8 +198,8 @@ class TestCombinedStage(unittest.TestCase):
         stage.updateMetadata({model.MD_ROTATION_COR: 1.57})
         stage.updateMetadata({model.MD_POS_COR: (0, 0)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        stage.moveAbs({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveAbs({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":-2e-06, "b":1e-06})
 
@@ -196,8 +207,8 @@ class TestCombinedStage(unittest.TestCase):
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        stage.moveAbs({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveAbs({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
 
@@ -205,11 +216,12 @@ class TestCombinedStage(unittest.TestCase):
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
         stage.updateMetadata({model.MD_POS_COR: (1e-06, 2e-06)})
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
-        stage.moveAbs({"x":1e-06, "y":2e-06})
-        time.sleep(1)
+        f = stage.moveAbs({"x":1e-06, "y":2e-06})
+        f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
         self.assertPosAlmostEqual(self, align.position.value, {"a":0, "b":0})
-        stage.moveAbs({"x":0, "y":0})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
 
     def on_done(self, future):
         self.done += 1

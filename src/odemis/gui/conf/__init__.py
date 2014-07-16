@@ -252,3 +252,16 @@ class AcquisitionConfig(Config):
     def last_extension(self, last_extension):
         self.set("acquisition", "last_extension", last_extension)
 
+class CalibrationConfig(Config):
+
+    def __init__(self):
+        file_name = "calibration.config"
+
+        super(CalibrationConfig, self).__init__(file_name)
+
+        # Define the default settings
+        self.default.add_section("calibration")
+        self.default.set("calibration", "last_path", ACQUI_PATH)
+
+
+

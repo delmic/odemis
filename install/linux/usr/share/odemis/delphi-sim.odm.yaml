@@ -4,7 +4,7 @@ DELPHI: {
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "SED Phenom", "NavCam"],
     actuators: ["Stage", "Optical stage", "Optical focus",
-                "SEM Chamber", "EBeam focus", "NavCam focus"],
+                "SEM Chamber", "EBeam focus", "NavCam focus", "CombinedStage"],
 }
 
 Spectra: {
@@ -61,7 +61,7 @@ Spectra: {
 
 "Stage": {
     class: simulated.Stage,
-    role: stage,
+    role: sem-stage,
     init: {axes: ["x", "y"]},
     affects: ["EBeam Phenom", "Zyla"],
     properties: {
@@ -122,6 +122,13 @@ Spectra: {
            transpose: [-2, 1], # rotated 90° clockwise
            image: "andorcam2-fake-clara.tiff", # only for simulator
     },
+}
+
+"CombinedStage": {
+    class: combined_stage.CombinedStage,
+    role: stage,
+    init: {},
+    children: {"lens": "Optical stage", "stage": "Stage"},
 }
 
 # Use 2 CombinedActuators to separate the axes of the TMCM over different roles
