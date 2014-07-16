@@ -401,3 +401,8 @@ class ConvertStage(model.Actuator):
         # This is normally never used (child is directly stopped)
         self._child.stop()
 
+    @isasync
+    def reference(self):
+        f = self._child.reference()
+        f.result()
+

@@ -176,6 +176,10 @@ class CombinedStage(model.Actuator):
         self._stage_conv.stop(axes)
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
+    @isasync
+    def reference(self):
+        self._stage_conv.reference()
+
     def terminate(self):
         if self._executor:
             self.stop()
