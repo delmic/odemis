@@ -124,9 +124,10 @@ Spectra: {
 "SEM Chamber": {
     class: simulated.Chamber,
     role: chamber,
+    affects: ["CombinedStage"],
     init: {
         positions: ["vented", "vacuum"],
-    },
+    }
 }
 
 "ChamberCam": {

@@ -57,6 +57,8 @@ class MetadataUpdater(model.Component):
         # Subscribe to the changes of the attributes that matter
         for a in self._components:
             for d in a.affects:
+                print d.role
+                print a.role
                 if a.role == "stage":
                     # update the image position
                     self.observeStage(a, d)
@@ -70,6 +72,10 @@ class MetadataUpdater(model.Component):
                 elif a.role == "light":
                     # update the emitted light wavelength
                     self.observeLight(a, d)
+                elif a.role == "chamber":
+                    # update the offset, rotation and scaling between
+                    # sem stage and objective lens
+                    self.observeChamber(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
 
@@ -90,6 +96,20 @@ class MetadataUpdater(model.Component):
         stage.position.subscribe(updateStagePos)
         updateStagePos(stage.position.value)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
+
+    def observeChamber(self, chamber, comp):
+        # update the transformation values used by the combined stage
+        def updateConvertValues(scaling, rotation, offset, comp=comp):
+            md = {model.MD_PIXEL_SIZE_COR: scaling,
+                  model.MD_ROTATION_COR: rotation,
+                  model.MD_POS_COR: offset}
+            logging.debug("Updating convert values for component %s, to %s, %s, %s",
+                          comp.name, scaling , rotation, offset)
+            comp.updateMetadata(md)
+
+        chamber.position.subscribe(updateConvertValues)
+        updateConvertValues((10, 10), 0, (1e-06, 2e-06))
+        self._onTerminate.append((chamber.position.unsubscribe, (updateConvertValues,)))
 
     def observeLens(self, lens, comp):
         if comp.role != "ccd":
