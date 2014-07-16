@@ -259,9 +259,25 @@ class CalibrationConfig(Config):
 
         super(CalibrationConfig, self).__init__(file_name)
 
-        # Define the default settings
-        self.default.add_section("calibration")
-        self.default.set("calibration", "last_path", ACQUI_PATH)
+    def insert(self, id, h1, h2, scaling, rotation, offset):
+        self.config.add_section(id)
+        self.set(id, "first_hole", str(h1))
+        self.set(id, "second_hole", str(h2))
+        self.set(id, "scaling", str(scaling))
+        self.set(id, "rotation", str(rotation))
+        self.set(id, "offset", str(offset))
+
+    def get(self, id):
+        if self.config.has_section(id):
+            h1 = self.config.get(id, "first_hole")
+            h2 = self.config.get(id, "second_hole")
+            scaling = self.config.get(id, "scaling")
+            rotation = self.config.get(id, "rotation")
+            offset = self.config.get(id, "offset")
+            return h1, h2, scaling, rotation, offset
+        else:
+            return None
+
 
 
 
