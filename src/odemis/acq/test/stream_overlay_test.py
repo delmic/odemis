@@ -57,7 +57,6 @@ class TestOverlayStream(unittest.TestCase):
         # we cannot run it normally as the child would also think he's in a unittest
         cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_LENS_CONFIG]
         # FIXME: give an informative warning when the comedi module has not been loaded
-        print os.environ
         ret = subprocess.call(cmd)
 
         if ret != 0:
