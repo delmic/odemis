@@ -735,7 +735,6 @@ def __init_resources():
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="SecomViewport" name="vp_secom_tl">
-                        <size>400,-1</size>
                         <XRCED>
                           <assign_var>1</assign_var>
                         </XRCED>
@@ -746,7 +745,6 @@ def __init_resources():
                     </object>
                     <object class="sizeritem">
                       <object class="SecomViewport" name="vp_secom_tr">
-                        <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
                         <XRCED>
@@ -767,7 +765,6 @@ def __init_resources():
                   <object class="wxBoxSizer">
                     <object class="sizeritem">
                       <object class="SecomViewport" name="vp_secom_bl">
-                        <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
                         <XRCED>
@@ -780,7 +777,6 @@ def __init_resources():
                     </object>
                     <object class="sizeritem">
                       <object class="SecomViewport" name="vp_secom_br">
-                        <size>400,-1</size>
                         <fg>#BFBFBF</fg>
                         <bg>#000000</bg>
                         <XRCED>
