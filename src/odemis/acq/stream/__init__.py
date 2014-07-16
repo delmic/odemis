@@ -199,6 +199,11 @@ class StreamTree(object):
         """ Return a flat list of spectrum streams """
         return self.get_streams_by_type(SPECTRUM_STREAMS)
 
+    @property
+    def em_streams(self):
+        """ Return a flat list of electron microscope streams """
+        return self.get_streams_by_type(EM_STREAMS)
+
     def get_streams_by_name(self, name):
         """ Return a list of streams with have names that match `name` """
 
