@@ -170,7 +170,7 @@ class ScaleWindow(BufferedWindow):
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
         self.mpp = None # unknown
-        self.MinSize = (120, 20) # we want at least a bit of space
+        # self.MinSize = (120, 20) # we want at least a bit of space
         # This is called before the end of __init__()
         # self.va = self.GetDefaultAttributes()
         self.nod = 4 # heigh of the nods (the end of the scale)

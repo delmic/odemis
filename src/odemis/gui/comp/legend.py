@@ -77,14 +77,13 @@ class InfoLegend(wx.Panel):
                                                 imgdata.getico_blending_semBitmap())
 
         # Horizontal Field Width text
-        self.hfw_text = wx.TextCtrl(self, size=(130, -1), style=wx.NO_BORDER | wx.CB_READONLY)
+        self.hfw_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
         self.hfw_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.hfw_text.SetForegroundColour(parent.GetForegroundColour())
         self.hfw_text.SetToolTipString("Horizontal Field Width")
 
         # Magnification text
-        self.magnification_text = wx.TextCtrl(self, size=(100, -1),
-                                              style=wx.NO_BORDER | wx.CB_READONLY)
+        self.magnification_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
         self.magnification_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.magnification_text.SetForegroundColour(parent.GetForegroundColour())
         self.magnification_text.SetToolTipString("Magnification")
@@ -113,20 +112,21 @@ class InfoLegend(wx.Panel):
         slider_sizer = wx.BoxSizer(wx.HORIZONTAL)
         # TODO: need to have the icons updated according to the streams type
         slider_sizer.Add(
-            self.bmp_slider_left,
+            self.bmp_slider_left, 0,
             border=3,
             flag=wx.ALIGN_CENTER | wx.RIGHT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         slider_sizer.Add(
-            self.merge_slider,
+            self.merge_slider, 1,
             flag=wx.ALIGN_CENTER | wx.EXPAND | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
         slider_sizer.Add(
-            self.bmp_slider_right,
+            self.bmp_slider_right, 0,
             border=3,
             flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
 
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        control_sizer.Add(self.magnification_text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
-        control_sizer.Add(self.hfw_text, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
+        control_sizer.Add(self.magnification_text, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT
+                                                                      | wx.EXPAND)
+        control_sizer.Add(self.hfw_text, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(self.scale_win, 1, border=10,flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 

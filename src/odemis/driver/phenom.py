@@ -582,8 +582,6 @@ class Detector(model.Detector):
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-            # "Blank" the beam
-            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
