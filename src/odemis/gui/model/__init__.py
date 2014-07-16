@@ -22,13 +22,10 @@ This file is part of Odemis.
 """
 
 from abc import ABCMeta
-import collections
 import logging
 import math
 from odemis import model
-from odemis.acq import align
 from odemis.acq.stream import Stream, StreamTree
-from odemis.acq.stream._live import SEMStream
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
                           NotSettableError, StringVA, getVAs)
@@ -36,13 +33,11 @@ import os
 import threading
 import time
 
-import odemis.dataio as dataio
-
 
 # The different states of a microscope
 STATE_OFF = 0
 STATE_ON = 1
-STATE_PAUSE = 2 # TODO: remove this state and add a STATE_DISABLED?
+STATE_DISABLED = 2 # TODO: use this state when cannot be used
 
 # Chamber states
 CHAMBER_UNKNOWN = 0  # Chamber in an unknown state
@@ -80,7 +75,7 @@ class MainGUIData(object):
 
     Normally, there is only one instance of this object per running GUI, so only one microscope
     can be manipulated at a time by the interface. An instance of this class will normally be
-    created in the `main.py` module during startup of the GUI.
+    created in the `main.py` module during start-up of the GUI.
 
     The two main attributes are:
 
@@ -211,7 +206,7 @@ class MainGUIData(object):
         # Used when doing fine alignment, based on the value used by the user
         # when doing manual alignment. 0.1s is not too bad value if the user
         # hasn't specified anything (yet).
-        self.fineAlignDwellTime = model.FloatContinuous(0.1, range=[1e-9, 100],
+        self.fineAlignDwellTime = FloatContinuous(0.1, range=[1e-9, 100],
                                                         unit="s")
 
         # TODO: should we put also the configuration related stuff?
@@ -328,18 +323,13 @@ class LiveViewGUIData(MicroscopyGUIData):
 
         # Represent the global state of the microscopes. Mostly indicating
         # whether optical/sem streams are active.
-        hw_states = {STATE_OFF, STATE_ON}
+        hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
 
         if self.main.ccd:
             self.opticalState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        else:
-            self.opticalState
 
         if self.main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
-        else:
-            self.emState = None
-
 
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
@@ -456,7 +446,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         # remove the ones that don't have an actuator
         for ss, (v, r, an, axn) in ss_def.items():
             if getattr(main, an) is not None:
-                self.stepsizes[ss] = model.FloatContinuous(v, r)
+                self.stepsizes[ss] = FloatContinuous(v, r)
                 if axn is None:
                     axn = getattr(main, an).axes
                 for a in axn:
