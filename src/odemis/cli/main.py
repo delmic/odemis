@@ -761,7 +761,8 @@ def main(args):
             return list_components(pretty=not options.machine)
         elif options.listprop is not None:
             # Speed up is only worthy if many VAs are accessed
-            odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
+            # TODO: and still it can use too many connections and block everything
+#             odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
             return list_properties(options.listprop, pretty=not options.machine)
         elif options.setattr is not None:
             for c, a, v in options.setattr:
