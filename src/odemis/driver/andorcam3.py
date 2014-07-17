@@ -80,7 +80,11 @@ class ATDLL(CDLL):
             WinDLL.__init__(self, "libatcore.dll") # TODO check it works
         else:
             # Global so that its sub-libraries can access it
-            CDLL.__init__(self, "libatcore.so.3", RTLD_GLOBAL) # libatcore.so.3
+            try:
+                CDLL.__init__(self, "libatcore.so.3", RTLD_GLOBAL) # libatcore.so.3
+            except OSError:
+                # The standard Andor installation only installs libatcore.so
+                CDLL.__init__(self, "libatcore.so", RTLD_GLOBAL)
 
         self.AT_InitialiseLibrary()
 
