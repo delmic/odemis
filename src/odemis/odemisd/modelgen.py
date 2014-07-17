@@ -445,6 +445,12 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
     except Exception as exp:
         logging.error("Failed to instantiate the model")
         logging.info("Full traceback of the error follows", exc_info=1)
+        try:
+            remote_tb = exp._pyroTraceback
+            logging.info("Remote exception %s", "".join(remote_tb))
+        except AttributeError:
+            pass
+
         # clean up by stopping everything which we had started
         for comp in instantiator.components:
             try:

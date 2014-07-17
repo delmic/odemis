@@ -252,7 +252,12 @@ class OdemisGUIApp(wx.App):
 
             try:
                 exc = traceback.format_exception(type, value, trace)
-                logging.error("".join(exc))
+                try:
+                    remote_tb = value._pyroTraceback
+                    rmt_exc = "Remote exception %s" % ("".join(remote_tb),)
+                except AttributeError:
+                    rmt_exc = ""
+                logging.error("".join(exc) + rmt_exc)
 
                 # When an exception occurs, automatically got to debug mode.
                 if not isinstance(value, NotImplementedError):
@@ -264,7 +269,8 @@ class OdemisGUIApp(wx.App):
                 # put us back
                 sys.excepthook = self.excepthook
         else:
-            print etype, value, trace
+            exc = traceback.format_exception(type, value, trace)
+            print "".join(exc)
 
 class OdemisOutputWindow(object):
     """ Helper class which allows ``wx`` to display uncaught

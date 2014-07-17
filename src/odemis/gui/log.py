@@ -18,16 +18,32 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/. """
 
 import logging
-import os.path
 from logging.handlers import RotatingFileHandler
-
+import os.path
+import sys
 import wx
+
 
 LOG_FILE = "odemis-gui.log"
 
 LOG_LINES = 500 # maximum lines in the GUI logger
 log = logging.getLogger() # for compatibility only
 
+def logging_rmt_expection(msg, *args):
+    """
+    same as logging.expection, but also display remote exception info from Pyro
+    """
+    logging.error(msg, exc_info=1, *args)
+
+    try:
+        ex_type, ex_value, ex_tb = sys.exc_info()
+        remote_tb = ex_value._pyroTraceback
+        logging.error("Remote exception %s", "".join(remote_tb))
+    except AttributeError:
+        pass
+
+# monkey patching
+logging.exception = logging_rmt_expection
 
 def init_logger(level=logging.DEBUG):
     """
