@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
+from numpy import random
 import numpy
 from odemis.acq.align import delphi_calibration
 from odemis.dataio import hdf5
@@ -33,6 +34,7 @@ class TestHoleDetection(unittest.TestCase):
     """
     Test HoleDetection
     """
+    # @unittest.skip("skip")
     def test_find_hole_center(self):
         """
         Test FindHoleCenter
@@ -44,7 +46,7 @@ class TestHoleDetection(unittest.TestCase):
         hole_coordinates = delphi_calibration.FindHoleCenter(data[0])
         expected_coordinates = (385.0, 267.5)
         numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
-
+    # @unittest.skip("skip")
     def test_no_hole(self):
         """
         Test FindHoleCenter raises exception

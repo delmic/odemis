@@ -31,6 +31,7 @@ import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.dataio import hdf5
+import scipy
 import threading
 import time
 
@@ -387,11 +388,13 @@ def FindHoleCenter(image):
     raises:    
         IOError if hole not found
     """
+    image = scipy.misc.bytescale(image)
     contours, hierarchy = cv2.findContours(image, cv2.RETR_LIST , cv2.CHAIN_APPROX_SIMPLE)
     if contours == []:
         raise IOError("Hole not found.")
 
     area = 0
+    max_cnt = None
     whole_area = numpy.prod(image.shape)
     for cnt in contours:
         new_area = cv2.contourArea(cnt)
@@ -400,12 +403,12 @@ def FindHoleCenter(image):
             area = new_area
             max_cnt = cnt
 
-    # cv2.drawContours(image, [max_cnt], 0, 255, 2)
+    if max_cnt is None:
+        raise IOError("Hole not found.")
+
     # Find center of hole
     center_x = numpy.mean([min(max_cnt[:, :, 0]), max(max_cnt[:, :, 0])])
     center_y = numpy.mean([min(max_cnt[:, :, 1]), max(max_cnt[:, :, 1])])
-    # image[center_x, center_y] = 255
+    image[center_y, center_x] = 255
 
-    # cv2.imshow('im', image)
-    # cv2.waitKey()
     return (center_x, center_y)
