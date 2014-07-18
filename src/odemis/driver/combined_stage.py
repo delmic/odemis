@@ -128,7 +128,7 @@ class CombinedStage(model.Actuator):
         f.result()
         abs_pos = self._sem.position.value
         # Move objective lens
-        f = self._stage_conv.moveAbs(abs_pos)
+        f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
         f.result()
 
         self._updatePosition()
@@ -146,7 +146,7 @@ class CombinedStage(model.Actuator):
         f.result()
         abs_pos = self._sem.position.value
         # Move objective lens
-        f = self._stage_conv.moveAbs(abs_pos)
+        f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
         f.result()
 
         self._updatePosition()
@@ -176,6 +176,8 @@ class CombinedStage(model.Actuator):
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
     def _doReference(self):
+        f = self._sem.moveAbs({"x":0, "y":0})
+        f.result()
         f = self._stage_conv.reference()
         f.result()
 

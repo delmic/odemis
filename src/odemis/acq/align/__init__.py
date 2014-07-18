@@ -34,6 +34,7 @@ from odemis import model
 from .images import GridScanner
 from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverlay
 from .spot import estimateAlignmentTime, _DoAlignSpot, _CancelAlignSpot
+from .delphi_calibration import estimateConversionTime, _DoUpdateConversion, _CancelUpdateConversion
 from .autofocus import AutoFocus
 from .spot import BEAM_SHIFT, STAGE_MOVE
 
@@ -112,3 +113,45 @@ def AlignSpot(ccd, stage, escan, focus, type=STAGE_MOVE):
     alignment_thread.start()
     return f
 
+def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
+                     combined_stage):
+    """
+    Wrapper for DoUpdateConversion. It provides the ability to check the progress 
+    of conversion update procedure or even cancel it.
+    ccd (model.DigitalCamera): The ccd
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    sem_stage (model.Actuator): The SEM stage
+    opt_stage (model.Actuator): The objective stage
+    focus (model.Actuator): Focus of objective lens
+    combined_stage (model.Actuator): The combined stage
+    returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
+                                         whose result() will return:
+            returns (tuple of floats):    offset #m,m 
+                    (float):    rotation #radians
+                    (tuple of floats):    scaling
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateConversionTime())
+    f._conversion_update_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelUpdateConversion
+    f._conversion_lock = threading.Lock()
+    f._done = threading.Event()
+
+    # Create align_offset and rotation_scaling and hole_detection module
+    f._hole_detectionf = model.InstantaneousFuture()
+    f._align_offsetf = model.InstantaneousFuture()
+    f._rotation_scalingf = model.InstantaneousFuture()
+
+    # Run in separate thread
+    conversion_thread = threading.Thread(target=executeTask,
+                  name="Conversion update",
+                  args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
+                        opt_stage, focus, combined_stage))
+
+    conversion_thread.start()
+    return f
