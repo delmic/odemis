@@ -54,7 +54,7 @@ Spectra: {
 "EBeam focus": {
     role: ebeam-focus,
     init: {axes: ["z"]},
-    affects: ["Zyla", "EBeam Phenom"]
+    affects: ["EBeam Phenom"]
 }
 
 "SED Phenom": { # aka ETD
@@ -64,8 +64,8 @@ Spectra: {
 
 "Stage Phenom": {
     role: stage,
+    affects: ["EBeam Phenom", "Zyla"],
     init: {},
-    affects: ["EBeam Phenom"]
 }
 
 "NavCam": {

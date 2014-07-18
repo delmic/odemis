@@ -63,7 +63,7 @@ Spectra: {
     class: simulated.Stage,
     role: stage,
     init: {axes: ["x", "y"]},
-    affects: ["EBeam Phenom"],
+    affects: ["EBeam Phenom", "Zyla"],
     properties: {
         speed: {"x": 0.01, "y": 0.01} #m/s
     }
