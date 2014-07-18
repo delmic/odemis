@@ -420,7 +420,7 @@ class AndorCam2(model.DigitalCamera):
         # Describe the camera
         # up-to-date metadata to be included in dataflow
         hw_name = self.getModelName()
-        self._metadata = {model.MD_HW_NAME: hw_name}
+        self._metadata[model.MD_HW_NAME] = hw_name
         # TODO test on other hardwares
         caps = self.GetCapabilities()
         if not caps.CameraType in AndorCapabilities.CameraTypes:
@@ -610,18 +610,6 @@ class AndorCam2(model.DigitalCamera):
         # sometimes causes GetAcquisitionTimings() to block. It seems like a
         # bug in the driver, but at least, it works.
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
-
-    def getMetadata(self):
-        return self._metadata
-
-    def updateMetadata(self, md):
-        """
-        Update the metadata associated with every image acquired to these
-        new values. It's accumulative, so previous metadata values will be kept
-        if they are not given.
-        md (dict string -> value): the metadata
-        """
-        self._metadata.update(md)
 
     # low level methods, wrapper to the actual SDK functions
     # they do not ensure the actual camera is selected, you have to call select()

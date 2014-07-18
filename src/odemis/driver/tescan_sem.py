@@ -67,7 +67,7 @@ class TescanSEM(model.HwComponent):
         self._device.ScStopScan()
 
         self._hwName = "TescanSEM (s/n: %s)" % (self._device.TcpGetDevice())
-        self._metadata = {model.MD_HW_NAME: self._hwName}
+        self._metadata[model.MD_HW_NAME] = self._hwName
         self._swVersion = "SEM sw %s, protocol %s" % (self._device.TcpGetSWVersion(),
                                                       self._device.TcpGetVersion())
         self._metadata[model.MD_SW_VERSION] = self._swVersion
@@ -122,9 +122,6 @@ class TescanSEM(model.HwComponent):
             raise KeyError("TescanSEM was not given a 'pressure' child")
         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._pressure)
-
-    def updateMetadata(self, md):
-        self._metadata.update(md)
 
     def terminate(self):
         """
@@ -241,9 +238,12 @@ class Scanner(model.Emitter):
                                   setter=self._setPC)
 
 
+    # we share metadata with our parent
     def updateMetadata(self, md):
-        # we share metadata with our parent
         self.parent.updateMetadata(md)
+
+    def getMetadata(self):
+        return self.parent.getMetadata()
 
     def _onHorizontalFOV(self, s):
         # Update current pixelSize and magnification
@@ -576,9 +576,13 @@ class Detector(model.Detector):
                 logging.debug("Acquisition thread closed")
                 self._acquisition_must_stop.clear()
 
+    # we share metadata with our parent
     def updateMetadata(self, md):
-        # we share metadata with our parent
         self.parent.updateMetadata(md)
+
+    def getMetadata(self):
+        return self.parent.getMetadata()
+
 
 class SEMDataFlow(model.DataFlow):
     """

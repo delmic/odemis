@@ -85,8 +85,9 @@ class SEM(model.HwComponent):
 
         self._imagingDevice = self._objects.create('ns0:imagingDevice')
 
-        self._metadata = {model.MD_HW_NAME: "PhenomSEM"}
+        self._metadata[model.MD_HW_NAME] = "PhenomSEM"
         info = self._device.VersionInfo().versionInfo
+        # Use an XML parser to parse it more robustly? At least don't fail if cannot find version
         start = info.index("'Version'>") + len("'Version'>")
         end = info.index("</Property", start)
         self._swVersion = "SEM sw %s" % (info[start:end])
@@ -147,12 +148,6 @@ class SEM(model.HwComponent):
             raise KeyError("PhenomSEM was not given a 'pressure' child")
         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._pressure)
-
-    def updateMetadata(self, md):
-        self._metadata.update(md)
-
-    def getMetadata(self):
-        return self._metadata
 
     def terminate(self):
         """

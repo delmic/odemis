@@ -220,7 +220,7 @@ class AndorCam3(model.DigitalCamera):
         
         # Describe the camera
         # up-to-date metadata to be included in dataflow
-        self._metadata = {model.MD_HW_NAME: self.getModelName()}
+        self._metadata[model.MD_HW_NAME] = self.getModelName()
         
         # odemis + sdk
         self._swVersion = "%s (driver %s)" % (odemis.__version__, self.getSDKVersion())
@@ -346,19 +346,6 @@ class AndorCam3(model.DigitalCamera):
 
         self.data = AndorCam3DataFlow(self)
     
-    # TODO: merge into HwComponent
-    def getMetadata(self):
-        return self._metadata
-    
-    def updateMetadata(self, md):
-        """
-        Update the metadata associated with every image acquired to these
-        new values. It's accumulative, so previous metadata values will be kept
-        if they are not given.
-        md (dict string -> value): the metadata
-        """
-        self._metadata.update(md)
-
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
 

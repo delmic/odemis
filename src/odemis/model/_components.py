@@ -229,6 +229,7 @@ class HwComponent(Component):
         self._affects = frozenset()
         self._swVersion = "Unknown (Odemis %s)" % odemis.__version__
         self._hwVersion = "Unknown"
+        self._metadata = {}  # internal metadata
 
     @roattribute
     def role(self):
@@ -267,9 +268,20 @@ class HwComponent(Component):
     def hwVersion(self):
         return self._hwVersion
 
-    # to be overridden by any component which actually can provide metadata
+    # can be overridden by components which need to know when the metadata is updated
+    def updateMetadata(self, md):
+        """
+        Updates the internal metadata. It's accumulative, so previous metadata
+        values will be kept if they are not given.
+        md (dict string -> value): values to update
+        """
+        self._metadata.update(md)
+
     def getMetadata(self):
-        return {}
+        """
+        return (dict string -> value): internal metadata
+        """
+        return self._metadata
 
     # to be overridden by components which can do self test
     def selfTest(self):

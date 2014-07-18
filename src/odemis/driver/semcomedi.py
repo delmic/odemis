@@ -325,20 +325,6 @@ class SEMComedi(model.HwComponent):
         """
         return comedi.get_board_name(self._device)
 
-    def getMetadata(self):
-        return self._metadata
-
-    def updateMetadata(self, md):
-        """
-        Update the metadata associated with every image acquired to these
-        new values. It's accumulative, so previous metadata values will be kept
-        if they are not given.
-        md (dict string -> value): the metadata
-        """
-        # We receive as MD_POS the _center_ position. When applied to an image,
-        # the scanner translation will be added to it.
-        self._metadata.update(md)
-
     def _get_min_periods(self):
         """
         Read the minimum scan periods for the AI and AO subdevices
@@ -2279,8 +2265,11 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
 
+    # we share metadata with our parent
+    def getMetadata(self):
+        return self.parent.getMetadata()
+
     def updateMetadata(self, md):
-        # we share metadata with our parent
         self.parent.updateMetadata(md)
 
     def _get_point_data(self, pos):
@@ -2510,8 +2499,11 @@ class Detector(model.Detector):
     def channel(self):
         return self._channel
 
+    # we share metadata with our parent
+    def getMetadata(self):
+        return self.parent.getMetadata()
+
     def updateMetadata(self, md):
-        # we share metadata with our parent
         self.parent.updateMetadata(md)
 
 class SEMDataFlow(model.DataFlow):

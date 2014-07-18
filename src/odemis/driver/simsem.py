@@ -67,7 +67,7 @@ class SimSEM(model.HwComponent):
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
-        self._metadata = {model.MD_HW_NAME: "FakeSEM"}
+        self._metadata[model.MD_HW_NAME] = "FakeSEM"
 
         # create the scanner child
         try:
@@ -94,12 +94,6 @@ class SimSEM(model.HwComponent):
         else:
             self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
             self.children.add(self._focus)
-
-    def updateMetadata(self, md):
-        self._metadata.update(md)
-
-    def getMetadata(self):
-        return self._metadata
 
     def terminate(self):
         """
@@ -188,9 +182,12 @@ class Scanner(model.Emitter):
                           unit="A")
         self.accelVoltage = model.FloatContinuous(10e3, (1e3, 30e3), unit="V")
 
+    # we share metadata with our parent
     def updateMetadata(self, md):
-        # we share metadata with our parent
         self.parent.updateMetadata(md)
+
+    def getMetadata(self):
+        return self.parent.getMetadata()
 
     def _onHFV(self, hfv):
         self._updatePixelSize()
@@ -326,6 +323,13 @@ class Detector(model.Detector):
         if parent._drift_period:
             self._update_drift_timer.start()
 
+    # we share metadata with our parent
+    def updateMetadata(self, md):
+        self.parent.updateMetadata(md)
+
+    def getMetadata(self):
+        return self.parent.getMetadata()
+
     def start_acquire(self, callback):
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
@@ -433,10 +437,6 @@ class Detector(model.Detector):
         finally:
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
-
-    def updateMetadata(self, md):
-        # we share metadata with our parent
-        self.parent.updateMetadata(md)
 
 class SEMDataFlow(model.DataFlow):
     """
