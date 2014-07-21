@@ -343,6 +343,12 @@ def main(args):
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
 
+    if loglev <= logging.DEBUG:
+        # Activate also Pyro logging
+        # TODO: options.logtarget
+        pyrolog = logging.getLogger("Pyro4")
+        pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.INFO))
+
     # Useful to debug cases of multiple conflicting installations
     logging.debug("Starting Odemis back-end (from %s)", __file__)
 

@@ -30,19 +30,22 @@ import urllib
 import weakref
 
 
-#Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
+# Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
 # There is a problem with threadpool: threads have a timeout on waiting for a
 # request. That obviously doesn't make much sense, but also means it's not
 # possible to put a global timeout with the current version and threadpool.
 # One possibility is to change ._pyroTimeout on each proxy.
+
 # thread is restricted: it can handle at the same time only
-# MAXTHREADS concurrent connections (which is MINTHREADS because there is a bug).
+# MAXTHREADS concurrent connections.
 # After that it simply blocks. As there is one connection per object, it goes fast.
 # Multiplex can handle a much larger number of connections, but will always
 # execute the requests one at a time. It seems to handle badly callbacks
 #Pyro4.config.SERVERTYPE = "multiplex"
-Pyro4.config.THREADPOOL_MINTHREADS = 24
-# TODO make sure Pyro can grow the pool: for now it allocates a huge static number of threads
+Pyro4.config.THREADPOOL_MINTHREADS = 16
+Pyro4.config.THREADPOOL_MAXTHREADS = 128
+# TODO make sure Pyro can now grow the pool: it used to allocate a huge static
+# number of threads. It seems also that when growing the pool it sometimes blocks
 
 # TODO needs a different value on Windows
 # TODO try a user temp directory if /var/run/odemisd doesn't exist (and cannot be created)
