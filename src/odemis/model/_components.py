@@ -720,7 +720,7 @@ class Actuator(HwComponent):
                     # we cannot check more precisely, unless we also know all
                     # the moves queued (eg, if we had a targetPosition)
                     rng = axis_def.range
-                    raise ValueError(u"Move %s for axis %s outside of range %f→%f"
+                    raise ValueError("Move %s for axis %s outside of range %f->%f"
                                      % (val, axis, rng[0], rng[1]))
                 elif hasattr(axis_def, "choices"):
                     # TODO: actually, in _some_ cases it could be acceptable
@@ -746,7 +746,7 @@ class Actuator(HwComponent):
                 elif (hasattr(axis_def, "range") and not
                       axis_def.range[0] <= val <= axis_def.range[1]):
                     rng = axis_def.range
-                    raise ValueError(u"Position %s for axis %s outside of range %f→%f"
+                    raise ValueError("Position %s for axis %s outside of range %f->%f"
                                      % (val, axis, rng[0], rng[1]))
             else:
                 raise ValueError("Unknown axis %s" % (axis,))
