@@ -447,8 +447,10 @@ class Detector(model.Detector):
         self._tilt_unblank = self.parent._device.GetSEMSourceTilt()
 
     def start_acquire(self, callback):
-        # Update stage position
+        # Update stage and focus position
         self.parent._stage._updatePosition()
+        self.parent._focus._updatePosition()
+        self.parent._navcam_focus._updatePosition()
 
         # Update all the Scanner VAs upon stream start
         # Get current field of view and compute magnification
@@ -734,6 +736,11 @@ class Stage(model.Actuator):
         pos = self._applyInversionAbs(pos)
 
         # self._doMove(pos)
+        return self._executor.submit(self._doMoveAbs, pos)
+
+    @isasync
+    def reference(self):
+        pos = {"x":0, "y":0}
         return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
