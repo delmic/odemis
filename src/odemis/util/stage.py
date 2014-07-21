@@ -206,9 +206,8 @@ class ConvertStage(model.Actuator):
     @isasync
     def reference(self):
         # TODO, implement reference for objective lens
-#         f = self._child.reference()
-#         f.result()
-        f = self.moveAbs({"x":0, "y":0})
+        f = self._child.reference()
+        f.result()
         return f
 
 

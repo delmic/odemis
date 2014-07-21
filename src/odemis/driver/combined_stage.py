@@ -176,7 +176,7 @@ class CombinedStage(model.Actuator):
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
     def _doReference(self):
-        f = self._sem.moveAbs({"x":0, "y":0})
+        f = self._sem.reference()
         f.result()
         f = self._stage_conv.reference()
         f.result()

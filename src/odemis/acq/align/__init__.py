@@ -34,7 +34,7 @@ from odemis import model
 from .images import GridScanner
 from .find_overlay import estimateOverlayTime, _DoFindOverlay, _CancelFindOverlay
 from .spot import estimateAlignmentTime, _DoAlignSpot, _CancelAlignSpot
-from .delphi_calibration import estimateConversionTime, _DoUpdateConversion, _CancelUpdateConversion
+from odemis.acq.align.delphi import estimateConversionTime, _DoUpdateConversion, _CancelUpdateConversion
 from .autofocus import AutoFocus
 from .spot import BEAM_SHIFT, STAGE_MOVE
 
