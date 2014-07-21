@@ -30,10 +30,15 @@ import math
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.dataio import hdf5
+from odemis.acq.align import transform
 import scipy
 import threading
 import time
+
+NUMBER_OF_HOLES = 2  # Number of holes in the sample holder
+EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
+HOLE_ERR_MARGIN = 30e-06  # Error margin in hole detection
+MAX_STEPS = 10  # To reach the hole
 
 
 # from .autofocus import AutoFocus, FINE_SPOTMODE_ACCURACY
@@ -319,8 +324,9 @@ def HoleDetection(detector, escan, sem_stage):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
+    et = 5e-06 * numpy.prod(escan.resolution.range[1])
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateHoleDetectionTime())
+                                end=est_start + estimateHoleDetectionTime(et))
     f._hole_detection_state = RUNNING
 
     # Task to run
@@ -344,17 +350,66 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
-    returns (tuple of floats): first_hole #m,m 
-            (tuple of floats): second_hole #m,m
+    returns (tuple of dicts): first_hole and second_hole #m,m 
     raises:    
         CancelledError() if cancelled
         IOError if holes not found
     """
     logging.debug("Starting hole detection...")
     try:
-        if future._hole_detection_state == CANCELLED:
-            raise CancelledError()
-        
+        escan.scale.value = (1, 1)
+        escan.resolution.value = escan.resolution.range[1]
+        escan.dwellTime.value = 5e-06
+        holes_found = EXPECTED_HOLES
+        et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
+        for hole in range(NUMBER_OF_HOLES):
+            if future._hole_detection_state == CANCELLED:
+                raise CancelledError()
+            # Set the FoV to 1.2mm
+            escan.horizontalFoV.value = 1.2e-03
+            # Set the voltage to 5.3kV
+            escan.accelVoltage.value = 5.3e03
+            # Move Phenom sample stage to expected hole position
+            f = sem_stage.moveAbs({"x":EXPECTED_HOLES[hole]["x"],
+                                   "y":EXPECTED_HOLES[hole]["y"]})
+            f.result()
+            dist = None
+            steps = 0
+            while True:
+                if future._hole_detection_state == CANCELLED:
+                    raise CancelledError()
+                if steps >= MAX_STEPS:
+                    break
+                # From SEM image determine marker position relative to the center of
+                # the SEM
+                image = detector.data.get(asap=False)
+                try:
+                    hole_coordinates = FindHoleCenter(image)
+                except IOError:
+                    raise IOError("Holes not found.")
+                pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+                center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+                tab_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
+                tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
+                dist = math.hypot(*tab)
+                # Move to hole until you are close enough
+                if dist <= HOLE_ERR_MARGIN:
+                    break
+                f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
+                f.result()
+                steps += 1
+                # Reset the FoV to 0.6mm
+                if escan.horizontalFoV.value != 0.6e-03:
+                    escan.horizontalFoV.value = 0.6e-03
+                # Update progress of the future
+                future.set_end_time(time.time() +
+                    estimateHoleDetectionTime(et, dist))
+
+            #SEM stage position plus offset from hole detection
+            holes_found[hole]["x"] = sem_stage.position.value["x"] + tab[0]
+            holes_found[hole]["y"] = sem_stage.position.value["y"] + tab[1]
+        return holes_found
+
     finally:
         with future._detection_lock:
             if future._hole_detection_state == CANCELLED:
@@ -375,12 +430,18 @@ def _CancelHoleDetection(future):
 
     return True
 
-def estimateHoleDetectionTime():
+def estimateHoleDetectionTime(et, dist=None):
     """
     Estimates hole detection procedure duration
     returns (float):  process estimated time #s
     """
-    pass
+    if dist is None:
+        steps = MAX_STEPS
+    else:
+        err_mrg = HOLE_ERR_MARGIN
+        steps = math.log(dist / err_mrg) / math.log(2)
+        steps = min(steps, MAX_STEPS)
+    return steps * (et + 2)  # s
 
 def FindHoleCenter(image):
     """
@@ -401,7 +462,7 @@ def FindHoleCenter(image):
     for cnt in contours:
         new_area = cv2.contourArea(cnt)
         #Make sure you dont detect the whole image frame or just a spot
-        if new_area > area and new_area < 0.8 * whole_area and new_area > 0.01 * whole_area:
+        if new_area > area and new_area < 0.8 * whole_area and new_area > 0.005 * whole_area:
             area = new_area
             max_cnt = cnt
 
@@ -411,6 +472,29 @@ def FindHoleCenter(image):
     # Find center of hole
     center_x = numpy.mean([min(max_cnt[:, :, 0]), max(max_cnt[:, :, 0])])
     center_y = numpy.mean([min(max_cnt[:, :, 1]), max(max_cnt[:, :, 1])])
-    image[center_y, center_x] = 255
 
     return (center_x, center_y)
+
+def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
+                         expected_second_hole, offset, rotation):
+    """
+    Given the hole coordinates found in the calibration file and the new ones, 
+    determine the offset and rotation of the current sample holder insertion. 
+    new_first_hole (tuple of floats): New coordinates of the holes
+    new_second_hole (tuple of floats)
+    expected_first_hole (tuple of floats): expected coordinates
+    expected_second_hole (tuple of floats) 
+    offset (tuple of floats): #m,m
+    rotation (float): #radians
+    returns (float): updated_rotation #radians
+            (tuple of floats): updated_offset
+    """
+    logging.debug("Starting extra offset calculation...")
+
+    # Extra offset and rotation
+    e_offset, unused, e_rotation = transform.CalculateTransform([new_first_hole, new_second_hole],
+                                                                 [expected_first_hole, expected_second_hole])
+    updated_offset = [a + b for a, b in zip(offset, e_offset)]
+    updated_rotation = rotation + e_rotation
+    return updated_offset, updated_rotation
+
