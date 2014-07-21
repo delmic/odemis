@@ -44,9 +44,9 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
     First calls the HoleDetection to find the hole centers. Then if the current 
     sample holder is inserted for the first time, calls AlignAndOffset, 
     RotationAndScaling and enters the data to the calibration file. Otherwise 
-    calls only RotationAndScaling if the sample holder is in the calibration 
-    file but the hole coordinates differ from the ones in the calibration file. 
-    Finally it updates the conversion metadata of the Combined Stage.
+    given the holes coordinates of the original calibration and the current 
+    holes coordinates, update the offset, rotation and scaling to be used by the
+     Combined Stage.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The ccd
     detector (model.Detector): The se-detector
@@ -337,7 +337,9 @@ def HoleDetection(detector, escan, sem_stage):
 
 def _DoHoleDetection(future, detector, escan, sem_stage):
     """
-    Detects the centers of the holes on the sample holder.
+    Moves to the expected positions of the holes on the sample holder and 
+    determines the centers of the holes (acquiring SEM images) with respect to 
+    the center of the SEM.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner

@@ -128,7 +128,7 @@ Spectra: {
     class: combined_stage.CombinedStage,
     role: stage,
     init: {},
-    children: {"lens": "Optical stage", "stage": "Stage"},
+    children: {"master": "Stage", "slave": "Optical stage"},
 }
 
 # Use 2 CombinedActuators to separate the axes of the TMCM over different roles

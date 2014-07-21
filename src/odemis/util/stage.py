@@ -207,7 +207,6 @@ class ConvertStage(model.Actuator):
     def reference(self):
         # TODO, implement reference for objective lens
         f = self._child.reference()
-        f.result()
         return f
 
 

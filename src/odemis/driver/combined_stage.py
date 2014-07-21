@@ -44,9 +44,9 @@ class CombinedStage(model.Actuator):
         self._position = {}
 
         # SEM stage
-        self._sem = None
+        self._master = None
         # Optical stage
-        self._lens = None
+        self._slave = None
 
         for type, child in children.items():
             child.parent = self
@@ -56,15 +56,15 @@ class CombinedStage(model.Actuator):
                 raise ValueError("Child %s is not a component." % str(child))
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % str(child))
-            if type == "lens":
-                self._lens = child
-            elif type == "stage":
-                self._sem = child
+            if type == "slave":
+                self._slave = child
+            elif type == "master":
+                self._master = child
             else:
                 raise IOError("Child given to CombinedStage is not a stage.")
 
         self._stage_conv = ConvertStage("converter-xy", "align",
-                            children={"aligner": self._lens},
+                            children={"aligner": self._slave},
                             axes=["x", "y"],
                             scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                             rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
@@ -94,7 +94,7 @@ class CombinedStage(model.Actuator):
         # Re-initialiaze ConvertStage with the new transformation values
         # Called after every sample holder insertion
         self._stage_conv = ConvertStage("converter-xy", "align",
-                    children={"aligner": self._lens},
+                    children={"aligner": self._slave},
                     axes=["x", "y"],
                     scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                     rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
@@ -107,7 +107,7 @@ class CombinedStage(model.Actuator):
         """
         update the position VA
         """
-        mode_pos = self._sem.position.value
+        mode_pos = self._master.position.value
         self._position["x"] = mode_pos['x']
         self._position["y"] = mode_pos['y']
 
@@ -124,9 +124,9 @@ class CombinedStage(model.Actuator):
             next_pos[axis] = new_pos
         absMove = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
         # Move SEM sample stage
-        f = self._sem.moveAbs({"x":absMove[0], "y":absMove[1]})
+        f = self._master.moveAbs({"x":absMove[0], "y":absMove[1]})
         f.result()
-        abs_pos = self._sem.position.value
+        abs_pos = self._master.position.value
         # Move objective lens
         f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
         f.result()
@@ -142,9 +142,9 @@ class CombinedStage(model.Actuator):
             rel[axis] = change
         relMove = rel.get("x", 0), rel.get("y", 0)
         # Move SEM sample stage
-        f = self._sem.moveRel({"x":relMove[0], "y":relMove[1]})
+        f = self._master.moveRel({"x":relMove[0], "y":relMove[1]})
         f.result()
-        abs_pos = self._sem.position.value
+        abs_pos = self._master.position.value
         # Move objective lens
         f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
         f.result()
@@ -176,7 +176,7 @@ class CombinedStage(model.Actuator):
         logging.warning("Stopping all axes: %s", ", ".join(self.axes))
 
     def _doReference(self):
-        f = self._sem.reference()
+        f = self._master.reference()
         f.result()
         f = self._stage_conv.reference()
         f.result()
