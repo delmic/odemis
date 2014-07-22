@@ -141,7 +141,7 @@ class ConvertStage(model.Actuator):
         self._L = numpy.array([[self._scale[0], 0],
                          [0, self._scale[1]]])
         # Offset between origins of the coordinate systems
-        self._O = numpy.transpose([self._offset[0], self._offset[1]])
+        self._O = numpy.transpose([-self._offset[0], -self._offset[1]])
 
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}

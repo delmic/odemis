@@ -31,14 +31,18 @@ import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform
+from odemis.acq.align import spot
 import scipy
 import threading
 import time
 
 NUMBER_OF_HOLES = 2  # Number of holes in the sample holder
 EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
-HOLE_ERR_MARGIN = 30e-06  # Error margin in hole detection
+ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
+# Positions to scan for rotation and scaling calculation
+ROTATION_SPOTS = ({"x":5e-03, "y":0}, {"x":-5e-03, "y":0},
+                  {"x":0, "y":5e-03}, {"x":0, "y":-5e-03})
 
 
 # from .autofocus import AutoFocus, FINE_SPOTMODE_ACCURACY
@@ -76,6 +80,13 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
         logging.debug("Detect the holes/markers of the sample holder...")
         future._hole_detectionf = HoleDetection(detector, escan, sem_stage)
         first_hole, second_hole = future._hole_detectionf.result()
+
+        # Configure CCD and e-beam to write CL spots
+        ccd.binning.value = (1, 1)
+        ccd.resolution.value = ccd.resolution.range[1]
+        ccd.exposureTime.value = 900e-03
+        escan.scale.value = (1, 1)
+        escan.resolution.value = (1, 1)
 
         # Check if the sample holder is inserted for the first time
         if True:
@@ -247,7 +258,7 @@ def RotationAndScaling(ccd, escan, sem_stage, opt_stage, focus, offset):
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateRotationAndScalingTime())
+                                end=est_start + estimateRotationAndScalingTime(ccd.exposureTime.value))
     f._rotation_scaling_state = RUNNING
 
     # Task to run
@@ -286,6 +297,64 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         if future._rotation_scaling_state == CANCELLED:
             raise CancelledError()
 
+        # Move Phenom sample stage to each spot
+        sem_spots = ROTATION_SPOTS
+        opt_spots = ROTATION_SPOTS
+        for spot in range(ROTATION_SPOTS):
+            pos = ROTATION_SPOTS[spot]
+            if future._rotation_scaling_state == CANCELLED:
+                raise CancelledError()
+            f = sem_stage.moveAbs({"x":pos["x"],
+                                   "y":pos["y"]})
+            f.result()
+            # Transform to coordinates in the reference frame of the objective stage
+            vpos = [-pos.get("x", 0), -pos.get("y", 0)]
+            P = numpy.transpose([vpos[0], vpos[1]])
+            O = numpy.transpose([offset[0], offset[1]])
+            q = numpy.add(P, O).tolist()
+            # Move objective lens correcting for offset
+            cor_pos = {"x": q[0], "y": q[1]}
+            f = opt_stage.moveAbs(cor_pos)
+            f.result()
+
+            # Move Phenom sample stage so that the spot should be at the center
+            # of the CCD FoV
+            dist = None
+            steps = 0
+            while True:
+                if future._rotation_scaling_state == CANCELLED:
+                    raise CancelledError()
+                if steps >= MAX_STEPS:
+                    break
+                image = ccd.data.get(asap=False)
+                try:
+                    spot_coordinates = spot.FindSpot(image)
+                except IOError:
+                    raise IOError("CL spot not found.")
+                pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+                center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+                tab_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
+                tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
+                dist = math.hypot(*tab)
+                # Move to spot until you are close enough
+                if dist <= ERR_MARGIN:
+                    break
+                f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
+                f.result()
+                steps += 1
+                # Update progress of the future
+                future.set_end_time(time.time() +
+                    estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
+
+            # Save Phenom sample stage position and Delmic optical stage position
+            sem_spots[spot]["x"] = sem_stage.position.value["x"] + tab[0]
+            sem_spots[spot]["y"] = sem_stage.position.value["y"] + tab[1]
+            opt_spots[spot]["x"] = opt_stage.position.value["x"]
+            opt_spots[spot]["y"] = opt_stage.position.value["y"]
+
+        # From the sets of 4 positions calculate rotation and scaling matrices
+
+
     finally:
         with future._rotation_lock:
             if future._rotation_scaling_state == CANCELLED:
@@ -306,12 +375,18 @@ def _CancelRotationAndScaling(future):
 
     return True
 
-def estimateRotationAndScalingTime():
+def estimateRotationAndScalingTime(et, dist=None):
     """
     Estimates rotation and scaling calculation procedure duration
     returns (float):  process estimated time #s
     """
-    pass
+    if dist is None:
+        steps = MAX_STEPS
+    else:
+        err_mrg = ERR_MARGIN
+        steps = math.log(dist / err_mrg) / math.log(2)
+        steps = min(steps, MAX_STEPS)
+    return steps * (et + 2)  # s
 
 def HoleDetection(detector, escan, sem_stage):
     """
@@ -359,7 +434,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
     try:
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
-        escan.dwellTime.value = 5e-06
+        escan.dwellTime.value = 5e-06  # good enough for clear SEM image
         holes_found = EXPECTED_HOLES
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
         for hole in range(NUMBER_OF_HOLES):
@@ -393,7 +468,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
                 tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
                 dist = math.hypot(*tab)
                 # Move to hole until you are close enough
-                if dist <= HOLE_ERR_MARGIN:
+                if dist <= ERR_MARGIN:
                     break
                 f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
                 f.result()
@@ -438,7 +513,7 @@ def estimateHoleDetectionTime(et, dist=None):
     if dist is None:
         steps = MAX_STEPS
     else:
-        err_mrg = HOLE_ERR_MARGIN
+        err_mrg = ERR_MARGIN
         steps = math.log(dist / err_mrg) / math.log(2)
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s

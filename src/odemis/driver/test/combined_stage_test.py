@@ -88,8 +88,8 @@ class TestCombinedStage(unittest.TestCase):
         sem_stage = self.sem_stage
         align = self.align
 
-        f = stage.reference()
-        f.result()
+        # f = stage.reference()
+        # f.result()
 
         # no transformation
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -143,11 +143,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-2e-06, "y":-4e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-1e-06, "y":-2e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"x":1e-06, "y":2e-06})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -158,11 +158,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-2e-05, "y":-4e-05})
+        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-1e-05, "y":-2e-05})
+        self.assertPosAlmostEqual(self, align.position.value, {"x":1e-05, "y":2e-05})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -172,8 +172,8 @@ class TestCombinedStage(unittest.TestCase):
         sem_stage = self.sem_stage
         align = self.align
 
-        f = stage.reference()
-        f.result()
+        # f = stage.reference()
+        # f.result()
 
         # no transformation
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -209,7 +209,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-2e-06, "y":-4e-06})
+        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
 
         # offset + scaling
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -218,7 +218,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-2e-05, "y":-4e-05})
+        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
