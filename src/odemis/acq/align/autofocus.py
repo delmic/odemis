@@ -37,6 +37,7 @@ ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
 INIT_THRES_FACTOR = 4e-3  # initial autofocus threshold factor
 
 MAX_STEPS_NUMBER = 40  # Max steps to perform autofocus
+MAX_BS_NUMBER = 2  # Maximum number of applying binary search with a smaller max_step
 
 
 def MeasureFocus(image):
@@ -59,7 +60,7 @@ def MeasureFocus(image):
     return ndimage.standard_deviation(image)
 
 
-def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
+def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
     """
     Iteratively acquires an optical image, measures its focus level and adjusts 
     the optical focus with respect to the focus level.
@@ -70,7 +71,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
     et: exposure time if detector is a ccd, 
         dwellTime*prod(resolution) if detector is an SEM
     focus (model.CombinedActuator): The optical focus
-    accuracy (float): Focus precision #m
     returns (float):    Focus position #m
                         Focus level
     raises:    
@@ -80,110 +80,109 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, accuracy):
     logging.debug("Starting Autofocus...")
 
     try:
-        # Clip accuracy within reasonable limits
-        accuracy = numpy.clip(accuracy, max_step / 5, max_step)
         rng = focus.axes["z"].range
 
-        # Keep the initial focus position
-        init_pos = focus.position.value.get('z')
-        step = accuracy
-        cur_pos = focus.position.value.get('z')
-        image = detector.data.get(asap=False)
-        fm_cur = MeasureFocus(image)
-        init_fm = fm_cur
-        f = focus.moveRel({"z": step})
-        f.result()
-        image = detector.data.get(asap=False)
-        fm_test = MeasureFocus(image)
-
-        if future._autofocus_state == CANCELLED:
-            raise CancelledError()
-        cur_pos = focus.position.value.get('z')
-
-        # Check if we our completely out of focus
-        if abs(fm_cur - fm_test) < (thres_factor * fm_cur):
-            logging.warning("Completely out of focus, retrying...")
-            step = max_step
-            fm_new = 0
-            sign = 1
-            factor = 1
-            new_step = step
+        for trial in range(MAX_BS_NUMBER):
+            # Keep the initial focus position
+            init_pos = focus.position.value.get('z')
+            step = max_step / 2
             cur_pos = focus.position.value.get('z')
-
-            steps = 0
-            count_fails = 0
-            while fm_new - fm_test < (thres_factor * 2) * fm_test:
-                if steps >= MAX_STEPS_NUMBER:
-                    break
-                sign = -sign
-                cur_pos = cur_pos + sign * new_step
-                if sign == 1:
-                    factor += 1
-                new_step += factor * step
-                if future._autofocus_state == CANCELLED:
-                    raise CancelledError()
-                if rng[0] <= cur_pos <= rng[1]:
-                    pos = focus.position.value.get('z')
-                    shift = cur_pos - pos
-                    f = focus.moveRel({"z":shift})
-                    f.result()
-                    image = detector.data.get(asap=False)
-                    fm_new = MeasureFocus(image)
-                    if fm_test - fm_new > (thres_factor / 2) * fm_new:
-                        count_fails+=1
-                        if (steps == 1) and (count_fails == 2):
-                            # Return to initial position
-                            logging.info("Binary search does not improve focus.")
-                            pos = focus.position.value.get('z')
-                            shift = init_pos - pos
-                            f = focus.moveRel({"z":shift})
-                            f.result()
-                            break
-                steps += 1
-
-            if future._autofocus_state == CANCELLED:
-                raise CancelledError()
             image = detector.data.get(asap=False)
             fm_cur = MeasureFocus(image)
+            init_fm = fm_cur
             f = focus.moveRel({"z": step})
             f.result()
             image = detector.data.get(asap=False)
             fm_test = MeasureFocus(image)
+
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
+            cur_pos = focus.position.value.get('z')
 
-        # Update progress of the future
-        future.set_end_time(time.time() +
-                            estimateAutoFocusTime(et, MAX_STEPS_NUMBER / 2))
-        # Determine focus direction
-        if fm_cur > fm_test:
-            sign = -1
-            f = focus.moveRel({"z":-step})
+            # Check if we our completely out of focus
+            if abs(fm_cur - fm_test) < ((thres_factor / (trial + 1)) * fm_cur):
+                logging.warning("Completely out of focus, retrying...")
+                step = max_step
+                fm_new = 0
+                sign = 1
+                factor = 1
+                new_step = step
+                cur_pos = focus.position.value.get('z')
+
+                steps = 0
+                count_fails = 0
+                while fm_new - fm_test < ((thres_factor / (trial + 1)) * 2) * fm_test:
+                    if steps >= MAX_STEPS_NUMBER:
+                        break
+                    sign = -sign
+                    cur_pos = cur_pos + sign * new_step
+                    if sign == 1:
+                        factor += 1
+                    new_step += factor * step
+                    if rng[0] <= cur_pos <= rng[1]:
+                        pos = focus.position.value.get('z')
+                        shift = cur_pos - pos
+                        f = focus.moveRel({"z":shift})
+                        f.result()
+                        image = detector.data.get(asap=False)
+                        fm_new = MeasureFocus(image)
+                        if fm_test - fm_new > ((thres_factor / (trial + 1)) / 2) * fm_new:
+                            count_fails += 1
+                            if (steps == 1) and (count_fails == 2):
+                                # Return to initial position
+                                logging.info("Binary search does not improve focus.")
+                                pos = focus.position.value.get('z')
+                                shift = init_pos - pos
+                                f = focus.moveRel({"z":shift})
+                                f.result()
+                                break
+                        if future._autofocus_state == CANCELLED:
+                            raise CancelledError()
+                    steps += 1
+
+                image = detector.data.get(asap=False)
+                fm_cur = MeasureFocus(image)
+                f = focus.moveRel({"z": step})
+                f.result()
+                image = detector.data.get(asap=False)
+                fm_test = MeasureFocus(image)
+                if future._autofocus_state == CANCELLED:
+                    raise CancelledError()
+
+            # Update progress of the future
+            future.set_end_time(time.time() +
+                                estimateAutoFocusTime(et, MAX_STEPS_NUMBER / 2))
+            # Determine focus direction
+            if fm_cur > fm_test:
+                sign = -1
+                f = focus.moveRel({"z":-step})
+                f.result()
+                if future._autofocus_state == CANCELLED:
+                    raise CancelledError()
+                fm_test = fm_cur
+            else:
+                sign = 1
+
+            # Move the lens in the correct direction until focus measure is decreased
+            step = max_step / 2
+            fm_old, fm_new = fm_test, fm_test
+            steps = 0
+            while fm_old - fm_new <= (thres_factor / (trial + 1)) * fm_old:
+                if steps >= MAX_STEPS_NUMBER:
+                    break
+                fm_old = fm_new
+                f = focus.moveRel({"z":sign * step})
+                f.result()
+                image = detector.data.get(asap=False)
+                fm_new = MeasureFocus(image)
+                if future._autofocus_state == CANCELLED:
+                    raise CancelledError()
+                steps += 1
+
+            # Binary search between the last 2 positions
+            f = focus.moveRel({"z":-sign * (step / (2 / (trial + 1)))})
             f.result()
-            if future._autofocus_state == CANCELLED:
-                raise CancelledError()
-            fm_test = fm_cur
-        else:
-            sign = 1
-
-        # Move the lens in the correct direction until focus measure is decreased
-        step = accuracy
-        fm_old, fm_new = fm_test, fm_test
-        steps = 0
-        while fm_old - fm_new <= thres_factor * fm_old:
-            if steps >= MAX_STEPS_NUMBER:
-                break
-            fm_old = fm_new
-            f = focus.moveRel({"z":sign * step})
-            f.result()
-            image = detector.data.get(asap=False)
-            fm_new = MeasureFocus(image)
-            if future._autofocus_state == CANCELLED:
-                raise CancelledError()
-            steps += 1
-
-        f = focus.moveRel({"z":-sign * step})
-        f.result()
+            max_step = max_step / 8
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
@@ -279,7 +278,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
     # Run in separate thread
     autofocus_thread = threading.Thread(target=executeTask,
                   name="Autofocus",
-                  args=(f, doAutoFocus, f, detector, max_step, thres_factor, et, focus, accuracy))
+                  args=(f, doAutoFocus, f, detector, max_step, thres_factor, et, focus))
 
     autofocus_thread.start()
     return f
