@@ -85,15 +85,18 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
         for trial in range(MAX_BS_NUMBER):
             # Keep the initial focus position
             init_pos = focus.position.value.get('z')
-            step = max_step / 2
+            step = max_step / 4
             cur_pos = focus.position.value.get('z')
             image = detector.data.get(asap=False)
             fm_cur = MeasureFocus(image)
             init_fm = fm_cur
-            f = focus.moveRel({"z": step})
-            f.result()
+            test_pos = cur_pos + step
+            if rng[0] <= test_pos <= rng[1]:
+                f = focus.moveRel({"z": step})
+                f.result()
             image = detector.data.get(asap=False)
             fm_test = MeasureFocus(image)
+            step = max_step / 2
 
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
