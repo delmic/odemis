@@ -433,7 +433,7 @@ class TestSEM(unittest.TestCase):
         f.result()
         self.assertTupleAlmostEqual(self.stage.position.value, pos)
 
-    @skip("skip")
+    # @skip("skip")
     def test_navcam(self):
         """
         Check it's possible to move the stage
