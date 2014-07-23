@@ -32,6 +32,7 @@ from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform
 from odemis.acq.align import spot
+from odemis.acq import align
 import scipy
 import threading
 import time
@@ -109,6 +110,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             rotation, scaling = future._rotation_scalingf.result()
         else:
             #Get offset, rotation, scaling
+            # KEEP IN MIND TO DEVIDE OFFSET BY SCALING
             pass
             
         #Update combined stage conversion metadata
@@ -167,7 +169,7 @@ def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateOffsetTime())
+                                end=est_start + estimateOffsetTime(ccd.exposure.time))
     f._align_offset_state = RUNNING
 
     # Task to run
@@ -207,13 +209,40 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
         IOError if CL spot not found
     """
     logging.debug("Starting alignment and offset calculation...")
+
+    # Configure CCD and e-beam to write CL spots
+    ccd.binning.value = (1, 1)
+    ccd.resolution.value = ccd.resolution.range[1]
+    ccd.exposureTime.value = 900e-03
+    escan.scale.value = (1, 1)
+    escan.resolution.value = (1, 1)
+
     try:
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
 
-        # Spot alignment using the beam shift
-#         future._alignspotf = AlignSpot(ccd, opt_stage, escan, focus, BEAM_SHIFT)
-#         dist = future._alignspotf.result()
+        # Reference both stages
+        f = sem_stage.reference()
+        f.result()
+        f = opt_stage.reference()
+        f.result()
+
+        if future._align_offset_state == CANCELLED:
+            raise CancelledError()
+        # Apply spot alignment
+        try:
+            # Maybe add extra type to not use the inclined stage
+            future_spot = align.AlignSpot(ccd, opt_stage, escan, focus)
+            dist = future_spot.result()
+            opt_pos = opt_stage.position.value
+        except IOError:
+            raise IOError("Failed to align stages and calculate offset.")
+
+        # Since the optical stage was referenced the final position after
+        # the alignment gives the offset from the SEM stage
+        offset = (opt_pos["x"], opt_pos["y"])
+
+        return offset
 
     finally:
         with future._offset_lock:
@@ -299,6 +328,14 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         IOError if CL spot not found
     """
     logging.debug("Starting rotation and scaling calculation...")
+
+    # Configure CCD and e-beam to write CL spots
+    ccd.binning.value = (1, 1)
+    ccd.resolution.value = ccd.resolution.range[1]
+    ccd.exposureTime.value = 900e-03
+    escan.scale.value = (1, 1)
+    escan.resolution.value = (1, 1)
+
     try:
         if future._rotation_scaling_state == CANCELLED:
             raise CancelledError()
@@ -306,8 +343,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         # Move Phenom sample stage to each spot
         sem_spots = []
         opt_spots = []
-        for spot in range(ROTATION_SPOTS):
-            pos = ROTATION_SPOTS[spot]
+        for spots in range(len(ROTATION_SPOTS)):
+            pos = ROTATION_SPOTS[spots]
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()
             f = sem_stage.moveAbs({"x":pos["x"],
@@ -322,7 +359,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
             cor_pos = {"x": q[0], "y": q[1]}
             f = opt_stage.moveAbs(cor_pos)
             f.result()
-
+            print sem_stage.position.value
+            print opt_stage.position.value
             # Move Phenom sample stage so that the spot should be at the center
             # of the CCD FoV
             dist = None
@@ -335,7 +373,7 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                 image = ccd.data.get(asap=False)
                 try:
                     spot_coordinates = spot.FindSpot(image)
-                except IOError:
+                except ValueError:
                     raise IOError("CL spot not found.")
                 pixelSize = image.metadata[model.MD_PIXEL_SIZE]
                 center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
@@ -442,7 +480,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
     try:
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
-        escan.dwellTime.value = 5e-06  # good enough for clear SEM image
+        escan.dwellTime.value = 6e-06  # good enough for clear SEM image
         holes_found = EXPECTED_HOLES
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
         for hole in range(NUMBER_OF_HOLES):
