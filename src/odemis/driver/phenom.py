@@ -971,24 +971,23 @@ class NavCam(model.DigitalCamera):
                 with self.parent._acq_progress_lock:
                     try:
                         img_str = self.parent._device.NavCamAcquireImageCopy(self._camParams)
+                        sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
+                        sem_img.shape = (self._camParams.height, self._camParams.width, 3)
+
+                        # Obtain pixel size and position as metadata
+                        pixelSize = (img_str.aAcqState.pixelHeight, img_str.aAcqState.pixelWidth)
+                        pos = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+                        metadata = {model.MD_POS: pos,
+                                    model.MD_PIXEL_SIZE: pixelSize,
+                                    model.MD_DIMS: NAVCAM_DIMS,
+                                    model.MD_ACQ_DATE: time.time()}
+                        array = model.DataArray(sem_img, metadata)
+                        callback(self._transposeDAToUser(array))
                     except suds.WebFault as e:
                         if e.message == NAVCAM_LOCKED_MSG:
                             logging.warning("NavCam firmware has locked up. Please power cycle Phenom.")
                         else:
                             logging.debug("NavCam acquisition failed.")
-
-                sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
-                sem_img.shape = (self._camParams.height, self._camParams.width, 3)
-
-                # Obtain pixel size and position as metadata
-                pixelSize = (img_str.aAcqState.pixelHeight, img_str.aAcqState.pixelWidth)
-                pos = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
-                metadata = {model.MD_POS: pos,
-                            model.MD_PIXEL_SIZE: pixelSize,
-                            model.MD_DIMS: NAVCAM_DIMS,
-                            model.MD_ACQ_DATE: time.time()}
-                array = model.DataArray(sem_img, metadata)
-                callback(self._transposeDAToUser(array))
 
         except:
             logging.exception("Failure during acquisition")

@@ -28,15 +28,16 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq._futures import executeTask
+from scipy import ndimage
 import threading
 import time
-from scipy import ndimage
+
 
 FINE_SPOTMODE_ACCURACY = 5e-6  # fine focus accuracy in spot mode #m
 ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
 INIT_THRES_FACTOR = 4e-3  # initial autofocus threshold factor
 
-MAX_STEPS_NUMBER = 40  # Max steps to perform autofocus
+MAX_STEPS_NUMBER = 20  # Max steps to perform autofocus
 MAX_BS_NUMBER = 2  # Maximum number of applying binary search with a smaller max_step
 
 
@@ -85,18 +86,20 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
         for trial in range(MAX_BS_NUMBER):
             # Keep the initial focus position
             init_pos = focus.position.value.get('z')
-            step = max_step / 4
+            best_pos = init_pos
+            step = max_step / 2
             cur_pos = focus.position.value.get('z')
             image = detector.data.get(asap=False)
             fm_cur = MeasureFocus(image)
             init_fm = fm_cur
-            test_pos = cur_pos + step
-            if rng[0] <= test_pos <= rng[1]:
-                f = focus.moveRel({"z": step})
-                f.result()
+            best_fm = init_fm
+            #Clip within range
+            new_pos = _ClippedMove(rng, focus, step)
             image = detector.data.get(asap=False)
             fm_test = MeasureFocus(image)
-            step = max_step / 2
+            if fm_test > best_fm:
+                best_pos = new_pos
+                best_fm = fm_test
 
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -119,36 +122,42 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
                         break
                     sign = -sign
                     cur_pos = cur_pos + sign * new_step
-                    if sign == 1:
-                        factor += 1
-                    new_step += factor * step
-                    if rng[0] <= cur_pos <= rng[1]:
-                        pos = focus.position.value.get('z')
-                        shift = cur_pos - pos
-                        f = focus.moveRel({"z":shift})
-                        f.result()
-                        image = detector.data.get(asap=False)
-                        fm_new = MeasureFocus(image)
-                        if fm_test - fm_new > ((thres_factor / (trial + 1)) / 2) * fm_new:
-                            count_fails += 1
-                            if (steps == 1) and (count_fails == 2):
-                                # Return to initial position
-                                logging.info("Binary search does not improve focus.")
-                                pos = focus.position.value.get('z')
-                                shift = init_pos - pos
-                                f = focus.moveRel({"z":shift})
-                                f.result()
-                                break
-                        if future._autofocus_state == CANCELLED:
-                            raise CancelledError()
+                    #if sign == 1:
+                    factor += 1
+                    new_step = factor * step
+                    #if rng[0] <= cur_pos <= rng[1]:
+                    pos = focus.position.value.get('z')
+                    shift = cur_pos - pos
+                    new_pos = _ClippedMove(rng, focus, shift)
+                    image = detector.data.get(asap=False)
+                    fm_new = MeasureFocus(image)
+                    if fm_new > best_fm:
+                        best_pos = new_pos
+                        best_fm = fm_new
+                    if fm_test - fm_new > ((thres_factor / (trial + 1)) / 2) * fm_new:
+                        count_fails += 1
+                        if (steps == 1) and (count_fails == 2):
+                            # Return to initial position
+                            logging.info("Binary search does not improve focus.")
+                            pos = focus.position.value.get('z')
+                            shift = init_pos - pos
+                            new_pos = _ClippedMove(rng, focus, shift)
+                            break
+                    if future._autofocus_state == CANCELLED:
+                        raise CancelledError()
                     steps += 1
 
                 image = detector.data.get(asap=False)
                 fm_cur = MeasureFocus(image)
-                f = focus.moveRel({"z": step})
-                f.result()
+                if fm_cur > best_fm:
+                    best_pos = new_pos
+                    best_fm = fm_cur
+                new_pos = _ClippedMove(rng, focus, step)
                 image = detector.data.get(asap=False)
                 fm_test = MeasureFocus(image)
+                if fm_test > best_fm:
+                    best_pos = new_pos
+                    best_fm = fm_test
                 if future._autofocus_state == CANCELLED:
                     raise CancelledError()
 
@@ -158,8 +167,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
             # Determine focus direction
             if fm_cur > fm_test:
                 sign = -1
-                f = focus.moveRel({"z":-step})
-                f.result()
+                new_pos = _ClippedMove(rng, focus, -step)
                 if future._autofocus_state == CANCELLED:
                     raise CancelledError()
                 fm_test = fm_cur
@@ -174,17 +182,23 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
                 if steps >= MAX_STEPS_NUMBER:
                     break
                 fm_old = fm_new
-                f = focus.moveRel({"z":sign * step})
-                f.result()
+                before_move = focus.position.value.get('z')
+                new_pos = _ClippedMove(rng, focus, sign * step)
+                after_move = focus.position.value.get('z')
+                # Do not stuck to the border
+                if before_move == after_move:
+                    sign = -sign
                 image = detector.data.get(asap=False)
                 fm_new = MeasureFocus(image)
+                if fm_new > best_fm:
+                    best_pos = new_pos
+                    best_fm = fm_new
                 if future._autofocus_state == CANCELLED:
                     raise CancelledError()
                 steps += 1
 
             # Binary search between the last 2 positions
-            f = focus.moveRel({"z":-sign * (step / (2 / (trial + 1)))})
-            f.result()
+            new_pos = _ClippedMove(rng, focus, -sign * (step / (2 / (trial + 1))))
             max_step = max_step / 8
 
         if future._autofocus_state == CANCELLED:
@@ -200,16 +214,39 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
             # Return to initial position
             pos = focus.position.value.get('z')
             shift = init_pos - pos
-            f = focus.moveRel({"z":shift})
-            f.result()
+            new_pos = _ClippedMove(rng, focus, shift)
             raise IOError("Autofocus failure")
 
         return focus.position.value.get('z'), fm_final
+    except CancelledError:
+        # Return to best measured focus position
+        pos = focus.position.value.get('z')
+        shift = best_pos - pos
+        new_pos = _ClippedMove(rng, focus, shift)
     finally:
         with future._autofocus_lock:
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
             future._autofocus_state = FINISHED
+
+def _ClippedMove(rng, focus, shift):
+    """
+    Clips the focus move requested within the range
+    """
+    cur_pos = focus.position.value.get('z')
+    test_pos = cur_pos + shift
+    if rng[0] >= test_pos :
+        diff = rng[0] - cur_pos
+        f = focus.moveRel({"z": diff})
+        f.result()
+    elif test_pos >= rng[1]:
+        diff = rng[1] - cur_pos
+        f = focus.moveRel({"z": diff})
+        f.result()
+    else:
+        f = focus.moveRel({"z": shift})
+        f.result()
+    return test_pos
 
 def _CancelAutoFocus(future):
     """
@@ -265,7 +302,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
         max_step = 100 * detector.pixelSize.value[0]
     elif role == "se-detector":  # SEM
         thres_factor = 5 * thres_factor
-        max_step = 15e03 * scanner.pixelSize.value[0]
+        max_step = 5.5e03 * scanner.pixelSize.value[0]
     else:
         raise IOError("The given detector does not support autofocus.")
 
