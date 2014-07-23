@@ -298,8 +298,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
             raise CancelledError()
 
         # Move Phenom sample stage to each spot
-        sem_spots = ROTATION_SPOTS
-        opt_spots = ROTATION_SPOTS
+        sem_spots = []
+        opt_spots = []
         for spot in range(ROTATION_SPOTS):
             pos = ROTATION_SPOTS[spot]
             if future._rotation_scaling_state == CANCELLED:
@@ -347,13 +347,15 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                     estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
 
             # Save Phenom sample stage position and Delmic optical stage position
-            sem_spots[spot]["x"] = sem_stage.position.value["x"] + tab[0]
-            sem_spots[spot]["y"] = sem_stage.position.value["y"] + tab[1]
-            opt_spots[spot]["x"] = opt_stage.position.value["x"]
-            opt_spots[spot]["y"] = opt_stage.position.value["y"]
+            sem_spots.append((sem_stage.position.value["x"] + tab[0],
+                              sem_stage.position.value["y"] + tab[1]))
+            opt_spots.append((opt_stage.position.value["x"],
+                              opt_stage.position.value["y"]))
 
         # From the sets of 4 positions calculate rotation and scaling matrices
-
+        unused, scaling, rotation = transform.CalculateTransform(opt_spots,
+                                                                 sem_spots)
+        return rotation, scaling
 
     finally:
         with future._rotation_lock:
