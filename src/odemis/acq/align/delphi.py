@@ -236,12 +236,18 @@ def _CancelAlignAndOffset(future):
 
     return True
 
-def estimateOffsetTime():
+def estimateOffsetTime(et, dist=None):
     """
     Estimates alignment and offset calculation procedure duration
     returns (float):  process estimated time #s
     """
-    pass
+    if dist is None:
+        steps = MAX_STEPS
+    else:
+        err_mrg = ERR_MARGIN
+        steps = math.log(dist / err_mrg) / math.log(2)
+        steps = min(steps, MAX_STEPS)
+    return steps * (et + 2)  # s
 
 def RotationAndScaling(ccd, escan, sem_stage, opt_stage, focus, offset):
     """
