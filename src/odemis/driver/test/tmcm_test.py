@@ -35,7 +35,8 @@ else:
 CLASS = tmcm.TMCM3110
 KWARGS = dict(name="test", role="stage", port=PORT,
               axes=["x", "y", "z"],
-              ustepsize=[1e-6, 1.2e-6, 0.9e-6],
+              ustepsize=[5.9e-9, 5.8e-9, 5e-9],
+              refproc="2xFinalForward",
               inverted=["y"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM.update({"port": "/dev/fake"})
@@ -311,11 +312,41 @@ if __name__ == "__main__":
     unittest.main()
 
 
+# from odemis.driver import tmcm
 # import logging
 # logging.getLogger().setLevel(logging.DEBUG)
 # PORT = "/dev/ttyTMCM0"
 # KWARGS = dict(name="test", role="stage", port=PORT,
 #               axes=["x", "y", "z"],
-#               ustepsize=[1e-6, 1.2e-6, 0.9e-6],
+#               ustepsize=[5.9e-9, 5.8e-9, 5e-9],
+#               refproc="2xFinalForward",
 #               inverted=["y"])
 # dev = tmcm.TMCM3110(**KWARGS)
+# val = dev.GetGlobalParam(2, 58)
+# print val
+# prog = [(9, 58, 2, val + 1), # SGP 58, 2, val +1
+#         (27, 0, 0, 2000), # WAIT TICKS, 0, 2000 # 2000 * 10 ms
+#         (28,), # STOP
+#        ]
+# addr = 10
+# dev.UploadProgram(prog, addr)
+# dev.RunProgram(addr)
+# time.sleep(1)
+# print dev.GetGlobalParam(2, 58)
+#
+# axis = 0
+# prog = [(9, 58, 2, val + 10), # SGP 58, 2, val +10
+#         (13, 1, axis), # RFS STOP, MotId   // Stop the reference search
+#         (38,), # RETI
+#        ]
+# dev.UploadProgram(prog, addr)
+# intid = 0 # TimerIrq
+# dev.SetInterrupt(intid, addr)
+# dev.SetGlobalParam(3, 0, 1000) # Timer every 1000 ms
+# dev.EnableInterrupt(intid)
+# dev.EnableInterrupt(255) # globally switch on interrupt processing
+#
+# time.sleep(2)
+
+
+# Note instruction 135 seems to return the current address number

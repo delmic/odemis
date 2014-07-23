@@ -62,16 +62,22 @@ TMCL_ERR_STATUS = {
     6: "Command not available",
     }
 
+REFPROC_2XFF = "2xFinalForward"
+
 class TMCM3110(model.Actuator):
     """
     Represents one Trinamic TMCM-3110 controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, axes, ustepsize, **kwargs):
+    def __init__(self, name, role, port, axes, ustepsize, refproc=None, **kwargs):
         """
         port (str): port name (only if sn is not specified)
         axes (list of str): names of the axes, from the 1st to the 3rd.
-        ustepsize (list of float): size of a microstep in m  
+        ustepsize (list of float): size of a microstep in m (the smaller, the
+          bigger will be a move for a given distance in m)
+        refproc (str or None): referencing (aka homing) procedure type. Use
+          None to indicate it's not possible (no reference/limit switch) or the
+          name of the procedure. For now only "2xFinalForward" is accepted.
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
         """
@@ -82,6 +88,10 @@ class TMCM3110(model.Actuator):
         if len(axes) != len(ustepsize):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
+
+        if refproc not in {REFPROC_2XFF, None}:
+            raise ValueError("Reference procedure %s unknown" % (refproc, ))
+
         for sz in ustepsize:
             if sz > 10e-3: # sz is typically ~1µm, so > 1 cm is very fishy
                 raise ValueError("ustepsize should be in meter, but got %g" % (sz,))
@@ -101,6 +111,12 @@ class TMCM3110(model.Actuator):
         if name is None and role is None: # For scan only
             return
 
+        # TODO: Detect if it is "USB bus powered" (meaning, not powered from
+        # an additional power supply), and warn the user that the motors will
+        # not move.
+        # One important note: programs don't run when USB bus powered
+
+
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
 
@@ -113,6 +129,9 @@ class TMCM3110(model.Actuator):
             axes_def[n] = model.Axis(range=rng, unit="m")
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
+        for i, a in enumerate(self._axes_names):
+            self._init_axis(i)
+
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
         self._hwVersion = "TMCM-%d (firmware %d.%02d)" % (modl, vmaj, vmin)
@@ -124,6 +143,12 @@ class TMCM3110(model.Actuator):
         self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
 
+        self._refproc = refproc
+        if refproc is not None:
+            # str -> boolean. Indicates whether an axis has already been referenced
+            axes_ref = dict([(a, False) for a in axes])
+            self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
+
     def terminate(self):
         if self._executor:
             self.stop()
@@ -134,6 +159,25 @@ class TMCM3110(model.Actuator):
             if self._serial:
                 self._serial.close()
                 self._serial = None
+
+
+    def _init_axis(self, axis):
+        """
+        Initialise the given axis with "good" values for our needs (Delphi)
+        axis (int): axis number
+        """
+        self.SetAxisParam(axis, 4, 1398) # maximum velocity to 1398 == 2 mm/s
+        self.SetAxisParam(axis, 5, 7)    # maximum acc to 7 == 20 mm/s2
+        self.SetAxisParam(axis, 140, 8)  # number of usteps ==2^8 =256 per fullstep
+        self.SetAxisParam(axis, 6, 7)    # maximum RMS-current to 7 == 7/255 x 2.8 =82mA
+        self.SetAxisParam(axis, 7, 0)    # standby current to 0
+        self.SetAxisParam(axis, 204, 100) # power off after 100 ms standstill
+        self.SetAxisParam(axis, 154, 0)  # step divider to 0 ==2^0 ==1
+        self.SetAxisParam(axis, 153, 0)  # acc divider to 0 ==2^0 ==1
+        self.SetAxisParam(axis, 163, 0)  # chopper mode
+        self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications)
+        self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
+        self.MoveRelPos(axis, 0) # activate parameter with dummy move
 
     # Communication functions
 
@@ -257,6 +301,44 @@ class TMCM3110(model.Actuator):
         val = self.SendInstruction(6, param, axis)
         return val
 
+    def SetAxisParam(self, axis, param, val):
+        """
+        Write the axis/parameter setting from the RAM
+        axis (0<=int<=2): axis number
+        param (0<=int<=255): parameter number
+        val (int): the value to store
+        """
+        self.SendInstruction(5, param, axis, val)
+
+    def GetGlobalParam(self, bank, param):
+        """
+        Read the parameter setting from the RAM
+        bank (0<=int<=2): bank number
+        param (0<=int<=255): parameter number
+        return (0<=int): the value stored for the given bank/parameter
+        """
+        val = self.SendInstruction(10, param, bank)
+        return val
+
+    def SetGlobalParam(self, bank, param, val):
+        """
+        Write the parameter setting from the RAM
+        bank (0<=int<=2): bank number
+        param (0<=int<=255): parameter number
+        val (int): the value to store
+        """
+        self.SendInstruction(9, param, bank, val)
+
+    def GetIO(self, bank, port):
+        """
+        Read the input/output value
+        bank (0<=int<=2): bank number
+        port (0<=int<=255): port number
+        return (0<=int): the value read from the given bank/port
+        """
+        val = self.SendInstruction(15, port, bank)
+        return val
+
     def MoveAbsPos(self, axis, pos):
         """
         Requests a move to an absolute position. This is non-blocking.
@@ -264,21 +346,31 @@ class TMCM3110(model.Actuator):
         pos (-2**31 <= int 2*31-1): position
         """
         self.SendInstruction(4, 0, axis, pos) # 0 = absolute
-
         
     def MoveRelPos(self, axis, offset):
         """
         Requests a move to a relative position. This is non-blocking.
         axis (0<=int<=2): axis number
-        offset (-2**31 <= int 2*31-1): relative postion
+        offset (-2**31 <= int 2*31-1): relative position
         """
         self.SendInstruction(4, 1, axis, offset) # 1 = relative
+        # it returns the expected final absolute position
         
     def MotorStop(self, axis):
         self.SendInstruction(3, mot=axis)
         
-    def ReferenceSearch(self, axis):
+    def StartRefSearch(self, axis):
         self.SendInstruction(13, 0, axis) # 0 = start
+
+    def StopRefSearch(self, axis):
+        self.SendInstruction(13, 1, axis) # 1 = stop
+
+    def GetStatusRefSearch(self, axis):
+        """
+        return (bool): False if reference is not active, True if reference is active.
+        """
+        val = self.SendInstruction(13, 2, axis) # 2 = status
+        return (val != 0)
 
     def _isOnTarget(self, axis):
         """
@@ -286,6 +378,194 @@ class TMCM3110(model.Actuator):
         """
         reached = self.GetAxisParam(axis, 8)
         return (reached != 0)
+
+    def UploadProgram(self, prog, addr):
+        """
+        Upload a program in memory
+        prog (sequence of tuples of 4 ints): list of the arguments for SendInstruction
+        addr (int): starting address of the program
+        """
+        # cf TMCL reference p. 50
+        # http://pandrv.com/ttdg/phpBB3/viewtopic.php?f=13&t=992
+#         To download a TMCL program into a module, the following steps have to be performed:
+#         - Send the "enter download mode command" to the module (command 132 with value as address of the program)
+#         - Send your commands to the module as usual (status byte return 101)
+#         - Send the "exit download mode" command (command 133 with all 0)
+        # Each instruction is numbered +1, starting from 0
+        self.SendInstruction(132, val=addr)
+        for inst in prog:
+            self.SendInstruction(*inst)
+        self.SendInstruction(133)
+
+    def RunProgram(self, addr):
+        """
+        Run the progam at the given address
+        addr (int): starting address of the program
+        """
+        self.SendInstruction(129, typ=1, val=addr) # type 1 = use specified address
+        # To check the program runs (ie, it's not USB bus powered), you can
+        # check the program counter increases:
+        # assert self.GetGlobalParam(0, 130) > addr
+
+    def SetInterrupt(self, id, addr):
+        """
+        Associate an interrupt to run a program at the given address
+        id (int): interrupt number
+        addr (int): starting address of the program
+        """
+        # Note: interrupts seem to only be executed when a program is running
+        self.SendInstruction(37, typ=id, val=addr)
+
+    def EnableInterrupt(self, id):
+        """
+        Enable an interrupt
+        See global parameters to configure the interrupts
+        id (int): interrupt number
+        """
+        self.SendInstruction(25, typ=id)
+
+    def DisableInterrupt(self, id):
+        """
+        Disable an interrupt
+        See global parameters to configure the interrupts
+        id (int): interrupt number
+        """
+        self.SendInstruction(26, typ=id)
+
+    def _setInputInterrupt(self, axis):
+        """
+        Upload the input interrupt commands for stopping the reference search
+        axis (int): axis number
+        """
+        prog = [(13, 1, axis), # RFS STOP, MotId   // Stop the reference search
+                # TODO: see if it's needed to do like in original procedure: set 0 ASAP
+                # (5, 1, axis, 0), # SAP 1, MotId, 0 // Set actual pos 0
+                (38,), # RETI
+                ]
+        addr = 50 + 10 * axis  # at addr 50/60/70
+        self.UploadProgram(prog, addr)
+
+        # To configure the interrupt
+        intid = 40 + axis   # axis 0 = IN1 = 40
+        self.SetInterrupt(intid, addr)
+        self.SetGlobalParam(3, 40, 3) # configure the interrupt: look at both edges
+        self.EnableInterrupt(intid)
+        self.EnableInterrupt(255) # globally switch on interrupt processing
+
+    def _startInputReference(self, axis, timeout=20):
+        """
+        Run a program that start the reference, stop it after timeout, and
+          report the status (in global param 50 + axis).
+        axis (int): axis number
+        timeout (0 < float): maximum time waiting for the reference search
+        """
+        timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
+        gparam = 50 + axis
+        addr = 0 + 15 * axis
+        prog = [(9, gparam, 2, 0), # Set global param to 0 (=running)
+                (13, 0, axis), # RFS START, MotId
+                (27, 4, axis, timeout_ticks), # WAIT RFS until timeout
+                (21, 8, 0, addr + 6), # JC ETO, to TIMEOUT (= +6)
+                (9, gparam, 2, 1), # Set global param to 1 (=all went fine)
+                (28,), # STOP
+                (13, 1, axis), # TIMEOUT: RFS STOP, Motid
+                (9, gparam, 2, 2), # Set global param to 2 (=RFS timed-out)
+                (28,), # STOP
+                ]
+        self.UploadProgram(prog, addr)
+        self.RunProgram(addr)
+
+    def _doInputReference(self, axis, speed):
+        """
+        Run synchronously one reference search
+        axis (int): axis number
+        speed (int): speed in (funky) hw units for the move
+        return (bool): True if the search was done in the positive direction,
+          otherwise False
+        raise:
+            TimeoutError: if the search failed within a timeout (20s)
+        """
+        # Set speed
+        self.SetAxisParam(axis, 194, speed) # maximum home velocity
+        self.SetAxisParam(axis, 195, speed) # maximum switching point velocity
+        # Set direction
+        edge = self.GetIO(0, 1 + axis) # IN1 = bank 0, port 1
+        logging.debug("Going to do reference search in dir %d", edge)
+        if edge == 1: # Edge is high, so we need to go positive dir
+            self.SetAxisParam(axis, 193, 7 + 128) # RFS with positive dir
+        else: # Edge is low => go negative dir
+            self.SetAxisParam(axis, 193, 8) # RFS with negative dir
+
+        self._startInputReference(axis)
+        # Wait until referenced
+        gparam = 50 + axis
+        status = self.GetGlobalParam(2, gparam)
+        while status == 0:
+            time.sleep(0.01)
+            status = self.GetGlobalParam(2, gparam)
+            # TODO also timeout from Python, and stop motor?
+        if status == 2:
+            # if timed out raise
+            raise IOError("Timeout during reference search dir %d" % edge)
+
+        return (edge == 1)
+
+    # Special methods for referencing
+    def _startReferencing(self, axis):
+        """
+        Do the referencing (this is synchronous)
+        raise:
+            IOError: if timeout happen
+        """
+        if self._refproc == REFPROC_2XFF:
+            # Procedure devised by NTS:
+            # It requires the ref signal to be active for half the length. Like:
+            #                      ___________________ 1
+            #                      |
+            # 0 ___________________|
+            # ----------------------------------------> forward
+            # It first checks on which side of the length the actuator is, and
+            # then goes towards the edge. If the movement was backward, then
+            # it does the search a second time forward, to increase the
+            # repeatability.
+            # All this is done twice, once a fast speed, then at slow speed to
+            # increase precision. Note that only the slow speed would need to
+            # always finish with forward movement, but for simplicity, they are
+            # identical at both speed.
+            # Note also that the reference signal is IN1-3, instead of the
+            # official "left switches". The only reason is that it was simpler
+            # to connect on the board. Because of that, we need to set an
+            # interrupt to stop the RFS command when the edge changes. As
+            # interrupts only work when a program is running, we have a small
+            # program that waits for the RFS and report the status.
+            # Note also that it seem "negative/positive" direction of the RFS
+            # are opposite to the move relative negative/positive direction.
+            self._setInputInterrupt(axis)
+
+            # TODO: be able to cancel
+            pos_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+            # TODO: the move should be dependent on the previous direction
+            dist = 1000 + pos_dir * 5000 # if it was positive, then move more to again do positive
+            self.MoveRelPos(axis, dist) # to force going to the ref from a bit far in positive dir
+            time.sleep(2) # TODO: should use _isOnTarget()
+            pos_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
+            if not pos_dir: # if it was done in negative direction, redo
+                logging.debug("Doing one last reference move, in positive dir")
+                # As it always wait for the edge to change, the second time
+                # should be positive
+                pos_dir = self._doInputReference(axis, 50)
+                if not pos_dir:
+                    logging.warning("Second reference search was again in negative direction")
+
+            # Disable interrupt
+            intid = 40 + axis   # axis 0 = IN1 = 40
+            self.DisableInterrupt(intid)
+            self.DisableInterrupt(255)
+
+            # Reset the absolute 0 (by setting current pos to 0)
+            self.SetAxisParam(axis, 1, 0)
+        else:
+            raise NotImplementedError("Unknown referencing procedure %s" % self._refproc)
 
     # high-level methods (interface)
     def _updatePosition(self):
@@ -365,12 +645,24 @@ class TMCM3110(model.Actuator):
         return f
     moveAbs.__doc__ = model.Actuator.moveAbs.__doc__
 
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+
+        f = self._createFuture()
+        f = self._executor.submitf(f, self._doReference, f, axes)
+        return f
+    reference.__doc__ = model.Actuator.reference.__doc__
+
     def stop(self, axes=None):
         self._executor.cancel()
 
     def _doMoveRel(self, future, pos):
         """
         Blocking and cancellable relative move
+        future (Future): the future it handles
         pos (dict str -> float): axis name -> relative target position
         """
         with future._moving_lock:
@@ -391,6 +683,7 @@ class TMCM3110(model.Actuator):
     def _doMoveAbs(self, future, pos):
         """
         Blocking and cancellable absolute move
+        future (Future): the future it handles
         pos (dict str -> float): axis name -> absolute target position
         """
         with future._moving_lock:
@@ -413,6 +706,7 @@ class TMCM3110(model.Actuator):
         """
         Wait until all the given axes are finished moving, or a request to 
         stop has been received.
+        future (Future): the future it handles
         axes (set of int): the axes IDs to check
         end (float): expected end time
         raise:
@@ -448,6 +742,23 @@ class TMCM3110(model.Actuator):
             raise CancelledError()
         finally:
             self._updatePosition() # update with final position
+
+
+    def _doReference(self, axes):
+        """
+        Actually runs the referencing code
+        axes (set of str)
+        """
+        # do the referencing for each axis
+        for a in axes:
+            aid = self._axes_names.index(a)
+            self._startReferencing(aid)
+
+        # TODO: handle cancellation
+        # if not cancelled and successful, update .referenced
+        for a in axes:
+            self.referenced._value[a] = True
+        self.referenced.notify(self.referenced.value) # read-only so manually notify
 
     def _cancelCurrentMove(self, future):
         """

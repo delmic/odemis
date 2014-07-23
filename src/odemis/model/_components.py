@@ -650,6 +650,7 @@ class Actuator(HwComponent):
                                  (an, name))
 
         # it should also have a .position VA
+        # it can also have .speed and .referenced VAs
 
     @roattribute
     def axes(self):
@@ -677,6 +678,16 @@ class Actuator(HwComponent):
         returns (Future): object to control the move request
         """
         pass
+
+    # If the actuator has .referenced, it must also override this method
+    @isasync
+    def reference(self, axes):
+        """
+        Start the referencing (aka homing) of the given axes
+        axes (set of str): axes to be referenced
+        returns (Future): object to control the reference request
+        """
+        raise NotImplementedError("Actuator doesn't accept referencing")
 
 
     # helper methods
@@ -750,6 +761,14 @@ class Actuator(HwComponent):
                                      % (val, axis, rng[0], rng[1]))
             else:
                 raise ValueError("Unknown axis %s" % (axis,))
+
+    def _checkReference(self, axes):
+        # check all the axes requested accept referencing
+        referenceable = set(self.referenced.value.keys())
+        nonref = axes - referenceable
+        if nonref:
+            raise ValueError("Cannot reference the following axes: %s" % (nonref,))
+
 
 class Emitter(HwComponent):
     """
