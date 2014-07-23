@@ -62,7 +62,8 @@ TMCL_ERR_STATUS = {
     6: "Command not available",
     }
 
-REFPROC_2XFF = "2xFinalForward"
+REFPROC_2XFF = "2xFinalForward" # fast then slow, always finishing by forward move
+REFPROC_FAKE = "FakeReferencing" # assign the current position as the reference
 
 class TMCM3110(model.Actuator):
     """
@@ -71,7 +72,7 @@ class TMCM3110(model.Actuator):
     """
     def __init__(self, name, role, port, axes, ustepsize, refproc=None, **kwargs):
         """
-        port (str): port name (only if sn is not specified)
+        port (str): port name (use /dev/fake for a simulator)
         axes (list of str): names of the axes, from the 1st to the 3rd.
         ustepsize (list of float): size of a microstep in m (the smaller, the
           bigger will be a move for a given distance in m)
@@ -89,7 +90,7 @@ class TMCM3110(model.Actuator):
             raise ValueError("Expecting %d ustepsize (got %s)" %
                              (len(axes), ustepsize))
 
-        if refproc not in {REFPROC_2XFF, None}:
+        if refproc not in {REFPROC_2XFF, REFPROC_FAKE, None}:
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
         self._refproc = refproc
 
@@ -201,7 +202,7 @@ class TMCM3110(model.Actuator):
             self.UploadProgram(prog, addr)
 
             # Program: start and wait for referencing
-            timeout = 20 # s
+            timeout = 20 # s (it can take up to 20 s to reach the home as fast speed)
             timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
             gparam = 50 + axis
             addr = 0 + 15 * axis # Max with 3 axes: ~40
@@ -598,6 +599,10 @@ class TMCM3110(model.Actuator):
             # Reset the absolute 0 (by setting current pos to 0)
             logging.debug("Changing referencing position by %d", self.GetAxisParam(axis, 1))
             self.SetAxisParam(axis, 1, 0)
+        elif self._refproc == REFPROC_FAKE:
+            logging.debug("Simulating referencing")
+            self.MotorStop(axis)
+            self.SetAxisParam(axis, 1, 0)
         else:
             raise NotImplementedError("Unknown referencing procedure %s" % self._refproc)
 
@@ -991,7 +996,7 @@ class TMCM3110Simulator(object):
 
         # decode the instruction
         if inst == 3: # Motor stop
-            if not(0 <= mot <= self._naxes):
+            if not 0 <= mot <= self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             # Note: the target position in axis param is not changed (in the
@@ -999,7 +1004,7 @@ class TMCM3110Simulator(object):
             self._axis_move[mot] = (0, 0, 0)
             self._sendReply(inst)
         elif inst == 4: # Move to position
-            if not (0 <= mot <= self._naxes):
+            if not 0 <= mot <= self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             if not typ in [0, 1, 2]:
@@ -1018,17 +1023,20 @@ class TMCM3110Simulator(object):
             self._axis_move[mot] = (now, end, pos)
             self._sendReply(inst, val=val)
         elif inst == 5: # Set axis parameter
-            if not(0 <= mot <= self._naxes):
+            if not 0 <= mot <= self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             if not 0 <= typ <= 255:
                 self._sendReply(inst, status=3) # wrong type
                 return
             # Warning: we don't handle special addresses
-            self._astates[mot][typ] = val
+            if typ == 1: # actual position
+                self._astates[mot][0] = val # set target position, which will be used for current pos
+            else:
+                self._astates[mot][typ] = val
             self._sendReply(inst, val=val)
         elif inst == 6: # Get axis parameter
-            if not(0 <= mot <= self._naxes):
+            if not 0 <= mot <= self._naxes:
                 self._sendReply(inst, status=4) # invalid value
                 return
             if not 0 <= typ <= 255:

@@ -39,8 +39,8 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               refproc="2xFinalForward",
               inverted=["y"])
 KWARGS_SIM = dict(KWARGS)
-del KWARGS_SIM["refproc"] # simulator doesn't support running program (=> fancy referencing)
-KWARGS_SIM.update({"port": "/dev/fake"})
+KWARGS_SIM["refproc"] = "FakeReferencing" # simulator doesn't support running program (=> fancy referencing)
+KWARGS_SIM["port"] = "/dev/fake"
 # KWARGS = KWARGS_SIM # uncomment to force using only the simulator
 
 # @skip("faster")
