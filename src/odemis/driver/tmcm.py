@@ -91,6 +91,7 @@ class TMCM3110(model.Actuator):
 
         if refproc not in {REFPROC_2XFF, None}:
             raise ValueError("Reference procedure %s unknown" % (refproc, ))
+        self._refproc = refproc
 
         for sz in ustepsize:
             if sz > 10e-3: # sz is typically ~1µm, so > 1 cm is very fishy
@@ -143,7 +144,6 @@ class TMCM3110(model.Actuator):
         self.speed = model.VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
 
-        self._refproc = refproc
         if refproc is not None:
             # str -> boolean. Indicates whether an axis has already been referenced
             axes_ref = dict([(a, False) for a in axes])
@@ -178,6 +178,44 @@ class TMCM3110(model.Actuator):
         self.SetAxisParam(axis, 162, 2)  # Chopper blank time (1 = for low current applications)
         self.SetAxisParam(axis, 167, 3)  # Chopper off time (2 = minimum)
         self.MoveRelPos(axis, 0) # activate parameter with dummy move
+
+        if self._refproc == REFPROC_2XFF:
+            # set up the programs needed for the referencing
+
+            # Interrupt: stop the referencing
+            # The original idea was to mark the current position as 0 ASAP, and then
+            # later on move back to there. Now, we just stop ASAP, and hope it
+            # takes always the same time to stop. This allows to read how far from
+            # a previous referencing position we were during the testing.
+            prog = [# (6, 1, axis), # GAP 1, Motid # read pos
+                    # (35, 60 + axis, 2), # AGP 60, 2 # save pos to 2/60
+
+                    # (32, 10 + axis, axis), # CCO 10, Motid // Save the current position # doesn't work??
+
+                    # TODO: see if it's needed to do like in original procedure: set 0 ASAP
+                    # (5, 1, axis, 0), # SAP 1, MotId, 0 // Set actual pos 0
+                    (13, 1, axis), # RFS STOP, MotId   // Stop the reference search
+                    (38,), # RETI
+                    ]
+            addr = 50 + 10 * axis  # at addr 50/60/70
+            self.UploadProgram(prog, addr)
+
+            # Program: start and wait for referencing
+            timeout = 20 # s
+            timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
+            gparam = 50 + axis
+            addr = 0 + 15 * axis # Max with 3 axes: ~40
+            prog = [(9, gparam, 2, 0), # Set global param to 0 (=running)
+                    (13, 0, axis), # RFS START, MotId
+                    (27, 4, axis, timeout_ticks), # WAIT RFS until timeout
+                    (21, 8, 0, addr + 6), # JC ETO, to TIMEOUT (= +6)
+                    (9, gparam, 2, 1), # Set global param to 1 (=all went fine)
+                    (28,), # STOP
+                    (13, 1, axis), # TIMEOUT: RFS STOP, Motid
+                    (9, gparam, 2, 2), # Set global param to 2 (=RFS timed-out)
+                    (28,), # STOP
+                    ]
+            self.UploadProgram(prog, addr)
 
     # Communication functions
 
@@ -339,6 +377,16 @@ class TMCM3110(model.Actuator):
         val = self.SendInstruction(15, port, bank)
         return val
 
+    def GetCoordinate(self, axis, num):
+        """
+        Read the axis/parameter setting from the RAM
+        axis (0<=int<=2): axis number
+        num (0<=int<=20): coordinate number
+        return (0<=int): the coordinate stored
+        """
+        val = self.SendInstruction(30, num, axis)
+        return val
+
     def MoveAbsPos(self, axis, pos):
         """
         Requests a move to an absolute position. This is non-blocking.
@@ -434,46 +482,15 @@ class TMCM3110(model.Actuator):
 
     def _setInputInterrupt(self, axis):
         """
-        Upload the input interrupt commands for stopping the reference search
+        Setup the input interrupt handler for stopping the reference search
         axis (int): axis number
         """
-        prog = [(13, 1, axis), # RFS STOP, MotId   // Stop the reference search
-                # TODO: see if it's needed to do like in original procedure: set 0 ASAP
-                # (5, 1, axis, 0), # SAP 1, MotId, 0 // Set actual pos 0
-                (38,), # RETI
-                ]
         addr = 50 + 10 * axis  # at addr 50/60/70
-        self.UploadProgram(prog, addr)
-
-        # To configure the interrupt
         intid = 40 + axis   # axis 0 = IN1 = 40
         self.SetInterrupt(intid, addr)
-        self.SetGlobalParam(3, 40, 3) # configure the interrupt: look at both edges
+        self.SetGlobalParam(3, intid, 3) # configure the interrupt: look at both edges
         self.EnableInterrupt(intid)
         self.EnableInterrupt(255) # globally switch on interrupt processing
-
-    def _startInputReference(self, axis, timeout=20):
-        """
-        Run a program that start the reference, stop it after timeout, and
-          report the status (in global param 50 + axis).
-        axis (int): axis number
-        timeout (0 < float): maximum time waiting for the reference search
-        """
-        timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
-        gparam = 50 + axis
-        addr = 0 + 15 * axis
-        prog = [(9, gparam, 2, 0), # Set global param to 0 (=running)
-                (13, 0, axis), # RFS START, MotId
-                (27, 4, axis, timeout_ticks), # WAIT RFS until timeout
-                (21, 8, 0, addr + 6), # JC ETO, to TIMEOUT (= +6)
-                (9, gparam, 2, 1), # Set global param to 1 (=all went fine)
-                (28,), # STOP
-                (13, 1, axis), # TIMEOUT: RFS STOP, Motid
-                (9, gparam, 2, 2), # Set global param to 2 (=RFS timed-out)
-                (28,), # STOP
-                ]
-        self.UploadProgram(prog, addr)
-        self.RunProgram(addr)
 
     def _doInputReference(self, axis, speed):
         """
@@ -487,7 +504,7 @@ class TMCM3110(model.Actuator):
         """
         # Set speed
         self.SetAxisParam(axis, 194, speed) # maximum home velocity
-        self.SetAxisParam(axis, 195, speed) # maximum switching point velocity
+        self.SetAxisParam(axis, 195, speed) # maximum switching point velocity (useless for us)
         # Set direction
         edge = self.GetIO(0, 1 + axis) # IN1 = bank 0, port 1
         logging.debug("Going to do reference search in dir %d", edge)
@@ -496,7 +513,11 @@ class TMCM3110(model.Actuator):
         else: # Edge is low => go negative dir
             self.SetAxisParam(axis, 193, 8) # RFS with negative dir
 
-        self._startInputReference(axis)
+        # Run the basic program (we need one, otherwise interrupt handlers are
+        # not processed)
+        addr = 0 + 15 * axis
+        self.RunProgram(addr)
+
         # Wait until referenced
         gparam = 50 + axis
         status = self.GetGlobalParam(2, gparam)
@@ -513,10 +534,12 @@ class TMCM3110(model.Actuator):
     # Special methods for referencing
     def _startReferencing(self, axis):
         """
-        Do the referencing (this is synchronous)
+        Do the referencing (this is synchronous). The current implementation
+        only supports one axis referencing at a time.
         raise:
             IOError: if timeout happen
         """
+        logging.info("Starting referencing of axis %d", axis)
         if self._refproc == REFPROC_2XFF:
             # Procedure devised by NTS:
             # It requires the ref signal to be active for half the length. Like:
@@ -528,41 +551,52 @@ class TMCM3110(model.Actuator):
             # then goes towards the edge. If the movement was backward, then
             # it does the search a second time forward, to increase the
             # repeatability.
-            # All this is done twice, once a fast speed, then at slow speed to
-            # increase precision. Note that only the slow speed would need to
-            # always finish with forward movement, but for simplicity, they are
-            # identical at both speed.
+            # All this is done twice, once a fast speed finishing with negative
+            # direction, then at slow speed to increase precision, finishing
+            # in positive direction. Note that as the fast speed finishes with
+            # negative direction, normally only one run (in positive direction)
+            # is required on slow speed.
             # Note also that the reference signal is IN1-3, instead of the
-            # official "left switches". The only reason is that it was simpler
-            # to connect on the board. Because of that, we need to set an
-            # interrupt to stop the RFS command when the edge changes. As
-            # interrupts only work when a program is running, we have a small
-            # program that waits for the RFS and report the status.
+            # official "left/home switches". It seems the reason is that it was
+            # because when connecting a left switch, a right switch must also
+            # be connected, but that's very probably false. Because of that,
+            # we need to set an interrupt to stop the RFS command when the edge
+            # changes. As interrupts only work when a program is running, we
+            # have a small program that waits for the RFS and report the status.
+            # In conclusion, RFS is used pretty much just to move at a constant
+            # speed.
             # Note also that it seem "negative/positive" direction of the RFS
             # are opposite to the move relative negative/positive direction.
-            self._setInputInterrupt(axis)
 
-            # TODO: be able to cancel
-            pos_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
-            # TODO: the move should be dependent on the previous direction
-            dist = 1000 + pos_dir * 5000 # if it was positive, then move more to again do positive
-            self.MoveRelPos(axis, dist) # to force going to the ref from a bit far in positive dir
-            time.sleep(2) # TODO: should use _isOnTarget()
-            pos_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
-            if not pos_dir: # if it was done in negative direction, redo
-                logging.debug("Doing one last reference move, in positive dir")
-                # As it always wait for the edge to change, the second time
-                # should be positive
-                pos_dir = self._doInputReference(axis, 50)
-                if not pos_dir:
-                    logging.warning("Second reference search was again in negative direction")
+            try:
+                self._setInputInterrupt(axis)
 
-            # Disable interrupt
-            intid = 40 + axis   # axis 0 = IN1 = 40
-            self.DisableInterrupt(intid)
-            self.DisableInterrupt(255)
+                # TODO: be able to cancel (=> set a flag + call RFS STOP)
+                pos_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+                if pos_dir: # always finish first by negative direction
+                    self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+                pos_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
+                if not pos_dir: # if it was done in negative direction (unlikely), redo
+                    logging.debug("Doing one last reference move, in positive dir")
+                    # As it always wait for the edge to change, the second time
+                    # should be positive
+                    pos_dir = self._doInputReference(axis, 50)
+                    if not pos_dir:
+                        logging.warning("Second reference search was again in negative direction")
+
+                # Disable interrupt
+                intid = 40 + axis   # axis 0 = IN1 = 40
+                self.DisableInterrupt(intid)
+                # TODO: to support multiple axes referencing simultaneously,
+                # only this global interrupt would need to be handle globally
+                # (= only disable iff noone needs interrupt).
+                self.DisableInterrupt(255)
+            finally:
+                # For safety, but also necessary to make sure SetAxisParam() works
+                self.MotorStop(axis)
 
             # Reset the absolute 0 (by setting current pos to 0)
+            logging.debug("Changing referencing position by %d", self.GetAxisParam(axis, 1))
             self.SetAxisParam(axis, 1, 0)
         else:
             raise NotImplementedError("Unknown referencing procedure %s" % self._refproc)
@@ -651,8 +685,7 @@ class TMCM3110(model.Actuator):
             return model.InstantaneousFuture()
         self._checkReference(axes)
 
-        f = self._createFuture()
-        f = self._executor.submitf(f, self._doReference, f, axes)
+        f = self._executor.submit(self._doReference, axes)
         return f
     reference.__doc__ = model.Actuator.reference.__doc__
 
@@ -755,10 +788,14 @@ class TMCM3110(model.Actuator):
             self._startReferencing(aid)
 
         # TODO: handle cancellation
-        # if not cancelled and successful, update .referenced
+        # If not cancelled and successful, update .referenced
+        # We only notify after updating the position so that when a listener
+        # receives updates both values are already updated.
         for a in axes:
             self.referenced._value[a] = True
-        self.referenced.notify(self.referenced.value) # read-only so manually notify
+        self._updatePosition() # all the referenced axes should be back to 0
+        # read-only so manually notify
+        self.referenced.notify(self.referenced.value)
 
     def _cancelCurrentMove(self, future):
         """
@@ -854,9 +891,9 @@ class TMCM3110Simulator(object):
         self._id = 1
 
         # internal global param values
-        # int -> int: param number -> value
-        self._gstate = {
-                       }
+        # 4 * dict(int -> int: param number -> value)
+        self._gstate = [{}, {}, {}, {}]
+
         # internal axis param values
         # int -> int: param number -> value
         orig_axis_state = {0: 0, # target position
@@ -979,12 +1016,22 @@ class TMCM3110Simulator(object):
             end = now + abs(pos - val) / self._getMaxSpeed(mot)
             self._astates[mot][0] = val
             self._axis_move[mot] = (now, end, pos)
-            self._sendReply(inst)
+            self._sendReply(inst, val=val)
+        elif inst == 5: # Set axis parameter
+            if not(0 <= mot <= self._naxes):
+                self._sendReply(inst, status=4) # invalid value
+                return
+            if not 0 <= typ <= 255:
+                self._sendReply(inst, status=3) # wrong type
+                return
+            # Warning: we don't handle special addresses
+            self._astates[mot][typ] = val
+            self._sendReply(inst, val=val)
         elif inst == 6: # Get axis parameter
             if not(0 <= mot <= self._naxes):
                 self._sendReply(inst, status=4) # invalid value
                 return
-            if typ not in self._astates[mot]:
+            if not 0 <= typ <= 255:
                 self._sendReply(inst, status=3) # wrong type
                 return
             # special code for special values
@@ -993,7 +1040,7 @@ class TMCM3110Simulator(object):
             elif typ == 8: # target reached?
                 rval = 0 if self._axis_move[mot][1] > time.time() else 1
             else:
-                rval = self._astates[mot][typ]
+                rval = self._astates[mot].get(typ, 0) # default to 0
             self._sendReply(inst, val=rval)
         elif inst == 136: # Get firmware version
             if typ == 0: # string

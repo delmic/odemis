@@ -39,6 +39,7 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               refproc="2xFinalForward",
               inverted=["y"])
 KWARGS_SIM = dict(KWARGS)
+del KWARGS_SIM["refproc"] # simulator doesn't support running program (=> fancy referencing)
 KWARGS_SIM.update({"port": "/dev/fake"})
 # KWARGS = KWARGS_SIM # uncomment to force using only the simulator
 
@@ -308,6 +309,29 @@ class TestActuator(unittest.TestCase):
         self.called += 1
         logging.debug("received (2) done for future %s", id(future))
 
+    def test_reference(self):
+        """
+        Try referencing each axis
+        """
+        axes = set(self.dev.axes.keys())
+        
+        # first try one by one
+        for a in axes:
+            self.dev.moveRel({a: -1e-3}) # move a bit to make it a bit harder
+            f = self.dev.reference({a})
+            f.result()
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertAlmostEqual(self.dev.position.value[a], 0)
+        
+        # try all axes simultaneously
+        mv = dict((a, 1e-3) for a in axes)
+        self.dev.moveRel(mv)
+        f = self.dev.reference(axes)
+        f.result()
+        for a in axes:
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertAlmostEqual(self.dev.position.value[a], 0)
+
 if __name__ == "__main__":
     unittest.main()
 
@@ -319,8 +343,7 @@ if __name__ == "__main__":
 # KWARGS = dict(name="test", role="stage", port=PORT,
 #               axes=["x", "y", "z"],
 #               ustepsize=[5.9e-9, 5.8e-9, 5e-9],
-#               refproc="2xFinalForward",
-#               inverted=["y"])
+#               refproc="2xFinalForward")
 # dev = tmcm.TMCM3110(**KWARGS)
 # val = dev.GetGlobalParam(2, 58)
 # print val
