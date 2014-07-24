@@ -261,7 +261,7 @@ def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimateOffsetTime(ccd.exposure.time))
+                                end=est_start + estimateOffsetTime(ccd.exposureTime.value))
     f._align_offset_state = RUNNING
 
     # Task to run
@@ -315,9 +315,10 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
             raise CancelledError()
 
         # Reference both stages
-        f = sem_stage.reference()
+        axes = set(["x", "y"])
+        f = sem_stage.reference(axes)
         f.result()
-        f = opt_stage.reference()
+        f = opt_stage.reference(axes)
         f.result()
         opt_pos = opt_stage.position.value
 

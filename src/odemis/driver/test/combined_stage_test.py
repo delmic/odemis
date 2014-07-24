@@ -88,8 +88,9 @@ class TestCombinedStage(unittest.TestCase):
         sem_stage = self.sem_stage
         align = self.align
 
-        # f = stage.reference()
-        # f.result()
+#         axes = set(["x", "y"])
+#         f = stage.reference(axes)
+#         f.result()
 
         # no transformation
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -172,8 +173,9 @@ class TestCombinedStage(unittest.TestCase):
         sem_stage = self.sem_stage
         align = self.align
 
-        # f = stage.reference()
-        # f.result()
+#         axes = set(["x", "y"])
+#         f = stage.reference(axes)
+#         f.result()
 
         # no transformation
         stage.updateMetadata({model.MD_ROTATION_COR: 0})

@@ -136,10 +136,10 @@ class TestCalibration(unittest.TestCase):
                                                                        (1, 1),
                                                                        (0, 0),
                                                                        (0, 1),
-                                                                       (-1, 0),
+                                                                       (1, 0),
                                                                        0,
-                                                                       (1, 1))
-        numpy.testing.assert_almost_equal(updated_offset, (0, 0))
+                                                                       (2, 2))
+        numpy.testing.assert_almost_equal(updated_offset, (1.5, 0))
         numpy.testing.assert_almost_equal(updated_rotation, 0)
 
     @unittest.skip("skip")
@@ -156,6 +156,20 @@ class TestCalibration(unittest.TestCase):
         rotation, scaling = f.result()
 
     # @unittest.skip("skip")
+    def test_align_offset(self):
+        """
+        Test AlignAndOffset
+        """
+        ccd = self.ccd
+        escan = self.ebeam
+        sem_stage = self.sem_stage
+        opt_stage = self.opt_stage
+        focus = self.focus
+        f = delphi.AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, (1, 1),
+                   (1, 0))
+        offset = f.result()
+
+    @unittest.skip("skip")
     def test_update_conversion(self):
         """
         Test UpdateConversion

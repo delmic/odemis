@@ -335,10 +335,11 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
             CancelledError() if cancelled
     """
     try:
-        stage_ab = InclinedStage("converter-ab", "stage",
-                            children={"aligner": stage},
-                            axes=["b", "a"],
-                            angle=135)
+        if type == STAGE_MOVE:
+            stage_ab = InclinedStage("converter-ab", "stage",
+                                children={"aligner": stage},
+                                axes=["b", "a"],
+                                angle=135)
         image = ccd.data.get(asap=False)
     
         # Center of optical image
