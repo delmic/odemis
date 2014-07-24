@@ -1001,7 +1001,7 @@ class SettingsBarController(object):
 
     def enable(self, enabled):
         for panel in self.settings_panels:
-            panel.activate(enabled)
+            panel.enable(enabled)
 
     def add_component(self, label, comp, panel):
 

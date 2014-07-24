@@ -664,7 +664,7 @@ class SparcAcquisitionTab(Tab):
         # Make sure nothing can be modified during acquisition
         self.main_frame.acq_btn_spectrometer.Enable(not is_acquiring)
         self.main_frame.acq_btn_angular.Enable(not is_acquiring)
-        self.tb.activate(not is_acquiring)
+        self.tb.enable(not is_acquiring)
         self.main_frame.vp_sparc_acq_view.Enable(not is_acquiring)
         self.main_frame.btn_sparc_change_file.Enable(not is_acquiring)
 

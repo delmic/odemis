@@ -385,7 +385,7 @@ class SecomAcquiController(object):
         main_settings_controller = secom_live_tab.settings_controller
         orig_settings = preset_as_is(main_settings_controller.entries)
         main_settings_controller.pause()
-        main_settings_controller.activate(False)
+        main_settings_controller.enable(False)
         # TODO: also pause the MicroscopeViews
 
         # pause all the live acquisitions
@@ -405,7 +405,7 @@ class SecomAcquiController(object):
 
             acqmng.apply_preset(orig_settings)
             main_settings_controller.resume()
-            main_settings_controller.activate(True)
+            main_settings_controller.enable(True)
 
             # Make sure that the acquisition button is enabled again.
             self._main_frame.btn_secom_acquire.Enable()
@@ -547,7 +547,7 @@ class SparcAcquiController(object):
         # save the original settings
         self._orig_settings = preset_as_is(self._settings_controller.entries)
         self._settings_controller.pause()
-        self._settings_controller.activate(False)
+        self._settings_controller.enable(False)
 
         # TODO: also freeze the MicroscopeView (for now we just pause the streams)
         # pause all the live acquisitions
@@ -568,7 +568,7 @@ class SparcAcquiController(object):
 
         acqmng.apply_preset(self._orig_settings)
         self._settings_controller.resume()
-        self._settings_controller.activate(True)
+        self._settings_controller.enable(True)
 
         # Make sure that the acquisition button is enabled again.
         self._main_frame.btn_sparc_acquire.Enable()
@@ -800,10 +800,10 @@ class FineAlignController(object):
         Pause the settings and the streams of the GUI
         """
         # save the original settings
-        self._settings_controller.activate(False)
+        self._settings_controller.enable(False)
         self._settings_controller.pause()
 
-        self._main_frame.lens_align_tb.activate(False)
+        self._main_frame.lens_align_tb.enable(False)
         self._main_frame.btn_auto_center.Enable(False)
 
         # make sure to not disturb the acquisition
@@ -817,9 +817,9 @@ class FineAlignController(object):
 
     def _resume(self):
         self._settings_controller.resume()
-        self._settings_controller.activate(True)
+        self._settings_controller.enable(True)
 
-        self._main_frame.lens_align_tb.activate(True)
+        self._main_frame.lens_align_tb.enable(True)
         self._main_frame.btn_auto_center.Enable(True)
 
         # Restart the streams (which were being played)
@@ -962,10 +962,10 @@ class AutoCenterController(object):
         Pause the settings and the streams of the GUI
         """
         # save the original settings
-        self._settings_controller.activate(False)
+        self._settings_controller.enable(False)
         self._settings_controller.pause()
 
-        self._main_frame.lens_align_tb.activate(False)
+        self._main_frame.lens_align_tb.enable(False)
         self._main_frame.btn_fine_align.Enable(False)
 
         # make sure to not disturb the acquisition
@@ -979,9 +979,9 @@ class AutoCenterController(object):
 
     def _resume(self):
         self._settings_controller.resume()
-        self._settings_controller.activate(True)
+        self._settings_controller.enable(True)
 
-        self._main_frame.lens_align_tb.activate(True)
+        self._main_frame.lens_align_tb.enable(True)
         # Spot mode should always be active, so it's fine to directly enable FA
         self._main_frame.btn_fine_align.Enable(True)
 
