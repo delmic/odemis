@@ -470,7 +470,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
         self.select_color = conversion.hex_to_frgba(
                                     gui.FG_COLOUR_HIGHLIGHT, 0.5)
-        self.enabled = False
+        self.active = False
 
     # Event handlers
 
@@ -492,15 +492,15 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         evt.Skip()
 
     def on_left_down(self, evt):
-        if self.enabled and self.values_are_set() and self.is_over():
+        if self.active and self.values_are_set() and self.is_over():
             self.cnvs.cancel_drag()
             # Since Ubuntu has a bug where it will not change the cursor when
             # the mouse is captured, we need to perform a little trick
             if self.cnvs.HasCapture():
                 self.cnvs.ReleaseMouse()
-            self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
             self.cnvs.CaptureMouse()
-            DragMixin.on_left_down(self, evt)
+            super(PixelSelectOverlay, self)._on_left_down(evt)
         else:
             evt.Skip()
 
@@ -511,15 +511,15 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         select a new pixel.
         """
 
-        if self._pixel_pos and self.enabled and self.is_over():
+        if self._pixel_pos and self.active and self.is_over():
             if self._selected_pixel.value != self._pixel_pos:
                 self._selected_pixel.value = self._pixel_pos
                 self.cnvs.update_drawing()
                 logging.debug("Pixel %s selected",
                               str(self._selected_pixel.value))
 
-        DragMixin.on_left_up(self, evt)
-        self.cnvs.SetCursor(wx.STANDARD_CURSOR)
+        super(PixelSelectOverlay, self)._on_left_up(evt)
+        self.cnvs.reset_dynamic_cursor()
         evt.Skip()
 
     def is_over(self):
@@ -734,7 +734,7 @@ class PointsOverlay(WorldOverlay):
                             MIN_DOT_RADIUS)
 
     def on_left_up(self, evt):
-        """ Set the seleceted point if the mouse cursor is hovering over one """
+        """ Set the selected point if the mouse cursor is hovering over one """
         # Clear the hover when the canvas was dragged
         if self.cnvs.was_dragged:
             self.cursor_over_point = None
@@ -774,10 +774,10 @@ class PointsOverlay(WorldOverlay):
                 self.b_hover_box = b_hover_box
                 self.cnvs.repaint()
 
-        if self.cursor_over_point and self.enabled:
-            self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+        if self.active and self.cursor_over_point:
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
         else:
-            self.cnvs.SetCursor(wx.STANDARD_CURSOR)
+            self.cnvs.reset_dynamic_cursor()
 
     def _calc_choices(self):
         """ Create a mapping between world coordinates and physical points
@@ -814,7 +814,7 @@ class PointsOverlay(WorldOverlay):
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if not self.choices or not self.enabled:
+        if not self.choices or not self.active:
             return
 
         if self.b_hover_box:

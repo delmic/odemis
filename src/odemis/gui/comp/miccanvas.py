@@ -28,9 +28,9 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.acq import stream
-from odemis.gui.model import LiveViewGUIData
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, DraggableCanvas
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay
+from odemis.gui.model import LiveViewGUIData
+from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
@@ -38,7 +38,6 @@ import threading
 import time
 import weakref
 import wx
-from wx.lib.pubsub import pub
 
 from odemis.acq.stream import UNDEFINED_ROI, SEMStream
 import odemis.gui as gui
@@ -78,6 +77,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
       is received, it will ensure the whole content fits the view (and reset
       this flag).
     """
+
     def __init__(self, *args, **kwargs):
         canvas.DraggableCanvas.__init__(self, *args, **kwargs)
         self.microscope_view = None
@@ -216,7 +216,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if tool_mode == guimodel.TOOL_NONE:
             self.current_mode = None
             self.clear_active_overlays()
-            self.cursor = wx.STANDARD_CURSOR # Fixme: can be removed?
+            self.reset_default_cursor()
             self.request_drawing_update()
         else:
 
@@ -233,17 +233,13 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             self.current_mode = tool_mode
 
-
-
-
             # FIXME: the right way would be to let the overlay say it wants
             # all the move-related events... and then it'd eat these events
             self.abilities.remove(canvas.CAN_DRAG)
 
-
         # TODO: send a .enable/.disable to overlay when becoming the active one
         if self.current_mode == guimodel.TOOL_DICHO:
-            self.dicho_overlay.enable(False)
+            self.dicho_overlay.activate()
             self.enable_drag()
         elif self.current_mode == guimodel.TOOL_SPOT:
             self._showSpotMode(False)
@@ -287,14 +283,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                        in self._tab_data_model.streams.value])):
                 self.current_mode = guimodel.TOOL_POINT
                 self.add_active_overlay(self.points_overlay)
-                self.points_overlay.enable(True)
+                self.points_overlay.activate(True)
             # TODO: Filtering by the name SEM CL is not desired. There should be
             # a more intelligent way to query the StreamTree about what's
             # present, like how it's done for Spectrum and AR streams
             elif self.pixel_overlay and (st.spectrum_streams or st.get_streams_by_name("SEM CL")):
                 self.current_mode = guimodel.TOOL_POINT
                 self.add_active_overlay(self.pixel_overlay)
-                self.pixel_overlay.enable(True)
+                self.pixel_overlay.activate(True)
         elif tool_mode == guimodel.TOOL_ROI:
             self.current_mode = guimodel.TOOL_ROI
             self.add_active_overlay(self.update_overlay)
@@ -312,7 +308,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             logging.warning("Unhandled tool type %s", tool_mode)
 
-        self.SetCursor(self.cursor)
+        self.set_default_cursor(self.cursor)
 
     def _onCrossHair(self, activated):
         """ Activate or disable the display of a cross in the middle of the view
@@ -757,6 +753,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # value produced while focussing.
 
             if evt.ShiftDown():
+                # TODO: Pressing and releasing the shift key while adjusting focus messes up the
+                # origin of the focus, so it's hard/impossible to go back to the original focus
+                # by dragging the mouse back to the center. Find a way to 'reset' the focus after
+                # the shift key has been released.
                 softener = 0.1  # softer
             else:
                 softener = 1
@@ -927,54 +927,6 @@ class SecomCanvas(DblMicroscopeCanvas):
                 images.insert(0, rgbim) # as first
 
         return images
-
-    def on_left_down(self, evt):
-        """ Process a left mouse button press
-
-        If the current mode indicates a tool is being used, we prevent the canvas drag from
-        happening
-
-        """
-
-        # If one of the specific SECOM tools is activated...
-        if self.current_mode in SECOM_MODES:
-            # ... we skip the direct super classes, so the canvas image won't be dragged
-            super(DraggableCanvas, self).on_left_down(evt)
-            self.request_drawing_update()  # TODO: Can this be removed?
-        else:
-            super(SecomCanvas, self).on_left_down(evt)
-
-    def on_left_up(self, evt):
-        """ Process a left mouse button release
-
-        If the current mode indicates a tool is being used, we prevent the canvas drag ending from
-        happening
-
-        """
-
-        # If one of the specific SECOM tools is activated...
-        if self.current_mode in SECOM_MODES:
-            # ... we skip the direct super classes, so the canvas image won't be dragged
-            super(DraggableCanvas, self).on_left_up(evt)
-            self.request_drawing_update()  # TODO: Can this be removed?
-        else:
-            super(SecomCanvas, self).on_left_up(evt)
-
-    def on_motion(self, evt):
-        """ Process mouse motion
-
-        If a Secom tool is selected, we skip any canvas processing (dragging and focus), by
-        directly calling the DraggableCanvas super class method.
-
-        """
-
-        # If one of the specific SECOM tools is activated...
-        if self.current_mode in SECOM_MODES:
-            # ... we skip the direct super classes, so the canvas image won't be dragged
-            super(DraggableCanvas, self).on_motion(evt)
-        else:
-            super(SecomCanvas, self).on_motion(evt)
-        self.request_drawing_update()  # TODO: Can this be removed?
 
     # Prevent certain events from being processed by the canvas
 
@@ -1422,24 +1374,20 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.plot_mode = canvas.PLOT_MODE_BAR
 
         self.markline_overlay = view_overlay.MarkingLineOverlay(
-                                                self,
-                                                orientation=3)
-        self.add_overlay(self.markline_overlay)
-        self.add_active_overlay(self.markline_overlay)
+            self,
+            orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
+        self.add_view_overlay(self.markline_overlay)
+        self.markline_overlay.activate()
 
     def set_data(self, data,
                  unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
-        super(ZeroDimensionalPlotCanvas, self).set_data(data,
-                                                        unit_x,
-                                                        unit_y,
-                                                        range_x,
-                                                        range_y)
+        super(ZeroDimensionalPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
+
         if data is None:
-            self.markline_overlay.v_posx.unsubscribe(self._calc_y_value)
+            self.markline_overlay.v_pos.unsubscribe(self._map_to_plot_values)
         else:
-            self.markline_overlay.v_posx.subscribe(self._calc_y_value,
-                                                   init=True)
+            self.markline_overlay.v_pos.subscribe(self._map_to_plot_values, init=True)
 
     def clear(self):
         super(ZeroDimensionalPlotCanvas, self).clear()
@@ -1449,7 +1397,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
     # Event handlers
 
-    def on_size(self, evt):  #pylint: disable=W0222
+    def on_size(self, evt):
         """ Update the position of the focus line """
         super(ZeroDimensionalPlotCanvas, self).on_size(evt)
         if None not in (self.val_x.value, self.val_y.value):
@@ -1457,10 +1405,13 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
                    self._val_y_to_pos_y(self.val_y.value))
             self.markline_overlay.set_position(pos)
 
-    def _calc_y_value(self, v_posx):
+    def _map_to_plot_values(self, v_pos):
         """ Calculate the x and y *values* belonging to the x pixel position """
-        if not self._data or v_posx is None:
+
+        if not self._data or v_pos is None:
             return
+
+        v_posx, v_posy = v_pos
 
         self.val_x.value = self._pos_x_to_val_x(v_posx, snap=True)
         self.val_y.value = self._val_x_to_val_y(self.val_x.value, snap=True)
@@ -1468,15 +1419,10 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         pos = (v_posx, self._val_y_to_pos_y(self.val_y.value))
         self.markline_overlay.set_position(pos)
 
-        self.markline_overlay.x_label = units.readable_str(self.val_x.value,
-                                                           self.unit_x,
-                                                           3)
+        self.markline_overlay.x_label = units.readable_str(self.val_x.value, self.unit_x, 3)
+        self.markline_overlay.y_label = units.readable_str(self.val_y.value, self.unit_y, 3)
 
-        self.markline_overlay.y_label = units.readable_str(self.val_y.value,
-                                                           self.unit_y,
-                                                           3)
-
-        self.Parent.Refresh()
+        self.Parent.Refresh()  # TODO: Does it need to be parent? is it needed at all?
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
@@ -1518,9 +1464,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         if self.microscope_view:
             self._updateThumbnail()
-
-    def add_overlay(self, ol):
-        self.add_view_overlay(ol)
 
     def get_y_value(self):
         """ Return the current y value """

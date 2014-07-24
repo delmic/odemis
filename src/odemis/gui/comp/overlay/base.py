@@ -25,6 +25,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 This module contains the base classes used for the construction of Overlay
 subclasses.
 
+
+Overlays will *always* have their Draw method called! Whether they are active or not.
+
+They will *only* receive mouse events if they are active!
+
 """
 
 from __future__ import division
@@ -134,10 +139,11 @@ class Overlay(object):
         if label:
             self.add_label(label)
 
-        # When an overlay is disabled, it will not draw anything and it will ignore all events
-        self.enabled = False
+        # When an overlay is active, it will process mouse events
+        self.active = False
 
-        # Mouse events
+        # Binding mouse events in this class will allow us to intercept them if we don't want them
+        # to reach the
         self.cnvs.Bind(wx.EVT_LEFT_DOWN, self.on_left_down)
         self.cnvs.Bind(wx.EVT_LEFT_UP, self.on_left_up)
         self.cnvs.Bind(wx.EVT_RIGHT_DOWN, self.on_right_down)
@@ -154,11 +160,15 @@ class Overlay(object):
         # Window events
         self.cnvs.Bind(wx.EVT_SIZE, self.on_size)
 
-    def enable(self):
-        self.enabled = True
+    def activate(self):
+        """ Process user generated mouse events """
+        self.active = True
+        self.cnvs.Refresh()
 
-    def disable(self):
-        self.enabled = False
+    def deactivate(self):
+        """ Stop processing user generated mouse events """
+        self.active = False
+        self.cnvs.Refresh()
 
     def add_label(self, text, pos=(0, 0), font_size=12, flip=True,
                   align=wx.ALIGN_LEFT | wx.ALIGN_TOP, colour=None, opacity=1.0, deg=None):
@@ -189,6 +199,10 @@ class Overlay(object):
             self._write_label(ctx, label)
 
     def _write_label(self, ctx, l):
+
+        # No text? Do nothing
+        if not l.text:
+            return
 
         # Cache the current context settings
         ctx.save()
@@ -343,19 +357,19 @@ class DragMixin(object):
         self.drag_v_start_pos = None
         self.drag_v_end_pos = None
 
-    def on_left_down(self, evt):
+    def _on_left_down(self, evt):
         self._ldragging = True
         self.drag_v_start_pos = evt.GetPositionTuple()
 
-    def on_left_up(self, evt):
+    def _on_left_up(self, evt):
         self._ldragging = False
         self.drag_v_end_pos = evt.GetPositionTuple()
 
-    def on_right_down(self, evt):
+    def _on_right_down(self, evt):
         self._rdragging = True
         self.drag_v_start_pos = evt.GetPositionTuple()
 
-    def on_righgt_up(self, evt):
+    def _on_righgt_up(self, evt):
         self._rdragging = False
         self.drag_v_end_pos = evt.GetPositionTuple()
 
@@ -632,13 +646,15 @@ class SelectionMixin(object):
         else:
             hover = self.is_hovering(v_pos)
             if hover == gui.HOVER_SELECTION:
-                self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_SIZENESW))  # A closed hand!
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
             elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):
-                self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_SIZEWE))
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZEWE)
             elif hover in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
-                self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_SIZENS))
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENS)
             else:
-                self.cnvs.SetCursor(self.cnvs.cursor)
+                self.cnvs.reset_dynamic_cursor()
+
+        self.cnvs.Refresh()
 
 
 class ViewOverlay(Overlay):

@@ -21,10 +21,7 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
-#===============================================================================
-# Test module for Odemis' gui.comp.overlay module
-#===============================================================================
+import math
 
 from odemis.util.conversion import hex_to_frgb
 from odemis.gui.comp.overlay import view as vol
@@ -39,19 +36,17 @@ import odemis.model as omodel
 import unittest
 import wx
 
+
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
 # test.set_sleep_time(1000)
 
 
-def do_stuff(value):
-    """ Test function that can be used to subscribe to VAs """
-    print "Testing VA subscriber received value ", value
-
-
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
+
+    # View overlay test cases
 
     def test_text_view_overlay_size(self):
         cnvs = canvas.BitmapCanvas(self.panel)
@@ -223,7 +218,106 @@ class OverlayTestCase(test.GuiTestCase):
             test.gui_loop(500)
             cnvs.Refresh()
 
-    # @unittest.skip("simple")
+    def test_crosshair_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        hol = vol.CrossHairOverlay(cnvs)
+        cnvs.add_view_overlay(hol)
+
+        test.gui_loop()
+
+    def test_spot_mode_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        sol = vol.SpotModeOverlay(cnvs)
+        cnvs.add_view_overlay(sol)
+
+        test.gui_loop()
+
+    def test_streamicon_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        sol = vol.StreamIconOverlay(cnvs)
+        cnvs.add_view_overlay(sol)
+        test.gui_loop(2000)
+        sol.hide_pause(False)
+        test.gui_loop()
+        test.gui_loop(2000)
+        sol.hide_pause(True)
+
+    def test_focus_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        class FakeFocus(object):
+            def moveRel(self, dummy):
+                pass
+
+        mmodel = test.FakeMicroscopeModel()
+        view = mmodel.focussedView.value
+        view._focus = [FakeFocus(), FakeFocus()]
+        cnvs.setView(view, mmodel)
+
+        test.gui_loop()
+
+    def test_view_select_overlay(self):
+        # Create and add a miccanvas
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        vsol = vol.ViewSelectOverlay(cnvs, "test view selection")
+        vsol.activate()
+        cnvs.add_view_overlay(vsol)
+        # cnvs.current_mode = guimodel.TOOL_ZOOM
+        test.gui_loop()
+
+    def test_marking_line_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        mlol = vol.MarkingLineOverlay(cnvs, orientation=1)
+        mlol.activate()
+        cnvs.add_view_overlay(mlol)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        test.gui_loop()
+
+        mlol.v_posx.value = 100
+        mlol.v_posy.value = 100
+        cnvs.Refresh()
+
+        test.gui_loop(500)
+        mlol.orientation = 2
+        mlol.v_posx.value = 200
+        mlol.v_posy.value = 200
+        cnvs.Refresh()
+
+        test.gui_loop(500)
+        mlol.orientation = 3
+        mlol.v_posx.value = 300
+        mlol.v_posy.value = 300
+        cnvs.Refresh()
+
+    def test_dichotomy_overlay(self):
+        cnvs = miccanvas.SecomCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        lva = omodel.ListVA()
+
+        dol = vol.DichotomyOverlay(cnvs, lva)
+        cnvs.add_view_overlay(dol)
+
+        def do_stuff(value):
+            """ Test function that can be used to subscribe to VAs """
+            print "Testing VA subscriber received value ", value
+
+        self.dummy = do_stuff
+        dol.sequence_va.subscribe(do_stuff, init=True)
+        dol.sequence_va.value = [0, 1, 2, 3, 0]
+        dol.activate()
+
+        test.gui_loop()
+
     def test_polar_overlay(self):
         cnvs = miccanvas.AngularResolvedCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
@@ -238,7 +332,47 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-    # @unittest.skip("simple")
+    def test_point_select_mode_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        slol = vol.PointSelectOverlay(cnvs)
+        slol.activate()
+
+        def print_pos(pos):
+            logging.debug(pos)
+
+        self.dummy = print_pos
+
+        slol.v_pos.subscribe(print_pos)
+        slol.w_pos.subscribe(print_pos)
+        if slol.p_pos:
+            slol.p_pos.subscribe(print_pos)
+
+        cnvs.add_view_overlay(slol)
+
+        test.gui_loop()
+
+    def test_history_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        hol = vol.HistoryOverlay(cnvs)
+        cnvs.add_view_overlay(hol)
+
+        steps = 100
+        for i in range(steps):
+            phi = (math.pi * 2) / steps
+            x = (100 + i) * math.cos(i * phi) + 500
+            y = (100 + i) * math.sin(i * phi) - 500
+
+            hol.add_location((x, y))
+            test.gui_loop()
+
+    # END View overlay test cases
+
+    # World overlay test cases
+
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
@@ -251,10 +385,9 @@ class OverlayTestCase(test.GuiTestCase):
         # Manually add the overlay
         pol = wol.PointsOverlay(cnvs)
         cnvs.add_world_overlay(pol)
-        cnvs.add_active_overlay(pol)
 
         cnvs.current_mode = guimodel.TOOL_POINT
-        pol.enable()
+        pol.activate()
 
         test.gui_loop()
 
@@ -269,15 +402,18 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
         cnvs.update_drawing()
-        test.sleep(1000)
+        test.sleep(500)
 
         point.value = (50 / 1.0e5, 50 / 1.0e5)
 
-        test.sleep(1000)
+        test.sleep(500)
 
         point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
 
         pol.set_point(point)
+
+
+
 
     # @unittest.skip("simple")
     def test_pixel_select_overlay(self):
@@ -290,9 +426,8 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.current_mode = guimodel.TOOL_POINT
 
         psol = wol.PixelSelectOverlay(cnvs)
-        psol.enabled = True
+        psol.activate()
         cnvs.add_world_overlay(psol)
-        cnvs.add_active_overlay(psol)
 
         # psol.set_values(33, (0.0, 0.0), (30, 30))
         psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
@@ -300,19 +435,7 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
     # @unittest.skip("simple")
-    def test_view_select_overlay(self):
-        # Create and add a miccanvas
-        cnvs = miccanvas.SecomCanvas(self.panel)
 
-        # cnvs.SetBackgroundColour(wx.WHITE)
-        # cnvs.SetForegroundColour("#DDDDDD")
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-
-        vsol = vol.ViewSelectOverlay(cnvs, "test view selection")
-        cnvs.add_view_overlay(vsol)
-        cnvs.add_active_overlay(vsol)
-        cnvs.current_mode = guimodel.TOOL_ZOOM
-        test.gui_loop()
 
     # @unittest.skip("simple")
     def test_roa_select_overlay(self):
@@ -360,42 +483,21 @@ class OverlayTestCase(test.GuiTestCase):
         # wx.FutureCall(3000, later)
 
     # @unittest.skip("simple")
-    def test_dichotomy_overlay(self):
-        cnvs = miccanvas.SecomCanvas(self.panel)
+
+
+    def test_polar_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        lva = omodel.ListVA()
-
-        dol = vol.DichotomyOverlay(cnvs, lva)
-        cnvs.add_view_overlay(dol)
-        cnvs.add_active_overlay(dol)
-
-        dol.sequence_va.subscribe(do_stuff, init=True)
-        dol.enable()
-
-        dol.sequence_va.value = [0, 1, 2, 3, 0]
+        pol = vol.PolarOverlay(cnvs)
+        pol.activate()
+        cnvs.add_view_overlay(pol)
 
         test.gui_loop()
 
-    # @unittest.skip("simple")
-    def test_spot_mode_overlay(self):
-        cnvs = miccanvas.SecomCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        sol = vol.SpotModeOverlay(cnvs)
-        cnvs.add_view_overlay(sol)
 
-        test.gui_loop()
 
-    def test_history_overlay(self):
-        cnvs = miccanvas.SecomCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-
-        hol = vol.HistoryOverlay(cnvs)
-        cnvs.add_view_overlay(hol)
-        cnvs.add_active_overlay(hol)
-
-        test.gui_loop()
 
 
 if __name__ == "__main__":

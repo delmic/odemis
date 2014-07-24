@@ -29,7 +29,6 @@ import math
 
 import cairo
 import wx
-import wx.lib.wxcairo as wxcairo
 
 from .base import ViewOverlay, DragMixin, SelectionMixin
 import odemis.gui as gui
@@ -40,11 +39,10 @@ import odemis.util.units as units
 
 
 class TextViewOverlay(ViewOverlay):
-    """ This overlay draws the label text at the provided view position """
+    """ Render the present labels to the screen """
 
-    def __init__(self, cnvs, vpos=((10, 16))):
+    def __init__(self, cnvs):
         super(TextViewOverlay, self).__init__(cnvs)
-        self.vpos = vpos
 
     def Draw(self, ctx):
         if self.labels:
@@ -52,48 +50,50 @@ class TextViewOverlay(ViewOverlay):
 
 
 class CrossHairOverlay(ViewOverlay):
-    def __init__(self, cnvs,
-                 colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE,
-                 center=(0, 0)):
+    """ Render a static cross hair to the center of the view """
+
+    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
         super(CrossHairOverlay, self).__init__(cnvs)
 
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
-        self.center = center
+        self.center = self.cnvs.get_half_view_size()
+
+    def on_size(self, evt):
+        self.center = self.cnvs.get_half_view_size()
 
     def Draw(self, ctx):
-        """ Draw a cross hair to the ctx Cairo context """
+        """ Draw a cross hair to the Cairo context """
 
         ctx.save()
 
-        center = self.cnvs.get_half_view_size()
-
-        tl = (center[0] - self.size, center[1] - self.size)
-        br = (center[0] + self.size, center[1] + self.size)
+        tl = (self.center[0] - self.size, self.center[1] - self.size)
+        br = (self.center[0] + self.size, self.center[1] + self.size)
 
         ctx.set_line_width(1)
 
+        # Draw shadow
         ctx.set_source_rgba(0, 0, 0, 0.9)
-        ctx.move_to(tl[0] + 1.5, center[1] + 1.5)
-        ctx.line_to(br[0] + 1.5, center[1] + 1.5)
-        ctx.move_to(center[0] + 1.5, tl[1] + 1.5)
-        ctx.line_to(center[0] + 1.5, br[1] + 1.5)
+        ctx.move_to(tl[0] + 1.5, self.center[1] + 1.5)
+        ctx.line_to(br[0] + 1.5, self.center[1] + 1.5)
+        ctx.move_to(self.center[0] + 1.5, tl[1] + 1.5)
+        ctx.line_to(self.center[0] + 1.5, br[1] + 1.5)
         ctx.stroke()
 
+        # Draw cross hair
         ctx.set_source_rgba(*self.colour)
-        ctx.move_to(tl[0] + 0.5, center[1] + 0.5)
-        ctx.line_to(br[0] + 0.5, center[1] + 0.5)
-        ctx.move_to(center[0] + 0.5, tl[1] + 0.5)
-        ctx.line_to(center[0] + 0.5, br[1] + 0.5)
+        ctx.move_to(tl[0] + 0.5, self.center[1] + 0.5)
+        ctx.line_to(br[0] + 0.5, self.center[1] + 0.5)
+        ctx.move_to(self.center[0] + 0.5, tl[1] + 0.5)
+        ctx.line_to(self.center[0] + 0.5, br[1] + 0.5)
         ctx.stroke()
 
         ctx.restore()
 
 
 class SpotModeOverlay(ViewOverlay):
-    """ This overlay displays a circle marker in the center of
-    the canvas, indicating that the spot mode has been activated.
-    """
+    """ Render the spot mode indicator in the center of the view """
+
     def __init__(self, cnvs):
         super(SpotModeOverlay, self).__init__(cnvs)
 
@@ -107,11 +107,14 @@ class SpotModeOverlay(ViewOverlay):
         # The problem with the code is that the fully transparent background of the image used
         # is *not* fully transparent.
 
+        # from wx.lib import wxcairo
         # img_surface = wxcairo.ImageSurfaceFromBitmap(self.marker_bmp)
-        # ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0) # transparent black
+        #
+        # # ctx.set_source_rgba(0.0, 0.0, 0.0, 0.0) # transparent black
         # ctx.translate(self.center[0] - self._marker_offset[0],
         #               self.center[1] - self._marker_offset[1])
         # ctx.set_source_surface(img_surface)
+        # # ctx.set_operator(cairo.OPERATOR_OVER)
         # ctx.paint()
 
         view_dc = wx.PaintDC(self.cnvs)
@@ -124,25 +127,19 @@ class SpotModeOverlay(ViewOverlay):
 
 
 class StreamIconOverlay(ViewOverlay):
-    """ This class can display various icon on the view to indicate the state of
-    the Streams belonging to that view.
-    """
+    """ Render Stream (play/pause) icons to the view """
 
     opacity = 0.8
 
     def __init__(self, cnvs):
         super(StreamIconOverlay, self).__init__(cnvs)
-        self.pause = False # if True: displayed
+        self.pause = False  # if True: displayed
         self.play = 0  # opacity of the play icon
-
         self.colour = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, self.opacity)
 
     def hide_pause(self, hidden=True):
-        """
-        Hides the pause icon (or not)
-        hidden (boolean): if True, hides the icon (and display shortly a play
-         icon). If False, shows the pause icon.
-        """
+        """ Hide or show the pause icon """
+
         self.pause = not hidden
         if not self.pause:
             self.play = 1.0
@@ -154,10 +151,9 @@ class StreamIconOverlay(ViewOverlay):
         elif self.play:
             self._draw_play(ctx)
             if self.play > 0:
-                self.play -= 0.1 # a tenth less
-                # Force a refresh (without erase background), to cause a new
-                # draw
-                wx.CallLater(50, self.cnvs.Refresh, False) # in 0.05 s
+                self.play -= 0.1  # a tenth less
+                # Force a refresh (without erase background), to cause a new draw
+                wx.CallLater(50, self.cnvs.Refresh, False)  # in 0.05 s
             else:
                 self.play = 0
 
@@ -229,7 +225,8 @@ class StreamIconOverlay(ViewOverlay):
 
 
 class FocusOverlay(ViewOverlay):
-    """ This overlay can be used to display the change in focus """
+    """ Display the focus modification indicator """
+
     def __init__(self, cnvs):
         super(FocusOverlay, self).__init__(cnvs)
 
@@ -237,25 +234,41 @@ class FocusOverlay(ViewOverlay):
         self.line_width = 16
         self.shifts = [0, 0]
 
-        self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT|wx.ALIGN_CENTER_VERTICAL)
+        self.focus_label = self.add_label("", align=wx.ALIGN_RIGHT | wx.ALIGN_CENTER_VERTICAL)
 
     def Draw(self, ctx):
-        """
-        Draws the crosshair
-        dc (wx.DC)
-        """
-        # TODO: handle displaying the focus 0 (horizontally)
+        # TODO: Both focuses at the same time, or 'snap' to horizontal/vertical on first motion?
 
+        ctx.set_line_width(10)
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
+
+        x, y = self.cnvs.ClientSize
+
+        # Horizontal
+        if self.shifts[0]:
+            y -= self.margin + (self.line_width // 2)
+            middle = x / 2
+
+            shift = self.shifts[0] * 1e6  # typically within µm
+            end_x = middle + (middle * (shift / (x / 2)))
+            end_x = min(max(self.margin, end_x), x - self.margin)
+
+            ctx.move_to(middle, y)
+            ctx.line_to(end_x, y)
+            ctx.stroke()
+
+            lbl = "focus %s" % units.readable_str(self.shifts[0], 'm', 2)
+            self.focus_label.text = lbl
+            self.focus_label.pos = (end_x, y - 15)
+            self._write_label(ctx, self.focus_label)
+
+        # Vertical
         if self.shifts[1]:
-            ctx.set_line_width(10)
-            ctx.set_line_join(cairo.LINE_JOIN_MITER)
-            ctx.set_source_rgba(1.0, 1.0, 1.0, 0.8)
-
-            x, y = self.cnvs.ClientSize
             x -= self.margin + (self.line_width // 2)
             middle = y / 2
 
-            shift = self.shifts[1] * 1e6 # typically within µm
+            shift = self.shifts[1] * 1e6  # typically within µm
             end_y = middle - (middle * (shift / (y / 2)))
             end_y = min(max(self.margin, end_y), y - self.margin)
 
@@ -269,10 +282,13 @@ class FocusOverlay(ViewOverlay):
             self._write_label(ctx, self.focus_label)
 
     def add_shift(self, shift, axis):
-        """ Adds a value on the given axis, and updates the overlay
+        """ Adds a value on the given axis and updates the overlay
+
         shift (float): amount added to the current value (can be negative)
         axis (int): axis for which this happens
+
         """
+
         self.shifts[axis] += shift
         self.cnvs.Refresh()
 
@@ -283,7 +299,7 @@ class FocusOverlay(ViewOverlay):
 
 
 class ViewSelectOverlay(ViewOverlay, SelectionMixin):
-    #pylint: disable=W0221
+
     def __init__(self, cnvs,
                  sel_cur=None,
                  colour=gui.SELECTION_COLOUR,
@@ -296,8 +312,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.v_start_pos and self.v_end_pos:
-            #pylint: disable=E1103
+        if self.active and self.v_start_pos and self.v_end_pos:
             start_pos = self.v_start_pos
             end_pos = self.v_end_pos
 
@@ -319,33 +334,34 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
             # draws the dotted line
             ctx.set_line_width(1.5)
-            ctx.set_dash([2,])
+            ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
             ctx.rectangle(*rect)
             ctx.stroke()
 
             self.position_label.pos = start_pos
-            # FIXME: label text is always empty... what's the point of displaying it?
-            # self.text = "kaas"
-
-            # self._write_label(ctx, self.position_label)
 
     def on_left_down(self, evt):
-        super(ViewSelectOverlay, self).on_left_down(evt)
-        SelectionMixin._on_left_down(self, evt)
+        """ Start drag action if enabled, otherwise call super method so event will propagate """
+        if self.active:
+            super(ViewSelectOverlay, self)._on_left_down(evt)
+        else:
+            super(ViewSelectOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
-        super(ViewSelectOverlay, self).on_left_up(evt)
-        SelectionMixin._on_left_up(self, evt)
+        """ End drag action if enabled, otherwise call super method so event will propagate """
+        if self.active:
+            super(ViewSelectOverlay, self)._on_left_up(evt)
+        else:
+            super(ViewSelectOverlay, self).on_left_up(evt)
 
     def on_motion(self, evt):
-        super(ViewSelectOverlay, self).on_motion(evt)
-        SelectionMixin._on_motion(self, evt)
-
-
-HORIZONTAL = 1
-VERTICAL = 2
+        """ Process drag motion if enabled, otherwise call super method so event will propagate """
+        if self.active:
+            super(ViewSelectOverlay, self)._on_motion(evt)
+        else:
+            super(ViewSelectOverlay, self).on_motion(evt)
 
 
 class MarkingLineOverlay(ViewOverlay, DragMixin):
@@ -353,27 +369,25 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     This class can easily be extended to include a horizontal or horz/vert
     display mode.
 
-    TODO: Added a way to have the lines track the mouse's x, y or a and y
     """
-    def __init__(self, cnvs,
-                 sel_cur=None,
-                 colour=gui.SELECTION_COLOUR,
-                 center=(0, 0),
-                 orientation=HORIZONTAL):
+
+    HORIZONTAL = 1
+    VERTICAL = 2
+
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, orientation=None):
 
         super(MarkingLineOverlay, self).__init__(cnvs)
         DragMixin.__init__(self)
 
+        self.label = None
         self.colour = conversion.hex_to_frgba(colour)
 
-        self.v_posx = model.VigilantAttribute(None)
-        self.v_posy = model.VigilantAttribute(None)
+        self.v_pos = model.VigilantAttribute(None)
 
         self._x_label = self.add_label("", colour=self.colour)
-        self._y_label = self.add_label("", colour=self.colour,
-                                       align=wx.ALIGN_BOTTOM)
+        self._y_label = self.add_label("", colour=self.colour, align=wx.ALIGN_BOTTOM)
 
-        self.orientation = orientation
+        self.orientation = orientation or self.HORIZONTAL
         self.line_width = 2
 
     @property
@@ -392,83 +406,82 @@ class MarkingLineOverlay(ViewOverlay, DragMixin):
     def y_label(self, lbl):
         self._y_label.text = lbl
 
-
     def clear_labels(self):
-        self.v_posx.value = None
-        self.v_posy.value = None
+        self.v_pos.value = None
+
+    # Event Handlers
 
     def on_left_down(self, evt):
-        super(MarkingLineOverlay, self).on_left_down(evt)
-        DragMixin.on_left_down(self, evt)
-        self.colour = self.colour[:3] + (0.5,)
-        self._set_to_mouse_x(evt)
+        if self.active:
+            super(MarkingLineOverlay, self)._on_left_down(evt)
+            self.colour = self.colour[:3] + (0.5,)
+            self._store_event_pos(evt)
+        else:
+            super(MarkingLineOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
-        super(MarkingLineOverlay, self).on_left_up(evt)
-        DragMixin.on_left_up(self, evt)
-        self.colour = self.colour[:3] + (1.0,)
-        self._set_to_mouse_x(evt)
-        self.cnvs.Refresh()
+        if self.active:
+            super(MarkingLineOverlay, self)._on_left_up(evt)
+            self.colour = self.colour[:3] + (1.0,)
+            self._store_event_pos(evt)
+            self.cnvs.Refresh()
+        else:
+            super(MarkingLineOverlay, self).on_left_up(evt)
 
     def on_motion(self, evt):
-        super(MarkingLineOverlay, self).on_motion(evt)
-        if self.left_dragging:
-            self._set_to_mouse_x(evt)
+        if self.active and self.left_dragging:
+            self._store_event_pos(evt)
+            self.cnvs.Refresh()
+        else:
+            super(MarkingLineOverlay, self).on_motion(evt)
 
-    def _set_to_mouse_x(self, evt):
+    # END Event Handlers
+
+    def _store_event_pos(self, evt):
         """ Position the focus line at the position of the given mouse event """
-        x, _ = evt.GetPositionTuple()
-        # Clip x
-        self.v_posx.value = max(min(self.cnvs.ClientSize.x, x), 1)
+        x, y = evt.GetPositionTuple()
+        self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height, y), 1))
 
-    def set_position(self, pos, label=None):
-        self.v_posx.value = max(min(self.cnvs.ClientSize.x, pos[0]), 1)
-        self.v_posy.value = max(1, min(pos[1], self.view_height - 1))
-        self.label = label
+    def set_position(self, pos):
+        x, y = pos
+        self.v_pos.value = (max(min(self.view_width, x), 1), max(min(self.view_height - 1, y), 1))
 
     def Draw(self, ctx):
         ctx.set_line_width(self.line_width)
-        ctx.set_dash([3,])
+        ctx.set_dash([3])
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
         ctx.set_source_rgba(*self.colour)
 
-        if (self.v_posx.value is not None and
-            self.orientation & HORIZONTAL == HORIZONTAL):
-            ctx.move_to(self.v_posx.value, 0)
-            ctx.line_to(self.v_posx.value, self.cnvs.ClientSize[1])
-            ctx.stroke()
+        if self.v_pos.value is not None:
+            v_posx, v_posy = self.v_pos.value
 
-        if (self.v_posy.value is not None and
-            self.orientation & VERTICAL == VERTICAL):
-            ctx.move_to(0, self.v_posy.value)
-            ctx.line_to(self.cnvs.ClientSize[0], self.v_posy.value)
-            ctx.stroke()
+            if self.orientation & self.VERTICAL == self.VERTICAL:
+                ctx.move_to(v_posx, 0)
+                ctx.line_to(v_posx, self.cnvs.ClientSize.y)
+                ctx.stroke()
 
-        if None not in (self.v_posy.value, self.v_posx.value):
+            if self.orientation & self.HORIZONTAL == self.HORIZONTAL:
+                ctx.move_to(0, v_posy)
+                ctx.line_to(self.cnvs.ClientSize.x, v_posy)
+                ctx.stroke()
+
             if self.x_label.text:
-                self.x_label.pos = (self.v_posx.value + 5,
-                                    self.cnvs.ClientSize.y)
+                self.x_label.pos = (v_posx + 5, self.cnvs.ClientSize.y)
                 self._write_label(ctx, self.x_label)
 
             if self.y_label.text:
-                yp = max(0, self.v_posy.value - 5) # Padding from line
+                yp = max(0, v_posy - 5)  # Padding from line
                 # Increase bottom margin if x label is close
-                label_padding = 30 if self.v_posx.value < 50 else 0
-                yn = min(self.cnvs.ClientSize.y - label_padding, yp)
+                label_padding = 30 if v_posx < 50 else 0
+                yn = min(self.view_height - label_padding, yp)
                 self.y_label.pos = (2, yn)
                 self._write_label(ctx, self.y_label)
 
             r, g, b, a = conversion.change_brightness(self.colour, -0.2)
             a = 0.5
             ctx.set_source_rgba(r, g, b, a)
-            ctx.arc(self.v_posx.value, self.v_posy.value, 5.5, 0, 2*math.pi)
+            ctx.arc(v_posx, v_posy, 5.5, 0, 2*math.pi)
             ctx.fill()
-
-
-TOP_LEFT = 0
-TOP_RIGHT = 1
-BOTTOM_LEFT = 2
-BOTTOM_RIGHT = 3
 
 
 class DichotomyOverlay(ViewOverlay):
@@ -477,6 +490,11 @@ class DichotomyOverlay(ViewOverlay):
     the bottom right. The first quadrant is the biggest, with each subsequent
     quadrant being nested in the one before it.
     """
+
+    TOP_LEFT = 0
+    TOP_RIGHT = 1
+    BOTTOM_LEFT = 2
+    BOTTOM_RIGHT = 3
 
     def __init__(self, cnvs, sequence_va, colour=gui.SELECTION_COLOUR):
         """ :param sequence_va: (ListVA) VA to store the sequence in
@@ -503,12 +521,12 @@ class DichotomyOverlay(ViewOverlay):
         # maximum number of sub-quadrants (6->2**6 smaller than the whole area)
         self.max_len = 6
 
-        self.sequence_va.subscribe(self.on_change, init=True)
+        self.sequence_va.subscribe(self.on_sequence_change, init=True)
 
         # Disabling the overlay will allow the event handlers to ignore events
-        self.enabled = False
+        self.active = False
 
-    def on_change(self, seq):
+    def on_sequence_change(self, seq):
 
         if not all([0 <= v <= 3 for v in seq]):
             raise ValueError("Illegal quadrant values in sequence!")
@@ -529,67 +547,72 @@ class DichotomyOverlay(ViewOverlay):
         logging.debug("Reset")
         self.sequence_va.value = []
 
+    # Event Handlers
+
     def on_leave(self, evt):
         """ Event handler called when the mouse cursor leaves the canvas """
 
-        # When the mouse cursor leaves the overlay, the current top quadrant
-        # should be highlighted, so clear the hover_pos attribute.
-        self.hover_pos = (None, None)
-        if self.enabled:
+        if self.active:
+            # When the mouse cursor leaves the overlay, the current top quadrant
+            # should be highlighted, so clear the hover_pos attribute.
+            self.hover_pos = (None, None)
             self.cnvs.Refresh()
-
-        evt.Skip()
-
-    def enable(self, enable=True):
-        """ Enable of disable the overlay """
-        self.enabled = enable
-        self.cnvs.Refresh()
+        else:
+            super(DichotomyOverlay, self).on_leave(evt)
 
     def on_motion(self, evt):
         """ Mouse motion event handler """
 
-        if self.enabled:
-            self._updateHover(evt.GetPosition())
-        evt.Skip()
+        if self.active:
+            self._update_hover(evt.GetPosition())
+        else:
+            super(DichotomyOverlay, self).on_leave(evt)
+
+    def on_left_down(self, evt):
+        """ Prevent the left mouse button event from propagating when the overlay is active"""
+        if not self.active:
+            evt.Skip()
 
     def on_left_up(self, evt):
         """ Mouse button handler """
-        evt.Skip() # FIXME
-        if not self.enabled:
-            return
 
-        # If the mouse cursor is over a selectable quadrant
-        if None not in self.hover_pos:
-            idx, quad = self.hover_pos
+        if self.active:
+            # If the mouse cursor is over a selectable quadrant
+            if None not in self.hover_pos:
+                idx, quad = self.hover_pos
 
-            # If we are hovering over the 'top' quadrant, add it to the sequence
-            if len(self.sequence_va.value) == idx:
-                new_seq = self.sequence_va.value + [quad]
-                new_seq = new_seq[:self.max_len] # cut if too long
-            # Jump to the desired quadrant otherwise, cutting the sequence
-            else:
-                # logging.debug("Trim")
-                new_seq = self.sequence_va.value[:idx] + [quad]
-            self.sequence_va.value = new_seq
+                # If we are hovering over the 'top' quadrant, add it to the sequence
+                if len(self.sequence_va.value) == idx:
+                    new_seq = self.sequence_va.value + [quad]
+                    new_seq = new_seq[:self.max_len]  # cut if too long
+                # Jump to the desired quadrant otherwise, cutting the sequence
+                else:
+                    # logging.debug("Trim")
+                    new_seq = self.sequence_va.value[:idx] + [quad]
+                self.sequence_va.value = new_seq
 
-            self._updateHover(evt.GetPosition())
+                self._update_hover(evt.GetPosition())
+        else:
+            super(DichotomyOverlay, self).on_leave(evt)
 
     def on_size(self, evt):
         """ Called when size of canvas changes
         """
-        # Force the recomputation of rectangles
-        self.on_change(self.sequence_va.value)
+        # Force the re-computation of rectangles
+        self.on_sequence_change(self.sequence_va.value)
 
-    def _updateHover(self, pos):
+    # END Event Handlers
+
+    def _update_hover(self, pos):
         idx, quad = self.quad_hover(pos)
 
         # Change the cursor into a hand if the quadrant being hovered over
         # can be selected. Use the default cursor otherwise
         if idx >= self.max_len:
-            self.cnvs.SetCursor(wx.STANDARD_CURSOR)
+            self.cnvs.reset_dynamic_cursor()
             idx, quad = (None, None)
         else:
-            self.cnvs.SetCursor(wx.StockCursor(wx.CURSOR_HAND))
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
 
         # Redraw only if the quadrant changed
         if self.hover_pos != (idx, quad):
@@ -605,8 +628,8 @@ class DichotomyOverlay(ViewOverlay):
 
         # Loop over the rectangles, smallest one first
         for i, (x, y, w, h) in reversed(list(enumerate(self.sequence_rect))):
-            if  x <= vpos.x <= x + w:
-                if  y <= vpos.y <= y + h:
+            if x <= vpos.x <= x + w:
+                if y <= vpos.y <= y + h:
                     # If vpos is within the rectangle, we can determine the
                     # quadrant.
                     # Remember that the quadrants are numbered as follows:
@@ -639,64 +662,63 @@ class DichotomyOverlay(ViewOverlay):
         x, y, w, h = self.sequence_rect[idx]
 
         # The new rectangle will have half the size of the cnvs one
-        w = w / 2
-        h = h / 2
+        w /= 2
+        h /= 2
 
         # If the quadrant is in the right half, construct x by adding half the
         # width to x position of the cnvs rectangle.
-        if quad in (TOP_RIGHT, BOTTOM_RIGHT):
+        if quad in (self.TOP_RIGHT, self.BOTTOM_RIGHT):
             x += w
 
         # If the quadrant is in the bottom half, construct y by adding half the
         # height to the y position of the cnvs rectangle.
-        if quad in (BOTTOM_LEFT, BOTTOM_RIGHT):
+        if quad in (self.BOTTOM_LEFT, self.BOTTOM_RIGHT):
             y += h
 
         return x, y, w, h
 
     def Draw(self, ctx):
 
-        if self.enabled:
-            ctx.set_source_rgba(*self.colour)
-            ctx.set_line_width(2)
-            ctx.set_dash([2,])
-            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+        ctx.set_source_rgba(*self.colour)
+        ctx.set_line_width(2)
+        ctx.set_dash([2])
+        ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
-            # Draw previous selections as dashed rectangles
-            for rect in self.sequence_rect:
-                # logging.debug("Drawing ", *args, **kwargs)
+        # Draw previous selections as dashed rectangles
+        for rect in self.sequence_rect:
+            # logging.debug("Drawing ", *args, **kwargs)
+            ctx.rectangle(*rect)
+        ctx.stroke()
+
+        # If the mouse is over the canvas
+        if None not in self.hover_pos:
+            idx, quad = self.hover_pos
+
+            # If the mouse is over the smallest selected quadrant
+            if idx == len(self.sequence_va.value):
+                # Mark quadrant to be added
+                ctx.set_source_rgba(*self.hover_forw)
+                rect = self.index_to_rect(idx, quad)
                 ctx.rectangle(*rect)
-            ctx.stroke()
+                ctx.fill()
+            else:
+                # Mark higher quadrant to 'jump' to
+                ctx.set_source_rgba(*self.hover_back)
+                rect = self.index_to_rect(idx, quad)
+                ctx.rectangle(*rect)
+                ctx.fill()
 
-            # If the mouse is over the canvas
-            if None not in self.hover_pos:
-                idx, quad = self.hover_pos
-
-                # If the mouse is over the smallest selected quadrant
-                if idx == len(self.sequence_va.value):
-                    # Mark quadrant to be added
-                    ctx.set_source_rgba(*self.hover_forw)
-                    rect = self.index_to_rect(idx, quad)
-                    ctx.rectangle(*rect)
-                    ctx.fill()
-                else:
-                    # Mark higher quadrant to 'jump' to
-                    ctx.set_source_rgba(*self.hover_back)
-                    rect = self.index_to_rect(idx, quad)
-                    ctx.rectangle(*rect)
-                    ctx.fill()
-
-                    # Mark current quadrant
-                    ctx.set_source_rgba(*self.hover_forw)
-                    ctx.rectangle(*self.sequence_rect[-1])
-                    ctx.fill()
-
-            # If the mouse is not over the canvas
-            elif self.sequence_va.value and self.sequence_rect:
-                # Mark the currently selected quadrant
+                # Mark current quadrant
                 ctx.set_source_rgba(*self.hover_forw)
                 ctx.rectangle(*self.sequence_rect[-1])
                 ctx.fill()
+
+        # If the mouse is not over the canvas
+        elif self.sequence_va.value and self.sequence_rect:
+            # Mark the currently selected quadrant
+            ctx.set_source_rgba(*self.hover_forw)
+            ctx.rectangle(*self.sequence_rect[-1])
+            ctx.fill()
 
 
 class PolarOverlay(ViewOverlay):
@@ -704,7 +726,6 @@ class PolarOverlay(ViewOverlay):
         super(PolarOverlay, self).__init__(cnvs)
 
         self.canvas_padding = 0
-        # self.cnvs.canDrag = False
         # Rendering attributes
         self.center_x = None
         self.center_y = None
@@ -722,23 +743,20 @@ class PolarOverlay(ViewOverlay):
 
         self.colour = conversion.hex_to_frgb(gui.SELECTION_COLOUR)
         self.colour_drag = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
-        self.colour_highlight = conversion.hex_to_frgb(
-                                            gui.FG_COLOUR_HIGHLIGHT)
-        self.intensity_label = self.add_label(
-                                    "", align=wx.ALIGN_CENTER_HORIZONTAL,
-                                    colour=self.colour_highlight)
+        self.colour_highlight = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.intensity_label = self.add_label("", align=wx.ALIGN_CENTER_HORIZONTAL,
+                                              colour=self.colour_highlight)
 
         self.phi = None             # Phi angle in radians
         self.phi_line_rad = None    # Phi drawing angle in radians (is phi -90)
         self.phi_line_pos = None    # End point in pixels of the Phi line
         self.phi_label = self.add_label("", colour=self.colour,
-                           align=wx.ALIGN_CENTER_HORIZONTAL | wx.ALIGN_BOTTOM)
+                                        align=wx.ALIGN_CENTER_HORIZONTAL | wx.ALIGN_BOTTOM)
         self.theta = None           # Theta angle in radians
         self.theta_radius = None    # Radius of the theta circle in pixels
         self.theta_label = self.add_label("", colour=self.colour,
                                           align=wx.ALIGN_CENTER_HORIZONTAL)
-        self.intersection = None    # The intersection of the cirle and line in
-                                    # pixels
+        self.intersection = None    # The intersection of the circle and line in pixels
 
         self.dragging = False
 
@@ -764,7 +782,6 @@ class PolarOverlay(ViewOverlay):
     def phi_deg(self, phi_deg):
         self.phi_rad = math.radians(phi_deg)
 
-
     @property
     def theta_rad(self):
         return self.theta
@@ -772,7 +789,7 @@ class PolarOverlay(ViewOverlay):
     @theta_rad.setter
     def theta_rad(self, theta_rad):
         self.theta = theta_rad
-        self.theta_radius = (theta_rad / (math.pi / 2 )) * self.inner_radius
+        self.theta_radius = (theta_rad / (math.pi / 2)) * self.inner_radius
         self._calculate_theta()
         self.cnvs.Refresh()
 
@@ -787,7 +804,7 @@ class PolarOverlay(ViewOverlay):
     # END Property Getters/Setters
 
     def _calculate_phi(self, view_pos=None):
-        """ Calcualte the Phi angle and the values to display the Phi line """
+        """ Calcualate the Phi angle and the values to display the Phi line """
 
         if view_pos:
             vx, vy = view_pos
@@ -812,7 +829,7 @@ class PolarOverlay(ViewOverlay):
             # Calc Phi label pos
 
             # Calculate the view point on the line where to place the label
-            if (self.theta_radius > self.inner_radius / 2):
+            if self.theta_radius > self.inner_radius / 2:
                 radius = self.inner_radius * 0.25
             else:
                 radius = self.inner_radius * 0.75
@@ -828,10 +845,10 @@ class PolarOverlay(ViewOverlay):
             # flip, depending on the angle.
 
             if self.phi < math.pi:
-                ang = -math.pi / 2.0 # -45 deg
+                ang = -math.pi / 2.0  # -45 deg
                 self.phi_label.flip = False
             else:
-                ang = math.pi / 2.0 # 45 deg
+                ang = math.pi / 2.0  # 45 deg
                 self.phi_label.flip = True
 
             # Calculate a point further down the line that we will rotate
@@ -893,26 +910,47 @@ class PolarOverlay(ViewOverlay):
         self._calculate_theta(view_pos)
         self._calculate_intersection()
 
-        if (view_pos and
-            0 < self.intersection[0] < self.cnvs.ClientSize.x and
-            0 < self.intersection[1] < self.cnvs.ClientSize.y):
-            # FIXME: Determine actual value here
-            #self.intensity_label.text = ""
-            pass
+        # if (view_pos and 0 < self.intersection[0] < self.cnvs.ClientSize.x and
+        #         0 < self.intersection[1] < self.cnvs.ClientSize.y):
+        #     # FIXME: Determine actual value here
+        #     #self.intensity_label.text = ""
+        #     pass
+
+    # Event Handlers
 
     def on_left_down(self, evt):
-        self.dragging = True
+        if self.active:
+            self.dragging = True
+        else:
+            super(PolarOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
-        self.on_motion(evt)
-        self.dragging = False
-        self.cnvs.Refresh()
+        if self.active:
+            self._calculate_display(evt.GetPositionTuple())
+            self.dragging = False
+            self.cnvs.Refresh()
+        else:
+            super(PolarOverlay, self).on_left_up(evt)
 
     def on_motion(self, evt):
         # Only change the values when the user is dragging
-        if self.dragging:
+        if self.active and self.dragging:
             self._calculate_display(evt.GetPositionTuple())
             self.cnvs.Refresh()
+        else:
+            super(PolarOverlay, self).on_motion(evt)
+
+    def on_enter(self, evt):
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
+        else:
+            super(PolarOverlay, self).on_enter(evt)
+
+    def on_leave(self, evt):
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            super(PolarOverlay, self).on_leave(evt)
 
     def on_size(self, evt=None):
         # Calculate the characteristic values
@@ -942,17 +980,18 @@ class PolarOverlay(ViewOverlay):
             lx = self.center_x + (self.radius + 5) * cos
             ly = self.center_y + (self.radius + 5) * sin
 
-            label = self.add_label(
-                      u"%d°" % (deg + 90),
-                      (lx, ly),
-                      colour=(0.8, 0.8, 0.8),
-                      deg=deg - 90,
-                      flip=True,
-                      align=wx.ALIGN_CENTRE_HORIZONTAL|wx.ALIGN_BOTTOM)
+            label = self.add_label(u"%d°" % (deg + 90),
+                                   (lx, ly),
+                                   colour=(0.8, 0.8, 0.8),
+                                   deg=deg - 90,
+                                   flip=True,
+                                   align=wx.ALIGN_CENTRE_HORIZONTAL | wx.ALIGN_BOTTOM)
 
             self.ticks.append((ox, oy, ix, iy, label))
 
         self._calculate_display()
+
+    # END Event Handlers
 
     def Draw(self, ctx):
         ### Draw angle lines ###
@@ -961,20 +1000,20 @@ class PolarOverlay(ViewOverlay):
         ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
 
         if self.theta is not None:
-            # Draw dark unerline azimuthal circle
+            # Draw dark underline azimuthal circle
             ctx.arc(self.center_x, self.center_y,
                     self.theta_radius, 0, self.tau)
             ctx.stroke()
 
         if self.phi is not None:
-            # Draw dark unerline Phi line
+            # Draw dark underline Phi line
             ctx.move_to(self.center_x, self.center_y)
             ctx.line_to(*self.phi_line_pos)
             ctx.stroke()
 
         # Light selection lines formatting
         ctx.set_line_width(2)
-        ctx.set_dash([3,])
+        ctx.set_dash([3])
 
         if self.dragging:
             ctx.set_source_rgba(*self.colour_drag)
@@ -1046,28 +1085,52 @@ class PolarOverlay(ViewOverlay):
 
 
 class PointSelectOverlay(ViewOverlay):
+    """ Overlay for the selection of canvas points in view, world and physical coordinates """
 
     def __init__(self, cnvs):
         super(PointSelectOverlay, self).__init__(cnvs)
         # Prevent the cursor from resetting on clicks
 
         # Physical position of the last click
-        self.p_pos = model.VigilantAttribute(None)
+        self.v_pos = model.VigilantAttribute(None)
+        self.w_pos = model.VigilantAttribute(None)
+        self.p_pos = None
+
+        # If the canvas can handle physical coordinates
+        if hasattr(self.cnvs, 'world_to_physical_pos'):
+            self.p_pos = model.VigilantAttribute(None)
+
+    # Event Handlers
 
     def on_enter(self, evt):
-        self.cnvs.previous_cursor = wx.CROSS_CURSOR
-        self.cnvs.SetCursor(wx.CROSS_CURSOR)
-        super(PointSelectOverlay, self).on_enter(evt)
+        if self.active:
+            self.cnvs.set_default_cursor(wx.CROSS_CURSOR)
+        else:
+            super(PointSelectOverlay, self).on_enter(evt)
 
     def on_leave(self, evt):
-        self.cnvs.previous_cursor = None
-        self.cnvs.SetCursor(wx.STANDARD_CURSOR)
-        super(PointSelectOverlay, self).on_leave(evt)
+        if self.active:
+            self.cnvs.reset_default_cursor()
+        else:
+            super(PointSelectOverlay, self).on_leave(evt)
+
+    def on_left_down(self, evt):
+        if not self.active:
+            super(PointSelectOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
-        v_pos = evt.GetPositionTuple()
-        w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_view_size())
-        self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+        if self.active:
+            v_pos = evt.GetPositionTuple()
+            w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_view_size())
+
+            self.v_pos.value = v_pos
+            self.w_pos.value = w_pos
+            if self.p_pos:
+                self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+        else:
+            super(PointSelectOverlay, self).on_left_up(evt)
+
+    # END Event Handlers
 
     def Draw(self, ctx):
         pass
@@ -1084,10 +1147,9 @@ class HistoryOverlay(ViewOverlay):
 
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.fade = True  # Fade older positions in the history list
-        self.length = 20  # Number of positions to track
+        self.length = 60  # Number of positions to track
         self.history = []  # List of (center, size) tuples
-        self.maker_size = 5
-
+        self.marker_size = 5
         self.mouse_over = False
 
     def add_location(self, p_center, p_size=None):
@@ -1105,6 +1167,9 @@ class HistoryOverlay(ViewOverlay):
             self.history.pop(0)
 
         self.history.append((p_center, p_size))
+        self.cnvs.Refresh()
+
+    # Event Handlers
 
     def on_enter(self, evt):
         super(HistoryOverlay, self).on_enter(evt)
@@ -1116,11 +1181,13 @@ class HistoryOverlay(ViewOverlay):
         self.mouse_over = False
         self.cnvs.Refresh()
 
+    # END Event Handlers
+
     def Draw(self, ctx):
 
         ctx.set_line_width(1)
         offset = self.cnvs.get_half_view_size()
-        half_size = self.maker_size / 2.0
+        half_size = self.marker_size / 2.0
 
         if self.mouse_over and self.history:
             history = self.history[-1:]
@@ -1128,13 +1195,12 @@ class HistoryOverlay(ViewOverlay):
             history = self.history
 
         for i, (p_center, _) in enumerate(history):
-            alpha = i * (0.8 / len(history)) + 0.2 if self.fade else 1.0
+            alpha = (i + 1) * (0.8 / len(history)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
             ctx.set_source_rgba(self.colour[0], self.colour[1], self.colour[2], alpha)
             # Render rectangles of 3 pixels wide
             ctx.rectangle(int(v_center[0]) - half_size,
                           int(v_center[1]) - half_size,
-                          self.maker_size,
-                          self.maker_size)
+                          self.marker_size,
+                          self.marker_size)
             ctx.stroke()
-

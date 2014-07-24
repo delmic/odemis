@@ -223,9 +223,9 @@ class BufferedCanvas(wx.Panel):
         # Doesn't seem to work on some canvas due to accessing ClientSize (too early?)
         # self.resize_buffer(self.get_minimum_buffer_size())
 
-        # This attribute is used to store the current mouse cursor type
-        # TODO: Change to a stack?
-        self.previous_cursor = None
+        # The main cursor is the default cursor when the mouse hovers over the canvas
+        self.default_cursor = wx.STANDARD_CURSOR
+        self.dynamic_cursor = None
 
         # Event Biding
 
@@ -265,6 +265,51 @@ class BufferedCanvas(wx.Panel):
     @property
     def view_height(self):
         return self.ClientSize.y
+
+    def set_default_cursor(self, cursor):
+        """ Set the default cursor
+
+        The default cursor is shown whenever the mouse cursor is over the canvas. It can be
+        overridden by setting the dynamic cursor. This method should be called when creating a
+        canvas or when the mouse cursor enters the canvas
+
+        """
+
+        if isinstance(cursor, int):
+            cursor = wx.StockCursor(cursor)
+        self.default_cursor = cursor
+        self.SetCursor(self.default_cursor)
+        logging.debug("Default cursor set to %s", cursor)
+
+    def reset_default_cursor(self):
+        """ Reset the default cursor to the 'standard' default cursor """
+        self.default_cursor = wx.STANDARD_CURSOR
+        self.SetCursor(self.default_cursor)
+        logging.debug("Default cursor reset")
+
+    def set_dynamic_cursor(self, cursor):
+        """ Set the dynamic cursor
+
+        Dynamic cursors are typically cursors that only should be shown on certain parts of the
+        canvas. They should probably only be called from 'on_motion' event handlers.
+
+        """
+
+        if not isinstance(cursor, int):
+            raise ValueError("Only integer cursor identifiers allowed")
+
+        if self.dynamic_cursor != cursor:
+            self.dynamic_cursor = cursor
+            cursor = wx.StockCursor(cursor)
+            self.SetCursor(cursor)
+            logging.debug("Dynamic cursor set to %s", self.dynamic_cursor)
+
+    def reset_dynamic_cursor(self):
+        """ Reset the dynamic cursor if one is defined """
+        if self.dynamic_cursor:
+            self.dynamic_cursor = None
+            self.SetCursor(self.default_cursor)
+            logging.debug("Dynamic cursor reset")
 
     ############ Overlay Management ###########
 
@@ -320,8 +365,8 @@ class BufferedCanvas(wx.Panel):
         """
 
         if cursor:
-            self.previous_cursor = self.GetCursor()
-            self.SetCursor(cursor)
+            raise Exception("Don't set the cursor like this anymore!")
+            self.set_dynamic_cursor(cursor)
 
         if not self.HasCapture():
             self.CaptureMouse()
@@ -335,9 +380,9 @@ class BufferedCanvas(wx.Panel):
             mouse is captured.
 
         """
+
         if self.HasCapture():
             self.ReleaseMouse()
-            self.SetCursor(self.previous_cursor or wx.NullCursor)
 
     @ignore_if_disabled
     def on_left_down(self, evt, cursor=None):
@@ -439,8 +484,9 @@ class BufferedCanvas(wx.Panel):
         """ Call an event handler with name 'evt_name' on the enabled overlays
         """
 
-        for ol in self.active_overlays:
-            getattr(ol, evt_name)(evt)
+        # for ol in self.active_overlays:
+        #     getattr(ol, evt_name)(evt)
+        pass
 
     def _pass_event_to_all_overlays(self, evt_name, evt):
         """ Call an event handler with name 'evt_name' on all the overlays
@@ -448,10 +494,11 @@ class BufferedCanvas(wx.Panel):
         This method should be used to pass events on to all overlays that are not necesarrily
         the result of a (direct) user action, e.g. on_size
         """
-        for ol in self.view_overlays:
-            getattr(ol, evt_name)(evt)
-        for ol in self.world_overlays:
-            getattr(ol, evt_name)(evt)
+        # for ol in self.view_overlays:
+        #     getattr(ol, evt_name)(evt)
+        # for ol in self.world_overlays:
+        #     getattr(ol, evt_name)(evt)
+        pass
 
     ############ END Event Handlers ############
 
@@ -1230,7 +1277,7 @@ class DraggableCanvas(BitmapCanvas):
 
         # Ignore the click if we're already dragging
         if CAN_DRAG in self.abilities and not self.dragging:
-            cursor = wx.StockCursor(wx.CURSOR_SIZENESW)
+            self.set_dynamic_cursor(wx.CURSOR_SIZENESW)
 
             # Fixme: only go to drag mode if the mouse moves before a mouse up?
             self._ldragging = True
@@ -1243,9 +1290,9 @@ class DraggableCanvas(BitmapCanvas):
 
             logging.debug("Drag started at %s", self.drag_init_pos)
         else:
-            cursor = None
+            self.reset_dynamic_cursor()
 
-        super(DraggableCanvas, self).on_left_down(evt, cursor)
+        super(DraggableCanvas, self).on_left_down(evt)
 
     def on_left_up(self, evt):
         """ End the dragging procedure """
