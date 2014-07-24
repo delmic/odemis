@@ -39,7 +39,7 @@ import odemis.gui.test as test
 from odemis.gui.test import generate_img_data
 
 
-# test.goto_manual()
+test.goto_manual()
 # test.goto_inspect()
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -262,15 +262,15 @@ class PlotCanvasTestCase(test.GuiTestCase):
         test.gui_loop()
         cnvs.set_data(test_data)
 
-        test.gui_loop(500)
+        test.gui_loop(200)
 
         cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
 
         for horz, vert in PLOTS:
             cnvs.set_1d_data( horz, vert)
-            test.gui_loop(500)
+            test.gui_loop(200)
 
-        test.gui_loop(500)
+        test.gui_loop()
 
     # @unittest.skip("simple")
     def test_buffer_to_world(self):
