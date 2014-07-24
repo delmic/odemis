@@ -309,6 +309,7 @@ def get_component(comp_name):
         LookupError if the component doesn't exist
         other exception if there is an error while contacting the backend
     """
+    # TODO: fallback to role if no component has the given name
     return get_component_from_set(comp_name, model.getComponents())
 
 
@@ -482,6 +483,40 @@ def move_abs(comp_name, axis_name, str_position):
         m.result()
     except Exception:
         logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
+        return 127
+
+    return 0
+
+def reference(comp_name, axis_name):
+    """
+    reference the axis of the given component
+    """
+    try:
+        component = get_component(comp_name)
+    except LookupError:
+        logging.error("Failed to find actuator '%s'", comp_name)
+        return 127
+    except:
+        logging.error("Failed to contact the back-end")
+        return 127
+
+    try:
+        if axis_name not in component.referenced.value:
+            if axis_name not in component.axes:
+                logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
+                return 129
+            else:
+                logging.error("Axis %s of actuator %s cannot be referenced", axis_name, comp_name)
+                return 129
+    except (TypeError, AttributeError):
+        logging.error("Component %s is not an actuator", comp_name)
+        return 127
+
+    try:
+        m = component.reference({axis_name})
+        m.result()
+    except Exception:
+        logging.error("Failed to reference axis %s of component %s", axis_name, comp_name)
         return 127
 
     return 0
@@ -673,10 +708,13 @@ def main(args):
                          " dictionary keys are delimited by colon)")
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
-                         help=u"move the axis by the amount of µm.")
+                         help=u"move the axis by the given amount (µm for distances).")
     dm_grpe.add_argument("--position", "-p", dest="position", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<position>"),
-                         help=u"move the axis to the given position in µm.")
+                         help=u"move the axis to the given position.")
+    dm_grpe.add_argument("--reference", dest="reference", nargs=2, action="append",
+                         metavar=("<component>", "<axis>"),
+                         help="runs the referencing procedure for the given axis.")
     dm_grpe.add_argument("--stop", "-S", dest="stop", action="store_true", default=False,
                          help="immediately stop all the actuators in all directions.")
     dm_grpe.add_argument("--acquire", "-a", dest="acquire", nargs="+",
@@ -714,11 +752,11 @@ def main(args):
     logging.getLogger().addHandler(handler)
 
     # anything to do?
-    if (not options.check and not options.kill and not options.scan
-        and not options.list and not options.stop and options.move is None
-        and options.position is None
-        and options.listprop is None and options.setattr is None
-        and options.acquire is None and options.live is None):
+    if not any((options.check, options.kill, options.scan,
+        options.list, options.stop, options.move,
+        options.position, options.reference,
+        options.listprop, options.setattr,
+        options.acquire, options.live)):
         logging.error("no action specified.")
         return 127
     if options.acquire is not None and options.output is None:
@@ -769,20 +807,24 @@ def main(args):
                 ret = set_attr(c, a, v)
                 if ret != 0:
                     return ret
+        # TODO: catch keyboard interrupt and stop the moves
+        elif options.reference is not None:
+            for c, a in options.reference:
+                ret = reference(c, a)
         elif options.position is not None:
             for c, a, d in options.position:
                 ret = move_abs(c, a, d)
                 # TODO warn if same axis multiple times
                 if ret != 0:
                     return ret
-            time.sleep(0.5)
+#             time.sleep(0.5)
         elif options.move is not None:
             for c, a, d in options.move:
                 ret = move(c, a, d)
                 # TODO move commands to the same actuator should be agglomerated
                 if ret != 0:
                     return ret
-            time.sleep(0.5) # wait a bit for the futures to close nicely
+#             time.sleep(0.5) # wait a bit for the futures to close nicely
         elif options.stop:
             return stop_move()
         elif options.acquire is not None:
@@ -803,7 +845,7 @@ def main(args):
                 logging.error("live command accepts only one data-flow")
                 return 127
             return live_display(component, dataflow)
-    except:
+    except Exception:
         logging.exception("Unexpected error while performing action.")
         return 127
 
