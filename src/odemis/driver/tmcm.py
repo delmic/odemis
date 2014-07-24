@@ -862,8 +862,10 @@ class TMCM3110(model.Actuator):
             try:
                 logging.debug("Trying port %s", p)
                 dev = cls(None, None, p, axes=["x", "y", "z"],
-                          ustepsize=[1e-6, 1e-6, 1e-6])
+                          ustepsize=[10e-9, 10e-9, 10e-9])
                 modl, vmaj, vmin = dev.GetVersion()
+                # TODO: based on the model name (ie, the first number) deduce
+                # the number of axes
             except (serial.SerialException, IOError):
                 # not possible to use this port? next one!
                 continue
@@ -874,7 +876,7 @@ class TMCM3110(model.Actuator):
             found.append(("TMCM-%s" % modl,
                           {"port": p,
                            "axes": ["x", "y", "z"],
-                           "ustepsize": [1e-6, 1e-6, 1e-6]})
+                           "ustepsize": [10e-9, 10e-9, 10e-9]})
                         )
 
         return found
