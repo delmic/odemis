@@ -155,7 +155,7 @@ class TestCalibration(unittest.TestCase):
         f = delphi.RotationAndScaling(ccd, escan, sem_stage, opt_stage, focus, (1e-06, 1e-06))
         rotation, scaling = f.result()
 
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_align_offset(self):
         """
         Test AlignAndOffset
