@@ -20,5 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # in case it's need to find all the devices supported (e.g., for a scan)
-__all__ = ["andorcam3", "andorcam2", "pi", "pigcs", "lle", "simulated", 
-           "semcomedi", "spectrapro", "pvcam", "omicronxx", "tlfw"]
+__all__ = ["andorcam3", "andorcam2", "andorshrk", "pi", "pigcs", "lle", "simulated",
+           "semcomedi", "spectrapro", "pvcam", "omicronxx", "tlfw", "tlaptmf",
+           "tmcm", "phenom", "tescan_sem", "simcam", "simsem"]
