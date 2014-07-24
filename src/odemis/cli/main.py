@@ -31,6 +31,7 @@ import inspect
 import logging
 from odemis import model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
+from odemis.util import units
 from odemis.util.conversion import convertToObject
 from odemis.util.driver import BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
@@ -430,6 +431,12 @@ def move(comp_name, axis_name, str_distance):
         distance = convertToObject(str_distance)
 
     try:
+        logging.info(u"Will move %s.%s by %s", comp_name, axis_name,
+                     units.readable_str(distance, ad.unit, sig=3))
+    except Exception:
+        pass
+
+    try:
         m = component.moveRel({axis_name: distance})
         m.result()
     except Exception:
@@ -442,8 +449,6 @@ def move_abs(comp_name, axis_name, str_position):
     """
     move (in absolute) the axis of the given component to the specified position in µm
     """
-    # for safety reason, we use µm instead of meters, as it's harder to type a
-    # huge distance
     try:
         component = get_component(comp_name)
     except LookupError:
@@ -462,10 +467,9 @@ def move_abs(comp_name, axis_name, str_position):
         logging.error("Component %s is not an actuator", comp_name)
         return 127
 
-    # TODO: check whether the component supports absolute positioning
     if ad.unit == "m":
         try:
-            position = float(str_position) * 1e-6 # µm -> m
+            position = float(str_position)
         except ValueError:
             logging.error("Distance '%s' cannot be converted to a number", str_position)
             return 127
@@ -478,6 +482,11 @@ def move_abs(comp_name, axis_name, str_position):
     else:
         position = convertToObject(str_position)
 
+    try:
+        logging.info(u"Will move %s.%s to %s", comp_name, axis_name,
+                     units.readable_str(position, ad.unit, sig=3))
+    except Exception:
+        pass
     try:
         m = component.moveAbs({axis_name: position})
         m.result()
