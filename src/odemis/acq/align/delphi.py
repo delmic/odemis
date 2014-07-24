@@ -32,7 +32,6 @@ from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform
 from odemis.acq.align import spot
-from odemis.acq import align
 import scipy
 import threading
 import time
@@ -46,10 +45,65 @@ ROTATION_SPOTS = ({"x":5e-03, "y":0}, {"x":-5e-03, "y":0},
                   {"x":0, "y":5e-03}, {"x":0, "y":-5e-03})
 
 
-# from .autofocus import AutoFocus, FINE_SPOTMODE_ACCURACY
-# from . import AlignSpot, BEAM_SHIFT
+def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
+                     combined_stage, first_insertion, known_first_hole=None,
+                    known_second_hole=None, known_offset=None, known_rotation=None,
+                    known_scaling=None):
+    """
+    Wrapper for DoUpdateConversion. It provides the ability to check the progress 
+    of conversion update procedure or even cancel it.
+    ccd (model.DigitalCamera): The ccd
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    sem_stage (model.Actuator): The SEM stage
+    opt_stage (model.Actuator): The objective stage
+    focus (model.Actuator): Focus of objective lens
+    combined_stage (model.Actuator): The combined stage
+    first_insertion (Boolean): If True it is the first insertion of this sample
+                                holder
+    known_first_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_second_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
+    known_rotation (float): Rotation of sample holder found in the calibration file #radians
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
+                                         whose result() will return:
+            returns first_hole (tuple of floats): Coordinates of first hole
+                    second_hole (tuple of floats): Coordinates of second hole
+                    (tuple of floats):    offset #m,m 
+                    (float):    rotation #radians
+                    (tuple of floats):    scaling
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateConversionTime(first_insertion))
+    f._conversion_update_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelUpdateConversion
+    f._conversion_lock = threading.Lock()
+    f._done = threading.Event()
+
+    # Create align_offset and rotation_scaling and hole_detection module
+    f._hole_detectionf = model.InstantaneousFuture()
+    f._align_offsetf = model.InstantaneousFuture()
+    f._rotation_scalingf = model.InstantaneousFuture()
+
+    # Run in separate thread
+    conversion_thread = threading.Thread(target=executeTask,
+                  name="Conversion update",
+                  args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
+                        opt_stage, focus, combined_stage, first_insertion, known_first_hole,
+                        known_second_hole, known_offset, known_rotation, known_scaling))
+
+    conversion_thread.start()
+    return f
+
 def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, 
-                        focus, combined_stage):
+                        focus, combined_stage, first_insertion, known_first_hole=None,
+                        known_second_hole=None, known_offset=None, known_rotation=None,
+                        known_scaling=None):
     """
     First calls the HoleDetection to find the hole centers. Then if the current 
     sample holder is inserted for the first time, calls AlignAndOffset, 
@@ -65,7 +119,17 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
     opt_stage (model.Actuator): The objective stage
     focus (model.Actuator): Focus of objective lens
     combined_stage (model.Actuator): The combined stage
-    returns (tuple of floats): offset #m,m
+    first_insertion (Boolean): If True it is the first insertion of this sample
+                                holder
+    known_first_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_second_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
+    known_rotation (float): Rotation of sample holder found in the calibration file #radians
+    known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    returns 
+            first_hole (tuple of floats): Coordinates of first hole
+            second_hole (tuple of floats): Coordinates of second hole
+            (tuple of floats): offset  
             (float): rotation #radians
             (tuple of floats): scaling
     raises:    
@@ -78,46 +142,70 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             raise CancelledError()
 
         # Detect the holes/markers of the sample holder
-        logging.debug("Detect the holes/markers of the sample holder...")
-        future._hole_detectionf = HoleDetection(detector, escan, sem_stage)
-        first_hole, second_hole = future._hole_detectionf.result()
-
-        # Configure CCD and e-beam to write CL spots
-        ccd.binning.value = (1, 1)
-        ccd.resolution.value = ccd.resolution.range[1]
-        ccd.exposureTime.value = 900e-03
-        escan.scale.value = (1, 1)
-        escan.resolution.value = (1, 1)
-
+        try:
+            logging.debug("Detect the holes/markers of the sample holder...")
+            future._hole_detectionf = HoleDetection(detector, escan, sem_stage)
+            first_hole, second_hole = future._hole_detectionf.result()
+        except IOError:
+            raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
-        if True:
+        if first_insertion == True:
+            if future._conversion_update_state == CANCELLED:
+                raise CancelledError()
+            # Update progress of the future
+            future.set_end_time(time.time() +
+                estimateConversionTime(first_insertion) * (2 / 3))
             logging.debug("Initial calibration to align and calculate the offset...")
-            future._align_offsetf = AlignAndOffset(ccd, escan, sem_stage,
-                                                   opt_stage, focus, first_hole,
-                                                   second_hole)
-            offset = future._align_offsetf.result()
+            try:
+                future._align_offsetf = AlignAndOffset(ccd, escan, sem_stage,
+                                                       opt_stage, focus, first_hole,
+                                                       second_hole)
+                offset = future._align_offsetf.result()
+            except IOError:
+                raise IOError("Conversion update failed to align and calculate offset.")
+
+            if future._conversion_update_state == CANCELLED:
+                raise CancelledError()
+            # Update progress of the future
+            future.set_end_time(time.time() +
+                estimateConversionTime(first_insertion) * (1 / 3))
             logging.debug("Calculate rotation and scaling...")
-            future._rotation_scalingf = RotationAndScaling(ccd, escan, sem_stage,
-                                                           opt_stage, focus, offset)
-            rotation, scaling = future._rotation_scalingf.result()
-            # Fill id, first_hole, second_hole, offset, rotation, scaling to
-            # configuration file
-        elif True:
-            #Get offset
-            logging.debug("Calculate rotation and scaling...")
-            future._rotation_scalingf = RotationAndScaling(ccd, escan, sem_stage,
-                                                           opt_stage, focus, offset)
-            rotation, scaling = future._rotation_scalingf.result()
+            try:
+                future._rotation_scalingf = RotationAndScaling(ccd, escan, sem_stage,
+                                                               opt_stage, focus, offset)
+                rotation, scaling = future._rotation_scalingf.result()
+            except IOError:
+                raise IOError("Conversion update failed to calculate rotation and scaling.")
+
+            # Now we can return. There is no need to update the convert stage
+            # metadata as the current sample holder will be unloaded
+            # Offset is divided by scaling, since Convert Stage applies scaling
+            # also in the given offset
+            offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
+            # Data returned needs to be filled in the calibration file
+            return first_hole, second_hole, offset, rotation, scaling
+
         else:
-            #Get offset, rotation, scaling
-            # KEEP IN MIND TO DEVIDE OFFSET BY SCALING
-            pass
-            
-        #Update combined stage conversion metadata
-        logging.debug("Update combined stage conversion metadata...")
-        combined_stage.updateMetadata({model.MD_ROTATION_COR: rotation})
-        combined_stage.updateMetadata({model.MD_POS_COR: offset})
-        combined_stage.updateMetadata({model.MD_PIXEL_SIZE_COR: scaling})
+            if future._conversion_update_state == CANCELLED:
+                raise CancelledError()
+            # Update progress of the future
+            future.set_end_time(time.time() + 1)
+            logging.debug("Calculate extra offset and rotation...")
+            updated_offset, updated_rotation = CalculateExtraOffset(first_hole,
+                                                                    second_hole,
+                                                                    known_first_hole,
+                                                                    known_second_hole,
+                                                                    known_offset,
+                                                                    known_rotation,
+                                                                    known_scaling)
+
+            # Update combined stage conversion metadata
+            logging.debug("Update combined stage conversion metadata...")
+            combined_stage.updateMetadata({model.MD_ROTATION_COR: updated_rotation})
+            combined_stage.updateMetadata({model.MD_POS_COR: updated_offset})
+            combined_stage.updateMetadata({model.MD_PIXEL_SIZE_COR: known_scaling})
+            # Data returned should NOT be filled in the calibration file
+            return first_hole, second_hole, updated_offset, updated_rotation, known_scaling
 
     finally:
         with future._conversion_lock:
@@ -145,12 +233,16 @@ def _CancelUpdateConversion(future):
     future._done.wait(10)
     return True
 
-def estimateConversionTime():
+def estimateConversionTime(first_insertion):
     """
     Estimates conversion procedure duration
     returns (float):  process estimated time #s
     """
-    pass
+    # Rough approximation
+    if first_insertion == True:
+        return 3 * 60
+    else:
+        return 60
 
 def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
                    second_hole):
@@ -216,6 +308,7 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
     ccd.exposureTime.value = 900e-03
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
+    escan.dwellTime.value = 5e-06
 
     try:
         if future._align_offset_state == CANCELLED:
@@ -226,14 +319,17 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
         f.result()
         f = opt_stage.reference()
         f.result()
+        opt_pos = opt_stage.position.value
 
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
         # Apply spot alignment
         try:
-            # Maybe add extra type to not use the inclined stage
-            future_spot = align.AlignSpot(ccd, opt_stage, escan, focus)
+            # Direct move of objective lens, not Inclined stage used
+            future_spot = spot.AlignSpot(ccd, opt_stage, escan, focus, type=spot.OBJECTIVE_MOVE)
             dist = future_spot.result()
+            # Almost done
+            future.set_end_time(time.time() + 1)
             opt_pos = opt_stage.position.value
         except IOError:
             raise IOError("Failed to align stages and calculate offset.")
@@ -335,6 +431,7 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
     ccd.exposureTime.value = 900e-03
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
+    escan.dwellTime.value = 5e-06
 
     try:
         if future._rotation_scaling_state == CANCELLED:
@@ -359,8 +456,6 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
             cor_pos = {"x": q[0], "y": q[1]}
             f = opt_stage.moveAbs(cor_pos)
             f.result()
-            print sem_stage.position.value
-            print opt_stage.position.value
             # Move Phenom sample stage so that the spot should be at the center
             # of the CCD FoV
             dist = None
@@ -445,7 +540,7 @@ def HoleDetection(detector, escan, sem_stage):
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
-    et = 5e-06 * numpy.prod(escan.resolution.range[1])
+    et = 6e-06 * numpy.prod(escan.resolution.range[1])
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimateHoleDetectionTime(et))
     f._hole_detection_state = RUNNING
@@ -471,7 +566,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
-    returns (tuple of dicts): first_hole and second_hole #m,m 
+    returns (tuple of tuples of floats): first_hole and second_hole #m,m 
     raises:    
         CancelledError() if cancelled
         IOError if holes not found
@@ -529,7 +624,10 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
             #SEM stage position plus offset from hole detection
             holes_found[hole]["x"] = sem_stage.position.value["x"] + tab[0]
             holes_found[hole]["y"] = sem_stage.position.value["y"] + tab[1]
-        return holes_found
+        
+        first_hole = (holes_found[0]["x"], holes_found[0]["y"])
+        second_hole = (holes_found[1]["x"], holes_found[1]["y"])
+        return first_hole, second_hole
 
     finally:
         with future._detection_lock:
@@ -597,7 +695,7 @@ def FindHoleCenter(image):
     return (center_x, center_y)
 
 def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
-                         expected_second_hole, offset, rotation):
+                         expected_second_hole, offset, rotation, scaling):
     """
     Given the hole coordinates found in the calibration file and the new ones, 
     determine the offset and rotation of the current sample holder insertion. 
@@ -607,6 +705,7 @@ def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
     expected_second_hole (tuple of floats) 
     offset (tuple of floats): #m,m
     rotation (float): #radians
+    scaling (tuple of floats)
     returns (float): updated_rotation #radians
             (tuple of floats): updated_offset
     """
@@ -615,6 +714,7 @@ def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
     # Extra offset and rotation
     e_offset, unused, e_rotation = transform.CalculateTransform([new_first_hole, new_second_hole],
                                                                  [expected_first_hole, expected_second_hole])
+    e_offset = ((e_offset[0] / scaling[0]), (e_offset[1] / scaling[1]))
     updated_offset = [a + b for a, b in zip(offset, e_offset)]
     updated_rotation = rotation + e_rotation
     return updated_offset, updated_rotation

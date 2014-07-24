@@ -22,7 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
 import logging
 import math
 import numpy
@@ -31,10 +32,51 @@ from odemis.dataio import hdf5
 import heapq
 import os
 import time
+from odemis.acq._futures import executeTask
+import threading
+from .images import GridScanner
 from . import coordinates, transform
 
 
 MAX_TRIALS_NUMBER = 2  # Maximum number of scan grid repetitions
+
+def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector):
+    """
+    Wrapper for DoFindOverlay. It provides the ability to check the progress of overlay procedure 
+    or even cancel it.
+    repetitions (tuple of ints): The number of CL spots are used
+    dwell_time (float): Time to scan each spot #s
+    max_allowed_diff (float): Maximum allowed difference in electron coordinates #m
+    escan (model.Emitter): The e-beam scanner
+    ccd (model.DigitalCamera): The CCD
+    detector (model.Detector): The electron detector
+    returns (model.ProgressiveFuture):    Progress of DoFindOverlay, whose result() will return:
+            translation (Tuple of 2 floats), 
+            scaling (Float), 
+            rotation (Float): Transformation parameters
+            transform_data : Transform metadata
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateOverlayTime(dwell_time, repetitions))
+    f._find_overlay_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelFindOverlay
+    f._overlay_lock = threading.Lock()
+    f._done = threading.Event()
+
+    # Create scanner for scan grid
+    f._scanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
+
+    # Run in separate thread
+    overlay_thread = threading.Thread(target=executeTask,
+                  name="SEM/CCD overlay",
+                  args=(f, _DoFindOverlay, f, repetitions, dwell_time, max_allowed_diff, escan, ccd, detector))
+
+    overlay_thread.start()
+    return f
 
 def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
                    ccd, detector):

@@ -41,6 +41,7 @@ FOV_MARGIN = 250  # pixels
 # Type of move in order to center the spot
 STAGE_MOVE = "Stage move"
 BEAM_SHIFT = "Beam shift"
+OBJECTIVE_MOVE = "Objective lens move"
 
 
 def MeasureSNR(image):
@@ -54,6 +55,42 @@ def MeasureSNR(image):
     snr = ms / sdn
     
     return snr
+
+def AlignSpot(ccd, stage, escan, focus, type=STAGE_MOVE):
+    """
+    Wrapper for DoAlignSpot. It provides the ability to check the progress of
+    spot mode procedure or even cancel it.
+    ccd (model.DigitalCamera): The CCD
+    stage (model.Actuator): The stage
+    escan (model.Emitter): The e-beam scanner
+    focus (model.Actuator): The optical focus
+    type (string): Type of move in order to align
+    returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
+                                         whose result() will return:
+            returns (float):    Final distance to the center #m 
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateAlignmentTime(ccd.exposureTime.value))
+    f._spot_alignment_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelAlignSpot
+    f._alignment_lock = threading.Lock()
+    f._done = threading.Event()
+
+    # Create autofocus and centerspot module
+    f._autofocusf = model.InstantaneousFuture()
+    f._centerspotf = model.InstantaneousFuture()
+
+    # Run in separate thread
+    alignment_thread = threading.Thread(target=executeTask,
+                  name="Spot alignment",
+                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type))
+
+    alignment_thread.start()
+    return f
 
 def _DoAlignSpot(future, ccd, stage, escan, focus, type):
     """
@@ -340,6 +377,9 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
             # Move to the found spot
             if type == STAGE_MOVE:
                 f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
+                f.result()
+            elif type == OBJECTIVE_MOVE:
+                f = stage.moveRel({"x":tab[0], "y":-tab[1]})
                 f.result()
             else:
                 escan.translation.value = (-tab_pxs[0], -tab_pxs[1])
