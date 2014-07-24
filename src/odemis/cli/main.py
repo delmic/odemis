@@ -29,17 +29,15 @@ import gc
 import importlib
 import inspect
 import logging
+import odemis
 from odemis import model, dataio, util
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.util import units
 from odemis.util.conversion import convertToObject
 from odemis.util.driver import BACKEND_RUNNING, \
     BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
-import odemis.util.driver
 import sys
 import threading
-import time
-
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
@@ -74,22 +72,23 @@ def scan():
                 # all drivers in the same process (andor cams don't like it)
                 container_name = "scanner%d" % num
                 num += 1
-                scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
-                devices = scanner.scan()
-                scanner.terminate()
-                model.getContainer(container_name).terminate()
-                for name, args in devices:
-                    print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
-    return 0
+                try:
+                    scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
+                    devices = scanner.scan()
+                    scanner.terminate()
+                    model.getContainer(container_name).terminate()
+                except Exception:
+                    logging.exception("Failed to scan %s.%s components", module_name, cls_name)
+                else:
+                    for name, args in devices:
+                        print "%s.%s: '%s' init=%s" % (module_name, cls_name, name, str(args))
 
 def kill_backend():
     try:
         backend = model.getContainer(model.BACKEND_NAME)
         backend.terminate()
-    except:
-        logging.error("Failed to stop the back-end")
-        return 127
-    return 0
+    except Exception:
+        raise IOError("Failed to stop the back-end")
 
 def print_component(comp, pretty=True, level=0):
     """
@@ -149,11 +148,10 @@ def list_components(pretty=True):
     # We actually just browse as a tree the microscope
     try:
         microscope = model.getMicroscope()
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+    except Exception:
+        raise IOError("Failed to contact the back-end")
+
     print_component_tree(microscope, pretty=pretty)
-    return 0
 
 def print_axes(name, value, pretty):
     if pretty:
@@ -282,49 +280,39 @@ def print_attributes(component, pretty):
     print_events(component, pretty)
     print_metadata(component, pretty)
 
-def get_component_from_set(comp_name, components):
-    """
-    return the component with the given name from a set of components
-    comp_name (string): name of the component to find
-    components (iterable Components): the set of components to look into
-    raises
-        LookupError if the component doesn't exist
-        other exception if there is an error while contacting the backend
-    """
-    component = None
-    for c in components:
-        if c.name == comp_name:
-            component = c
-            break
-
-    if component is None:
-        raise LookupError("Failed to find component '%s'" % comp_name)
-
-    return component
-
 def get_component(comp_name):
     """
     return the component with the given name
     comp_name (string): name of the component to find
     raises
-        LookupError if the component doesn't exist
+        ValueError if the component doesn't exist
         other exception if there is an error while contacting the backend
     """
-    # TODO: fallback to role if no component has the given name
-    return get_component_from_set(comp_name, model.getComponents())
-
+    logging.debug("Looking for component %s", comp_name)
+    try:
+        return model.getComponent(name=comp_name)
+    except LookupError:
+        try:
+            comp = model.getComponent(role=comp_name)
+            logging.info("Using component %s with role %s", comp.name, comp.role)
+            return comp
+        except LookupError:
+            raise ValueError("No component found with name or role '%s'" % comp_name)
 
 def get_detector(comp_name):
     """
     return the actuator component with the given name
     comp_name (string): name of the component to find
     raises
-        LookupError if the component doesn't exist
+        ValueError if the component doesn't exist or is not a detector
         other exception if there is an error while contacting the backend
     """
-    # isinstance() doesn't work, so we just list every component in microscope.detectors
-    microscope = model.getMicroscope()
-    return get_component_from_set(comp_name, microscope.detectors)
+    comp = get_component(comp_name)
+    # check it's a detector by looking at some of the required attributes
+    if (not isinstance(comp.shape, collections.Iterable) or
+        not isinstance(comp.data, model.DataFlowBase)):
+        raise ValueError("Component %s is not a detector" % comp.name)
+    return comp
 
 def list_properties(comp_name, pretty=True):
     """
@@ -332,48 +320,25 @@ def list_properties(comp_name, pretty=True):
     comp_name (string): name of the component
     pretty (bool): if True, display with pretty-printing
     """
-    logging.debug("Looking for component %s", comp_name)
-    try:
-        component = get_component(comp_name)
-    except LookupError:
-        logging.error("Failed to find component '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
-
+    component = get_component(comp_name)
     print_attributes(component, pretty)
-    return 0
-
 
 def set_attr(comp_name, attr_name, str_val):
     """
     set the value of vigilant attribute of the given component using the type
     of the current value of the attribute.
     """
-    try:
-        component = get_component(comp_name)
-    except LookupError:
-        logging.error("Failed to find component '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+    component = get_component(comp_name)
 
     try:
         attr = getattr(component, attr_name)
-    except:
-        logging.error("Failed to find attribute '%s' on component '%s'", attr_name, comp_name)
-        return 129
+    except Exception:
+        raise ValueError("Failed to find attribute '%s' on component '%s'" % (attr_name, comp_name))
 
     if not isinstance(attr, model.VigilantAttributeBase):
-        logging.error("'%s' is not a vigilant attribute of component '%s'", attr_name, comp_name)
-        return 129
+        raise ValueError("'%s' is not a vigilant attribute of component %s" % (attr_name, comp_name))
 
-    try:
-        new_val = convertToObject(str_val)
-    except Exception:
-        return 127
+    new_val = convertToObject(str_val)
 
     # Special case for floats, due to rounding error, it's very hard to put the
     # exact value if it's an enumerated VA. So just pick the closest one in this
@@ -387,10 +352,8 @@ def set_attr(comp_name, attr_name, str_val):
 
     try:
         attr.value = new_val
-    except:
-        logging.exception("Failed to set %s.%s = '%s'", comp_name, attr_name, str_val)
-        return 127
-    return 0
+    except Exception:
+        raise IOError("Failed to set %s.%s = '%s'" % (comp_name, attr_name, str_val))
 
 MAX_DISTANCE = 0.01 #m
 def move(comp_name, axis_name, str_distance):
@@ -399,34 +362,24 @@ def move(comp_name, axis_name, str_distance):
     """
     # for safety reason, we use µm instead of meters, as it's harder to type a
     # huge distance
-    try:
-        component = get_component(comp_name)
-    except LookupError:
-        logging.error("Failed to find actuator '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+    component = get_component(comp_name)
 
     try:
         if axis_name not in component.axes:
-            logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
-            return 129
+            raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
         ad = component.axes[axis_name]
     except (TypeError, AttributeError):
-        logging.error("Component %s is not an actuator", comp_name)
-        return 127
+        raise ValueError("Component %s is not an actuator" % comp_name)
 
     if ad.unit == "m":
         try:
             distance = float(str_distance) * 1e-6 # µm -> m
         except ValueError:
-            logging.error("Distance '%s' cannot be converted to a number", str_distance)
-            return 127
+            raise ValueError("Distance '%s' cannot be converted to a number" % str_distance)
 
         if abs(distance) > MAX_DISTANCE:
-            logging.error("Distance of %f m is too big (> %f m)", abs(distance), MAX_DISTANCE)
-            return 129
+            raise IOError("Distance of %f m is too big (> %f m)" %
+                          (abs(distance), MAX_DISTANCE))
     else:
         distance = convertToObject(str_distance)
 
@@ -440,45 +393,32 @@ def move(comp_name, axis_name, str_distance):
         m = component.moveRel({axis_name: distance})
         m.result()
     except Exception:
-        logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
-        return 127
-
-    return 0
+        raise IOError("Failed to move axis %s of component %s" % (axis_name, comp_name))
 
 def move_abs(comp_name, axis_name, str_position):
     """
     move (in absolute) the axis of the given component to the specified position in µm
     """
-    try:
-        component = get_component(comp_name)
-    except LookupError:
-        logging.error("Failed to find actuator '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+    component = get_component(comp_name)
 
     try:
         if axis_name not in component.axes:
-            logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
-            return 129
+            raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
         ad = component.axes[axis_name]
     except (TypeError, AttributeError):
-        logging.error("Component %s is not an actuator", comp_name)
-        return 127
+        raise ValueError("Component %s is not an actuator" % comp_name)
 
     if ad.unit == "m":
         try:
             position = float(str_position)
         except ValueError:
-            logging.error("Distance '%s' cannot be converted to a number", str_position)
-            return 127
+            raise ValueError("Position '%s' cannot be converted to a number" % str_position)
 
         # compare to the current position, to see if the new position sounds reasonable
         cur_pos = component.position.value[axis_name]
         if abs(cur_pos - position) > MAX_DISTANCE:
-            logging.error("Distance of move of %g m is too big (> %g m)", abs(cur_pos - position), MAX_DISTANCE)
-            return 129
+            raise IOError("Distance of %f m is too big (> %f m)" %
+                           (abs(cur_pos - position), MAX_DISTANCE))
     else:
         position = convertToObject(str_position)
 
@@ -487,48 +427,36 @@ def move_abs(comp_name, axis_name, str_position):
                      units.readable_str(position, ad.unit, sig=3))
     except Exception:
         pass
+
     try:
         m = component.moveAbs({axis_name: position})
         m.result()
     except Exception:
-        logging.error("Failed to move axis %s of component %s", axis_name, comp_name)
-        return 127
-
-    return 0
+        raise IOError("Failed to move axis %s of component %s" % (axis_name, comp_name))
 
 def reference(comp_name, axis_name):
     """
     reference the axis of the given component
     """
+    component = get_component(comp_name)
+
     try:
-        component = get_component(comp_name)
-    except LookupError:
-        logging.error("Failed to find actuator '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+        if axis_name not in component.axes:
+            raise ValueError("Actuator %s has no axis '%s'" % (comp_name, axis_name))
+    except (TypeError, AttributeError):
+        raise ValueError("Component %s is not an actuator" % comp_name)
 
     try:
         if axis_name not in component.referenced.value:
-            if axis_name not in component.axes:
-                logging.error("Actuator %s has not axis '%s'", comp_name, axis_name)
-                return 129
-            else:
-                logging.error("Axis %s of actuator %s cannot be referenced", axis_name, comp_name)
-                return 129
+            raise ValueError("Axis %s of actuator %s cannot be referenced" % (axis_name, comp_name))
     except (TypeError, AttributeError):
-        logging.error("Component %s is not an actuator", comp_name)
-        return 127
+        raise ValueError("Axis %s of actuator %s cannot be referenced" % (axis_name, comp_name))
 
     try:
         m = component.reference({axis_name})
         m.result()
     except Exception:
-        logging.error("Failed to reference axis %s of component %s", axis_name, comp_name)
-        return 127
-
-    return 0
+        raise IOError("Failed to reference axis %s of component %s" % (axis_name, comp_name))
 
 def stop_move():
     """
@@ -539,18 +467,18 @@ def stop_move():
         microscope = model.getMicroscope()
         actuators = microscope.actuators
     except Exception:
-        logging.error("Failed to contact the back-end")
-        return 127
+        raise IOError("Failed to contact the back-end")
 
-    ret = 0
+    error = False
     for actuator in actuators:
         try:
             actuator.stop()
         except Exception:
-            logging.error("Failed to stop actuator %s", actuator.name)
-            ret = 127
+            logging.exception("Failed to stop actuator %s", actuator.name)
+            error = True
 
-    return ret
+    if error:
+        raise IOError("Failed to stop all the actuators")
 
 def acquire(comp_name, dataflow_names, filename):
     """
@@ -559,27 +487,19 @@ def acquire(comp_name, dataflow_names, filename):
     dataflow_names (list of string): name of each dataflow to access
     filename (unicode): name of the output file (format depends on the extension)
     """
-    try:
-        component = get_detector(comp_name)
-    except LookupError:
-        logging.error("Failed to find detector '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+    component = get_detector(comp_name)
 
     # check the dataflow exists
     dataflows = []
     for df_name in dataflow_names:
         try:
             df = getattr(component, df_name)
-        except:
-            logging.error("Failed to find data-flow '%s' on component '%s'", df_name, comp_name)
-            return 129
+        except AttributeError:
+            raise ValueError("Failed to find data-flow '%s' on component %s" % (df_name, comp_name))
 
         if not isinstance(df, model.DataFlowBase):
-            logging.error("'%s' is not a data-flow of component '%s'", df_name, comp_name)
-            return 129
+            raise ValueError("%s.%s is not a data-flow" % (comp_name, df_name))
+
         dataflows.append(df)
 
     images = []
@@ -588,9 +508,8 @@ def acquire(comp_name, dataflow_names, filename):
             image = df.get()
             images.append(image)
             logging.info("Acquired an image of dimension %r.", image.shape)
-        except:
-            logging.exception("Failed to acquire image from component '%s'", comp_name)
-            return 127
+        except Exception:
+            raise IOError("Failed to acquire image from component %s" % comp_name)
 
         try:
             if model.MD_PIXEL_SIZE in image.metadata:
@@ -604,15 +523,14 @@ def acquire(comp_name, dataflow_names, filename):
                 spxs = image.metadata[model.MD_SENSOR_PIXEL_SIZE]
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
                 logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
-        except:
-            logging.exception("Failed to read image information")
+        except Exception:
+            raise IOError("Failed to read image information")
 
     exporter = dataio.find_fittest_exporter(filename)
     try:
         exporter.export(filename, images)
     except IOError as exc:
-        logging.error(u"Failed to save to '%s': %s", filename, exc)
-    return 0
+        raise IOError(u"Failed to save to '%s': %s" % (filename, exc))
 
 def live_display(comp_name, df_name):
     """
@@ -620,25 +538,16 @@ def live_display(comp_name, df_name):
     comp_name (string): name of the detector to find
     df_name (string): name of the dataflow to access
     """
-    try:
-        component = get_detector(comp_name)
-    except LookupError:
-        logging.error("Failed to find detector '%s'", comp_name)
-        return 127
-    except:
-        logging.error("Failed to contact the back-end")
-        return 127
+    component = get_detector(comp_name)
 
     # check the dataflow exists
     try:
         df = getattr(component, df_name)
-    except:
-        logging.error("Failed to find data-flow '%s' on component '%s'", df_name, comp_name)
-        return 129
+    except AttributeError:
+        raise ValueError("Failed to find data-flow '%s' on component %s" % (df_name, comp_name))
 
     if not isinstance(df, model.DataFlowBase):
-        logging.error("'%s' is not a data-flow of component '%s'", df_name, comp_name)
-        return 129
+        raise ValueError("%s.%s is not a data-flow" % (comp_name, df_name))
 
     print "Press 'Q' to quit"
     # try to guess the size of the first image that will come
@@ -652,10 +561,11 @@ def live_display(comp_name, df_name):
         # pick something not too stupid
         size = (512, 512)
 
+    # TODO: if only one line -> use plot
     # create a window
     window = VideoDisplayer("Live from %s.%s" % (comp_name, df_name), size)
 
-        # update the picture and wait
+    # update the picture and wait
     def new_image_wrapper(df, image):
         window.new_image(image)
     try:
@@ -674,11 +584,12 @@ def ensure_output_encoding():
     # sets it automatically. But when piping, python can not check the output
     # encoding. In that case, it is None. In that case, we force it to UTF-8
 
-    current = sys.stdout.encoding
-    if current is None :
+    current = getattr(sys.stdout, "encoding", None)
+    if current is None:
         sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
-    current = sys.stderr.encoding
-    if current is None :
+
+    current = getattr(sys.stderr, "encoding", None)
+    if current is None:
         sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
 
 def main(args):
@@ -749,7 +660,8 @@ def main(args):
 
     # Set up logging before everything else
     if options.loglev < 0:
-        parser.error("log-level must be positive.")
+        logging.error("Log-level must be positive.")
+        return 127
     # TODO: allow to put logging level so low that nothing is ever output
     loglev_names = [logging.WARNING, logging.INFO, logging.DEBUG]
     loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
@@ -766,12 +678,11 @@ def main(args):
         options.position, options.reference,
         options.listprop, options.setattr,
         options.acquire, options.live)):
-        logging.error("no action specified.")
+        logging.error("No action specified.")
         return 127
     if options.acquire is not None and options.output is None:
-        logging.error("name of the output file must be specified.")
+        logging.error("Name of the output file must be specified.")
         return 127
-
 
     logging.debug("Trying to find the backend")
     status = get_backend_status()
@@ -779,63 +690,47 @@ def main(args):
         logging.info("Status of back-end is %s", status)
         return status_to_xtcode[status]
 
-    # scan needs to have the backend stopped
-    if options.scan:
-        if status == BACKEND_RUNNING:
-            logging.error("Back-end running while trying to scan for devices")
-            return 127
-        try:
-            return scan()
-        except Exception:
-            logging.exception("Unexpected error while performing scan.")
-            return 127
-
-    # check if there is already a backend running
-    if status == BACKEND_STOPPED:
-        logging.error("No running back-end")
-        return 127
-    elif status == BACKEND_DEAD:
-        logging.error("Back-end appears to be non-responsive.")
-        return 127
-
     try:
+        # scan needs to have the backend stopped
+        if options.scan:
+            if status == BACKEND_RUNNING:
+                raise ValueError("Back-end running while trying to scan for devices")
+            scan()
+
+        # check if there is already a backend running
+        if status == BACKEND_STOPPED:
+            raise IOError("No running back-end")
+        elif status == BACKEND_DEAD:
+            raise IOError("Back-end appears to be non-responsive.")
+
         if options.kill:
-            return kill_backend()
+            kill_backend()
 
         logging.debug("Executing the actions")
 
         if options.list:
-            return list_components(pretty=not options.machine)
+            list_components(pretty=not options.machine)
         elif options.listprop is not None:
-            # Speed up is only worthy if many VAs are accessed
-            # TODO: and still it can use too many connections and block everything
-#             odemis.util.driver.speedUpPyroConnect(model.getMicroscope())
-            return list_properties(options.listprop, pretty=not options.machine)
+            list_properties(options.listprop, pretty=not options.machine)
         elif options.setattr is not None:
             for c, a, v in options.setattr:
-                ret = set_attr(c, a, v)
-                if ret != 0:
-                    return ret
+                set_attr(c, a, v)
         # TODO: catch keyboard interrupt and stop the moves
         elif options.reference is not None:
             for c, a in options.reference:
-                ret = reference(c, a)
+                reference(c, a)
         elif options.position is not None:
             for c, a, d in options.position:
-                ret = move_abs(c, a, d)
-                # TODO warn if same axis multiple times
-                if ret != 0:
-                    return ret
+                move_abs(c, a, d)
 #             time.sleep(0.5)
         elif options.move is not None:
+            # TODO warn if same axis multiple times
+            # TODO move commands to the same actuator should be agglomerated
             for c, a, d in options.move:
-                ret = move(c, a, d)
-                # TODO move commands to the same actuator should be agglomerated
-                if ret != 0:
-                    return ret
+                move(c, a, d)
 #             time.sleep(0.5) # wait a bit for the futures to close nicely
         elif options.stop:
-            return stop_move()
+            stop_move()
         elif options.acquire is not None:
             component = options.acquire[0]
             if len(options.acquire) == 1:
@@ -843,7 +738,7 @@ def main(args):
             else:
                 dataflows = options.acquire[1:]
             filename = options.output.decode(sys.getfilesystemencoding())
-            return acquire(component, dataflows, filename)
+            acquire(component, dataflows, filename)
         elif options.live is not None:
             component = options.live[0]
             if len(options.live) == 1:
@@ -851,12 +746,17 @@ def main(args):
             elif len(options.live) == 2:
                 dataflow = options.acquire[2]
             else:
-                logging.error("live command accepts only one data-flow")
-                return 127
-            return live_display(component, dataflow)
+                raise ValueError("Live command accepts only one data-flow")
+            live_display(component, dataflow)
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
     except Exception:
         logging.exception("Unexpected error while performing action.")
-        return 127
+        return 130
 
     return 0
 

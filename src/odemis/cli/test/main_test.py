@@ -59,7 +59,6 @@ class TestWithoutBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --help"
@@ -88,7 +87,6 @@ class TestWithoutBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --log-level=2 --scan"
@@ -145,12 +143,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
@@ -162,7 +159,7 @@ class TestWithBackend(unittest.TestCase):
         try:
             cmdline = "cli --check"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "Not detecting backend running")
 
@@ -170,12 +167,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list-prop Spectra"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
@@ -201,12 +197,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list-prop Spectra"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
@@ -218,12 +213,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --set-attr Spectra power 0"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
@@ -231,12 +225,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --list-prop Spectra"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
@@ -249,12 +242,11 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = ["cli", "--set-attr", "OLStage", "speed", "x: 0.5, y: 0.2"]
             ret = main.main(cmdline)
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
     
@@ -264,25 +256,49 @@ class TestWithBackend(unittest.TestCase):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --move OLStage x 5 --move OLStage y -0.2"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-    
+
+    def test_position(self):
+        try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+
+            cmdline = "cli --position OLStage x 50e-6"
+            ret = main.main(cmdline.split())
+        except SystemExit as exc:
+            ret = exc.code
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+    def test_reference(self):
+        # On this simulated hardware, no component supports referencing, so
+        # just check that referencing correctly reports this
+        try:
+            # change the stdout
+            out = StringIO.StringIO()
+            sys.stdout = out
+
+            cmdline = "cli --reference OLStage x"
+            ret = main.main(cmdline.split())
+        except SystemExit as exc:
+            ret = exc.code
+        self.assertNotEqual(ret, 0, "Referencing should have failed with '%s'" % cmdline)
+
     def test_stop(self):
         try:
             # change the stdout
             out = StringIO.StringIO()
-            out.encoding = "UTF-8"
             sys.stdout = out
             
             cmdline = "cli --stop"
             ret = main.main(cmdline.split())
-        except SystemExit, exc:
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
     
@@ -292,19 +308,19 @@ class TestWithBackend(unittest.TestCase):
         
         # change resolution
         try:
-            # "Andor SimCam" contains a space, so use \t as delimiter
-            cmdline = "cli\t--set-attr\tAndor SimCam\tresolution\t%d,%d" % size
-            ret = main.main(cmdline.split("\t"))
-        except SystemExit, exc:
+            # "Andor SimCam" contains a space, so cut the line ourselves
+            cmdline = ["cli", "--set-attr", "Andor SimCam", "resolution", "%d,%d" % size]
+            ret = main.main(cmdline)
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
         # acquire (simulated) image
         try:
-            # "Andor SimCam" contains a space, so use \t as delimiter
-            cmdline = "cli\t--acquire\tAndor SimCam\t--output=%s" % picture_name
-            ret = main.main(cmdline.split("\t"))
-        except SystemExit, exc:
+            # "Andor SimCam" contains a space, so cut the line ourselves
+            cmdline = ["cli", "--acquire", "Andor SimCam", "--output=%s" % picture_name]
+            ret = main.main(cmdline)
+        except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
         
