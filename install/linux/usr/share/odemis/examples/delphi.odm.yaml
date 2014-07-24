@@ -143,9 +143,9 @@ TMCM: {
     init: {
         port: "/dev/fake",
         axes: ["x", "y", "z"],
-        ustepsize=[5.9e-9, 5.8e-9, 5e-9], # m/µstep
-        refproc="FakeReferencing", # referencing procedure for simulator
-        #refproc="2xFinalForward", # official referencing procedure for the Delphi
+        ustepsize: [5.9e-9, 5.8e-9, 5.e-9], # m/µstep
+        refproc: "FakeReferencing", # referencing procedure for simulator
+        #refproc: "2xFinalForward", # official referencing procedure for the Delphi
         # inverted: ["y"],
     },
 }

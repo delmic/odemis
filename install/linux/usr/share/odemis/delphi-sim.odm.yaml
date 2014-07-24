@@ -154,8 +154,8 @@ TMCM: {
     init: {
         port: "/dev/fake",
         axes: ["x", "y", "z"],
-        ustepsize=[5.9e-9, 5.8e-9, 5e-9], # m/µstep
-        refproc="FakeReferencing", # referencing procedure for simulator
+        ustepsize: [5.9e-9, 5.8e-9, 5.e-9], # m/µstep
+        refproc: "FakeReferencing", # referencing procedure for simulator
         # inverted: ["y"],
     },
 }
