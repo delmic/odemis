@@ -357,8 +357,8 @@ class TestActuator(unittest.TestCase):
         f = stage.moveAbs(move)
         f.result() # wait
         # TODO: almost equal
-        self.assertDictEqual(move, stage.position.value,
-                             "Actuator didn't move to the requested position")
+        for a, p in stage.position.value.items():
+            self.assertAlmostEqual(move[a], p, msg="Axis %s @ %f != %f" % (a, p, move[a]))
 
         stage.moveAbs(orig_pos)
 

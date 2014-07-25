@@ -146,9 +146,6 @@ Clara: { # Also works with iXon Ultra
         axes_map: {"x": "x", "y": "y"},
         inverted: ["x"],
     },
-    properties: {
-        speed: {'x': 0.01, 'y': 0.01} #m/s (low enough to ensure we always use the minimum voltage, but about right, to not wait too long)
-    }
 }
 
 "SEM-Optical Alignment": {

@@ -934,8 +934,8 @@ class Controller(object):
         speed (0<float<10): speed in m/s.
         axis (1<=int<=16): the axis
         """
-        assert((0 < speed) and (speed <= self.max_speed))
-        assert(axis in self._channels)
+        assert (self.min_speed <= speed <= self.max_speed)
+        assert (axis in self._channels)
         self._speed[axis] = speed
 
     def getSpeed(self, axis):
@@ -948,8 +948,8 @@ class Controller(object):
         accel (0<float<100): acceleration in m/s².
         axis (1<=int<=16): the axis
         """
-        assert((0 < accel) and (accel <= self.max_accel))
-        assert(axis in self._channels)
+        assert (0 < accel <= self.max_accel)
+        assert (axis in self._channels)
         self._accel[axis] = accel
 
     def moveRel(self, axis, distance):
@@ -1405,6 +1405,10 @@ class SMOController(Controller):
         speed_base (0<float<10): speed in m/s at the base voltage (3.5V). The
           base voltage is used for long moves (~> 50 µm). 
         """
+        # TODO: need 4 settings:
+        # vmin/speed_min: voltage/speed for the smallest moves (will be used < 50 µm)
+        # vmax/speed_max: voltage/speed for the big moves (will be used above)
+
         if not (0.5 < vmin < 10):
             raise ValueError("vmin (%s) must be between 0.5 and 10 V" % vmin)
         if not (0 < speed_base < 10):
@@ -1426,7 +1430,7 @@ class SMOController(Controller):
         # The maximum output voltage is calculated following this formula:
         # 200 Vpp*Maximum motor output/32767
         self._max_motor_out = int(self.GetParameter(1, 0x9))
-        # official approx. min is 3V, but from test, it can go down to 1.5V.
+        # official approx. min is 3V, but from test, it can sometimes go down to 1.5V.
         self._min_motor_out = int((vmin / 10) * 32767) # encoded as a ratio of 10 V * 32767
         if self._max_motor_out < self._min_motor_out:
             raise ValueError("Controller report max voltage lower than vmin=%g V" % vmin)
@@ -1811,6 +1815,10 @@ class Bus(model.Actuator):
         returns (dict string-> float): the new value
         """
         for axis, v in value.items():
+            rng = self._axes[axis].speed
+            if not rng[0] <= v <= rng[1]:
+                raise ValueError("Requested speed of %f for axis %s not within %f->%f" %
+                                 (v, axis, rng[0], rng[1]))
             controller, channel = self._axis_to_cc[axis]
             controller.setSpeed(channel, v)
         return value
