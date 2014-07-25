@@ -8,7 +8,7 @@ _odemis_cli()
     _get_comp_words_by_ref cur prev
     # TODO: handle 2nd argument for --set-attr (=type:va)
     case $prev in
-        --list-prop|-L|--move|-m|--position|-p|--set-attr|-s|--acquire|-a|--live)
+        --list-prop|-L|--move|-m|--position|-p|--reference|--set-attr|-s|--update-metadata|-u|--acquire|-a|--live)
             # TODO: For some commands, only actuators or detectors are valid.
             odemis-cli --check || return 0
             local components=$(odemis-cli --list --machine|cut -f1)
@@ -29,7 +29,8 @@ _odemis_cli()
         *)
             COMPREPLY=( $(compgen -W '--help --log-level --machine \
                 --kill --check --scan --list --list-prop --set-attr \
-                --move --position --stop --acquire --output --live' -- "$cur") )
+                --update-metadata --move --position --reference --stop \
+                --acquire --output --live' -- "$cur") )
             return 0
             ;;
     esac

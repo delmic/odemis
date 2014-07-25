@@ -325,8 +325,7 @@ def list_properties(comp_name, pretty=True):
 
 def set_attr(comp_name, attr_name, str_val):
     """
-    set the value of vigilant attribute of the given component using the type
-    of the current value of the attribute.
+    set the value of vigilant attribute of the given component.
     """
     component = get_component(comp_name)
 
@@ -354,6 +353,33 @@ def set_attr(comp_name, attr_name, str_val):
         attr.value = new_val
     except Exception as exc:
         raise IOError("Failed to set %s.%s = '%s': %s" % (comp_name, attr_name, str_val, exc))
+
+def update_metadata(comp_name, key_name, str_val):
+    """
+    update the metadata of the given component with the given key/value 
+    """
+    component = get_component(comp_name)
+
+    # Check that the metadata is a valid one. It's a bit tricky as there is no
+    # "official" list. But we look at the ones defined in model.MD_*
+    for n, v in inspect.getmembers(model, lambda m: isinstance(m, str)):
+        if n.startswith("MD_") and v == key_name:
+            key = key_name
+            break
+    else:
+        # fallback to looking for MD_{key_name}
+        try:
+            key = getattr(model, "MD_%s" % key_name)
+        except AttributeError:
+            raise ValueError("Metadata key '%s' is unknown" % key_name)
+        
+    val = convertToObject(str_val)
+
+    try:
+        component.updateMetadata({key: val})
+    except Exception as exc:
+        raise IOError("Failed to update metadata of %s {'%s': '%s'}: %s" %
+                      (comp_name, key_name, str_val, exc))
 
 MAX_DISTANCE = 0.01 #m
 def move(comp_name, axis_name, str_distance):
@@ -630,6 +656,9 @@ def main(args):
                          metavar=("<component>", "<attribute>", "<value>"),
                          help="set the attribute of a component (lists are delimited by commas,"
                          " dictionary keys are delimited by colon)")
+    dm_grpe.add_argument("--update-metadata", "-u", dest="upmd", nargs=3, action='append',
+                         metavar=("<component>", "<key>", "<value>"),
+                         help="update the metadata entry of a component (lists are delimited by commas)")
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
                          help=u"move the axis by the given amount (µm for distances).")
@@ -645,7 +674,9 @@ def main(args):
                          metavar=("<component>", "data-flow"),
                          help="acquire an image (default data-flow is \"data\")")
     dm_grp.add_argument("--output", "-o", dest="output",
-                        help="name of the file where the image should be saved after acquisition. The file format is derived from the extension (TIFF and HDF5 are supported).")
+                        help="name of the file where the image should be saved "
+                        "after acquisition. The file format is derived from the extension "
+                        "(TIFF and HDF5 are supported).")
     dm_grpe.add_argument("--live", dest="live", nargs="+",
                          metavar=("<component>", "data-flow"),
                          help="display and update an image on the screen (default data-flow is \"data\")")
@@ -680,7 +711,7 @@ def main(args):
     if not any((options.check, options.kill, options.scan,
         options.list, options.stop, options.move,
         options.position, options.reference,
-        options.listprop, options.setattr,
+        options.listprop, options.setattr, options.upmd,
         options.acquire, options.live)):
         logging.error("No action specified.")
         return 127
@@ -719,6 +750,10 @@ def main(args):
         elif options.setattr is not None:
             for c, a, v in options.setattr:
                 set_attr(c, a, v)
+        elif options.upmd is not None:
+            # TODO: support multiple key/value per component
+            for c, a, v in options.upmd:
+                update_metadata(c, a, v)
         # TODO: catch keyboard interrupt and stop the moves
         elif options.reference is not None:
             for c, a in options.reference:
