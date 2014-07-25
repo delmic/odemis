@@ -823,7 +823,7 @@ class Continuous(object):
 
         if (any([v < mn for v, mn in zip(value, start)]) or
             any([v > mx for v, mx in zip(value, end)])):
-            msg ="Trying to assign value '%s' outside of the range %s→%s."
+            msg = "Trying to assign value '%s' outside of the range %s->%s."
             raise IndexError(msg % (value, start, end))
 
 class Enumerated(object):
@@ -963,8 +963,8 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
         for axis, v in value.items():
             # It has to be within the range, but also > 0
             if v <= 0 or v < self._range[0] or v > self._range[1]:
-                raise IndexError("Trying to assign axis '%s' value '%s' outside of the range %s→%s." %
-                            (str(axis), str(value), str(self._range[0]), str(self._range[1])))
+                raise IndexError("Trying to assign axis '%s' value '%s' outside of the range %s->%s." %
+                            (axis, v, self._range[0], self._range[1]))
 
 
 
