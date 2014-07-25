@@ -147,6 +147,7 @@ import collections
 from decorator import decorator
 import logging
 import math
+from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
 import os
@@ -317,10 +318,14 @@ class BufferedCanvas(wx.Panel):
 
     def add_view_overlay(self, overlay):
         if overlay not in self.view_overlays:
+            if not isinstance(overlay, ViewOverlay):
+                raise ValueError("Not a ViewOverlay!")
             self.view_overlays.append(overlay)
 
     def remove_view_overlay(self, overlay):
         if overlay in self.view_overlays:
+            if not isinstance(overlay, ViewOverlay):
+                raise ValueError("Not a ViewOverlay!")
             self.view_overlays.remove(overlay)
 
     def clear_view_overlays(self):
@@ -330,10 +335,14 @@ class BufferedCanvas(wx.Panel):
 
     def add_world_overlay(self, overlay):
         if overlay not in self.world_overlays:
+            if not isinstance(overlay, WorldOverlay):
+                raise ValueError("Not a WorldOverlay!")
             self.world_overlays.append(overlay)
 
     def remove_world_overlay(self, overlay):
         if overlay in self.world_overlays:
+            if not isinstance(overlay, WorldOverlay):
+                raise ValueError("Not a WorldOverlay!")
             self.world_overlays.remove(overlay)
 
     def clear_world_overlays(self):
@@ -446,10 +455,10 @@ class BufferedCanvas(wx.Panel):
         dc_view = wx.PaintDC(self)
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
-                    (0, 0),             # destination point
-                    self.ClientSize,    # size of area to copy
-                    self._dc_buffer,    # source
-                    (0, 0)              # source point
+            (0, 0),             # destination point
+            self.ClientSize,    # size of area to copy
+            self._dc_buffer,    # source
+            (0, 0)              # source point
         )
         ctx = wxcairo.ContextFromDC(dc_view)
         self._draw_view_overlays(ctx)
@@ -514,7 +523,7 @@ class BufferedCanvas(wx.Panel):
 
     def get_half_view_size(self):
         """ Return half the size of the current view """
-        return (self.ClientSize.x // 2, self.ClientSize.y // 2)
+        return self.view_width // 2, self.view_height // 2
 
     def resize_buffer(self, size):
         """ Resize the bitmap buffer to the given size
@@ -523,7 +532,7 @@ class BufferedCanvas(wx.Panel):
 
         """
         logging.debug("Resizing buffer size to %s", size)
-        # Make new offscreen bitmap
+        # Make new off-screen bitmap
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size
 
@@ -590,13 +599,24 @@ class BufferedCanvas(wx.Panel):
     # END Buffer and drawing methods
 
     def _draw_view_overlays(self, ctx):
+        """ Draw all the view overlays
+
+        ctx (cairo context): the view context on which to draw
+
         """
-        Draws all the view overlays
-        ctx (cairo context): the context on which to draw
-        """
-        # TODO: Add filtering for *enabled overlays
+
         for vo in self.view_overlays:
             vo.Draw(ctx)
+
+    def _draw_world_overlays(self, ctx):
+        """ Draw all the world overlays
+
+        ctx (cairo context): the buffer context on which to draw
+
+        """
+
+        for wo in self.world_overlays:
+            wo.Draw(ctx, self.w_buffer_center, self.scale)
 
     ############ Position conversion ############
 
@@ -1300,6 +1320,7 @@ class DraggableCanvas(BitmapCanvas):
         # If the canvas was being dragged
         if self._ldragging:
             self._ldragging = False
+            self.reset_dynamic_cursor()
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
             new_pos = (
@@ -1428,10 +1449,10 @@ class DraggableCanvas(BitmapCanvas):
 
         # Blit the appropriate area from the buffer to the view port
         dc_view.BlitPointSize(
-                    (0, 0),             # destination point
-                    self.ClientSize,    # size of area to copy
-                    self._dc_buffer,    # source
-                    src_pos             # source point
+            (0, 0),             # destination point
+            self.ClientSize,    # size of area to copy
+            self._dc_buffer,    # source
+            src_pos             # source point
         )
 
         # Remember that the device context of the view port is passed!

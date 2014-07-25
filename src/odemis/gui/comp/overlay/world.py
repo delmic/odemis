@@ -114,7 +114,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Update the world position to reflect the view position
         """
         if self.v_start_pos and self.v_end_pos:
-            offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
+            offset = [v // 2 for v in self.cnvs.buffer_size]
             w_pos = (self.cnvs.view_to_world(self.v_start_pos, offset) +
                      self.cnvs.view_to_world(self.v_end_pos, offset))
             w_pos = list(util.normalize_rect(w_pos))
@@ -127,7 +127,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if not self.w_start_pos or not self.w_end_pos:
             logging.warning("Asking to convert non-existing world positions")
             return
-        offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
+        offset = [v // 2 for v in self.cnvs.buffer_size]
         v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
                  self.cnvs.world_to_view(self.w_end_pos, offset))
         v_pos = list(util.normalize_rect(v_pos))
@@ -163,7 +163,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
-            offset = [v // 2 for v in self.cnvs._bmp_buffer_size]
+            offset = [v // 2 for v in self.cnvs.buffer_size]
             b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                      self.cnvs.world_to_buffer(self.w_end_pos, offset))
             b_pos = util.normalize_rect(b_pos)
@@ -181,7 +181,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             # draws the dotted line
             ctx.set_line_width(2)
-            ctx.set_dash([3,])
+            ctx.set_dash([3])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
             ctx.rectangle(*rect)
@@ -190,10 +190,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             # Label
             if (self.selection_mode in (base.SEL_MODE_EDIT, base.SEL_MODE_CREATE) and
                     self.cnvs.microscope_view):
-                w, h = self.cnvs.selection_to_real_size(
-                                            self.w_start_pos,
-                                            self.w_end_pos
-                )
+                w, h = self.cnvs.selection_to_real_size(self.w_start_pos, self.w_end_pos)
                 w = units.readable_str(w, 'm', sig=2)
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
@@ -204,22 +201,37 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 self.position_label.text = size_lbl
                 self._write_labels(ctx)
 
+    # Event Handlers
+
     def on_left_down(self, evt):
-        super(WorldSelectOverlay, self).on_left_down(evt)
-        SelectionMixin._on_left_down(self, evt)
+        """ Start drag action if enabled, otherwise call super method so event will propagate """
+        if self.active:
+            super(WorldSelectOverlay, self)._on_left_down(evt)
+        else:
+            super(WorldSelectOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
-        super(WorldSelectOverlay, self).on_left_up(evt)
-        SelectionMixin._on_left_up(self, evt)
+        """ End drag action if enabled, otherwise call super method so event will propagate """
+        if self.active:
+            super(WorldSelectOverlay, self)._on_left_up(evt)
+            self.cnvs.request_drawing_update()
+        else:
+            super(WorldSelectOverlay, self).on_left_up(evt)
 
     def on_motion(self, evt):
-        super(WorldSelectOverlay, self).on_motion(evt)
-        SelectionMixin._on_motion(self, evt)
+        """ Process drag motion if enabled, otherwise call super method so event will propagate """
+        if self.active:
+            super(WorldSelectOverlay, self)._on_motion(evt)
+            # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
+            # possible, because we are drawing directly into the buffer, which might render slowly
+            # anyway. What we would want, is that a world overlay that can visually change when the
+            # mouse moves, draws into the view. After the motion is done, it should be rendered into
+            # buffer.
+            self.cnvs.request_drawing_update()
+        else:
+            super(WorldSelectOverlay, self).on_motion(evt)
 
-
-FILL_NONE = 0
-FILL_GRID = 1
-FILL_POINT = 2
+    # END Event Handlers
 
 
 class RepetitionSelectOverlay(WorldSelectOverlay):
@@ -228,13 +240,18 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     The type of display for the repetition is set by the .fill and repetition
     attributes. You must redraw the canvas for it to be updated.
     """
+
+    FILL_NONE = 0
+    FILL_GRID = 1
+    FILL_POINT = 2
+
     def __init__(self, cnvs,
                  sel_cur=None,
                  colour=gui.SELECTION_COLOUR):
 
         super(RepetitionSelectOverlay, self).__init__(cnvs, sel_cur, colour)
 
-        self._fill = FILL_NONE
+        self._fill = self.FILL_NONE
         self._repetition = (0, 0)
         self._bmp = None # used to cache repetition with FILL_POINT
         # ROI for which the bmp is valid
@@ -246,7 +263,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
     @fill.setter
     def fill(self, val):
-        assert(val in [FILL_NONE, FILL_GRID, FILL_POINT])
+        assert(val in [self.FILL_NONE, self.FILL_GRID, self.FILL_POINT])
         self._fill = val
         self._bmp = None
 
@@ -427,10 +444,10 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         mode_cache = self.selection_mode
         if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
-            if self.fill == FILL_POINT:
+            if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
                 self.selection_mode = base.SEL_MODE_EDIT
-            elif self.fill == FILL_GRID:
+            elif self.fill == self.FILL_GRID:
                 self._draw_grid(ctx)
                 self.selection_mode = base.SEL_MODE_EDIT
 
@@ -439,13 +456,8 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
-    """ This overlay allows for the selection of a pixel in a dataset that is
-    associated with spectral data.
-
-    prerequisite:
-
-    The mpp, physical_center, resolution and selected_pixel_va values must be
-    set using the  `set_values` method.
+    """ This overlay allows for the selection of a pixel in a data set that is associated with
+    spectral data.
 
     """
 
@@ -458,75 +470,68 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
         # External values
         self._mpp = None # Meter per pixel
-        self._physical_center = None # in meter (float, float)
-        self._resolution = None # Pixels in linked data (int, int)
-        self._selected_pixel = None # TupleVA (int, int)
+        self._physical_center = None  # in meter (float, float)
+        self._resolution = None  # Pixels in linked data (int, int)
+        self._selected_pixel = None  # TupleVA (int, int)
 
         # Calculated values
-        self._topleft_wpos = None # in world units (float, float)
-        self._pixel_wsize = None # cnvs size of the pixel block (float, float)
-        self._pixel_pos = None # position of the current pixel (int, int)
+        self._topleft_wpos = None  # in world units (float, float)
+        self._pixel_wsize = None  # cnvs size of the pixel block (float, float)
+        self._pixel_pos = None  # position of the current pixel (int, int)
 
         self.colour = conversion.hex_to_frgba(gui.SELECTION_COLOUR, 0.5)
-        self.select_color = conversion.hex_to_frgba(
-                                    gui.FG_COLOUR_HIGHLIGHT, 0.5)
-        self.active = False
+        self.select_color = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT, 0.5)
+
+    def deactivate(self):
+        """ Clear the hover pixel when the overlay is deactivated """
+        self._pixel_pos = None
+        self.cnvs.update_drawing()
+        super(PixelSelectOverlay, self).deactivate()
 
     # Event handlers
 
     def on_motion(self, evt):
-        """ Update the current mouse position and update the selected pixel if
-        the user is dragging within the pixel data area.
-        """
-        # # If the mouse button is not down...
-        # if not self.cnvs.HasCapture():
-        if self.values_are_set():
-            self._mouse_vpos = evt.GetPositionTuple()
-            old_pixel_pos = self._pixel_pos
-            self.view_to_pixel()
-            if self._pixel_pos != old_pixel_pos:
-                if self.is_over() and self.left_dragging:
-                    self._selected_pixel.value = self._pixel_pos
-                self.cnvs.update_drawing()
+        """ Update the current mouse position """
 
-        evt.Skip()
+        if self.active:
+            if self.values_are_set():
+                self._mouse_vpos = evt.GetPositionTuple()
+                old_pixel_pos = self._pixel_pos
+                self.view_to_pixel()
+                if self._pixel_pos != old_pixel_pos:
+                    if self.is_over_pixel_data() and self.left_dragging:
+                        self._selected_pixel.value = self._pixel_pos
+                        logging.debug("Pixel %s selected", self._selected_pixel.value)
+                    self.cnvs.update_drawing()
+        else:
+            super(PixelSelectOverlay, self).on_motion(evt)
 
     def on_left_down(self, evt):
-        if self.active and self.values_are_set() and self.is_over():
-            self.cnvs.cancel_drag()
-            # Since Ubuntu has a bug where it will not change the cursor when
-            # the mouse is captured, we need to perform a little trick
-            if self.cnvs.HasCapture():
-                self.cnvs.ReleaseMouse()
-            self.cnvs.set_dynamic_cursor(wx.CURSOR_CROSS)
-            self.cnvs.CaptureMouse()
-            super(PixelSelectOverlay, self)._on_left_down(evt)
+
+        if self.active:
+            if self.values_are_set():
+                super(PixelSelectOverlay, self)._on_left_down(evt)
         else:
-            evt.Skip()
+            super(PixelSelectOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
-        """ Set the selected pixel, if a pixel position is known
+        """ Set the selected pixel, if a pixel position is known """
 
-        If the cnvs was dragged while the mouse button was down, we do *not*
-        select a new pixel.
-        """
+        if self.active:
+            if self._pixel_pos and self.is_over_pixel_data():
+                if self._selected_pixel.value != self._pixel_pos:
+                    self._selected_pixel.value = self._pixel_pos
+                    self.cnvs.update_drawing()
+                    logging.debug("Pixel %s selected", self._selected_pixel.value)
+            super(PixelSelectOverlay, self)._on_left_up(evt)
 
-        if self._pixel_pos and self.active and self.is_over():
-            if self._selected_pixel.value != self._pixel_pos:
-                self._selected_pixel.value = self._pixel_pos
-                self.cnvs.update_drawing()
-                logging.debug("Pixel %s selected",
-                              str(self._selected_pixel.value))
+        # Call the super class,
+        super(PixelSelectOverlay, self).on_left_up(evt)
 
-        super(PixelSelectOverlay, self)._on_left_up(evt)
-        self.cnvs.reset_dynamic_cursor()
-        evt.Skip()
+    # END Event handlers
 
-    def is_over(self):
-        """ Check if the current mouse position is over the area for which
-        pixel data is provided.
-
-        """
+    def is_over_pixel_data(self):
+        """ Check if the mouse cursor is over an area containing pixel data """
 
         if self._mouse_vpos:
             offset = self.cnvs.get_half_buffer_size()
@@ -538,18 +543,16 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
             if 0 <= wpos[0] - self._topleft_wpos[0] <= physical_size[0]:
                 if 0 <= wpos[1] - self._topleft_wpos[1] <= physical_size[1]:
                     return True
+
         return False
 
-    # END Event handlers
-
     def set_values(self, mpp, physical_center, resolution, selected_pixel_va):
-        """ Set the values needed for mapping mouse positions to pixel
-        coordinates
+        """ Set the values needed for mapping mouse positions to pixel coordinates
 
         :param mpp: (float) Size of the pixels in meters
         :param physical_center: (float, float) The center of the pixel data in
             physical coordinates.
-        :param resoluton: (int, int) The width and height of the pixel data
+        :param resolution: (int, int) The width and height of the pixel data
 
         """
 
@@ -568,8 +571,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         self._calc_core_values()
 
     def _selection_made(self, selected_pixel):
-        """ Event handler that requests a redraw when the selected pixel changes
-        """
+        """ Event handler that requests a redraw when the selected pixel changes """
         self.cnvs.update_drawing()
 
     def values_are_set(self):
@@ -580,10 +582,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
                             self._selected_pixel)
 
     def _calc_core_values(self):
-        """ Calculate the core values that only change when the external values
-        change.
-
-        """
+        """ Calculate the core values that only change when the external values change. """
 
         if self.values_are_set():
             # Get the physical size of the external data
@@ -662,11 +661,8 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
         return b_top_left + b_width
 
-    # @profile
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
-        if (self._pixel_pos and
-            self._selected_pixel.value != self._pixel_pos and
-            self.is_over()):
+        if self._pixel_pos and self._selected_pixel.value != self._pixel_pos and self.is_over_pixel_data():
 
             rect = self.pixel_to_rect(self._pixel_pos, scale)
             if rect:

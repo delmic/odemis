@@ -104,7 +104,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # meter per "world unit"
         # for conversion between "world pos" in the canvas and a real unit
         # mpp == mpwu => 1 world coord == 1 px => scale == 1
-        self.mpwu = 1.0 # m/wu
+        self.mpwu = 1.0  # m/wu
         # This is a const, don't change at runtime!
         # FIXME: turns out to be useless. => Need to directly use physical
         # coordinates. Currently, the only difference is that Y in going up in
@@ -131,11 +131,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.icon_overlay = view_overlay.StreamIconOverlay(self)
         self.add_view_overlay(self.icon_overlay)
 
-        self.zoom_overlay = view_overlay.ViewSelectOverlay(self, "Zoom")
-        self.add_view_overlay(self.zoom_overlay)
+        self.zoom_overlay = None  # view_overlay.ViewSelectOverlay(self, "Zoom")
+        # self.add_view_overlay(self.zoom_overlay)
 
-        self.update_overlay = world_overlay.WorldSelectOverlay(self, "Update")
-        self.add_world_overlay(self.update_overlay)
+        self.update_overlay = None  # world_overlay.WorldSelectOverlay(self, "Update")
+        # self.add_world_overlay(self.update_overlay)
 
     # Ability manipulation
 
@@ -1032,7 +1032,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         style (overlay.FILL_*): type of repetition display
         """
         if rep is None:
-            self.roi_overlay.fill = world_overlay.FILL_NONE
+            self.roi_overlay.fill = world_overlay.RepetitionSelectOverlay.FILL_NONE
         else:
             self.roi_overlay.fill = style
             self.roi_overlay.repetition = rep

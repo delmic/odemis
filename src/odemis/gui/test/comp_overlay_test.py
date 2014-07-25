@@ -22,6 +22,7 @@
 
 """
 import math
+from odemis.gui.model import TOOL_POINT
 
 from odemis.util.conversion import hex_to_frgb
 from odemis.gui.comp.overlay import view as vol
@@ -373,6 +374,109 @@ class OverlayTestCase(test.GuiTestCase):
 
     # World overlay test cases
 
+    def test_world_select_overlay(self):
+        cnvs = miccanvas.SecomCanvas(self.panel)
+        # mmodel = test.FakeMicroscopeModel()
+        # view = mmodel.focussedView.value
+        # cnvs.setView(view, mmodel)
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        wsol = wol.WorldSelectOverlay(cnvs)
+        wsol.activate()
+        cnvs.add_world_overlay(wsol)
+
+        tol = vol.TextViewOverlay(cnvs)
+        tol.add_label("Right click to toggle tool")
+        cnvs.add_view_overlay(tol)
+
+        test.gui_loop()
+
+        def toggle(evt):
+            if wsol.active:
+                wsol.deactivate()
+            else:
+                wsol.activate()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
+    def test_roa_select_overlay(self):
+        # but it should be a simple miccanvas
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+
+        rsol = wol.RepetitionSelectOverlay(cnvs)
+        rsol.activate()
+        cnvs.add_world_overlay(rsol)
+        cnvs.scale = 400
+
+        test.gui_loop()
+        wroi = [-0.1, 0.3, 0.2, 0.4]  # in m
+        rsol.set_physical_sel(wroi)
+        test.gui_loop()
+        wroi_back = rsol.get_physical_sel()
+
+        for o, b in zip(wroi, wroi_back):
+            self.assertAlmostEqual(o, b, msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
+
+        rsol.repetition = (3, 2)
+        rsol.fill = wol.RepetitionSelectOverlay.FILL_POINT
+
+        pos = cnvs.margins[0] + 10,  cnvs.margins[1] + 10
+        rsol.add_label("Repetition fill will change in 3 seconds.",
+                       pos, colour=(0.8, 0.2, 0.1))
+
+        cnvs.update_drawing()
+        test.gui_loop()
+
+        tol = vol.TextViewOverlay(cnvs)
+        tol.add_label("Right click to toggle tool")
+        cnvs.add_view_overlay(tol)
+
+        test.gui_loop()
+
+    def test_pixel_select_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        mmodel = test.FakeMicroscopeModel()
+        view = mmodel.focussedView.value
+
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        # FIXME: when setView is called *before* the add_control, the picture goes blakc and no
+        # pixels are visible
+        cnvs.setView(view, mmodel)
+        cnvs.current_mode = TOOL_POINT
+
+        psol = wol.PixelSelectOverlay(cnvs)
+        psol.activate()
+        psol.enabled = True
+
+        cnvs.add_world_overlay(psol)
+
+        # psol.set_values(33, (0.0, 0.0), (30, 30))
+        psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
+        view.mpp.value = 1e-06
+        test.gui_loop()
+
+        # Tool toggle for debugging
+
+        tol = vol.TextViewOverlay(cnvs)
+        tol.add_label("Right click to toggle tool", (10, 30))
+        cnvs.add_view_overlay(tol)
+
+        def toggle(evt):
+            if psol.active:
+                psol.deactivate()
+            else:
+                psol.activate()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
+    # END World overlay test cases
+
+
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
@@ -416,85 +520,15 @@ class OverlayTestCase(test.GuiTestCase):
 
 
     # @unittest.skip("simple")
-    def test_pixel_select_overlay(self):
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        cnvs.current_mode = guimodel.TOOL_POINT
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
-        cnvs.setView(view, mmodel)
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        cnvs.current_mode = guimodel.TOOL_POINT
 
-        psol = wol.PixelSelectOverlay(cnvs)
-        psol.activate()
-        cnvs.add_world_overlay(psol)
 
-        # psol.set_values(33, (0.0, 0.0), (30, 30))
-        psol.set_values(1e-05, (0.0, 0.0), (17, 19), omodel.TupleVA())
-        view.mpp.value = 1e-06
-        test.gui_loop()
+    # @unittest.skip("simple")
+
 
     # @unittest.skip("simple")
 
 
     # @unittest.skip("simple")
-    def test_roa_select_overlay(self):
-        # Create and add a miccanvas
-        # TODO: Sparc canvas because it's now the only one which supports
-        # TOOL_ROA
-        # but it should be a simple miccanvas
-        cnvs = miccanvas.SparcAcquiCanvas(self.panel)
-
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-
-        rsol = wol.RepetitionSelectOverlay(cnvs)
-        cnvs.add_world_overlay(rsol)
-        cnvs.add_active_overlay(rsol)
-        cnvs.current_mode = guimodel.TOOL_ROA
-
-        test.gui_loop()
-        wroi = [-0.1, 0.3, 0.2, 0.4]  # in m
-        rsol.set_physical_sel(wroi)
-        test.gui_loop()
-        wroi_back = rsol.get_physical_sel()
-
-        for o, b in zip(wroi, wroi_back):
-            self.assertAlmostEqual(o, b, msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
-
-        rsol.repetition = (3, 2)
-        rsol.fill = wol.FILL_POINT
-
-        pos = cnvs.margins[0] + 10,  cnvs.margins[1] + 10
-        rsol.add_label("Repetition fill will change in 3 seconds.",
-                       pos, colour=(0.8, 0.2, 0.1))
-
-        cnvs.update_drawing()
-        test.gui_loop()
-
-        # def later():
-        #     try:
-        #         rsol.repetition  = (4, 5)
-        #         rsol.fill = wol.FILL_POINT
-        #         test.gui_loop()
-        #         cnvs.update_drawing()
-        #     except wx.PyDeadObjectError:
-        #         pass
-
-        # wx.FutureCall(3000, later)
-
-    # @unittest.skip("simple")
-
-
-    def test_polar_overlay(self):
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-
-        pol = vol.PolarOverlay(cnvs)
-        pol.activate()
-        cnvs.add_view_overlay(pol)
-
-        test.gui_loop()
-
 
 
 
