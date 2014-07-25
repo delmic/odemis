@@ -352,8 +352,8 @@ def set_attr(comp_name, attr_name, str_val):
 
     try:
         attr.value = new_val
-    except Exception:
-        raise IOError("Failed to set %s.%s = '%s'" % (comp_name, attr_name, str_val))
+    except Exception as exc:
+        raise IOError("Failed to set %s.%s = '%s': %s" % (comp_name, attr_name, str_val, exc))
 
 MAX_DISTANCE = 0.01 #m
 def move(comp_name, axis_name, str_distance):
@@ -375,7 +375,8 @@ def move(comp_name, axis_name, str_distance):
         try:
             distance = float(str_distance) * 1e-6 # µm -> m
         except ValueError:
-            raise ValueError("Distance '%s' cannot be converted to a number" % str_distance)
+            raise ValueError("Distance '%s' cannot be converted to a number" %
+                             str_distance)
 
         if abs(distance) > MAX_DISTANCE:
             raise IOError("Distance of %f m is too big (> %f m)" %
@@ -392,8 +393,9 @@ def move(comp_name, axis_name, str_distance):
     try:
         m = component.moveRel({axis_name: distance})
         m.result()
-    except Exception:
-        raise IOError("Failed to move axis %s of component %s" % (axis_name, comp_name))
+    except Exception as exc:
+        raise IOError("Failed to move axis %s of component %s: %s" %
+                      (axis_name, comp_name, exc))
 
 def move_abs(comp_name, axis_name, str_position):
     """
@@ -431,8 +433,9 @@ def move_abs(comp_name, axis_name, str_position):
     try:
         m = component.moveAbs({axis_name: position})
         m.result()
-    except Exception:
-        raise IOError("Failed to move axis %s of component %s" % (axis_name, comp_name))
+    except Exception as exc:
+        raise IOError("Failed to move axis %s of component %s: %s" %
+                      (axis_name, comp_name, exc))
 
 def reference(comp_name, axis_name):
     """
@@ -455,8 +458,9 @@ def reference(comp_name, axis_name):
     try:
         m = component.reference({axis_name})
         m.result()
-    except Exception:
-        raise IOError("Failed to reference axis %s of component %s" % (axis_name, comp_name))
+    except Exception as exc:
+        raise IOError("Failed to reference axis %s of component %s: %s" %
+                      (axis_name, comp_name, exc))
 
 def stop_move():
     """
@@ -508,8 +512,8 @@ def acquire(comp_name, dataflow_names, filename):
             image = df.get()
             images.append(image)
             logging.info("Acquired an image of dimension %r.", image.shape)
-        except Exception:
-            raise IOError("Failed to acquire image from component %s" % comp_name)
+        except Exception as exc:
+            raise IOError("Failed to acquire image from component %s: %s" % (comp_name, exc))
 
         try:
             if model.MD_PIXEL_SIZE in image.metadata:
@@ -523,8 +527,8 @@ def acquire(comp_name, dataflow_names, filename):
                 spxs = image.metadata[model.MD_SENSOR_PIXEL_SIZE]
                 dim_sens = (image.shape[0] * spxs[0], image.shape[1] * spxs[1])
                 logging.info("Physical dimension of sensor is %fx%f m.", dim_sens[0], dim_sens[1])
-        except Exception:
-            raise IOError("Failed to read image information")
+        except Exception as exc:
+            raise IOError("Failed to read image information: %s", exc)
 
     exporter = dataio.find_fittest_exporter(filename)
     try:
