@@ -312,7 +312,7 @@ class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.active and self.v_start_pos and self.v_end_pos:
+        if self.v_start_pos and self.v_end_pos:
             start_pos = self.v_start_pos
             end_pos = self.v_end_pos
 
@@ -892,7 +892,7 @@ class PolarOverlay(ViewOverlay):
 
     def _calculate_intersection(self):
         if None not in (self.phi_line_rad, self.theta_radius):
-            # Calculate the intersecion between Phi and Theta
+            # Calculate the intersection between Phi and Theta
             x = self.center_x + self.theta_radius * math.cos(self.phi_line_rad)
             y = self.center_y + self.theta_radius * math.sin(self.phi_line_rad)
             self.intersection = (x, y)

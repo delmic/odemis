@@ -358,20 +358,24 @@ class DragMixin(object):
         self.drag_v_end_pos = None
 
     def _on_left_down(self, evt):
-        self._ldragging = True
-        self.drag_v_start_pos = evt.GetPositionTuple()
+        if not self.right_dragging:
+            self._ldragging = True
+            self.drag_v_start_pos = evt.GetPositionTuple()
 
     def _on_left_up(self, evt):
-        self._ldragging = False
-        self.drag_v_end_pos = evt.GetPositionTuple()
+        if not self.right_dragging:
+            self._ldragging = False
+            self.drag_v_end_pos = evt.GetPositionTuple()
 
     def _on_right_down(self, evt):
-        self._rdragging = True
-        self.drag_v_start_pos = evt.GetPositionTuple()
+        if not self.left_dragging:
+            self._rdragging = True
+            self.drag_v_start_pos = evt.GetPositionTuple()
 
     def _on_righgt_up(self, evt):
-        self._rdragging = False
-        self.drag_v_end_pos = evt.GetPositionTuple()
+        if not self.left_dragging:
+            self._rdragging = False
+            self.drag_v_end_pos = evt.GetPositionTuple()
 
     def reset_drag(self):
         self.drag_v_start_pos = None
@@ -388,6 +392,11 @@ class DragMixin(object):
     @property
     def dragging(self):
         return self._ldragging or self._rdragging
+
+    @property
+    def was_dragged(self):
+        return ((None, None) != (self.drag_v_start_pos, self.drag_v_end_pos) and
+                self.drag_v_start_pos != self.drag_v_end_pos)
 
 # Modes for creating, changing and dragging selections
 SEL_MODE_NONE = 0
@@ -639,10 +648,13 @@ class SelectionMixin(object):
 
         if self.selection_mode == SEL_MODE_CREATE:
             self.update_selection(v_pos)
+            self.cnvs.Refresh()
         elif self.selection_mode == SEL_MODE_EDIT:
             self.update_edit(v_pos)
+            self.cnvs.Refresh()
         elif self.selection_mode == SEL_MODE_DRAG:
             self.update_drag(v_pos)
+            self.cnvs.Refresh()
         else:
             hover = self.is_hovering(v_pos)
             if hover == gui.HOVER_SELECTION:
@@ -653,8 +665,6 @@ class SelectionMixin(object):
                 self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENS)
             else:
                 self.cnvs.reset_dynamic_cursor()
-
-        self.cnvs.Refresh()
 
 
 class ViewOverlay(Overlay):
