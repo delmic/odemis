@@ -183,6 +183,12 @@ def _add_image_info(group, dataset, image):
     for i, d in enumerate(dataset.dims):
         d.label = dims[i]
     
+    # FIXME: We map the position of the center to X/YOffset. That's quite
+    # contrary to the feeling that the position of a pixel should be read as
+    # XOffset + i * DimensionScaleX. => It would be more logical to set
+    # X/YOffset as the position of pixel 0,0. (The drawback being that we need
+    # to have a precise idea of the size of a pixel to position the image)
+
     # Offset
     if model.MD_POS in image.metadata:
         pos = image.metadata[model.MD_POS]
