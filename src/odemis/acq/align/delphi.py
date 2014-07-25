@@ -36,7 +36,6 @@ import scipy
 import threading
 import time
 
-NUMBER_OF_HOLES = 2  # Number of holes in the sample holder
 EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
@@ -291,10 +290,12 @@ def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
 def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
                       first_hole, second_hole):
     """
-    Performs referencing of both stages. Write one CL spot and align it, 
+    Write one CL spot and align it, 
     moving both SEM stage and e-beam (spot alignment). Calculate the offset 
     based on the final position plus the offset of the hole from the expected 
-    position.
+    position. 
+    Note: The optical stage should be referenced before calling this function.
+    The SEM stage should be positioned at an origin position.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The ccd
     escan (model.Emitter): The e-beam scanner
@@ -323,12 +324,6 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
 
-        # Reference both stages
-        axes = set(["x", "y"])
-        f = sem_stage.reference(axes)
-        f.result()
-        f = opt_stage.reference(axes)
-        f.result()
         opt_pos = opt_stage.position.value
 
         if future._align_offset_state == CANCELLED:
@@ -336,6 +331,12 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
         # Apply spot alignment
         try:
             # Direct move of objective lens, not Inclined stage used
+            # TODO, maybe move the inclined stage out of the AlignSpot and
+            # remove the type of move. Then create a set of "stage wrappers" that
+            # can be used for the SECOM AB, Delphi optical or Delphi SEM. If no
+            # stage is provided use the ebeam shift (or have a wrapper for ebeam
+            # shift -> fake stage??)
+            # TODO, move the sem_stage instead of objective lens
             future_spot = spot.AlignSpot(ccd, opt_stage, escan, focus, type=spot.OBJECTIVE_MOVE)
             dist = future_spot.result()
             # Almost done
@@ -433,6 +434,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         CancelledError() if cancelled
         IOError if CL spot not found
     """
+    # TODO: get rid of the offset param, and expect the sem_stage and optical stage
+    # to be aligned on a spot when this is called
     logging.debug("Starting rotation and scaling calculation...")
 
     # Configure CCD and e-beam to write CL spots
@@ -451,24 +454,26 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         # Move Phenom sample stage to each spot
         sem_spots = []
         opt_spots = []
-        for spots in range(len(ROTATION_SPOTS)):
-            pos = ROTATION_SPOTS[spots]
+        for pos in ROTATION_SPOTS:
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()
-            f = sem_stage.moveAbs({"x":pos["x"],
-                                   "y":pos["y"]})
+            f = sem_stage.moveAbs(pos)
             f.result()
             # Transform to coordinates in the reference frame of the objective stage
-            vpos = [-pos.get("x", 0), -pos.get("y", 0)]
-            P = numpy.transpose([vpos[0], vpos[1]])
-            O = numpy.transpose([offset[0], offset[1]])
-            q = numpy.add(P, O).tolist()
+            vpos = [-pos["x"], -pos["y"]]
+#             P = numpy.transpose([vpos[0], vpos[1]])
+#             O = numpy.transpose([offset[0], offset[1]])
+#             q = numpy.add(P, O).tolist()
+            q = [vpos[0] + offset[0], vpos[1] + offset[1]]
             # Move objective lens correcting for offset
             cor_pos = {"x": q[0], "y": q[1]}
             f = opt_stage.moveAbs(cor_pos)
             f.result()
             # Move Phenom sample stage so that the spot should be at the center
             # of the CCD FoV
+            # Simplified version of AlignSpot() but without autofocus, with
+            # different error margin, and moves the SEM stage.
+            # TODO => reuse/factorize the code?
             dist = None
             steps = 0
             while True:
@@ -483,6 +488,7 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                     raise IOError("CL spot not found.")
                 pixelSize = image.metadata[model.MD_PIXEL_SIZE]
                 center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+                # TODO: tab? better name?
                 tab_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
                 tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
                 dist = math.hypot(*tab)
@@ -505,6 +511,7 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         # From the sets of 4 positions calculate rotation and scaling matrices
         unused, scaling, rotation = transform.CalculateTransform(opt_spots,
                                                                  sem_spots)
+        # TODO: warn if the translation is > epsilon?
         return rotation, scaling
 
     finally:
@@ -588,9 +595,9 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
         escan.dwellTime.value = 6e-06  # good enough for clear SEM image
-        holes_found = EXPECTED_HOLES
+        holes_found = []
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
-        for hole in range(NUMBER_OF_HOLES):
+        for pos in EXPECTED_HOLES:
             if future._hole_detection_state == CANCELLED:
                 raise CancelledError()
             # Set the FoV to 1.2mm
@@ -598,8 +605,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
             # Set the voltage to 5.3kV
             escan.accelVoltage.value = 5.3e03
             # Move Phenom sample stage to expected hole position
-            f = sem_stage.moveAbs({"x":EXPECTED_HOLES[hole]["x"],
-                                   "y":EXPECTED_HOLES[hole]["y"]})
+            f = sem_stage.moveAbs(pos)
             f.result()
             dist = None
             steps = 0
@@ -607,6 +613,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
                 if future._hole_detection_state == CANCELLED:
                     raise CancelledError()
                 if steps >= MAX_STEPS:
+                    logging.warning("Could not center to the hole within %d trials", steps)
                     break
                 # From SEM image determine marker position relative to the center of
                 # the SEM
@@ -634,8 +641,8 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
                     estimateHoleDetectionTime(et, dist))
 
             #SEM stage position plus offset from hole detection
-            holes_found[hole]["x"] = sem_stage.position.value["x"] + tab[0]
-            holes_found[hole]["y"] = sem_stage.position.value["y"] + tab[1]
+            holes_found.append({"x": sem_stage.position.value["x"] + tab[0],
+                                "y": sem_stage.position.value["y"] + tab[1]})
         
         first_hole = (holes_found[0]["x"], holes_found[0]["y"])
         second_hole = (holes_found[1]["x"], holes_found[1]["y"])
@@ -706,6 +713,7 @@ def FindHoleCenter(image):
 
     return (center_x, center_y)
 
+# TODO: rename to UpdateOffsetAndRotation ?
 def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
                          expected_second_hole, offset, rotation, scaling):
     """
@@ -785,6 +793,9 @@ def _DoPatternDetection(future, ccd, detector, escan, opt_stage, focus, pattern)
         CancelledError() if cancelled
         IOError if pattern not found
     """
+    # TODO: this should stop after a while... move to it's own object with a
+    # thread that can be started/stopped.
+    # The whole procedure could then be represented by a object similar to GridScanner
     logging.debug("Starting pattern detection...")
     try:
         # Set proper SEM FoV
@@ -795,15 +806,17 @@ def _DoPatternDetection(future, ccd, detector, escan, opt_stage, focus, pattern)
         escan.translation.value = (0, 0)
         escan.dwellTime.value = escan.dwellTime.range[1]
         ccd.binning.value = (1, 1)
+        # FIXME: the CCD FoV depends on the lens magnification (cf metadata)
         ccd.resolution.value = (int(DETECTION_FOV[0] / ccd.pixelSize.value[0]),
                                 int(DETECTION_FOV[1] / ccd.pixelSize.value[1]))
         ccd.exposureTime.value = 900e-03  # s
         
         #Distance between spots in subpattern in pixels
-        spot_dist_pxs = SPOT_DIST/escan.pixelSize.value[0]
-        subpattern_dist_pxs = SUBPATTERN_DIST/escan.pixelSize.value[0]
-        center_subpattern = (int(SUBPATTERNS[0]/2), int(SUBPATTERNS[1]/2))
-        center_spot = (int(SUBPATTERN_DIMS[0]/2), int(SUBPATTERN_DIMS[1]/2))
+        spot_dist_pxs = SPOT_DIST / escan.pixelSize.value[0]
+        subpattern_dist_pxs = SUBPATTERN_DIST / escan.pixelSize.value[0]
+        # floor rounding to take care of odd number of pixels
+        center_subpattern = (SUBPATTERNS[0] // 2, SUBPATTERNS[1] // 2)
+        center_spot = (SUBPATTERN_DIMS[0] // 2, SUBPATTERN_DIMS[1] // 2)
         
         # Iterate until you reach the center pattern
         while True:
@@ -811,26 +824,24 @@ def _DoPatternDetection(future, ccd, detector, escan, opt_stage, focus, pattern)
                 raise CancelledError()
             detector.data.subscribe(_discard_data)
             #Go through the 3x3 subpatterns
-            for i in range(SUBPATTERNS[0]):
-                for j in range(SUBPATTERNS[1]):
-                    if future._pattern_detection_state == CANCELLED:
-                        raise CancelledError()
-                    subpattern = pattern[(i * SUBPATTERN_DIMS[0]):(i * SUBPATTERN_DIMS[0]) + SUBPATTERN_DIMS[0], 
-                                         (j * SUBPATTERN_DIMS[1]):(j * SUBPATTERN_DIMS[1]) + SUBPATTERN_DIMS[1]]
-                    # Translation to subpattern center
-                    center_translation = ((i - center_subpattern[0])*subpattern_dist_pxs,
-                                          (j - center_subpattern[1])*subpattern_dist_pxs)
-                    for k in range(subpattern.shape[0]):
-                        for l in range(subpattern.shape[1]):
-                            #If spot has to be scanned
-                            if subpattern[k,l] == 1:
-                                # Translation from subpattern center to particular spot
-                                spot_translation = ((k - center_spot[0]) * spot_dist_pxs,
-                                                    (l - center_spot[1]) * spot_dist_pxs)
-                                # Translation from SEM center to particular spot
-                                total_translation = (center_translation[0] + spot_translation[0],
-                                                     center_translation[1] + spot_translation[1])
-                                escan.translation.value = total_translation
+            for i, j in numpy.ndindex(SUBPATTERNS):
+                if future._pattern_detection_state == CANCELLED:
+                    raise CancelledError()
+                subpattern = pattern[(i * SUBPATTERN_DIMS[0]):(i * SUBPATTERN_DIMS[0]) + SUBPATTERN_DIMS[0],
+                                     (j * SUBPATTERN_DIMS[1]):(j * SUBPATTERN_DIMS[1]) + SUBPATTERN_DIMS[1]]
+                # Translation to subpattern center
+                center_translation = ((i - center_subpattern[0]) * subpattern_dist_pxs,
+                                      (j - center_subpattern[1]) * subpattern_dist_pxs)
+                for k, l in numpy.ndindex(subpattern.shape):
+                    # If spot has to be scanned
+                    if subpattern[k, l] == 1:
+                        # Translation from subpattern center to particular spot
+                        spot_translation = ((k - center_spot[0]) * spot_dist_pxs,
+                                            (l - center_spot[1]) * spot_dist_pxs)
+                        # Translation from SEM center to particular spot
+                        total_translation = (center_translation[0] + spot_translation[0],
+                                             center_translation[1] + spot_translation[1])
+                        escan.translation.value = total_translation
             # TODO, pattern detection and move
             # Maybe autofocus in the first iteration?
             # image = ccd.data.get()
