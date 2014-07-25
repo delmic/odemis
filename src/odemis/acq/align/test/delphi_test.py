@@ -185,5 +185,19 @@ class TestCalibration(unittest.TestCase):
                      combined_stage, True)
         first_hole, second_hole, offset, rotation, scaling = f.result()
 
+    # @unittest.skip("skip")
+    def test_scan_pattern(self):
+        """
+        Test PatternDetection
+        """
+        ccd = self.ccd
+        detector = self.sed
+        escan = self.ebeam
+        opt_stage = self.opt_stage
+        focus = self.focus
+        pattern = numpy.random.randint(2, size=(21, 21))
+        f = delphi.PatternDetection(ccd, detector, escan, opt_stage, focus, pattern)
+        f.result(5)
+
 if __name__ == '__main__':
     unittest.main()

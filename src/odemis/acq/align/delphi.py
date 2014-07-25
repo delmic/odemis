@@ -43,6 +43,14 @@ MAX_STEPS = 10  # To reach the hole
 # Positions to scan for rotation and scaling calculation
 ROTATION_SPOTS = ({"x":5e-03, "y":0}, {"x":-5e-03, "y":0},
                   {"x":0, "y":5e-03}, {"x":0, "y":-5e-03})
+SCANNING_FOV = 1020e-06  # SEM FoV used for the pattern scanning
+DETECTION_FOV = (220e-06, 220e-06)   #CCD FoV that guarantees at least one  
+                                    #complete subpattern is observed #m 
+SUBPATTERNS = (7,7) #Dimensions of pattern in terms of subpatterns
+SPOT_DIST = 20e-06  #Distance between spots in subpattern #m
+SUBPATTERN_DIMS = (3,3) #Dimensions of subpattern in terms of spots
+SUBPATTERN_DIST = 160e-06  #Distance between 2 neighboor subpatterns 
+                            #(from center to center) #m
 
 
 def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
@@ -308,6 +316,7 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
     ccd.exposureTime.value = 900e-03
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
+    escan.translation.value = (0, 0)
     escan.dwellTime.value = 5e-06
 
     try:
@@ -432,6 +441,7 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
     ccd.exposureTime.value = 900e-03
     escan.scale.value = (1, 1)
     escan.resolution.value = (1, 1)
+    escan.translation.value = (0, 0)
     escan.dwellTime.value = 5e-06
 
     try:
@@ -576,6 +586,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
     try:
         escan.scale.value = (1, 1)
         escan.resolution.value = escan.resolution.range[1]
+        escan.translation.value = (0, 0)
         escan.dwellTime.value = 6e-06  # good enough for clear SEM image
         holes_found = EXPECTED_HOLES
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
@@ -720,3 +731,141 @@ def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
     updated_rotation = rotation + e_rotation
     return updated_offset, updated_rotation
 
+def PatternDetection(ccd, detector, escan, opt_stage, focus, pattern):
+    """
+    Wrapper for DoPatternDetection. It provides the ability to check the 
+    progress of the procedure.
+    ccd (model.DigitalCamera): The ccd
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    opt_stage (model.Actuator): The objective stage
+    focus (model.Actuator): Focus of objective lens
+    pattern (model.DataArray): 21x21 array containing the spot
+                                pattern in binary data. Needs to 
+                                be divided in 3x3 sub-arrays to 
+                                get the actual information
+    returns (ProgressiveFuture): Progress DoPatternDetection
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimatePatternDetectionTime())
+    f._pattern_detection_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelPatternDetection
+    f._pattern_lock = threading.Lock()
+
+    # Run in separate thread
+    pattern_thread = threading.Thread(target=executeTask,
+                  name="Pattern detection",
+                  args=(f, _DoPatternDetection, f, ccd, detector, escan,
+                        opt_stage, focus, pattern))
+
+    pattern_thread.start()
+    return f
+
+def _DoPatternDetection(future, ccd, detector, escan, opt_stage, focus, pattern):
+    """
+    Given an SH Calibration Pattern, it first scans the required spots, acquires 
+    the CCD image, detects the combination of the spots observed and moves 
+    accordingly. It repeats this process until the CCD image contains the center 
+    pattern.
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    ccd (model.DigitalCamera): The ccd
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    opt_stage (model.Actuator): The objective stage
+    focus (model.Actuator): Focus of objective lens
+    pattern (model.DataArray): 21x21 array containing the spot
+                                pattern in binary data. Needs to 
+                                be divided in 3x3 sub-arrays to 
+                                get the actual information
+    raises:    
+        CancelledError() if cancelled
+        IOError if pattern not found
+    """
+    logging.debug("Starting pattern detection...")
+    try:
+        # Set proper SEM FoV
+        escan.horizontalFoV.value = SCANNING_FOV
+        # Spot mode
+        escan.scale.value = (1, 1)
+        escan.resolution.value = (1, 1)
+        escan.translation.value = (0, 0)
+        escan.dwellTime.value = escan.dwellTime.range[1]
+        ccd.binning.value = (1, 1)
+        ccd.resolution.value = (int(DETECTION_FOV[0] / ccd.pixelSize.value[0]),
+                                int(DETECTION_FOV[1] / ccd.pixelSize.value[1]))
+        ccd.exposureTime.value = 900e-03  # s
+        
+        #Distance between spots in subpattern in pixels
+        spot_dist_pxs = SPOT_DIST/escan.pixelSize.value[0]
+        subpattern_dist_pxs = SUBPATTERN_DIST/escan.pixelSize.value[0]
+        center_subpattern = (int(SUBPATTERNS[0]/2), int(SUBPATTERNS[1]/2))
+        center_spot = (int(SUBPATTERN_DIMS[0]/2), int(SUBPATTERN_DIMS[1]/2))
+        
+        # Iterate until you reach the center pattern
+        while True:
+            if future._pattern_detection_state == CANCELLED:
+                raise CancelledError()
+            detector.data.subscribe(_discard_data)
+            #Go through the 3x3 subpatterns
+            for i in range(SUBPATTERNS[0]):
+                for j in range(SUBPATTERNS[1]):
+                    if future._pattern_detection_state == CANCELLED:
+                        raise CancelledError()
+                    subpattern = pattern[(i * SUBPATTERN_DIMS[0]):(i * SUBPATTERN_DIMS[0]) + SUBPATTERN_DIMS[0], 
+                                         (j * SUBPATTERN_DIMS[1]):(j * SUBPATTERN_DIMS[1]) + SUBPATTERN_DIMS[1]]
+                    # Translation to subpattern center
+                    center_translation = ((i - center_subpattern[0])*subpattern_dist_pxs,
+                                          (j - center_subpattern[1])*subpattern_dist_pxs)
+                    for k in range(subpattern.shape[0]):
+                        for l in range(subpattern.shape[1]):
+                            #If spot has to be scanned
+                            if subpattern[k,l] == 1:
+                                # Translation from subpattern center to particular spot
+                                spot_translation = ((k - center_spot[0]) * spot_dist_pxs,
+                                                    (l - center_spot[1]) * spot_dist_pxs)
+                                # Translation from SEM center to particular spot
+                                total_translation = (center_translation[0] + spot_translation[0],
+                                                     center_translation[1] + spot_translation[1])
+                                escan.translation.value = total_translation
+            # TODO, pattern detection and move
+            # Maybe autofocus in the first iteration?
+            # image = ccd.data.get()
+            # move = DetectSubpattern(image)
+            # If center subpattern is detected the move will be 0 and we break
+            # opt_stage.moveRel(move)
+    finally:
+        with future._pattern_lock:
+            if future._pattern_detection_state == CANCELLED:
+                raise CancelledError()
+            future._pattern_detection_state = FINISHED
+
+def _CancelPatternDetection(future):
+    """
+    Canceller of _DoPatternDetection task.
+    """
+    logging.debug("Cancelling pattern detection...")
+
+    with future._pattern_lock:
+        if future._pattern_detection_state == FINISHED:
+            return False
+        future._pattern_detection_state = CANCELLED
+        logging.debug("Pattern detection cancelled.")
+
+    return True
+
+def estimatePatternDetectionTime():
+    """
+    Estimates hole detection procedure duration
+    returns (float):  process estimated time #s
+    """
+    return 0
+
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
