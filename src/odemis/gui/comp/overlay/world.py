@@ -253,7 +253,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         self._fill = self.FILL_NONE
         self._repetition = (0, 0)
-        self._bmp = None # used to cache repetition with FILL_POINT
+        self._bmp = None  # used to cache repetition with FILL_POINT
         # ROI for which the bmp is valid
         self._bmp_bpos = (None, None, None, None)
 
@@ -357,9 +357,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     blit(x, 0, 3, 3, point_dc, 0, 0)
 
                 total_dc = wx.MemoryDC()
-                self._bmp = wx.EmptyBitmap(
-                                int(end_x - start_x),
-                                int(end_y - start_y))
+                self._bmp = wx.EmptyBitmap(int(end_x - start_x), int(end_y - start_y))
                 total_dc.SelectObject(self._bmp)
                 total_dc.SetBackground(wx.BLACK_BRUSH)
                 total_dc.Clear()
@@ -372,9 +370,11 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 self._bmp.SetMaskColour(wx.BLACK)
                 self._bmp_bpos = cl_pos
 
-            self.cnvs._dc_buffer.DrawBitmapPoint(self._bmp,
-                                                 wx.Point(int(start_x), int(start_y)),
-                                                 useMask=True)
+            self.cnvs._dc_buffer.DrawBitmapPoint(
+                self._bmp,
+                wx.Point(int(start_x), int(start_y)),
+                useMask=True
+            )
 
     def _draw_grid(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
@@ -469,7 +469,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         self._mouse_vpos = None
 
         # External values
-        self._mpp = None # Meter per pixel
+        self._mpp = None  # Meter per pixel
         self._physical_center = None  # in meter (float, float)
         self._resolution = None  # Pixels in linked data (int, int)
         self._selected_pixel = None  # TupleVA (int, int)
@@ -570,7 +570,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
         self._calc_core_values()
 
-    def _selection_made(self, selected_pixel):
+    def _selection_made(self, _):
         """ Event handler that requests a redraw when the selected pixel changes """
         self.cnvs.update_drawing()
 
@@ -608,7 +608,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
             # Note: Since the mpwu is always 1 (and will like be removed at a
             # later stage), the physical and world sizes are the same!
             self._pixel_wsize = (physical_size[0] / self._resolution[0],
-                                physical_size[1] / self._resolution[1])
+                                 physical_size[1] / self._resolution[1])
 
     def view_to_pixel(self):
         """ Translate a view coordinate into a data pixel coordinate
@@ -662,7 +662,8 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         return b_top_left + b_width
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
-        if self._pixel_pos and self._selected_pixel.value != self._pixel_pos and self.is_over_pixel_data():
+        if (self._pixel_pos and self._selected_pixel.value != self._pixel_pos and
+                self.is_over_pixel_data()):
 
             rect = self.pixel_to_rect(self._pixel_pos, scale)
             if rect:
@@ -678,14 +679,14 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
                 ctx.rectangle(*rect)
                 ctx.fill()
 
-MAX_DOT_RADIUS = 25.5
-MIN_DOT_RADIUS = 3.5
-
 
 class PointsOverlay(WorldOverlay):
     """ Overlay showing the available points and allowing the selection of one
     of them.
     """
+
+    MAX_DOT_RADIUS = 25.5
+    MIN_DOT_RADIUS = 3.5
 
     def __init__(self, cnvs):
         super(PointsOverlay, self).__init__(cnvs)
@@ -698,13 +699,11 @@ class PointsOverlay(WorldOverlay):
         self.min_dist = None
 
         # Appearance
-        self.point_colour = conversion.hex_to_frgb(
-                                        gui.FG_COLOUR_HIGHLIGHT)
-        self.select_colour = conversion.hex_to_frgba(
-                                        gui.FG_COLOUR_EDIT, 0.5)
+        self.point_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.select_colour = conversion.hex_to_frgba(gui.FG_COLOUR_EDIT, 0.5)
         self.dot_colour = (0, 0, 0, 0.1)
         # The float radius of the dots to draw
-        self.dot_size = MIN_DOT_RADIUS
+        self.dot_size = self.MIN_DOT_RADIUS
         # None or the point over which the mouse is hovering
         self.cursor_over_point = None
         # The box over which the mouse is hovering, or None
@@ -718,7 +717,7 @@ class PointsOverlay(WorldOverlay):
         self._calc_choices()
         self.cnvs.microscope_view.mpp.subscribe(self._on_mpp, init=True)
 
-    def _on_point_selected(self, selected_point):
+    def _on_point_selected(self, _):
         """ Update the overlay when a point has been selected """
         self.cnvs.repaint()
 
@@ -726,24 +725,31 @@ class PointsOverlay(WorldOverlay):
         """ Calculate the values dependant on the mpp attribute
         (i.e. when the zoom level of the canvas changes)
         """
-        self.dot_size = max(min(MAX_DOT_RADIUS, self.min_dist / mpp),
-                            MIN_DOT_RADIUS)
+        self.dot_size = max(min(self.MAX_DOT_RADIUS, self.min_dist / mpp), self.MIN_DOT_RADIUS)
+
+    # Event Handlers
+
+    def on_left_down(self, evt):
+        super(PointsOverlay, self).on_left_down(evt)
 
     def on_left_up(self, evt):
         """ Set the selected point if the mouse cursor is hovering over one """
         # Clear the hover when the canvas was dragged
-        if self.cnvs.was_dragged:
-            self.cursor_over_point = None
-            self.b_hover_box = None
-        elif self.cursor_over_point: # and self.enabled: FIXME: check
+        if self.active and self.cursor_over_point and not self.cnvs.was_dragged:
             self.point.value = self.choices[self.cursor_over_point]
             logging.debug("Point %s selected", self.point.value)
-            self.cnvs.repaint()
+            self.cnvs.update_drawing()
+        elif self.cnvs.was_dragged:
+            self.cursor_over_point = None
+            self.b_hover_box = None
+
+        super(PointsOverlay, self).on_left_up(evt)
 
     def on_wheel(self, evt):
         """ Clear the hover when the canvas is zooming """
         self.cursor_over_point = None
         self.b_hover_box = None
+        super(PointsOverlay, self).on_wheel(evt)
 
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
@@ -775,6 +781,8 @@ class PointsOverlay(WorldOverlay):
         else:
             self.cnvs.reset_dynamic_cursor()
 
+        super(PointsOverlay, self).on_motion(evt)
+
     def _calc_choices(self):
         """ Create a mapping between world coordinates and physical points
 
@@ -800,13 +808,13 @@ class PointsOverlay(WorldOverlay):
                 min_dist = min(distance(p_point, d) for d in physical_points if d != p_point)
         else:
             # can't compute the distance => pick something typical
-            min_dist = 100e-9 # m
+            min_dist = 100e-9  # m
 
             if len(physical_points) == 1:
                 w_x, w_y = self.cnvs.physical_to_world_pos(physical_points[0])
                 self.choices[(w_x, w_y)] = physical_points[0]
 
-        self.min_dist = min_dist / 2.0 # get radius
+        self.min_dist = min_dist / 2.0  # get radius
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
