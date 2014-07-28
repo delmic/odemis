@@ -17,11 +17,20 @@ The basic idea is to describe the model as set of named components (a mapping of
 a name (str) to a mapping). Each component description has the following information:
 
  * Name of component
- * class: python class of the component. If it is a child provided by another component, this is not a required key.
+ * class (str): python class of the component. It should be a subclass of 
+   ``odemis.driver`` or be a ``Microscope``. It is written as ``module.class``.
+   If the component is create by delegation (i.e., it is provided by another 
+   component), this is not a required key.
  * role (str): compulsory string representing the role of the component in the system
  * init: mapping of str → values representing the initialisation arguments (optional)
  * properties (optional) (mapping of str → values): properties to set at initialisation (should be existing and valid for the given component)
- * children (optional): mapping of str (arbitrary names defined by the class) → str (names of other components provided by this component)
+ * children (optional): mapping of str (arbitrary names defined by the class)
+   → str (names of other components provided or used by this component). 
+ * creator (optional): name of the component that will create and provide this 
+   component. It is only valid if the component has no class specified. The
+   creator component must have this component specified in its "children". 
+   This key will be automatically filled in unless several components 
+   use the component as a child (in which case it is required).
  * affects: sequence of str (names of other components). By default it is empty.
  * emitters (only for Microscope): sequence of str (names of other components)
  * detectors (only for Microscope): sequence of str (names of other components)
@@ -38,7 +47,7 @@ The microscope component can have as role:
  * sem: an SEM (only)
  * secom
  * sparc
- * secom-mini : for a SECOM/Phenom microscope
+ * delphi
 
 Typical detectors found in a microscope can be of the following roles:
  * ccd: the main optical camera
@@ -64,8 +73,10 @@ Typical actuators found can be of the following roles:
  * focus: Changes the lens distance to the sample. Must have "z" axis.
  * ebeam-focus: Changes the focus of the e-beam. Must have "z" axis.
  * mirror: To move the mirror of the SPARC, can have four axes: x, y, rz (yaw), ry (pitch)
- * align: alignment actuator for the SECOM microscope. 
-   It must have two axes: "a" and "b".
+ * align: alignment actuator for the SECOM and DELPHI microscopes. 
+   For the SECOM, it must have two axes: "a" and "b".
+   For the DELPHI, it must have two axes: "x" and "y".
+ * sem-stage: the stage of the DELPHI that moves the (whole) sample holder.
  * filter: Emission filter on the fluorescence microscope or the filter on the 
    optical path of the SPARC. It must have a "band" axis.
  * spectrograph: See the spectrometer
