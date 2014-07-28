@@ -70,16 +70,17 @@ class TestCommandLine(unittest.TestCase):
     @staticmethod
     def create_test_validate_pass(filename):
         def test_validate_pass(self):
-            cmdline = "odemisd --log-level=2 --validate %s" % filename
+            cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertEqual(ret, 0, "error detected in correct config "
                                 "file '%s'" % filename)
+            os.remove("test.log")
         return test_validate_pass
       
     @staticmethod
     def create_test_validate_error(filename):
         def test_validate_error(self):
-            cmdline = "odemisd --log-target=test.log --validate %s" % filename
+            cmdline = "odemisd --log-level=2 --log-target=test.log --validate %s" % filename
             ret = main.main(cmdline.split())
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
                                 "file '%s'" % filename)
@@ -186,6 +187,29 @@ class TestCommandLine(unittest.TestCase):
             self.fail("no error detected in erroneous config file '%s'" % filename)
         os.remove("test.log")
         
+    @timeout(10)
+    def test_multiple_parents(self):
+        """Test creating component with multiple parents"""
+        filename = "multiple-parents.odm.yaml"
+        cmdline = ODEMISD_CMD + " --log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
+        ret = subprocess.call(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        # now it should say it's running
+        cmdline = "odemisd --log-level=2 --log-target=test.log --check"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "command '%s' returned %d" % (cmdline, ret))
+
+        # stop the backend
+        cmdline = "odemisd --log-level=2 --log-target=test.log --kill"
+        ret = main.main(cmdline.split())
+        self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
+
+        time.sleep(5) # give some time to stop
+        ret = main.main(cmdline.split())
+        os.remove("test.log")
+        os.remove("testdaemon.log")
+
 # extends the class fully at module 
 TestCommandLine.create_tests()
                             

@@ -179,8 +179,8 @@ class BackendRunner(object):
             logging.debug("model instantiation file is: %s", self.model.name)
             inst_model = modelgen.get_instantiation_model(self.model)
             logging.info("model has been read successfully")
-        except modelgen.ParseError:
-            logging.exception("Error while parsing file %s", self.model.name)
+        except modelgen.ParseError as exp:
+            logging.error("Error while parsing file %s:\n%s", self.model.name, exp)
             return 127
 
         # change to odemis group and create the base directory
@@ -228,7 +228,12 @@ class BackendRunner(object):
             logging.info("model has been successfully instantiated")
             logging.debug("model microscope is %s", mic.name)
             logging.debug("model components are %s", ", ".join([c.name for c in comps]))
-        except:
+
+        except modelgen.SemanticError as exp:
+            logging.error("When instantiating file %s:\n%s", self.model.name, exp)
+            self.stop()
+            return 127
+        except Exception:
             logging.exception("When instantiating file %s", self.model.name)
             self.stop()
             return 127

@@ -54,7 +54,7 @@ def get_instantiation_model(inst_file):
         # yaml.load() is dangerous as it can create any python object
         data = yaml.safe_load(inst_file)
     except yaml.YAMLError as exc:
-        logging.error("Syntax error in microscope instantiation file: %s", exc)
+        logging.error("Syntax error in microscope file: %s", exc)
         if hasattr(exc, 'problem_mark'):
             mark = exc.problem_mark
             # display the line
@@ -63,7 +63,7 @@ def get_instantiation_model(inst_file):
             logging.error("%s", line.rstrip("\n"))
             # display the column
             logging.error(" " * mark.column + "^")
-        raise ParseError("Syntax error in microscope instantiation file.")
+        raise ParseError("Syntax error in microscope file.")
     
     logging.debug("YAML file read like this: " + str(data))
     # TODO detect duplicate keys (e.g., two components with the same name)
@@ -91,12 +91,12 @@ def get_class(name):
     else:
         # It comes from the user, so check carefully there is no strange characters
         if not re.match("(\w|\.)+\.(\w)+\Z", name):
-            raise ParseError("Syntax error in microscope instantiation "
+            raise ParseError("Syntax error in microscope "
                 "file: class name '%s' is malformed." % name)
     
         names = name.rsplit(".", 1)
         if len(names) < 2:
-            raise ParseError("Syntax error in microscope instantiation file: "
+            raise ParseError("Syntax error in microscope file: "
                 "class name '%s' is not in the form 'module.method'." % name)
         module_name = "odemis.driver." + names[0] # always look in drivers directory
         class_name = names[1]
@@ -104,14 +104,14 @@ def get_class(name):
     try:
         mod = __import__(module_name, fromlist=[class_name]) 
     except ImportError:
-        raise SemanticError("Error in microscope instantiation file: "
+        raise SemanticError("Error in microscope file: "
             "no module '%s' exists (class '%s')." % (module_name, class_name))
 #        return None # DEBUG
     
     try:
         the_class = getattr(mod, class_name)
     except AttributeError:
-        raise SemanticError("Error in microscope instantiation "
+        raise SemanticError("Error in microscope "
             "file: module '%s' has no class '%s'." % (module_name, class_name))
     
     return the_class 
@@ -130,7 +130,7 @@ class Instantiator(object):
         dry_run (bool): if True, it will check the semantic and try to instantiate the 
           model without actually any driver contacting the hardware.
         """
-        self.ast = model_ast # AST of the model to instantiate
+        self.ast = model_ast.copy() # AST of the model to instantiate
         self.root_container = container # the container for non-leaf components
         
         self.microscope = None # the root of the model (Microscope)
@@ -138,7 +138,9 @@ class Instantiator(object):
         self.sub_containers = set() # all the sub-containers created for the components
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
         self.dry_run = dry_run # flag for instantiating mock version of the components
-        
+
+        # update/fill up the model with implicit information
+        self.fill_creator()
 
     def make_args(self, name):
         """
@@ -152,14 +154,14 @@ class Instantiator(object):
         
         # it's an error to specify "name" and "role" in the init
         if "name" in init:
-            raise SemanticError("Error in microscope instantiation "
+            raise SemanticError("Error in microscope "
                 "file: component '%s' should not have a 'name' entry in the init." % name)
         init["name"] = name
         if "role" in init:
-            raise SemanticError("Error in microscope instantiation "
+            raise SemanticError("Error in microscope "
                 "file: component '%s' should not have a 'role' entry in the init." % name)
         if not "role" in attr:
-            raise SemanticError("Error in microscope instantiation "
+            raise SemanticError("Error in microscope "
                 "file: component '%s' has no role specified." % name)
         init["role"] = attr["role"]
         
@@ -170,7 +172,7 @@ class Instantiator(object):
         
         # create recursively the children
         if "children" in init:
-            raise SemanticError("Error in microscope instantiation "
+            raise SemanticError("Error in microscope "
                 "file: component '%s' should not have a 'children' entry in the init." % name)
         if "children" in attr:
             init["children"] = {}
@@ -178,13 +180,15 @@ class Instantiator(object):
             for internal_name, child_name in children_names.items():
                 child_attr = self.ast[child_name]
                 # Two types of children creation:
-                if "class" in child_attr:
-                    # the child has a class => we explicitly create/reuse it
-                    init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
-                else:
-                    # the child has no class => it'll be created by the component,
+                if "creator" in child_attr and child_attr["creator"] == name:
+                    # the child creation is delegated... to this component
+                    # => it'll be created by the component, so
                     # we just pass the init arguments
                     init["children"][internal_name] = self.make_args(child_name)
+                else:
+                    # the child has a class or is created by another component
+                    # => we explicitly create/reuse it
+                    init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
         
         return init
     
@@ -286,13 +290,13 @@ class Instantiator(object):
             else:
                 # created by delegation => we instantiate the parent 
                 try:
-                    parent = attr["parent"]
+                    creator = attr["creator"]
                 except KeyError:
-                    raise SemanticError("Error in microscope instantiation file: "
+                    raise SemanticError("Error in microscope file: "
                                         "component %s has no class specified and "
-                                        "is not a child." % name)
-                parent_comp = self.instantiate_comp(parent)
-                self.components.add(parent_comp)
+                                        "is not created by any component." % name)
+                creator_comp = self.instantiate_comp(creator)
+                self.components.add(creator_comp)
                 # now the child ought to be created
                 return self.get_component_by_name(name)
     
@@ -312,7 +316,53 @@ class Instantiator(object):
                 ret |= Instantiator.get_children(child)
         
         return ret
-    
+
+    def fill_creator(self):
+        """
+        Add the "parents" field (= reverse of children) and update the creator
+         field for the components that don't have it explicitly set.
+        """
+        # update the children by adding a "parents" attribute
+        for name, comp in self.ast.items():
+            children_names = comp.get("children", {}) # dict internal name -> name
+            for child_name in children_names.values():
+                # detect direct loop
+                if child_name == name:
+                    raise SemanticError("Error in "
+                            "microscope file: component %s "
+                            "is child of itself." % name)
+
+                if not "parents" in self.ast[child_name].keys():
+                    self.ast[child_name]["parents"] = []
+                self.ast[child_name]["parents"].append(name)
+        
+        # For each component which is created by delegation (= no class):
+        # * if no creator specified, use its parent (and error if multiple parents)
+        # * if creator specified, check it's one of the parents
+        for name, comp in self.ast.items():
+            if "class" in comp:
+                continue
+            parents = comp["parents"]
+            if "creator" in comp:
+                creator_name = comp["creator"]
+                if creator_name not in parents:
+                    raise SemanticError("Error in microscope file: component %s "
+                            "is creator of component %s but doesn't have it as a child."
+                            % (creator_name, name))
+            else:
+                if len(parents) == 0:
+                    raise SemanticError("Error in microscope file: component %s "
+                            "has no class specified and is not created by any "
+                            "component." % name)
+                elif len(parents) > 1:
+                    raise SemanticError("Error in microscope file: component %s "
+                            "has to be created by one of its parents %s, but no "
+                            "creator is designated." % (name, tuple(parents)))
+                else:
+                    comp["creator"] = parents[0]
+                    logging.debug("Identified %s as creator of %s",
+                                  parents[0], name)
+
     def update_microscope(self):
         assert(not isinstance(self.microscope, model.ComponentProxy))
         # Connect all the sub-components of microscope: detectors, emitters, actuators
@@ -321,17 +371,18 @@ class Instantiator(object):
         self.microscope._detectors = set(detectors)
         if not detectors:
             logging.warning("Microscope contains no detectors.")
-        
+
         emitter_names = self.ast[self.microscope.name].get("emitters", []) # none is weird but ok
         emitters = [self.get_component_by_name(name) for name in emitter_names]
         self.microscope._emitters = set(emitters)
         if not emitters:
             logging.warning("Microscope contains no emitters.")
-        
+
         actuator_names = self.ast[self.microscope.name].get("actuators", [])
         actuators = [self.get_component_by_name(name) for name in actuator_names]
         self.microscope._actuators = set(actuators)
-        
+
+
     def instantiate_model(self):
         """
         Generates the real microscope model from the microscope instantiation model
@@ -343,26 +394,6 @@ class Instantiator(object):
             ParseError
             Exception (dependent on the driver): in case initialisation of a driver fails
         """
-        # mark the children by adding a "parent" attribute
-        for name, attr in self.ast.items():
-            children_names = attr.get("children", {}) # dict internal name -> name
-            for child_name in children_names.values():
-                # detect direct loop
-                if child_name == name:
-                    raise SemanticError("Error in "
-                            "microscope instantiation file: component %s "
-                            "is child of itself." % name)
-                # detect child with multiple parents
-                if ("parent" in self.ast[child_name] and
-                    self.ast[child_name]["parent"] != name):
-                    logging.warning("component %s is child of both %s and %s.", 
-                            child_name, name, self.ast[child_name]["parent"])
-#                    raise SemanticError("Error in "
-#                            "microscope instantiation file: component %s "
-#                            "is child of both %s and %s." 
-#                            % (child_name, name, self.ast[child_name]["parent"]))
-                self.ast[child_name]["parent"] = name
-        
         # try to get every component, at the end, we have all of them 
         for name in self.ast:
             self.get_or_instantiate_comp(name)
@@ -372,11 +403,11 @@ class Instantiator(object):
         if len(microscopes) == 1:
             self.microscope = microscopes[0]
         elif len(microscopes) > 1:
-            raise SemanticError("Error in microscope instantiation file: "
+            raise SemanticError("Error in microscope file: "
                     "there are several Microscopes (%s)." % 
                     ", ".join([m.name for m in microscopes]))
         else:
-            raise SemanticError("Error in microscope instantiation "
+            raise SemanticError("Error in microscope "
                     "file: no Microscope component found.")
         
         self.update_microscope()
@@ -397,7 +428,7 @@ class Instantiator(object):
             try:
                 comp._set_affects(affected)
             except AttributeError:
-                raise SemanticError("Error in microscope instantiation "
+                raise SemanticError("Error in microscope "
                         "file: Component '%s' does not support 'affects'." % name)
 
         # for each component set the properties
@@ -408,15 +439,15 @@ class Instantiator(object):
                     try:
                         va = getattr(comp, prop_name)
                     except AttributeError:
-                        raise SemanticError("Error in microscope instantiation "
+                        raise SemanticError("Error in microscope "
                                 "file: Component '%s' has no property '%s'." % (name, prop_name))
                     if not isinstance(va, model.VigilantAttributeBase):
-                        raise SemanticError("Error in microscope instantiation "
+                        raise SemanticError("Error in microscope "
                                 "file: Component '%s' has no property (VA) '%s'." % (name, prop_name))
                     try:
                         va.value = value
                     except Exception:
-                        raise ValueError("Error in microscope instantiation "
+                        raise ValueError("Error in microscope "
                                 "file: %s.%s = '%s' failed." % (name, prop_name, value))
     
 def instantiate_model(inst_model, container=None, create_sub_containers=False,

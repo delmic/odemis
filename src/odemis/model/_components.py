@@ -823,7 +823,8 @@ class CombinedActuator(Actuator):
                 raise ValueError("Child %s is not an actuator." % str(child))
             axes[axis] = child.axes[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
-            self._speed[axis] = child.speed.value[axes_map[axis]]
+            if isinstance(child.speed, _vattributes.VigilantAttributeBase):
+                self._speed[axis] = child.speed.value[axes_map[axis]]
 
         # TODO: test/finish conversion to Axis
         # this set ._axes and ._children
@@ -860,12 +861,14 @@ class CombinedActuator(Actuator):
         # TODO: change the speed range to a dict of speed ranges
         self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
         for c, ax in children_axes.items():
+            if not isinstance(c.speed, _vattributes.VigilantAttributeBase):
+                continue
             def update_speed_per_child(value, ax=ax):
                 for a in ax:
                     try:
                         self._speed[a] = value[axes_map[a]]
                     except KeyError:
-                        logging.error("Child %s is not reporting position of axis %s", c.name, a)
+                        logging.error("Child %s is not reporting speed of axis %s", c.name, a)
                 self._updateSpeed()
             c.speed.subscribe(update_speed_per_child)
             self._subfun.append(update_speed_per_child)
