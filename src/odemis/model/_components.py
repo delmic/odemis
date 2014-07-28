@@ -991,47 +991,5 @@ class CombinedActuator(Actuator):
                 logging.warning("Stopping child actuator of '%s' is taking more than 1s", self.name)
 
 
-class MockComponent(HwComponent):
-    """
-    A very special component which does nothing but can pretend to be any component
-    It's used for validation of the instantiation model.
-    Do not use or inherit when writing a device driver!
-    """
-    def __init__(self, name, role, _realcls, children=None, _vas=None, daemon=None, **kwargs):
-        """
-        _realcls (class): the class we pretend to be
-        _vas (list of string): a list of mock vigilant attributes to create
-        """
-        HwComponent.__init__(self, name, role, daemon=daemon)
-        if len(kwargs) > 0:
-            logging.debug("Component '%s' got init arguments %r", name, kwargs)
-
-        # Special handling of actuators, for CombinedActuator
-        # Can not be generic for every roattribute, as we don't know what to put as value
-        if issubclass(_realcls, Actuator):
-            self.axes = {"x": Axis(range=[-1, 1])}
-            # make them roattributes for proxy
-            self._odemis_roattributes = ["axes"]
-
-        if _vas is not None:
-            for va in _vas:
-                self.__dict__[va] = _vattributes.VigilantAttribute(None)
-
-        if not children:
-            children = {}
-
-        for child_name, child_args in children.items():
-            # we don't care of child_name as it's only for internal use in the real component
-
-            if isinstance(child_args, dict): # delegation
-                # the real class is unknown, so just give a generic one
-                logging.debug("Instantiating mock child component %s", child_name)
-                child = MockComponent(_realcls=HwComponent, daemon=daemon, **child_args)
-            else: # explicit creation (already done)
-                child = child_args
-
-            self._children.add(child)
-            child.parent = self
-
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

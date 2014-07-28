@@ -20,22 +20,24 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import Pyro4
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
+import gc
+import logging
 from multiprocessing.process import Process
+import numpy
 from odemis import model
 from odemis.model import roattribute, oneway, isasync
 from odemis.model._vattributes import VigilantAttributeBase
-from threading import Thread
-import Pyro4
-import gc
-import logging
-import numpy
+from odemis.util import mock
 import os
 import pickle
+from threading import Thread
 import threading
 import time
 import unittest
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
@@ -134,7 +136,7 @@ class SerializerTest(unittest.TestCase):
         CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0", 
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
-        sem = model.MockComponent(daemon=daemon, _realcls=model.HwComponent, **CONFIG_SEM)
+        sem = mock.MockComponent(daemon=daemon, _realcls=model.HwComponent, **CONFIG_SEM)
                 
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)

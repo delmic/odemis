@@ -20,15 +20,17 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # various functions to instantiate a model from a yaml description
-
-from odemis import model
-import itertools
-import logging
-import re
-import yaml
 # There is a standard JSON parser, but JSON doesn't allow comments (and wants
 # {} around the whole file and "" around each string). In addition, the standard
-# parser doesn't report where the error is situated in the file.  
+# parser doesn't report where the error is situated in the file.
+
+import itertools
+import logging
+from odemis import model
+from odemis.util import mock
+import re
+import yaml
+
 
 class ParseError(Exception):
     pass
@@ -232,7 +234,7 @@ class Instantiator(object):
         if self.dry_run and not class_name == "Microscope":
             # mock class for everything but Microscope (because it is safe)
             args["_realcls"] = class_comp
-            class_comp = model.MockComponent
+            class_comp = mock.MockComponent
             
         try:
             if self.create_sub_containers and self.is_leaf(name):
@@ -462,7 +464,7 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
                 container.terminate()
             except:
                 pass
-        raise
+        raise exp
     
     return instantiator.microscope, instantiator.components, instantiator.sub_containers 
 
