@@ -21,6 +21,7 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+
 import math
 from odemis.gui.model import TOOL_POINT
 
@@ -474,9 +475,6 @@ class OverlayTestCase(test.GuiTestCase):
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
 
-    # END World overlay test cases
-
-
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
@@ -512,9 +510,13 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.sleep(500)
 
-        point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
+        # point = omodel.VAEnumerated(phys_points[0], choices=frozenset([(50 / 1.0e5, 50 / 1.0e5)]))
+        # pol.set_point(point)
 
-        pol.set_point(point)
+    # END World overlay test cases
+
+
+
 
 
 
