@@ -323,63 +323,68 @@ def list_properties(comp_name, pretty=True):
     component = get_component(comp_name)
     print_attributes(component, pretty)
 
-def set_attr(comp_name, attr_name, str_val):
+def set_attr(comp_name, attr_val_str):
     """
     set the value of vigilant attribute of the given component.
+    attr_val_str (dict str->str): attribute name -> value as a string
     """
     component = get_component(comp_name)
 
-    try:
-        attr = getattr(component, attr_name)
-    except Exception:
-        raise ValueError("Failed to find attribute '%s' on component '%s'" % (attr_name, comp_name))
-
-    if not isinstance(attr, model.VigilantAttributeBase):
-        raise ValueError("'%s' is not a vigilant attribute of component %s" % (attr_name, comp_name))
-
-    new_val = convertToObject(str_val)
-
-    # Special case for floats, due to rounding error, it's very hard to put the
-    # exact value if it's an enumerated VA. So just pick the closest one in this
-    # case.
-    if isinstance(new_val, float) and (
-       hasattr(attr, "choices") and isinstance(attr.choices, collections.Iterable)):
-        orig_val = new_val
-        new_val = util.find_closest(new_val, attr.choices)
-        if new_val != orig_val:
-            logging.debug("Adjusting value to %s", new_val)
-
-    try:
-        attr.value = new_val
-    except Exception as exc:
-        raise IOError("Failed to set %s.%s = '%s': %s" % (comp_name, attr_name, str_val, exc))
-
-def update_metadata(comp_name, key_name, str_val):
-    """
-    update the metadata of the given component with the given key/value 
-    """
-    component = get_component(comp_name)
-
-    # Check that the metadata is a valid one. It's a bit tricky as there is no
-    # "official" list. But we look at the ones defined in model.MD_*
-    for n, v in inspect.getmembers(model, lambda m: isinstance(m, str)):
-        if n.startswith("MD_") and v == key_name:
-            key = key_name
-            break
-    else:
-        # fallback to looking for MD_{key_name}
+    for attr_name, str_val in attr_val_str.items():
         try:
-            key = getattr(model, "MD_%s" % key_name)
-        except AttributeError:
-            raise ValueError("Metadata key '%s' is unknown" % key_name)
-        
-    val = convertToObject(str_val)
+            attr = getattr(component, attr_name)
+        except Exception:
+            raise ValueError("Failed to find attribute '%s' on component '%s'" % (attr_name, comp_name))
+
+        if not isinstance(attr, model.VigilantAttributeBase):
+            raise ValueError("'%s' is not a vigilant attribute of component %s" % (attr_name, comp_name))
+
+        new_val = convertToObject(str_val)
+
+        # Special case for floats, due to rounding error, it's very hard to put the
+        # exact value if it's an enumerated VA. So just pick the closest one in this
+        # case.
+        if isinstance(new_val, float) and (
+           hasattr(attr, "choices") and isinstance(attr.choices, collections.Iterable)):
+            orig_val = new_val
+            new_val = util.find_closest(new_val, attr.choices)
+            if new_val != orig_val:
+                logging.debug("Adjusting value to %s", new_val)
+
+        try:
+            attr.value = new_val
+        except Exception as exc:
+            raise IOError("Failed to set %s.%s = '%s': %s" % (comp_name, attr_name, str_val, exc))
+
+def update_metadata(comp_name, key_val_str):
+    """
+    update the metadata of the given component with the given key/value
+    key_val_str (dict str->str): key name -> value as a string 
+    """
+    component = get_component(comp_name)
+
+    md = {}
+    for key_name, str_val in key_val_str.items():
+        # Check that the metadata is a valid one. It's a bit tricky as there is no
+        # "official" list. But we look at the ones defined in model.MD_*
+        for n, v in inspect.getmembers(model, lambda m: isinstance(m, str)):
+            if n.startswith("MD_") and v == key_name:
+                key = key_name
+                break
+        else:
+            # fallback to looking for MD_{key_name}
+            try:
+                key = getattr(model, "MD_%s" % key_name)
+            except AttributeError:
+                raise ValueError("Metadata key '%s' is unknown" % key_name)
+
+        md[key] = convertToObject(str_val)
 
     try:
-        component.updateMetadata({key: val})
+        component.updateMetadata(md)
     except Exception as exc:
-        raise IOError("Failed to update metadata of %s {'%s': '%s'}: %s" %
-                      (comp_name, key_name, str_val, exc))
+        raise IOError("Failed to update metadata of %s to %s: %s" %
+                      (comp_name, md, exc))
 
 MAX_DISTANCE = 0.01 #m
 def move(comp_name, axis_name, str_distance):
@@ -652,13 +657,16 @@ def main(args):
                          help="list the components of the microscope")
     dm_grpe.add_argument("--list-prop", "-L", dest="listprop", metavar="<component>",
                          help="list the properties of a component")
-    dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs=3, action='append',
-                         metavar=("<component>", "<attribute>", "<value>"),
-                         help="set the attribute of a component (lists are delimited by commas,"
-                         " dictionary keys are delimited by colon)")
-    dm_grpe.add_argument("--update-metadata", "-u", dest="upmd", nargs=3, action='append',
-                         metavar=("<component>", "<key>", "<value>"),
-                         help="update the metadata entry of a component (lists are delimited by commas)")
+    dm_grpe.add_argument("--set-attr", "-s", dest="setattr", nargs="+", action='append',
+                         metavar=("<component>", "<attribute>"),
+                         help="set the attribute of a component. First the component name, "
+                         "then a series of attribute/value to be set. "
+                         "(Lists are delimited by commas, dictionary keys are delimited by colon)")
+    dm_grpe.add_argument("--update-metadata", "-u", dest="upmd", nargs="+", action='append',
+                         metavar=("<component>", "<key>"),
+                         help="update the metadata entry of a component. First the component name, "
+                         "then a series of key/value to be set. "
+                         "(Lists are delimited by commas)")
     dm_grpe.add_argument("--move", "-m", dest="move", nargs=3, action='append',
                          metavar=("<component>", "<axis>", "<distance>"),
                          help=u"move the axis by the given amount (µm for distances).")
@@ -718,6 +726,14 @@ def main(args):
     if options.acquire is not None and options.output is None:
         logging.error("Name of the output file must be specified.")
         return 127
+    if options.setattr:
+        for l in options.setattr:
+            if len(l) < 3 or (len(l) - 1) % 2 == 1:
+                logging.error("--set-attr expects component name and then a even number of arguments")
+    if options.upmd:
+        for l in options.upmd:
+            if len(l) < 3 or (len(l) - 1) % 2 == 1:
+                logging.error("--update-metadata expects component name and then a even number of arguments")
 
     logging.debug("Trying to find the backend")
     status = get_backend_status()
@@ -748,12 +764,16 @@ def main(args):
         elif options.listprop is not None:
             list_properties(options.listprop, pretty=not options.machine)
         elif options.setattr is not None:
-            for c, a, v in options.setattr:
-                set_attr(c, a, v)
+            for l in options.setattr:
+                # C A B E F => C, {A: B, E: F}
+                c = l[0]
+                avs = dict(zip(l[1::2], l[2::2]))
+                set_attr(c, avs)
         elif options.upmd is not None:
-            # TODO: support multiple key/value per component
-            for c, a, v in options.upmd:
-                update_metadata(c, a, v)
+            for l in options.upmd:
+                c = l[0]
+                kvs = dict(zip(l[1::2], l[2::2]))
+                update_metadata(c, kvs)
         # TODO: catch keyboard interrupt and stop the moves
         elif options.reference is not None:
             for c, a in options.reference:
