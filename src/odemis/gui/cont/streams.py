@@ -229,7 +229,6 @@ class StreamController(object):
             # Insert it as first, so it's considered the latest stream used
             self._tab_data_model.streams.value.insert(0, stream)
 
-
         if add_to_all_views:
             for v in self._tab_data_model.views.value:
                 if (hasattr(v, "stream_classes") and
@@ -238,7 +237,7 @@ class StreamController(object):
         else:
             v = self._tab_data_model.focussedView.value
             if (hasattr(v, "stream_classes") and
-                        isinstance(stream, v.stream_classes)):
+                    not isinstance(stream, v.stream_classes)):
                 warn = "Adding stream incompatible with the current view"
                 logging.warning(warn)
             v.addStream(stream)
@@ -445,7 +444,7 @@ class StreamController(object):
     def enableStreams(self, enabled, classes=Stream):
         """
         Enable/disable the play/pause button of all the streams of the given class
-        
+
         enabled (boolean): True if the buttons should be enabled, False to
          disable them.
         classes (class or list of class): classes of streams that should be
