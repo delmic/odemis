@@ -692,14 +692,14 @@ class SparcAcquisitionTab(Tab):
         # Convert stream to right display
         cvs = self.main_frame.vp_sparc_acq_view.canvas
         if stream is None:
-            cvs.showRepetition(None)
+            cvs.show_repetition(None)
         else:
             rep = stream.repetition.value
             if isinstance(stream, streammod.AR_STREAMS):
-                style = overlay.world.FILL_POINT
+                style = overlay.world.RepetitionSelectOverlay.FILL_POINT
             else:
-                style = overlay.world.FILL_GRID
-            cvs.showRepetition(rep, style)
+                style = overlay.world.RepetitionSelectOverlay.FILL_GRID
+            cvs.show_repetition(rep, style)
 
     def on_rep_focus(self, evt):
         """
@@ -1440,7 +1440,7 @@ class LensAlignTab(Tab):
         stream_bar.add_stream(ccd_spe, True)
         ccd_spe.flatten()  # removes the expander header
         # force this view to never follow the tool mode (just standard view)
-        main_frame.vp_align_ccd.canvas.allowedModes = set([guimod.TOOL_NONE])
+        main_frame.vp_align_ccd.canvas.allowed_modes = set([guimod.TOOL_NONE])
 
         # Bind actuator buttons and keys
         self._actuator_controller = ActuatorController(self.tab_data_model,

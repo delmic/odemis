@@ -31,6 +31,7 @@ import cairo
 import wx
 
 from .base import WorldOverlay, SelectionMixin, DragMixin
+from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
@@ -41,13 +42,9 @@ import odemis.util.units as units
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
-    def __init__(self, cnvs,
-                 sel_cur=None,
-                 colour=gui.SELECTION_COLOUR,
-                 center=(0, 0)):
-
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         super(WorldSelectOverlay, self).__init__(cnvs)
-        SelectionMixin.__init__(self, sel_cur, colour, center)
+        SelectionMixin.__init__(self, colour, center)
 
         self.w_start_pos = None
         self.w_end_pos = None
@@ -105,14 +102,11 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.w_end_pos = None
 
     def _center_view_origin(self, vpos):
-        #view_size = self.cnvs._bmp_buffer_size
         w, h = self.cnvs.GetSize()
-        return (vpos[0] - (w // 2),
-                vpos[1] - (h // 2))
+        return vpos[0] - (w // 2), vpos[1] - (h // 2)
 
     def _calc_world_pos(self):
-        """ Update the world position to reflect the view position
-        """
+        """ Update the world position to reflect the view position """
         if self.v_start_pos and self.v_end_pos:
             offset = [v // 2 for v in self.cnvs.buffer_size]
             w_pos = (self.cnvs.view_to_world(self.v_start_pos, offset) +
@@ -122,8 +116,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             self.w_end_pos = w_pos[2:4]
 
     def _calc_view_pos(self):
-        """ Update the view position to reflect the world position
-        """
+        """ Update the view position to reflect the world position """
         if not self.w_start_pos or not self.w_end_pos:
             logging.warning("Asking to convert non-existing world positions")
             return
@@ -136,9 +129,12 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self._calc_edges()
 
     def get_physical_sel(self):
-        """
+        """ Return the selected rectangle in physical coordinates
+
         return (tuple of 4 floats): position in m
+
         """
+
         if self.w_start_pos and self.w_end_pos:
             p_pos = (self.cnvs.world_to_physical_pos(self.w_start_pos) +
                      self.cnvs.world_to_physical_pos(self.w_end_pos))
@@ -147,9 +143,12 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             return None
 
     def set_physical_sel(self, rect):
-        """
+        """ Set the selection using the provided physical coordinates
+
         rect (tuple of 4 floats): t, l, b, r positions in m
+
         """
+
         if rect is None:
             self.clear_selection()
         else:
@@ -195,7 +194,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 h = units.readable_str(h, 'm', sig=2)
                 size_lbl = u"{} x {}".format(w, h)
 
-                pos = (b_pos[2] + 10, b_pos[3] + 5)
+                pos = (b_pos[2] + 8, b_pos[3] - 10)
 
                 self.position_label.pos = pos
                 self.position_label.text = size_lbl
@@ -207,6 +206,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
             super(WorldSelectOverlay, self)._on_left_down(evt)
+            self.cnvs.update_drawing()
         else:
             super(WorldSelectOverlay, self).on_left_down(evt)
 
@@ -214,7 +214,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active:
             super(WorldSelectOverlay, self)._on_left_up(evt)
-            self.cnvs.request_drawing_update()
+            self.cnvs.update_drawing()
         else:
             super(WorldSelectOverlay, self).on_left_up(evt)
 
@@ -245,14 +245,15 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     FILL_GRID = 1
     FILL_POINT = 2
 
-    def __init__(self, cnvs,
-                 sel_cur=None,
-                 colour=gui.SELECTION_COLOUR):
-
-        super(RepetitionSelectOverlay, self).__init__(cnvs, sel_cur, colour)
+    def __init__(self, cnvs, roa=None, colour=gui.SELECTION_COLOUR):
+        super(RepetitionSelectOverlay, self).__init__(cnvs, colour)
 
         self._fill = self.FILL_NONE
         self._repetition = (0, 0)
+        self._roa = roa
+        if roa:
+            self._roa.subscribe(self._on_roa, init=True)
+
         self._bmp = None  # used to cache repetition with FILL_POINT
         # ROI for which the bmp is valid
         self._bmp_bpos = (None, None, None, None)
@@ -276,6 +277,38 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         assert(len(val) == 2)
         self._repetition = val
         self._bmp = None
+
+    def _on_roa(self, roa):
+        """ Update the ROA overlay with the new roa VA data
+
+        roi (tuple of 4 floats): top, left, bottom, right position relative to the SEM image
+
+        """
+        phys_rect = self.cnvs.convert_roi_ratio_to_phys(roa)
+        self.set_physical_sel(phys_rect)
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def on_left_up(self, evt):
+        super(RepetitionSelectOverlay, self).on_left_up(evt)
+
+        if self._roa:
+            if self.active:
+                if self.get_size() != (None, None):
+                    phys_rect = self.get_physical_sel()
+                    rel_rect = self.cnvs.convert_roi_phys_to_ratio(phys_rect)
+
+                    # Update VA. We need to unsubscribe to be sure we don't received
+                    # intermediary values as the VA is modified by the stream further on, and
+                    # VA don't ensure the notifications are ordered (so the listener could
+                    # receive the final value, and then our requested ROI value).
+                    self._roa.unsubscribe(self._on_roa)
+                    self._roa.value = rel_rect
+                    self._roa.subscribe(self._on_roa, init=True)
+                else:
+                    self._roa.value = UNDEFINED_ROI
+
+        else:
+            logging.warn("Expected ROA not found!")
 
     def _draw_points(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
@@ -334,11 +367,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                 buf_rep_y = int((end_y - start_y) / step_y)
 
                 # TODO: need to take into account shift, like drawGrid
-                logging.debug(
-                        "Rendering %sx%s points",
-                        buf_rep_x,
-                        buf_rep_y
-                )
+                logging.debug("Rendering %sx%s points", buf_rep_x, buf_rep_y)
 
                 point = img.getdotBitmap()
                 point_dc = wx.MemoryDC()
@@ -443,6 +472,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         mode_cache = self.selection_mode
+
         if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
             if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
@@ -662,22 +692,23 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
         return b_top_left + b_width
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
-        if (self._pixel_pos and self._selected_pixel.value != self._pixel_pos and
-                self.is_over_pixel_data()):
+        if self._selected_pixel:
+            if (self._pixel_pos and self._selected_pixel.value != self._pixel_pos and
+                    self.is_over_pixel_data()):
 
-            rect = self.pixel_to_rect(self._pixel_pos, scale)
-            if rect:
-                ctx.set_source_rgba(*self.colour)
-                ctx.rectangle(*rect)
-                ctx.fill()
+                rect = self.pixel_to_rect(self._pixel_pos, scale)
+                if rect:
+                    ctx.set_source_rgba(*self.colour)
+                    ctx.rectangle(*rect)
+                    ctx.fill()
 
-        if self._selected_pixel.value not in (None, (None, None)):
-            rect = self.pixel_to_rect(self._selected_pixel.value, scale)
+            if self._selected_pixel.value not in (None, (None, None)):
+                rect = self.pixel_to_rect(self._selected_pixel.value, scale)
 
-            if rect:
-                ctx.set_source_rgba(*self.select_color)
-                ctx.rectangle(*rect)
-                ctx.fill()
+                if rect:
+                    ctx.set_source_rgba(*self.select_color)
+                    ctx.rectangle(*rect)
+                    ctx.fill()
 
 
 class PointsOverlay(WorldOverlay):

@@ -28,8 +28,8 @@ import logging
 import numpy
 from odemis import util, model
 from odemis.acq import stream
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, DraggableCanvas
 from odemis.gui.model import LiveViewGUIData
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
@@ -83,7 +83,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view = None
         self._tab_data_model = None
 
-        self.abilities |= set([CAN_ZOOM, CAN_FOCUS])
+        self.abilities |= {CAN_ZOOM, CAN_FOCUS}
         self.fit_view_to_next_image = True
 
         # TODO: If it's too resource consuming, which might want to create just
@@ -114,28 +114,25 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.cursor = wx.STANDARD_CURSOR
 
-        # Some more overlays
+        # Overlays
+
+        # Passive overlays that only display information, but offer no interaction
         self._crosshair_ol = None
         self._spotmode_ol = None
         self._fps_ol = None
-        self.focus_overlay = None
-        self.roi_overlay = None
-        self.anchor_overlay = None
+        self._focus_overlay = None
+
         self.pixel_overlay = None
         self.points_overlay = None
         self.dicho_overlay = None
-        # TODO: create special area view overlay
-        self.area_overlay = None  # Mark rectangular area which can only be altered programmatically
 
         # play/pause icon
         self.icon_overlay = view_overlay.StreamIconOverlay(self)
         self.add_view_overlay(self.icon_overlay)
 
-        self.zoom_overlay = None  # view_overlay.ViewSelectOverlay(self, "Zoom")
-        # self.add_view_overlay(self.zoom_overlay)
-
-        self.update_overlay = None  # world_overlay.WorldSelectOverlay(self, "Update")
-        # self.add_world_overlay(self.update_overlay)
+        # Unused at the moment
+        self.zoom_overlay = None
+        self.update_overlay = None
 
     # Ability manipulation
 
@@ -161,21 +158,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-        self.focus_overlay = None
+        self._focus_overlay = None
 
         if self.microscope_view.get_focus_count():
-            self.focus_overlay = view_overlay.FocusOverlay(self)
-            self.add_view_overlay(self.focus_overlay)
+            self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
         self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
-
-        if tab_data.tool:
-            # If required, create a PixelSelectOverlay
-            if guimodel.TOOL_POINT in tab_data.tool.choices:
-                self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
-                self.add_world_overlay(self.pixel_overlay)
-                self.points_overlay = world_overlay.PointsOverlay(self)
-                self.add_world_overlay(self.points_overlay)
 
         if hasattr(self.microscope_view, "stage_pos"):
             # TODO: should this be moved to MicroscopeView, to update view_pos
@@ -190,13 +178,16 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._calc_bg_offset(world_pos)
         self.requested_world_pos = world_pos
 
+        self.points_overlay = world_overlay.PointsOverlay(self)
+        self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
+
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
         # handle cross hair
-        self.microscope_view.show_crosshair.subscribe(self._onCrossHair, init=True)
+        self.microscope_view.show_crosshair.subscribe(self._on_cross_hair_show, init=True)
 
-        tab_data.main.debug.subscribe(self._onDebug, init=True)
+        tab_data.main.debug.subscribe(self._on_debug, init=True)
 
         if tab_data.tool:
             tab_data.tool.subscribe(self._on_tool, init=True)
@@ -206,149 +197,115 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # A weird situation which should not happen
         if self.dragging:
-            logging.error("Changing to mode (%s) while dragging is not implemented", tool_mode)
+            logging.error("Changing to mode (%s) while dragging is not supported!", tool_mode)
 
         # Check if the desired tool mode is allowed
         if self.allowed_modes and tool_mode not in self.allowed_modes:
             logging.warn("Toolmode %s is not allowed and will be ignored!", tool_mode)
             tool_mode = guimodel.TOOL_NONE
 
-        if tool_mode == guimodel.TOOL_NONE:
-            self.current_mode = None
-            self.clear_active_overlays()
-            self.reset_default_cursor()
-            self.request_drawing_update()
-        else:
+        self.current_mode = tool_mode
+        cursor = wx.STANDARD_CURSOR
 
-            if tool_mode == guimodel.TOOL_DICHO:
-                if not self.dicho_overlay:
-                    self.dicho_overlay = view_overlay.DichotomyOverlay(
-                        self, self._tab_data_model.dicho_seq)
-                    self.add_view_overlay(self.dicho_overlay)
-                self.add_active_overlay(self.dicho_overlay)
-                #FIXME: cursor handled by .enable()
-                # self.cursor = wx.StockCursor(wx.CURSOR_HAND)
-            else:
-                self.remove_active_overlay(self.dicho_overlay)
+        self._set_spot_mode(tool_mode)
+        self._set_dichotomy_mode(tool_mode)
+        self._set_point_select_mode(tool_mode)
 
-            self.current_mode = tool_mode
+        self.update_drawing()
 
-            # FIXME: the right way would be to let the overlay say it wants
-            # all the move-related events... and then it'd eat these events
-            self.abilities.remove(canvas.CAN_DRAG)
-
-        # TODO: send a .enable/.disable to overlay when becoming the active one
-        if self.current_mode == guimodel.TOOL_DICHO:
-            self.dicho_overlay.activate()
-            self.enable_drag()
-        elif self.current_mode == guimodel.TOOL_SPOT:
-            self._showSpotMode(False)
-            self.microscope_view.show_crosshair.value = True
-
-        # TODO: fix with the rest of the todos
-        # if self.pixel_overlay:
-        #     self.pixel_overlay.enable(False)
-        #     self.points_overlay.enable(False)
-
-        # Remove the active overlays that can be assigned in this method
-        self.remove_active_overlay(self.roi_overlay, self.anchor_overlay, self.points_overlay,
-                                   self.pixel_overlay, self.update_overlay, self.zoom_overlay,
-                                   self.dicho_overlay)
-
-        # TODO: one mode <-> one overlay (type)
-        # TODO: create the overlay on the fly, the first time it's requested
-        if tool_mode == guimodel.TOOL_NONE:
-            self.current_mode = None
-            self.clear_active_overlays()
-            self.cursor = wx.STANDARD_CURSOR
-            self.request_drawing_update()
-        elif tool_mode == guimodel.TOOL_ROA:
-            self.current_mode = guimodel.TOOL_ROA
-            self.add_active_overlay(self.roi_overlay)
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool_mode == guimodel.TOOL_RO_ANCHOR:
-            self.current_mode = tool_mode
-            self.add_active_overlay(self.anchor_overlay)
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
-        elif tool_mode == guimodel.TOOL_POINT:
-            # Enable the Spectrum point select overlay when a spectrum stream
-            # is attached to the view
-            st = self.microscope_view.stream_tree
-            # Enable the Angular Resolve point select overlay when there's a
-            # AR stream known anywhere in the data model (and the view has
-            # streams).
-            if (self.points_overlay and
-                  len(self.microscope_view.stream_tree) and
-                  any([isinstance(s, stream.AR_STREAMS) for s
-                       in self._tab_data_model.streams.value])):
-                self.current_mode = guimodel.TOOL_POINT
-                self.add_active_overlay(self.points_overlay)
-                self.points_overlay.activate(True)
-            # TODO: Filtering by the name SEM CL is not desired. There should be
-            # a more intelligent way to query the StreamTree about what's
-            # present, like how it's done for Spectrum and AR streams
-            elif self.pixel_overlay and (st.spectrum_streams or st.get_streams_by_name("SEM CL")):
-                self.current_mode = guimodel.TOOL_POINT
-                self.add_active_overlay(self.pixel_overlay)
-                self.pixel_overlay.activate(True)
-        elif tool_mode == guimodel.TOOL_ROI:
-            self.current_mode = guimodel.TOOL_ROI
-            self.add_active_overlay(self.update_overlay)
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+        if tool_mode == guimodel.TOOL_ROI:
+            # self.current_mode = guimodel.TOOL_ROI
+            # self.add_active_overlay(self.update_overlay)
+            # cursor = wx.CURSOR_CROSS
+            raise NotImplementedError()
         elif tool_mode == guimodel.TOOL_ZOOM:
-            self.current_mode = guimodel.TOOL_ZOOM
-            self.add_active_overlay(self.zoom_overlay)
-            self.cursor = wx.StockCursor(wx.CURSOR_CROSS)
+            # self.current_mode = guimodel.TOOL_ZOOM
+            # self.add_active_overlay(self.zoom_overlay)
+            # cursor = wx.CURSOR_CROSS
+            raise NotImplementedError()
 
-        elif tool_mode == guimodel.TOOL_SPOT:
-            self.current_mode = tool_mode
-            # the only thing the view does is to indicate the mode
-            self._showSpotMode(True)
-            self.microscope_view.show_crosshair.value = False
-        else:
-            logging.warning("Unhandled tool type %s", tool_mode)
+        self.set_default_cursor(cursor)
 
-        self.set_default_cursor(self.cursor)
+    # Overlay creation and activation
 
-    def _onCrossHair(self, activated):
-        """ Activate or disable the display of a cross in the middle of the view
-        activated = true if the cross should be displayed
-        """
+    def _on_cross_hair_show(self, activated):
+        """ Activate the cross hair view overlay """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = view_overlay.CrossHairOverlay(self)
-            self.add_view_overlay(self._crosshair_ol)
-        else:
+                self._crosshair_ol = self.add_view_overlay(view_overlay.CrossHairOverlay(self))
+        elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
 
         self.Refresh(eraseBackground=False)
 
-    def _showSpotMode(self, activated=True):
-        if activated:
-            if self._spotmode_ol is None:
-                self._spotmode_ol = view_overlay.SpotModeOverlay(self)
-            self.add_view_overlay(self._spotmode_ol)
-        else:
-            self.remove_view_overlay(self._spotmode_ol)
-
-        self.Refresh(eraseBackground=False)
-
-    # FIXME: seems like it might still be called while the Canvas has been
-    # destroyed
-    # => need to make sure that the object is garbage collected (= no more
-    # references) once it's not used. (Or explicitly unsubscribe??)
+    # FIXME: seems like it might still be called while the Canvas has been destroyed
+    # => need to make sure that the object is garbage collected (= no more references) once it's
+    # not used. (Or explicitly unsubscribe??)
     @ignore_dead
-    def _onDebug(self, activated):
+    def _on_debug(self, activated):
         """ Called when GUI debug mode changes => display FPS overlay """
         if activated:
             if self._fps_ol is None:
-                self._fps_ol = view_overlay.TextViewOverlay(self)
+                self._fps_ol = self.add_view_overlay(view_overlay.TextViewOverlay(self))
                 self._fps_ol.add_label("")
-            self.add_view_overlay(self._fps_ol)
-        else:
+        elif self._fps_ol:
             self.remove_view_overlay(self._fps_ol)
 
         self.Refresh(eraseBackground=False)
+
+    def _set_spot_mode(self, tool_mode):
+        is_activated = tool_mode == guimodel.TOOL_SPOT
+
+        if is_activated:
+            if self._spotmode_ol is None:
+                self._spotmode_ol = self.add_view_overlay(view_overlay.SpotModeOverlay(self))
+        elif self._spotmode_ol:
+            self.remove_view_overlay(self._spotmode_ol)
+
+        self.microscope_view.show_crosshair.value = not is_activated
+
+        self.Refresh(eraseBackground=False)
+
+    def _set_dichotomy_mode(self, tool_mode):
+        """ Activate the dichotomy overlay if needed """
+        if tool_mode == guimodel.TOOL_DICHO:
+            if not self.dicho_overlay:
+                self.dicho_overlay = view_overlay.DichotomyOverlay(
+                    self,
+                    self._tab_data_model.dicho_seq
+                )
+                self.add_view_overlay(self.dicho_overlay)
+            self.dicho_overlay.activate()
+        elif self.dicho_overlay:
+            self.dicho_overlay.deactivate()
+
+    def _set_point_select_mode(self, tool_mode):
+        """ Activate the required point selection overlay """
+
+        if tool_mode == guimodel.TOOL_POINT:
+            # Enable the Spectrum point select overlay when a spectrum stream
+            # is attached to the view
+            stream_tree = self.microscope_view.stream_tree
+            # Enable the Angular Resolve point select overlay when there's a
+            # AR stream known anywhere in the data model (and the view has
+            # streams).
+            tab_streams = self._tab_data_model.streams.value
+
+            if (len(self.microscope_view.stream_tree) and
+                    any([isinstance(s, stream.AR_STREAMS) for s in tab_streams])):
+                self.points_overlay.activate(True)
+            # TODO: Filtering by the name SEM CL is not desired. There should be
+            # a more intelligent way to query the StreamTree about what's
+            # present, like how it's done for Spectrum and AR streams
+            elif stream_tree.spectrum_streams or stream_tree.get_streams_by_name("SEM CL"):
+                self.pixel_overlay.activate()
+        else:
+            if self.pixel_overlay:
+                self.pixel_overlay.deactivate()
+            if self.points_overlay:
+                self.points_overlay.deactivate()
+
+    # END Overlay creation and activation
 
     def _get_ordered_images(self):
         """ Return the list of images to display, ordered bottom to top (=last to draw) """
@@ -365,7 +322,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         return images
 
-    def _convertStreamsToImages(self):
+    def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as
         the canvas currently expects.
         """
@@ -375,7 +332,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # add the images in order
         ims = []
         for rgbim in images:
-            # TODO: convert to RGBA later, in canvas and/or cache the convertion
+            # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
 
@@ -395,7 +352,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._latest = 0
             if self._latest > 0:
                 logging.debug("Updated canvas list %g s after acquisition",
-                               time.time() - self._latest)
+                              time.time() - self._latest)
 
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
@@ -408,7 +365,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _onViewImageUpdate(self, t):
         # TODO: use the real streamtree functions
         # for now we call a conversion layer
-        self._convertStreamsToImages()
+        self._convert_streams_to_images()
         if self.fit_view_to_next_image and any([i is not None for i in self.images]):
             self.fit_view_to_content()
             self.fit_view_to_next_image = False
@@ -470,8 +427,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         phy_pos (tuple of 2 float): X/Y in physical coordinates (m)
         """
         pos = self.physical_to_world_pos(phy_pos)
-        # skip ourself, to avoid asking the stage to move to (almost) the same
-        # position
+        # skip ourselves, to avoid asking the stage to move to (almost) the same position
         wx.CallAfter(super(DblMicroscopeCanvas, self).recenter_buffer, pos)
 
     def recenter_buffer(self, world_pos):
@@ -513,9 +469,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.microscope_view.mpp.value = self.microscope_view.mpp.clip(new_mpp)
 
     def _on_view_mpp(self, mpp):
-        """
-        Called when the view.mpp is updated
-        """
+        """ Called when the view.mpp is updated """
         self.scale = self.mpwu / mpp
         self.microscope_view.horizontal_field_width.value = self.horizontal_field_width
         wx.CallAfter(self.request_drawing_update)
@@ -670,8 +624,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             shift = self._moveFocusDistance[0]
             self._moveFocusDistance[0] = 0
 
-        if self.focus_overlay:
-            self.focus_overlay.add_shift(shift, 0)
+        if self._focus_overlay:
+            self._focus_overlay.add_shift(shift, 0)
         logging.debug("Moving focus0 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(0).moveRel({"z": shift})
 
@@ -680,8 +634,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             shift = self._moveFocusDistance[1]
             self._moveFocusDistance[1] = 0
 
-        if self.focus_overlay:
-            self.focus_overlay.add_shift(shift, 1)
+        if self._focus_overlay:
+            self._focus_overlay.add_shift(shift, 1)
 
         logging.debug("Moving focus1 by %f μm", shift * 1e6)
         self.microscope_view.get_focus(1).moveRel({"z": shift})
@@ -708,8 +662,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 elif num_focus == 2:
                     logging.debug("Two focus actuators found")
                     cursor = wx.StockCursor(wx.CURSOR_CROSS)
-            if self.focus_overlay:
-                self.focus_overlay.clear_shift()
+            if self._focus_overlay:
+                self._focus_overlay.clear_shift()
 
         super(DblMicroscopeCanvas, self).on_right_down(event, cursor)
 
@@ -727,8 +681,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 if timer.IsRunning():
                     timer.Stop()
             # The mouse cursor is automatically reset in the super class method
-            if self.focus_overlay:
-                self.focus_overlay.clear_shift()
+            if self._focus_overlay:
+                self._focus_overlay.clear_shift()
 
         super(DblMicroscopeCanvas, self).on_right_up(event)
 
@@ -980,131 +934,88 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         super(SparcAcquiCanvas, self).__init__(*args, **kwargs)
 
         self._roa = None  # The ROI VA of SEM CL stream, initialized on setView()
-        self.roi_overlay = world_overlay.RepetitionSelectOverlay(self, "Region of acquisition")
-        self.add_world_overlay(self.roi_overlay)
+        self.roa_overlay = None
 
-        self._dcRegion = None  # The dcRegion VA of the SEM CL
-        self.anchor_overlay = world_overlay.RepetitionSelectOverlay(
-            self,
-            "Anchor region for drift correction",
-            colour=gui.SELECTION_COLOUR_2ND)
-        self.add_world_overlay(self.anchor_overlay)
+        self._dc_region = None  # The dcRegion VA of the SEM CL
+        self.dirftcor_overlay = None
+
+    def _on_tool(self, tool_mode):
+        super(SparcAcquiCanvas, self)._on_tool(tool_mode)
+
+        self._set_roa_mode(tool_mode)
+        self._set_dc_mode(tool_mode)
+
+    def _set_roa_mode(self, tool_mode):
+        if tool_mode == guimodel.TOOL_ROA:
+            self.roa_overlay.activate()
+        elif self.roa_overlay:
+            self.roa_overlay.deactivate()
+        self.Refresh(eraseBackground=False)
+
+    def _set_dc_mode(self, tool_mode):
+        if tool_mode == guimodel.TOOL_RO_ANCHOR:
+            self.dirftcor_overlay.activate()
+        elif self.dirftcor_overlay:
+            self.dirftcor_overlay.deactivate()
+        self.Refresh(eraseBackground=False)
 
     def setView(self, microscope_view, tab_data):
-        """
-        Set the microscope_view that this canvas is displaying/representing
-        Can be called only once, at initialisation.
+        """ Set the microscope_view that this canvas is displaying/representing
+
+        Should be called only once, at initialisation.
 
         :param microscope_view:(model.MicroscopeView)
         :param tab_data: (model.MicroscopyGUIData)
+
         """
-        super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
+
+        sem = tab_data.main.ebeam
+        if not sem:
+            raise AttributeError("No SEM on the microscope")
 
         # Associate the ROI of the SEM CL stream to the region of acquisition
         sem_stream = tab_data.semStream
         if sem_stream is None:
             raise KeyError("SEM CL stream not set, required for the SPARC acquisition")
 
+        super(SparcAcquiCanvas, self).setView(microscope_view, tab_data)
+
+        # Get the region of interest and link it to the ROA overlay
+
         self._roa = sem_stream.roi
-        # TODO: simplify, and expect dcRegion to be there
-        if hasattr(sem_stream, "dcRegion"):
-            self._dcRegion = sem_stream.dcRegion
+        self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa)
+        self.add_world_overlay(self.roa_overlay)
 
-        # TODO: move this to the RepetitionSelectOverlay?
-        self._roa.subscribe(self._onROA, init=True)
-        if self._dcRegion:
-            self._dcRegion.subscribe(self._onDCRegion, init=True)
+        # Link drift correction region
 
-        sem = tab_data.main.ebeam
-        if not sem:
-            raise AttributeError("No SEM on the microscope")
+        self._dc_region = sem_stream.dcRegion
+        self.dirftcor_overlay = world_overlay.RepetitionSelectOverlay(
+            self, self._dc_region, colour=gui.SELECTION_COLOUR_2ND)
+        self.add_world_overlay(self.dirftcor_overlay)
 
         # Regions depend on the magnification (=field of view)
-        if isinstance(sem.magnification, VigilantAttributeBase):
-            sem.magnification.subscribe(self._onSEMMag)
 
-    # TODO: maybe should not be called directly, but should be a VA on the view
-    # or the tab?
-    def showRepetition(self, rep, style=None):
-        """
-        Change/display repetition on the ROA, if the ROA is displayed
+        if isinstance(sem.magnification, VigilantAttributeBase):
+            sem.magnification.subscribe(self._on_sem_mag)
+
+    # TODO: maybe should not be called directly, but should be a VA on the view or the tab?
+    def show_repetition(self, rep, style=None):
+        """ Change/display repetition on the ROA if the ROA is visible
+
         rep (None or tuple of 2 ints): if None, repetition is hidden
         style (overlay.FILL_*): type of repetition display
+
         """
+
         if rep is None:
-            self.roi_overlay.fill = world_overlay.RepetitionSelectOverlay.FILL_NONE
+            self.roa_overlay.fill = world_overlay.RepetitionSelectOverlay.FILL_NONE
         else:
-            self.roi_overlay.fill = style
-            self.roi_overlay.repetition = rep
+            self.roa_overlay.fill = style
+            self.roa_overlay.repetition = rep
 
         wx.CallAfter(self.request_drawing_update)
 
-    def on_left_down(self, evt):
-        """ Process a left mouse button press
-
-        If the current mode indicates a tool is being used, we prevent the canvas drag from
-        happening
-
-        """
-
-        # If one of the Sparc tools is activated...
-        if self.current_mode in SPARC_MODES:
-            super(DraggableCanvas, self).on_left_down(evt)
-            self.request_drawing_update()  # TODO: Can this be removed?
-        else:
-            super(SparcAcquiCanvas, self).on_left_down(evt)
-
-    def on_left_up(self, evt):
-        """ Process a left mouse button release
-
-        If the current mode indicates a tool is being used, we prevent the canvas drag ending from
-        happening
-
-        """
-
-        # If one of the specific SPARC tools is activated...
-        if self.current_mode in SPARC_MODES:
-
-            if self.was_dragged:
-                if self.current_mode == guimodel.TOOL_ROA:
-                    self._updateROA()
-                elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
-                    self._updateDCRegion()
-            else:
-                # TODO: set the rect of the active_overlays to None, then do the
-                # normal _update*. This would avoid redundancy
-                # Simple click => delete ROI
-                if self.current_mode == guimodel.TOOL_ROA:
-                    if self._roa:
-                        self._roa.value = UNDEFINED_ROI
-                elif self.current_mode == guimodel.TOOL_RO_ANCHOR:
-                    if self._dcRegion:
-                        self._dcRegion.value = UNDEFINED_ROI
-
-            super(DraggableCanvas, self).on_left_up(evt)
-            # Manual reset of was_dragged, because we 'skipped' the DraggableCanvas class
-            self.was_dragged = False
-        else:
-            super(SparcAcquiCanvas, self).on_left_up(evt)
-
-    def on_motion(self, event):
-        super(SparcAcquiCanvas, self).on_motion(event)
-        self.request_drawing_update()  # TODO: Can this be removed?
-
-    # Capture unwanted events when a tool is active.
-
-    def on_wheel(self, event):
-        super(SparcAcquiCanvas, self).on_wheel(event)
-
-    def on_right_down(self, event):
-        if self.current_mode not in SPARC_MODES:
-            super(SparcAcquiCanvas, self).on_right_down(event)
-
-    def on_right_up(self, event):
-        if self.current_mode not in SPARC_MODES:
-            super(SparcAcquiCanvas, self).on_right_up(event)
-
-    def _onSEMMag(self, mag):
+    def _on_sem_mag(self, mag):
         """
         Called when the magnification of the SEM changes
         """
@@ -1113,10 +1024,10 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         # we update the selection so that the ROA stays the same. It's probably
         # that the user has forgotten to set the magnification before, so let's
         # pick solution 2.
-        self._onROA(self._roa.value)
-        self._onDCRegion(self._dcRegion.value)
+        self.roa_overlay.on_roa(self._roa.value)
+        self.dirftcor_overlay.on_roa(self._dc_region.value)
 
-    def _getSEMRect(self):
+    def _get_sem_rect(self):
         """
         Returns the (theoretical) scanning area of the SEM. Works even if the
         SEM has not send any image yet.
@@ -1142,7 +1053,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         return sem_rect
 
-    def _convertROIPhysToRatio(self, phys_rect):
+    def convert_roi_phys_to_ratio(self, phys_rect):
         """
         Convert and truncate the ROI in physical coordinates to the coordinates
          relative to the SEM FoV
@@ -1156,7 +1067,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
             return UNDEFINED_ROI
 
         # Position of the complete SEM scan in physical coordinates
-        sem_rect = self._getSEMRect()
+        sem_rect = self._get_sem_rect()
 
         # Take only the intersection so that that ROA is always inside the SEM scan
         phys_rect = util.rect_intersect(phys_rect, sem_rect)
@@ -1183,38 +1094,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
 
         return rel_rect
 
-    def _updateROA(self):
-        """
-        Update the value of the ROA VA according to the roi_overlay
-        """
-        if self._roa is None:
-            logging.warning("ROA is supposed to be updated, but no ROA VA")
-            return
-
-        phys_rect = self.roi_overlay.get_physical_sel()
-        rel_rect = self._convertROIPhysToRatio(phys_rect)
-
-        # Update VA. We need to unsubscribe to be sure we don't received
-        # intermediary values as the VA is modified by the stream further on, and
-        # VA don't ensure the notifications are ordered (so the listener could
-        # receive the final value, and then our requested ROI value).
-        self._roa.unsubscribe(self._onROA)
-        self._roa.value = rel_rect
-        self._roa.subscribe(self._onROA, init=True)
-
-    def _updateDCRegion(self):
-        """
-        Update the value of the dcRegion VA according to the anchor_overlay
-        """
-        if self._dcRegion is None:
-            logging.warning("dcRegion is supposed to be updated, but no dcRegion VA")
-            return
-
-        phys_rect = self.anchor_overlay.get_physical_sel()
-        rel_rect = self._convertROIPhysToRatio(phys_rect)
-        self._dcRegion.value = rel_rect
-
-    def _convertROIRatioToPhys(self, roi):
+    def convert_roi_ratio_to_phys(self, roi):
         """
         Convert the ROI in relative coordinates (to the SEM FoV) into physical
          coordinates
@@ -1227,7 +1107,7 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
         else:
             # convert relative position to physical position
             try:
-                sem_rect = self._getSEMRect()
+                sem_rect = self._get_sem_rect()
             except AttributeError:
                 logging.warning("Trying to convert a SEM ROI, but no SEM available")
                 return None
@@ -1239,27 +1119,6 @@ class SparcAcquiCanvas(DblMicroscopeCanvas):
                      sem_rect[1] + (1 - roi[1]) * (sem_rect[3] - sem_rect[1]))
 
         return phys_rect
-
-    def _onROA(self, roi):
-        """
-        Called when the ROI of the SEM CL is updated (that's our region of
-         acquisition).
-        roi (tuple of 4 floats): top, left, bottom, right position relative to
-          the SEM image
-        """
-        phys_rect = self._convertROIRatioToPhys(roi)
-        self.roi_overlay.set_physical_sel(phys_rect)
-        wx.CallAfter(self.request_drawing_update)
-
-    def _onDCRegion(self, roi):
-        """
-        Called when dcRegion (ie, the anchor region) of the SEM CL is updated.
-        roi (tuple of 4 floats): top, left, bottom, right position relative to
-          the SEM image
-        """
-        phys_rect = self._convertROIRatioToPhys(roi)
-        self.anchor_overlay.set_physical_sel(phys_rect)
-        wx.CallAfter(self.request_drawing_update)
 
 
 class SparcAlignCanvas(DblMicroscopeCanvas):
@@ -1280,7 +1139,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
         """ Called when the goal_im is dereferenced """
         self._goal_wim = None
 
-    def _convertStreamsToImages(self):
+    def _convert_streams_to_images(self):
         """
         Same as the overridden method, but ensures the goal image keeps the alpha
         and is displayed second. Also force the mpp to be the one of the sensor.
@@ -1495,7 +1354,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
     # Event handlers
 
-    def on_size(self, evt):  #pylint: disable=W0222
+    def on_size(self, evt):
         """ Called when the canvas is resized """
         self.fit_to_content(recenter=True)
         super(AngularResolvedCanvas, self).on_size(evt)

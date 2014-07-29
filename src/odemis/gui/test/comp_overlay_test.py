@@ -24,6 +24,7 @@
 
 import math
 from odemis.gui.model import TOOL_POINT
+from odemis.model._vattributes import VigilantAttribute
 
 from odemis.util.conversion import hex_to_frgb
 from odemis.gui.comp.overlay import view as vol
@@ -435,6 +436,15 @@ class OverlayTestCase(test.GuiTestCase):
         tol.add_label("Right click to toggle tool")
         cnvs.add_view_overlay(tol)
 
+        def toggle(evt):
+            if rsol.active:
+                rsol.deactivate()
+            else:
+                rsol.activate()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
         test.gui_loop()
 
     def test_pixel_select_overlay(self):
@@ -514,26 +524,6 @@ class OverlayTestCase(test.GuiTestCase):
         # pol.set_point(point)
 
     # END World overlay test cases
-
-
-
-
-
-
-
-    # @unittest.skip("simple")
-
-
-    # @unittest.skip("simple")
-
-
-    # @unittest.skip("simple")
-
-
-    # @unittest.skip("simple")
-
-
-
 
 
 if __name__ == "__main__":
