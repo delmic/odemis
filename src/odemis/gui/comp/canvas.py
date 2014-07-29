@@ -321,6 +321,7 @@ class BufferedCanvas(wx.Panel):
             if not isinstance(overlay, ViewOverlay):
                 raise ValueError("Not a ViewOverlay!")
             self.view_overlays.append(overlay)
+            return overlay
 
     def remove_view_overlay(self, overlay):
         if overlay in self.view_overlays:
@@ -338,6 +339,7 @@ class BufferedCanvas(wx.Panel):
             if not isinstance(overlay, WorldOverlay):
                 raise ValueError("Not a WorldOverlay!")
             self.world_overlays.append(overlay)
+            return overlay
 
     def remove_world_overlay(self, overlay):
         if overlay in self.world_overlays:
@@ -731,8 +733,8 @@ class BufferedCanvas(wx.Panel):
 
         """
         return cls.buffer_to_view_pos(
-                cls.world_to_buffer_pos(w_pos, w_buff_cent, scale, offset),
-                margins
+            cls.world_to_buffer_pos(w_pos, w_buff_cent, scale, offset),
+            margins
         )
 
     ############ END Position conversion ############
@@ -1058,9 +1060,9 @@ class BitmapCanvas(BufferedCanvas):
 
         return b_topleft + final_size
 
-    def _get_sub_img(self, b_intersect, b_im_rect, im_data, total_scale):
-        """
-        Return the minimial image data that will cover the intersection
+    @staticmethod
+    def _get_sub_img(b_intersect, b_im_rect, im_data, total_scale):
+        """ Return the minimial image data that will cover the intersection
 
         :param b_intersect: (rect) Intersection of the full image and the buffer
         :param b_im_rect: (rect) The area the full image would occupy in the
@@ -1089,31 +1091,33 @@ class BitmapCanvas(BufferedCanvas):
             return im_data, b_im_rect[:2]
 
         # where is this intersection in the original image?
-        unsc_rect = ((b_intersect[0] - b_im_rect[0]) / total_scale,
-                     (b_intersect[1] - b_im_rect[1]) / total_scale,
-                      b_intersect[2] / total_scale,
-                      b_intersect[3] / total_scale)
+        unsc_rect = (
+            (b_intersect[0] - b_im_rect[0]) / total_scale,
+            (b_intersect[1] - b_im_rect[1]) / total_scale,
+            b_intersect[2] / total_scale,
+            b_intersect[3] / total_scale
+        )
 
         # Round the rectangle values to whole pixel values
         # Note that the width and length get "double rounded":
         # The bottom left gets rounded up to match complete pixels and that
         # value is adjusted by a rounded down top/left.
         unsc_rnd_rect = [
-                int(unsc_rect[0]), # rounding down origin
-                int(unsc_rect[1]), # rounding down origin
-                math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
-                math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
+            int(unsc_rect[0]),  # rounding down origin
+            int(unsc_rect[1]),  # rounding down origin
+            math.ceil(unsc_rect[0] + unsc_rect[2]) - int(unsc_rect[0]),
+            math.ceil(unsc_rect[1] + unsc_rect[3]) - int(unsc_rect[1])
         ]
 
         # Make sure that the rectangle fits inside the image
         if (unsc_rnd_rect[0] + unsc_rnd_rect[2] > im_w or
-            unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
+                unsc_rnd_rect[1] + unsc_rnd_rect[3] > im_h):
             # sometimes floating errors + rounding leads to one pixel too
-            # much => just crop. pylint: disable=C0325
+            # much => just crop.
             assert(unsc_rnd_rect[0] + unsc_rnd_rect[2] <= im_w + 1)
             assert(unsc_rnd_rect[1] + unsc_rnd_rect[3] <= im_h + 1)
-            unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0] # clip width
-            unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1] # clip height
+            unsc_rnd_rect[2] = im_w - unsc_rnd_rect[0]  # clip width
+            unsc_rnd_rect[3] = im_h - unsc_rnd_rect[1]  # clip height
 
         # New top left origin in buffer coordinates to account for the clipping
         b_new_x = (unsc_rnd_rect[0] * total_scale) + b_im_rect[0]
@@ -1134,7 +1138,7 @@ class BitmapCanvas(BufferedCanvas):
 
     # Position conversion
 
-    def world_to_buffer(self, pos, offset=(0, 0)): #pylint: disable=W0221
+    def world_to_buffer(self, pos, offset=(0, 0)):
         return super(BitmapCanvas, self).world_to_buffer_pos(
             pos,
             self.w_buffer_center,
@@ -1142,7 +1146,7 @@ class BitmapCanvas(BufferedCanvas):
             offset
         )
 
-    def buffer_to_world(self, pos, offset=(0, 0)): #pylint: disable=W0221
+    def buffer_to_world(self, pos, offset=(0, 0)):
         return super(BitmapCanvas, self).buffer_to_world_pos(
             pos,
             self.w_buffer_center,
@@ -1150,7 +1154,7 @@ class BitmapCanvas(BufferedCanvas):
             offset
         )
 
-    def view_to_world(self, pos, offset=None): #pylint: disable=W0221
+    def view_to_world(self, pos, offset=None):
         return super(BitmapCanvas, self).view_to_world_pos(
             pos,
             self.w_buffer_center,
@@ -1158,7 +1162,7 @@ class BitmapCanvas(BufferedCanvas):
             self.scale,
             offset)
 
-    def world_to_view(self, pos, offset=None):  #pylint: disable=W0221
+    def world_to_view(self, pos, offset=None):
         return super(BitmapCanvas, self).world_to_view_pos(
             pos,
             self.w_buffer_center,
@@ -1166,12 +1170,12 @@ class BitmapCanvas(BufferedCanvas):
             self.scale,
             offset)
 
-    def view_to_buffer(self, pos):  #pylint: disable=W0221
+    def view_to_buffer(self, pos):
         return super(BitmapCanvas, self).view_to_buffer_pos(
             pos,
             self.margins)
 
-    def buffer_to_view(self, pos):  #pylint: disable=W0221
+    def buffer_to_view(self, pos):
         return super(BitmapCanvas, self).buffer_to_view_pos(
             pos,
             self.margins)
@@ -1235,9 +1239,9 @@ class DraggableCanvas(BitmapCanvas):
         self._ldragging = False
 
         # The amount of pixels shifted in the current drag event
-        self.drag_shift = (0, 0) # px, px
+        self.drag_shift = (0, 0)  # px, px
         #  initial position of mouse when started dragging
-        self.drag_init_pos = (0, 0) # px, px
+        self.drag_init_pos = (0, 0)  # px, px
 
         # Indicate a right mouse button drag in the canvas
         # Note: *only* use it indicate that the *canvas* is performing an operation related to
@@ -1303,7 +1307,7 @@ class DraggableCanvas(BitmapCanvas):
             self._ldragging = True
 
             pos = evt.GetPositionTuple()
-            # There might be several draggings before the buffer is updated
+            # There might be several drags before the buffer is updated
             # So take into account the current drag_shift to compensate
             self.drag_init_pos = (pos[0] - self.drag_shift[0],
                                   pos[1] - self.drag_shift[1])
@@ -1550,14 +1554,15 @@ class DraggableCanvas(BitmapCanvas):
 
     # END Buffer and drawing methods
 
-
     # View manipulation
 
     def shift_view(self, shift):
         """ Moves the position of the view by a delta
 
         :param shift: (int, int) delta in buffer coordinates (pixels)
+
         """
+
         self.recenter_buffer(
             (self.w_buffer_center[0] - (shift[0] / self.scale),
              self.w_buffer_center[1] - (shift[1] / self.scale))
@@ -1609,19 +1614,19 @@ class DraggableCanvas(BitmapCanvas):
 
         # if no recenter, increase bbox so that its center is the current center
         if not recenter:
-            c = self.requested_world_pos # think ahead, use the next center pos
+            c = self.requested_world_pos  # think ahead, use the next center pos
             hw = max(abs(c[0] - bbox[0]), abs(c[0] - bbox[2]))
             hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
             bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
 
         # compute mpp so that the bbox fits exactly the visible part
-        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1] # wu
+        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # wu
         if w == 0 or h == 0:
             logging.warning("Weird image size of %fx%f wu", w, h)
             return # no image
-        cw = max(1, self.ClientSize[0]) # px
-        ch = max(1, self.ClientSize[1]) # px
-        self.scale = min(ch / h, cw / w) # pick the dimension which is shortest
+        cw = max(1, self.ClientSize[0])  # px
+        ch = max(1, self.ClientSize[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
 
         # TODO: avoid aliasing when possible by picking a round number for the
         # zoom level (for the "main" image) if it's ±10% of the target size
@@ -1641,6 +1646,7 @@ PLOT_CLOSE_BOTTOM = 2
 PLOT_MODE_POINT = 1
 PLOT_MODE_LINE = 2
 PLOT_MODE_BAR = 3
+
 
 class PlotCanvas(BufferedCanvas):
     """ This is a general canvas for plotting numerical data in various ways
@@ -1671,7 +1677,7 @@ class PlotCanvas(BufferedCanvas):
         self.unit_y = None
 
         ## Rendering settings
-        self.line_width = 2.0 # px
+        self.line_width = 2.0  # px
         self.line_colour = wxcol_to_frgb(self.ForegroundColour)
         self.fill_colour = self.line_colour
 
@@ -1792,7 +1798,7 @@ class PlotCanvas(BufferedCanvas):
         :return: (int, int)
         """
         x, y = value_tuple
-        return (self._val_x_to_pos_x(x), self._val_y_to_pos_y(y))
+        return self._val_x_to_pos_x(x), self._val_y_to_pos_y(y)
 
     # FIXME: When the memoize on the method is activated,
     # _pos_x_to_val_x starts returning weird value.
@@ -1983,7 +1989,6 @@ class PlotCanvas(BufferedCanvas):
         ctx.set_line_width(self.line_width)
         ctx.set_source_rgb(*self.fill_colour)
         ctx.fill()
-
 
     def _point_plot(self, ctx):
         """ Do a line plot of the current `_data` """

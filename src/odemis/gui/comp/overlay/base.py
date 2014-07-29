@@ -42,7 +42,6 @@ import cairo
 import wx
 
 import odemis.gui as gui
-import odemis.gui.model as guimodel
 import odemis.util as util
 import odemis.util.conversion as conversion
 
@@ -415,7 +414,7 @@ class SelectionMixin(object):
 
     hover_margin = 10  # px
 
-    def __init__(self, sel_cur=None, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         # The start and end points of the selection rectangle in view port
         # coordinates
         self.v_start_pos = None
@@ -611,12 +610,19 @@ class SelectionMixin(object):
         return False
 
     def get_width(self):
+        """ Return the width of the selection in view pixels or None if there is no selection """
+        if None in (self.v_start_pos, self.v_end_pos):
+            return None
         return abs(self.v_start_pos[0] - self.v_end_pos[0])
 
     def get_height(self):
+        """ Return the height of the selection in view pixels """
+        if None in (self.v_start_pos, self.v_end_pos):
+            return None
         return abs(self.v_start_pos[1] - self.v_end_pos[1])
 
     def get_size(self):
+        """ Return the size of the selection in view pixels """
         return self.get_width(), self.get_height()
 
     def contains_selection(self):
@@ -635,7 +641,7 @@ class SelectionMixin(object):
         else:  # Clicked inside selection
             self.start_drag(v_pos)  # Start edit
 
-    def _on_left_up(self, evt):
+    def _on_left_up(self, _):
         """ Call this method from the 'on_left_up' method of super classes"""
 
         if self.selection_mode == SEL_MODE_NONE:
