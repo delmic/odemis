@@ -233,6 +233,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if activated:
             if self._crosshair_ol is None:
                 self._crosshair_ol = self.add_view_overlay(view_overlay.CrossHairOverlay(self))
+            self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
 
@@ -248,6 +249,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._fps_ol is None:
                 self._fps_ol = self.add_view_overlay(view_overlay.TextViewOverlay(self))
                 self._fps_ol.add_label("")
+            self.add_view_overlay(self._fps_ol)
         elif self._fps_ol:
             self.remove_view_overlay(self._fps_ol)
 
@@ -259,10 +261,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if is_activated:
             if self._spotmode_ol is None:
                 self._spotmode_ol = self.add_view_overlay(view_overlay.SpotModeOverlay(self))
+            self.add_view_overlay(self._spotmode_ol)
         elif self._spotmode_ol:
             self.remove_view_overlay(self._spotmode_ol)
 
-        self.microscope_view.show_crosshair.value = not is_activated
+        if self._spotmode_ol:
+            self.microscope_view.show_crosshair.value = not is_activated
 
         self.Refresh(eraseBackground=False)
 

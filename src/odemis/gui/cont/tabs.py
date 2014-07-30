@@ -135,9 +135,7 @@ class Tab(object):
             def set_cross_check(fv):
                 """Called when focused view changes"""
                 if hasattr(fv, "show_crosshair"):
-                    fv.show_crosshair.subscribe(
-                        self.main_frame.menu_item_cross.Check,
-                        init=True)
+                    fv.show_crosshair.subscribe(self.main_frame.menu_item_cross.Check, init=True)
                     self.main_frame.menu_item_cross.Enable(True)
                 else:
                     self.main_frame.menu_item_cross.Enable(False)
