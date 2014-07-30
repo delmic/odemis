@@ -66,9 +66,8 @@ class SEM(model.HwComponent):
         Raise an exception if the device cannot be opened
         '''
 
-        # TODO: only reduce the logging level for suds
-        # Avoid unnecessary logging from suds.client
-        logging.getLogger().setLevel(logging.INFO)
+        # Avoid unnecessary logging from suds
+        logging.getLogger("suds").setLevel(logging.INFO)
 
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
@@ -547,6 +546,7 @@ class Detector(model.Detector):
         self._scanParams.center.y = 0
 
         with self.parent._acq_progress_lock:
+            logging.debug("Acquiring SEM image of %s with %d bpp", res, bpp)
             # Check if spot mode is required
             if res == (1, 1):
                 # FIXME
@@ -823,23 +823,21 @@ class PhenomFocus(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
-        logging.info("Focus relative move...")
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
         shift = self._applyInversionRel(shift)
-        logging.info("Submit relative move...")
+        logging.debug("Submit relative move of %s...", shift)
         self._moves_queue.append(("moveRel", shift))
         return self._executor.submit(self._checkQueue)
 
     @isasync
     def moveAbs(self, pos):
-        logging.info("Focus absolute move...")
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversionAbs(pos)
-        logging.info("Submit absolute move...")
+        logging.info("Submit absolute move of %s...", pos)
         self._moves_queue.append(("moveAbs", pos))
         return self._executor.submit(self._checkQueue)
 
