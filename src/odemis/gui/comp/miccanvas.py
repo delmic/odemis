@@ -901,9 +901,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         super(SecomCanvas, self).setView(microscope_view, tab_data)
 
         # TODO: move this to the view controller
-        if (isinstance(tab_data, LiveViewGUIData)
-            and microscope_view.name.value == "SEM" # TODO do in a cleaner way
-            and isinstance(tab_data.main.ebeam.horizontalFoV, VigilantAttributeBase)):
+        if (isinstance(tab_data, LiveViewGUIData) and
+                microscope_view.name.value == "SEM" and  # TODO do in a cleaner way
+                isinstance(tab_data.main.ebeam.horizontalFoV, VigilantAttributeBase)):
             microscope_view.horizontal_field_width.subscribe(self.on_view_em_hfw_change, init=True)
 
     def on_view_em_hfw_change(self, hfw):
