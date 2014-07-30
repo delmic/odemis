@@ -1,0 +1,68 @@
+PhenomProX: {
+    class: Microscope,
+    role: sem,
+    emitters: ["EBeam Phenom"],
+    detectors: ["SED Phenom", "NavCam"],
+    actuators: ["Stage Phenom", "Chamber Phenom", "EBeam focus", "NavCam focus"],
+}
+
+# Connection to the Phenom, which must have API access activated
+"Phenom": {
+    class: phenom.SEM,
+    role: none,
+    init: {
+           host: "http://Phenom-MVE0206151080.local:8888", 
+           username: "delmic",
+           password: "6526AM9688B1",
+    },
+    children: {scanner: "EBeam Phenom",
+               focus: "EBeam focus",
+               detector: "SED Phenom",
+               stage: "Stage Phenom",
+               camera: "NavCam",
+               navcam-focus: "NavCam focus",
+               pressure: "Chamber Phenom",
+    }
+}
+
+"EBeam Phenom": {
+    # Internal child of SEM Phenom, so no class
+    role: e-beam,
+    init: {},
+    affects: ["SED Phenom"] # affects the CCD in case of cathodoluminescence
+}
+
+"EBeam focus": {
+    role: ebeam-focus,
+    init: {axes: ["z"]},
+    affects: ["EBeam Phenom"]
+}
+
+"SED Phenom": { # aka ETD
+    role: se-detector,
+    init: {}
+}
+
+"Stage Phenom": {
+    role: stage,
+    affects: ["EBeam Phenom"],
+    init: {},
+}
+
+"NavCam": {
+    role: overview-ccd,
+    init: {}
+}
+
+"NavCam focus": {
+    role: overview-focus,
+    init: {axes: ["z"]},
+    affects: ["NavCam"]
+}
+
+"Chamber Phenom": {
+    # Used to move between SEM and NavCam or to unload the sample
+    role: chamber,
+    init: {},
+}
+

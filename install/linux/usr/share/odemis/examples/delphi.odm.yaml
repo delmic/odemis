@@ -11,17 +11,16 @@ Spectra: {
     class: lle.FakeLLE,
     role: light,
     init: {
-        port: "/dev/ttyLLE",
+        port: "/dev/ttyFTDI*",
         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        sources: {"red": [615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
-                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
-                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
-                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
-                  "yellow": [565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9],
-                  "blue": [420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9],
-                  "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
+        # Values are quite approximate (only centre is pretty sure)
+        sources: {"UV": [372.e-9, 382.e-9, 390.e-9, 398.e-9, 408.e-9],
+                  "cyan": [465.e-9, 475.e-9, 485.e-9, 495.e-9, 505.e-9],
+                  "green": [535.e-9, 545.e-9, 560.e-9, 575.e-9, 585.e-9],
+                  "red": [637.e-9, 645.e-9, 650.e-9, 655.e-9, 663.e-9],
                  }
         },
+        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
     affects: ["Zyla"],
 }
 
@@ -92,6 +91,7 @@ Spectra: {
     affects: ["Zyla"]
 }
 
+# Semrock FF01-440/521/607/700
 "MultiBand Filter": {
     class: static.LightFilter,
     role: filter,
@@ -143,7 +143,7 @@ TMCM: {
     init: {
         port: "/dev/fake",
         axes: ["x", "y", "z"],
-        ustepsize: [5.9e-9, 5.8e-9, 5.e-9], # m/µstep
+        ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
         refproc: "FakeReferencing", # referencing procedure for simulator
         #refproc: "2xFinalForward", # official referencing procedure for the Delphi
         # inverted: ["y"],
