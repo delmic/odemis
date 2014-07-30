@@ -1,24 +1,23 @@
 # -*- coding: utf-8 -*-
 
 """
-Created on 2014-01-25
-
-@author: Rinze de Laat
-
-Copyright © 2014 Rinze de Laat, Delmic
+:created: 2014-01-25
+:author: Rinze de Laat
+:copyright: © 2014 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
@@ -300,13 +299,9 @@ class FocusOverlay(ViewOverlay):
 
 class ViewSelectOverlay(ViewOverlay, SelectionMixin):
 
-    def __init__(self, cnvs,
-                 sel_cur=None,
-                 colour=gui.SELECTION_COLOUR,
-                 center=(0, 0)):
-
+    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         super(ViewSelectOverlay, self).__init__(cnvs)
-        SelectionMixin.__init__(self, sel_cur, colour, center)
+        SelectionMixin.__init__(self, colour, center)
 
         self.position_label = self.add_label("")
 
@@ -900,10 +895,10 @@ class PolarOverlay(ViewOverlay):
             self.intersection = None
 
     def _calculate_display(self, view_pos=None):
-        """ Calculate the values needed for plotting the Phi and Theta lines and
-        labels
+        """ Calculate the values needed for plotting the Phi and Theta lines and labels
 
         If view_pos is not given, the current Phi and Theta angles will be used.
+
         """
 
         self._calculate_phi(view_pos)

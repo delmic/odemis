@@ -1,33 +1,29 @@
 # -*- coding: utf-8 -*-
 """
-Created on Jan 2014
-
-@author: Rinze de Laat
-
-Copyright © 2014 Rinze de Laat, Delmic
+:created: 2014-01-25
+:author: Rinze de Laat
+:copyright: © 2014 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms
-of the GNU General Public License version 2 as published by the Free Software
-Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
-PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
-
-
-### Purpose ###
-
-This module contains the base classes used for the construction of Overlay
-subclasses.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 
+Overlay Module
+==============
+
+This module contains the base classes used for the construction of Overlay subclasses
 Overlays will *always* have their Draw method called! Whether they are active or not.
-
 They will *only* receive mouse events if they are active!
 
 """
@@ -635,7 +631,7 @@ class SelectionMixin(object):
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
 
-        self.cnvs.on_mouse_up()
+        self.cnvs.on_mouse_down()
 
         v_pos = evt.GetPositionTuple()
         hover = self.is_hovering(v_pos)
