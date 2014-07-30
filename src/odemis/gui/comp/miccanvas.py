@@ -908,25 +908,15 @@ class SecomCanvas(DblMicroscopeCanvas):
 
     def on_view_em_hfw_change(self, hfw):
         """ Adjust the SEM horizontal field width when the view HFW changes """
-        if self._tab_data_model.emState.value == guimodel.STATE_ON:
-            # Collect all the SEM streams
-            em_streams = self.microscope_view.stream_tree.get_streams_by_type(SEMStream)
+        em_streams = self.microscope_view.stream_tree.em_streams
 
-            for em_stream in em_streams:
-                if em_stream.is_active.value:
-                    mi, ma = self._tab_data_model.main.ebeam.horizontalFoV.range
-                    # Clip the HFW if needed
-                    if not mi <= hfw <= ma:
-                        hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+        for em_stream in em_streams:
+            if em_stream.is_active.value:
+                # TODO: handle the case when horizontalFoV has choices (and not range)
+                hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+                self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
 
-                    # Set the hardware HFW
-                    self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
-
-                    # Set the HFW for all the views (in case of clipping)
-                    for view in self._tab_data_model.visible_views.value:
-                        if view.stream_tree.get_streams_by_type(SEMStream):
-                            view.horizontal_field_width.value = hfw
-                    break
+                break
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
