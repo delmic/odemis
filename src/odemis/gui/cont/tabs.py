@@ -1197,7 +1197,6 @@ class AnalysisTab(Tab):
         else:
             self.tb.enable_button(tools.TOOL_POINT, False)
 
-
         # Reload current calibration on the new streams
         if ar_found:
             try:

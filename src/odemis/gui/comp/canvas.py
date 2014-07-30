@@ -367,7 +367,7 @@ class BufferedCanvas(wx.Panel):
 
     ############ Event Handlers ############
 
-    def _on_mouse_down(self, cursor=None):
+    def on_mouse_down(self):
         """ Perform actions common to both left and right mouse button down
 
         .. note:: A bug prevents the cursor from changing in Ubuntu after the
@@ -375,16 +375,12 @@ class BufferedCanvas(wx.Panel):
 
         """
 
-        if cursor:
-            raise Exception("Don't set the cursor like this anymore!")
-            self.set_dynamic_cursor(cursor)
-
         if not self.HasCapture():
             self.CaptureMouse()
 
         self.SetFocus()
 
-    def _on_mouse_up(self):
+    def on_mouse_up(self):
         """ Perform actions common to both left and right mouse button up
 
         .. note:: A bug prevents the cursor from changing in Ubuntu after the
@@ -396,56 +392,56 @@ class BufferedCanvas(wx.Panel):
             self.ReleaseMouse()
 
     @ignore_if_disabled
-    def on_left_down(self, evt, cursor=None):
+    def on_left_down(self, evt):
         """ Standard left mouse button down processor """
-        self._on_mouse_down(cursor)
-        self._pass_event_to_active_overlays('on_left_down', evt)
+        self.on_mouse_down()
+        evt.Skip()
 
     @ignore_if_disabled
     def on_left_up(self, evt):
         """ Standard left mouse button release processor """
-        self._on_mouse_up()
-        self._pass_event_to_active_overlays('on_left_up', evt)
+        self.on_mouse_up()
+        evt.Skip()
 
     @ignore_if_disabled
-    def on_right_down(self, evt, cursor=None):
+    def on_right_down(self, evt):
         """ Standard right mouse button release processor """
-        self._on_mouse_down(cursor)
-        self._pass_event_to_active_overlays('on_right_down', evt)
+        self.on_mouse_down()
+        evt.Skip()
 
     @ignore_if_disabled
     def on_right_up(self, evt):
         """ Standard right mouse button release processor """
-        self._on_mouse_up()
-        self._pass_event_to_active_overlays('on_right_up', evt)
+        self.on_mouse_up()
+        evt.Skip()
 
     @ignore_if_disabled
     def on_dbl_click(self, evt):
         """ Standard left mouse button double click processor """
-        self._pass_event_to_active_overlays('on_dbl_click', evt)
+        evt.Skip()
 
     @ignore_if_disabled
     def on_motion(self, evt):
         """ Standard mouse motion processor """
-        self._pass_event_to_active_overlays('on_motion', evt)
+        evt.Skip()
 
     @ignore_if_disabled
     def on_wheel(self, evt):
         """ Standard mouse wheel processor """
-        self._pass_event_to_active_overlays('on_wheel', evt)
+        evt.Skip()
 
     def on_enter(self, evt):
         """ Standard mouse enter processor """
-        self._pass_event_to_active_overlays('on_enter', evt)
+        evt.Skip()
 
     def on_leave(self, evt):
         """ Standard mouse leave processor """
-        self._pass_event_to_active_overlays('on_leave', evt)
+        evt.Skip()
 
     @ignore_if_disabled
     def on_char(self, evt):
         """ Standard key stroke processor """
-        self._pass_event_to_active_overlays('on_char', evt)
+        evt.Skip()
 
     @ignore_if_disabled
     def on_paint(self, evt):
@@ -473,9 +469,6 @@ class BufferedCanvas(wx.Panel):
         # Ensure the buffer is always at least as big as the window
         min_size = self.get_minimum_buffer_size()
 
-        # any displayed overlay might need to redraw itself
-        self._pass_event_to_all_overlays('on_size', evt)
-
         if min_size != self._bmp_buffer_size:
             logging.debug("Buffer size changed, redrawing...")
             self.resize_buffer(min_size)
@@ -490,26 +483,6 @@ class BufferedCanvas(wx.Panel):
         # thread_name = threading.current_thread().name
         # logging.debug("Drawing timer in thread %s", thread_name)
         self.update_drawing()
-
-    def _pass_event_to_active_overlays(self, evt_name, evt):
-        """ Call an event handler with name 'evt_name' on the enabled overlays
-        """
-
-        # for ol in self.active_overlays:
-        #     getattr(ol, evt_name)(evt)
-        pass
-
-    def _pass_event_to_all_overlays(self, evt_name, evt):
-        """ Call an event handler with name 'evt_name' on all the overlays
-
-        This method should be used to pass events on to all overlays that are not necesarrily
-        the result of a (direct) user action, e.g. on_size
-        """
-        # for ol in self.view_overlays:
-        #     getattr(ol, evt_name)(evt)
-        # for ol in self.world_overlays:
-        #     getattr(ol, evt_name)(evt)
-        pass
 
     ############ END Event Handlers ############
 
@@ -1887,7 +1860,6 @@ class PlotCanvas(BufferedCanvas):
         if min_size != self._bmp_buffer_size:
             self.resize_buffer(min_size)
 
-        self._pass_event_to_active_overlays('on_size', evt)
         self.update_drawing()
 
     def draw(self):
