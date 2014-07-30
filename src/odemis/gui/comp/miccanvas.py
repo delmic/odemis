@@ -297,17 +297,21 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             if (len(self.microscope_view.stream_tree) and
                     any([isinstance(s, stream.AR_STREAMS) for s in tab_streams])):
-                self.points_overlay.activate(True)
+                self.add_world_overlay(self.points_overlay)
+                self.points_overlay.activate()
             # TODO: Filtering by the name SEM CL is not desired. There should be
             # a more intelligent way to query the StreamTree about what's
             # present, like how it's done for Spectrum and AR streams
             elif stream_tree.spectrum_streams or stream_tree.get_streams_by_name("SEM CL"):
                 self.pixel_overlay.activate()
+                self.add_world_overlay(self.pixel_overlay)
         else:
             if self.pixel_overlay:
                 self.pixel_overlay.deactivate()
+                self.remove_world_overlay(self.pixel_overlay)
             if self.points_overlay:
                 self.points_overlay.deactivate()
+                self.remove_world_overlay(self.points_overlay)
 
     # END Overlay creation and activation
 
