@@ -360,21 +360,25 @@ class DragMixin(object):
         if not self.right_dragging:
             self._ldragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
+        self.cnvs.on_mouse_down()
 
     def _on_left_up(self, evt):
         if not self.right_dragging:
             self._ldragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
+        self.cnvs.on_mouse_up()
 
     def _on_right_down(self, evt):
         if not self.left_dragging:
             self._rdragging = True
             self.drag_v_start_pos = evt.GetPositionTuple()
+        self.cnvs.on_mouse_down()
 
     def _on_righgt_up(self, evt):
         if not self.left_dragging:
             self._rdragging = False
             self.drag_v_end_pos = evt.GetPositionTuple()
+        self.cnvs.on_mouse_up()
 
     def reset_drag(self):
         self.drag_v_start_pos = None
@@ -631,6 +635,8 @@ class SelectionMixin(object):
     def _on_left_down(self, evt):
         """ Call this method from the 'on_left_down' method of super classes """
 
+        self.cnvs.on_mouse_up()
+
         v_pos = evt.GetPositionTuple()
         hover = self.is_hovering(v_pos)
 
@@ -643,6 +649,8 @@ class SelectionMixin(object):
 
     def _on_left_up(self, _):
         """ Call this method from the 'on_left_up' method of super classes"""
+
+        self.cnvs.on_mouse_up()
 
         if self.selection_mode == SEL_MODE_NONE:
             self.clear_selection()

@@ -412,7 +412,6 @@ class ViewController(object):
         # vp[visible_idx].Parent.Layout()
         parent_sizer.Layout()
 
-
     def _on_visible_views(self, visible_views):
         """ This method is called when the visible views in the data model
         change.
@@ -425,10 +424,9 @@ class ViewController(object):
 
         self._set_visible_views(visible_views)
 
-        # Ensure the focussed view is always one that is visible
+        # Ensure the focused view is always one that is visible
         if self._data_model.focussedView.value not in visible_views:
             self._data_model.focussedView.value = visible_views[0]
-
 
     def _onView(self, view):
         """ Called when another focussed view changes.
