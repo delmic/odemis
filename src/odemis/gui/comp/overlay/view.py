@@ -1168,12 +1168,12 @@ class HistoryOverlay(ViewOverlay):
 
     def on_enter(self, evt):
         super(HistoryOverlay, self).on_enter(evt)
-        self.mouse_over = True
+        # self.mouse_over = True
         self.cnvs.Refresh()
 
     def on_leave(self, evt):
         super(HistoryOverlay, self).on_leave(evt)
-        self.mouse_over = False
+        # self.mouse_over = False
         self.cnvs.Refresh()
 
     # END Event Handlers
@@ -1192,6 +1192,15 @@ class HistoryOverlay(ViewOverlay):
         for i, (p_center, _) in enumerate(history):
             alpha = (i + 1) * (0.8 / len(history)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
+
+            ctx.set_source_rgba(0, 0, 0, 0.5)
+            # Render rectangles of 3 pixels wide
+            ctx.rectangle(int(v_center[0]) - half_size + 1,
+                          int(v_center[1]) - half_size + 1,
+                          self.marker_size,
+                          self.marker_size)
+            ctx.stroke()
+
             ctx.set_source_rgba(self.colour[0], self.colour[1], self.colour[2], alpha)
             # Render rectangles of 3 pixels wide
             ctx.rectangle(int(v_center[0]) - half_size,

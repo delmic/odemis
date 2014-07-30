@@ -830,6 +830,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         # Keep track of old stage positions
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
+        self.point_select_overlay.activate()
 
     def on_stage_pos_change(self, p_pos):
         self.history_overlay.add_location(
