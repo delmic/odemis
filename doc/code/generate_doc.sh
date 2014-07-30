@@ -9,9 +9,8 @@ export PYTHONPATH
 echo $PYTHONPATH
 
 # Code doc root
-code_path="/home/rinze/dev/odemis/doc/code"
-
-cd "$code_path"
+#code_path="/home/rinze/dev/odemis/doc/code"
+#cd "$code_path"
 
 # Remove old rst files
 rm -rf _gen/*.rst
