@@ -10,12 +10,12 @@ Type=Application
 Icon=odemis
 Categories=Utility;
 #StartupWMClass=main.py
-#StartupWMClass=Odemis # not necessary as it's the same name as this file
+StartupWMClass=Odemis
 StartupNotify=true
 
 Actions=Stop
 
 [Desktop Action Stop]
-Name=Fully stop
+Name=Full stop
 Exec=odemis-stop
 OnlyShowIn=Unity;
