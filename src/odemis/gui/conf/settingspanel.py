@@ -221,7 +221,8 @@ CONFIG = {
         },
         "horizontalFoV":
         {
-            "label": "Horiz field width",
+            "label": "HFW",
+            "tooltip": "Horizontal Field Width",
             "control_type": odemis.gui.CONTROL_COMBO,
             "choices": _hfw_choices,
         },
