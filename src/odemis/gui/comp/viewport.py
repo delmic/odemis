@@ -36,6 +36,7 @@ from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
+from odemis.model._vattributes import VigilantAttributeBase
 from odemis.util import units
 import wx
 
@@ -447,6 +448,7 @@ class SecomViewport(MicroscopeViewport):
 
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
+        self._orig_abilities = set()
 
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
@@ -474,6 +476,21 @@ class SecomViewport(MicroscopeViewport):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
+
+    def track_view_mpp(self):
+        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+            self.microscope_view.mpp.subscribe(self._on_mpp_set_fov, init=True)
+
+    def _on_mpp_set_fov(self, mpp):
+        em_streams = self.microscope_view.stream_tree.em_streams
+        hfw = self.canvas.horizontal_field_width
+
+        for em_stream in em_streams:
+            if em_stream.is_active.value:
+                # TODO: handle the case when horizontalFoV has choices (and not range)
+                hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+                self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
+                break
 
 
 class SparcAcquisitionViewport(MicroscopeViewport):
