@@ -482,15 +482,11 @@ class SecomViewport(MicroscopeViewport):
             self.microscope_view.mpp.subscribe(self._on_mpp_set_fov, init=True)
 
     def _on_mpp_set_fov(self, mpp):
-        em_streams = self.microscope_view.stream_tree.em_streams
         hfw = self.canvas.horizontal_field_width
 
-        for em_stream in em_streams:
-            if em_stream.is_active.value:
-                # TODO: handle the case when horizontalFoV has choices (and not range)
-                hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
-                self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
-                break
+        # TODO: handle the case when horizontalFoV has choices (and not range)
+        hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+        self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
 
 
 class SparcAcquisitionViewport(MicroscopeViewport):
