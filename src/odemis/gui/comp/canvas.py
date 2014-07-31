@@ -1312,7 +1312,7 @@ class DraggableCanvas(BitmapCanvas):
         super(DraggableCanvas, self).on_left_up(evt)
         self.was_dragged = False
 
-    def on_right_down(self, evt, cursor=None):
+    def on_right_down(self, evt):
         """ Process right mouse button down event
 
         If the canvas can focus, the data needed for that operation are set
@@ -1327,7 +1327,7 @@ class DraggableCanvas(BitmapCanvas):
 
             logging.debug("Drag started at %s", self._rdrag_init_pos)
 
-        super(DraggableCanvas, self).on_right_down(evt, cursor)
+        super(DraggableCanvas, self).on_right_down(evt)
 
     def on_right_up(self, evt):
         """ Process right mouse button release event

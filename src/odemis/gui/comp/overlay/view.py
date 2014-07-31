@@ -60,6 +60,7 @@ class CrossHairOverlay(ViewOverlay):
 
     def on_size(self, evt):
         self.center = self.cnvs.get_half_view_size()
+        super(CrossHairOverlay, self).on_size(evt)
 
     def Draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
@@ -595,6 +596,7 @@ class DichotomyOverlay(ViewOverlay):
         """
         # Force the re-computation of rectangles
         self.on_sequence_change(self.sequence_va.value)
+        super(DichotomyOverlay, self).on_size(evt)
 
     # END Event Handlers
 
@@ -717,6 +719,7 @@ class DichotomyOverlay(ViewOverlay):
 
 
 class PolarOverlay(ViewOverlay):
+
     def __init__(self, cnvs):
         super(PolarOverlay, self).__init__(cnvs)
 
@@ -985,6 +988,9 @@ class PolarOverlay(ViewOverlay):
             self.ticks.append((ox, oy, ix, iy, label))
 
         self._calculate_display()
+        
+        if evt:
+            super(PolarOverlay, self).on_size(evt)
 
     # END Event Handlers
 
