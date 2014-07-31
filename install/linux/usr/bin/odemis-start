@@ -1,10 +1,11 @@
 #!/bin/bash
 # Start the gui and back-end in any case
-# might ask to type password become root
+# might ask to type password to become root
 # Accepts one argument: the microscope model file, which overrides the MODEL
 # default value.
 
-LOGLEVEL=1 # default that will be overrided (probably) in odemis.conf
+LOGLEVEL=1 # default that will be overridden (probably) in odemis.conf
+TERMINAL=/usr/bin/gnome-terminal
 
 . /etc/odemis.conf
 
@@ -22,6 +23,11 @@ fi
 odemis-cli --check
 status=$?
 if [ $status -ne 0 ]; then
+    # TODO: it'd be nice to update the text, but notify-send doesn't support it
+    # cf https://bugs.launchpad.net/ubuntu/+source/libnotify/+bug/257135
+    # http://unix.stackexchange.com/questions/75386/clearing-modifying-previous-libnotify-notifications 
+    notify-send -i gtk-dialog-info "Starting Odemis back-end"
+
     # backend not responding or dead
     if [ $status -gt 2 ]; then
         echo "Warning: failed to check status of back-end"
@@ -32,7 +38,7 @@ if [ $status -ne 0 ]; then
         echo "Creating cgroup"
         sudo /usr/bin/cgcreate -a :odemis -g memory:odemisd
     fi
-    
+
     # kill the current backend
     sudo /usr/bin/pkill -f $BACKEND
 
@@ -40,31 +46,46 @@ if [ $status -ne 0 ]; then
     echo -n "Starting back-end.."
     
     # odemisd likes to start as root to be able to create /var/run files, but then
-    # drop its priviledges to the odemis group
+    # drop its privileges to the odemis group
     # use sudo background mode to be sure it won't be killed at the end
     sudo -b odemisd --daemonize --log-level=$LOGLEVEL --log-target "$LOGFILE" "$MODEL"
     status=$?
     if [ $status -ne 0 ]; then
         echo " failed"
+        notify-send -i gtk-dialog-warning "Odemis back-end failed to start" \
+	"For more information type odemis-start in a terminal."
         exit 1
     fi
     echo "."
     
-    # Display the log while starting (and automatically quit when this script ends)
-    /usr/bin/tail -n 0 -f "$LOGFILE" --pid=$$ &
-    
+    if [ $LOGLEVEL -gt 1 ]; then
+        # Display the log while starting (and automatically quit when this script ends)
+        $TERMINAL -x /usr/bin/tail -n 0 -f "$LOGFILE" & #--pid=$$
+    fi
+
     # For some drivers, initialisation can be pretty long
     sleep 5
-    
+    echo "."
+
     # Check (and synchronise)
     if odemis-cli --check; then
         echo "Back-end successfully started"
+        notify-send -i gtk-dialog-info "Odemis back-end successfully started" \
+        "Graphical interface will now start."
     else
         echo "Back-end failed to start."
+        echo "For more log messages see file $LOGFILE"
+        notify-send -i gtk-dialog-warning "Odemis back-end failed to start" \
+        "For more information check the error messages in $LOGFILE."
+        # TODO: also add last message like:
+        # tail -n 50 "$LOGFILE" | grep "Error while instantiating component" | tail -n 1
+
 #        echo "The last error messages were:"
 #        /usr/bin/tail -n 50 "$LOGFILE" | /bin/grep --color -iE "(ERROR|Exception)"
-		echo "For more log messages see file $LOGFILE"
-		read -p "Press [Enter] to quit..."
+	# Display latest messages in a window (iff the terminal is not already running)
+        if [ $LOGLEVEL -le 1 ]; then
+            tail -n 100 $LOGFILE | zenity --width=800 --height=800 --title "Latest messages from Odemis back-end" --text-info & # --font="mono"
+        fi
         exit 1
     fi
 fi
