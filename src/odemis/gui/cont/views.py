@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
 """
-Created on 1 Oct 2012
-
-@author: Rinze de Laat
-
-Copyright © 2012-2013 Rinze de Laat and Éric Piel, Delmic
+:created: 2012-10-01
+:author: Rinze de Laat
+:copyright: © 2012-2013 Rinze de Laat and Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the
-terms of the GNU General Public License version 2 as published by the Free
-Software Foundation.
+.. license::
+    Odemis is free software: you can redistribute it and/or modify it under the
+    terms of the GNU General Public License version 2 as published by the Free
+    Software Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
-WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-PARTICULAR PURPOSE. See the GNU General Public License for more details.
+    Odemis is distributed in the hope that it will be useful, but WITHOUT ANY
+    WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+    PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with
-Odemis. If not, see http://www.gnu.org/licenses/.
+    You should have received a copy of the GNU General Public License along with
+    Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
@@ -29,16 +28,16 @@ from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
+from odemis.gui.model import LiveViewGUIData
 from odemis.gui.util import call_after
 import wx
 
 import odemis.gui.util.widgets as util
+from odemis.model._vattributes import VigilantAttributeBase
 
 
 class ViewController(object):
-    """ Manage the display of various viewports in a tab
-
-    """
+    """ Manage the display of various viewports in a tab """
 
     def __init__(self, tab_data, main_frame, viewports, toolbar=None):
         """
@@ -64,11 +63,11 @@ class ViewController(object):
 
         if isinstance(viewports, collections.OrderedDict):
             self._viewports = viewports.keys()
-            self._createViewsFixed(viewports)
+            self._create_views_fixed(viewports)
         else:
             # create the (default) views
             self._viewports = viewports
-            self._createViewsAuto()
+            self._create_views_auto()
 
         # Add fit view to content to toolbar
         if toolbar:
@@ -86,7 +85,7 @@ class ViewController(object):
     def viewports(self):
         return self._viewports
 
-    def _createViewsFixed(self, viewports):
+    def _create_views_fixed(self, viewports):
         """ Create the different views displayed, according to viewtypes
         viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
 
@@ -117,7 +116,7 @@ class ViewController(object):
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views
 
-    def _createViewsAuto(self):
+    def _create_views_auto(self):
         """ Create the different views displayed, according to the current
         microscope.
 
@@ -135,8 +134,8 @@ class ViewController(object):
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
         if isinstance(self._data_model, model.AnalysisGUIData):
             assert len(self._viewports) >= 4
-            # TODO: should be dependent on the type of acquisition, and so
-            # updated every time the .file changes
+            # TODO: should be dependent on the type of acquisition, and so updated every time the
+            # .file changes
             if self._main_data_model.role == "sparc":
                 logging.info("Creating (static) SPARC viewport layout")
                 vpv = collections.OrderedDict([
@@ -282,6 +281,13 @@ class ViewController(object):
                     "stream_classes": (RGBCameraStream, BrightfieldStream),
                 }
 
+            self._create_views_fixed(vpv)
+
+            # Track the mpp of the SEM view in order to set the magnification
+            if isinstance(self._data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+                self._viewports[0].track_view_mpp()  # = Live SEM viewport
+
+            return
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
@@ -295,12 +301,11 @@ class ViewController(object):
                                  }
                 i += 1
 
-        self._createViewsFixed(vpv)
+        self._create_views_fixed(vpv)
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
     def _viewport_by_view(self, view):
-        """ Return the ViewPort associated with the given view
-        """
+        """ Return the ViewPort associated with the given view """
 
         for vp in self._viewports:
             if vp.microscope_view == view:
@@ -308,15 +313,11 @@ class ViewController(object):
         raise IndexError("No ViewPort found for view %s" % view)
 
     def _viewport_index_by_view(self, view):
-        """ Return the index number of the ViewPort associated with the given
-        view
-        """
+        """ Return the index number of the ViewPort associated with the given view """
         return self._viewports.index(self._viewport_by_view(view))
 
     def _set_visible_views(self, views):
-        """ set the view order to the one provided in the parameter
-        views (list of View)
-        """
+        """ Set the view order to the one provided in the parameter views (list of View) """
         msg = "Resetting views to %s"
         msgdata = [str(v) for v in views] if not views is None else "default"
         logging.debug(msg, msgdata)
@@ -534,12 +535,11 @@ class ViewController(object):
         if pviews:
             self._data_model.focussedView.value = pviews[0]
 
-        logging.debug("Failed to find any view compatible with stream %s",
-                      stream.name.value)
+        logging.debug("Failed to find any view compatible with stream %s", stream.name.value)
+
 
 class ViewSelector(object):
-    """ This class controls the view selector buttons and labels associated with
-    them.
+    """ This class controls the view selector buttons and labels associated with them.
     """
 
     def __init__(self, tab_data, main_frame, buttons, viewports=None):
@@ -574,10 +574,8 @@ class ViewSelector(object):
         # Explicitly unsubscribe the current event handlers
         for btn, (vp, _) in self.buttons.items():
             if btn in self._subscriptions:
-                vp.microscope_view.thumbnail.unsubscribe(
-                                            self._subscriptions[btn]["thumb"])
-                vp.microscope_view.name.unsubscribe(
-                                            self._subscriptions[btn]["label"])
+                vp.microscope_view.thumbnail.unsubscribe(self._subscriptions[btn]["thumb"])
+                vp.microscope_view.name.unsubscribe(self._subscriptions[btn]["label"])
         # Clear the subscriptions
         self._subscriptions = {}
 

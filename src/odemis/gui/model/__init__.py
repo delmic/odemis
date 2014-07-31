@@ -332,6 +332,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         if self.main.ebeam:
             self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
+
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
     acquire signal. It allows fine control of the shape and density of the scan.
