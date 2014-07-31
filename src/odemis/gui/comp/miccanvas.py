@@ -470,7 +470,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
         self.scale = self.mpwu / mpp
-        self.microscope_view.horizontal_field_width.value = self.horizontal_field_width
         wx.CallAfter(self.request_drawing_update)
 
     @property
@@ -834,26 +833,7 @@ class SecomCanvas(DblMicroscopeCanvas):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).on_right_up(event)
 
-    def setView(self, microscope_view, tab_data):
-        super(SecomCanvas, self).setView(microscope_view, tab_data)
 
-        # TODO: move this to the view controller
-        if (isinstance(tab_data, LiveViewGUIData) and
-                microscope_view.name.value == "SEM" and  # TODO do in a cleaner way
-                isinstance(tab_data.main.ebeam.horizontalFoV, VigilantAttributeBase)):
-            microscope_view.horizontal_field_width.subscribe(self.on_view_em_hfw_change, init=True)
-
-    def on_view_em_hfw_change(self, hfw):
-        """ Adjust the SEM horizontal field width when the view HFW changes """
-        em_streams = self.microscope_view.stream_tree.em_streams
-
-        for em_stream in em_streams:
-            if em_stream.is_active.value:
-                # TODO: handle the case when horizontalFoV has choices (and not range)
-                hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
-                self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
-
-                break
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
