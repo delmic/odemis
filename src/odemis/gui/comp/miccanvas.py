@@ -666,14 +666,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 num_focus = self.microscope_view.get_focus_count()
                 if num_focus == 1:
                     logging.debug("One focus actuator found")
-                    cursor = wx.StockCursor(wx.CURSOR_SIZENS)
+                    self.set_dynamic_cursor(wx.CURSOR_SIZENS)
                 elif num_focus == 2:
                     logging.debug("Two focus actuators found")
-                    cursor = wx.StockCursor(wx.CURSOR_CROSS)
+                    self.set_dynamic_cursor(wx.CURSOR_SIZEWE)
             if self._focus_overlay:
                 self._focus_overlay.clear_shift()
 
-        super(DblMicroscopeCanvas, self).on_right_down(event, cursor)
+        super(DblMicroscopeCanvas, self).on_right_down(event)
 
     def on_right_up(self, event):
         """ Process right mouse button release event
