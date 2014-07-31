@@ -171,7 +171,6 @@ class SettingsPanel(object):
 
         self.panel = wx.Panel(self.fold_panel)
 
-
         self.panel.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
         self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
 
@@ -431,10 +430,7 @@ class SettingsPanel(object):
         conf = conf or {}
 
         # Get the range and choices
-        min_val, max_val, choices, unit = self._get_va_meta(comp,
-                                                            vigil_attr,
-                                                            conf)
-
+        min_val, max_val, choices, unit = self._get_va_meta(comp, vigil_attr, conf)
         format = conf.get("format", True)
 
         if choices:
@@ -462,9 +458,9 @@ class SettingsPanel(object):
 
         # Change radio type to fitting type depending on its content
         if control_type == odemis.gui.CONTROL_RADIO:
-            if len(choices_fmt) <= 1: # only one choice => force label
+            if len(choices_fmt) <= 1:  # only one choice => force label
                 control_type = odemis.gui.CONTROL_LABEL
-            elif len(choices_fmt) > 10: # too many choices => combo
+            elif len(choices_fmt) > 10:  # too many choices => combo
                 control_type = odemis.gui.CONTROL_COMBO
             else:
                 # choices names too long => combo
@@ -486,8 +482,10 @@ class SettingsPanel(object):
 
         # Format label
         label = conf.get('label', self._label_to_human(name))
+        tooltip = conf.get('tooltip', "")
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
+        lbl_ctrl.SetToolTipString(tooltip)
         self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
@@ -570,7 +568,6 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
             # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
 
-
         elif control_type == odemis.gui.CONTROL_FLT:
             if unit == "": # don't display unit prefix if no unit
                 unit = None
@@ -593,13 +590,14 @@ class SettingsPanel(object):
 
         elif control_type == odemis.gui.CONTROL_RADIO:
             new_ctrl = GraphicalRadioButtonControl(
-                                    self.panel,
-                                    - 1,
-                                    size=(-1, 16),
-                                    choices=[c for c, _ in choices_fmt],
-                                    style=wx.NO_BORDER,
-                                    labels=[f for _, f in choices_fmt],
-                                    units=unit)
+                self.panel,
+                - 1,
+                size=(-1, 16),
+                choices=[c for c, _ in choices_fmt],
+                style=wx.NO_BORDER,
+                labels=[f for _, f in choices_fmt],
+                units=unit
+            )
 
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
@@ -717,8 +715,10 @@ class SettingsPanel(object):
         else:
             logging.error("Unknown control type %s", control_type)
 
+        new_ctrl.SetToolTipString(tooltip)
+
         self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
-                        flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
         self.entries.append(ne)
@@ -731,7 +731,8 @@ class SettingsPanel(object):
 
         return ne
 
-    def _create_label(self, panel, vigil_attr, unit):
+    @staticmethod
+    def _create_label(panel, vigil_attr, unit):
         """ Create a read-only TextCtrl connected to the given va
 
         :return: The newly created control and its vig
@@ -785,13 +786,15 @@ class SettingsPanel(object):
         if hasattr(ad, "range"):
             minv, maxv = ad.range
 
-            new_ctrl = UnitFloatSlider(self.panel,
-                             value=pos,
-                             min_val=minv,
-                             max_val=maxv,
-                             unit=unit,
-                             t_size=(50, -1),
-                             accuracy=conf.get('accuracy', 3))
+            new_ctrl = UnitFloatSlider(
+                self.panel,
+                value=pos,
+                min_val=minv,
+                max_val=maxv,
+                unit=unit,
+                t_size=(50, -1),
+                accuracy=conf.get('accuracy', 3)
+            )
 
             # don't bind to wx.EVT_SLIDER, which happens as soon as the slider moves,
             # but to EVT_SCROLL_CHANGED, which happens when the user has made his
@@ -815,11 +818,12 @@ class SettingsPanel(object):
             choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
 
             new_ctrl = ComboBox(
-                        self.panel,
-                        wx.ID_ANY,
-                        value='', pos=(0, 0), size=(100, 16),
-                        # FIXME: should be readonly, but it fails with GetInsertionPoint
-                        style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER | wx.CB_READONLY)
+                self.panel,
+                wx.ID_ANY,
+                value='', pos=(0, 0), size=(100, 16),
+                # FIXME: should be readonly, but it fails with GetInsertionPoint
+                style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER | wx.CB_READONLY
+            )
 
             def _eat_event(evt):
                 """ Quick and dirty empty function used to 'eat'
@@ -1008,7 +1012,7 @@ class SettingsBarController(object):
         self.settings_panels.append(panel)
 
         try:
-            name = "Name" # for exception handling only
+            name = "Name"  # for exception handling only
             # We no longer display the component name
             # panel.add_label(label, comp.name, selectable=False)
             vigil_attrs = getVAs(comp)
@@ -1100,17 +1104,20 @@ class SparcSettingsController(SettingsBarController):
         main_data = tab_data.main
 
         self._sem_panel = SemSettingsPanel(
-                                    parent_frame.fp_settings_sparc_sem,
-                                    "No SEM found",
-                                    highlight_change)
+            parent_frame.fp_settings_sparc_sem,
+            "No SEM found",
+            highlight_change
+        )
         self._angular_panel = AngularSettingsPanel(
-                                    parent_frame.fp_settings_sparc_angular,
-                                    "No angular camera found",
-                                    highlight_change)
+            parent_frame.fp_settings_sparc_angular,
+            "No angular camera found",
+            highlight_change
+        )
         self._spectrum_panel = SpectrumSettingsPanel(
-                                    parent_frame.fp_settings_sparc_spectrum,
-                                    "No spectrometer found",
-                                    highlight_change)
+            parent_frame.fp_settings_sparc_spectrum,
+            "No spectrometer found",
+            highlight_change
+        )
 
         # Somewhat of a hack to get direct references to a couple of controls
         self.angular_rep_ent = None
@@ -1119,39 +1126,40 @@ class SparcSettingsController(SettingsBarController):
 
         if main_data.ebeam:
             self.add_component(
-                    "SEM",
-                    main_data.ebeam,
-                    self._sem_panel
+                "SEM",
+                main_data.ebeam,
+                self._sem_panel
             )
 
         if main_data.spectrometer:
             self.add_component(
-                    "Spectrometer",
-                    main_data.spectrometer,
-                    self._spectrum_panel
+                "Spectrometer",
+                main_data.spectrometer,
+                self._spectrum_panel
             )
             # If available, add filter selection
             # TODO: have the control in a (common) separate panel?
             # TODO: also add it to the Mirror alignment tab?
             if main_data.light_filter:
-                self._spectrum_panel.add_axis("band",
-                                              main_data.light_filter,
+                self._spectrum_panel.add_axis("band", main_data.light_filter,
                                               CONFIG["filter"]["band"])
 
             self._spectrum_panel.add_divider()
             if spec_stream:
                 self.spectro_rep_ent = self._spectrum_panel.add_value(
-                                            "repetition",
-                                            spec_stream.repetition,
-                                            None,  #component
-                                            CONFIG["streamspec"]["repetition"])
+                    "repetition",
+                    spec_stream.repetition,
+                    None,  #component
+                    CONFIG["streamspec"]["repetition"]
+                )
                 spec_stream.repetition.subscribe(self.on_spec_rep)
 
                 self.spec_pxs_ent = self._spectrum_panel.add_value(
-                                            "pixelSize",
-                                            spec_stream.pixelSize,
-                                            None,  #component
-                                            CONFIG["streamspec"]["pixelSize"])
+                    "pixelSize",
+                    spec_stream.pixelSize,
+                    None,  #component
+                    CONFIG["streamspec"]["pixelSize"]
+                )
             else:
                 logging.warning("Spectrometer available, but no spectrum "
                                 "stream provided")
@@ -1193,17 +1201,17 @@ class SparcSettingsController(SettingsBarController):
             self.add_component("Camera", main_data.ccd, self._angular_panel)
 
             if main_data.light_filter:
-                self._angular_panel.add_axis("band",
-                                              main_data.light_filter,
-                                              CONFIG["filter"]["band"])
+                self._angular_panel.add_axis("band", main_data.light_filter,
+                                             CONFIG["filter"]["band"])
 
             self._angular_panel.add_divider()
             if ar_stream is not None:
                 self.angular_rep_ent = self._angular_panel.add_value(
-                                        "repetition",
-                                        ar_stream.repetition,
-                                        None,  #component
-                                        CONFIG["streamar"]["repetition"])
+                    "repetition",
+                    ar_stream.repetition,
+                    None,  #component
+                    CONFIG["streamar"]["repetition"]
+                )
 
                 ar_stream.repetition.subscribe(self.on_ar_rep)
 
@@ -1219,7 +1227,8 @@ class SparcSettingsController(SettingsBarController):
     def on_ar_rep(self, rep):
         self._on_rep(rep, self.angular_rep_ent.va, self.angular_rep_ent.ctrl)
 
-    def _on_rep(self, rep, rep_va, rep_ctrl):
+    @staticmethod
+    def _on_rep(rep, rep_va, rep_ctrl):
         """ Recalculate the repetition presets according to the ROI ratio """
         ratio = rep[1] / rep[0]
 
@@ -1249,6 +1258,7 @@ class SparcSettingsController(SettingsBarController):
         rep_ctrl.Clear()
         for c in choices:
             rep_ctrl.Append(u"%s x %s px" % c, c)
+
 
 class AnalysisSettingsController(SettingsBarController):
     """ Control the widgets/settings in the right column of the analysis tab """
@@ -1303,9 +1313,9 @@ class AnalysisSettingsController(SettingsBarController):
         # It's displayed only if there are AR streams (handled by the tab cont)
         self._pnl_arfile = FileInfoSettingsPanel(self.parent.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
-                                   "AR background",
-                                   "Angular resolved background acquisition file",
-                                   "None").ctrl
+            "AR background",
+            "Angular resolved background acquisition file",
+            "None").ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(
                                         odemis.dataio.get_available_formats(),
                                         include_all=True)
