@@ -23,3 +23,5 @@ rm -rf _build/*
 
 # Create html
 make html
+
+xdg-open ./_build/html/index.html
