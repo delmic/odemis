@@ -113,11 +113,16 @@ class TMCM3110(model.Actuator):
         if name is None and role is None: # For scan only
             return
 
-        # TODO: Detect if it is "USB bus powered" (meaning, not powered from
-        # an additional power supply), and warn the user that the motors will
-        # not move.
-        # One important note: programs don't run when USB bus powered
-
+        # Detect if it is "USB bus powered" by using the fact that programs
+        # don't run when USB bus powered
+        addr = 80 # big enough to not overlap with REFPROC_2XFF programs
+        prog = [(9, 50, 2, 1), # Set global param 50 to 1
+                (28,), # STOP
+                ]
+        self.UploadProgram(prog, addr)
+        if not self._isFullyPowered():
+            # Only a warning, at the power can be connected afterwards
+            logging.warning("Device %s has no power, the motor will not move", name)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -202,6 +207,8 @@ class TMCM3110(model.Actuator):
             self.UploadProgram(prog, addr)
 
             # Program: start and wait for referencing
+            # It's independent enough that even if the controlling computer
+            # stops during the referencing the motor will always eventually stop.
             timeout = 20 # s (it can take up to 20 s to reach the home as fast speed)
             timeout_ticks = int(round(timeout * 100)) # 1 tick = 10 ms
             gparam = 50 + axis
@@ -456,6 +463,12 @@ class TMCM3110(model.Actuator):
         # check the program counter increases:
         # assert self.GetGlobalParam(0, 130) > addr
 
+    def StopProgram(self):
+        """
+        Stop a progam if any is running
+        """
+        self.SendInstruction(128)
+
     def SetInterrupt(self, id, addr):
         """
         Associate an interrupt to run a program at the given address
@@ -493,6 +506,21 @@ class TMCM3110(model.Actuator):
         self.EnableInterrupt(intid)
         self.EnableInterrupt(255) # globally switch on interrupt processing
 
+    def _isFullyPowered(self):
+        """
+        return (boolean): True if the device is "self-powered" (meaning the
+         motors will be able to move) or False if the device is "USB bus powered"
+         (meaning it does answer to the computer, but nothing more).
+        """
+        # We use a strange fact that programs will not run if the device is not
+        # self-powered.
+        gparam = 50
+        self.SetGlobalParam(2, gparam, 0)
+        self.RunProgram(80) # our stupid program address
+        time.sleep(0.01) # 10 ms should be more than enough to run one instruction
+        status = self.GetGlobalParam(2, gparam)
+        return (status == 1)
+
     def _doInputReference(self, axis, speed):
         """
         Run synchronously one reference search
@@ -503,6 +531,7 @@ class TMCM3110(model.Actuator):
         raise:
             TimeoutError: if the search failed within a timeout (20s)
         """
+        timeout = 20 # s
         # Set speed
         self.SetAxisParam(axis, 194, speed) # maximum home velocity
         self.SetAxisParam(axis, 195, speed) # maximum switching point velocity (useless for us)
@@ -514,18 +543,24 @@ class TMCM3110(model.Actuator):
         else: # Edge is low => go negative dir
             self.SetAxisParam(axis, 193, 8) # RFS with negative dir
 
+        gparam = 50 + axis
+        self.SetGlobalParam(2, gparam, 0)
         # Run the basic program (we need one, otherwise interrupt handlers are
         # not processed)
         addr = 0 + 15 * axis
+        endt = time.time() + timeout + 2 # +2 s to let the program first timeout
         self.RunProgram(addr)
 
         # Wait until referenced
-        gparam = 50 + axis
         status = self.GetGlobalParam(2, gparam)
         while status == 0:
             time.sleep(0.01)
             status = self.GetGlobalParam(2, gparam)
-            # TODO also timeout from Python, and stop motor?
+            if time.time() > endt:
+                self.StopRefSearch(axis)
+                self.StopProgram()
+                self.MotorStop(axis)
+                raise IOError("Timeout during reference search from device")
         if status == 2:
             # if timed out raise
             raise IOError("Timeout during reference search dir %d" % edge)
@@ -542,6 +577,9 @@ class TMCM3110(model.Actuator):
         """
         logging.info("Starting referencing of axis %d", axis)
         if self._refproc == REFPROC_2XFF:
+            if not self._isFullyPowered():
+                raise IOError("Device is not powered, so motors cannot move")
+
             # Procedure devised by NTS:
             # It requires the ref signal to be active for half the length. Like:
             #                      ___________________ 1
@@ -584,7 +622,7 @@ class TMCM3110(model.Actuator):
                     pos_dir = self._doInputReference(axis, 50)
                     if not pos_dir:
                         logging.warning("Second reference search was again in negative direction")
-
+            finally:
                 # Disable interrupt
                 intid = 40 + axis   # axis 0 = IN1 = 40
                 self.DisableInterrupt(intid)
@@ -592,7 +630,6 @@ class TMCM3110(model.Actuator):
                 # only this global interrupt would need to be handle globally
                 # (= only disable iff noone needs interrupt).
                 self.DisableInterrupt(255)
-            finally:
                 # For safety, but also necessary to make sure SetAxisParam() works
                 self.MotorStop(axis)
 
