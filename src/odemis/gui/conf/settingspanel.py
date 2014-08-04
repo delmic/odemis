@@ -247,6 +247,16 @@ CONFIG = {
             # means will make sure both dimensions are treated as one
             "type": "1d_binning",
         },
+        "accelVoltage":
+        {
+            "label": "Accel. voltage",
+            # TODO: tooltip: "Acceleration voltage"
+        },
+        "bpp":
+        {
+            "label": "BPP",
+            # TODO: tooltip: "Bits per pixel"
+        },
         # what we don't want to display:
         "translation":
         {
