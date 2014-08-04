@@ -82,3 +82,5 @@ Typical actuators found can be of the following roles:
  * spectrograph: See the spectrometer
  * chamber: manages the pressure and/or sample loading.
    It must have a "pressure" axis.
+ * lens-switch: Switch between lens on/off for the SPARC
+ * ar-spec-selector: Selector between AR/Spectrometer for the SPARC
