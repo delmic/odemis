@@ -644,15 +644,19 @@ class TMCM3110(model.Actuator):
             raise NotImplementedError("Unknown referencing procedure %s" % self._refproc)
 
     # high-level methods (interface)
-    def _updatePosition(self):
+    def _updatePosition(self, axes=None):
         """
         update the position VA
+        axes (set of str): names of the axes to update or None if all should be
+          updated
         """
-        # TODO: allow to specify which axes to update (and other axes keep the current position)
-        pos = {}
+        if axes is None:
+            axes = self._axes_names
+        pos = self.position.value
         for i, n in enumerate(self._axes_names):
-            # param 1 = current position
-            pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
+            if n in axes:
+                # param 1 = current position
+                pos[n] = self.GetAxisParam(i, 1) * self._ustepsize[i]
 
         # it's read-only, so we change it via _value
         self.position._value = pos
@@ -790,6 +794,7 @@ class TMCM3110(model.Actuator):
         moving_axes = set(axes)
 
         last_upd = time.time()
+        last_axes = moving_axes.copy()
         try:
             while not future._must_stop.is_set():
                 for aid in moving_axes.copy(): # need copy to remove during iteration
@@ -800,9 +805,11 @@ class TMCM3110(model.Actuator):
                     return
 
                 # Update the position from time to time (10 Hz)
-                if time.time() - last_upd > 0.1:
-                    self._updatePosition() # TODO: only update the axes which moved since last time
+                if time.time() - last_upd > 0.1 or last_axes != moving_axes:
+                    last_names = set(self._axes_names[i] for i in last_axes)
+                    self._updatePosition(last_names)
                     last_upd = time.time()
+                    last_axes = moving_axes.copy()
 
                 # Wait half of the time left (maximum 0.1 s)
                 left = end - time.time()
@@ -816,8 +823,7 @@ class TMCM3110(model.Actuator):
             future._was_stopped.set()
             raise CancelledError()
         finally:
-            self._updatePosition() # update with final position
-
+            self._updatePosition() # update (all axes) with final position
 
     def _doReference(self, axes):
         """
@@ -835,7 +841,7 @@ class TMCM3110(model.Actuator):
         # receives updates both values are already updated.
         for a in axes:
             self.referenced._value[a] = True
-        self._updatePosition() # all the referenced axes should be back to 0
+        self._updatePosition(axes) # all the referenced axes should be back to 0
         # read-only so manually notify
         self.referenced.notify(self.referenced.value)
 
