@@ -209,7 +209,7 @@ class ViewController(object):
             for viewport in self._viewports:
                 vpv[viewport] = {"name": "SEM %d" % i,
                                  "stage": self._main_data_model.stage,
-                                 "focus1": self._main_data_model.ebeam_focus,
+                                 "focus": self._main_data_model.ebeam_focus,
                                  "stream_classes": EM_STREAMS,
                                  }
                 i += 1
@@ -223,7 +223,7 @@ class ViewController(object):
             for viewport in self._viewports:
                 vpv[viewport] = {"name": "Optical %d" % i,
                                  "stage": self._main_data_model.stage,
-                                 "focus1": self._main_data_model.focus,
+                                 "focus": self._main_data_model.focus,
                                  "stream_classes": OPTICAL_STREAMS,
                                  }
                 i += 1
@@ -240,27 +240,25 @@ class ViewController(object):
                 (self._viewports[0],  # focused view
                  {"name": "SEM",
                   "stage": self._main_data_model.stage,
-                  "focus1":  self._main_data_model.ebeam_focus,
+                  "focus":  self._main_data_model.ebeam_focus,
                   "stream_classes": EM_STREAMS,
                   }),
                 (self._viewports[1],
                  {"name": "Optical",
                   "stage": self._main_data_model.stage,
-                  "focus1": self._main_data_model.focus,
+                  "focus": self._main_data_model.focus,
                   "stream_classes": OPTICAL_STREAMS,
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",
                   "stage": self._main_data_model.stage,
-                  "focus0": None, # TODO: SEM focus when em stream on
-                  "focus1": self._main_data_model.focus,
+                  "focus": self._main_data_model.focus,
                   "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
                   }),
                 (self._viewports[3],
                  {"name": "Combined 2",
                   "stage": self._main_data_model.stage,
-                  "focus0": None, # TODO: SEM focus when em stream on
-                  "focus1": self._main_data_model.focus,
+                  "focus": self._main_data_model.focus,
                   "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
                   }),
             ])
@@ -271,8 +269,7 @@ class ViewController(object):
                 vpv[self._viewports[2]] = {
                     "name": "Chamber",
                     "stage": None,
-                    "focus0": None,
-                    "focus1": None,
+                    "focus": None,
                     "stream_classes": (RGBCameraStream,),
                 }
 
@@ -281,8 +278,7 @@ class ViewController(object):
                 vpv[self._viewports[4]] = {
                     "name": "Overview",
                     # "stage": None,
-                    # "focus0": None,
-                    # "focus1": None,
+                    # "focus": None,
                     "stream_classes": (RGBCameraStream, BrightfieldStream),
                 }
 
@@ -294,7 +290,7 @@ class ViewController(object):
             for viewport in self._viewports:
                 vpv[viewport] = {"name": "View %d" % i,
                                  "stage": self._main_data_model.stage,
-                                 "focus0": self._main_data_model.focus,
+                                 "focus": self._main_data_model.focus,
                                  "stream_classes": None, # everything
                                  }
                 i += 1

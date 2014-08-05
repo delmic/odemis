@@ -21,6 +21,7 @@ This file is part of Odemis.
 
 """
 
+import Queue
 from abc import ABCMeta
 import logging
 import math
@@ -427,7 +428,7 @@ class ActuatorGUIData(MicroscopyGUIData):
         # Step size name -> val, range, actuator, axes (None if all)
         # str -> float, [float, float], str, (str, ...)
         ss_def = {"stage": (1e-6, [100e-9, 1e-3], "stage", None),
-                  "focus": (100e-9, [10e-9, 1e-4], "focus", None),
+                  # "focus": (100e-9, [10e-9, 1e-4], "focus", None),
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   # Mirror is a bit more complicated as it has 4 axes and Y
                   # usually needs to be 10x bigger than X
@@ -582,14 +583,11 @@ class MicroscopeView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, focus0=None, focus1=None, stream_classes=None):
+    def __init__(self, name, stage=None, focus=None, stream_classes=None):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
-        :param focus0 (Actuator): actuator with one axis: z. Can be None
-        :param focus1 (Actuator): actuator with one axis: z. Can be None
-          Focuses 0 and 1 are modified when changing focus respectively along
-          the X and Y axis.
+        :param focus (Actuator): actuator with one axis: z. Can be None
         :param stream_classes (None, or tuple of classes): all subclasses that the
           streams in this view is allowed to show.
         """
@@ -601,7 +599,16 @@ class MicroscopeView(View):
         else:
             self.stream_classes = stream_classes
         self._stage = stage
-        self._focus = [focus0, focus1]
+
+        # TODO: allow to have multiple focus, one per stream class
+        self.focus = focus
+        if focus is not None:
+            self._focus_queue = Queue.Queue()
+            self._focus_thread = threading.Thread(target=self._moveFocus,
+                                                  name="Focus mover view %s" % name)
+            # TODO: way to detect the view is not used and so we need to stop the thread? (cf __del__?)
+            self._focus_thread.daemon = True
+            self._focus_thread.start()
 
         # The real stage position, to be modified via moveStageToView()
         # it's a direct access from the stage, so looks like a dict of axes
@@ -643,12 +650,41 @@ class MicroscopeView(View):
 
         self.horizontal_field_width = model.FloatVA()
 
-    def get_focus(self, i):
-        return self._focus[i]
+    def _moveFocus(self):
+        time_last_move = 0
+        try:
+            while True:
+                # wait until there is something to do
+                shift = self._focus_queue.get()
 
-    def get_focus_count(self):
-        """ Get the number of available focus actuators """
-        return len([a for a in self._focus if a])
+                # rate limit to 20 Hz
+                sleept = time_last_move + 0.05 - time.time()
+                if sleept > 0:
+                    time.sleep(sleept)
+
+                # Add more moves if there are already more
+                try:
+                    while True:
+                        shift += self._focus_queue.get(block=False)
+                except Queue.Empty:
+                    pass
+
+                # TODO: check we stay within the axis range
+                logging.debug("Moving focus by %f μm", shift * 1e6)
+                f = self.focus.moveRel({"z": shift})
+                time_last_move = time.time()
+                # wait until it's finished so that we don't accumulate requests,
+                # but instead only do requests of size "big enough"
+                try:
+                    f.result()
+                except Exception:
+                    logging.info("Failed to apply focus move", exc_info=1)
+        except Exception:
+            logging.exception("Focus mover thread failed")
+
+    def moveFocusRel(self, shift):
+        # FIXME: "stop all axes" should also clear the queue
+        self._focus_queue.put(shift)
 
     def has_stage(self):
         return self._stage is not None

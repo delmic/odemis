@@ -1388,7 +1388,7 @@ class LensAlignTab(Tab):
             (main_frame.vp_align_ccd,  # focused view
              {"name": "Optical CL",
               "stage": self._stage_ab,
-              "focus1": main_data.focus,
+              "focus": main_data.focus,
               "stream_classes": (streammod.CameraNoLightStream,),
              }),
             (main_frame.vp_align_sem,

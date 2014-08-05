@@ -86,15 +86,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.abilities |= {CAN_ZOOM, CAN_FOCUS}
         self.fit_view_to_next_image = True
 
-        # TODO: If it's too resource consuming, which might want to create just
-        # our own thread. cf model.stream.histogram
-        # FIXME: "stop all axes" should also cancel the next timer
-        self._moveFocusLock = threading.Lock()
-        self._moveFocusDistance = [0, 0]
-        # TODO: deduplicate!
-        self._moveFocus0Timer = wx.PyTimer(self._moveFocus0)
-        self._moveFocus1Timer = wx.PyTimer(self._moveFocus1)
-
         # Current (tool) mode. TODO: Make platform (secom/sparc) independent
         # and use listen to .tool (cf SparcCanvas)
         self.current_mode = None
@@ -160,7 +151,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self._focus_overlay = None
 
-        if self.microscope_view.get_focus_count():
+        if self.microscope_view.focus is not None:
             self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
         self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
@@ -591,7 +582,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             >0: toward up/right
         """
 
-        if self.microscope_view.get_focus(axis) is not None:
+        if axis == 1 and self.microscope_view.focus is not None:
             # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a
             # couple of mm)
             # TODO this should be adjusted by the lens magnification:
@@ -601,52 +592,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             val = 0.1e-6 * shift # m
             assert(abs(val) < 0.01) # a move of 1 cm is a clear sign of bug
             # logging.error("%s, %s", axis, shift)
-            self.queueMoveFocus(axis, val)
-
-    def queueMoveFocus(self, axis, shift, period=0.1):
-        """ Move the focus, but at most every period, to avoid accumulating
-        many slow small moves.
-
-        axis (0|1): axis/focus number
-            0 => X
-            1 => Y
-        shift (float): distance of the focus move
-        period (second): maximum time to wait before it will be moved
-        """
-        # update the complete move to do
-        with self._moveFocusLock:
-            self._moveFocusDistance[axis] += shift
-            # logging.debug(
-            #         "Increasing focus mod with %s for axis %s set to %s",
-            #         shift,
-            #         axis,
-            #         self._moveFocusDistance[axis])
-
-        # start the timer if not yet started
-        timer = [self._moveFocus0Timer, self._moveFocus1Timer][axis]
-        if not timer.IsRunning():
-            timer.Start(period * 1000.0, oneShot=True)
-
-    def _moveFocus0(self):
-        with self._moveFocusLock:
-            shift = self._moveFocusDistance[0]
-            self._moveFocusDistance[0] = 0
-
-        if self._focus_overlay:
-            self._focus_overlay.add_shift(shift, 0)
-        logging.debug("Moving focus0 by %f μm", shift * 1e6)
-        self.microscope_view.get_focus(0).moveRel({"z": shift})
-
-    def _moveFocus1(self):
-        with self._moveFocusLock:
-            shift = self._moveFocusDistance[1]
-            self._moveFocusDistance[1] = 0
-
-        if self._focus_overlay:
-            self._focus_overlay.add_shift(shift, 1)
-
-        logging.debug("Moving focus1 by %f μm", shift * 1e6)
-        self.microscope_view.get_focus(1).moveRel({"z": shift})
+            self.microscope_view.moveFocusRel(val)
+            self._focus_overlay.add_shift(val, axis)
 
     def on_right_down(self, event):
         """ Process right mouse button down event
@@ -662,15 +609,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Note: Set the cursor before the super method is called.
             # There is a Ubuntu/wxPython related bug that SetCursor does not work once CaptureMouse
             # is called (which happens in the super method).
-            if self.microscope_view:
-                num_focus = self.microscope_view.get_focus_count()
-                if num_focus == 1:
-                    logging.debug("One focus actuator found")
-                    self.set_dynamic_cursor(wx.CURSOR_SIZENS)
-                elif num_focus == 2:
-                    logging.debug("Two focus actuators found")
-                    self.set_dynamic_cursor(wx.CURSOR_SIZEWE)
-            if self._focus_overlay:
+            if self.microscope_view and self.microscope_view.focus is not None:
+                self.set_dynamic_cursor(wx.CURSOR_SIZENS)
                 self._focus_overlay.clear_shift()
 
         super(DblMicroscopeCanvas, self).on_right_down(event)
@@ -684,10 +624,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
 
         if CAN_FOCUS in self.abilities and self.right_dragging:
-            # Stop the timers, so there won't be any more focussing once the button is released.
-            for timer in [self._moveFocus0Timer, self._moveFocus1Timer]:
-                if timer.IsRunning():
-                    timer.Stop()
             # The mouse cursor is automatically reset in the super class method
             if self._focus_overlay:
                 self._focus_overlay.clear_shift()
@@ -715,37 +651,29 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # value produced while focussing.
 
             if evt.ShiftDown():
-                # TODO: Pressing and releasing the shift key while adjusting focus messes up the
-                # origin of the focus, so it's hard/impossible to go back to the original focus
-                # by dragging the mouse back to the center. Find a way to 'reset' the focus after
-                # the shift key has been released.
                 softener = 0.1  # softer
             else:
                 softener = 1
 
             linear_zone = 32.0
+            # We only care of the vertical position for the focus
             pos = evt.GetPositionTuple()
-            for i in [0, 1]:  # x, y
-                shift = pos[i] - self._rdrag_init_pos[i]
+            # Flip the sign for vertical movement, as indicated in the
+            # on_extra_axis_move docstring: up/right is positive
+            shift = -(pos[1] - self._rdrag_init_pos[1])
 
-                if i:
-                    # Flip the sign for vertical movement, as indicated in the
-                    # on_extra_axis_move docstring: up/right is positive
-                    shift = -shift
-                    # logging.debug("pos %s, shift %s", pos[i], shift)
+            if abs(shift) <= linear_zone:
+                value = shift
+            else:
+                ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
+                value = shift + ssquare / linear_zone
 
-                if abs(shift) <= linear_zone:
-                    value = shift
-                else:
-                    ssquare = cmp(shift, 0) * (abs(shift) - linear_zone) ** 2
-                    value = shift + ssquare / linear_zone
+            change = value - self._rdrag_prev_value[1]
 
-                change = value - self._rdrag_prev_value[i]
-
-                # Changing the extra axis start the focus timer
-                if change:
-                    self.on_extra_axis_move(i, change * softener)
-                    self._rdrag_prev_value[i] = value
+            # Changing the extra axis start the focus timer
+            if change:
+                self.on_extra_axis_move(1, change * softener)
+                self._rdrag_prev_value[1] = value
 
         super(DblMicroscopeCanvas, self).on_motion(evt)
 
