@@ -1,11 +1,19 @@
+import array
+import random
+import numpy
 import threading
+
 import wx
 from wx.lib.delayedresult import startWorker
-import array
-import numpy
+
 
 
 #=============================================================================
+
+# THREAD RENDER TEST
+from odemis.model._dataflow import DataArray
+
+
 class DrawPanelDBT(wx.Panel):
     """
     Complex panel with its content drawn in another thread
@@ -169,6 +177,7 @@ def random_color(mix_color=None, alpha=255):
     return red * a, green * a, blue * a, alpha
 
 #=============================================================================
+
 class MainWindow(wx.Frame):
     def __init__(self, *args, **kwargs):
         wx.Frame.__init__(self, *args, **kwargs)
@@ -185,3 +194,7 @@ class MainWindow(wx.Frame):
 app = wx.App(False)
 win = MainWindow(None)
 app.MainLoop()
+
+# END THREAD RENDER TEST
+
+#=============================================================================
