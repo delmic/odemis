@@ -66,6 +66,7 @@ def get_sizer_position(window):
 
     raise ValueError("Widget not found")
 
+
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control,
     making sure that the changes in one are automatically reflected in the

@@ -84,7 +84,7 @@ def to_si_scale(x):
     return x / divisor, prefix
 
 def si_scale_list(values):
-    """ Scales a list of numerical values using the same metrix scale """
+    """ Scales a list of numerical values using the same metric scale """
     if values:
         marker = max(values)
         divisor, prefix = get_si_scale(marker)
@@ -148,8 +148,8 @@ def to_string_pretty(x, sig=None, unit=None):
             else:
                 return str_val
 
-
     return u"%s" % x
+
 
 def readable_str(value, unit=None, sig=None):
     """

@@ -24,20 +24,29 @@ This module contains classes to control the settings controls in the right
 setting column of the user interface.
 
 
-..NOTE:
+.. note::
     This module is a prime candidate for a refactoring session!!!
 
 """
+
 from __future__ import division
+from abc import ABCMeta
 
 import collections
 import logging
 import numbers
+import re
+import time
+
+import wx
+from wx.lib.pubsub import pub
+
 from odemis import model
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
+from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
 import odemis.gui.comp.hist as hist
 from odemis.gui.conf.settingspanel import CONFIG
@@ -46,18 +55,14 @@ from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from odemis.util.units import readable_str
-import re
-import time
-import wx
-from wx.lib.pubsub import pub
-
 from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
 import odemis.gui.comp.text as text
 import odemis.gui.conf as guiconf
 import odemis.util.units as utun
 
-
 ####### Utility functions #######
+
+
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
@@ -65,6 +70,7 @@ def choice_to_str(choice):
 
 
 def traverse(seq_val):
+    """ """
     if isinstance(seq_val, collections.Iterable):
         for value in seq_val:
             for subvalue in traverse(value):
@@ -74,12 +80,15 @@ def traverse(seq_val):
 
 
 def bind_menu(se):
-    """
-    Add a menu to reset a setting entry to the original (current) value
+    """ Add a menu to reset a setting entry to the original (current) value
+
+    .. note:
+        se must at least have a valid label, ctrl and va
+
     :param se: (SettingEntry)
 
-    Note: se must have a valid label, ctrl and va at least
     """
+
     orig_val = se.va.value
 
     def reset_value(evt):
@@ -89,7 +98,7 @@ def bind_menu(se):
     def show_reset_menu(evt):
         # No menu needed if value hasn't changed
         if se.va.value == orig_val:
-            return # TODO: or display it greyed out?
+            return  # TODO: or display it greyed out?
 
         menu = wx.Menu()
         mi = wx.MenuItem(menu, wx.NewId(), 'Reset value')
@@ -103,14 +112,14 @@ def bind_menu(se):
     se.ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
     se.label.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
-
 ####### Classes #######
 
+
 class SettingEntry(object):
-    """
-    Represents a setting entry in the panel. It merely associates the VA to
+    """ Represents a setting entry in the panel. It merely associates the VA to
     the widgets that allow to control it.
     """
+
     # TODO: merge with VAC?
     def __init__(self, name, va=None, comp=None, label=None, ctrl=None, vac=None):
         """
@@ -151,7 +160,7 @@ class SettingEntry(object):
             self.label.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
 
 
-class SettingsPanel(object):
+class SettingsController(object):
     """ Settings base class which describes an indirect wrapper for
     FoldPanelItems.
 
@@ -163,48 +172,22 @@ class SettingsPanel(object):
     NOTE: Do not instantiate this class, but always inherit it.
     """
 
+    __metaclass__ = ABCMeta
+
     def __init__(self, fold_panel, default_msg, highlight_change=False):
 
-        assert isinstance(fold_panel, FoldPanelItem)
-
-        self.fold_panel = fold_panel
-
-        self.panel = wx.Panel(self.fold_panel)
-
-        self.panel.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-        self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+        self.panel = SettingsPanel(fold_panel, default_msg=default_msg)
+        fold_panel.add_item(self.panel)
 
         self.highlight_change = highlight_change
-
-        self._main_sizer = wx.BoxSizer()
-        self._gb_sizer = wx.GridBagSizer(0, 0)
-
-        self._gb_sizer.Add(wx.StaticText(self.panel, -1, default_msg), (0, 1))
-
-        self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-        self.panel.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
-
-        self.panel.SetSizer(self._main_sizer)
-        self._main_sizer.Add(self._gb_sizer,
-                             proportion=1,
-                             flag=wx.ALL | wx.EXPAND,
-                             border=5)
-
-        self.fold_panel.add_item(self.panel)
-
-        self._gb_sizer.AddGrowableCol(1)
-
         self.num_entries = 0
-        self.entries = [] # list of SettingEntry
+        self.entries = []  # list of SettingEntry
 
-    def Hide(self, *args, **kwargs):
-        self.panel.Hide(*args, **kwargs)
+    def hide_panel(self):
+        self.panel.Hide()
 
-    def Show(self, *args, **kwargs):
-        self.panel.Show(*args, **kwargs)
-
-    def IsShown(self):
-        return self.panel.IsShown()
+    def show_panel(self):
+        self.panel.Show()
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
@@ -223,19 +206,6 @@ class SettingsPanel(object):
             if entry.ctrl:
                 entry.ctrl.Enable(enabled)
 
-    def _clear(self):
-        """ Remove default 'no content' label """
-        if self.num_entries == 0:
-            cl = self.panel.GetChildren()
-            if cl:
-                cl[0].Destroy()
-
-    def clear(self):
-        """ Remove all entries"""
-        if self.num_entries > 0:
-            for c in self.panel.GetChildren():
-                c.Destroy()
-            self.num_entries = 0
 
     def _label_to_human(self, label):
         """ Converts a camel-case label into a human readable one
@@ -348,20 +318,20 @@ class SettingsPanel(object):
         self._clear()
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         if value and not selectable:
             value_ctrl = wx.StaticText(self.panel, label=unicode(value))
             value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
+            self.panel._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                                flag=wx.ALL, border=5)
         elif value and selectable:
             value_ctrl = wx.TextCtrl(self.panel, value=unicode(value),
                                      style=wx.BORDER_NONE | wx.TE_READONLY)
             value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
             value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-            self._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
+            self.panel._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                                flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                                border=5)
         else:
@@ -374,13 +344,13 @@ class SettingsPanel(object):
         return ne
 
     def add_browse_button(self, label, label_tl=None, clearlabel=None):
-        self._clear()
+        self.panel.clear_message()
 
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
         if label_tl:
             lbl_ctrl.SetToolTipString(label_tl)
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         config = guiconf.get_acqui_conf()
@@ -393,7 +363,7 @@ class SettingsPanel(object):
         value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
 
-        self._gb_sizer.Add(value_ctrl,
+        self.panel._gb_sizer.Add(value_ctrl,
                            (self.num_entries, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
@@ -407,7 +377,7 @@ class SettingsPanel(object):
 
     def add_divider(self):
         line = wx.StaticLine(self.panel, size=(-1, 1))
-        self._gb_sizer.Add(
+        self.panel._gb_sizer.Add(
                 line,
                 (self.num_entries, 0),
                 span=(1, 2),
@@ -425,6 +395,9 @@ class SettingsPanel(object):
         :param conf: ({}): Configuration items that may override default settings
         """
         assert isinstance(vigil_attr, VigilantAttributeBase)
+
+        # Remove any 'empty panel' warning
+        self.panel.clear_message()
 
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
@@ -477,8 +450,7 @@ class SettingsPanel(object):
             # don't increase num_entries, as it doesn't add any graphical element
             return
 
-        # Remove any 'empty panel' warning
-        self._clear()
+
 
         # Format label
         label = conf.get('label', self._label_to_human(name))
@@ -486,7 +458,7 @@ class SettingsPanel(object):
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
         lbl_ctrl.SetToolTipString(tooltip)
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
         # vigilant attribute.
@@ -550,7 +522,7 @@ class SettingsPanel(object):
             new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_INT:
-            if unit == "": # don't display unit prefix if no unit
+            if unit == "":  # don't display unit prefix if no unit
                 unit = None
             new_ctrl = text.UnitIntegerCtrl(self.panel,
                                             style=wx.NO_BORDER,
@@ -644,10 +616,11 @@ class SettingsPanel(object):
         elif control_type == odemis.gui.CONTROL_COMBO:
 
             new_ctrl = ComboBox(
-                        self.panel,
-                        wx.ID_ANY,
-                        value='', pos=(0, 0), size=(100, 16),
-                        style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER)
+                self.panel,
+                wx.ID_ANY,
+                value='', pos=(0, 0), size=(100, 16),
+                style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER
+            )
 
             def _eat_event(evt):
                 """ Quick and dirty empty function used to 'eat'
@@ -668,7 +641,7 @@ class SettingsPanel(object):
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def cb_set(value, ctrl=new_ctrl, unit=unit):
+            def cb_set(value, ctrl=new_ctrl, u=unit):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
@@ -679,8 +652,8 @@ class SettingsPanel(object):
                 else:
                     logging.debug("No existing label found for value %s", value)
                     # entering value as free text
-                    txt = readable_str(value, unit)
-                    ctrl.SetValue(txt)
+                    txt = readable_str(value, u, sig=3)
+                    return ctrl.SetValue(txt)
 
             # equivalent wrapper function to retrieve the actual value
             def cb_get(ctrl=new_ctrl, va=vigil_attr):
@@ -706,11 +679,12 @@ class SettingsPanel(object):
                     return new_val
 
             vac = VigilantAttributeConnector(
-                    vigil_attr,
-                    new_ctrl,
-                    va_2_ctrl=cb_set,
-                    ctrl_2_va=cb_get,
-                    events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+                vigil_attr,
+                new_ctrl,
+                va_2_ctrl=cb_set,
+                ctrl_2_va=cb_get,
+                events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
+            )
 
             new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
             new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
@@ -720,7 +694,7 @@ class SettingsPanel(object):
 
         new_ctrl.SetToolTipString(tooltip)
 
-        self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
+        self.panel._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
@@ -730,7 +704,7 @@ class SettingsPanel(object):
         if self.highlight_change:
             bind_menu(ne)
 
-        self.fold_panel.Parent.Layout()
+        self.panel.Parent.Parent.Layout()
 
         return ne
 
@@ -775,7 +749,7 @@ class SettingsPanel(object):
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
-        self._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
@@ -868,7 +842,7 @@ class SettingsPanel(object):
                                 ctrl_2_pos=cb_get,
                                 events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
-        self._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
+        self.panel._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
         # AxisConnector follows VigilantAttributeConnector interface, so can be
@@ -880,7 +854,7 @@ class SettingsPanel(object):
         if self.highlight_change:
             bind_menu(ne)
 
-        self.fold_panel.Parent.Layout()
+        self.panel.Parent.Parent.Layout()
 
     def add_widgets(self, *wdg):
         """
@@ -894,7 +868,7 @@ class SettingsPanel(object):
             span = wx.DefaultSpan
 
         for i, w in enumerate(wdg):
-            self._gb_sizer.Add(w, (self.num_entries, i), span=span,
+            self.panel._gb_sizer.Add(w, (self.num_entries, i), span=span,
                                flag=wx.ALL | wx.EXPAND,
                                border=5)
         self.num_entries += 1
@@ -947,19 +921,19 @@ class SettingsPanel(object):
             else:
                 p = p.Parent
 
-class SemSettingsPanel(SettingsPanel):
+class SemSettingsController(SettingsController):
     pass
 
-class OpticalSettingsPanel(SettingsPanel):
+class OpticalSettingsController(SettingsController):
     pass
 
-class AngularSettingsPanel(SettingsPanel):
+class AngularSettingsController(SettingsController):
     pass
 
-class SpectrumSettingsPanel(SettingsPanel):
+class SpectrumSettingsController(SettingsController):
     pass
 
-class FileInfoSettingsPanel(SettingsPanel):
+class FileInfoSettingsController(SettingsController):
     pass
 
 class SettingsBarController(object):
@@ -1041,12 +1015,12 @@ class SecomSettingsController(SettingsBarController):
                                                       highlight_change)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsPanel(
+        self._sem_panel = SemSettingsController(
                                     parent_frame.fp_settings_secom_sem,
                                     "No SEM found",
                                     highlight_change)
 
-        self._optical_panel = OpticalSettingsPanel(
+        self._optical_panel = OpticalSettingsController(
                                     parent_frame.fp_settings_secom_optical,
                                     "No optical microscope found",
                                     highlight_change)
@@ -1077,12 +1051,12 @@ class LensAlignSettingsController(SettingsBarController):
                                                           highlight_change)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsPanel(
+        self._sem_panel = SemSettingsController(
                                     parent_frame.fp_lens_sem_settings,
                                     "No SEM found",
                                     highlight_change)
 
-        self._optical_panel = OpticalSettingsPanel(
+        self._optical_panel = OpticalSettingsController(
                                     parent_frame.fp_lens_opt_settings,
                                     "No optical microscope found",
                                     highlight_change)
@@ -1106,17 +1080,17 @@ class SparcSettingsController(SettingsBarController):
                                                       highlight_change)
         main_data = tab_data.main
 
-        self._sem_panel = SemSettingsPanel(
+        self._sem_panel = SemSettingsController(
             parent_frame.fp_settings_sparc_sem,
             "No SEM found",
             highlight_change
         )
-        self._angular_panel = AngularSettingsPanel(
+        self._angular_panel = AngularSettingsController(
             parent_frame.fp_settings_sparc_angular,
             "No angular camera found",
             highlight_change
         )
-        self._spectrum_panel = SpectrumSettingsPanel(
+        self._spectrum_panel = SpectrumSettingsController(
             parent_frame.fp_settings_sparc_spectrum,
             "No spectrometer found",
             highlight_change
@@ -1309,12 +1283,12 @@ class AnalysisSettingsController(SettingsBarController):
         """
 
         ### Panel containing information about the acquisition file
-        self._pnl_acqfile = FileInfoSettingsPanel(self.parent.fp_fileinfo,
+        self._pnl_acqfile = FileInfoSettingsController(self.parent.fp_fileinfo,
                                                   "No file loaded")
 
         ### Panel with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
-        self._pnl_arfile = FileInfoSettingsPanel(self.parent.fp_fileinfo, "")
+        self._pnl_arfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
             "AR background",
             "Angular resolved background acquisition file",
@@ -1323,19 +1297,19 @@ class AnalysisSettingsController(SettingsBarController):
                                         odemis.dataio.get_available_formats(),
                                         include_all=True)
         self._arfile_ctrl.SetWildcard(wildcards)
-        self._pnl_arfile.Hide()
+        self._pnl_arfile.hide_panel()
         self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
         ###  Panel with spectrum efficiency compensation file information
         # It's displayed only if there are Spectrum streams
-        self._pnl_specfile = FileInfoSettingsPanel(self.parent.fp_fileinfo, "")
+        self._pnl_specfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._specfile_ctrl = self._pnl_specfile.add_browse_button(
                                             "Spec. correction",
                                             "Spectrum efficiency correction file",
                                             "None").ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
-        self._pnl_specfile.Hide()
+        self._pnl_specfile.hide_panel()
         # connect
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
@@ -1352,7 +1326,7 @@ class AnalysisSettingsController(SettingsBarController):
         """
 
         # Remove the old controls
-        self._pnl_acqfile.clear()
+        self._pnl_acqfile.panel.clear_all()
 
         if file_info:
             se_file = self._pnl_acqfile.add_label("File",
@@ -1413,14 +1387,14 @@ class AnalysisSettingsController(SettingsBarController):
 
     def ShowCalibrationPanel(self, ar=None, spec=None):
         """
-        Show/hide the ar/spec panels
+        show_panel/hide the ar/spec panels
         ar (boolean or None): show, hide or don't change AR calib panel
         spec (boolean or None): show, hide or don't change spec calib panel
         """
         if ar is not None:
-            self._pnl_arfile.Show(ar)
+            self._pnl_arfile.show_panel(ar)
         if spec is not None:
-            self._pnl_specfile.Show(spec)
+            self._pnl_specfile.show_panel(spec)
 
         self.parent.Layout()
 
@@ -1431,10 +1405,10 @@ class SparcAlignSettingsController(SettingsBarController):
         super(SparcAlignSettingsController, self).__init__(tab_data)
         main_data = tab_data.main
 
-        self._ar_panel = AngularSettingsPanel(
+        self._ar_panel = AngularSettingsController(
                                 parent_frame.fp_ma_settings_ar,
                                 "No angular resolved camera found")
-        self._spectrum_panel = SpectrumSettingsPanel(
+        self._spectrum_panel = SpectrumSettingsController(
                                     parent_frame.fp_ma_settings_spectrum,
                                     "No spectrometer found")
 
