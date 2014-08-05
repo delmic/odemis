@@ -113,16 +113,17 @@ class TMCM3110(model.Actuator):
         if name is None and role is None: # For scan only
             return
 
-        # Detect if it is "USB bus powered" by using the fact that programs
-        # don't run when USB bus powered
-        addr = 80 # big enough to not overlap with REFPROC_2XFF programs
-        prog = [(9, 50, 2, 1), # Set global param 50 to 1
-                (28,), # STOP
-                ]
-        self.UploadProgram(prog, addr)
-        if not self._isFullyPowered():
-            # Only a warning, at the power can be connected afterwards
-            logging.warning("Device %s has no power, the motor will not move", name)
+        if port != "/dev/fake": # TODO: support programs in simulator
+            # Detect if it is "USB bus powered" by using the fact that programs
+            # don't run when USB bus powered
+            addr = 80 # big enough to not overlap with REFPROC_2XFF programs
+            prog = [(9, 50, 2, 1), # Set global param 50 to 1
+                    (28,), # STOP
+                    ]
+            self.UploadProgram(prog, addr)
+            if not self._isFullyPowered():
+                # Only a warning, at the power can be connected afterwards
+                logging.warning("Device %s has no power, the motor will not move", name)
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -689,7 +690,7 @@ class TMCM3110(model.Actuator):
         f = CancellableFuture()
         f._moving_lock = threading.Lock() # taken while moving
         f._must_stop = threading.Event() # cancel of the current future requested
-        f._was_stopped = threading.Event() # if cancel was successful
+        f._was_stopped = False # if cancel was successful
         f.task_canceller = self._cancelCurrentMove
         return f
 
@@ -820,7 +821,7 @@ class TMCM3110(model.Actuator):
             # stop all axes still moving them
             for i in moving_axes:
                 self.MotorStop(i)
-            future._was_stopped.set()
+            future._was_stopped = True
             raise CancelledError()
         finally:
             self._updatePosition() # update (all axes) with final position
@@ -859,11 +860,9 @@ class TMCM3110(model.Actuator):
 
         future._must_stop.set() # tell the thread taking care of the move it's over
         with future._moving_lock:
-            if future._was_stopped.is_set():
-                return True
-            else:
+            if not future._was_stopped:
                 logging.debug("Cancelling failed")
-                return False
+            return future._was_stopped
 
     @staticmethod
     def _openSerialPort(port):
