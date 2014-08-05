@@ -1,5 +1,5 @@
 #!/bin/bash
-# Start the cli
+# Start the backend, with memory limit if possible
 
 . /etc/odemis.conf
 
@@ -8,18 +8,18 @@ RUNNER=""
 MEMLIM_FILE=/sys/fs/cgroup/memory/odemisd/memory.limit_in_bytes
 MEMSWLIM_FILE=/sys/fs/cgroup/memory/odemisd/memory.memsw.limit_in_bytes
 # make sure we don't use too much memory
-if [ -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgexec ]; then
+if [ -d /sys/fs/cgroup/memory/odemisd -a -x /usr/bin/cgexec -a -f "$MEMLIM_FILE" ]; then
     MAXMEM=$(( 2 * 1024 * 1024 * 1024 )) # 2Gb
-    # ulimit doesn't work because it can only specify virtual memory, which is extremelly unpredictable for multiple processes
+    # ulimit doesn't work because it can only specify virtual memory, which is extremely unpredictable for multiple processes
     #ulimit -S -d $MAXMEM -v $(( 2 * $MAXMEM ))
     
-    if [[ "$(<"$MEMLIM_FILE")" -le $MAXMEM && "$(<$MEMSWLIM_FILE)" -le $MAXMEM ]]; then
+    if [[ "$(<"$MEMLIM_FILE")" -le $MAXMEM && -f "$MEMSWLIM_FILE" && "$(<$MEMSWLIM_FILE)" -le $MAXMEM ]]; then
         # everything is already fine
         RUNNER="/usr/bin/cgexec -g memory:odemisd"
     else
         # try to do it ourselves
         echo $MAXMEM > "$MEMLIM_FILE"
-        echo $MAXMEM > "$MEMSWLIM_FILE"
+        [ -f "$MEMSWLIM_FILE" ] && echo $MAXMEM > "$MEMSWLIM_FILE"
         status=$?
         if [[ $status == 0 ]]; then
             RUNNER="/usr/bin/cgexec -g memory:odemisd"
