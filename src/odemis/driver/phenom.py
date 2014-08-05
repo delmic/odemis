@@ -811,6 +811,7 @@ class PhenomFocus(model.Actuator):
                 wd = self.GetWD()
                 while True:
                     try:
+                        # FIXME: don't add the moves if the future was cancelled
                         typ, mov = self._moves_queue.popleft()
                     except IndexError:
                         break
