@@ -133,9 +133,10 @@ def _hfw_choices(comp, va, conf):
     except NotApplicableError:
         mi, ma, = va.range
         choices = [mi]
+        step = 1
         while choices[-1] < ma:
-            choices.append(choices[-1] * 2)
-        choices.append(ma)
+            choices.append(mi * 10 ** step)
+            step += 1
 
     return choices
 
@@ -167,7 +168,7 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_SLIDER,
             "scale": "log",
-            "range": (0.01, 60.0), # TODO: SECOM => 1e-3 -> 60, SPARC => 0.01 -> 500
+            "range": (0.01, 60.0),  # TODO: SECOM => 1e-3 -> 60, SPARC => 0.01 -> 500
             "type": "float",
             "accuracy": 2,
         },
@@ -225,6 +226,7 @@ CONFIG = {
             "tooltip": "Horizontal Field Width",
             "control_type": odemis.gui.CONTROL_COMBO,
             "choices": _hfw_choices,
+            "accuracy": 2,
         },
         # force using just a text field => it's for copy-paste
         "magnification":
