@@ -34,7 +34,7 @@ if os.name == "nt":
 else:
     PORT = "/dev/ttyFTDI*" #"/dev/ttyLLE"
 
-CLASS = lle.LLE # use FakeLLE if no hardware
+CLASS = lle.FakeLLE # use FakeLLE if no hardware
 KWARGS = {"name": "test", "role": "light", "port": PORT, "sources": lle.DEFAULT_SOURCES}
 
 class TestStatic(unittest.TestCase):
@@ -137,7 +137,7 @@ class TestLLE(unittest.TestCase):
             em[i] = 0.1 + 0.1 * i
         self.dev.emissions.value = em
         self.assertEqual(self.dev.emissions.value, em)
-        
+
         # turn on yellow source very strong => all the other ones should be shut
         yellow_i = self.dev._source_id.index(4)
         em[yellow_i] = 1
@@ -155,8 +155,7 @@ class TestLLE(unittest.TestCase):
         Test each emission source for 2 seconds at maximum intensity and then 1s
         at 30%.
         """
-        em = self.dev.emissions.value
-        em = [0 for v in em]
+        em = [0] * len(self.dev.emissions.value)
         self.dev.power.value = self.dev.power.range[1]
         
         # can fully checked only by looking what the hardware is doing
@@ -171,8 +170,9 @@ class TestLLE(unittest.TestCase):
             self.dev.emissions.value = em
             time.sleep(1)
             self.assertEqual(self.dev.emissions.value, em)
+            # value so small that it's == 0 for the hardware
+            self.dev.emissions.value[i] = 1e-8
             em[i] = 0
-            self.dev.emissions.value = em
             self.assertEqual(self.dev.emissions.value, em)
             
 

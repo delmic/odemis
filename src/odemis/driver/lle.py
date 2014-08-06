@@ -138,9 +138,9 @@ class LLE(model.Emitter):
             else:
                 self._rcubt.append(len(spectra))
             spectra.append(tuple(wls))
-        
+
         model.Emitter.__init__(self, name, role, **kwargs)
-        
+
         self._shape = ()
         self._max_power = 0.4 # W (According to doc: ~400mW)
         self.power = model.FloatContinuous(0., (0., self._max_power), unit="W")
@@ -150,25 +150,23 @@ class LLE(model.Emitter):
         self.emissions = model.ListVA(list(self._intensities), unit="", 
                                       setter=self._setEmissions)
         self.spectra = model.ListVA(spectra, unit="m", readonly=True) 
-        
+
         self._prev_intensities = [None] * len(spectra) # => will update for sure
         self._updateIntensities() # turn off every source
-        
+
         self.power.subscribe(self._updatePower)
         # set HW and SW version
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
                                                       driver.getSerialDriver(self._port))
         self._hwVersion = "Lumencor Light Engine" # hardware doesn't report any version
-        
-        
+
         # Update temperature every 10s
         current_temp = self.GetTemperature()
         self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
         self._temp_timer = util.RepeatingTimer(10, self._updateTemperature,
-                                         "LLE temperature update")
+                                               "LLE temperature update")
         self._temp_timer.start()
-    
-    
+
     def getMetadata(self):
         metadata = {}
         # MD_IN_WL expects just min/max => if multiple sources, we need to combine
@@ -402,14 +400,14 @@ class LLE(model.Emitter):
         Update the sources setting of the hardware, if necessary
         """
         need_update = False
-        for i in range(len(self._intensities)):
-            if self._prev_intensities[i] != self._intensities[i]:
+        for i, intens in enumerate(self._intensities):
+            if self._prev_intensities[i] != intens:
                 need_update = True
                 # Green and Yellow share the same source => do it later    
                 if i in self._gy:
                     continue
                 sid = self._source_id[i]
-                self._setSourceIntensity(sid, int(round(self._intensities[i] * 255 / self._max_power)))
+                self._setSourceIntensity(sid, int(round(intens * 255 / self._max_power)))
         
         # special for Green/Yellow: merge them
         prev_gy = self._getIntensityGY(self._prev_intensities)
@@ -419,8 +417,8 @@ class LLE(model.Emitter):
         
         if need_update:
             toTurnOn = set()
-            for i in range(len(self._intensities)):
-                if self._intensities[i] > self._max_power/255:
+            for i, intens in enumerate(self._intensities):
+                if intens > self._max_power / 255:
                     toTurnOn.add(self._source_id[i])
             self._enableSources(toTurnOn)
             
@@ -465,12 +463,17 @@ class LLE(model.Emitter):
         
         # set the actual values
         for i, intensity in enumerate(intensities):
-            intensity = max(0, min(1, intensity))
+            # clip + indicate minimum step
+            if intensity < 1 / 256:
+                logging.debug("Clipping intensity from %f to 0", intensity)
+                intensity = 0
+            elif intensity > 255 / 256:
+                intensity = 1
             intensities[i] = intensity
             self._intensities[i] = intensity * self.power.value
         self._updateIntensities()
+        logging.debug("Final intensity computed is %s", intensities)
         return intensities
-        
 
     def terminate(self):
         if hasattr(self, "_temp_timer") and self._temp_timer:
