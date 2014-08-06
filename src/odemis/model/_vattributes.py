@@ -658,11 +658,14 @@ class ListVA(VigilantAttribute):
             raise TypeError("Value '%r' is not a list." % value)
 
     def _internal_set_value(self, value):
+        # force notify as comparing to old value will not show any difference
         self._set_value(value, must_notify=True)
 
     # Redefine the setter, so we can force to listen to internal modifications
     def _set_value(self, value, must_notify=False):
         VigilantAttribute._set_value(self, value, must_notify)
+        # TODO: this means that .notify will be called with a simple list,
+        # should it be overridden to change to a notifying list? Same for the proxy.
         self._value = _NotifyingList(self._value, notifier=self._internal_set_value)
 
     value = property(VigilantAttribute._get_value,
