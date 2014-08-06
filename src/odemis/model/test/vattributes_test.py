@@ -20,12 +20,14 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import logging
 from odemis import model
 import pickle
 import unittest
 from unittest.case import skip
 import weakref
 
+logging.getLogger().setLevel(logging.DEBUG)
 
 class VigilantAttributeTest(unittest.TestCase):
 
@@ -167,6 +169,7 @@ class VigilantAttributeTest(unittest.TestCase):
         # Item adding
         prop.value += [44] # +1
         self.assertEqual(prop.value, [1, 4, 44])
+        self.assertEqual(self.called, 9, "Called has value %s" % self.called)
 
         prop.value.extend([43, 42]) # +1
         prop.value.extend([]) # The list value stays the same, so no increase!!
@@ -179,6 +182,7 @@ class VigilantAttributeTest(unittest.TestCase):
         orig_len = len(prop.value)
         prop.value *= 3 # +1
         self.assertEqual(len(prop.value), orig_len * 3)
+        self.assertEqual(self.called, 12, "Called has value %s" % self.called)
 
         # Item assignment
         prop.value = range(5) # +1
@@ -203,11 +207,12 @@ class VigilantAttributeTest(unittest.TestCase):
         except TypeError:
             pass # as it should be
         prop.unsubscribe(self.callback_test_notify)
+        self.assertEqual(self.called, 17, "Called has value %s" % self.called)
 
         prop.value = ["b"] # no more counting
 
-        self.assertTrue(prop.value == ["b"])
-        self.assertTrue(self.called == 17, "Called has value %s" % self.called)
+        self.assertEqual(prop.value, ["b"])
+        self.assertEqual(self.called, 17, "Called has value %s" % self.called)
 
     def test_continuous(self):
         prop = model.FloatContinuous(2.0, [-1, 3.4])

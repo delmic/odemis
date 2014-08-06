@@ -659,7 +659,7 @@ class RemoteTest(unittest.TestCase):
         self.assertIsInstance(value, (int, float))
     
 #    @unittest.skip("simple")
-    def test_complex_va(self):
+    def test_enumerated_va(self):
         # enumerated
         self.assertEqual(self.comp.enum.value, "a")
         self.assertEqual(self.comp.enum.choices, set(["a", "c", "bfds"]))
@@ -671,7 +671,8 @@ class RemoteTest(unittest.TestCase):
             self.fail("Assigning out of bound should not be allowed.")
         except IndexError:
             pass # as it should be
-        
+
+    def test_continuous_va(self):
         # continuous
         self.assertEqual(self.comp.cont.value, 2)
         self.assertEqual(self.comp.cont.range, (-1, 3.4))
@@ -685,6 +686,7 @@ class RemoteTest(unittest.TestCase):
         except IndexError:
             pass # as it should be
         
+    def test_list_va(self):
         # List
         l = self.comp.listval
         self.assertEqual(len(l.value), 2)
@@ -692,8 +694,12 @@ class RemoteTest(unittest.TestCase):
         l.subscribe(self.receive_listva_update)
         l.value += [3]
         self.assertEqual(len(l.value), 3)
+        l.value[-1] = 4
+        self.assertEqual(l.value[-1], 4)
+        l.value.reverse()
+        self.assertEqual(l.value[0], 4)
         time.sleep(0.1)
-        self.assertEqual(self.called, 1)
+        self.assertEqual(self.called, 3)
         l.unsubscribe(self.receive_listva_update)
 
     def receive_listva_update(self, value):

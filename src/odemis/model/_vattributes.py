@@ -291,15 +291,19 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._commands = None
         self._thread = None
 
+        # cache them for small speed up
+        self._remote_getter = self.__getattr__("_get_value")
+        self._remote_setter = self.__getattr__("_set_value")
+
     @property
     def value(self):
-        return Pyro4.Proxy.__getattr__(self, "_get_value")()
+        return self._remote_getter()
 
     @value.setter
     def value(self, v):
         if self.readonly:
             raise NotSettableError("Value is read-only")
-        return Pyro4.Proxy.__getattr__(self, "_set_value")(v)
+        return self._remote_setter(v)
     # no delete remotely
 
     # for enumerated VA
@@ -349,6 +353,10 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._ctx = None
         self._commands = None
         self._thread = None
+
+        # cache them for small speed up
+        self._remote_getter = self.__getattr__("_get_value")
+        self._remote_setter = self.__getattr__("_set_value")
 
     def _create_thread(self):
         logging.debug("Creating thread")
@@ -589,6 +597,7 @@ def _call_with_notifier(func):
             try:
                 self._notifier(self)
             except WeakRefLostError:
+                logging.debug("No more notifier %s for %s", self._notifier, self._notifier.c, exc_info=1)
                 pass
         return res
     return newfunc
@@ -658,20 +667,23 @@ class ListVA(VigilantAttribute):
 class ListVAProxy(VigilantAttributeProxy):
     # VAProxy + listen to modifications inside the list
 
-    # Only the getter needs to be special
     @property
     def value(self):
         # Transform a normal list into a notifying one
-        raw_list = Pyro4.Proxy.__getattr__(self, "_get_value")()
-        # When value change, directly call the remote setter
-        val = _NotifyingList(raw_list, notifier=Pyro4.Proxy.__getattr__(self, "_set_value"))
+        raw_list = self._remote_getter()
+        # When value change, same as setting the value
+        val = _NotifyingList(raw_list, notifier=self.__value_setter)
         return val
 
     @value.setter
     def value(self, v):
+        return self.__value_setter(v)
+
+    # needs to be an explicit method to be able to reference it from the list
+    def __value_setter(self, v):
         if self.readonly:
             raise NotSettableError("Value is read-only")
-        return Pyro4.Proxy.__getattr__(self, "_set_value")(v)
+        self._remote_setter(v)
 
 class BooleanVA(VigilantAttribute):
     """
