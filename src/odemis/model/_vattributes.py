@@ -159,7 +159,7 @@ class VigilantAttribute(VigilantAttributeBase):
         return self._value
 
     # cannot be oneway because we need the exception in case of error
-    def _set_value(self, value):
+    def _set_value(self, value, must_notify=False):
         # TODO need a lock?
         if self.readonly:
             raise NotSettableError("Value is read-only")
@@ -172,9 +172,10 @@ class VigilantAttribute(VigilantAttributeBase):
             self._value = self.__default_setter(value)
 
         # only notify if the value has changed (or is different from requested)
-        must_notify = False
         try:
-            if isinstance(value, numpy.ndarray):
+            if must_notify:
+                pass # no need to check for more
+            elif isinstance(value, numpy.ndarray):
                 # For numpy arrays, it's not possible to use !=
                 # => just check it's the same object
                 if prev_value is not self._value or value is not self._value:
@@ -619,6 +620,8 @@ class _NotifyingList(list):
         if "notifier" in kwargs:
             notifier = kwargs.pop("notifier")
             self._notifier = WeakMethod(notifier)
+        else:
+            logging.debug("Creating notifying list without notifier")
         list.__init__(self, *args, **kwargs)
 
     # transform back to a normal list when pickled
@@ -647,17 +650,20 @@ class ListVA(VigilantAttribute):
     """
 
     def __init__(self, value=None, *args, **kwargs):
-        value = _NotifyingList([] if value is None else value, notifier=self.notify)
+        value = _NotifyingList([] if value is None else value, notifier=self._internal_set_value)
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
         if not isinstance(value, collections.Iterable):
             raise TypeError("Value '%r' is not a list." % value)
 
+    def _internal_set_value(self, value):
+        self._set_value(value, must_notify=True)
+
     # Redefine the setter, so we can force to listen to internal modifications
-    def _set_value(self, value):
-        value = _NotifyingList(value, notifier=self.notify)
-        VigilantAttribute._set_value(self, value)
+    def _set_value(self, value, must_notify=False):
+        VigilantAttribute._set_value(self, value, must_notify)
+        self._value = _NotifyingList(self._value, notifier=self._internal_set_value)
 
     value = property(VigilantAttribute._get_value,
                      _set_value,
