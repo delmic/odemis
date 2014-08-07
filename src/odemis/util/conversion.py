@@ -20,11 +20,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import collections
 import logging
 import re
+import wx
 import yaml
 
-import wx
 
 # Inspired by code from:
 # http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
@@ -289,3 +290,17 @@ def convertToObject(s):
         logging.error("Syntax error: %s", exc)
         # TODO: with Python3: raise from?
         raise ValueError("Failed to parse %s" % s)
+
+
+def ensureTuple(v):
+    """
+    Recursively convert an iterable object into a tuple
+    v (iterable or object): If it is an iterable, it will be converted into a tuple, and
+      otherwise it will be returned as is
+    return (tuple or object): same a v, but a tuple if v was iterable
+    """
+    if isinstance(v, collections.Iterable):
+        # convert to a tuple, with each object contained also converted
+        return tuple(ensureTuple(i) for i in v)
+    else:
+        return v
