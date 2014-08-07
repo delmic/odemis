@@ -27,6 +27,22 @@ FIT_GOOD = 2 # Should be fine
 FIT_BAD = 1 # Might work, but not at its best
 FIT_IMPOSSIBLE = 0 # Unlikely to work
 
+def get_center(band):
+    """
+    Return the center wavelength of a emission/excitation band
+    band ((list of) tuple of 2 or 5 floats): either the min/max
+      of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
+    return ((list of) float): wavelength in m or list of wavelength for each band
+    """
+    if isinstance(band[0], collections.Iterable):
+        return [get_center(b) for b in band]
+
+    if len(band) % 2:
+        center = sum(band) / len(band) # works well at least with 2 values
+    else:
+        center = band[len(band) // 2]
+    return center
+
 def estimate_fit_to_dye(wl, band):
     """
     Estimate how well the light settings of the hardware fit for a given dye
@@ -36,7 +52,7 @@ def estimate_fit_to_dye(wl, band):
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return (FIT_*): how well it fits (the higher the better)
     """
-    # TODO: support (multiple) peak/band/curve for the dye
+    # TODO: support multiple-peak/band/curve for the dye
 
     # if multi-band: get the best of all
     if isinstance(band[0], collections.Iterable):
@@ -62,10 +78,7 @@ def quantify_fit_to_dye(wl, band):
     if isinstance(band[0], collections.Iterable):
         return max(quantify_fit_to_dye(wl, b) for b in band)
 
-    if len(band) % 2:
-        center = sum(band) / len(band) # works well at least with 2 values
-    else:
-        center = band[len(band) // 2]
+    center = get_center(band)
     width = band[-1] - band[0]
     distance = abs(wl - center)
 
