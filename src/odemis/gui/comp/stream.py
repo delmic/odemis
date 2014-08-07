@@ -35,6 +35,7 @@ import numpy
 from odemis import acq
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
     BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS
+from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
 from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
@@ -42,6 +43,7 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
 from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper, \
     ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.util import fluo
 from odemis.util.conversion import wave2rgb
 import wx.lib.newevent
 from wx.lib.pubsub import pub
@@ -981,6 +983,8 @@ class StreamPanel(wx.PyPanel):
           ├ StaticText (emission)
           └ UnitIntegerCtrl
         """
+        # When displaying a static stream, the excitation/emission VAs are
+        # read-only, in which case the name of the dye should not be selectable
 
         # handle the auto-completion of dye names
         # TODO: Do not remove the incompatible dyes (because we might be wrong,
@@ -989,51 +993,62 @@ class StreamPanel(wx.PyPanel):
         # * mark them a "disabled" colour in the list. (how to do that?)
         # * show a warning message when they are picked.
         if not self.stream.excitation.readonly:
-            self._expander.set_label_choices(self._getCompatibleDyes())
+            self._expander.set_label_choices(dye.DyeDatabase.keys())
             self._expander.onLabelChange = self._onNewDyeName
 
-        # Excitation and emission are a text input + a colour display
-        # Warning: stream.excitation is in m, we present everything in nm
+        # Excitation and emission are:
+        # Label + wavelength combo box + peak label + a colour display
+        # Note: stream.excitation is in m, we present everything in nm
         lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
         self._gbs.Add(lbl_excitation, (self.row_count, 0),
                       flag=wx.ALL, border=5)
 
-        if self.stream.excitation.readonly:
+        # TODO: factor emission and excitation
+        band = self.stream.excitation.value
+        ex_center = fluo.get_center(band)
+        if isinstance(ex_center, collections.Iterable):
+            ex_center = min(ex_center) # we've got to pick one
+
+        if self.stream.excitation.readonly or len(self.stream.excitation.choices) < 1:
             self._txt_excitation = wx.TextCtrl(self._panel,
-                       value="%d nm" % round(self.stream.excitation.value * 1e9),
+                       value=self._to_readable_band(band),
                        style=wx.BORDER_NONE | wx.TE_READONLY)
             self._txt_excitation.SetForegroundColour(FG_COLOUR_DIS)
         else:
-            min_val = int(math.ceil(self.stream.excitation.range[0] * 1e9))
-            max_val = int(self.stream.excitation.range[1] * 1e9)
-            # if the range is very small, they might not be min < max
-            min_val, max_val = (min(min_val, max_val), max(min_val, max_val))
+            self._txt_excitation = ComboBox(
+                        self._panel,
+                        wx.ID_ANY,
+                        value=self._to_readable_band(band),
+                        pos=(0, 0), size=(100, 16),
+                        style=wx.CB_READONLY | wx.BORDER_NONE)
 
-            self._txt_excitation = UnitIntegerCtrl(self._panel, -1,
-                    int(round(self.stream.excitation.value * 1e9)),
-                    style=wx.NO_BORDER,
-                    size=(-1, 14),
-                    min_val=min_val,
-                    max_val=max_val,
-                    unit='nm')
+            ex_choices = sorted(self.stream.excitation.choices, 
+                                key=fluo.get_center) # TODO: for multi-band, use min
+            for b in ex_choices:
+                self._txt_excitation.Append(self._to_readable_band(b), b)
 
-            self._txt_excitation.SetForegroundColour(FG_COLOUR_EDIT)
-            self._vac_excitation = VigilantAttributeConnector(
-                  self.stream.excitation, self._txt_excitation,
-                  va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
-                  ctrl_2_va=self._excitation_2_va, # to convert from nm
-                  events=wx.EVT_COMMAND_ENTER)
+            # To avoid catching mouse wheels events when scrolling the panel
+            self._txt_excitation.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
 
-        self._txt_excitation.SetBackgroundColour(BG_COLOUR_MAIN)
+#             self._vac_excitation = VigilantAttributeConnector(
+#                   self.stream.excitation, self._txt_excitation,
+#                   va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
+#                   ctrl_2_va=self._excitation_2_va, # to convert from nm
+#                   events=wx.EVT_COMBOBOX)
+
 
         self._gbs.Add(self._txt_excitation, (self.row_count, 1),
                       flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
                       border=5)
 
+        # TODO also a label for warnings
+
         # A button, but not clickable, just to show the wavelength
+        # If a dye is selected, the colour of the peak is used, otherwise we
+        # use the hardware setting
         self._btn_excitation = buttons.ColourButton(self._panel, -1,
                             bitmap=img.getemptyBitmap(),
-                            colour=wave2rgb(self.stream.excitation.value),
+                            colour=wave2rgb(ex_center),
                             background_parent=self._panel)
         self._btn_excitation.SetToolTipString("Wavelength colour")
 
@@ -1043,81 +1058,108 @@ class StreamPanel(wx.PyPanel):
         self.row_count += 1
 
 
-        # TODO also a label for warnings
 
-        # Emission
-        lbl_emission = wx.StaticText(self._panel, -1, "Emission")
-        self._gbs.Add(lbl_emission, (self.row_count, 0),
-                      flag=wx.ALL, border=5)
+#         # Emission
+#         lbl_emission = wx.StaticText(self._panel, -1, "Emission")
+#         self._gbs.Add(lbl_emission, (self.row_count, 0),
+#                       flag=wx.ALL, border=5)
+#
+#         if self.stream.emission.readonly:
+#             self._txt_emission = wx.TextCtrl(self._panel,
+#                        value="%d nm" % round(self.stream.emission.value * 1e9),
+#                        style=wx.BORDER_NONE | wx.TE_READONLY)
+#             self._txt_emission.SetForegroundColour(FG_COLOUR_DIS)
+#         else:
+#             min_val = int(math.ceil(self.stream.emission.range[0] * 1e9))
+#             max_val = int(self.stream.emission.range[1] * 1e9)
+#             # if the range is very small, they might not be min < max
+#             min_val, max_val = (min(min_val, max_val), max(min_val, max_val))
+#
+#             self._txt_emission = UnitIntegerCtrl(self._panel, -1,
+#                     int(round(self.stream.emission.value * 1e9)),
+#                     style=wx.NO_BORDER,
+#                     size=(-1, 14),
+#                     min_val=min_val,
+#                     max_val=max_val,
+#                     unit='nm')
+#
+#             self._txt_emission.SetForegroundColour(FG_COLOUR_EDIT)
+#             self._vac_emission = VigilantAttributeConnector(
+#                   self.stream.emission, self._txt_emission,
+#                   va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
+#                   ctrl_2_va=self._emission_2_va, # to convert from nm
+#                   events=wx.EVT_COMMAND_ENTER)
+#
+#         self._txt_emission.SetBackgroundColour(BG_COLOUR_MAIN)
+#
+#         self._gbs.Add(self._txt_emission, (self.row_count, 1),
+#                       flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
+#                       border=5)
+#
+#         self._btn_emission = buttons.ColourButton(self._panel, -1,
+#                                           bitmap=img.getemptyBitmap(),
+#                                           colour=wave2rgb(self.stream.emission.value),
+#                                           background_parent=self._panel)
+#         self._btn_emission.SetToolTipString("Wavelength colour")
+#
+#         self._gbs.Add(self._btn_emission, (self.row_count, 2),
+#                       flag=wx.RIGHT | wx.ALIGN_RIGHT,
+#                       border=5)
+#         self.row_count += 1
 
-        if self.stream.emission.readonly:
-            self._txt_emission = wx.TextCtrl(self._panel,
-                       value="%d nm" % round(self.stream.emission.value * 1e9),
-                       style=wx.BORDER_NONE | wx.TE_READONLY)
-            self._txt_emission.SetForegroundColour(FG_COLOUR_DIS)
-        else:
-            min_val = int(math.ceil(self.stream.emission.range[0] * 1e9))
-            max_val = int(self.stream.emission.range[1] * 1e9)
-            # if the range is very small, they might not be min < max
-            min_val, max_val = (min(min_val, max_val), max(min_val, max_val))
-
-            self._txt_emission = UnitIntegerCtrl(self._panel, -1,
-                    int(round(self.stream.emission.value * 1e9)),
-                    style=wx.NO_BORDER,
-                    size=(-1, 14),
-                    min_val=min_val,
-                    max_val=max_val,
-                    unit='nm')
-
-            self._txt_emission.SetForegroundColour(FG_COLOUR_EDIT)
-            self._vac_emission = VigilantAttributeConnector(
-                  self.stream.emission, self._txt_emission,
-                  va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
-                  ctrl_2_va=self._emission_2_va, # to convert from nm
-                  events=wx.EVT_COMMAND_ENTER)
-
-        self._txt_emission.SetBackgroundColour(BG_COLOUR_MAIN)
-
-        self._gbs.Add(self._txt_emission, (self.row_count, 1),
-                      flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
-                      border=5)
-
-        self._btn_emission = buttons.ColourButton(self._panel, -1,
-                                          bitmap=img.getemptyBitmap(),
-                                          colour=wave2rgb(self.stream.emission.value),
-                                          background_parent=self._panel)
-        self._btn_emission.SetToolTipString("Wavelength colour")
-
-        self._gbs.Add(self._btn_emission, (self.row_count, 2),
-                      flag=wx.RIGHT | wx.ALIGN_RIGHT,
-                      border=5)
-        self.row_count += 1
-
-    def _getCompatibleDyes(self):
+    def _to_readable_band(self, band):
         """
-        Find the names of the dyes in the database which are compatible with the
-         hardware.
-        return (list of string): names of all the dyes which are compatible
+        Convert a emission or excitation band into readable text
+        band ((list of) tuple of 2 or 5 floats): either the min/max
+          of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
+        return (unicode): readable string.
         """
-        # we expect excitation and emission to have a range
-        x_range = list(self.stream.excitation.range)
-        e_range = list(self.stream.emission.range)
+        # if one band => center/bandwidth nm (bandwidth not displayed if < 5nm)
+        #   ex: 453/19 nm
+        # if multi-band => center, center... nm
+        #   ex: 453, 568, 968 nm
+        if not isinstance(band[0], collections.Iterable):
+            b = band
+            center_nm = int(round(fluo.get_center(b) * 1e9))
 
-        # TODO: for now be very indulgent, as there is no user feedback about
-        # the hardware not being compatible, and we are only looking at
-        # the peak values. In the future, it might be better to display every
-        # dye, and add a big warning if it looks incompatible with the hardware.
-        x_range[0] -= 20e-9
-        x_range[1] += 20e-9
-        e_range[0] -= 20e-9
-        e_range[1] += 20e-9
-        dyes = []
-        for name, (xwl, ewl) in dye.DyeDatabase.items():
-            if (x_range[0] <= xwl <= x_range[1] and
-                e_range[0] <= ewl <= e_range[1]):
-                dyes.append(name)
+            width = b[-1] - b[0]
+            if width > 5e-9:
+                width_nm = int(round(width * 1e9))
+                return u"%d/%d nm" % (center_nm, width_nm)
+            else:
+                return u"%d nm" % center_nm
+        else: # multi-band
+            centers = []
+            for c in fluo.get_center(band):
+                center_nm = int(round(c * 1e9))
+                centers.append(u"%d" % center_nm)
+            return u", ".join(centers) + " nm"
 
-        return dyes
+#     def _getCompatibleDyes(self):
+#         """
+#         Find the names of the dyes in the database which are compatible with the
+#          hardware.
+#         return (list of string): names of all the dyes which are compatible
+#         """
+#         # we expect excitation and emission to have a range
+#         x_range = list(self.stream.excitation.range)
+#         e_range = list(self.stream.emission.range)
+#
+#         # TODO: for now be very indulgent, as there is no user feedback about
+#         # the hardware not being compatible, and we are only looking at
+#         # the peak values. In the future, it might be better to display every
+#         # dye, and add a big warning if it looks incompatible with the hardware.
+#         x_range[0] -= 20e-9
+#         x_range[1] += 20e-9
+#         e_range[0] -= 20e-9
+#         e_range[1] += 20e-9
+#         dyes = []
+#         for name, (xwl, ewl) in dye.DyeDatabase.items():
+#             if (x_range[0] <= xwl <= x_range[1] and
+#                 e_range[0] <= ewl <= e_range[1]):
+#                 dyes.append(name)
+#
+#         return dyes
 
     def _onNewDyeName(self, txt):
         # update the name of the stream
