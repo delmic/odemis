@@ -27,7 +27,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream
 from odemis.driver import simcam
-from odemis.util import driver, conversion
+from odemis.util import driver, conversion, timeout
 import os
 import subprocess
 import time
@@ -319,8 +319,14 @@ class SECOMTestCase(unittest.TestCase):
         s1 = stream.FluoStream("fluo1", self.ccd, self.ccd.data,
                                self.light, self.light_filter)
         self.ccd.exposureTime = 1 # s, to avoid acquiring too many images
+
+        # Check we manage to get at least one image
+        self._image = None
+        s1.image.subscribe(self._on_image)
+
         s1.should_update.value = True
         s1.is_active.value = True
+
         # change the stream setting (for each possible excitation)
         for i, exc in enumerate(self.light.spectra.value):
             s1.excitation.value = exc
@@ -330,7 +336,13 @@ class SECOMTestCase(unittest.TestCase):
             exp_intens[i] = 1
             self.assertEqual(self.light.emissions.value, exp_intens)
 
+        time.sleep(2)
         s1.is_active.value = False
+        
+        self.assertFalse(self._image is None, "No image received after 2s")
+
+    def _on_image(self, im):
+        self._image = im
 
 
 # @skip("faster")

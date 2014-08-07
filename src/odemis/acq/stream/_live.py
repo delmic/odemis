@@ -616,8 +616,10 @@ class FluoStream(CameraStream):
     def onNewImage(self, dataflow, data):
         # Add some metadata on the fluorescence
 
-        # TODO: handle better if there is already MD_OUT_WL
-        data.metadata[model.MD_OUT_WL] = self._current_out_wl
+        # TODO: should be handled by the MD updater?
+        if model.MD_OUT_WL not in data.metadata:
+            # TODO: check that multi-band can be handled correctly by dataio
+            data.metadata[model.MD_OUT_WL] = self.emission.value
 
         data.metadata[model.MD_USER_TINT] = self.tint.value
         super(FluoStream, self).onNewImage(dataflow, data)
