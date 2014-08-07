@@ -495,30 +495,59 @@ class FluoStream(CameraStream):
         CameraStream.__init__(self, name, detector, dataflow, emitter)
         self._em_filter = em_filter
 
-        # TODO: instead of defining the excitation and emission wavelengths,
-        # just give the user the same choice as the hardware, and the user
-        # has to pick the right value (and the GUI can start with an
-        # "informed guess").
+        # Emission and excitation are based on the hardware capacities.
+        # For excitation, compared to the hardware, only one band at a time can
+        # be selected. The difficulty comes to pick the default value. The best
+        # would be to use the current hardware value, but if the light is off
+        # there is no default value. In that case, we pick the emission value
+        # and try to pick a compatible excitation value: the first excitation
+        # wavelength below the emission. However, the emission value might also
+        # be difficult to know if there is a multi-band filter. In that case we
+        # just pick the lowest value.
+        # TODO: once the streams have their own version of the hardware settings
+        # and in particular light.power, it should be possible to turn off the
+        # light just by stopping the power, and so leaving the emissions as is.
 
-        # This is what is displayed to the user
-        # Default to the center of the first excitation and emission bands
-        exc_range = [min([s[0] for s in emitter.spectra.value]),
-                     max([s[4] for s in emitter.spectra.value])]
-        self.excitation = model.FloatContinuous(emitter.spectra.value[0][2],
-                                                range=exc_range, unit="m")
+        em_choices = em_filter.axes["band"].choices.copy()
+        # convert any list into tuple, as lists cannot be put in a set
+        for k, v in em_choices.items():
+            em_choices[k] = conversion.ensureTuple(v)
+
+        # invert the dict, to directly convert the emission to the position value
+        self._emission_to_idx = dict((v, k) for k, v in em_choices.items())
+
+        cur_pos = em_filter.position.value["band"]
+        current_em = em_choices[cur_pos]
+        if isinstance(current_em[0], collections.Iterable):
+            # if multiband => pick the first one
+            em_band = current_em[0]
+        else:
+            em_band = current_em
+        center_em = (em_band[0] + em_band[1]) / 2
+
+        exc_choices = set(emitter.spectra.value)
+        current_exc = self._get_current_excitation()
+        if current_exc is None:
+            # pick the closest below the current emission
+            current_exc = min(exc_choices, key=lambda b: b[2]) # default to the smallest
+            for b in exc_choices:
+                if (b[2] < center_em and
+                    center_em - b[2] < center_em - current_exc[2]):
+                    current_exc = b
+            logging.debug("Guessed excitation is %s, based on emission %s",
+                          current_exc, current_em)
+
+        self.excitation = model.VAEnumerated(current_exc, choices=exc_choices,
+                                             unit="m")
         self.excitation.subscribe(self.onExcitation)
 
         # The wavelength band on the out path (set when emission changes)
-        bands = em_filter.axes["band"].choices
-        cur_pos = em_filter.position.value["band"]
-        self._current_out_wl = bands[cur_pos]
-        em_range = self._find_emission_range(bands.values())
-        self.emission = model.FloatContinuous(em_range[0] + 1e-9,
-                                              range=em_range, unit="m")
+        self.emission = model.VAEnumerated(current_em, choices=set(em_choices.values()),
+                                           unit="m")
         self.emission.subscribe(self.onEmission)
 
         # colouration of the image
-        default_tint = conversion.wave2rgb(self.emission.value)
+        default_tint = conversion.wave2rgb(center_em)
         self.tint = model.ListVA(default_tint, unit="RGB") # 3-tuple R,G,B
         self.tint.subscribe(self.onTint)
 
@@ -548,144 +577,41 @@ class FluoStream(CameraStream):
 
         self._updateImage()
 
-    def _find_emission_range(self, bands):
+    def _get_current_excitation(self):
         """
-        return (float, float): min/max wavelength
+        Determine the current excitation based on hardware settings
+        return (None or 5 floats): tuple of the current excitation, or None if
+        the light is completely off.
         """
-        lows, highs = [], []
-        # if multi-band: get the range of all
-        for b in bands:
-            if isinstance(b[0], collections.Iterable):
-                rng = self._find_emission_range(b)
-            else:
-                rng = b
-            lows.append(rng[0])
-            highs.append(rng[1])
-
-        return min(lows), max(highs)
-
-    def _find_best_emission_band(self, wl):
-        """
-        wl (float): wavelength (in m)
-        return (int): the position corresponding to the best band
-        """
-        # The most fitting band: narrowest band centered around the wavelength
-        bands = self._em_filter.axes["band"].choices
-        def quantify_fit(wl, band):
-            """ Quantifies how well the given wavelength matches the given
-            band: the better the match, the higher the return value will be.
-            wl (float): Wavelength to quantify
-            band ((list of) 2-tuple floats): The band(s)
-            return (0<float): the more, the merrier
-            """
-            # if multi-band: get the best of all
-            if isinstance(band[0], collections.Iterable):
-                return max(quantify_fit(wl, b) for b in band)
-
-            if band[0] < wl < band[1]:
-                distance = abs(wl - numpy.mean(band)) # distance to center
-                width = band[1] - band[0]
-                # ensure it cannot get infinite score for being in the center
-                return 1 / (max(distance, 1e-9) * max(width, 1e-9))
-            elif band[0] - 20e-9 < wl < band[1] + 20e-9:
-                # almost? => 100x less good
-                distance = abs(wl - numpy.mean(band)) # distance to center
-                width = band[1] - band[0]
-                return 0.01 / (max(distance, 1e-9) * max(width, 1e-9))
-            else:
-                # No match
-                return 0
-
-        scores = dict((k, quantify_fit(wl, v)) for k, v in bands.items())
-        # key with best score
-        best, score = max(scores.items(), key=lambda x: x[1])
-        if score == 0:
+        # The current excitation is the band which has the highest intensity
+        intens = self._emitter.emissions.value
+        m = max(intens)
+        if m == 0:
             return None
-        return best
+        i = intens.index(m)
+        return self._emitter.spectra.value[i]
 
     def _setup_emission(self):
         """
         Set-up the hardware for the right emission light (light path between
-        the sample and the CCD), and check whether the emission value matches
-        the emission filter bands.
+        the sample and the CCD).
         """
-        wl = self.emission.value
-
-        p = self._find_best_emission_band(wl)
-        self._removeWarnings(Stream.WARNING_EMISSION_IMPOSSIBLE,
-                             Stream.WARNING_EMISSION_NOT_OPT)
-        if p is not None:
-            f = self._em_filter.moveAbs({"band": p})
-            bands = self._em_filter.axes["band"].choices[p]
-            self._current_out_wl = bands
-
-            # Detect if the selected band is outside of wl
-            if not isinstance(bands[0], collections.Iterable):
-                bands = [bands] # force it to be a list of bands
-            for l, h in bands:
-                if l < wl < h:
-                    break
-            else:
-                self._addWarning(Stream.WARNING_EMISSION_NOT_OPT)
-                # TODO: add the actual band in the warning message?
-
-            f.result() # wait for the move to be finished
-        else:
-            logging.warning("Emission wavelength %s doesn't fit the filter",
-                            units.readable_str(wl, "m"))
-            self._addWarning(Stream.WARNING_EMISSION_IMPOSSIBLE)
-
-        return
+        em = self.emission.value
+        em_idx = self._emission_to_idx[em]
+        f = self._em_filter.moveAbs({"band": em_idx})
+        f.result() # wait for the move to be finished
 
     def _setup_excitation(self):
-        """ Set-up the excitation light to the specified wavelength (light path
-        between the light source and the sample), and check whether this
-        actually can work.
         """
-        wave_length = self.excitation.value
-
-        def quantify_fit(wl, spec):
-            """ Quantifies how well the given wavelength matches the given
-            spectrum: the better the match, the higher the return value will be.
-            wl (float): Wavelength to quantify
-            spec (5-tuple float): The spectrum to check the wavelength against
-            return (0<float): the more, the merrier
-            """
-            if spec[0] < wl < spec[4]:
-                distance = abs(wl - spec[2]) # distance to 100%
-                if distance:
-                    return 1 / distance
-                # No distance, ultimate match
-                return float("inf")
-            else:
-                # No match
-                return 0
-
-        spectra = self._emitter.spectra.value
-        # arg_max with quantify_fit function as key
-        best = max(spectra, key=lambda x: quantify_fit(wave_length, x))
-        i = spectra.index(best)
-
-        # create an emissions with only one source active, which best matches
-        # the excitation wavelength
-        emissions = [0.] * len(spectra)
+        Set-up the hardware to emit light in the excitation band.
+        The light power is not modified, and is expected to be > 0.
+        """
+        # All intensities to 0, but the one corresponding to the selected band
+        choices = self._emitter.spectra.value
+        i = choices.index(self.excitation.value)
+        emissions = [0.] * len(choices)
         emissions[i] = 1.
         self._emitter.emissions.value = emissions
-
-        # TODO: read back self._emitter.emissions.value to get the actual value
-        # set warnings if necessary
-        self._removeWarnings(Stream.WARNING_EXCITATION_IMPOSSIBLE,
-                             Stream.WARNING_EXCITATION_NOT_OPT)
-
-        # TODO: if the band is too wide (e.g., white), it should also have a
-        # warning
-        # TODO: if the light can only be changed manually, display a warning
-        if wave_length < best[0] or wave_length > best[4]:
-            # outside of band
-            self._addWarning(Stream.WARNING_EXCITATION_IMPOSSIBLE)
-        elif wave_length < best[1] or wave_length > best[3]:
-            # outside of main 50% band
-            self._addWarning(Stream.WARNING_EXCITATION_NOT_OPT)
 
     def onNewImage(self, dataflow, data):
         # Add some metadata on the fluorescence

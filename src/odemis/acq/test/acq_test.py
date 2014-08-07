@@ -92,7 +92,7 @@ class SECOMTestCase(unittest.TestCase):
                                cls.light, cls.light_filter)
         s2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
                                cls.light, cls.light_filter)
-        s2.excitation.value = s2.excitation.range[1]
+        s2.excitation.value = s2.excitation.choices[-1]
         s3 = stream.BrightfieldStream("bf", cls.ccd, cls.ccd.data, cls.light)
         cls.streams = [s1, s2, s3]
 

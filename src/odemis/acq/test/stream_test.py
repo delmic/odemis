@@ -19,6 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Test module for model.Stream classes
+from __future__ import division
 
 import logging
 import numpy
@@ -26,7 +27,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream
 from odemis.driver import simcam
-from odemis.util import driver
+from odemis.util import driver, conversion
 import os
 import subprocess
 import time
@@ -41,7 +42,7 @@ logging.getLogger().handlers[0].setFormatter(logging.Formatter(_frm))
 
 ODEMISD_CMD = ["python2", "-m", "odemis.odemisd.main"]
 ODEMISD_ARG = ["--log-level=2", "--log-target=testdaemon.log", "--daemonize"]
-CONFIG_PATH = os.path.dirname(odemis.__file__) + "../../install/linux/usr/share/odemis/"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sparc-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "secom-sim.odm.yaml"
 
@@ -59,7 +60,7 @@ class FakeEBeam(model.Emitter):
         self.pixelSize = model.VigilantAttribute((1e-9, 1e-9), unit="m", readonly=True)
         self.magnification = model.FloatVA(1000.)
 
-#@skip("simple")
+# @skip("simple")
 class StreamTestCase(unittest.TestCase):
     def assertTupleAlmostEqual(self, first, second, places=None, msg=None, delta=None):
         """
@@ -220,8 +221,119 @@ class StreamTestCase(unittest.TestCase):
         img2 = rgbs.image.value
         self.assertIs(img, img2)
 
-        
-@skip("faster")
+class SECOMTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SECOM
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        if driver.get_backend_status() == driver.BACKEND_RUNNING:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+
+        # run the backend as a daemon
+        # we cannot run it normally as the child would also think he's in a unittest
+        cmd = ODEMISD_CMD + ODEMISD_ARG + [SECOM_CONFIG]
+        ret = subprocess.call(cmd)
+        if ret != 0:
+            logging.error("Failed starting backend with '%s'", cmd)
+        time.sleep(1) # time to start
+
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.light_filter = model.getComponent(role="filter")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        # end the backend
+        cmd = ODEMISD_CMD + ["--kill"]
+        subprocess.call(cmd)
+        model._core._microscope = None # force reset of the microscope for next connection
+        time.sleep(1) # time to stop
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def test_default_fluo(self):
+        """
+        Check the default values for the FluoStream are fitting the current HW
+        settings
+        """
+        em_choices = self.light_filter.axes["band"].choices
+
+        # no light info
+        self.light.emissions.value = [0] * len(self.light.emissions.value)
+        s1 = stream.FluoStream("fluo1", self.ccd, self.ccd.data,
+                               self.light, self.light_filter)
+        # => stream emission is based on filter
+        self.assertEqual(s1.excitation.choices, set(self.light.spectra.value))
+        self.assertEqual(set(s1.emission.choices),
+                         set(conversion.ensureTuple(em_choices.values())))
+
+        em_idx = self.light_filter.position.value["band"]
+        em_hw = em_choices[em_idx]
+        self.assertEqual(s1.emission.value, conversion.ensureTuple(em_hw))
+
+        # => stream excitation is light spectra closest below emission
+        self.assertIn(s1.excitation.value, self.light.spectra.value)
+        em_center = numpy.mean(em_hw)
+        ex_centers = [s[2] for s in s1.excitation.choices]
+        try:
+            expected_ex = min([c for c in ex_centers if c < em_center],
+                              key=lambda c: em_center - c)
+        except ValueError: # no excitation < em_center
+            expected_ex = min(ex_centers)
+        self.assertEqual(s1.excitation.value[2], expected_ex)
+
+        # with light info (last emission is used)
+        self.light.emissions.value[-1] = 0.9
+        s2 = stream.FluoStream("fluo2", self.ccd, self.ccd.data,
+                               self.light, self.light_filter)
+        # => stream emission is based on filter
+        self.assertEqual(s2.excitation.choices, set(self.light.spectra.value))
+        self.assertEqual(set(s2.emission.choices),
+                         set(conversion.ensureTuple(em_choices.values())))
+
+        em_idx = self.light_filter.position.value["band"]
+        em_hw = em_choices[em_idx]
+        self.assertEqual(s2.emission.value, conversion.ensureTuple(em_hw))
+
+        # => stream excitation is based on light.emissions
+        self.assertIn(s2.excitation.value, self.light.spectra.value)
+        expected_ex = self.light.spectra.value[-1] # last value of emission
+        self.assertEqual(s2.excitation.value, expected_ex)
+
+    def test_fluo(self):
+        """
+        Check that the hardware settings are correctly set based on the settings
+        """
+        s1 = stream.FluoStream("fluo1", self.ccd, self.ccd.data,
+                               self.light, self.light_filter)
+        self.ccd.exposureTime = 1 # s, to avoid acquiring too many images
+        s1.should_update.value = True
+        s1.is_active.value = True
+        # change the stream setting (for each possible excitation)
+        for i, exc in enumerate(self.light.spectra.value):
+            s1.excitation.value = exc
+            time.sleep(0.1)
+            # check the hardware setting is updated
+            exp_intens = [0] * len(self.light.spectra.value)
+            exp_intens[i] = 1
+            self.assertEqual(self.light.emissions.value, exp_intens)
+
+        s1.is_active.value = False
+
+
+# @skip("faster")
 class SPARCTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC
@@ -244,16 +356,10 @@ class SPARCTestCase(unittest.TestCase):
         time.sleep(1) # time to start
 
         # Find CCD & SEM components
-        cls.microscope = model.getMicroscope()
-        for comp in model.getComponents():
-            if comp.role == "ccd":
-                cls.ccd = comp
-            elif comp.role == "spectrometer":
-                cls.spec = comp
-            elif comp.role == "e-beam":
-                cls.ebeam = comp
-            elif comp.role == "se-detector":
-                cls.sed = comp
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spec = model.getComponent(role="spectrometer")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
 
     @classmethod
     def tearDownClass(cls):
@@ -264,7 +370,7 @@ class SPARCTestCase(unittest.TestCase):
         subprocess.call(cmd)
         model._core._microscope = None # force reset of the microscope for next connection
         time.sleep(1) # time to stop
-    
+
     def setUp(self):
         if self.backend_was_running:
             self.skipTest("Running backend found")
