@@ -1136,7 +1136,6 @@ class AndorCam3(model.DigitalCamera):
             # the only advantage is the save of bandwidth from camera to PC,
             # allowing higher frame rate/lower latency.
             logging.debug("Updating binning settings")
-            # FIXME: doesn't seem to work with binning != 1 => black image
             self._binning = self._storeBinning(self._binning)
             self._metadata[model.MD_BINNING] = self._transposeSizeToUser(self._binning)
 
