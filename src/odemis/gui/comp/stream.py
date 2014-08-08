@@ -34,7 +34,8 @@ import math
 import numpy
 from odemis import acq
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
-    BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS
+    BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS, FG_COLOUR_HIGHLIGHT, \
+    FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
@@ -983,129 +984,105 @@ class StreamPanel(wx.PyPanel):
           ├ StaticText (emission)
           └ UnitIntegerCtrl
         """
+        # Handle the auto-completion of dye names.
         # When displaying a static stream, the excitation/emission VAs are
         # read-only, in which case the name of the dye should not be selectable
-
-        # handle the auto-completion of dye names
-        # TODO: Do not remove the incompatible dyes (because we might be wrong,
-        # and it leads the user to wonder why the dye is not there if he's
-        # looking for it):
-        # * mark them a "disabled" colour in the list. (how to do that?)
-        # * show a warning message when they are picked.
         if not self.stream.excitation.readonly:
+            # TODO: mark dye incompatible with the hardware with a "disabled"
+            # colour in the list. (Need a special version of the combobox?)
             self._expander.set_label_choices(dye.DyeDatabase.keys())
             self._expander.onLabelChange = self._onNewDyeName
 
+        # Peak excitation/emission wavelength of the selected dye, to be used
+        # for peak text and wavelength colour
+        self._dye_xwl = None
+        self._dye_ewl = None
+
         # Excitation and emission are:
         # Label + wavelength combo box + peak label + a colour display
-        # Note: stream.excitation is in m, we present everything in nm
-        lbl_excitation = wx.StaticText(self._panel, -1, "Excitation")
-        self._gbs.Add(lbl_excitation, (self.row_count, 0),
-                      flag=wx.ALL, border=5)
+        r = self._add_filter_line(u"Excitation", self.stream.excitation,
+                                  self._excitation_2_ctrl,
+                                  self._excitation_2_va)
+        (_, self._txt_excitation, self._lbl_exc_peak,
+         self._btn_excitation, self._vac_excitation) = r
 
-        # TODO: factor emission and excitation
-        band = self.stream.excitation.value
-        ex_center = fluo.get_center(band)
-        if isinstance(ex_center, collections.Iterable):
-            ex_center = min(ex_center) # we've got to pick one
+        r = self._add_filter_line(u"Emission", self.stream.emission,
+                                  self._emission_2_ctrl,
+                                  self._emission_2_va)
+        (_, self._txt_emission, self._lbl_em_peak,
+         self._btn_emission, self._vac_emission) = r
 
-        if self.stream.excitation.readonly or len(self.stream.excitation.choices) < 1:
-            self._txt_excitation = wx.TextCtrl(self._panel,
+    def _add_filter_line(self, name, va, va_2_ctrl, ctrl_2_va):
+        """
+        Create the label, hw setting, peak info, and colour button for an
+        emission/excitation colour filter settings.
+        name (unicode): the label name
+        va (VigilantAttribute): the VA for the emission/excitation (contains a band)
+        return (4 wx.Controls + VAConnector): the respective controls created,
+         and a VAC for the hw settings
+        """
+        # Note: va.value is in m, but we present everything in nm
+        lbl = wx.StaticText(self._panel, -1, name)
+        self._gbs.Add(lbl, (self.row_count, 0), flag=wx.ALL, border=5)
+
+        # will contain both the combo box and the peak label
+        exc_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self._gbs.Add(exc_sizer, (self.row_count, 1))
+
+        band = va.value
+        ex_center = self._get_one_center(band)
+
+        if va.readonly or len(va.choices) <= 1:
+            hw_set = wx.TextCtrl(self._panel,
                        value=self._to_readable_band(band),
                        style=wx.BORDER_NONE | wx.TE_READONLY)
-            self._txt_excitation.SetForegroundColour(FG_COLOUR_DIS)
+            hw_set.SetForegroundColour(FG_COLOUR_DIS)
         else:
-            self._txt_excitation = ComboBox(
+            hw_set = ComboBox(
                         self._panel,
                         wx.ID_ANY,
                         value=self._to_readable_band(band),
                         pos=(0, 0), size=(100, 16),
                         style=wx.CB_READONLY | wx.BORDER_NONE)
 
-            ex_choices = sorted(self.stream.excitation.choices, 
-                                key=fluo.get_center) # TODO: for multi-band, use min
+            # TODO: for multi-band, use min
+            ex_choices = sorted(va.choices, key=fluo.get_center)
             for b in ex_choices:
-                self._txt_excitation.Append(self._to_readable_band(b), b)
+                hw_set.Append(self._to_readable_band(b), b)
 
             # To avoid catching mouse wheels events when scrolling the panel
-            self._txt_excitation.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
+            hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
 
-#             self._vac_excitation = VigilantAttributeConnector(
-#                   self.stream.excitation, self._txt_excitation,
-#                   va_2_ctrl=self._excitation_2_ctrl, # to convert to nm + update btn
-#                   ctrl_2_va=self._excitation_2_va, # to convert from nm
-#                   events=wx.EVT_COMBOBOX)
+            vac = VigilantAttributeConnector(
+                  va, hw_set,
+                  va_2_ctrl, # to convert to selection + update btn
+                  ctrl_2_va, # to convert from selection to VA
+                  events=wx.EVT_COMBOBOX)
 
-
-        self._gbs.Add(self._txt_excitation, (self.row_count, 1),
+        exc_sizer.Add(hw_set, 1,
                       flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
                       border=5)
 
-        # TODO also a label for warnings
+        # Label for peak information
+        lbl_peak = wx.StaticText(self._panel)
+        exc_sizer.Add(lbl_peak, 1,
+                      flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_LEFT,
+                      border=5)
 
         # A button, but not clickable, just to show the wavelength
         # If a dye is selected, the colour of the peak is used, otherwise we
         # use the hardware setting
-        self._btn_excitation = buttons.ColourButton(self._panel, -1,
+        btn_col = buttons.ColourButton(self._panel, -1,
                             bitmap=img.getemptyBitmap(),
                             colour=wave2rgb(ex_center),
                             background_parent=self._panel)
-        self._btn_excitation.SetToolTipString("Wavelength colour")
-
-        self._gbs.Add(self._btn_excitation, (self.row_count, 2),
+        self._gbs.Add(btn_col, (self.row_count, 2),
                       flag=wx.RIGHT | wx.ALIGN_RIGHT,
                       border=5)
+        self._update_peak_label_fit(lbl_peak, btn_col, None, band)
         self.row_count += 1
 
-
-
-#         # Emission
-#         lbl_emission = wx.StaticText(self._panel, -1, "Emission")
-#         self._gbs.Add(lbl_emission, (self.row_count, 0),
-#                       flag=wx.ALL, border=5)
-#
-#         if self.stream.emission.readonly:
-#             self._txt_emission = wx.TextCtrl(self._panel,
-#                        value="%d nm" % round(self.stream.emission.value * 1e9),
-#                        style=wx.BORDER_NONE | wx.TE_READONLY)
-#             self._txt_emission.SetForegroundColour(FG_COLOUR_DIS)
-#         else:
-#             min_val = int(math.ceil(self.stream.emission.range[0] * 1e9))
-#             max_val = int(self.stream.emission.range[1] * 1e9)
-#             # if the range is very small, they might not be min < max
-#             min_val, max_val = (min(min_val, max_val), max(min_val, max_val))
-#
-#             self._txt_emission = UnitIntegerCtrl(self._panel, -1,
-#                     int(round(self.stream.emission.value * 1e9)),
-#                     style=wx.NO_BORDER,
-#                     size=(-1, 14),
-#                     min_val=min_val,
-#                     max_val=max_val,
-#                     unit='nm')
-#
-#             self._txt_emission.SetForegroundColour(FG_COLOUR_EDIT)
-#             self._vac_emission = VigilantAttributeConnector(
-#                   self.stream.emission, self._txt_emission,
-#                   va_2_ctrl=self._emission_2_ctrl, # to convert to nm + update btn
-#                   ctrl_2_va=self._emission_2_va, # to convert from nm
-#                   events=wx.EVT_COMMAND_ENTER)
-#
-#         self._txt_emission.SetBackgroundColour(BG_COLOUR_MAIN)
-#
-#         self._gbs.Add(self._txt_emission, (self.row_count, 1),
-#                       flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
-#                       border=5)
-#
-#         self._btn_emission = buttons.ColourButton(self._panel, -1,
-#                                           bitmap=img.getemptyBitmap(),
-#                                           colour=wave2rgb(self.stream.emission.value),
-#                                           background_parent=self._panel)
-#         self._btn_emission.SetToolTipString("Wavelength colour")
-#
-#         self._gbs.Add(self._btn_emission, (self.row_count, 2),
-#                       flag=wx.RIGHT | wx.ALIGN_RIGHT,
-#                       border=5)
-#         self.row_count += 1
+        return lbl, hw_set, lbl_peak, btn_col, vac
 
     def _to_readable_band(self, band):
         """
@@ -1135,31 +1112,18 @@ class StreamPanel(wx.PyPanel):
                 centers.append(u"%d" % center_nm)
             return u", ".join(centers) + " nm"
 
-#     def _getCompatibleDyes(self):
-#         """
-#         Find the names of the dyes in the database which are compatible with the
-#          hardware.
-#         return (list of string): names of all the dyes which are compatible
-#         """
-#         # we expect excitation and emission to have a range
-#         x_range = list(self.stream.excitation.range)
-#         e_range = list(self.stream.emission.range)
-#
-#         # TODO: for now be very indulgent, as there is no user feedback about
-#         # the hardware not being compatible, and we are only looking at
-#         # the peak values. In the future, it might be better to display every
-#         # dye, and add a big warning if it looks incompatible with the hardware.
-#         x_range[0] -= 20e-9
-#         x_range[1] += 20e-9
-#         e_range[0] -= 20e-9
-#         e_range[1] += 20e-9
-#         dyes = []
-#         for name, (xwl, ewl) in dye.DyeDatabase.items():
-#             if (x_range[0] <= xwl <= x_range[1] and
-#                 e_range[0] <= ewl <= e_range[1]):
-#                 dyes.append(name)
-#
-#         return dyes
+    def _get_one_center(self, band):
+        """
+        Return the center of a band, and if it's a multi-band, return just one
+        of the centers.
+        return (float): wavelength in m
+        """
+        # TODO: be clever, and guess which one is most likely based on the other
+        # wavelength? (needs to have 2 versions: excitation and emission)
+        if isinstance(band[0], collections.Iterable):
+            return fluo.get_center(band[0])
+        else:
+            return fluo.get_center(band)
 
     def _onNewDyeName(self, txt):
         # update the name of the stream
@@ -1168,39 +1132,101 @@ class StreamPanel(wx.PyPanel):
         # update the excitation and emission wavelength
         if txt in dye.DyeDatabase:
             xwl, ewl = dye.DyeDatabase[txt]
-            try:
-                self.stream.excitation.value = xwl
-            except IndexError:
-                logging.info("Excitation at %g nm is out of bound", xwl * 1e9)
-            try:
-                self.stream.emission.value = ewl
-                colour = wave2rgb(self.stream.emission.value)
-                # changing emission should also change the tint
-                self.stream.tint.value = colour
-            except IndexError:
-                logging.info("Emission at %g nm is out of bound", ewl * 1e9)
+            self._dye_xwl = xwl
+            self._dye_ewl = ewl
+
+            self.stream.excitation.value = fluo.find_best_band_for_dye(xwl, self.stream.excitation.choices)
+            self.stream.emission.value = fluo.find_best_band_for_dye(ewl, self.stream.emission.choices)
+
+            # use peak values to pick the best tint and set the wavelength colour
+            xcol = wave2rgb(xwl)
+            self._btn_excitation.set_colour(xcol)
+            ecol = wave2rgb(ewl)
+            self._btn_emission.set_colour(ecol)
+            self.stream.tint.value = ecol
+        else:
+            self._dye_xwl = None
+            self._dye_ewl = None
+
+        # Either update the peak info, or clean up if nothing to display
+        self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                                    self._dye_xwl, self.stream.excitation.value)
+        self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
+                                    self._dye_ewl, self.stream.emission.value)
+
+    def _update_peak_label_fit(self, lbl_ctrl, col_ctrl, wl, band):
+        """
+        Changes the colour & tooltip of the peak info label based on how well
+        it fits to the given band setting.
+        lbl_ctrl (wx.StaticText): control to update the foreground colour
+        col_ctrl (wx.ButtonColour): just to update the tooltip
+        wl (None or float): the wavelength of peak of the dye or None if no dye 
+        band ((list of) tuple of 2 or 5 floats): the band of the hw setting
+        """
+        if wl is None:
+            # No dye known => no peak information
+            lbl_ctrl.LabelText = u""
+            lbl_ctrl.SetToolTip(None)
+            col_ctrl.SetToolTipString(u"Centre wavelength colour")
+        else:
+            wl_nm = int(round(wl * 1e9))
+            lbl_ctrl.LabelText = u"Peak at %d nm" % wl_nm
+            col_ctrl.SetToolTipString(u"Peak wavelength colour")
+
+            fit = fluo.estimate_fit_to_dye(wl, band)
+            # Update colour
+            colour = {fluo.FIT_GOOD: FG_COLOUR_DIS,
+                      fluo.FIT_BAD: FG_COLOUR_WARNING,
+                      fluo.FIT_IMPOSSIBLE: FG_COLOUR_ERROR,
+                     }[fit]
+            lbl_ctrl.SetForegroundColour(colour)
+
+            # Update tooltip string
+            tooltip = {fluo.FIT_GOOD: u"The peak is inside the band %d→%d nm",
+                      fluo.FIT_BAD: u"Some light might pass through the band %d→%d nm",
+                      fluo.FIT_IMPOSSIBLE: u"The peak is too far from the band %d→%d nm",
+                     }[fit]
+            if isinstance(band[0], collections.Iterable): # multi-band
+                band = fluo.find_best_band_for_dye(wl, band)
+            low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
+            lbl_ctrl.SetToolTipString(tooltip % (low, high))
 
     def _excitation_2_va(self):
         """
         Called when the text is changed (by the user).
         returns a value to set for the VA
         """
-        # logging.debug("Excitation changed")
-        wl = (self._txt_excitation.GetValue() or 0) * 1e-9
-        # FIXME: need to turn the text red if the value is too small (bigger,
-        # maybe not necessary) => inside the widget?
-        wl = sorted(self.stream.excitation.range + (wl,))[1]
-        return wl
+        # FIXME: once updated to wxpython 3.0, GetSelection() will work correctly
+#         return self._txt_excitation.GetClientData(self._txt_excitation.Selection)
+        val = self._txt_excitation.GetValue()
+        logging.debug("Excitation changed to %s", val)
+        for i in range(self._txt_excitation.Count):
+            if self._txt_excitation.Items[i] == val:
+                return self._txt_excitation.GetClientData(i)
+        else:
+            logging.error("No existing label found for value %s", val)
 
     def _excitation_2_ctrl(self, value):
         """
         Called to update the widgets (text + colour display) when the VA changes.
         returns nothing
         """
-        self._txt_excitation.ChangeValue(int(round(value * 1e9)))
-        colour = wave2rgb(value)
-        # logging.debug("Changing colour to %s", colour)
-        self._btn_excitation.set_colour(colour)
+        # The control can be a label or a combo-box, but we are connected only
+        # when it's a combo-box
+        for i in range(self._txt_excitation.Count):
+            if self._txt_excitation.GetClientData(i) == value:
+                # FIXME: once updated to wxpython 3.0, use SetSelection(i)
+                self._txt_excitation.SetValue(self._txt_excitation.Items[i])
+                break
+        else:
+            logging.error("No existing label found for value %s", value)
+
+        if self._dye_xwl is None: # no dye info => use hardware settings
+            colour = wave2rgb(self._get_one_center(value))
+            self._btn_excitation.set_colour(colour)
+        else:
+            self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
+                                        self._dye_xwl, value)
 
     def _emission_2_va(self):
         """
@@ -1208,26 +1234,37 @@ class StreamPanel(wx.PyPanel):
         Also updates the tint as a side-effect.
         returns a value to set for the VA
         """
-        wl = (self._txt_emission.GetValue() or 0) * 1e-9
-        wl = sorted(self.stream.emission.range + (wl,))[1]
-
-        # changing emission should also change the tint
-        colour = wave2rgb(wl)
-        self.stream.tint.value = colour
-
-        return wl
+        val = self._txt_emission.GetValue()
+        logging.debug("Excitation changed to %s", val)
+        for i in range(self._txt_emission.Count):
+            if self._txt_emission.Items[i] == val:
+                return self._txt_emission.GetClientData(i)
+        else:
+            logging.error("No existing label found for value %s", val)
 
     def _emission_2_ctrl(self, value):
         """
         Called to update the widgets (text + colour display) when the VA changes.
         returns nothing
         """
-        self._txt_emission.ChangeValue(int(round(value * 1e9)))
-        colour = wave2rgb(value)
-        # logging.debug("Changing colour to %s", colour)
-        self._btn_emission.set_colour(colour)
+        for i in range(self._txt_emission.Count):
+            if self._txt_emission.GetClientData(i) == value:
+                # FIXME: once updated to wxpython 3.0, use SetSelection(i)
+                self._txt_emission.SetValue(self._txt_emission.Items[i])
+                break
+        else:
+            logging.error("No existing label found for value %s", value)
 
-    # ===== Wavelength bandwidth
+        if self._dye_ewl is None: # no dye info => use hardware settings
+            colour = wave2rgb(self._get_one_center(value))
+            self._btn_emission.set_colour(colour)
+            # if dye is used, keep the peak wavelength
+            self.stream.tint.value = colour
+        else:
+            self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
+                                        self._dye_ewl, value)
+
+    # ===== Wavelength bandwidth for SpectrumStream
 
     def _has_wl(self, stream):
         """

@@ -37,7 +37,7 @@ def get_center(band):
     if isinstance(band[0], collections.Iterable):
         return [get_center(b) for b in band]
 
-    if len(band) % 2:
+    if len(band) % 2 == 0:
         center = sum(band) / len(band) # works well at least with 2 values
     else:
         center = band[len(band) // 2]
