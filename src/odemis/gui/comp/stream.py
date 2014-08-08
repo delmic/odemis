@@ -1041,7 +1041,6 @@ class StreamPanel(wx.PyPanel):
         else:
             hw_set = ComboBox(self._panel,
                             value=self._to_readable_band(band),
-                            # pos=(0, 0),
                             size=(140, 16),
                             style=wx.CB_READONLY | wx.BORDER_NONE)
 
