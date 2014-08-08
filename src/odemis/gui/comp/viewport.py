@@ -28,12 +28,12 @@ from __future__ import division
 import collections
 import logging
 from odemis import gui, model
+from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
+from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
-from odemis.gui.comp.overlay.view import PointSelectOverlay
 from odemis.gui.img.data import getico_blending_goalBitmap
-from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
 from odemis.util import units
@@ -61,8 +61,8 @@ class ViewPort(wx.Panel):
 
         font = wx.Font(8, wx.FONTFAMILY_DEFAULT, wx.FONTSTYLE_NORMAL, wx.FONTWEIGHT_NORMAL)
         self.SetFont(font)
-        self.SetBackgroundColour("#1A1A1A")
-        self.SetForegroundColour("#BBBBBB")
+        self.SetBackgroundColour(BG_COLOUR_LEGEND)
+        self.SetForegroundColour(FG_COLOUR_LEGEND)
 
         # main widget
         self.canvas = self.canvas_class(self)
@@ -91,7 +91,7 @@ class ViewPort(wx.Panel):
                 grid_sizer.Add(self.legend[1], pos=(0, 0), flag=wx.EXPAND)
 
                 filler = wx.Panel(self)
-                filler.SetBackgroundColour("#1A1A1A")
+                filler.SetBackgroundColour(BG_COLOUR_LEGEND)
                 grid_sizer.Add(filler, pos=(1, 0), flag=wx.EXPAND)
 
                 grid_sizer.AddGrowableRow(0, 1)

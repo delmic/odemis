@@ -23,15 +23,17 @@
 """
 
 
+import cairo
+import logging
 from odemis.acq import stream
+from odemis.gui import FG_COLOUR_DIS
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.slider import Slider
 from odemis.util.conversion import wxcol_to_frgb
-import cairo
-import logging
+import wx
+
 import odemis.gui.img.data as imgdata
 import odemis.util.units as units
-import wx
 
 
 class InfoLegend(wx.Panel):
@@ -66,7 +68,7 @@ class InfoLegend(wx.Panel):
         )
 
         self.merge_slider.SetBackgroundColour(parent.GetBackgroundColour())
-        self.merge_slider.SetForegroundColour("#4d4d4d")
+        self.merge_slider.SetForegroundColour(FG_COLOUR_DIS) # "#4d4d4d"
         self.merge_slider.SetToolTipString("Merge ratio")
 
         self.bmp_slider_left = wx.StaticBitmap(self,

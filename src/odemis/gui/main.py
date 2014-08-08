@@ -100,15 +100,15 @@ class OdemisGUIApp(wx.App):
                     sys.exit(1)
                 microscope = None
 
+        logging.info("\n\n************  Starting Odemis GUI  ************\n")
+        logging.info(wx.version())
+
         self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame
         self.main_frame = main_xrc.xrcfr_main(None)
 
         self.init_gui()
-
         log.create_gui_logger(self.main_frame.txt_log, self.main_data.debug)
-        logging.info("\n\n************  Starting Odemis GUI  ************\n")
-        logging.info(wx.version())
 
         # Application successfully launched
         return True
@@ -218,7 +218,7 @@ class OdemisGUIApp(wx.App):
 
         if self.main_data.is_acquiring.value:
             msg = ("Acquisition in progress!\n\n"
-                   "Please cancel the current acquistion operation before exiting Odemis." )
+                   "Please cancel the current acquisition operation before exiting Odemis.")
             dlg = wx.MessageDialog(self.main_frame, msg, "Exit", wx.OK | wx.ICON_STOP)
             # if dlg.ShowModal() == wx.ID_NO:
             dlg.ShowModal()

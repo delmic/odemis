@@ -19,6 +19,8 @@ Odemis. If not, see http://www.gnu.org/licenses/. """
 
 import logging
 from logging.handlers import RotatingFileHandler
+from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_DIS, \
+    FG_COLOUR_MAIN, BG_COLOUR_LEGEND
 import os.path
 import sys
 import wx
@@ -121,6 +123,7 @@ class TextFieldHandler(logging.Handler):
     def setTextField(self, textfield):
         self.textfield = textfield
         self.textfield.Clear()
+        self.textfield.SetBackgroundColour(BG_COLOUR_LEGEND)
 
     def setErrorVA(self, error_va):
         self.error_va = error_va
@@ -129,13 +132,14 @@ class TextFieldHandler(logging.Handler):
         """ Write a record, in colour, to a text field. """
         if self.textfield is not None:
             if record.levelno >= logging.ERROR:
-                colour = "#B00B2C"
+                colour = FG_COLOUR_ERROR
             elif record.levelno == logging.WARNING:
-                colour = "#C87000"
+                colour = FG_COLOUR_WARNING
+
             elif record.levelno == logging.INFO:
-                colour = "#555555"
+                colour = FG_COLOUR_MAIN
             else:
-                colour = "#777777"
+                colour = FG_COLOUR_DIS
 
             # FIXME: still seems to be possible to completely hog the GUI by
             # logging too much. A way to fix it would be to run the textfield
