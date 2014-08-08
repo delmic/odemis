@@ -56,7 +56,7 @@ def estimate_fit_to_dye(wl, band):
 
     # if multi-band: get the best of all
     if isinstance(band[0], collections.Iterable):
-        return max(estimate_fit_to_dye(b, wl) for b in band)
+        return max(estimate_fit_to_dye(wl, b) for b in band)
 
     if band[0] < wl < band[-1]: # within the hardware range
         return FIT_GOOD

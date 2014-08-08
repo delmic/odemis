@@ -1030,6 +1030,7 @@ class StreamPanel(wx.PyPanel):
         if va.readonly or len(va.choices) <= 1:
             hw_set = wx.TextCtrl(self._panel,
                        value=self._to_readable_band(band),
+                       size=(140, 16),
                        style=wx.BORDER_NONE | wx.TE_READONLY)
             hw_set.SetBackgroundColour(self._panel.BackgroundColour)
             hw_set.SetForegroundColour(FG_COLOUR_DIS)
@@ -1040,7 +1041,8 @@ class StreamPanel(wx.PyPanel):
         else:
             hw_set = ComboBox(self._panel,
                             value=self._to_readable_band(band),
-                            pos=(0, 0), size=(100, 16),
+                            # pos=(0, 0),
+                            size=(140, 16),
                             style=wx.CB_READONLY | wx.BORDER_NONE)
 
             ex_choices = sorted(va.choices, key=self._get_one_center)
@@ -1075,7 +1077,7 @@ class StreamPanel(wx.PyPanel):
                             colour=wave2rgb(ex_center),
                             background_parent=self._panel)
         self._gbs.Add(btn_col, (self.row_count, 2),
-                      flag=wx.RIGHT | wx.ALIGN_RIGHT,
+                      flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
                       border=5)
         self._update_peak_label_fit(lbl_peak, btn_col, None, band)
         self.row_count += 1
