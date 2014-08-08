@@ -674,12 +674,15 @@ class SettingsPanel(object):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
-                        return ctrl.SetValue(ctrl.Items[i])
+                        # FIXME: once updated to wxpython 3.0, SetSelection() will work correctly
+                        # ctrl.SetSelection(i)
+                        ctrl.SetValue(ctrl.Items[i])
+                        break
                 else:
                     logging.debug("No existing label found for value %s", value)
                     # entering value as free text
                     txt = readable_str(value, unit)
-                    return ctrl.SetValue(txt)
+                    ctrl.SetValue(txt)
 
             # equivalent wrapper function to retrieve the actual value
             def cb_get(ctrl=new_ctrl, va=vigil_attr):

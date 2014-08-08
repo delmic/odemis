@@ -62,9 +62,6 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_KEY_DOWN, self.on_key)
 
-        # Grab a reference
-        self.txt_ctrl = self.GetTextCtrl()
-
     def on_size(self, evt):
         """ Force the TextCtrl to cover the white 'border' at the bottom
         on each resize.
@@ -74,22 +71,22 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         # Note: The height is fixed (as in, not related to the ComboBox itself) because that
         # would cause 'jumping' text in certain use cases, where the text would be displayed at
         # positions that differed 1 px in the vertical direction.
-        if self.txt_ctrl:
-            wx.CallAfter(self.txt_ctrl.SetSize, (-1, 16))
+        if self.TextCtrl:
+            wx.CallAfter(self.TextCtrl.SetSize, (-1, 16))
         evt.Skip()
 
     def on_key(self, evt):
         """ The OwnerDrawnComboBox makes the left/right keys change the
         selection instead of moving the caret. This method corrects that problem
         """
-        if self.txt_ctrl and self.Enabled:
+        if self.TextCtrl and self.Enabled:
             key = evt.GetKeyCode()
             ip = self.txt_ctrl.GetInsertionPoint()
 
             if key == wx.WXK_RIGHT:
-                self.txt_ctrl.SetInsertionPoint(ip + 1)
+                self.TextCtrl.SetInsertionPoint(ip + 1)
             elif key == wx.WXK_LEFT and ip > 0:
-                self.txt_ctrl.SetInsertionPoint(ip - 1)
+                self.TextCtrl.SetInsertionPoint(ip - 1)
             else:
                 evt.Skip()
         else:

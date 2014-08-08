@@ -169,6 +169,11 @@ class StreamController(object):
                 name,
                 self._main_data_model.ccd, self._main_data_model.ccd.data,
                 self._main_data_model.light, self._main_data_model.light_filter)
+
+        # TODO: automatically pick a good set of excitation/emission which is
+        # not yet used by any FluoStream (or the values from the last stream
+        # deleted?)
+
         return self._addStream(s, **kwargs)
 
     def addBrightfield(self, **kwargs):

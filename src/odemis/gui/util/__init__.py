@@ -169,14 +169,14 @@ def dead_object_wrapper(f, *args, **kwargs):
     """ This simple wrapper suppresses errors caused code trying to access
     wxPython widgets that have already been destroyed
     """
-    def dear_object_wrapzor(*args, **kwargs):
+    def dead_object_wrapzor(*args, **kwargs):
         try:
             app = wx.GetApp()
             if app:
                 return f(*args, **kwargs)
         except wx.PyDeadObjectError:
             logging.warn("Dead object ignored in %s", f.__name__)
-    return dear_object_wrapzor
+    return dead_object_wrapzor
 
 
 # Path functions
