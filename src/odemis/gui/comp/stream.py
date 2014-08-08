@@ -30,17 +30,16 @@ manipulate various data streams coming from the microscope.
 
 import collections
 import logging
-import math
 import numpy
 from odemis import acq
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, \
-    BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS, FG_COLOUR_HIGHLIGHT, \
+    BG_COLOUR_MAIN, BG_COLOUR_STREAM, FG_COLOUR_DIS, \
     FG_COLOUR_WARNING, FG_COLOUR_ERROR
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider
-from odemis.gui.comp.text import SuggestTextCtrl, UnitIntegerCtrl, \
-    UnitFloatCtrl, IntegerTextCtrl, FloatTextCtrl
+from odemis.gui.comp.text import SuggestTextCtrl, \
+    UnitFloatCtrl, FloatTextCtrl
 from odemis.gui.util import call_after, wxlimit_invocation, dead_object_wrapper, \
     ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -413,6 +412,7 @@ class StreamPanel(wx.PyPanel):
         # Data models
         self.stream = stream
         self._tab_data_model = tab_data
+        self._vacs = [] # VAConnectors to keep reference of
 
         # Appearance
         self._agwStyle = agwStyle | wx.CP_NO_TLW_RESIZE  # |wx.CP_GTK_EXPANDER
@@ -423,7 +423,6 @@ class StreamPanel(wx.PyPanel):
         self._collapsed = True
 
         # Child widgets
-
         self._panel = wx.Panel(self, style=wx.TAB_TRAVERSAL | wx.NO_BORDER)
         self._panel.Hide()
 
@@ -489,7 +488,6 @@ class StreamPanel(wx.PyPanel):
         if wx.Platform == "__WXMSW__":
             self._expander.Bind(wx.EVT_LEFT_DCLICK, self.on_button)
 
-        # ==== Bind events
         vis = self.stream in self._tab_data_model.focussedView.value.getStreams()
         self.setVisible(vis)
 
@@ -1003,14 +1001,12 @@ class StreamPanel(wx.PyPanel):
         r = self._add_filter_line(u"Excitation", self.stream.excitation,
                                   self._excitation_2_ctrl,
                                   self._excitation_2_va)
-        (_, self._txt_excitation, self._lbl_exc_peak,
-         self._btn_excitation, self._vac_excitation) = r
+        (_, self._txt_excitation, self._lbl_exc_peak, self._btn_excitation) = r
 
         r = self._add_filter_line(u"Emission", self.stream.emission,
                                   self._emission_2_ctrl,
                                   self._emission_2_va)
-        (_, self._txt_emission, self._lbl_em_peak,
-         self._btn_emission, self._vac_emission) = r
+        (_, self._txt_emission, self._lbl_em_peak, self._btn_emission) = r
 
     def _add_filter_line(self, name, va, va_2_ctrl, ctrl_2_va):
         """
@@ -1018,8 +1014,7 @@ class StreamPanel(wx.PyPanel):
         emission/excitation colour filter settings.
         name (unicode): the label name
         va (VigilantAttribute): the VA for the emission/excitation (contains a band)
-        return (4 wx.Controls + VAConnector): the respective controls created,
-         and a VAC for the hw settings
+        return (4 wx.Controls): the respective controls created
         """
         # Note: va.value is in m, but we present everything in nm
         lbl = wx.StaticText(self._panel, -1, name)
@@ -1036,17 +1031,19 @@ class StreamPanel(wx.PyPanel):
             hw_set = wx.TextCtrl(self._panel,
                        value=self._to_readable_band(band),
                        style=wx.BORDER_NONE | wx.TE_READONLY)
+            hw_set.SetBackgroundColour(self._panel.BackgroundColour)
             hw_set.SetForegroundColour(FG_COLOUR_DIS)
+            # TODO: why does it need to _not_ have top/bottom borders to be aligned?
+            exc_sizer.Add(hw_set, 1,
+                          flag=wx.LEFT | wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL,
+                          border=5)
         else:
-            hw_set = ComboBox(
-                        self._panel,
-                        wx.ID_ANY,
-                        value=self._to_readable_band(band),
-                        pos=(0, 0), size=(100, 16),
-                        style=wx.CB_READONLY | wx.BORDER_NONE)
+            hw_set = ComboBox(self._panel,
+                            value=self._to_readable_band(band),
+                            pos=(0, 0), size=(100, 16),
+                            style=wx.CB_READONLY | wx.BORDER_NONE)
 
-            # TODO: for multi-band, use min
-            ex_choices = sorted(va.choices, key=fluo.get_center)
+            ex_choices = sorted(va.choices, key=self._get_one_center)
             for b in ex_choices:
                 hw_set.Append(self._to_readable_band(b), b)
 
@@ -1058,10 +1055,11 @@ class StreamPanel(wx.PyPanel):
                   va_2_ctrl, # to convert to selection + update btn
                   ctrl_2_va, # to convert from selection to VA
                   events=wx.EVT_COMBOBOX)
+            self._vacs.append(vac) # make sure it doesn't get dereferenced
 
-        exc_sizer.Add(hw_set, 1,
-                      flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
-                      border=5)
+            exc_sizer.Add(hw_set, 1,
+                          flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
+                          border=5)
 
         # Label for peak information
         lbl_peak = wx.StaticText(self._panel)
@@ -1082,7 +1080,7 @@ class StreamPanel(wx.PyPanel):
         self._update_peak_label_fit(lbl_peak, btn_col, None, band)
         self.row_count += 1
 
-        return lbl, hw_set, lbl_peak, btn_col, vac
+        return lbl, hw_set, lbl_peak, btn_col
 
     def _to_readable_band(self, band):
         """

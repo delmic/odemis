@@ -106,23 +106,17 @@ class StaticFluoStream(StaticStream):
         # Wavelengths
         try:
             exc_range = image.metadata[model.MD_IN_WL]
-            val = numpy.mean(exc_range)
-            self.excitation = model.FloatContinuous(val,
-                                                    range=exc_range,
-                                                    unit="m",
-                                                    readonly=True)
+            self.excitation = VigilantAttribute(exc_range, unit="m",
+                                                readonly=True)
         except KeyError:
             logging.warning("No excitation wavelength for fluorescence stream")
 
         try:
             em_range = image.metadata[model.MD_OUT_WL]
-            val = numpy.mean(em_range)
-            self.emission = model.FloatContinuous(val,
-                                                  range=em_range,
-                                                  unit="m",
-                                                  readonly=True)
+            self.emission = VigilantAttribute(em_range, unit="m",
+                                              readonly=True)
 
-            default_tint = conversion.wave2rgb(self.emission.value)
+            default_tint = conversion.wave2rgb(numpy.mean(em_range))
         except KeyError:
             logging.warning("No emission wavelength for fluorescence stream")
             default_tint = (0, 255, 0) # green is most typical
