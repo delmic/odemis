@@ -24,7 +24,6 @@
 
 import math
 from odemis.gui.model import TOOL_POINT
-from odemis.model._vattributes import VigilantAttribute
 
 from odemis.util.conversion import hex_to_frgb
 from odemis.gui.comp.overlay import view as vol
@@ -259,10 +258,10 @@ class OverlayTestCase(test.GuiTestCase):
             def moveRel(self, dummy):
                 pass
 
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
         view._focus = [FakeFocus(), FakeFocus()]
-        cnvs.setView(view, mmodel)
+        cnvs.setView(view, tab_mod)
 
         test.gui_loop()
 
@@ -271,7 +270,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        vsol = vol.ViewSelectOverlay(cnvs, "test view selection")
+        vsol = vol.ViewSelectOverlay(cnvs)
         vsol.activate()
         cnvs.add_view_overlay(vsol)
         # cnvs.current_mode = guimodel.TOOL_ZOOM
@@ -285,20 +284,17 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         test.gui_loop()
 
-        mlol.v_posx.value = 100
-        mlol.v_posy.value = 100
+        mlol.v_pos.value = (100, 100)
         cnvs.Refresh()
 
         test.gui_loop(500)
         mlol.orientation = 2
-        mlol.v_posx.value = 200
-        mlol.v_posy.value = 200
+        mlol.v_pos.value = (200, 200)
         cnvs.Refresh()
 
         test.gui_loop(500)
         mlol.orientation = 3
-        mlol.v_posx.value = 300
-        mlol.v_posy.value = 300
+        mlol.v_pos.value = (300, 300)
         cnvs.Refresh()
 
     def test_dichotomy_overlay(self):
@@ -378,9 +374,6 @@ class OverlayTestCase(test.GuiTestCase):
 
     def test_world_select_overlay(self):
         cnvs = miccanvas.SecomCanvas(self.panel)
-        # mmodel = test.FakeMicroscopeModel()
-        # view = mmodel.focussedView.value
-        # cnvs.setView(view, mmodel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         wsol = wol.WorldSelectOverlay(cnvs)
@@ -450,13 +443,13 @@ class OverlayTestCase(test.GuiTestCase):
     def test_pixel_select_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
 
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         # FIXME: when setView is called *before* the add_control, the picture goes blakc and no
         # pixels are visible
-        cnvs.setView(view, mmodel)
+        cnvs.setView(view, tab_mod)
         cnvs.current_mode = TOOL_POINT
 
         psol = wol.PixelSelectOverlay(cnvs)
@@ -490,9 +483,9 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
-        cnvs.setView(view, mmodel)
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
+        cnvs.setView(view, tab_mod)
 
         # Manually add the overlay
         pol = wol.PointsOverlay(cnvs)

@@ -162,31 +162,43 @@ class GuiTestCase(unittest.TestCase):
             child.Window.Destroy()
         cls.sizer.Layout()
 
-# Dummy clases for testing purposes
-class Object(object):
-    pass
+    def create_simple_tab_model(self):
+        main = gmodel.MainGUIData(None) # no microscope backend
+        tab = gmodel.MicroscopyGUIData(main)
 
-class FakeMicroscopeModel(object):
-    """
-    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
-    """
-    def __init__(self):
+        # Add one view
         fview = gmodel.MicroscopeView("fakeview")
-        self.focussedView = omodel.VigilantAttribute(fview)
+        tab.views.value.append(fview)
+        tab.focussedView.value = fview
 
-        self.main = Object() #pylint: disable=E0602
-        self.main.light = None
-        self.main.ebeam = None
-        self.main.debug = omodel.VigilantAttribute(fview)
-        self.focussedView = omodel.VigilantAttribute(fview)
+        return tab
 
-        self.light = None
-        self.light_filter = None
-        self.ccd = None
-        self.sed = None
-        self.ebeam = None
-        self.tool = None
-        self.subscribe = None
+
+# # Dummy clases for testing purposes
+# class Object(object):
+#     pass
+#
+# class MainGUIData(object):
+#     """
+#     Imitates a MainGUIData wrt stream entry: it just needs a focussedView
+#     """
+#     def __init__(self):
+#         fview = gmodel.MicroscopeView("fakeview")
+#         self.focussedView = omodel.VigilantAttribute(fview)
+#
+#         self.main = Object() #pylint: disable=E0602
+#         self.main.light = None
+#         self.main.ebeam = None
+#         self.main.debug = omodel.VigilantAttribute(fview)
+#         self.focussedView = omodel.VigilantAttribute(fview)
+#
+#         self.light = None
+#         self.light_filter = None
+#         self.ccd = None
+#         self.sed = None
+#         self.ebeam = None
+#         self.tool = None
+#         self.subscribe = None
 
 # Utility functions
 

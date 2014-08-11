@@ -30,9 +30,8 @@ from odemis.gui.comp.canvas import BufferedCanvas
 import unittest
 import wx
 
-from odemis.acq.stream import StaticStream, RGBStream
+from odemis.acq.stream import RGBStream
 import odemis.gui.comp.miccanvas as miccanvas
-import odemis.gui.model as guimodel
 
 
 # logging.getLogger().setLevel(logging.DEBUG)
@@ -56,51 +55,23 @@ def GetImageFromBuffer(canvas):
     resultDC.SelectObject(wx.NullBitmap)
     return wx.ImageFromBitmap(resultBmp)
 
-class Object(object):
-    pass
-
-class FakeMicroscopeModel(object):
-    """
-    Imitates a MicroscopeModel wrt stream entry: it just needs a focussedView
-    """
-    def __init__(self):
-        fview = guimodel.MicroscopeView("fakeview")
-        self.focussedView = model.VigilantAttribute(fview)
-
-        self.main = Object()
-        self.main.light = None
-        self.main.ebeam = None
-        self.main.debug = model.VigilantAttribute(fview)
-        self.focussedView = model.VigilantAttribute(fview)
-
-        self.light = None
-        self.light_filter = None
-        self.ccd = None
-        self.sed = None
-        self.ebeam = None
-        self.tool = None
-        self.subscribe = None
-
-class TestDblMicroscopeCanvas(unittest.TestCase):
+class TestDblMicroscopeCanvas(test.GuiTestCase):
+    frame_class = test.test_gui.xrccanvas_frame
 
     def setUp(self):
-        self.app = wx.App(False)
-        self.frame = wx.Frame(None)
-        self.mmodel = FakeMicroscopeModel()
+        test.gui_loop()
+        self.mmodel = self.create_simple_tab_model()
         self.view = self.mmodel.focussedView.value
-        self.canvas = miccanvas.DblMicroscopeCanvas(self.frame)
+        self.canvas = miccanvas.DblMicroscopeCanvas(self.panel)
         self.canvas.background_brush = wx.SOLID # no special background
+        self.add_control(self.canvas, flags=wx.EXPAND, proportion=1)
+        test.gui_loop()
+
         self.canvas.setView(self.view, self.mmodel)
 
-        self.frame.SetSize((400, 400))
-        self.frame.Center()
-        test.gui_loop()
-        self.frame.Show(True)
-        test.gui_loop()
 
     def tearDown(self):
-        self.frame.Destroy()
-        self.app.MainLoop()
+        self.remove_all()
 
     # @unittest.skip("simple")
     def test_CrossHair(self):

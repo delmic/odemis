@@ -37,6 +37,9 @@ class TestCanvas(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
+    def tearDown(self):
+        self.remove_all()
+
     def xtest_cairo_wander_bug_demo(self):
         """
         This method is not really a test, but demonstrates a possible bug in Cairo.
@@ -91,8 +94,8 @@ class TestCanvas(test.GuiTestCase):
 
         test.gui_loop()
 
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
+        tab = self.create_simple_tab_model()
+        view = tab.focussedView.value
 
         # Changes in default values might affect other test, so we need to know
         self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
@@ -108,7 +111,7 @@ class TestCanvas(test.GuiTestCase):
 
         # Changes in default values might affect other test, so we need to know
         self.assertEqual(cnvs.scale, 1, "Default canvas scale has changed!")
-        cnvs.setView(view, mmodel)
+        cnvs.setView(view, tab)
 
         # Setting the view, calls _onMPP with the view.mpp value
         # mpwu / mpp = scale => 1 (fixed, default) / view.mpp (1e-5)
@@ -140,22 +143,6 @@ class TestCanvas(test.GuiTestCase):
         shift = (10, 10)
         cnvs.shift_view(shift)
 
-    def xtest_calc_buffer_rect_img_data(self):
-
-        im_data = numpy.array([
-                        [1, 2, 3, 4],
-                        [5, 6, 7, 8],
-                        [9, 10, 11, 12],
-                        [13, 14, 15, 16],
-                    ])
-
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-
-        brect = (1, -1, 4, 4)
-        irect = (1, 0, 3, 3)
-
-        print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
-
     def test_calc_img_buffer_rect(self):
 
         # Setting up test frame
@@ -167,8 +154,8 @@ class TestCanvas(test.GuiTestCase):
 
         test.gui_loop()
 
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
+        tab = self.create_simple_tab_model()
+        view = tab.focussedView.value
 
         # Changes in default values might affect other test, so we need to know
         self.assertEqual(view.mpp.value, 1e-5, "The default mpp value has changed!")
@@ -183,7 +170,7 @@ class TestCanvas(test.GuiTestCase):
 
         # Changes in default values might affect other test, so we need to know
         self.assertEqual(cnvs.scale, 1, "Default canvas scale has changed!")
-        cnvs.setView(view, mmodel)
+        cnvs.setView(view, tab)
 
         # Setting the view, calls _onMPP with the view.mpp value
         # mpwu / mpp = scale => 1 (fixed, default) / view.mpp (1e-5)
@@ -252,7 +239,7 @@ class TestCanvas(test.GuiTestCase):
         # Dummy image
         shape = (200, 201, 4)
         rgb = numpy.empty(shape, dtype=numpy.uint8)
-        rgb[..., ..., ...] = 255
+        rgb[...] = 255
         darray = DataArray(rgb)
 
         logging.getLogger().setLevel(logging.DEBUG)
@@ -373,12 +360,12 @@ class TestCanvas(test.GuiTestCase):
         self.app.test_frame.Layout()
 
         # old_canvas = DraggableCanvas(self.panel)
-        mmodel = test.FakeMicroscopeModel()
-        view = mmodel.focussedView.value
+        tab = self.create_simple_tab_model()
+        view = tab.focussedView.value
         old_canvas = miccanvas.DblMicroscopeCanvas(self.panel)
         old_canvas.use_threading = True
         # self.canvas.background_brush = wx.SOLID # no special background
-        old_canvas.setView(view, mmodel)
+        old_canvas.setView(view, tab)
         self.add_control(old_canvas, flags=wx.EXPAND, proportion=1)
 
 
@@ -467,11 +454,11 @@ class TestCanvas(test.GuiTestCase):
         self.app.test_frame.Layout()
 
         # old_canvas = DraggableCanvas(self.panel)
-        mmodel = test.FakeMicroscopeModel()
+        tab = self.create_simple_tab_model()
         mpp = FloatContinuous(10e-6, range=(1e-3, 1), unit="m/px")
-        mmodel.focussedView.value.mpp = mpp
+        tab.focussedView.value.mpp = mpp
 
-        view = mmodel.focussedView.value
+        view = tab.focussedView.value
         canvas = miccanvas.DblMicroscopeCanvas(self.panel)
 
         shape = (5, 5, 4)
@@ -494,7 +481,7 @@ class TestCanvas(test.GuiTestCase):
         rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
         darray = DataArray(rgb)
 
-        canvas.setView(view, mmodel)
+        canvas.setView(view, tab)
         self.add_control(canvas, flags=wx.EXPAND, proportion=1)
         test.gui_loop()
         # Set the mpp again, because the on_size handler will have recalculated it
@@ -515,15 +502,15 @@ class TestCanvas(test.GuiTestCase):
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
 
-        mmodel = test.FakeMicroscopeModel()
+        tab = self.create_simple_tab_model()
         mpp = FloatContinuous(2, range=(0, 1), unit="m/px")
-        mmodel.focussedView.value.mpp = mpp
+        tab.focussedView.value.mpp = mpp
 
-        view = mmodel.focussedView.value
+        view = tab.focussedView.value
         canvas = miccanvas.DblMicroscopeCanvas(self.panel)
 
 
-        canvas.setView(view, mmodel)
+        canvas.setView(view, tab)
         # self.add_control(canvas, flags=wx.EXPAND, proportion=1)
         # test.gui_loop()
         # # Set the mpp again, because the on_size handler will have recalculated it
