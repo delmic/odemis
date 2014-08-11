@@ -156,7 +156,7 @@ class TestCanvas(test.GuiTestCase):
 
         print cnvs._calc_buffer_rect_img_data(irect, brect, im_data, 1)
 
-    def xtest_calc_img_buffer_rect(self):
+    def test_calc_img_buffer_rect(self):
 
         # Setting up test frame
         # pylint: disable=E1103
@@ -367,7 +367,7 @@ class TestCanvas(test.GuiTestCase):
         logging.getLogger().setLevel(logging.ERROR)
 
     # @profile
-    def xtest(self):
+    def test(self):
         self.app.test_frame.SetSize((500, 1000))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
@@ -460,7 +460,7 @@ class TestCanvas(test.GuiTestCase):
         print "Done"
 
 
-    def xtest_nanana(self):
+    def test_nanana(self):
 
         self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
@@ -506,8 +506,8 @@ class TestCanvas(test.GuiTestCase):
         canvas.update_drawing()
         test.gui_loop(100)
 
-    @unittest.skip("simple")
-    def xtest_reshape(self):
+    # @unittest.skip("simple")
+    def test_reshape(self):
 
         darray = generate_img_data(100, 100, 4, 100)
 
