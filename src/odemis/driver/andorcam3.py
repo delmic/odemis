@@ -33,7 +33,6 @@ import collections
 from ctypes import *
 import gc
 import logging
-import math
 import numpy
 from odemis import model, util
 import odemis
@@ -344,6 +343,8 @@ class AndorCam3(model.DigitalCamera):
             # Also a way to indicate to the DataFlow it's synchronisable
             self.softwareTrigger = model.Event()
 
+        self._SetStaticSettings()
+
         self.data = AndorCam3DataFlow(self)
     
     # TODO: merge into HwComponent
@@ -358,6 +359,21 @@ class AndorCam3(model.DigitalCamera):
         md (dict string -> value): the metadata
         """
         self._metadata.update(md)
+
+    def _SetStaticSettings(self):
+        if self.isImplemented(u"Overlap"):
+            # No overlap, as it can introduce additional noise, and we don't need
+            # the speed.
+            self.SetBool(u"Overlap", False)
+
+        if self.isImplemented(u"MetadataEnable"):
+            # Ask for timestamp, to track precisely the acquisition time 
+            self.SetBool(u"MetadataEnable", True)
+            self.SetBool(u"MetadataTimestamp", True)
+            self._clock_factor = 1 / self.GetInt(u"TimestampClockFrequency")
+            self._clock_shift = time.time()
+            self.Command(u"TimestampClockReset")
+            logging.debug("Clock is at %d", self.GetInt(u"TimestampClock"))
 
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
@@ -1170,14 +1186,14 @@ class AndorCam3(model.DigitalCamera):
         """
         returns a cbuffer of the right size for an image
         """
-        image_size_bytes = self.GetInt(u"ImageSizeBytes")
+        image_size = self.GetInt(u"ImageSizeBytes")
         # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
-        assert image_size_bytes >= (size[0] * size[1] * 2)
-        
+        assert image_size >= (size[0] * size[1] * 2)
+
         # allocating directly a numpy array doesn't work if there is metadata:
         # ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
         # cbuffer = numpy.ctypeslib.as_ctypes(ndbuffer)
-        cbuffer = (c_byte * image_size_bytes)() # empty array
+        cbuffer = (c_byte * image_size)() # empty array
         assert(addressof(cbuffer) % 8 == 0) # the SDK wants it aligned
         
         return cbuffer
@@ -1200,6 +1216,43 @@ class AndorCam3(model.DigitalCamera):
         dataarray = model.DataArray(ndbuffer, metadata)
         # crop the array in case of stride (should not cause copy)
         return dataarray[:,:size[0]]
+
+    LENGTH_FIELD_SIZE = 4
+    CID_FIELD_SIZE = 4
+    CID_TIMESTAMP = 1
+    def _read_timestamp_md(self, cbuffer, size):
+        """
+        return (float or None): time in s contained in the metadata or None if
+        not available
+        """
+        if not self.isImplemented(u"MetadataEnable"):
+            return None
+        data_size = size[0] * size[1] * 2
+
+        # Metadata is read from the end to the beginning of the data
+        # ...TAG | CID | LENGTH
+        # Note: the documentation says the length is the length of the tag,
+        # but it appears to be length of tag + cid
+        addl = addressof(cbuffer) + len(cbuffer) - self.LENGTH_FIELD_SIZE
+        while addl > data_size:
+            pl = cast(addl, POINTER(c_uint32))
+            l = pl.contents.value
+            pcid = cast(addl - self.CID_FIELD_SIZE, POINTER(c_uint32))
+            cid = pcid.contents.value
+#             logging.debug("Found metadata: cid = %d, len = %d", cid, l)
+
+            if cid == self.CID_TIMESTAMP:
+                pts = cast(addl - l, POINTER(c_uint64))
+                ts = pts.contents.value # ticks
+                # convert to s
+                ts_s = self._clock_shift + ts * self._clock_factor
+                return ts_s
+
+            # next one
+            addl -= self.LENGTH_FIELD_SIZE + l
+
+        logging.warning("Failed to find timestamp in metadata")
+        return None
 
     # unused
     def acquireOne(self):
@@ -1308,22 +1361,34 @@ class AndorCam3(model.DigitalCamera):
                     self._ready_for_acq_start = True
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
-                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                tstart = time.time()
+                tend = tstart + exposure_time + readout_time # s
+                # TODO: tstart might be after the actual beginning of the acquisition
+                # if there are multiple images acquired, as the next acquisition
+                # immediately starts after the readout
+                metadata[model.MD_ACQ_DATE] = tstart # time at the beginning
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
 
-                # first we wait ourselves the typical time (which might be very long)
-                # while detecting requests for stop
-                if self.acquire_must_stop.wait(exposure_time + readout_time):
-                    raise CancelledError()
-
-                # then wait a bounded time to ensure the image is acquired
+                # we don't know when it started acquiring, so we just keep
+                # poking (to also be able to detect cancellation)
                 try:
-                    pbuffer, buffersize = self.WaitBuffer(1)
+                    while True:
+                        # cancelled by the user?
+                        if self.acquire_must_stop.is_set():
+                            raise CancelledError()
 
-                    # Maybe the must_stop flag has been set while we were waiting
-                    if self.acquire_must_stop.is_set():
-                        raise CancelledError()
+                        # we actually _expect_ a timeout
+                        try:
+                            pbuffer, buffersize = self.WaitBuffer(0.1)
+                        except ATError as (errno, strerr):
+                            if errno == 13: #AT_ERR_TIMEDOUT
+                                if time.time() > tend + 1:
+                                    raise # seems actually serious
+                                else:
+                                    pass
+                        else:
+                            break # new image!
                 except ATError as (errno, strerr):
                     # sometimes there is timeout, don't completely give up
                     # Note: seems to happen when time between two waitbuffer() is too long
@@ -1347,6 +1412,12 @@ class AndorCam3(model.DigitalCamera):
                 assert(addressof(pbuffer.contents) == addressof(cbuffer))
 
                 array = self._buffer_as_array(cbuffer, size, metadata)
+
+                hw_ts = self._read_timestamp_md(cbuffer, size)
+                if hw_ts:
+                    logging.debug("Start time = %f, hw time = %f, diff = %g s",
+                                  metadata[model.MD_ACQ_DATE], hw_ts,
+                                  metadata[model.MD_ACQ_DATE] - hw_ts)
 
                 # Next buffer. We cannot reuse the buffer because we don't know if
                 # the callee still needs it or not
