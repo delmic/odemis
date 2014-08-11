@@ -29,16 +29,16 @@ import numpy
 
 import wx
 
-import odemis.gui.test.test_gui
+import test_gui
 import odemis.gui.model as gmodel
 import odemis.model as omodel
 from odemis.gui.xmlh import odemis_get_test_resources
 
-
 MANUAL = False
 INSPECT = False
 
-SLEEP_TIME = 50 # ms: time to sleep between actions (to slow down the tests)
+SLEEP_TIME = 50  # ms: time to sleep between actions (to slow down the tests)
+
 
 def goto_manual():
     """ Call this function as soon as possible, to go to manual mode, where
@@ -46,9 +46,11 @@ def goto_manual():
     global MANUAL
     MANUAL = True
 
+
 def goto_inspect():
     global INSPECT
     INSPECT = True
+
 
 def gui_loop(slp=None):
     """
@@ -66,12 +68,15 @@ def gui_loop(slp=None):
 
     wx.MilliSleep(slp or SLEEP_TIME)
 
+
 def sleep(ms=None):
     wx.MilliSleep(ms or SLEEP_TIME)
+
 
 def set_sleep_time(slp_tm):
     global SLEEP_TIME
     SLEEP_TIME = slp_tm
+
 
 # Default wxPython App that can be used as a basis for testing
 class GuiTestApp(wx.App):
@@ -79,7 +84,7 @@ class GuiTestApp(wx.App):
     test_frame = None
 
     def __init__(self, frame):
-        odemis.gui.test.test_gui.get_resources = odemis_get_test_resources
+        test_gui.get_resources = odemis_get_test_resources
         self.test_frame = frame
         self.module_name = ""
 
@@ -87,7 +92,7 @@ class GuiTestApp(wx.App):
         wx.App.__init__(self, redirect=False)
 
     def OnInit(self):
-        self.test_frame = self.test_frame(None) # odemis.gui.test.test_gui.xrccanvas_frame(None)
+        self.test_frame = self.test_frame(None)  # odemis.gui.test.test_gui.xrccanvas_frame(None)
         self.test_frame.SetSize((400, 400))
         self.test_frame.Center()
         self.test_frame.Layout()
@@ -112,6 +117,7 @@ class GuiTestApp(wx.App):
                 return self.panel_finder(c)
         return None
 
+
 # TestCase base class, with GuiTestApp support
 class GuiTestCase(unittest.TestCase):
 
@@ -129,7 +135,7 @@ class GuiTestCase(unittest.TestCase):
         cls.sizer = cls.panel.GetSizer()
 
         # NOTE!: Call Layout on the panel here, because otherwise the
-        # controls layed out using XRC will not have the right sizes!
+        # controls laid out using XRC will not have the right sizes!
         gui_loop()
 
     @classmethod
@@ -162,9 +168,11 @@ class GuiTestCase(unittest.TestCase):
             child.Window.Destroy()
         cls.sizer.Layout()
 
+
 # Dummy clases for testing purposes
 class Object(object):
     pass
+
 
 class FakeMicroscopeModel(object):
     """
@@ -174,7 +182,7 @@ class FakeMicroscopeModel(object):
         fview = gmodel.MicroscopeView("fakeview")
         self.focussedView = omodel.VigilantAttribute(fview)
 
-        self.main = Object() #pylint: disable=E0602
+        self.main = Object()
         self.main.light = None
         self.main.ebeam = None
         self.main.debug = omodel.VigilantAttribute(fview)
@@ -188,11 +196,12 @@ class FakeMicroscopeModel(object):
         self.tool = None
         self.subscribe = None
 
-# Utility functions
 
+# Utility functions
 def set_img_meta(img, pixel_size, pos):
     img.metadata[omodel.MD_PIXEL_SIZE] = pixel_size
     img.metadata[omodel.MD_POS] = pos
+
 
 def generate_img_data(width, height, depth, alpha=255):
     """ Create an image of the given dimensions """
