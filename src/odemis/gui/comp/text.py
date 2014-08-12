@@ -503,7 +503,7 @@ class NumberValidator(wx.PyValidator):
         val (string)
         returns (boolean): True if the given string is valid
         """
-        if not val:
+        if val is False or val is None:
             return False
 
         try:
