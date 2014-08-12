@@ -833,7 +833,7 @@ class AndorCam2(model.DigitalCamera):
         if timeout is None:
             self.atcore.WaitForAcquisition()
         else:
-            logging.debug("waiting for acquisition, maximum %f s", timeout)
+            # logging.debug("waiting for acquisition, maximum %f s", timeout)
             timeout_ms = c_uint(int(round(timeout * 1e3))) # ms
             self.atcore.WaitForAcquisitionTimeOut(timeout_ms)
 
@@ -1511,22 +1511,31 @@ class AndorCam2(model.DigitalCamera):
 
                 # Acquire the images
                 metadata = dict(self._metadata) # duplicate
-                metadata[model.MD_ACQ_DATE] = time.time() # time at the beginning
+                tstart = time.time()
+                tend = tstart + duration
+                metadata[model.MD_ACQ_DATE] = tstart # time at the beginning
                 cbuffer = self._allocate_buffer(size)
                 array = self._buffer_as_array(cbuffer, size, metadata)
 
-                # first we wait ourselves the typical time (which might be very long)
-                # while detecting requests for stop
-                if self.acquire_must_stop.wait(duration):
-                    break
-
-                # then wait a bounded time to ensure the image is acquired
+                # we don't know when it started acquiring, so we just keep
+                # poking (to also be able to detect cancellation)
                 try:
-                    self.WaitForAcquisition(1)
-                    # if the must_stop flag has been set while we were waiting
-                    if self.acquire_must_stop.is_set():
-                        break
+                    while True:
+                        # cancelled by the user?
+                        if self.acquire_must_stop.is_set():
+                            raise CancelledError()
 
+                        # we actually _expect_ a timeout
+                        try:
+                            self.WaitForAcquisition(0.1)
+                        except AndorV2Error as (errno, strerr):
+                            if errno == 20024: # DRV_NO_NEW_DATA
+                                if time.time() > tend + 1:
+                                    raise # seems actually serious
+                                else:
+                                    pass
+                        else:
+                            break # new image!
                     # it might have acquired _several_ images in the time to process
                     # one image. In this case we discard all but the last one.
                     self.atcore.GetMostRecentImage16(cbuffer, c_uint32(size[0] * size[1]))
@@ -1547,12 +1556,17 @@ class AndorCam2(model.DigitalCamera):
                     else:
                         raise
 
+                logging.debug("image acquired successfully after %g s", time.time() - tstart)
                 callback(self._transposeDAToUser(array))
+                del cbuffer, array
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
                 gc.collect()
-        except:
+        except CancelledError:
+            # received a must-stop event
+            pass
+        except Exception:
             logging.exception("Failure during acquisition")
         finally:
             # ending cleanly
@@ -1571,6 +1585,7 @@ class AndorCam2(model.DigitalCamera):
                 has_hw_lock = False
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
+            gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
 
@@ -1620,15 +1635,15 @@ class AndorCam2(model.DigitalCamera):
                 # Acquire the images
                 self._ready_for_acq_start = True
                 self._start_acquisition()
-                start = time.time()
+                tstart = time.time()
                 metadata = dict(self._metadata) # duplicate
-                metadata[model.MD_ACQ_DATE] = start
+                metadata[model.MD_ACQ_DATE] = tstart
                 cbuffer = self._allocate_buffer(size)
                 array = self._buffer_as_array(cbuffer, size, metadata)
 
                 # first we wait ourselves the typical time (which might be very long)
                 # while detecting requests for stop
-                if self.acquire_must_stop.wait(duration):
+                if self.acquire_must_stop.wait(max(0, duration - 0.1)):
                     raise CancelledError()
 
                 # then wait a bounded time to ensure the image is acquired
@@ -1658,8 +1673,9 @@ class AndorCam2(model.DigitalCamera):
                     else:
                         raise
 
-                logging.debug("image acquired successfully after %g s", time.time() - start)
+                logging.debug("image acquired successfully after %g s", time.time() - tstart)
                 callback(self._transposeDAToUser(array))
+                del cbuffer, array
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
@@ -1667,6 +1683,8 @@ class AndorCam2(model.DigitalCamera):
         except CancelledError:
             # received a must-stop event
             pass
+        except Exception:
+            logging.exception("Failure during acquisition")
         finally:
             # ending cleanly
             try:
@@ -1681,6 +1699,7 @@ class AndorCam2(model.DigitalCamera):
                     raise
             self.atcore.FreeInternalMemory() # TODO not sure it's needed
             self.acquisition_lock.release()
+            gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
 
@@ -2271,12 +2290,17 @@ class FakeAndorV2DLL(object):
         self.acq_end = time.time() + duration
 
     def _WaitForAcquisition(self, timeout=None):
-        left = time.time() - self.acq_end
-        timeout = max(min(left, timeout), 0.001)
+        left = self.acq_end - time.time()
+        if timeout is None:
+            timeout = left
+        timeout = max(0.001, min(timeout, left))
         try:
             must_stop = self.acq_aborted.wait(timeout)
             if must_stop:
-                return
+                raise AndorV2Error(20024, "")
+
+            if time.time() < self.acq_end:
+                raise AndorV2Error(20024, "")
 
             if self.acqmode == 1: # Single scan
                 self.AbortAcquisition()
@@ -2291,7 +2315,7 @@ class FakeAndorV2DLL(object):
         self._WaitForAcquisition()
 
     def WaitForAcquisitionTimeOut(self, timeout_ms):
-        self._WaitForAcquisition(_val(timeout_ms) * 1000)
+        self._WaitForAcquisition(_val(timeout_ms) / 1000)
 
     def CancelWait(self):
         self.acq_aborted.set()
