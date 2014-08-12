@@ -1370,7 +1370,6 @@ class AndorCam3(model.DigitalCamera):
                 # Acquire an image
                 if synchronised:
                     logging.debug("waiting for acquisition trigger")
-                    self._ready_for_acq_start = True
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
                 tend = time.time() + exposure_time + readout_time # s
@@ -1497,9 +1496,6 @@ class AndorCam3(model.DigitalCamera):
          is synchronized, wait for the Event to be triggered.
         raises CancelledError if the acquisition must stop
         """
-        # has synchronisation already happened?
-        assert self._ready_for_acq_start
-
         # catch up late events if we missed the start
         if self._late_events:
             event_time = self._late_events.pop()
@@ -1507,6 +1503,7 @@ class AndorCam3(model.DigitalCamera):
             self.Command(u"SoftwareTrigger")
             return
 
+        self._ready_for_acq_start = True
         try:
             # wait until onEvent was called (it will directly start acquisition)
             # or must stop

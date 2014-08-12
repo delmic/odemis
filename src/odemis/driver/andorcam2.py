@@ -1633,7 +1633,6 @@ class AndorCam2(model.DigitalCamera):
                     need_reinit = False
 
                 # Acquire the images
-                self._ready_for_acq_start = True
                 self._start_acquisition()
                 tstart = time.time()
                 metadata = dict(self._metadata) # duplicate
@@ -1710,15 +1709,14 @@ class AndorCam2(model.DigitalCamera):
          is synchronized, wait for the Event to be triggered.
         raises CancelledError if the acquisition must stop
         """
-        assert self._ready_for_acq_start
-
         # catch up late events if we missed the start
         if self._late_events:
-            event_time = self._late_events.pop()
+            event_time = self._late_events.popleft()
             logging.warning("starting acquisition late by %g s", time.time() - event_time)
             self.atcore.StartAcquisition()
             return
 
+        self._ready_for_acq_start = True
         try:
             # wait until onEvent was called (it will directly start acquisition)
             # or must stop

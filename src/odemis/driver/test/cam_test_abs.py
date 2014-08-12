@@ -503,7 +503,7 @@ class VirtualTestSynchronized(object):
         # works with PVCam and Andorcam, but is probably different with other drivers :-(
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
         # it seems with the iVac, 20ms is enough to account for the overhead and extra image acquisition
-        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.05
+        self.scanner.dwellTime.value = (exp + readout) * 1.1 + 0.1
         self.scanner.resolution.value = self.sem_size
         # pixel write/read setup is pretty expensive ~10ms
         expected_duration = numbert * (self.scanner.dwellTime.value + 0.01)

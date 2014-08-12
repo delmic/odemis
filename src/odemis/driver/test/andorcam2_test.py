@@ -33,7 +33,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CLASS_SIM = andorcam2.FakeAndorCam2
 CLASS = andorcam2.AndorCam2 # use CLASS_SIM if you don't have the hardware
-CLASS = CLASS_SIM
+# CLASS = CLASS_SIM
 
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],
