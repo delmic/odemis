@@ -366,14 +366,21 @@ class AndorCam3(model.DigitalCamera):
             # the speed.
             self.SetBool(u"Overlap", False)
 
+        # Global shutter allows to simplify if we need to connect exposure to light
+        # and it avoids tearing (though normally, it shouldn't matter for
+        # microscopy)
+        try:
+            self.SetEnumString(u"ElectronicShutteringMode", u"Global")
+        except ATError:
+            logging.info("Failed to set global shutter")
+
         if self.isImplemented(u"MetadataEnable"):
             # Ask for timestamp, to track precisely the acquisition time 
             self.SetBool(u"MetadataEnable", True)
             self.SetBool(u"MetadataTimestamp", True)
             self._clock_factor = 1 / self.GetInt(u"TimestampClockFrequency")
-            self._clock_shift = time.time()
             self.Command(u"TimestampClockReset")
-            logging.debug("Clock is at %d", self.GetInt(u"TimestampClock"))
+            self._clock_shift = time.time()
 
     # low level methods, wrapper to the actual SDK functions
     # TODO: not _everything_ is implemented, just what we need
@@ -1157,6 +1164,7 @@ class AndorCam3(model.DigitalCamera):
             self._exp_time = self._storeExposureTime(self._exp_time)
             self._metadata[model.MD_EXP_TIME] = self._exp_time
             logging.debug("Updating exposure time to %g s", self._exp_time)
+            logging.debug("Frame rate is %g", self.GetFloat(u"FrameRate"))
 
         # Changing the binning modifies the resolution if conflicting
         if prev_binning != self._binning:
@@ -1173,6 +1181,11 @@ class AndorCam3(model.DigitalCamera):
             prev_trans != self._translation):
             logging.debug("Updating resolution settings")
             self._setSize(self._resolution)
+
+        # Update to framerate to maximum possible, to get the best from the HW
+        fr_rng = self.GetFloatRanges(u"FrameRate")
+        self.SetFloat(u"FrameRate", fr_rng[1])
+        logging.debug("Framerate set to %g", self.GetFloat(u"FrameRate"))
 
         # Baseline depends on the other settings
         if self.isImplemented(u"BaselineLevel"):
@@ -1307,12 +1320,14 @@ class AndorCam3(model.DigitalCamera):
                name="andorcam acquire flow thread",
                args=(callback,))
         self.acquire_thread.start()
-        
+
+    GC_PERIOD = 10 # how often the garbage collector should run (in number of buffers)
     def _acquire_thread_run(self, callback):
         """
         The core of the acquisition thread. Runs until acquire_must_stop is True.
         """
-        nbuffers = 2
+        nbuffers = 3
+        num_gc = 0
         num_errors = 0
         need_reinit = True
         try:
@@ -1342,11 +1357,11 @@ class AndorCam3(model.DigitalCamera):
                     else: # for SimCam
                         readout_time = size[0] * size[1] / self.readoutRate.value # s
 
-                    # Allocates a pipeline of two buffers in a pipe, so that when we are
-                    # processing one buffer, the driver can already acquire the next image.
+                    # Allocates a pipeline of buffers, so that when we are processing
+                    # one buffer, the driver can already acquire the next image.
                     self.Flush()
                     buffers = []
-                    for i in range(nbuffers):
+                    for i in range(nbuffers - 1):
                         cbuffer = self._allocate_buffer(size)
                         self.QueueBuffer(cbuffer)
                         buffers.append(cbuffer)
@@ -1361,14 +1376,17 @@ class AndorCam3(model.DigitalCamera):
                     self._ready_for_acq_start = True
                     self._start_acquisition()
                 metadata = dict(self._metadata) # duplicate
-                tstart = time.time()
-                tend = tstart + exposure_time + readout_time # s
-                # TODO: tstart might be after the actual beginning of the acquisition
-                # if there are multiple images acquired, as the next acquisition
-                # immediately starts after the readout
-                metadata[model.MD_ACQ_DATE] = tstart # time at the beginning
+                tend = time.time() + exposure_time + readout_time # s
                 center = metadata.get(model.MD_POS, (0, 0))
                 metadata[model.MD_POS] = (center[0] + phyt[0], center[1] + phyt[1])
+
+                # We have (probably) time now, let's queue next buffer here
+                # Note we cannot reuse the buffer because we don't know if
+                # the callee still needs it or not
+                logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
+                cbuffer = self._allocate_buffer(size)
+                self.QueueBuffer(cbuffer)
+                buffers.append(cbuffer)
 
                 # we don't know when it started acquiring, so we just keep
                 # poking (to also be able to detect cancellation)
@@ -1380,9 +1398,9 @@ class AndorCam3(model.DigitalCamera):
 
                         # we actually _expect_ a timeout
                         try:
-                            pbuffer, buffersize = self.WaitBuffer(0.1)
+                            pbuffer, _ = self.WaitBuffer(0.1)
                         except ATError as (errno, strerr):
-                            if errno == 13: #AT_ERR_TIMEDOUT
+                            if errno == 13: # AT_ERR_TIMEDOUT
                                 if time.time() > tend + 1:
                                     raise # seems actually serious
                                 else:
@@ -1397,7 +1415,7 @@ class AndorCam3(model.DigitalCamera):
                         if num_errors > 5:
                             logging.error("%d errors in a row, canceling acquisition", num_errors)
                             return
-                        logging.warning("trying again to acquire image after error %s:", strerr)
+                        logging.warning("trying again to acquire image after error %s", strerr)
                         need_reinit = True
                         continue
                     else:
@@ -1411,25 +1429,55 @@ class AndorCam3(model.DigitalCamera):
                 cbuffer = buffers.pop(0)
                 assert(addressof(pbuffer.contents) == addressof(cbuffer))
 
+                # TODO: automatically reduce the framerate if the queue is increasing
+                # check if there is already a newer image
+#                 for i in range(10):
+#                     try:
+#                         logging.debug("Checking queue length")
+#                         # TODO: timeout < 0.05 always causes timeout??
+#                         pbuffer, _ = self.WaitBuffer(0.05) # only if it's already there
+#                     except ATError as (errno, strerr):
+#                         logging.debug("waitbuffer failed to get a new image %d", errno)
+#                         if errno == 13: # AT_ERR_TIMEDOUT
+#                             break # no new image (=> good!)
+#                         raise
+#
+#                     logging.debug("Discarding image as new one is already available")
+#                     # get the newer image (and forget about the old one)
+#                     cbuffer = buffers.pop(0)
+#                     assert(addressof(pbuffer.contents) == addressof(cbuffer))
+#
+#                     # Next buffer. We cannot reuse the buffer because we don't know if
+#                     # the callee still needs it or not
+#                     logging.debug("Queuing a new buffer (queue len = %d)", len(buffers))
+#                     ncbuffer = self._allocate_buffer(size)
+#                     self.QueueBuffer(ncbuffer)
+#                     buffers.append(ncbuffer)
+#                     del ncbuffer
+#                 else:
+#                     logging.warning("Too many images in queue, will send old one")
+
+                # TODO: use hardware timestamp instead of guessing?
+                # time at the beginning
+                metadata[model.MD_ACQ_DATE] = time.time() - (exposure_time + readout_time)
                 array = self._buffer_as_array(cbuffer, size, metadata)
 
-                hw_ts = self._read_timestamp_md(cbuffer, size)
-                if hw_ts:
-                    logging.debug("Start time = %f, hw time = %f, diff = %g s",
-                                  metadata[model.MD_ACQ_DATE], hw_ts,
-                                  metadata[model.MD_ACQ_DATE] - hw_ts)
+                if logging.getLogger().isEnabledFor(logging.DEBUG):
+                    hw_ts = self._read_timestamp_md(cbuffer, size)
+                    if hw_ts:
+                        logging.debug("Start time = %f, hw time = %f, diff = %g s",
+                                      metadata[model.MD_ACQ_DATE], hw_ts,
+                                      metadata[model.MD_ACQ_DATE] - hw_ts)
 
-                # Next buffer. We cannot reuse the buffer because we don't know if
-                # the callee still needs it or not
-                logging.debug("Queuing a new buffer")
-                cbuffer = self._allocate_buffer(size)
-                self.QueueBuffer(cbuffer)
-                buffers.append(cbuffer)
                 callback(self._transposeDAToUser(array))
+                del cbuffer, array
 
                 # force the GC to non-used buffers, for some reason, without this
                 # the GC runs only after we've managed to fill up the memory
-                gc.collect()
+                num_gc += 1
+                if num_gc >= self.GC_PERIOD:
+                    gc.collect()
+                    num_gc = 0
         except CancelledError:
             # received a must-stop event
             pass
@@ -1442,6 +1490,7 @@ class AndorCam3(model.DigitalCamera):
                 pass # probably just complaining it was already stopped
             self.Flush()
             self.acquisition_lock.release()
+            gc.collect()
             logging.debug("Acquisition thread closed")
             self.acquire_must_stop.clear()
     
