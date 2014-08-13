@@ -17,6 +17,7 @@
 
     You should have received a copy of the GNU General Public License along with
     Odemis. If not, see http://www.gnu.org/licenses/.
+
 """
 
 # This module contains various custom button classes used throughout the odemis
@@ -27,14 +28,14 @@
 # in XRCED's plugin directory.
 
 from __future__ import division
-from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, \
-    GenBitmapTextToggleButton, GenBitmapTextButton
 import logging
+
+from wx.lib.buttons import GenBitmapButton, GenBitmapToggleButton, GenBitmapTextToggleButton, \
+    GenBitmapTextButton
+import wx
+
 from odemis.gui import FG_COLOUR_HIGHLIGHT
 import odemis.gui.img.data as img
-import wx
-from odemis.util.conversion import change_brightness, hex_to_frgb, wxcol_to_frgb, hex_to_wxcol, \
-    frgb_to_wxcol
 
 
 def resize_bmp(btn_size, bmp):
@@ -49,47 +50,48 @@ def resize_bmp(btn_size, bmp):
         btn_width, _ = btn_size
         img_width, img_height = bmp.GetSize()
 
-        if btn_width > 0 and img_width != btn_width:
-            logging.debug("Resizing button bmp from %s to %s",
-                      bmp.GetSize(),
-                      btn_size)
+        if 0 < btn_width != img_width:
+            logging.debug("Resizing button bmp from %s to %s", bmp.GetSize(), btn_size)
             new_img = bmp.ConvertToImage()
             return new_img.Rescale(btn_width, img_height).ConvertToBitmap()
 
     return bmp
 
 
-def DarkenImage(anImage):
-    """
-    Convert the given image (in place) to a grayed-out
-    version, appropriate for a 'disabled' appearance.
+def darken_image(image):
+    """  Darken the given image
+
+    The image is darkened (in place) to a grayed-out version, appropriate for a 'disabled'
+    appearance.
+
     """
 
-    if anImage.HasAlpha():
-        alpha = anImage.GetAlphaData()
+    if image.HasAlpha():
+        alpha = image.GetAlphaData()
     else:
         alpha = None
 
-    data = [ord(d) for d in list(anImage.GetData())]
+    data = [ord(d) for d in list(image.GetData())]
 
     for i in range(0, len(data), 3):
         pixel = (data[i], data[i + 1], data[i + 2])
-        pixel = tuple([int(p * 0.4)  for p in pixel])
+        pixel = tuple([int(p * 0.5) for p in pixel])
         for x in range(3):
             data[i + x] = pixel[x]
-    anImage.SetData(''.join([chr(d) for d in data]))
+
+    image.SetData(''.join([chr(d) for d in data]))
+
     if alpha:
-        anImage.SetAlphaData(alpha)
+        image.SetAlphaData(alpha)
+
 
 # The normal SetBitmapLabel method of the GenBitmapButton class is called from the constructor,
 # before the actual wx.Window is created. Therefore the size cannot be probed yet.
 def SetBitmapLabel(self, bitmap, createOthers=True):
-    """
-    Set the bitmap to display normally. This is the only one that is required.
+    """ Set the bitmap to display normally. This is the only one that is required.
     If  createOthers is True, then the other bitmaps will be generated on the
     fly.  Currently, only the disabled bitmap is generated.
     """
-
     try:
         self.bmpLabel = resize_bmp(self.GetSize(), bitmap)
     except TypeError:
@@ -97,11 +99,12 @@ def SetBitmapLabel(self, bitmap, createOthers=True):
 
     if bitmap is not None and createOthers:
         image = wx.ImageFromBitmap(bitmap)
-        DarkenImage(image)
+        darken_image(image)
         self.SetBitmapDisabled(wx.BitmapFromImage(image))
 
 
 GenBitmapButton.SetBitmapLabel = SetBitmapLabel
+
 
 class ImageButton(GenBitmapButton):
     """ Graphical button with hover effect.
@@ -336,12 +339,12 @@ class ImageTextButton(GenBitmapTextButton):
         """
         return self.bmpHover
 
-    def SetLabel(self, label):  #pylint: disable=W0221
+    def SetLabel(self, label):
         GenBitmapTextButton.SetLabel(self, label)
         # FIXME: should be fixed into GenBitmapTextButton => opened ticket
         # #15032
         # http://trac.wxwidgets.org/ticket/15032
-        self.Refresh() # force to redraw the image
+        self.Refresh()  # force to redraw the image
 
     def OnEnter(self, evt):
         """ Event handler that fires when the mouse cursor enters the button """
@@ -402,7 +405,6 @@ class ImageTextButton(GenBitmapTextButton):
             #Background bitmap is centered
             dc.DrawBitmap(bmp, (width - bw) // 2, (height - bh) // 2, hasMask)
 
-
         if self.HasFlag(wx.ALIGN_CENTER):
             pos_x = pos_x + (bw - tw) // 2
         elif self.HasFlag(wx.ALIGN_RIGHT):
@@ -421,7 +423,8 @@ class ImageTextButton(GenBitmapTextButton):
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
-class ImageToggleButton(GenBitmapToggleButton):  #pylint: disable=R0901
+
+class ImageToggleButton(GenBitmapToggleButton):
     """ Graphical toggle button with a hover effect. """
 
     # The displacement of the button content when it is pressed down, in pixels
