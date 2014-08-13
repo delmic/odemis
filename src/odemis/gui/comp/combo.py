@@ -92,7 +92,10 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
 
             if key == wx.WXK_RIGHT:
                 self.TextCtrl.SetInsertionPoint(ip + 1)
-            elif key == wx.WXK_LEFT and ip > 0:
-                self.TextCtrl.SetInsertionPoint(ip - 1)
+            elif key == wx.WXK_LEFT:
+                if ip > 0:
+                    self.TextCtrl.SetInsertionPoint(ip - 1)
+            else:
+                evt.Skip()
         else:
             evt.Skip()
