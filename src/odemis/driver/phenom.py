@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from abc import abstractmethod
+from abc import abstractmethod, ABCMeta
 import base64
 import collections
 import functools
@@ -37,18 +37,21 @@ import threading
 import time
 import weakref
 
+
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
 MAX_FRAMES = 255
-SOCKET_TIMEOUT = 1e03  # timeout for suds client
+# TODO: why so long? can it happen that the Phenom doesn't answer for 1000s and
+# still everything is fine?!
+SOCKET_TIMEOUT = 1000  # s, timeout for suds client
 TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
 HFW_RANGE = [2.5e-06, 0.003]
 TENSION_RANGE = [4797.56, 20006.84]
-SPOT_RANGE = [0.0, 5.73018379531]
+SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 class SEM(model.HwComponent):
@@ -78,19 +81,23 @@ class SEM(model.HwComponent):
         # Access to service objects
         self._objects = client.factory
 
+        info = self._device.VersionInfo().versionInfo
+        # TODO: Use an XML parser to parse it more robustly? At least don't fail if cannot find version
+        start = info.index("'Product Name'>") + len("'Product Name'>")
+        end = info.index("</Property", start)
+        self._hwVersion = "%s" % (info[start:end])
+        self._metadata[model.MD_HW_NAME] = self._hwVersion
+
+        start = info.index("'Version'>") + len("'Version'>")
+        end = info.index("</Property", start)
+        self._swVersion = "%s" % (info[start:end])
+        self._metadata[model.MD_SW_VERSION] = self._swVersion
+
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
         self._acq_progress_lock = threading.Lock()
 
         self._imagingDevice = self._objects.create('ns0:imagingDevice')
-
-        self._metadata[model.MD_HW_NAME] = "PhenomSEM"
-        info = self._device.VersionInfo().versionInfo
-        # Use an XML parser to parse it more robustly? At least don't fail if cannot find version
-        start = info.index("'Version'>") + len("'Version'>")
-        end = info.index("</Property", start)
-        self._swVersion = "SEM sw %s" % (info[start:end])
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
 
         # create the scanner child
         try:
@@ -124,6 +131,7 @@ class SEM(model.HwComponent):
         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._focus)
 
+        # TODO: rename to navcam or overview (if overview, rename navcam-focus too)
         # create the camera child
         try:
             kwargs = children["camera"]
@@ -151,7 +159,7 @@ class SEM(model.HwComponent):
     def terminate(self):
         """
         Must be called at the end of the usage. Can be called multiple times,
-        but the component shouldn't be used afterward.
+        but the component shouldn't be used afterwards.
         """
         # Don't need to close the connection, it's already closed by the time
         # suds returns the data
@@ -170,11 +178,15 @@ class Scanner(model.Emitter):
     def __init__(self, name, role, parent, **kwargs):
         # It will set up ._shape and .parent
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
+        self._hwVersion = parent._hwVersion
+        self._swVersion = parent._swVersion
 
         self._shape = (2048, 2048)
 
         # Distance between borders if magnification = 1. It should be found out
         # via calibration. We assume that image is square, i.e., VFW = HFW
+        # TODO: document where this funky number comes from
+        # Could we relate it to GetSEMHFWCalib()? At least move to a constant.
         self._hfw_nomag = 0.268128  # m
 
         # Just the initialization of the FoV. The actual value will be acquired
@@ -186,21 +198,20 @@ class Scanner(model.Emitter):
         fov_range = HFW_RANGE
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFoV)
-        self.horizontalFoV.subscribe(self._onHorizontalFoV)  # to update metadata
+        self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
-        pxs = (self._hfw_nomag / (self._shape[0] * mag),
-               self._hfw_nomag / (self._shape[1] * mag))
-        self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
+        self.pixelSize = model.VigilantAttribute((0, 0), unit="m", readonly=True)
 
         # (.resolution), .translation, .rotation, and .scaling are used to
         # define the conversion from coordinates to a region of interest.
 
+        # TODO: allow translation to shift the ebeam (so the range is much larger)
         # (float, float) in px => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
-                    (self._shape[0] / 2, self._shape[1] / 2)]
+        tran_rng = ((-self._shape[0] / 2, -self._shape[1] / 2),
+                    (self._shape[0] / 2, self._shape[1] / 2))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
@@ -221,6 +232,8 @@ class Scanner(model.Emitter):
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
+        self._updatePixelSize() # needs .scale
+
         # (float) in rad => rotation of the image compared to the original axes
         # Just the initialization of rotation. The actual value will be acquired
         # once we start the stream
@@ -231,7 +244,7 @@ class Scanner(model.Emitter):
 
         # Compute dwellTime range based on max number of frames and the fixed
         # phenom dwellTime
-        dt_range = [DWELL_TIME, DWELL_TIME * MAX_FRAMES]
+        dt_range = (DWELL_TIME, DWELL_TIME * MAX_FRAMES)
         dt = DWELL_TIME
         # Corresponding nr of frames for initial DWELL_TIME
         self._nr_frames = 1
@@ -250,9 +263,10 @@ class Scanner(model.Emitter):
         self.bpp = model.IntEnumerated(16, set([8, 16]),
                                           unit="", setter=self._setBpp)
 
-        range = SPOT_RANGE
+        spt_rng = SPOT_RANGE
         # Convert A/sqrt(V) to just A
-        pc_range = [(range[0] * math.sqrt(volt_range[1])), (range[1] * math.sqrt(volt_range[1]))]
+        pc_range = (spt_rng[0] * math.sqrt(volt_range[0]),
+                    spt_rng[1] * math.sqrt(volt_range[1]))
         self._spotSize = numpy.mean(SPOT_RANGE)
         self._probeCurrent = self._spotSize * math.sqrt(volt)
         self.probeCurrent = model.FloatContinuous(self._probeCurrent, pc_range, unit="A",
@@ -265,7 +279,16 @@ class Scanner(model.Emitter):
     def getMetadata(self):
         return self.parent.getMetadata()
 
-    def _onHorizontalFoV(self, s):
+    def _updateHorizontalFoV(self):
+        """
+        Reads again the hardware setting and update the VA
+        """
+        fov = self.parent._device.GetSEMHFW()
+        # we don't set it explicitly, to avoid calling .SetSEMHFW()
+        self.horizontalFoV._value = fov
+        self.horizontalFoV.notify(fov)
+
+    def _onHorizontalFoV(self, fov):
         # Update current pixelSize and magnification
         self._updatePixelSize()
         self._updateMagnification()
@@ -286,19 +309,18 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
 
     def _onDwellTime(self, dt):
+        # Calculate number of frames
+        self._nr_frames = int(math.ceil(dt / DWELL_TIME))
+
         # Abort current scanning when dwell time is changed
         try:
             self.parent._device.SEMAbortImageAcquisition()
         except suds.WebFault:
             logging.debug("No acquisition in progress to be aborted.")
 
-        # Calculate number of frames
-        self._nr_frames = int(math.ceil(dt / DWELL_TIME))
-
     def _onRotation(self, rot):
         with self.parent._acq_progress_lock:
             self.parent._device.SetSEMRotation(rot)
-        pass
 
     def _onVoltage(self, volt):
         self.parent._device.SEMSetHighTension(-volt)
@@ -383,7 +405,7 @@ class Scanner(model.Emitter):
     def _setTranslation(self, value):
         """
         value (float, float): shift from the center. It will always ensure that
-          the whole ROI fitself.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)s the screen.
+          the whole ROI fits the screen.
         returns actual shift accepted
         """
         # compute the min/max of the shift. It's the same as the margin between
@@ -396,6 +418,7 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
 
+    # TODO: unused
     def pixelToPhy(self, px_pos):
         """
         Converts a position in pixels to physical (at the current magnification)
@@ -420,6 +443,8 @@ class Detector(model.Detector):
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        self._hwVersion = parent._hwVersion
+        self._swVersion = parent._swVersion
 
         # setup detector
         self._scanParams = self.parent._objects.create('ns0:scanParams')
@@ -440,12 +465,18 @@ class Detector(model.Detector):
         self._acquisition_must_stop = threading.Event()
 
         # The shape is just one point, the depth
-        self._shape = (2 ** 16 - 1,)  # only one point
+        self._shape = (2 ** 16,)  # only one point
 
         # Get current tilt and use it to unblank the beam
         self._tilt_unblank = self.parent._device.GetSEMSourceTilt()
 
     def start_acquire(self, callback):
+        # TODO: that's a weird place to do all these updates. If some values
+        # cannot be known before the SEM mode is reached, then better put all
+        # this in a special update() function called from the chamber.
+        # Otherwise, just listen to events, and update the information as the
+        # events arrive.
+
         # Update stage and focus position
         self.parent._stage._updatePosition()
         self.parent._focus._updatePosition()
@@ -516,36 +547,33 @@ class Detector(model.Detector):
         Acquires the SEM image based on the translation, resolution and
         current drift.
         """
-        pxs = self.parent._scanner.pixelSize.value  # m/px
-        scale = self.parent._scanner.scale.value
-        res = (self.parent._scanner.resolution.value[0],
-               self.parent._scanner.resolution.value[1])
-
-        # Set dataType based on current bpp value
-        bpp = self.parent._scanner.bpp.value
-        if bpp == 16:
-            dataType = numpy.uint16
-        else:
-            dataType = numpy.uint8
-
-        metadata = dict(self.parent._metadata)
-
-        # update changed metadata
-        metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
-        metadata[model.MD_ACQ_DATE] = time.time()
-        metadata[model.MD_ROTATION] = self.parent._scanner.rotation.value
-        metadata[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
-        metadata[model.MD_BPP] = bpp
-
-        self._scanParams.resolution.width = res[0]
-        self._scanParams.resolution.height = res[1]
-        self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
-        self._scanParams.HDR = bpp == 16
-        # TODO beam shift
-        self._scanParams.center.x = 0
-        self._scanParams.center.y = 0
-
         with self.parent._acq_progress_lock:
+            pxs = self.parent._scanner.pixelSize.value  # m/px
+            scale = self.parent._scanner.scale.value
+            res = (self.parent._scanner.resolution.value[0],
+                   self.parent._scanner.resolution.value[1])
+
+            # Set dataType based on current bpp value
+            bpp = self.parent._scanner.bpp.value
+            if bpp == 16:
+                dataType = numpy.uint16
+            else:
+                dataType = numpy.uint8
+
+            self._scanParams.resolution.width = res[0]
+            self._scanParams.resolution.height = res[1]
+            self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
+            self._scanParams.HDR = bpp == 16
+            # TODO beam shift/translation
+            self._scanParams.center.x = 0 # TODO: m or px?
+            self._scanParams.center.y = 0
+
+            # update changed metadata
+            metadata = dict(self.parent._metadata)
+            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
+            metadata[model.MD_ACQ_DATE] = time.time()
+            metadata[model.MD_BPP] = bpp
+
             logging.debug("Acquiring SEM image of %s with %d bpp", res, bpp)
             # Check if spot mode is required
             if res == (1, 1):
@@ -559,8 +587,14 @@ class Detector(model.Detector):
             else:
                 self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
-                # get MD_POS from metadata returned from Phenom
+                # Use the metadata from the string to update some metadata
                 metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+                metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
+                metadata[model.MD_ROTATION] = img_str.aAcqState.rotation
+                # TODO: dwell time = dwell time * integrations?
+                metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
+                # TODO: metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent  ?
+
                 # image to ndarray
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
                                            dtype=dataType)
@@ -636,36 +670,35 @@ class Stage(model.Actuator):
         """
         axes (set of string): names of the axes
         """
-        axes_def = {}
-        self._position = {}
-
         # Position phenom object
+        # TODO: only one object needed?
         self._stagePos = parent._objects.create('ns0:position')
         self._stageRel = parent._objects.create('ns0:position')
         self._navAlgorithm = parent._objects.create('ns0:navigationAlgorithm')
         self._navAlgorithm = 'NAVIGATION-AUTO'
 
-        rng = [-0.5, 0.5]
-        axes_def["x"] = model.Axis(unit="m", range=rng)
-        axes_def["y"] = model.Axis(unit="m", range=rng)
+        axes_def = {}
+        stroke = parent._device.GetStageStroke()
+        axes_def["x"] = model.Axis(unit="m", range=(stroke.semX.min, stroke.semX.max))
+        axes_def["y"] = model.Axis(unit="m", range=(stroke.semY.min, stroke.semY.max))
 
         # TODO, may be needed in case setting a referencial point is required
-        # First calibrate
+        # cf .reference() and .referenced
 #         calib_pos = parent._device.GetStageCenterCalib()
 #         if calib_pos.x != 0 or calib_pos.y != 0:
 #             logging.warning("Stage was not calibrated. We are performing calibration now.")
 #             self._stagePos.x, self._stagePos.y = 0, 0
 #             parent._device.SetStageCenterCalib(self._stagePos)
 
-        # Just initialization, actual position updated once stage is moved
-        self._position["x"] = 0
-        self._position["y"] = 0
-
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+        self._hwVersion = parent._hwVersion
+        self._swVersion = parent._swVersion
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
+        # Just initialization, actual position updated once stage is moved
+        self._position = {"x": 0, "y": 0}
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
@@ -688,10 +721,8 @@ class Stage(model.Actuator):
         move to the position 
         """
         with self.parent._acq_progress_lock:
-            next_pos = {}
-            for axis, new_pos in pos.items():
-                next_pos[axis] = new_pos
-            self._stagePos.x, self._stagePos.y = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
+            self._stagePos.x = pos.get("x", self._position["x"])
+            self._stagePos.y = pos.get("y", self._position["y"])
             self.parent._device.MoveTo(self._stagePos, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
@@ -706,10 +737,7 @@ class Stage(model.Actuator):
         move by the shift 
         """
         with self.parent._acq_progress_lock:
-            rel = {}
-            for axis, change in shift.items():
-                rel[axis] = change
-            self._stageRel.x, self._stageRel.y = rel.get("x", 0), rel.get("y", 0)
+            self._stageRel.x, self._stageRel.y = shift.get("x", 0), shift.get("y", 0)
             self.parent._device.MoveBy(self._stageRel, self._navAlgorithm)
 
             # Obtain the finally reached position after move is performed.
@@ -740,6 +768,7 @@ class Stage(model.Actuator):
 
     @isasync
     def reference(self):
+        # TODO: this is just plain wrong, really call calibration procedure, or don't provide .reference()
         pos = {"x":0, "y":0}
         return self._executor.submit(self._doMoveAbs, pos)
 
@@ -759,7 +788,8 @@ class PhenomFocus(model.Actuator):
     This is an extension of the model.Actuator class and represents a focus
     actuator. This is an abstract class that should be inherited.
     """
-    def __init__(self, name, role, parent, axes, rng, pos, **kwargs):
+    __metaclass__ = ABCMeta
+    def __init__(self, name, role, parent, axes, rng, **kwargs):
         assert len(axes) > 0
         axes_def = {}
 
@@ -768,10 +798,13 @@ class PhenomFocus(model.Actuator):
         axes_def[a] = model.Axis(unit="m", range=rng)
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
+        self._hwVersion = parent._hwVersion
+        self._swVersion = parent._swVersion
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({},
                                     unit="m", readonly=True)
+        self._updatePosition()
 
         # Queue maintaining moves to be done
         self._moves_queue = collections.deque()
@@ -806,8 +839,8 @@ class PhenomFocus(model.Actuator):
         if not self._moves_queue:
             return
         else:
-            logging.info("Blocked by the acquisition...")
             with self.parent._acq_progress_lock:
+                logging.debug("Requesting focus move for %s", self.name)
                 wd = self.GetWD()
                 while True:
                     try:
@@ -860,12 +893,10 @@ class EbeamFocus(PhenomFocus):
     between the end of the objective and the surface of the observed specimen 
     """
     def __init__(self, name, role, parent, axes, **kwargs):
-        range = parent._device.GetSEMWDRange()
-        rng = [range.min, range.max]
-        pos = parent._device.GetSEMWD()
+        rng = parent._device.GetSEMWDRange()
 
-        PhenomFocus.__init__(self, name, role, parent=parent, axes=axes, rng=rng,
-                             pos=pos, **kwargs)
+        PhenomFocus.__init__(self, name, role, parent=parent, axes=axes,
+                             rng=(rng.min, rng.max), **kwargs)
 
     def _updatePosition(self):
         """
@@ -874,7 +905,10 @@ class EbeamFocus(PhenomFocus):
         super(EbeamFocus, self)._updatePosition()
 
         # Changing WD results to change in fov
-        self.parent._scanner.horizontalFoV._value = self.parent._device.GetSEMHFW()
+        try:
+            self.parent._scanner._updateHorizontalFoV()
+        except suds.WebFault:
+            pass # can happen at startup if not in SEM mode
 
     def GetWD(self):
         return self.parent._device.GetSEMWD()
@@ -896,16 +930,29 @@ class NavCam(model.DigitalCamera):
     Represents the optical camera that is activated after the Phenom door is
     closed and the sample is transferred to the optical imaging position.
     """
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name, role, parent, contrast=0, brightness=1, **kwargs):
         """
         Initialises the device.
+        contrast (0<=float<=1): "Contrast" ratio where 1 means bright-field, and 0
+         means dark-field
+        brightness (0<=float<=1): light intensity between 0 and 1
         Raise an exception if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
+        self._hwVersion = parent._hwVersion
+        self._swVersion = parent._swVersion
+
+        # TODO: provide contrast and brightness via a new Light component
+        if not 0 <= contrast <= 1:
+            raise ValueError("contrast argument = %s, not between 0 and 1", contrast)
+        if not 0 <= brightness <= 1:
+            raise ValueError("brightness argument = %s, not between 0 and 1", brightness)
+        self._contrast = contrast
+        self._brightness = brightness
 
         resolution = NAVCAM_RESOLUTION
         # RGB
-        self._shape = resolution + (3, 2 ** 8 - 1)
+        self._shape = resolution + (3, 2 ** 8)
         self.resolution = model.ResolutionVA(resolution,
                                       [NAVCAM_RESOLUTION, NAVCAM_RESOLUTION])
                                     # , readonly=True)
@@ -935,15 +982,16 @@ class NavCam(model.DigitalCamera):
         # Check if Phenom is in the proper mode
         area = self.parent._device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-NAVCAM":
-            raise IOError("Cannot initiate stream, Phenom is not in NAVCAM mode.")
+            raise IOError("Cannot initiate stream, Phenom is not in NAVCAM mode."
+                          "Make sure the chamber pressure is set for overview.")
 
         # if there is a very quick unsubscribe(), subscribe(), the previous
         # thread might still be running
         self.wait_stopped_flow()  # no-op is the thread is not running
         self.acquisition_lock.acquire()
 
-        target = self._acquire_thread_continuous
-        self.acquire_thread = threading.Thread(target=target,
+        self.acquire_thread = threading.Thread(
+                target=self._acquire_thread_continuous,
                 name="NavCam acquire flow thread",
                 args=(callback,))
         self.acquire_thread.start()
@@ -966,9 +1014,19 @@ class NavCam(model.DigitalCamera):
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
         try:
+            try:
+                self.parent._device.SetNavCamContrast(self._contrast)
+            except suds.WebFault as e:
+                logging.warning("Failed to set contrast to %f: %s", self._contrast, e)
+            try:
+                self.parent._device.SetNavCamBrightness(self._brightness)
+            except suds.WebFault:
+                logging.warning("Failed to set brightness to %f: %s", self._brightness, e)
+
             while not self.acquire_must_stop.is_set():
                 with self.parent._acq_progress_lock:
                     try:
+                        logging.debug("Waiting for next navcam frame")
                         img_str = self.parent._device.NavCamAcquireImageCopy(self._camParams)
                         sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]), dtype="uint8")
                         sem_img.shape = (self._camParams.height, self._camParams.width, 3)
@@ -988,7 +1046,7 @@ class NavCam(model.DigitalCamera):
                         else:
                             logging.debug("NavCam acquisition failed.")
 
-        except:
+        except Exception:
             logging.exception("Failure during acquisition")
         finally:
             self.acquisition_lock.release()
@@ -1041,12 +1099,10 @@ class NavCamFocus(PhenomFocus):
     between the end of the camera and the surface of the observed specimen 
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
-        range = parent._device.GetNavCamWDRange()
-        rng = [range.min, range.max]
-        pos = parent._device.GetNavCamWD()
+        rng = parent._device.GetNavCamWDRange()
 
-        PhenomFocus.__init__(self, name, role, parent=parent, axes=axes, rng=rng,
-                             pos=pos, **kwargs)
+        PhenomFocus.__init__(self, name, role, parent=parent, axes=axes,
+                             rng=(rng.min, rng.max), **kwargs)
 
     def GetWD(self):
         return self.parent._device.GetNavCamWD()
@@ -1077,16 +1133,19 @@ class ChamberPressure(model.Actuator):
     between the NavCam and SEM areas or even unload it.
     """
     def __init__(self, name, role, parent, ranges=None, **kwargs):
-        axes = {"pressure": model.Axis(unit="",
-                                       choices={PRESSURE_UNLOADED: "unloaded",
+        axes = {"pressure": model.Axis(unit="Pa",
+                                       choices={PRESSURE_UNLOADED: "vented",
                                                 PRESSURE_NAVCAM: "overview",
-                                                PRESSURE_SEM: "SEM"})}
+                                                PRESSURE_SEM: "vacuum"})}
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
+        self._hwVersion = parent._hwVersion
+        self._swVersion = parent._swVersion
+
         self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
 
         # Handle the cases of stand-by and hibernate mode
         mode = self.parent._device.GetInstrumentMode()
-        if mode == 'INSTRUMENT-MODE-HIBERNATE' or mode == 'INSTRUMENT-MODE-STANDBY':
+        if mode in {'INSTRUMENT-MODE-HIBERNATE', 'INSTRUMENT-MODE-STANDBY'}:
             self.parent._device.SetInstrumentMode('INSTRUMENT-MODE-OPERATIONAL')
 
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
@@ -1107,10 +1166,9 @@ class ChamberPressure(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
-        # Tuple containing sample holder ID and type
-        self.sampleHolder = model.TupleVA((0, 0), unit="", readonly=True)
+        # Tuple containing sample holder ID and type, or None, None if absent
+        self.sampleHolder = model.TupleVA((None, None), readonly=True)
         self._updateSampleHolder()
-
 
     def _updatePosition(self):
         """
@@ -1130,19 +1188,24 @@ class ChamberPressure(model.Actuator):
         self.position.notify(self.position.value)
         logging.debug("Chamber in position: %s", self.position)
 
+        # TODO: ensure the position always stay as is (ie, prevent
+        # standby/hibernate while in SEM or navcam), or detect the position changed.
+
     def _updateSampleHolder(self):
         """
         update the sampleHolder VA 
         """
-        # TODO: set to (None, None) if not sample holder in?
-        # Convert base64 to long int
-        s = base64.decodestring(self.parent._device.GetSampleHolder().holderID.id[0])
-        holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
-        self._sampleHolder = (holderID,
-                              self.parent._device.GetSampleHolder().holderType)
+        holder = self.parent._device.GetSampleHolder()
+        if holder.status == "SAMPLE-ABSENT":
+            val = (None, None)
+        else:
+            # Convert base64 to long int
+            s = base64.decodestring(holder.holderID.id[0])
+            holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
+            val = (holderID, holder.holderType)
 
-        self.sampleHolder._value = self._sampleHolder
-        self.sampleHolder.notify(self.sampleHolder.value)
+        self.sampleHolder._value = val
+        self.sampleHolder.notify(val)
 
     @isasync
     def moveRel(self, shift):
@@ -1184,6 +1247,9 @@ class ChamberPressure(model.Actuator):
         """
         Estimates move procedure duration
         """
+        # TODO: get better estimate, based on the current status, it can go
+        # up to 12 hours!
+
         # Just an indicative time. It will be updated by polling the remaining
         # time.
         timeRemaining = 20
