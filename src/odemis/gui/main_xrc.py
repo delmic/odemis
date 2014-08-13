@@ -888,7 +888,7 @@ def __init_resources():
                         </object>
                       </object>
                       <size>400,-1</size>
-                      <bg>#4D4D4D</bg>
+                      <bg>#333333</bg>
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
