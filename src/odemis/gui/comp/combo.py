@@ -32,7 +32,6 @@ import odemis.gui
 import odemis.gui.img.data as img
 
 
-
 class ComboBox(wx.combo.OwnerDrawnComboBox):
     """ A simple sub class of OwnerDrawnComboBox that prevents a white border
     from showing around the combobox and allows for left/right caret
@@ -46,8 +45,8 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
     Getting rid op margins also didn't help, since the top margin is 'stuck' at
     -1, which causes the ComboCtrl's white background colour to show.
 
-    In the end, the solution was to force the TextCtrl to be one pixel higher
-    than calculated by the control. See the on_size method.
+    In the end, the solution was to draw the background ourselves, using the correct colour.
+
     """
 
     def __init__(self, *args, **kwargs):
@@ -56,24 +55,32 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         # margin won't move and stays at the default -1.
         self.SetMargins(0, 0)
         self.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        # Even those this colour sets the right
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
 
-        self.Bind(wx.EVT_SIZE, self.on_size)
         self.Bind(wx.EVT_KEY_DOWN, self.on_key)
+        self.Bind(wx.EVT_PAINT, self.on_paint)
 
-    def on_size(self, evt):
-        """ Force the TextCtrl to cover the white 'border' at the bottom
-        on each resize.
+    def on_paint(self, evt):
+        """ Handle the paint event
+
+        Because OwnerDrawnComboBox showed the white background 'behind' the text control (1px
+        at the bottom and to the right), which could not be gotten rid off, we are forced to
+        paint the background in the correct colour ourselves.
+
         """
-        # If the ComboBox if given the wx.CB_READONLY style, it does not contain
-        # a child TextCtrl, so it seems.
-        # Note: The height is fixed (as in, not related to the ComboBox itself) because that
-        # would cause 'jumping' text in certain use cases, where the text would be displayed at
-        # positions that differed 1 px in the vertical direction.
-        if self.TextCtrl:
-            wx.CallAfter(self.TextCtrl.SetSize, (-1, 16))
-        evt.Skip()
+
+        dc = wx.BufferedPaintDC(self)
+        self.draw(dc)
+        evt.Skip()  # Make sure the event propagates, so the drop-down button will be drawn
+
+    def draw(self, dc):
+        """ Clear the widget with the correct background colour """
+        back_colour = self.Parent.GetBackgroundColour()
+        back_brush = wx.Brush(back_colour, wx.SOLID)
+        dc.SetBackground(back_brush)
+        dc.Clear()
 
     def on_key(self, evt):
         """ The OwnerDrawnComboBox makes the left/right keys change the
@@ -87,7 +94,5 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
                 self.TextCtrl.SetInsertionPoint(ip + 1)
             elif key == wx.WXK_LEFT and ip > 0:
                 self.TextCtrl.SetInsertionPoint(ip - 1)
-            else:
-                evt.Skip()
         else:
             evt.Skip()
