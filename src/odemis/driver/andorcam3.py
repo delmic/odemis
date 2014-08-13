@@ -1498,7 +1498,7 @@ class AndorCam3(model.DigitalCamera):
         """
         # catch up late events if we missed the start
         if self._late_events:
-            event_time = self._late_events.pop()
+            event_time = self._late_events.popleft()
             logging.warning("starting acquisition late by %g s", time.time() - event_time)
             self.Command(u"SoftwareTrigger")
             return
