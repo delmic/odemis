@@ -28,13 +28,12 @@ import wx
 
 LOG_FILE = "odemis-gui.log"
 
-LOG_LINES = 500 # maximum lines in the GUI logger
-log = logging.getLogger() # for compatibility only
+LOG_LINES = 500  # maximum lines in the GUI logger
+log = logging.getLogger()  # for compatibility only
 
-def logging_rmt_expection(msg, *args):
-    """
-    same as logging.expection, but also display remote exception info from Pyro
-    """
+
+def logging_remote_exception(msg, *args):
+    """ Same as logging.expection, but also display remote exception info from Pyro """
     logging.error(msg, exc_info=1, *args)
 
     try:
@@ -45,7 +44,8 @@ def logging_rmt_expection(msg, *args):
         pass
 
 # monkey patching
-logging.exception = logging_rmt_expection
+logging.exception = logging_remote_exception
+
 
 def init_logger(level=logging.DEBUG):
     """
@@ -57,6 +57,7 @@ def init_logger(level=logging.DEBUG):
     l.setLevel(level)
     frm = "%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s"
     l.handlers[0].setFormatter(logging.Formatter(frm))
+
 
 def create_gui_logger(log_field, error_va=None):
     """
@@ -101,6 +102,7 @@ def create_gui_logger(log_field, error_va=None):
         logging.exception("Failed to set-up logging handlers")
         raise
 
+
 def stop_gui_logger():
     """
     Stop the logger from displaying logs to the GUI.
@@ -111,6 +113,7 @@ def stop_gui_logger():
     for handler in log.handlers:
         if isinstance(handler, TextFieldHandler):
             log.removeHandler(handler)
+
 
 class TextFieldHandler(logging.Handler):
     """ Custom log handler, used to output log entries to a text field. """

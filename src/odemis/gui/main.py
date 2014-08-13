@@ -62,6 +62,9 @@ class OdemisGUIApp(wx.App):
         self._tab_controller = None
         self._is_standalone = standalone
 
+        l = logging.getLogger()
+        self.log_level = l.getEffectiveLevel()
+
         if not standalone:
             try:
                 driver.speedUpPyroConnect(model.getMicroscope())
@@ -210,6 +213,12 @@ class OdemisGUIApp(wx.App):
         """ This method (un)sets the application into debug mode, setting the
         log level and opening the log panel. """
         self.main_frame.pnl_log.Show(enabled)
+        l = logging.getLogger()
+        if enabled:
+            self.log_level = l.getEffectiveLevel()
+            l.setLevel(logging.DEBUG)
+        else:
+            l.setLevel(self.log_level)
         self.main_frame.Layout()
 
     def on_close_window(self, evt=None): #pylint: disable=W0613
@@ -286,6 +295,7 @@ class OdemisOutputWindow(object):
     def flush(self):
         pass
 
+
 def installThreadExcepthook():
     """ Workaround for sys.excepthook thread bug
     http://spyced.blogspot.com/2007/06/workaround-for-sysexcepthook-bug.html
@@ -305,6 +315,7 @@ def installThreadExcepthook():
                 sys.excepthook(*sys.exc_info())
         self.run = run_with_except_hook
     threading.Thread.__init__ = init
+
 
 def main(args):
     """
