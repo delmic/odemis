@@ -28,6 +28,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.driver import semcomedi
+import threading
 import time
 import unittest
 
@@ -463,6 +464,7 @@ class VirtualTestSynchronized(object):
         cls.ccd = cls.camera_type(**cls.camera_kwargs)
         cls.sem = semcomedi.SEMComedi(**CONFIG_SEM)
 
+
         for child in cls.sem.children:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
@@ -475,7 +477,7 @@ class VirtualTestSynchronized(object):
         cls.sem.terminate()
 
     def setUp(self):
-        pass
+        self.got_image = threading.Event()
 
     def tearUp(self):
         # just in case it failed
@@ -535,8 +537,46 @@ class VirtualTestSynchronized(object):
 
         time.sleep(0.1)
 
-    # TODO: test .softwareTrigger event
+    def test_software_trigger(self):
+        """
+        Check that the synchronisation with softwareTrigger works.
+        Make it typical, by waiting for the data received, and then notifying
+        the software trigger again after a little while.
+        """
+        if not hasattr(self.ccd, "softwareTrigger"):
+            self.skipTest("Camera doesn't support software trigger")
+        exp = 50e-3 # s
+        self.ccd.exposureTime.value = exp
+        self.ccd.binning.value = (1, 1)
+        self.ccd_size = self.ccd.resolution.value
+        readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
+        duration = exp + readout # approximate time for one frame
 
+        numbert = 10
+        self.ccd_left = numbert # unsubscribe after receiving
+
+        try:
+            self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
+        except IOError:
+            self.skipTest("Camera doesn't support synchronisation")
+        self.ccd.data.subscribe(self.receive_ccd_image)
+
+        # Wait for the image 
+        for i in range(numbert):
+            self.got_image.clear()
+            self.ccd.softwareTrigger.notify()
+            # wait for the image to be received
+            gi = self.got_image.wait(duration + 10)
+            self.assertTrue(gi, "image not received after %g s" % (duration + 10))
+            time.sleep(i * 0.1) # wait a bit to simulate some processing
+
+        self.assertEqual(self.ccd_left, 0)
+        self.ccd.data.synchronizedOn(None)
+
+        # check we can still get data normally
+        d = self.ccd.data.get()
+
+        time.sleep(0.1)
 
     def receive_sem_data(self, dataflow, image):
         """
@@ -557,4 +597,4 @@ class VirtualTestSynchronized(object):
         if self.ccd_left <= 0:
             dataflow.unsubscribe(self.receive_ccd_image)
             self.end_time = time.time()
-
+        self.got_image.set()
