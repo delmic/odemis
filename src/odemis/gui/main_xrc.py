@@ -2995,12 +2995,13 @@ def __init_resources():
                   <face>Courier 10 Pitch</face>
                   <encoding>UTF-8</encoding>
                 </font>
-                <style>wxTE_MULTILINE</style>
+                <style>wxBORDER_NONE|wxTE_MULTILINE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxEXPAND</flag>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>2</border>
             </object>
           </object>
           <size>-1,200</size>
