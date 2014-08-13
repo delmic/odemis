@@ -81,7 +81,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         """
         if self.TextCtrl and self.Enabled:
             key = evt.GetKeyCode()
-            ip = self.txt_ctrl.GetInsertionPoint()
+            ip = self.TextCtrl.GetInsertionPoint()
 
             if key == wx.WXK_RIGHT:
                 self.TextCtrl.SetInsertionPoint(ip + 1)
