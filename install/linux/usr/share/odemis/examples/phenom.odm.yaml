@@ -51,7 +51,10 @@ PhenomProX: {
 
 "NavCam": {
     role: overview-ccd,
-    init: {}
+    init: {
+        contrast: 0, # dark-field  (put 1 to get bright-field)
+        brightness: 0.5, # not too strong
+    }
 }
 
 "NavCam focus": {

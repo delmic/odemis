@@ -70,7 +70,10 @@ Spectra: {
 
 "NavCam": {
     role: overview-ccd,
-    init: {}
+    init: {
+        contrast: 0, # dark-field (works much better for Delphi samples)
+        brightness: 0.5, # not too strong
+    }
 }
 
 "NavCam focus": {
