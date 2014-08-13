@@ -248,8 +248,8 @@ class Scanner(model.Emitter):
         dt = DWELL_TIME
         # Corresponding nr of frames for initial DWELL_TIME
         self._nr_frames = 1
-        self.dwellTime = model.FloatContinuous(dt, dt_range, unit="s")
-        self.dwellTime.subscribe(self._onDwellTime)
+        self.dwellTime = model.FloatContinuous(dt, dt_range, unit="s",
+                                               setter=self._setDwellTime)
 
         # Range is according to min and max voltages accepted by Phenom API
         volt_range = TENSION_RANGE
@@ -308,15 +308,18 @@ class Scanner(model.Emitter):
         self.magnification._value = mag
         self.magnification.notify(mag)
 
-    def _onDwellTime(self, dt):
+    def _setDwellTime(self, dt):
         # Calculate number of frames
         self._nr_frames = int(math.ceil(dt / DWELL_TIME))
+        new_dt = DWELL_TIME * self._nr_frames
 
         # Abort current scanning when dwell time is changed
         try:
             self.parent._device.SEMAbortImageAcquisition()
         except suds.WebFault:
             logging.debug("No acquisition in progress to be aborted.")
+
+        return new_dt
 
     def _onRotation(self, rot):
         with self.parent._acq_progress_lock:
@@ -548,11 +551,7 @@ class Detector(model.Detector):
         current drift.
         """
         with self.parent._acq_progress_lock:
-            pxs = self.parent._scanner.pixelSize.value  # m/px
-            scale = self.parent._scanner.scale.value
-            res = (self.parent._scanner.resolution.value[0],
-                   self.parent._scanner.resolution.value[1])
-
+            res = self.parent._scanner.resolution.value
             # Set dataType based on current bpp value
             bpp = self.parent._scanner.bpp.value
             if bpp == 16:
@@ -565,12 +564,11 @@ class Detector(model.Detector):
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
             # TODO beam shift/translation
-            self._scanParams.center.x = 0 # TODO: m or px?
+            self._scanParams.center.x = 0 # m
             self._scanParams.center.y = 0
 
             # update changed metadata
             metadata = dict(self.parent._metadata)
-            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
 
@@ -590,10 +588,11 @@ class Detector(model.Detector):
                 # Use the metadata from the string to update some metadata
                 metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
-                metadata[model.MD_ROTATION] = img_str.aAcqState.rotation
-                # TODO: dwell time = dwell time * integrations?
-                metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
                 # TODO: metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent  ?
+                metadata[model.MD_ROTATION] = img_str.aAcqState.rotation
+                metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
+                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
+                                                 img_str.aAcqState.pixelHeight)
 
                 # image to ndarray
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
