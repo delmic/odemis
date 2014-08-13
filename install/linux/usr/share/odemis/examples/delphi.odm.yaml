@@ -62,6 +62,7 @@ Spectra: {
 }
 
 "Stage Phenom": {
+    creator: "Phenom", # necessary as it has multiple parents
     role: stage,
     affects: ["EBeam Phenom", "Zyla"],
     init: {},
