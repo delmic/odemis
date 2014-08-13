@@ -21,10 +21,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 from odemis.gui.util.img import NDImage2wxImage
+from odemis.util import img
 from scipy import ndimage
 import wx
-
-from odemis.util.img import DataArray2RGB
 
 
 class VideoDisplayer(object):
@@ -49,9 +48,13 @@ class VideoDisplayer(object):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        mn, mx, mnp, mxp = ndimage.extrema(data)
-        logging.info("Image data from %s to %s", mn, mx)
-        rgb = DataArray2RGB(data) # auto brightness/contrast
+        if data.ndim == 3 and 3 in data.shape: # RGB
+            rgb = img.ensureYXC(data)
+        else: # Greyscale (hopefully)
+            mn, mx, mnp, mxp = ndimage.extrema(data)
+            logging.info("Image data from %s to %s", mn, mx)
+            rgb = img.DataArray2RGB(data) # auto brightness/contrast
+
         self.app.img = NDImage2wxImage(rgb)
         wx.CallAfter(self.app.update_view)
     
