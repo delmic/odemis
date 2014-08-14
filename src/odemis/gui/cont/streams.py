@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
-    StaticStream, Stream, OPTICAL_STREAMS, EM_STREAMS
+    StaticStream, Stream, OPTICAL_STREAMS, EM_STREAMS, AlignedSEMStream
 from odemis.gui import comp
 from odemis.gui.model import STATE_OFF, STATE_ON, CHAMBER_VACUUM, \
     CHAMBER_UNKNOWN
@@ -191,9 +191,19 @@ class StreamController(object):
         Creates a new SED stream and panel in the stream bar
         returns (StreamPanel): the panel created
         """
-        s = SEMStream("Secondary electrons",
-                  self._main_data_model.sed, self._main_data_model.sed.data,
-                  self._main_data_model.ebeam)
+        if self._main_data_model.role == "delphi":
+            # For the Delphi, the SEM stream needs to be more "clever" because
+            # it needs to run a simple spot alignment every time the stage has
+            # moved before starting to acquire.
+            s = AlignedSEMStream("Secondary electrons",
+                      self._main_data_model.sed, self._main_data_model.sed.data,
+                      self._main_data_model.ebeam, self._main_data_model.ccd,
+                      self._main_data_model.stage, shiftebeam=False)
+            # TODO: use shiftebeam once the phenom driver supports it
+        else:
+            s = SEMStream("Secondary electrons",
+                      self._main_data_model.sed, self._main_data_model.sed.data,
+                      self._main_data_model.ebeam)
         return self._addStream(s, **kwargs)
 
     def addStatic(self, name, image,

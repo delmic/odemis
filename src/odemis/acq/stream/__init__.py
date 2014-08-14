@@ -29,6 +29,7 @@ from ._static import *
 from ._sync import *
 
 # Generic cross-cut types
+# TODO: instead of using tuples, use AbstractClass (cf collections.Iterable)
 
 # All the stream types related to optical
 OPTICAL_STREAMS = (CameraStream,
