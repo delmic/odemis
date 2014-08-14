@@ -441,6 +441,7 @@ def mergeMetadata(current, correction=None):
     if correction is None:
         correction = current
 
+    # TODO: rotation and position correction should use addition, not subtraction
     if model.MD_ROTATION_COR in correction:
         # Default rotation is 0 rad if not specified
         rotation_cor = correction[model.MD_ROTATION_COR]
