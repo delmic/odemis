@@ -25,11 +25,14 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq import drift
-from odemis.model import MD_ROTATION, MD_POS
-from odemis.util import img, limit_invocation, conversion, units
+from odemis.acq.align import spot
+from odemis.model import MD_POS, MD_POS_COR, MD_PIXEL_SIZE_COR, \
+    MD_ROTATION_COR
+from odemis.util import img, limit_invocation, conversion
 import time
 
 from ._base import Stream, UNDEFINED_ROI
+from odemis.model._metadata import MD_PIXEL_SIZE
 
 
 class SEMStream(Stream):
@@ -144,10 +147,15 @@ class SEMStream(Stream):
 
     def _onSpot(self, spot):
         if self.is_active.value:
+            # to be avoid potential weird scanning while changing values
+            self._dataflow.unsubscribe(self.onNewImage)
+
             if spot:
                 self._startSpot()
             else:
                 self._stopSpot()
+
+            self._dataflow.subscribe(self.onNewImage)
 
     def _startSpot(self):
         """
@@ -156,9 +164,6 @@ class SEMStream(Stream):
         if self._no_spot_settings != (None, None, None):
             logging.debug("Starting spot mode while it was already active")
             return
-
-        # to be avoid potential weird scanning while changing values
-        self._dataflow.unsubscribe(self.onNewImage)
 
         logging.debug("Activating spot mode")
         self._no_spot_settings = (self._emitter.dwellTime.value,
@@ -174,9 +179,6 @@ class SEMStream(Stream):
         # and not too long to avoid using too much memory for acquiring one point.
         self._emitter.dwellTime.value = 0.1 # s
 
-        if self.is_active.value:
-            self._dataflow.subscribe(self.onNewImage)
-
     def _stopSpot(self):
         """
         Stop the spot mode. Can handle being called if it's already inactive
@@ -184,9 +186,6 @@ class SEMStream(Stream):
         if self._no_spot_settings == (None, None, None):
             logging.debug("Stop spot mode while it was already inactive")
             return
-
-        # to be avoid potential weird scanning while changing values
-        self._dataflow.unsubscribe(self.onNewImage)
 
         logging.debug("Disabling spot mode")
         logging.debug("Restoring values : %s", self._no_spot_settings)
@@ -196,9 +195,6 @@ class SEMStream(Stream):
          self._emitter.translation.value) = self._no_spot_settings
 
         self._no_spot_settings = (None, None, None)
-
-        if self.is_active.value:
-            self._dataflow.subscribe(self.onNewImage)
 
     def estimateAcquisitionTime(self):
 
@@ -218,30 +214,33 @@ class SEMStream(Stream):
             duration += self.SETUP_OVERHEAD
 
             return duration
-        # TODO: Remove 'catch-all' with realistic exception
-        except Exception:  # pylint: disable=W0703
+        except Exception:
             msg = "Exception while estimating acquisition time of %s"
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
     def onActive(self, active):
-        if active:
-            # TODO: if can blank => unblank
-
-            # update hw settings to our own ROI
-            self._onROI(self.roi.value)
-
-            if self.dcRegion.value != UNDEFINED_ROI:
-                raise NotImplementedError("SEM drift correction on simple SEM "
-                                          "acquisition not yet implemented")
-
         # handle spot mode
         if self.spot.value:
             if active:
                 self._startSpot()
+                super(SEMStream, self).onActive(active)
             else:
+                # stop acquisition before changing the settings
+                super(SEMStream, self).onActive(active)
                 self._stopSpot()
-        super(SEMStream, self).onActive(active)
+        else:
+            if active:
+                # TODO: if can blank => unblank, or done automatically by the driver?
+
+                # update hw settings to our own ROI
+                self._onROI(self.roi.value)
+
+                if self.dcRegion.value != UNDEFINED_ROI:
+                    raise NotImplementedError("SEM drift correction on simple SEM "
+                                              "acquisition not yet implemented")
+
+            super(SEMStream, self).onActive(active)
 
     def onDwellTime(self, value):
         # When the dwell time changes, the new value is only used on the next
@@ -275,13 +274,137 @@ class SEMStream(Stream):
 
     def onNewImage(self, df, data):
         """
-
+        received a new image from the hardware
         """
         # In spot mode, don't update the image.
         # (still receives data as the e-beam needs an active detector to acquire)
         if self.spot.value:
             return
         super(SEMStream, self).onNewImage(df, data)
+
+class AlignedSEMStream(SEMStream):
+    """
+    This is a special SEM stream which automatically first aligns with the
+    CCD (using spot alignment) every time the stage position changes.
+    Alignment correction can either be done via beam shift (=translation), or
+    by just updating the image position.
+    """
+    def __init__(self, name, detector, dataflow, emitter,
+                 ccd, stage, shiftebeam=False):
+        """
+        shiftebeam (bool): if True, will correct the SEM position using beam shift
+         (iow, using emitter.translation). If False, it will just update the
+         position correction metadata on the SEM images.
+        """
+        SEMStream.__init__(self, name, detector, dataflow, emitter)
+        self._ccd = ccd
+        self._stage = stage
+        self._shiftebeam = shiftebeam
+        self._calibrated = False # whether the calibration has been already done
+        self._last_pos = None # last known position of the stage
+        stage.position.subscribe(self._onStageMove)
+
+    def _onStageMove(self, pos):
+        """
+        Called when the stage moves (changes position)
+        pos (dict): new position
+        """
+        # Check if the position has really changed, as some stage tend to 
+        # report "new" position even when no actual move has happened
+        if self._last_pos == pos:
+            return
+
+        self._calibrated = False
+
+    # TODO: move to acq.align
+    def _findEbeamCenter(self):
+        """
+        Locate the center of the SEM image by setting the SEM to spot mode and
+        measuring the position of the spot on the CCD. It is mostly targeted at
+        doing it fast. In particular it doesn’t do any focusing or multiple
+        iterations with feedback loop.
+        return (tuple of 2 floats): x, y position of the spot relative to the
+         center of the CCD.
+        raise:
+            LookupError: if the spot cannot be found
+        """
+        # save the hw settings
+        prev_exp = self._ccd.exposureTime.value
+        prev_bin = self._ccd.binning.value
+        prev_res = self._ccd.resolution.value
+
+        try:
+            # set the CCD to maximum resolution
+            self._ccd.binning.value = (1, 1)
+            self._ccd.resolution.value = self._ccd.resolution.range[1]
+
+            self._startSpot() # it's always at the center
+            exp = 0.1 # start value
+            prev_img = None
+            while exp < 2: # above 2 s it means something went wrong
+                self._ccd.exposureTime.value = exp
+
+                img = self._ccd.data.get()
+                if prev_img is not None:
+                    img += prev_img # accumulate, to increase the signal
+
+                try:
+                    coord = spot.FindSpot(img)
+                except ValueError:
+                    # no spot (or too many), just try again
+                    pass
+                else:
+                    # found a spot! => convert position to meters from center
+                    pxs = img.metadata[MD_PIXEL_SIZE]
+                    center = (img.shape[1] / 2, img.shape[0] / 2) # shape is Y,X
+                    pos = ((coord[0] - center[0]) * pxs[0],
+                           -(coord[1] - center[1]) * pxs[1]) # physical Y is opposite direction
+                    return pos
+                # try longer exposure time
+                prev_img = img
+                exp *= 2
+
+        finally:
+            # restore hw settings
+            self._stopSpot()
+            self._ccd.exposureTime.value = prev_exp
+            self._ccd.binning.value = prev_bin
+            self._ccd.resolution.value = prev_res
+
+        raise LookupError("Failed to locate spot after exposure time %g s", exp)
+
+    def _compensateShift(self, shift):
+        """
+        Compensate the SEM shift, using either beam shift or metadata update
+        shift (2 floats): shift to apply in meters
+        """
+        if self._shiftebeam:
+            # convert shift into SEM pixels
+            pxs = self._emitter.pixelSize.value
+            trans = tuple(s / p for s, p in zip(shift, pxs))
+            self._emitter.translation.value = trans
+        else:
+            # update the correction metadata
+            self._detector.updateMetadata({MD_POS_COR: shift})
+
+    def onActive(self, active):
+        if active and not self._calibrated and not self.spot.value:
+            # Need to calibrate
+            shift = (0, 0)
+            try:
+                logging.info("Determining the Ebeam center position")
+                shift = self._findEbeamCenter()
+            except LookupError:
+                logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
+            except Exception:
+                logging.exception("Failure while looking for the ebeam center")
+            else:
+                logging.info("Aligning SEM image using shift of %s", shift)
+                self._calibrated = True
+
+            self._compensateShift(shift)
+
+        super(AlignedSEMStream, self).onActive(active)
 
 class CameraStream(Stream):
     """ Abstract class representing streams which have a digital camera as a
@@ -325,17 +448,6 @@ class CameraStream(Stream):
         # light source when just switching between FluoStreams. => have a
         # global acquisition manager which takes care of switching on/off
         # the emitters which are used/unused.
-
-    def _find_metadata(self, md):
-        """
-        Find the PIXEL_SIZE and POS metadata from the given raw image
-        return (dict MD_* -> value)
-        """
-        # Override the standard method to use the correction metadata
-        # TODO: just always use the correction metadata for all the streams?
-        md = dict(md)  # duplicate to not modify the original metadata
-        img.mergeMetadata(md)
-        return super(CameraStream, self)._find_metadata(md)
 
 class BrightfieldStream(CameraStream):
     """ Stream containing images obtained via optical brightfield illumination.
@@ -392,12 +504,16 @@ class CameraNoLightStream(CameraStream):
         Find the PIXEL_SIZE and POS metadata from the given raw image
         return (dict MD_* -> value)
         """
+        # No correction to be displayed when aligning the lenses
+        md = md.copy()
+        md.pop(MD_POS_COR, None)
+        md.pop(MD_PIXEL_SIZE_COR, None)
+        md.pop(MD_ROTATION_COR, None)
+
         # Override the normal metadata by using the ._position we know
         md = super(CameraNoLightStream, self)._find_metadata(md)
 
-        # No rotation to be displayed when aligning the lenses
-        md[MD_ROTATION] = 0
-
+        # override the position if requested
         try:
             if self._position:
                 pos = self._position.value # a stage should always have x,y axes

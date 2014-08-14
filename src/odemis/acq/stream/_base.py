@@ -22,7 +22,7 @@ import math
 import numbers
 import numpy
 from odemis import model
-from odemis.model import MD_POS, MD_PIXEL_SIZE, MD_ROTATION
+from odemis.model import MD_POS, MD_PIXEL_SIZE, MD_ROTATION, MD_ACQ_DATE
 from odemis.util import img, limit_invocation
 import threading
 import time
@@ -292,6 +292,9 @@ class Stream(object):
         Find the PIXEL_SIZE, POS, and ROTATION metadata from the given raw image
         return (dict MD_* -> value)
         """
+        md = dict(md)  # duplicate to not modify the original metadata
+        img.mergeMetadata(md) # applies correction metadata
+
         try:
             pos = md[MD_POS]
         except KeyError:
@@ -315,14 +318,14 @@ class Stream(object):
 
         # Not necessary, but handy to debug latency problems
         try:
-            date = md[model.MD_ACQ_DATE]
+            date = md[MD_ACQ_DATE]
         except KeyError:
             date = time.time()
 
         return {MD_PIXEL_SIZE: pxs,
                 MD_POS: pos,
                 MD_ROTATION: rot,
-                model.MD_ACQ_DATE: date}
+                MD_ACQ_DATE: date}
 
     @limit_invocation(0.1) # Max 10 Hz
     def _updateImage(self, tint=(255, 255, 255)):
