@@ -42,9 +42,9 @@ import weakref
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
 MAX_FRAMES = 255
-# TODO: why so long? can it happen that the Phenom doesn't answer for 1000s and
-# still everything is fine?!
-SOCKET_TIMEOUT = 1000  # s, timeout for suds client
+# For a 2048x2048 image with the maximum dt we need about 205 seconds plus some
+# additional overhead for the transfer. In any case, 300 second should be enough
+SOCKET_TIMEOUT = 300  # s, timeout for suds client
 TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
