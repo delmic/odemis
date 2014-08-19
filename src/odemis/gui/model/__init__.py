@@ -649,8 +649,6 @@ class MicroscopeView(View):
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
 
-        self.horizontal_field_width = model.FloatVA()
-
     def _moveFocus(self):
         time_last_move = 0
         try:

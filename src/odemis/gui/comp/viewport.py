@@ -456,6 +456,7 @@ class SecomViewport(MicroscopeViewport):
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
         self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
 
+        # If a HorizontalFoV vattribute is present, we keep an eye on it
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
             self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp)
 
@@ -482,22 +483,36 @@ class SecomViewport(MicroscopeViewport):
             self.ShowMergeSlider(False)
 
     def track_view_mpp(self):
+        """ Keep track of changes in the MicroscopeView's mpp value """
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
             logging.error("Tracking mpp on %s" % self)
             self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
 
     def untrack_view_mpp(self):
+        """ Ignore changes in the MicroscopeView's mpp value """
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
             logging.error("UnTracking mpp on %s" % self)
             self.microscope_view.mpp.unsubscribe(self._on_mpp_set_hfw)
 
     def _on_hfw_set_mpp(self, hfw):
+        """ Change the mpp value of the MicroscopeView when the HFW changes
+
+        We set the mpp value of the MicroscopeView by assigning the microscope's hfw value to
+        the Canvas' hfw value, which will cause the the Canvas to calculate a new mpp value
+        and assign it to View's mpp attribute.
+
+        """
+
         logging.error("Calculating mpp from hfw for viewport %s" % self)
-        # self.untrack_view_mpp()  # Prevent circular updates of the mpp value
-        self.microscope_view.horizontal_field_width = hfw
-        # self.track_view_mpp()
+        self.canvas.horizontal_field_width = hfw
 
     def _on_mpp_set_hfw(self, mpp):
+        """ Set the microscope's hfw when the MicroscopeView's mpp value changes
+
+        The canvas calculates the new hfw value.
+
+        """
+
         logging.error("Calculating hfw from mpp for viewport %s" % self)
         hfw = self.canvas.horizontal_field_width
 
