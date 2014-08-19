@@ -27,6 +27,9 @@ from __future__ import division
 
 import collections
 import logging
+
+import wx
+
 from odemis import gui, model
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
@@ -36,9 +39,8 @@ from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
-from odemis.model._vattributes import VigilantAttributeBase, NotApplicableError
+from odemis.model import VigilantAttributeBase, NotApplicableError
 from odemis.util import units
-import wx
 
 
 class ViewPort(wx.Panel):
