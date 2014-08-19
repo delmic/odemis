@@ -476,12 +476,21 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def horizontal_field_width(self):
         """ Return the field width of the canvas in meters
 
-        :return: Field width in meters
+        :return: (None or float) Field width in meters
+
         """
+
         if self.microscope_view:
             return self.microscope_view.mpp.value * self.ClientSize.x
 
         return None
+
+    @horizontal_field_width.setter
+    def horizontal_field_width(self, hfw):
+        """ Set the mpp of the microscope view according to the given HFW """
+
+        if self.microscope_view:
+            self.microscope_view.mpp.value = hfw / self.ClientSize.x
 
     def on_size(self, event):
         new_size = event.Size

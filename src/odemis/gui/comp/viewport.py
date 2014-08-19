@@ -36,7 +36,7 @@ from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
 from odemis.gui.model import CHAMBER_VACUUM
 from odemis.gui.util import call_after
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model._vattributes import VigilantAttributeBase, NotApplicableError
 from odemis.util import units
 import wx
 
@@ -287,7 +287,6 @@ class MicroscopeViewport(ViewPort):
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
 
-
     ################################################
     ## Panel control
     ################################################
@@ -311,7 +310,7 @@ class MicroscopeViewport(ViewPort):
         # TODO: shall we use the real density of the screen?
         # We could use real density but how much important is it?
         # The 24" @ 1920x1200 screens from Dell have an mpp value of 0.000270213
-        mpp_screen = 0.00025 # 0.25 mm/px
+        mpp_screen = 0.00025  # 0.25 mm/px
         label = u"Mag: "
 
         # three possibilities:
@@ -452,7 +451,7 @@ class SecomViewport(MicroscopeViewport):
 
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
-        self._orig_abilities = self.canvas.abilities & set([CAN_DRAG, CAN_FOCUS])
+        self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
         self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
 
     def hide_pause(self, is_playing):
@@ -463,7 +462,7 @@ class SecomViewport(MicroscopeViewport):
             if is_playing:
                 self.canvas.abilities |= self._orig_abilities
             else:
-                self.canvas.abilities -= set([CAN_DRAG, CAN_FOCUS])
+                self.canvas.abilities -= {CAN_DRAG, CAN_FOCUS}
 
     def _checkMergeSliderDisplay(self):
         # Overridden to avoid displaying merge slide if only SEM or only Optical
@@ -479,13 +478,32 @@ class SecomViewport(MicroscopeViewport):
 
     def track_view_mpp(self):
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            self.microscope_view.mpp.subscribe(self._on_mpp_set_fov, init=True)
+            logging.error("Tracking mpp on %s" % id(self))
+            self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
 
-    def _on_mpp_set_fov(self, mpp):
+    def untrack_view_mpp(self):
+        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+            logging.error("UnTracking mpp on %s" % id(self))
+            self.microscope_view.mpp.unsubscribe(self._on_mpp_set_hfw)
+
+    def _on_hfw_set_mpp(self, hfw):
+        logging.error("Calculating mpp from hfw for viewport %s" % self)
+        # self.untrack_view_mpp()  # Prevent circular updates of the mpp value
+        self.microscope_view.horizontal_field_width = hfw
+        # self.track_view_mpp()
+
+    def _on_mpp_set_hfw(self, mpp):
+        logging.error("Calculating hfw from mpp for viewport %s" % self)
         hfw = self.canvas.horizontal_field_width
 
-        # TODO: handle the case when horizontalFoV has choices (and not range)
-        hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+        try:
+            # TODO: Test with a simulated SEM that has HFW choices
+            choices = self._tab_data_model.main.ebeam.horizontalFoV.choices
+            # Get the choice that matches hfw most closely
+            hfw = min(choices, key=lambda choice: abs(choice - hfw))
+        except NotApplicableError:
+            hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+
         self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
 
 
