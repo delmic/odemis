@@ -354,21 +354,41 @@ class OverlayTestCase(test.GuiTestCase):
 
     def test_history_overlay(self):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs.disable_drag()
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         hol = vol.HistoryOverlay(cnvs)
+        hol.length = 200
         cnvs.add_view_overlay(hol)
 
         steps = 100
         for i in range(steps):
             phi = (math.pi * 2) / steps
-            x = (100 + i) * math.cos(i * phi) + 500
-            y = (100 + i) * math.sin(i * phi) - 500
+            x = (50 + i) * math.cos(i * phi) + 500
+            y = (50 + i) * math.sin(i * phi) - 500
 
             hol.add_location((x, y))
-            test.gui_loop()
 
-    # END View overlay test cases
+        test.gui_loop()
+
+        for j in range(1, 5):
+            offset = 300 + (j * 75)
+
+            for i in range(10):
+                hol.add_location(((j * i) + offset, (j * -i) - offset))
+
+            for i in range(10):
+                hol.add_location(((j * -i) + offset, (j * -i) - offset))
+
+            for i in range(10):
+                hol.add_location(((j * -i) + offset, (j * i) - offset))
+
+            for i in range(10):
+                hol.add_location(((j * i) + offset, (j * i) - offset))
+
+        test.gui_loop()
+
+# END View overlay test cases
 
     # World overlay test cases
 

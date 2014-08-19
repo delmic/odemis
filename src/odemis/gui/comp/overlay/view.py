@@ -988,7 +988,7 @@ class PolarOverlay(ViewOverlay):
             self.ticks.append((ox, oy, ix, iy, label))
 
         self._calculate_display()
-        
+
         if evt:
             super(PolarOverlay, self).on_size(evt)
 
@@ -1146,7 +1146,8 @@ class HistoryOverlay(ViewOverlay):
     def __init__(self, cnvs):
         super(HistoryOverlay, self).__init__(cnvs)
 
-        self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
+        self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.fade = True  # Fade older positions in the history list
         self.length = 60  # Number of positions to track
         self.history = []  # List of (center, size) tuples
@@ -1201,13 +1202,19 @@ class HistoryOverlay(ViewOverlay):
 
             ctx.set_source_rgba(0, 0, 0, 0.5)
             # Render rectangles of 3 pixels wide
-            ctx.rectangle(int(v_center[0]) - half_size + 1,
-                          int(v_center[1]) - half_size + 1,
-                          self.marker_size,
-                          self.marker_size)
+            ctx.rectangle(int(v_center[0]) - half_size - 1,
+                          int(v_center[1]) - half_size - 1,
+                          self.marker_size + 2,
+                          self.marker_size + 2)
             ctx.stroke()
 
-            ctx.set_source_rgba(self.colour[0], self.colour[1], self.colour[2], alpha)
+            if i < len(history) - 1:
+                colour = self.trail_colour
+            else:
+                colour = self.pos_colour
+
+            ctx.set_source_rgba(colour[0], colour[1], colour[2], alpha)
+
             # Render rectangles of 3 pixels wide
             ctx.rectangle(int(v_center[0]) - half_size,
                           int(v_center[1]) - half_size,
