@@ -454,6 +454,9 @@ class SecomViewport(MicroscopeViewport):
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
         self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
 
+        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+            self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp)
+
     def hide_pause(self, is_playing):
         #pylint: disable=E1101
         self.canvas.icon_overlay.hide_pause(is_playing)
@@ -478,12 +481,12 @@ class SecomViewport(MicroscopeViewport):
 
     def track_view_mpp(self):
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.error("Tracking mpp on %s" % id(self))
+            logging.error("Tracking mpp on %s" % self)
             self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
 
     def untrack_view_mpp(self):
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.error("UnTracking mpp on %s" % id(self))
+            logging.error("UnTracking mpp on %s" % self)
             self.microscope_view.mpp.unsubscribe(self._on_mpp_set_hfw)
 
     def _on_hfw_set_mpp(self, hfw):

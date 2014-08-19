@@ -287,15 +287,6 @@ class ViewController(object):
             if isinstance(self._data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
                 self._viewports[0].track_view_mpp()  # = Live SEM viewport
 
-                self._data_model.main.ebeam.horizontalFoV.subscribe(
-                    self._viewports[0]._on_hfw_set_mpp)
-
-                self._data_model.main.ebeam.horizontalFoV.subscribe(
-                    self._viewports[2]._on_hfw_set_mpp)
-
-                self._data_model.main.ebeam.horizontalFoV.subscribe(
-                    self._viewports[3]._on_hfw_set_mpp)
-
             return
         else:
             logging.warning("No known microscope configuration, creating %d "
