@@ -485,13 +485,13 @@ class SecomViewport(MicroscopeViewport):
     def track_view_mpp(self):
         """ Keep track of changes in the MicroscopeView's mpp value """
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.error("Tracking mpp on %s" % self)
+            logging.info("Tracking mpp on %s" % self)
             self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
 
     def untrack_view_mpp(self):
         """ Ignore changes in the MicroscopeView's mpp value """
         if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.error("UnTracking mpp on %s" % self)
+            logging.info("UnTracking mpp on %s" % self)
             self.microscope_view.mpp.unsubscribe(self._on_mpp_set_hfw)
 
     def _on_hfw_set_mpp(self, hfw):
@@ -503,7 +503,7 @@ class SecomViewport(MicroscopeViewport):
 
         """
 
-        logging.error("Calculating mpp from hfw for viewport %s" % self)
+        logging.info("Calculating mpp from hfw for viewport %s" % self)
         self.canvas.horizontal_field_width = hfw
 
     def _on_mpp_set_hfw(self, mpp):
@@ -513,7 +513,7 @@ class SecomViewport(MicroscopeViewport):
 
         """
 
-        logging.error("Calculating hfw from mpp for viewport %s" % self)
+        logging.info("Calculating hfw from mpp for viewport %s" % self)
         hfw = self.canvas.horizontal_field_width
 
         try:

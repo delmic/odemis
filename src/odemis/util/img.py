@@ -230,7 +230,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
 
     if data.dtype == "uint8" and irange == (0, 255):
         # short-cut when data is already the same type
-        logging.debug("Applying direct range mapping to RGB")
+        # logging.debug("Applying direct range mapping to RGB")
         drescaled = data
         # TODO: also write short-cut for 16 bits by reading only the high byte?
     else:
