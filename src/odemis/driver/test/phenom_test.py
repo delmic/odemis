@@ -23,6 +23,7 @@ from __future__ import division
 import Pyro4
 import copy
 from odemis import model
+from odemis.driver import phenom
 import os
 import pickle
 import threading
@@ -30,10 +31,8 @@ import time
 import unittest
 from unittest.case import skip
 
-from odemis.driver import phenom
 
 # logging.getLogger().setLevel(logging.DEBUG)
-
 # arguments used for the creation of basic components
 CONFIG_SED = {"name": "sed", "role": "sed"}
 CONFIG_BSD = {"name": "bsd", "role": "bsd"}
@@ -47,7 +46,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080
               "username": "delmic", "password" : "6526AM9688B1",
               "children": {"detector": CONFIG_SED, "scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STAGE, "focus": CONFIG_FOCUS,
-                           "camera": CONFIG_NAVCAM, "navcam-focus": CONFIG_NC_FOCUS,
+                           "navcam": CONFIG_NAVCAM, "navcam-focus": CONFIG_NC_FOCUS,
                            "pressure": CONFIG_PRESSURE}
               }
 @skip("skip")

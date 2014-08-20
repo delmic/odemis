@@ -85,25 +85,25 @@ def main(args):
                 detector = c
             elif c.role == "ccd":
                 ccd = c
-            elif c.role == "light":
-                light = c
+            # elif c.role == "light":
+            #    light = c
         if not all([escan, detector, ccd]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
         
-        f_acq = SEMCCDAcquisition(escan, ccd, detector, light)
+        # f_acq = SEMCCDAcquisition(escan, ccd, detector, light)
 
         optical_image_1, optical_image_2, optical_image_3, electron_image = f_acq.result()
         
         f = find_overlay.FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
         trans_val, correction_md = f.result()
 
-        md_1 = img.mergeMetadata(optical_image_1.metadata, correction_md)
-        md_2 = img.mergeMetadata(optical_image_2.metadata, correction_md)
-        md_3 = img.mergeMetadata(optical_image_3.metadata, correction_md)
-        optical_image_1.metadata.update(md_1)
-        optical_image_2.metadata.update(md_2)
-        optical_image_3.metadata.update(md_3)
+        # md_1 = img.mergeMetadata(optical_image_1.metadata, correction_md)
+        # md_2 = img.mergeMetadata(optical_image_2.metadata, correction_md)
+        # md_3 = img.mergeMetadata(optical_image_3.metadata, correction_md)
+        # optical_image_1.metadata.update(md_1)
+        # optical_image_2.metadata.update(md_2)
+        # optical_image_3.metadata.update(md_3)
 
     except:
         logging.exception("Unexpected error while performing action.")

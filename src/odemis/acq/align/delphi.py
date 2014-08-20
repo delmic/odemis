@@ -162,6 +162,11 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             # Update progress of the future
             future.set_end_time(time.time() +
                 estimateConversionTime(first_insertion) * (2 / 3))
+            logging.debug("Move SEM and objective stage to (0,0)...")
+            f = sem_stage.moveAbs({"x":0, "y":0})
+            f.result()
+            f = opt_stage.moveAbs({"x":0, "y":0})
+            f.result()
             logging.debug("Initial calibration to align and calculate the offset...")
             try:
                 future._align_offsetf = AlignAndOffset(ccd, escan, sem_stage,

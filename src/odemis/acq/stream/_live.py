@@ -25,14 +25,13 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq import drift
-from odemis.acq.align import spot
+from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS, MD_POS_COR, MD_PIXEL_SIZE_COR, \
     MD_ROTATION_COR
 from odemis.util import img, limit_invocation, conversion
 import time
 
 from ._base import Stream, UNDEFINED_ROI
-from odemis.model._metadata import MD_PIXEL_SIZE
 
 
 class SEMStream(Stream):
@@ -314,64 +313,8 @@ class AlignedSEMStream(SEMStream):
         if self._last_pos == pos:
             return
 
+        self._last_pos = pos
         self._calibrated = False
-
-    # TODO: move to acq.align
-    def _findEbeamCenter(self):
-        """
-        Locate the center of the SEM image by setting the SEM to spot mode and
-        measuring the position of the spot on the CCD. It is mostly targeted at
-        doing it fast. In particular it doesn’t do any focusing or multiple
-        iterations with feedback loop.
-        return (tuple of 2 floats): x, y position of the spot relative to the
-         center of the CCD.
-        raise:
-            LookupError: if the spot cannot be found
-        """
-        # save the hw settings
-        prev_exp = self._ccd.exposureTime.value
-        prev_bin = self._ccd.binning.value
-        prev_res = self._ccd.resolution.value
-
-        try:
-            # set the CCD to maximum resolution
-            self._ccd.binning.value = (1, 1)
-            self._ccd.resolution.value = self._ccd.resolution.range[1]
-
-            self._startSpot() # it's always at the center
-            exp = 0.1 # start value
-            prev_img = None
-            while exp < 2: # above 2 s it means something went wrong
-                self._ccd.exposureTime.value = exp
-
-                img = self._ccd.data.get()
-                if prev_img is not None:
-                    img += prev_img # accumulate, to increase the signal
-
-                try:
-                    coord = spot.FindSpot(img)
-                except ValueError:
-                    # no spot (or too many), just try again
-                    pass
-                else:
-                    # found a spot! => convert position to meters from center
-                    pxs = img.metadata[MD_PIXEL_SIZE]
-                    center = (img.shape[1] / 2, img.shape[0] / 2) # shape is Y,X
-                    pos = ((coord[0] - center[0]) * pxs[0],
-                           -(coord[1] - center[1]) * pxs[1]) # physical Y is opposite direction
-                    return pos
-                # try longer exposure time
-                prev_img = img
-                exp *= 2
-
-        finally:
-            # restore hw settings
-            self._stopSpot()
-            self._ccd.exposureTime.value = prev_exp
-            self._ccd.binning.value = prev_bin
-            self._ccd.resolution.value = prev_res
-
-        raise LookupError("Failed to locate spot after exposure time %g s", exp)
 
     def _compensateShift(self, shift):
         """
@@ -393,7 +336,7 @@ class AlignedSEMStream(SEMStream):
             shift = (0, 0)
             try:
                 logging.info("Determining the Ebeam center position")
-                shift = self._findEbeamCenter()
+                shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
             except LookupError:
                 logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:

@@ -210,3 +210,18 @@ class ConvertStage(model.Actuator):
         return f
 
 
+class AntiBacklashStage(model.Actuator):
+    """
+    This is a stage wrapper that takes a stage and ensures that every move 
+    always finishes in the same direction.
+    """
+    def __init__(self, name, role, children, axes, scale, rotation, offset):
+        """
+        children (dict str -> Stage): dict containing one component, the stage 
+        to wrap
+        axes (list of string): names of the axes for x and y
+        scale (tuple of floats): scale factor from SEM to optical
+        rotation (float in degrees): rotation factor #radians
+        offset (tuple of floats): offset factor #m, m
+        """
+        pass

@@ -41,7 +41,7 @@ import weakref
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
-MAX_FRAMES = 255
+MAX_FRAMES = 128
 # For a 2048x2048 image with the maximum dt we need about 205 seconds plus some
 # additional overhead for the transfer. In any case, 300 second should be enough
 SOCKET_TIMEOUT = 300  # s, timeout for suds client
@@ -83,15 +83,18 @@ class SEM(model.HwComponent):
 
         info = self._device.VersionInfo().versionInfo
         # TODO: Use an XML parser to parse it more robustly? At least don't fail if cannot find version
-        start = info.index("'Product Name'>") + len("'Product Name'>")
-        end = info.index("</Property", start)
-        self._hwVersion = "%s" % (info[start:end])
-        self._metadata[model.MD_HW_NAME] = self._hwVersion
+        try:
+            start = info.index("'Product Name'>") + len("'Product Name'>")
+            end = info.index("</Property", start)
+            self._hwVersion = "%s" % (info[start:end])
+            self._metadata[model.MD_HW_NAME] = self._hwVersion
 
-        start = info.index("'Version'>") + len("'Version'>")
-        end = info.index("</Property", start)
-        self._swVersion = "%s" % (info[start:end])
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
+            start = info.index("'Version'>") + len("'Version'>")
+            end = info.index("</Property", start)
+            self._swVersion = "%s" % (info[start:end])
+            self._metadata[model.MD_SW_VERSION] = self._swVersion
+        except ValueError:
+            logging.warning("Phenom version could not be retrieved")
 
         # Lock in order to synchronize all the child component functions
         # that acquire data from the SEM while we continuously acquire images
@@ -131,14 +134,13 @@ class SEM(model.HwComponent):
         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
         self.children.add(self._focus)
 
-        # TODO: rename to navcam or overview (if overview, rename navcam-focus too)
-        # create the camera child
+        # create the navcam child
         try:
-            kwargs = children["camera"]
+            kwargs = children["navcam"]
         except (KeyError, TypeError):
-            raise KeyError("PhenomSEM was not given a 'camera' child")
-        self._camera = NavCam(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._camera)
+            raise KeyError("PhenomSEM was not given a 'navcam' child")
+        self._navcam = NavCam(parent=self, daemon=daemon, **kwargs)
+        self.children.add(self._navcam)
 
         # create the NavCam focus child
         try:
@@ -310,7 +312,9 @@ class Scanner(model.Emitter):
 
     def _setDwellTime(self, dt):
         # Calculate number of frames
-        self._nr_frames = int(math.ceil(dt / DWELL_TIME))
+        nr_frames = int(math.ceil(dt / DWELL_TIME))
+        # Limit to powers of 2
+        self._nr_frames = 1 << (nr_frames - 1).bit_length()
         new_dt = DWELL_TIME * self._nr_frames
 
         # Abort current scanning when dwell time is changed
@@ -420,19 +424,6 @@ class Scanner(model.Emitter):
         tran = (max(min(value[0], max_tran[0]), -max_tran[0]),
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
-
-    # TODO: unused
-    def pixelToPhy(self, px_pos):
-        """
-        Converts a position in pixels to physical (at the current magnification)
-        Note: the convention is that in internal coordinates Y goes down, while
-        in physical coordinates, Y goes up.
-        px_pos (tuple of 2 floats): position in internal coordinates (pixels)
-        returns (tuple of 2 floats): physical position in meters
-        """
-        pxs = self.pixelSize.value  # m/px
-        phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
-        return phy_pos
 
 class Detector(model.Detector):
     """
@@ -572,23 +563,26 @@ class Detector(model.Detector):
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
 
-            logging.debug("Acquiring SEM image of %s with %d bpp", res, bpp)
+            logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
+                          res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
             if res == (1, 1):
                 # FIXME
                 # Avoid setting resolution to 1,1
                 self._scanParams.resolution.width = 512
                 self._scanParams.resolution.height = 512
-                self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
+                if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
+                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([], dtype=dataType), metadata)
             else:
-                self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-IMAGING':
+                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
                 metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
-                # TODO: metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent  ?
+                metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
                 metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
@@ -696,8 +690,9 @@ class Stage(model.Actuator):
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
-        # Just initialization, actual position updated once stage is moved
-        self._position = {"x": 0, "y": 0}
+        # Just initialization, position will be updated once we move
+        self._position = {"x":0, "y": 0}
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
@@ -765,12 +760,6 @@ class Stage(model.Actuator):
         # self._doMove(pos)
         return self._executor.submit(self._doMoveAbs, pos)
 
-    @isasync
-    def reference(self):
-        # TODO: this is just plain wrong, really call calibration procedure, or don't provide .reference()
-        pos = {"x":0, "y":0}
-        return self._executor.submit(self._doMoveAbs, pos)
-
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
@@ -796,6 +785,7 @@ class PhenomFocus(model.Actuator):
         # Just z axis
         a = axes[0]
         axes_def[a] = model.Axis(unit="m", range=rng)
+        self.rng = rng
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
         self._hwVersion = parent._hwVersion
@@ -852,7 +842,8 @@ class PhenomFocus(model.Actuator):
                         wd += mov["z"]
                     else:
                         wd = mov["z"]
-                wd = numpy.clip(wd, *self.rng)
+                # Clip within range
+                wd = numpy.clip(wd, self.rng[0], self.rng[1])
                 self.SetWD(wd)
                 self._updatePosition()
 

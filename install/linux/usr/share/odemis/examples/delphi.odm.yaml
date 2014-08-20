@@ -4,7 +4,7 @@ DELPHI: {
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "SED Phenom", "NavCam"],
     actuators: ["Stage Phenom", "Optical stage", "Optical focus",
-                "Chamber Phenom", "EBeam focus", "NavCam focus"],
+                "Chamber Phenom", "EBeam focus", "NavCam focus", "CombinedStage"],
 }
 
 Spectra: {
@@ -29,15 +29,20 @@ Spectra: {
     class: phenom.SEM,
     role: none,
     init: {
+           #Standalone Phenom
            host: "http://Phenom-MVE0206151080.local:8888", 
            username: "delmic",
            password: "6526AM9688B1",
+           #Delphi
+           #host: "http://Phenom-MVE0217221140.local:8888", 
+           #username: "Delmic",
+           #password: "C2CS5TRY1YJ7",
     },
     children: {scanner: "EBeam Phenom",
                focus: "EBeam focus",
                detector: "SED Phenom",
                stage: "Stage Phenom",
-               camera: "NavCam",
+               navcam: "NavCam",
                navcam-focus: "NavCam focus",
                pressure: "Chamber Phenom",
     }
@@ -63,7 +68,7 @@ Spectra: {
 
 "Stage Phenom": {
     creator: "Phenom", # necessary as it has multiple parents
-    role: stage,
+    role: sem-stage,
     affects: ["EBeam Phenom", "Zyla"],
     init: {},
 }
@@ -91,7 +96,7 @@ Spectra: {
 "Nikon Lens": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 60.0}, # ratio
+    init: {mag: 40.0}, # ratio
     affects: ["Zyla"]
 }
 
@@ -116,6 +121,13 @@ Spectra: {
            transpose: [-2, 1], # rotated 90° clockwise
            image: "andorcam2-fake-clara.tiff", # only for simulator
     },
+}
+
+"CombinedStage": {
+    class: combined_stage.CombinedStage,
+    role: stage,
+    init: {},
+    children: {"master": "Stage Phenom", "slave": "Optical stage"},
 }
 
 # Use 2 CombinedActuators to separate the axes of the TMCM over different roles

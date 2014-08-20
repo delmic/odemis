@@ -177,8 +177,8 @@ class CombinedStage(model.Actuator):
 
     def _doReference(self):
         axes = set(["x", "y"])
-        f = self._master.reference(axes)
-        f.result()
+        # f = self._master.reference(axes)
+        # f.result()
         f = self._stage_conv.reference(axes)
         f.result()
 
