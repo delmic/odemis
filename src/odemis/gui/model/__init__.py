@@ -658,6 +658,7 @@ class MicroscopeView(View):
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
+
                 if sleept > 0:
                     time.sleep(sleept)
 
@@ -669,12 +670,14 @@ class MicroscopeView(View):
                     pass
 
                 # TODO: check we stay within the axis range
-                logging.debug("Moving focus by %f μm", shift * 1e6)
+                logging.error("Moving focus by %f μm", shift * 1e6)
                 f = self.focus.moveRel({"z": shift})
                 time_last_move = time.time()
                 # wait until it's finished so that we don't accumulate requests,
                 # but instead only do requests of size "big enough"
                 try:
+                    # FIXME: Currently hangs with live Phenom (.result() never returns)
+                    # Probably related to a range error on the focus (Suds complains too)
                     f.result()
                 except Exception:
                     logging.info("Failed to apply focus move", exc_info=1)
