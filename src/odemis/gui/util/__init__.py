@@ -111,12 +111,14 @@ def wxlimit_invocation(delay_s):
 
     return decorator(limit)
 
+
 @decorator
 def ignore_dead(f, self, *args, **kwargs):
     try:
         return f(self, *args, **kwargs)
     except wx.PyDeadObjectError:
         logging.warn("Dead object ignored in %s", f.__name__)
+
 
 class memoize(object):
     """ Decorator that caches a function's return value each time it is called.

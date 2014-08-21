@@ -8,15 +8,15 @@ Copyright © 2014 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
@@ -56,9 +56,9 @@ NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 class SEM(model.HwComponent):
     '''
-    This is an extension of the model.HwComponent class. It instantiates the scanner 
-    and se-detector children components and provides an update function for its 
-    metadata. 
+    This is an extension of the model.HwComponent class. It instantiates the scanner
+    and se-detector children components and provides an update function for its
+    metadata.
     '''
 
     def __init__(self, name, role, children, host, username, password, daemon=None, **kwargs):
@@ -167,12 +167,12 @@ class SEM(model.HwComponent):
 
 class Scanner(model.Emitter):
     """
-    This is an extension of the model.Emitter class. It contains Vigilant 
+    This is an extension of the model.Emitter class. It contains Vigilant
     Attributes and setters for magnification, pixel size, translation, resolution,
-    scale, rotation and dwell time. Whenever one of these attributes is changed, 
-    its setter also updates another value if needed e.g. when scale is changed, 
-    resolution is updated, when resolution is changed, the translation is recentered 
-    etc. Similarly it subscribes to the VAs of scale and magnification in order 
+    scale, rotation and dwell time. Whenever one of these attributes is changed,
+    its setter also updates another value if needed e.g. when scale is changed,
+    resolution is updated, when resolution is changed, the translation is recentered
+    etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
     """
     def __init__(self, name, role, parent, **kwargs):
@@ -386,7 +386,7 @@ class Scanner(model.Emitter):
 
     def _setResolution(self, value):
         """
-        value (0<int, 0<int): defines the size of the resolution. If the 
+        value (0<int, 0<int): defines the size of the resolution. If the
          resolution is not possible, it will pick the most fitting one. It will
          recenter the translation if otherwise it would be out of the whole
          scanned area.
@@ -428,7 +428,7 @@ class Scanner(model.Emitter):
         Note: the convention is that in internal coordinates Y goes down, while
         in physical coordinates, Y goes up.
         px_pos (tuple of 2 floats): position in internal coordinates (pixels)
-        returns (tuple of 2 floats): physical position in meters 
+        returns (tuple of 2 floats): physical position in meters
         """
         pxs = self.pixelSize.value  # m/px
         phy_pos = (px_pos[0] * pxs[0], -px_pos[1] * pxs[1])  # - to invert Y
@@ -436,8 +436,8 @@ class Scanner(model.Emitter):
 
 class Detector(model.Detector):
     """
-    This is an extension of model.Detector class. It performs the main functionality 
-    of the SEM. It sets up a Dataflow and notifies it every time that an SEM image 
+    This is an extension of model.Detector class. It performs the main functionality
+    of the SEM. It sets up a Dataflow and notifies it every time that an SEM image
     is captured.
     """
     def __init__(self, name, role, parent, **kwargs):
@@ -603,8 +603,8 @@ class Detector(model.Detector):
     def _acquire_thread(self, callback):
         """
         Thread that performs the SEM acquisition. It calculates and updates the
-        center (e-beam) position based on the translation and provides the new 
-        generated output to the Dataflow. 
+        center (e-beam) position based on the translation and provides the new
+        generated output to the Dataflow.
         """
         try:
             while not self._acquisition_must_stop.is_set():
@@ -632,8 +632,8 @@ class Detector(model.Detector):
 
 class SEMDataFlow(model.DataFlow):
     """
-    This is an extension of model.DataFlow. It receives notifications from the 
-    detector component once the SEM output is captured. This is the dataflow to 
+    This is an extension of model.DataFlow. It receives notifications from the
+    detector component once the SEM output is captured. This is the dataflow to
     which the SEM acquisition streams subscribe.
     """
     def __init__(self, detector, sem):
@@ -663,7 +663,7 @@ class SEMDataFlow(model.DataFlow):
 class Stage(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
-    moving the Phenom stage and updating the position. 
+    moving the Phenom stage and updating the position.
     """
     def __init__(self, name, role, parent, **kwargs):
         """
@@ -717,7 +717,7 @@ class Stage(model.Actuator):
 
     def _doMoveAbs(self, pos):
         """
-        move to the position 
+        move to the position
         """
         with self.parent._acq_progress_lock:
             self._stagePos.x = pos.get("x", self._position["x"])
@@ -733,7 +733,7 @@ class Stage(model.Actuator):
 
     def _doMoveRel(self, shift):
         """
-        move by the shift 
+        move by the shift
         """
         with self.parent._acq_progress_lock:
             self._stageRel.x, self._stageRel.y = shift.get("x", 0), shift.get("y", 0)
@@ -791,6 +791,7 @@ class PhenomFocus(model.Actuator):
     def __init__(self, name, role, parent, axes, rng, **kwargs):
         assert len(axes) > 0
         axes_def = {}
+        self.rng = rng
 
         # Just z axis
         a = axes[0]
@@ -814,11 +815,11 @@ class PhenomFocus(model.Actuator):
     @abstractmethod
     def GetWD(self):
         pass
-        
+
     @abstractmethod
     def SetWD(self, wd):
         pass
-            
+
     def _updatePosition(self):
         """
         update the position VA
@@ -851,6 +852,7 @@ class PhenomFocus(model.Actuator):
                         wd += mov["z"]
                     else:
                         wd = mov["z"]
+                wd = numpy.clip(wd, *self.rng)
                 self.SetWD(wd)
                 self._updatePosition()
 
@@ -888,8 +890,8 @@ class PhenomFocus(model.Actuator):
 class EbeamFocus(PhenomFocus):
     """
     This is an extension of the PhenomFocus class. It provides functions for
-    adjusting the ebeam focus by changing the working distance i.e. the distance 
-    between the end of the objective and the surface of the observed specimen 
+    adjusting the ebeam focus by changing the working distance i.e. the distance
+    between the end of the objective and the surface of the observed specimen
     """
     def __init__(self, name, role, parent, axes, **kwargs):
         rng = parent._device.GetSEMWDRange()
@@ -1094,8 +1096,8 @@ class NavCamDataFlow(model.DataFlow):
 class NavCamFocus(PhenomFocus):
     """
     This is an extension of the model.Actuator class. It provides functions for
-    adjusting the overview focus by changing the working distance i.e. the distance 
-    between the end of the camera and the surface of the observed specimen 
+    adjusting the overview focus by changing the working distance i.e. the distance
+    between the end of the camera and the surface of the observed specimen
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
         rng = parent._device.GetNavCamWDRange()
@@ -1192,7 +1194,7 @@ class ChamberPressure(model.Actuator):
 
     def _updateSampleHolder(self):
         """
-        update the sampleHolder VA 
+        update the sampleHolder VA
         """
         holder = self.parent._device.GetSampleHolder()
         if holder.status == "SAMPLE-ABSENT":

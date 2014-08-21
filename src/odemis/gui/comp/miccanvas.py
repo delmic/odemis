@@ -23,28 +23,28 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from decorator import decorator
 import logging
 import numpy
+import time
+import weakref
+
+from decorator import decorator
+import wx
+
 from odemis import util, model
 from odemis.acq import stream
-from odemis.gui.model import LiveViewGUIData
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
 from odemis.util import units
-import threading
-import time
-import weakref
-import wx
-
-from odemis.acq.stream import UNDEFINED_ROI, SEMStream
+from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
 import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
+
 
 SECOM_MODES = (guimodel.TOOL_ZOOM, guimodel.TOOL_ROI)
 SPARC_MODES = (guimodel.TOOL_ROA, guimodel.TOOL_POINT, guimodel.TOOL_RO_ANCHOR)
@@ -339,7 +339,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             keepalpha = False
             scale = rgbim.metadata[model.MD_PIXEL_SIZE][0] / self.mpwu
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
-            rot = -rgbim.metadata.get(model.MD_ROTATION, 0) # ccw -> cw
+            rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
 
             ims.append((rgba_im, pos, scale, keepalpha, rot))
         self.set_images(ims)

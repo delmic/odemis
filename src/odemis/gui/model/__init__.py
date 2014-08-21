@@ -669,15 +669,12 @@ class MicroscopeView(View):
                 except Queue.Empty:
                     pass
 
-                # TODO: check we stay within the axis range
                 logging.error("Moving focus by %f μm", shift * 1e6)
                 f = self.focus.moveRel({"z": shift})
                 time_last_move = time.time()
                 # wait until it's finished so that we don't accumulate requests,
                 # but instead only do requests of size "big enough"
                 try:
-                    # FIXME: Currently hangs with live Phenom (.result() never returns)
-                    # Probably related to a range error on the focus (Suds complains too)
                     f.result()
                 except Exception:
                     logging.info("Failed to apply focus move", exc_info=1)
