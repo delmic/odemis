@@ -450,6 +450,7 @@ class SecomViewport(MicroscopeViewport):
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
         self._orig_abilities = set()
+        self.self_set_hfw = False
 
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
@@ -488,12 +489,6 @@ class SecomViewport(MicroscopeViewport):
             logging.info("Tracking mpp on %s" % self)
             self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
 
-    def untrack_view_mpp(self):
-        """ Ignore changes in the MicroscopeView's mpp value """
-        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.info("UnTracking mpp on %s" % self)
-            self.microscope_view.mpp.unsubscribe(self._on_mpp_set_hfw)
-
     def _on_hfw_set_mpp(self, hfw):
         """ Change the mpp value of the MicroscopeView when the HFW changes
 
@@ -503,8 +498,10 @@ class SecomViewport(MicroscopeViewport):
 
         """
 
-        logging.info("Calculating mpp from hfw for viewport %s" % self)
-        self.canvas.horizontal_field_width = hfw
+        if not self.self_set_hfw:
+            logging.info("Calculating mpp from hfw for viewport %s" % self)
+            self.canvas.horizontal_field_width = hfw
+        self.self_set_hfw = False
 
     def _on_mpp_set_hfw(self, mpp):
         """ Set the microscope's hfw when the MicroscopeView's mpp value changes
@@ -524,6 +521,7 @@ class SecomViewport(MicroscopeViewport):
         except NotApplicableError:
             hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
 
+        self.self_set_hfw = True
         self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
 
 

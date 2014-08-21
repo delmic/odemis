@@ -285,6 +285,7 @@ class ViewController(object):
 
             # Track the mpp of the SEM view in order to set the magnification
             if isinstance(self._data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+                logging.info("Tracking mpp value of '%s'", self._viewports[0])
                 self._viewports[0].track_view_mpp()  # = Live SEM viewport
 
             return
@@ -294,11 +295,12 @@ class ViewController(object):
             i = 1
             vpv = collections.OrderedDict()
             for viewport in self._viewports:
-                vpv[viewport] = {"name": "View %d" % i,
-                                 "stage": self._main_data_model.stage,
-                                 "focus": self._main_data_model.focus,
-                                 "stream_classes": None, # everything
-                                 }
+                vpv[viewport] = {
+                    "name": "View %d" % i,
+                     "stage": self._main_data_model.stage,
+                     "focus": self._main_data_model.focus,
+                     "stream_classes": None, # everything
+                }
                 i += 1
 
         self._create_views_fixed(vpv)
