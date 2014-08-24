@@ -315,7 +315,7 @@ class SettingsController(object):
           (iow, copy/pasted)
         returns (SettingEntry): the new SettingEntry created
         """
-        self._clear()
+        self.panel.clear_message()
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
         self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
@@ -1392,9 +1392,9 @@ class AnalysisSettingsController(SettingsBarController):
         spec (boolean or None): show, hide or don't change spec calib panel
         """
         if ar is not None:
-            self._pnl_arfile.show_panel(ar)
+            self._pnl_arfile.show_panel()
         if spec is not None:
-            self._pnl_specfile.show_panel(spec)
+            self._pnl_specfile.show_panel()
 
         self.parent.Layout()
 
