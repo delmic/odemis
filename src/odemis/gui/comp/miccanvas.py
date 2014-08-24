@@ -822,7 +822,7 @@ class SecomCanvas(DblMicroscopeCanvas):
                                      "correctly for now"))
                 has_sem_image = True
             else:
-                images.insert(0, rgbim) # as first
+                images.insert(0, rgbim)  # as first
 
         return images
 

@@ -108,16 +108,16 @@ class ViewPort(wx.Panel):
                 main_sizer.Add(grid_sizer, 1,
                         border=2, flag=wx.EXPAND | wx.ALL)
             else:
-                main_sizer.Add(self.canvas, 1,
-                    border=2, flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
+                main_sizer.Add(self.canvas, proportion=1, border=2,
+                               flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
                 # It's made of multiple controls positioned via sizers
                 # TODO: allow the user to pick which information is displayed
                 # in the legend
-                # pylint: disable=E1102, E1103
                 self.legend = self.legend_class(self)
                 self.legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-                main_sizer.Add(self.legend, 0, border=2, flag=wx.EXPAND|wx.BOTTOM|wx.LEFT|wx.RIGHT)
+                main_sizer.Add(self.legend, proportion=0, border=2,
+                               flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
         else:
             main_sizer.Add(self.canvas, 1,
                 border=2, flag=wx.EXPAND | wx.ALL)
@@ -252,9 +252,10 @@ class MicroscopeViewport(ViewPort):
         # Call parent constructor at the end, because it needs the legend panel
         ViewPort.__init__(self, *args, **kwargs)
 
-        # Bind on EVT_SLIDER to update even while the user is moving
-        self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
+        if self.legend:
+            # Bind on EVT_SLIDER to update even while the user is moving
+            self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+            self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
 
 
     def setView(self, microscope_view, tab_data):
@@ -462,7 +463,6 @@ class SecomViewport(MicroscopeViewport):
             self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp)
 
     def hide_pause(self, is_playing):
-        #pylint: disable=E1101
         self.canvas.icon_overlay.hide_pause(is_playing)
         if hasattr(self._microscope_view, "stage_pos"):
             # disable/enable move and focus change

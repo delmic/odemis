@@ -505,70 +505,68 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="SecomViewport" name="vp_secom_tl">
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
+              <object class="wxPanel">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="SecomViewport" name="vp_secom_tl">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <object class="sizeritem">
-                      <object class="SecomViewport" name="vp_secom_tr">
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
-                    </object>
-                    <orient>wxHORIZONTAL</orient>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>0,0</cellpos>
                   </object>
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                  <ratio>1</ratio>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="SecomViewport" name="vp_secom_bl">
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
+                  <object class="sizeritem">
+                    <object class="SecomViewport" name="vp_secom_tr">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <object class="sizeritem">
-                      <object class="SecomViewport" name="vp_secom_br">
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
-                    </object>
-                    <orient>wxHORIZONTAL</orient>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>0,1</cellpos>
                   </object>
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                  <ratio>1</ratio>
+                  <object class="sizeritem">
+                    <object class="SecomViewport" name="vp_secom_bl">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>1,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="SecomViewport" name="vp_secom_br">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>1,1</cellpos>
+                  </object>
+                  <growablecols>0,1</growablecols>
+                  <growablerows>0,1</growablerows>
                 </object>
-                <orient>wxVERTICAL</orient>
+                <bg>#A020F0</bg>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
