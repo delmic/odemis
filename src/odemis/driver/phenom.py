@@ -49,7 +49,7 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 
 # SEM ranges in order to allow scanner initialization even if Phenom is in
 # unloaded state
-HFW_RANGE = [2.5e-06, 0.003]
+HFW_RANGE = [2.5e-06, 0.0031]
 TENSION_RANGE = [4797.56, 20006.84]
 SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
@@ -397,15 +397,6 @@ class Scanner(model.Emitter):
          scanned area.
         returns the actual value used
         """
-        # In case of resolution 1,1 store the current fov and set the spot mode
-        if value == (1, 1) and self._resolution != (1, 1):
-            self.last_fov = self.horizontalFoV.value
-            self.parent._detector.beam_blank(False)
-            self.horizontalFoV.value = self.horizontalFoV.range[0]
-        # If we are going back from spot mode to normal scanning, reset fov
-        elif self._resolution == (1, 1):
-            self.horizontalFoV.value = self.last_fov
-
         max_size = (int(self._shape[0] // self._scale[0]),
                     int(self._shape[1] // self._scale[1]))
 
@@ -456,10 +447,6 @@ class Detector(model.Detector):
         # use all detector segments
         detectorMode = 'SEM-DETECTOR-MODE-ALL'
         self._scanParams.detector = detectorMode
-        # always acquire to the center of FOV
-        self._scanParams.center.x = 0
-        self._scanParams.center.y = 0
-        self._scanParams.scale = 1
 
         # adjust brightness and contrast
         # self.parent._device.SEMACB()
@@ -531,9 +518,6 @@ class Detector(model.Detector):
     def stop_acquire(self):
         try:
             # "Blank" the beam
-            # if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
-            # Do not blank if we are in spot
-            # if self.parent._scanner.resolution.value != (1,1):
             try:
                 self.parent._device.SEMAbortImageAcquisition()
             except suds.WebFault:
@@ -573,8 +557,6 @@ class Detector(model.Detector):
             else:
                 dataType = numpy.uint8
 
-            self._scanParams.resolution.width = res[0]
-            self._scanParams.resolution.height = res[1]
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
             # TODO beam shift/translation
@@ -590,24 +572,25 @@ class Detector(model.Detector):
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
             if res == (1, 1):
-                # Keep current FoV in case you just changed to spot mode
-                # self.last_fov = self.parent._scanner.horizontalFoV.value
-                # FIXME
-                # Setting resolution to 1,1
-                # self._scanParams.resolution.width = 256
-                # self._scanParams.resolution.height = 256
-                # self.parent._scanner.horizontalFoV.value = self.parent._scanner.horizontalFoV.range[0]
-                # img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
-                # if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
-                    # self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
+                # Avoid setting resolution to 1,1
+                # Set scale so the FoV is reduced to something really small
+                # even if the current HFW is the maximum
+                self._scanParams.scale = 1 / 2048
+                self._scanParams.resolution.width = 128
+                self._scanParams.resolution.height = 128
+                if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
+                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([], dtype=dataType), metadata)
             else:
+                self._scanParams.scale = 1
+                self._scanParams.resolution.width = res[0]
+                self._scanParams.resolution.height = res[1]
                 if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-IMAGING':
                     self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
-                metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+                # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = img_str.aAcqState.rotation
@@ -628,11 +611,20 @@ class Detector(model.Detector):
         generated output to the Dataflow.
         """
         try:
+            # trans = 0, 0
             while not self._acquisition_must_stop.is_set():
+
+#                 new_trans = self.translation.value
+#                 diff_trans = new_trans - trans
+#                 if diff_trans != (0, 0):
+#                     self.moveRel(diff_trans)
+#                 trans = new_trans
+
                 callback(self._acquire_image())
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
+#             self.moveRel(-trans)
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 

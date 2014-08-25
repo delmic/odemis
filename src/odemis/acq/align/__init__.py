@@ -68,7 +68,8 @@ def FindEbeamCenter(ccd, detector, escan):
         # put a not too short dwell time to avoid acquisition to keep repeating,
         # and not too long to avoid using too much memory for acquiring one point.
         escan.dwellTime.value = escan.dwellTime.range[1]  # s
-        # detector.data.get()
+        # Subscribe to actually set the spot mode
+        detector.data.subscribe(discard_data)
 
         exp = 0.1  # start value
         prev_img = None
@@ -97,6 +98,7 @@ def FindEbeamCenter(ccd, detector, escan):
             exp *= 2
 
     finally:
+        detector.data.unsubscribe(discard_data)
         # restore hw settings
         (escan.dwellTime.value,
          escan.resolution.value,
@@ -106,3 +108,10 @@ def FindEbeamCenter(ccd, detector, escan):
         ccd.resolution.value = prev_res
 
     raise LookupError("Failed to locate spot after exposure time %g s", exp)
+
+
+def discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
