@@ -69,14 +69,12 @@ Spectra: {
 "Stage Phenom": {
     creator: "Phenom", # necessary as it has multiple parents
     role: sem-stage,
-    affects: ["EBeam Phenom", "Zyla"],
     init: {},
 }
 
 "NavCam": {
     role: overview-ccd,
     init: {
-        #FIXME, for some reason minimum contrast in Delphi is 1
         contrast: 1, # dark-field (works much better for Delphi samples)
         brightness: 0.5, # not too strong
     }
@@ -125,6 +123,7 @@ Spectra: {
 "CombinedStage": {
     class: combined_stage.CombinedStage,
     role: stage,
+    affects: ["EBeam Phenom", "Zyla"],
     init: {},
     children: {"master": "Stage Phenom", "slave": "Optical stage"},
 }

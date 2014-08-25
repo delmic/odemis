@@ -63,7 +63,6 @@ Spectra: {
     class: simulated.Stage,
     role: sem-stage,
     init: {axes: ["x", "y"]},
-    affects: ["EBeam Phenom", "Zyla"],
     properties: {
         speed: {"x": 0.01, "y": 0.01} #m/s
     }
@@ -127,6 +126,7 @@ Spectra: {
 "CombinedStage": {
     class: combined_stage.CombinedStage,
     role: stage,
+    affects: ["EBeam Phenom", "Zyla"],
     init: {},
     children: {"master": "Stage", "slave": "Optical stage"},
 }
