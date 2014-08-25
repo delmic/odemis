@@ -60,7 +60,6 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_secom_align = xrc.XRCCTRL(self, "btn_tab_secom_align")
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
-        self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
         self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
@@ -76,6 +75,7 @@ class xrcfr_main(wx.Frame):
         self.vp_secom_tr = xrc.XRCCTRL(self, "vp_secom_tr")
         self.vp_secom_bl = xrc.XRCCTRL(self, "vp_secom_bl")
         self.vp_secom_br = xrc.XRCCTRL(self, "vp_secom_br")
+        self.vp_overview_sem = xrc.XRCCTRL(self, "vp_overview_sem")
         self.live_btn_press = xrc.XRCCTRL(self, "live_btn_press")
         self.live_btn_sem = xrc.XRCCTRL(self, "live_btn_sem")
         self.live_btn_opt = xrc.XRCCTRL(self, "live_btn_opt")
@@ -543,17 +543,6 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="OverviewViewport" name="vp_overview_sem">
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-                    <border>10</border>
-                    <minsize>200,150</minsize>
-                  </object>
-                  <object class="sizeritem">
                     <object class="ToolBar" name="secom_toolbar">
                       <style>wxVERTICAL</style>
                       <XRCED>
@@ -790,8 +779,17 @@ def __init_resources():
                   </object>
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
+                  <object class="sizeritem">
+                    <object class="OverviewViewport" name="vp_overview_sem">
+                      <hidden>1</hidden>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,2</cellpos>
+                  </object>
                 </object>
-                <bg>#A020F0</bg>
+                <bg>#000000</bg>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
