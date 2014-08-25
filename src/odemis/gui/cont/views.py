@@ -28,7 +28,6 @@ from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
-from odemis.gui.model import LiveViewGUIData
 from odemis.gui.util import call_after
 import wx
 
@@ -284,7 +283,8 @@ class ViewController(object):
             self._create_views_fixed(vpv)
 
             # Track the mpp of the SEM view in order to set the magnification
-            if isinstance(self._data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+            if (self._main_data_model.ebeam and
+                isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
                 logging.info("Tracking mpp value of '%s'", self._viewports[0])
                 self._viewports[0].track_view_mpp()  # = Live SEM viewport
 
