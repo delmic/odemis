@@ -458,8 +458,9 @@ class SecomViewport(MicroscopeViewport):
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
         self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
 
-        # If a HorizontalFoV vattribute is present, we keep an eye on it
-        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+        # If a HorizontalFoV VA is present, we keep an eye on it
+        if (self._tab_data_model.main.ebeam and
+            isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase)):
             self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp)
 
     def hide_pause(self, is_playing):
