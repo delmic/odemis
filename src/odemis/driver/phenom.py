@@ -201,6 +201,7 @@ class Scanner(model.Emitter):
         self.horizontalFoV = model.FloatContinuous(fov, range=fov_range, unit="m",
                                                    setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
+        self.last_fov = self.horizontalFoV.value
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
@@ -396,6 +397,15 @@ class Scanner(model.Emitter):
          scanned area.
         returns the actual value used
         """
+        # In case of resolution 1,1 store the current fov and set the spot mode
+        if value == (1, 1) and self._resolution != (1, 1):
+            self.last_fov = self.horizontalFoV.value
+            self.parent._detector.beam_blank(False)
+            self.horizontalFoV.value = self.horizontalFoV.range[0]
+        # If we are going back from spot mode to normal scanning, reset fov
+        elif self._resolution == (1, 1):
+            self.horizontalFoV.value = self.last_fov
+
         max_size = (int(self._shape[0] // self._scale[0]),
                     int(self._shape[1] // self._scale[1]))
 
@@ -407,6 +417,7 @@ class Scanner(model.Emitter):
         # setting the same value means it will recheck the boundaries with the
         # new resolution, and reduce the distance to the center if necessary.
         self.translation.value = self.translation.value
+
         return size
 
     def _setTranslation(self, value):
@@ -502,7 +513,7 @@ class Detector(model.Detector):
             self._wait_acquisition_stopped()
             try:
                 # "Unblank" the beam
-                self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+                self.beam_blank(False)
             except suds.WebFault:
                 logging.warning("Beam might still be blanked!")
             target = self._acquire_thread
@@ -511,11 +522,23 @@ class Detector(model.Detector):
                     args=(callback,))
             self._acquisition_thread.start()
 
+    def beam_blank(self, blank):
+        if blank == True:
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+        else:
+            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+
     def stop_acquire(self):
         try:
             # "Blank" the beam
-            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-            self.parent._device.SEMAbortImageAcquisition()
+            # if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
+            # Do not blank if we are in spot
+            # if self.parent._scanner.resolution.value != (1,1):
+            try:
+                self.parent._device.SEMAbortImageAcquisition()
+            except suds.WebFault:
+                logging.debug("No acquisition in progress to be aborted.")
+            self.beam_blank(True)
         except suds.WebFault:
             logging.debug("No acquisition in progress to be aborted.")
         self._acquisition_must_stop.set()
@@ -567,12 +590,16 @@ class Detector(model.Detector):
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
             if res == (1, 1):
+                # Keep current FoV in case you just changed to spot mode
+                # self.last_fov = self.parent._scanner.horizontalFoV.value
                 # FIXME
-                # Avoid setting resolution to 1,1
-                self._scanParams.resolution.width = 512
-                self._scanParams.resolution.height = 512
-                if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
-                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
+                # Setting resolution to 1,1
+                # self._scanParams.resolution.width = 256
+                # self._scanParams.resolution.height = 256
+                # self.parent._scanner.horizontalFoV.value = self.parent._scanner.horizontalFoV.range[0]
+                # img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
+                # if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
+                    # self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([], dtype=dataType), metadata)
             else:
@@ -620,7 +647,7 @@ class Detector(model.Detector):
         logging.info("Terminating SEM stream...")
         try:
             # "Unblank" the beam
-            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+            self.beam_blank(False)
         except suds.WebFault:
             logging.warning("Beam might still be blanked!")
 

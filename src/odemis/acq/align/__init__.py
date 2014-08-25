@@ -29,6 +29,7 @@ from .autofocus import AutoFocus
 from .delphi import UpdateConversion
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
+from odemis.dataio import hdf5
 
 
 def FindEbeamCenter(ccd, detector, escan):
@@ -67,14 +68,15 @@ def FindEbeamCenter(ccd, detector, escan):
         # put a not too short dwell time to avoid acquisition to keep repeating,
         # and not too long to avoid using too much memory for acquiring one point.
         escan.dwellTime.value = escan.dwellTime.range[1]  # s
-        detector.data.get()
+        # detector.data.get()
 
-        exp = 200  # start value
+        exp = 0.1  # start value
         prev_img = None
-        while exp < 205:  # above 2 s it means something went wrong
+        while exp < 2:  # above 2 s it means something went wrong
             ccd.exposureTime.value = exp
 
             img = ccd.data.get()
+            hdf5.export("FindEbeamCenter.h5", img)
             if prev_img is not None:
                 img += prev_img  # accumulate, to increase the signal
 
@@ -87,8 +89,8 @@ def FindEbeamCenter(ccd, detector, escan):
                 # found a spot! => convert position to meters from center
                 pxs = img.metadata[MD_PIXEL_SIZE]
                 center = (img.shape[1] / 2, img.shape[0] / 2)  # shape is Y,X
-                pos = ((coord[0] - center[0]) * pxs[0],
-                       - (coord[1] - center[1]) * pxs[1])  # physical Y is opposite direction
+                pos = (-(coord[0] - center[0]) * pxs[0],
+                        (coord[1] - center[1]) * pxs[1])  # physical Y is opposite direction
                 return pos
             # try longer exposure time
             prev_img = img

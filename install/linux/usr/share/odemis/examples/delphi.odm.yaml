@@ -8,7 +8,7 @@ DELPHI: {
 }
 
 Spectra: {
-    class: lle.FakeLLE,
+    class: lle.LLE,
     role: light,
     init: {
         port: "/dev/ttyFTDI*",
@@ -30,13 +30,13 @@ Spectra: {
     role: none,
     init: {
            #Standalone Phenom
-           host: "http://Phenom-MVE0206151080.local:8888", 
-           username: "delmic",
-           password: "6526AM9688B1",
+           #host: "http://Phenom-MVE0206151080.local:8888", 
+           #username: "delmic",
+           #password: "6526AM9688B1",
            #Delphi
-           #host: "http://Phenom-MVE0217221140.local:8888", 
-           #username: "Delmic",
-           #password: "C2CS5TRY1YJ7",
+           host: "http://Phenom-MVE0217221140.local:8888", 
+           username: "Delmic",
+           password: "C2CS5TRY1YJ7",
     },
     children: {scanner: "EBeam Phenom",
                focus: "EBeam focus",
@@ -76,7 +76,8 @@ Spectra: {
 "NavCam": {
     role: overview-ccd,
     init: {
-        contrast: 0, # dark-field (works much better for Delphi samples)
+        #FIXME, for some reason minimum contrast in Delphi is 1
+        contrast: 1, # dark-field (works much better for Delphi samples)
         brightness: 0.5, # not too strong
     }
 }
@@ -114,12 +115,10 @@ Spectra: {
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
 "Zyla": {
-    #class: andorcam3.AndorCam3,
-    class: andorcam2.FakeAndorCam2,
+    class: andorcam3.AndorCam3,
     role: ccd,
     init: {device: 0,
-           transpose: [-2, 1], # rotated 90° clockwise
-           image: "andorcam2-fake-clara.tiff", # only for simulator
+           transpose: [-2, -1], # rotated 90° clockwise
     },
 }
 
@@ -158,11 +157,10 @@ TMCM: {
     class: tmcm.TMCM3110,
     role: none,
     init: {
-        port: "/dev/fake", # /dev/ttyTMCM0
+        port: "/dev/ttyTMCM0",
         axes: ["x", "y", "z"],
         ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
-        refproc: "FakeReferencing", # referencing procedure for simulator
-        #refproc: "2xFinalForward", # official referencing procedure for the Delphi
+        refproc: "2xFinalForward", # official referencing procedure for the Delphi
         # inverted: ["y"],
     },
 }

@@ -342,7 +342,7 @@ class AlignedSEMStream(SEMStream):
             except Exception:
                 logging.exception("Failure while looking for the ebeam center")
             else:
-                logging.info("Aligning SEM image using shift of %s", shift)
+                logging.error("Aligning SEM image using shift of %s", shift)
                 self._calibrated = True
 
             self._compensateShift(shift)

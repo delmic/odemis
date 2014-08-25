@@ -215,13 +215,68 @@ class AntiBacklashStage(model.Actuator):
     This is a stage wrapper that takes a stage and ensures that every move 
     always finishes in the same direction.
     """
-    def __init__(self, name, role, children, axes, scale, rotation, offset):
+    def __init__(self, name, role, children, axes, backlash):
         """
         children (dict str -> Stage): dict containing one component, the stage 
         to wrap
         axes (list of string): names of the axes for x and y
-        scale (tuple of floats): scale factor from SEM to optical
-        rotation (float in degrees): rotation factor #radians
-        offset (tuple of floats): offset factor #m, m
+        backlash (dict str -> float): for each axis of the stage, the additional 
+        distance to move (and the direction). If an axis of the stage is not 
+        present, then it’s the same as having 0 as backlash (=> no antibacklash 
+        motion is performed for this axis)
+
         """
+        assert len(axes) == 2
+        if len(children) != 1:
+            raise ValueError("AntiBacklashStage needs 1 child")
+
+        self._child = children.values()[0]
+        self._axes_child = {"x": axes[0], "y": axes[1]}
+        self._backlash = backlash
+
+        axes_def = {"x": self._child.axes[axes[0]],
+                    "y": self._child.axes[axes[1]]}
+        model.Actuator.__init__(self, name, role, axes=axes_def)
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute(
+                                    {"x": 0, "y": 0},
+                                    unit="m", readonly=True)
+        # it's just a conversion from the child's position
+        self._child.position.subscribe(self._updatePosition, init=True)
+
+    def _updatePosition(self, pos_child):
+        """
+        update the position VA when the child's position is updated
+        """
+        # it's read-only, so we change it via _value
+        vpos_child = [pos_child[self._axes_child["x"]],
+                      pos_child[self._axes_child["y"]]]
+        self.position._value = {"x": vpos_child[0],
+                                "y": vpos_child[1]}
+        self.position.notify(self.position.value)
+
+    @isasync
+    def moveRel(self, shift):
+        # TODO, not implemented
         pass
+
+    @isasync
+    def moveAbs(self, pos):
+        # shift is a vector, conversion is identical to a point
+        vpos = [pos.get("x", 0), pos.get("y", 0)]
+
+#         pos_child = {self._axes_child["x"]: vpos[0],
+#                        self._axes_child["y"]: vpos[1]}
+#
+        sub_move = {self._axes_child["x"]: vpos[0] - self._backlash["x"],
+                    self._axes_child["y"]: vpos[1] - self._backlash["y"]}
+        f = self._child.moveAbs(sub_move)
+        f.result()
+
+        f = self._child.moveRel(self._backlash)
+        return f
+
+    def stop(self, axes=None):
+        # This is normally never used (child is directly stopped)
+        self._child.stop()
