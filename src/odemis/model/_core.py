@@ -40,9 +40,10 @@ import weakref
 # MAXTHREADS concurrent connections.
 # After that it simply blocks. As there is one connection per object, it goes fast.
 # Multiplex can handle a much larger number of connections, but will always
-# execute the requests one at a time. It seems to handle badly callbacks
+# execute the requests one at a time, which can cause deadlock when handling
+# callbacks.
 #Pyro4.config.SERVERTYPE = "multiplex"
-Pyro4.config.THREADPOOL_MINTHREADS = 16
+Pyro4.config.THREADPOOL_MINTHREADS = 48 # big, because it can block when increasing the pool
 Pyro4.config.THREADPOOL_MAXTHREADS = 128
 # TODO make sure Pyro can now grow the pool: it used to allocate a huge static
 # number of threads. It seems also that when growing the pool it sometimes blocks
