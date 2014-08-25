@@ -67,11 +67,13 @@ class ViewPort(wx.Panel):
         self.SetBackgroundColour(BG_COLOUR_LEGEND)
         self.SetForegroundColour(FG_COLOUR_LEGEND)
 
+        # This attribute can be used to track the (GribBag) sizer position of the viewport (if any)
+        self.sizer_pos = None
+
         # main widget
         self.canvas = self.canvas_class(self)
 
         # Put all together (canvas + legend)
-
         self.legend = None
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)

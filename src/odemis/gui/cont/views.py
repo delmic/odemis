@@ -77,8 +77,8 @@ class ViewController(object):
 
         # subscribe to layout and view changes
         tab_data.visible_views.subscribe(self._on_visible_views)
-        tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
-        tab_data.focussedView.subscribe(self._onView, init=True)
+        tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
+        tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
 
     @property
     def viewports(self):
@@ -426,69 +426,132 @@ class ViewController(object):
         if self._data_model.focussedView.value not in visible_views:
             self._data_model.focussedView.value = visible_views[0]
 
-    def _onView(self, view):
+    def _on_focussed_view(self, view):
         """ Called when another focussed view changes.
 
         :param view: (MicroscopeView) The newly focussed view
-        """
-        logging.debug("Changing focus to view %s", view.name.value)
-        layout = self._data_model.viewLayout.value
 
-        self._viewports[0].Parent.Freeze()
+        """
+
+        logging.debug("Changing focus to view %s", view.name.value)
+
+        containing_window = self._viewports[0].Parent
+        containing_window.Freeze()
 
         try:
-            for viewport in self._viewports[:4]:
-                if viewport.microscope_view == view:
-                    viewport.SetFocus(True)
-                    if layout == model.VIEW_LAYOUT_ONE:
-                        viewport.Show()
-                    # Enable/disable ZOOM_FIT tool according to view ability
-                    if self._toolbar:
-                        can_fit = hasattr(viewport.canvas, "fit_view_to_content")
-                        self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
-                else:
-                    viewport.SetFocus(False)
-                    if layout == model.VIEW_LAYOUT_ONE:
-                        viewport.Hide()
+            try:
+                viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
+            except IndexError:
+                logging.exception("No associated ViewPort found for view %s", view)
+                raise
 
-            if layout == model.VIEW_LAYOUT_ONE:
-                self._viewports[0].Parent.Layout()  # resize viewport
+            if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
+                self._show_viewport(containing_window.GetSizer(), viewport)
+                # Enable/disable ZOOM_FIT tool according to view ability
+                if self._toolbar:
+                    can_fit = hasattr(viewport.canvas, "fit_view_to_content")
+                    self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
+            else:
+                for vp in self._viewports:
+                    vp.SetFocus(False)
+                viewport.SetFocus(True)
+
         finally:
-            self._viewports[0].Parent.Thaw()
+            containing_window.Thaw()
 
-    def _onViewLayout(self, layout):
+    def _show_viewport(self, gb, visible_viewport=None):
+        """ Show the given viewport or show the first four in the 2x2 grid if none is given
+
+        :param sizer: wx.GridBagSizer
+        :param viewport: ViewPort
+
+
+        ..note:
+            This method still handles sizers different from the GridBagSizer for backward
+            compatibility reasons. That part of the code should be removed at a future point.
+
+        """
+
+        if isinstance(gb, wx.GridBagSizer):
+
+            # Detach and hide all viewports
+
+            for viewport_sizer_item in gb.GetChildren():
+                viewport = viewport_sizer_item.GetWindow()
+                if viewport:
+                    # If the initial position has not been cached yet...
+                    if not viewport.sizer_pos:
+                        gb.SetEmptyCellSize((0, 0))
+                        viewport.sizer_pos = viewport_sizer_item.GetPos()
+                    viewport.Hide()
+                    # Only clear the focus on the other viewports if a visible one is given
+                    if visible_viewport:
+                        viewport.SetFocus(False)
+                    gb.Detach(viewport)
+
+            # If a visible viewport is given...
+            if visible_viewport in self._viewports:
+                gb.Add(visible_viewport, (0, 0), flag=wx.EXPAND)
+                visible_viewport.Show()
+                visible_viewport.SetFocus(True)
+            else:  # If the 2x2 grid is to be shown...
+
+                # Assign all viewports their initial position
+                for viewport in self._viewports:
+                    gb.Add(viewport, viewport.sizer_pos, flag=wx.EXPAND)
+
+                # Show the first 4 (2x2) viewports
+                for viewport in self._viewports[:4]:
+                    viewport.Show()
+        else:
+            # Assume legacy sizer construction
+
+            if visible_viewport in self._viewports:
+                for viewport in self._viewports:
+                    if visible_viewport == viewport:
+                        viewport.Show()
+                        viewport.SetFocus(True)
+                    else:
+                        viewport.Hide()
+                        viewport.SetFocus(False)
+            else:
+                for viewport in self._viewports[:4]:
+                    viewport.Show()
+                for viewport in self._viewports[4:]:
+                    viewport.Hide()
+
+        gb.Layout()
+
+    def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
 
         This method only manipulates ViewPort, since the only thing it needs to
         change is the visibility of ViewPorts.
+
         """
 
         containing_window = self._viewports[0].Parent
-
         containing_window.Freeze()
 
         try:
             if layout == model.VIEW_LAYOUT_ONE:
-                logging.debug("Showing only one view")
-                for viewport in self._viewports[:4]:
+                logging.debug("Displaying single viewport")
+                for viewport in self._viewports:
                     if viewport.microscope_view == self._data_model.focussedView.value:
-                        viewport.Show()
-                    else:
-                        viewport.Hide()
+                        self._show_viewport(containing_window.GetSizer(), viewport)
+                        break
+                else:
+                    raise ValueError("No foccused view found!")
 
             elif layout == model.VIEW_LAYOUT_22:
-                logging.debug("Showing all views")
-                # We limit the showing of viewports to the first 4, because more
-                # than 4 may be present
-                for viewport in self._viewports[:4]:
-                    viewport.Show()
+                logging.debug("Displaying 2x2 viewport grid")
+                self._show_viewport(containing_window.GetSizer(), None)
 
             elif layout == model.VIEW_LAYOUT_FULLSCREEN:
                 raise NotImplementedError()
             else:
                 raise NotImplementedError()
 
-            containing_window.Layout()  # resize the viewports
         finally:
             containing_window.Thaw()
 
