@@ -119,8 +119,8 @@ Spectra: {
     class: andorcam2.FakeAndorCam2,
     role: ccd,
     init: {device: 0,
-           transpose: [-2, 1], # rotated 90° clockwise
-           image: "single_spot.h5", # only for simulator
+           transpose: [-2, -1], # rotated 90° clockwise
+           image: "andorcam2-fake-clara.tiff", # only for simulator
     },
 }
 
