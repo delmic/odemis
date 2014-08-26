@@ -740,6 +740,7 @@ class ImageTextToggleButton(GenBitmapTextToggleButton):
         else:
             self.faceDnClr = self.GetParent().GetBackgroundColour()
 
+
 class ViewButton(ImageTextToggleButton):
     """ The ViewButton class describes a toggle button that has an image overlay
     that depicts a thumbnail view of one of the view panels.
