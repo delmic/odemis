@@ -19,7 +19,7 @@ PhenomProX: {
                focus: "EBeam focus",
                detector: "SED Phenom",
                stage: "Stage Phenom",
-               camera: "NavCam",
+               navcam: "NavCam",
                navcam-focus: "NavCam focus",
                pressure: "Chamber Phenom",
     }
