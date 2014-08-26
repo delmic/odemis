@@ -206,6 +206,8 @@ class ChamberButtonController(HardwareButtonController):
         if state in self._tooltips:
             self.btn.SetToolTipString(self._tooltips[state])
 
+        self.btn.Refresh()
+
     def _btn_to_va(self):
         """ Return the hardware state associated with the current button toggle state
 
@@ -345,7 +347,7 @@ class SecomStateController(MicroscopeStateController):
 
     def _reset_streams(self):
         """
-        Empty the data of the streams which might have no more meaning after 
+        Empty the data of the streams which might have no more meaning after
           loading a new sample.
         """
         for s in self._tab_data.streams.value:
