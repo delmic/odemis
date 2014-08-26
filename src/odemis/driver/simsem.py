@@ -404,7 +404,7 @@ class Detector(model.Detector):
             elif self.parent._focus:
                 # apply the defocus
                 pos = self.parent._focus.position.value['z']
-                dist = abs(pos) * 1e4
+                dist = abs(pos - self.parent._focus._good_focus) * 1e4
                 sim_img = ndimage.gaussian_filter(sim_img, sigma=dist)
 
             # update fake output metadata
@@ -476,8 +476,9 @@ class EbeamFocus(model.Actuator):
     Just pretends to be able to move Z (instantaneously).
     """
     def __init__(self, name, role, **kwargs):
-        axes_def = {"z": model.Axis(unit="m", range=[-0.3, 0.3])}
-        self._position = {"z": 0}
+        self._good_focus = 0.1
+        axes_def = {"z": model.Axis(unit="m", range=[1e-6, 0.3])}
+        self._position = {"z": self._good_focus}
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
