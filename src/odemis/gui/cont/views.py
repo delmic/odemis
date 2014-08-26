@@ -499,6 +499,13 @@ class ViewController(object):
                 # Show the first 4 (2x2) viewports
                 for viewport in self._viewports[:4]:
                     viewport.Show()
+
+                # If the viewport that currently has the focus is not one in the 2x2 grid, we
+                # move the focus to the top left viewport by default
+                focussed_view = self._data_model.focussedView.value
+                if not focussed_view in [v.microscope_view for v in self._viewports[:4]]:
+                    self._viewports[0].SetFocus(True)
+
         else:
             # Assume legacy sizer construction
 
