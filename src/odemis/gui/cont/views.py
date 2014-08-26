@@ -657,7 +657,7 @@ class ViewSelector(object):
             self._subscriptions[btn] = {"thumb": on_thumbnail}
 
             # also subscribe for updating the 2x2 button
-            vp.microscope_view.thumbnail.subscribe(self._update22Thumbnail)
+            vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
             def on_name(name, lbl=lbl):  # save lbl in scope
                 lbl.SetLabel(name)
@@ -690,7 +690,7 @@ class ViewSelector(object):
                 b.SetToggle(False)
 
     @call_after
-    def _update22Thumbnail(self, im):
+    def _update_22_thumbnail(self, im):
         """
         Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
         the first button.
@@ -700,7 +700,7 @@ class ViewSelector(object):
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
         btn_all = [b for b, (vp, _) in self.buttons.items() if vp is None][0]
-        border_width = 2 # px
+        border_width = 2  # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
                     max(1, (size[1] - border_width) // 2))
@@ -712,7 +712,7 @@ class ViewSelector(object):
         i = 0
 
         for vp, _ in self.buttons.values():
-            if vp is None: # 2x2 layout
+            if vp is None:  # 2x2 layout
                 continue
 
             im = vp.microscope_view.thumbnail.value
@@ -741,7 +741,7 @@ class ViewSelector(object):
             else:
                 # black image
                 # Should never happen
-                pass #sim = wx.EmptyImage(*size_sub)
+                pass  #sim = wx.EmptyImage(*size_sub)
 
             i += 1
 

@@ -262,10 +262,6 @@ class SecomStreamsTab(Tab):
 
         buttons = collections.OrderedDict([
             (
-                self.main_frame.btn_secom_overview,
-                (self.main_frame.vp_overview_sem, self.main_frame.lbl_secom_overview)
-            ),
-            (
                 self.main_frame.btn_secom_view_all,
                 (None, self.main_frame.lbl_secom_view_all)
             ),
@@ -283,6 +279,10 @@ class SecomStreamsTab(Tab):
             (
                 self.main_frame.btn_secom_view_br,
                 (self.main_frame.vp_secom_br, self.main_frame.lbl_secom_view_br)
+            ),
+            (
+                self.main_frame.btn_secom_overview,
+                (self.main_frame.vp_overview_sem, self.main_frame.lbl_secom_overview)
             ),
         ])
 
