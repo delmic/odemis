@@ -60,6 +60,8 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_secom_align = xrc.XRCCTRL(self, "btn_tab_secom_align")
         self.btn_tab_sparc_align = xrc.XRCCTRL(self, "btn_tab_sparc_align")
         self.pnl_tab_secom_streams = xrc.XRCCTRL(self, "pnl_tab_secom_streams")
+        self.lbl_secom_overview = xrc.XRCCTRL(self, "lbl_secom_overview")
+        self.btn_secom_overview = xrc.XRCCTRL(self, "btn_secom_overview")
         self.secom_toolbar = xrc.XRCCTRL(self, "secom_toolbar")
         self.lbl_secom_view_all = xrc.XRCCTRL(self, "lbl_secom_view_all")
         self.btn_secom_view_all = xrc.XRCCTRL(self, "btn_secom_view_all")
@@ -543,20 +545,54 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="ToolBar" name="secom_toolbar">
-                      <style>wxVERTICAL</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALIGN_RIGHT</flag>
-                  </object>
-                  <object class="spacer">
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
                     <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_secom_overview">
+                              <label>view</label>
+                              <fg>#BFBFBF</fg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxBOTTOM</flag>
+                            <border>2</border>
+                          </object>
+                          <orient>wxVERTICAL</orient>
+                        </object>
+                        <flag>wxTOP|wxRIGHT|wxALIGN_RIGHT</flag>
+                        <border>18</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ViewButton" name="btn_secom_overview">
+                          <bitmap>img_preview_block_png</bitmap>
+                          <hover>img_preview_block_a_png</hover>
+                          <selected>img_preview_block_a_png</selected>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                        <border>6</border>
+                      </object>
+                      <object class="spacer">
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ToolBar" name="secom_toolbar">
+                          <style>wxVERTICAL</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                      <object class="spacer">
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
                       <object class="sizeritem">
                         <object class="wxBoxSizer">
                           <object class="sizeritem">
@@ -708,7 +744,7 @@ def __init_resources():
                       </object>
                       <orient>wxVERTICAL</orient>
                     </object>
-                    <option>0</option>
+                    <option>1</option>
                     <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>44</border>
                   </object>

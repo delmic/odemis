@@ -459,7 +459,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if recenter is None:
             # recenter only if there is no stage attached
             recenter = not hasattr(self.microscope_view, "stage_pos")
-
+        print self.Size
         super(DblMicroscopeCanvas, self).fit_to_content(recenter=recenter)
 
         # this will indirectly call _on_view_mpp(), but not have any additional effect

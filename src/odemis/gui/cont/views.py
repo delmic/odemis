@@ -32,7 +32,7 @@ from odemis.gui.util import call_after
 import wx
 
 import odemis.gui.util.widgets as util
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model import VigilantAttributeBase
 
 
 class ViewController(object):
@@ -275,8 +275,6 @@ class ViewController(object):
             if len(self._viewports) == 5:
                 vpv[self._viewports[4]] = {
                     "name": "Overview",
-                    # "stage": None,
-                    # "focus": None,
                     "stream_classes": (RGBCameraStream, BrightfieldStream),
                 }
 
@@ -284,7 +282,7 @@ class ViewController(object):
 
             # Track the mpp of the SEM view in order to set the magnification
             if (self._main_data_model.ebeam and
-                isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
+                    isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
                 logging.info("Tracking mpp value of '%s'", self._viewports[0])
                 self._viewports[0].track_view_mpp()  # = Live SEM viewport
 
@@ -347,7 +345,6 @@ class ViewController(object):
         a 2x2 display, and that hidden_idx is outside this 2x2 layout and
         invisible.
         """
-
         # Small shorthand local variable
         vp = self._viewports
 
@@ -411,9 +408,8 @@ class ViewController(object):
         parent_sizer.Layout()
 
     def _on_visible_views(self, visible_views):
-        """ This method is called when the visible views in the data model
-        change.
-        """
+        """ This method is called when the visible views in the data model change """
+
         logging.debug("Visible view change detected")
         # Test if all provided views are known
         for view in visible_views:
@@ -584,7 +580,7 @@ class ViewController(object):
                 pviews.append(v)
 
         if fv in pviews:
-            return # nothing to do
+            return  # nothing to do
         if pviews:
             self._data_model.focussedView.value = pviews[0]
             return
@@ -646,32 +642,32 @@ class ViewSelector(object):
 
         # subscribe to change of name
         for btn, (vp, lbl) in self.buttons.items():
-            if vp is None: # 2x2 layout
-                lbl.SetLabel("Overview")
+            if vp is None:  # 2x2 layout
+                lbl.SetLabel("All")
                 continue
 
             @call_after
-            def onThumbnail(im, btn=btn): # save btn in scope
+            def on_thumbnail(im, btn=btn):  # save btn in scope
                 # import traceback
                 # traceback.print_stack()
                 btn.set_overlay_image(im)
 
-            vp.microscope_view.thumbnail.subscribe(onThumbnail, init=True)
+            vp.microscope_view.thumbnail.subscribe(on_thumbnail, init=True)
             # keep ref of the functions so that they are not dropped
-            self._subscriptions[btn] = {"thumb" : onThumbnail}
+            self._subscriptions[btn] = {"thumb": on_thumbnail}
 
             # also subscribe for updating the 2x2 button
             vp.microscope_view.thumbnail.subscribe(self._update22Thumbnail)
 
-            def onName(name, lbl=lbl): # save lbl in scope
+            def on_name(name, lbl=lbl):  # save lbl in scope
                 lbl.SetLabel(name)
 
             btn.Freeze()
-            vp.microscope_view.name.subscribe(onName, init=True)
+            vp.microscope_view.name.subscribe(on_name, init=True)
             btn.Parent.Layout()
             btn.Thaw()
 
-            self._subscriptions[btn]["label"] = onName
+            self._subscriptions[btn]["label"] = on_name
 
     def toggleButtonForView(self, microscope_view):
         """
@@ -773,7 +769,6 @@ class ViewSelector(object):
 
                 for b, (vp, lbl) in self.buttons.items():
                     if vp == old_viewport:
-                        # pylint: disable=E1103
                         # Remove the subscription of the old viewport
                         old_viewport.microscope_view.thumbnail.unsubscribe(
                                                 self._subscriptions[b]["thumb"])

@@ -533,9 +533,8 @@ class SecomStateController(MicroscopeStateController):
         # to final pressure
 
     def _on_overview_image(self, image):
-        """
-        Called once the overview image has been acquired
-        """
+        """ Called once the overview image has been acquired """
+
         logging.debug("New overview image acquired")
         # Stop the stream (the image is immediately displayed in the view)
         try:

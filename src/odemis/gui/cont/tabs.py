@@ -261,20 +261,29 @@ class SecomStreamsTab(Tab):
         )
 
         buttons = collections.OrderedDict([
-            (self.main_frame.btn_secom_view_all,
-             (None, self.main_frame.lbl_secom_view_all)),
-            (self.main_frame.btn_secom_view_tl,
-             (self.main_frame.vp_secom_tl,
-              self.main_frame.lbl_secom_view_tl)),
-            (self.main_frame.btn_secom_view_tr,
-             (self.main_frame.vp_secom_tr,
-              self.main_frame.lbl_secom_view_tr)),
-            (self.main_frame.btn_secom_view_bl,
-             (self.main_frame.vp_secom_bl,
-              self.main_frame.lbl_secom_view_bl)),
-            (self.main_frame.btn_secom_view_br,
-             (self.main_frame.vp_secom_br,
-              self.main_frame.lbl_secom_view_br))
+            (
+                self.main_frame.btn_secom_overview,
+                (self.main_frame.vp_overview_sem, self.main_frame.lbl_secom_overview)
+            ),
+            (
+                self.main_frame.btn_secom_view_all,
+                (None, self.main_frame.lbl_secom_view_all)
+            ),
+            (
+                self.main_frame.btn_secom_view_tl,
+                (self.main_frame.vp_secom_tl, self.main_frame.lbl_secom_view_tl)
+            ),
+            (
+                self.main_frame.btn_secom_view_tr,
+                (self.main_frame.vp_secom_tr, self.main_frame.lbl_secom_view_tr)),
+            (
+                self.main_frame.btn_secom_view_bl,
+                (self.main_frame.vp_secom_bl, self.main_frame.lbl_secom_view_bl)
+            ),
+            (
+                self.main_frame.btn_secom_view_br,
+                (self.main_frame.vp_secom_br, self.main_frame.lbl_secom_view_br)
+            ),
         ])
 
         self._view_selector = viewcont.ViewSelector(
@@ -1291,9 +1300,8 @@ class AnalysisTab(Tab):
 
     @guiutil.call_after
     def _onTool(self, tool):
-        """
-        Called when the tool (mode) is changed
-        """
+        """ Called when the tool (mode) is changed """
+
         # Reset the viewports when the spot tool is not selected
         # Doing it this way, causes some unnecessary calls to the reset method
         # but it cannot be avoided. Subscribing to the tool VA will only
