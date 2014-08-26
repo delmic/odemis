@@ -556,7 +556,7 @@ class View(object):
         self.name = model.StringVA(name)
 
         # a thumbnail version of what is displayed
-        self.thumbnail = VigilantAttribute(None) # contains a wx.Image
+        self.thumbnail = VigilantAttribute(None)  # contains a wx.Image
 
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
@@ -570,7 +570,7 @@ class View(object):
         return "{}".format(self.name.value)
 
 
-MAX_SAFE_MOVE_DISTANCE = 1000e-3 # 100 cm
+MAX_SAFE_MOVE_DISTANCE = 1000e-3  # 100 cm
 
 
 class MicroscopeView(View):

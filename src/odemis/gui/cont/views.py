@@ -32,7 +32,7 @@ from odemis.gui.util import call_after
 import wx
 
 import odemis.gui.util.widgets as util
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model import VigilantAttributeBase
 
 
 class ViewController(object):
@@ -275,8 +275,6 @@ class ViewController(object):
             if len(self._viewports) == 5:
                 vpv[self._viewports[4]] = {
                     "name": "Overview",
-                    # "stage": None,
-                    # "focus": None,
                     "stream_classes": (RGBCameraStream, BrightfieldStream),
                 }
 
@@ -284,7 +282,7 @@ class ViewController(object):
 
             # Track the mpp of the SEM view in order to set the magnification
             if (self._main_data_model.ebeam and
-                isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
+                    isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
                 logging.info("Tracking mpp value of '%s'", self._viewports[0])
                 self._viewports[0].track_view_mpp()  # = Live SEM viewport
 
@@ -347,7 +345,6 @@ class ViewController(object):
         a 2x2 display, and that hidden_idx is outside this 2x2 layout and
         invisible.
         """
-
         # Small shorthand local variable
         vp = self._viewports
 
@@ -411,9 +408,8 @@ class ViewController(object):
         parent_sizer.Layout()
 
     def _on_visible_views(self, visible_views):
-        """ This method is called when the visible views in the data model
-        change.
-        """
+        """ This method is called when the visible views in the data model change """
+
         logging.debug("Visible view change detected")
         # Test if all provided views are known
         for view in visible_views:
@@ -503,6 +499,13 @@ class ViewController(object):
                 # Show the first 4 (2x2) viewports
                 for viewport in self._viewports[:4]:
                     viewport.Show()
+
+                # If the viewport that currently has the focus is not one in the 2x2 grid, we
+                # move the focus to the top left viewport by default
+                focussed_view = self._data_model.focussedView.value
+                if not focussed_view in [v.microscope_view for v in self._viewports[:4]]:
+                    self._viewports[0].SetFocus(True)
+
         else:
             # Assume legacy sizer construction
 
@@ -584,7 +587,7 @@ class ViewController(object):
                 pviews.append(v)
 
         if fv in pviews:
-            return # nothing to do
+            return  # nothing to do
         if pviews:
             self._data_model.focussedView.value = pviews[0]
             return
@@ -646,32 +649,32 @@ class ViewSelector(object):
 
         # subscribe to change of name
         for btn, (vp, lbl) in self.buttons.items():
-            if vp is None: # 2x2 layout
-                lbl.SetLabel("Overview")
+            if vp is None:  # 2x2 layout
+                lbl.SetLabel("All")
                 continue
 
             @call_after
-            def onThumbnail(im, btn=btn): # save btn in scope
+            def on_thumbnail(im, btn=btn):  # save btn in scope
                 # import traceback
                 # traceback.print_stack()
                 btn.set_overlay_image(im)
 
-            vp.microscope_view.thumbnail.subscribe(onThumbnail, init=True)
+            vp.microscope_view.thumbnail.subscribe(on_thumbnail, init=True)
             # keep ref of the functions so that they are not dropped
-            self._subscriptions[btn] = {"thumb" : onThumbnail}
+            self._subscriptions[btn] = {"thumb": on_thumbnail}
 
             # also subscribe for updating the 2x2 button
-            vp.microscope_view.thumbnail.subscribe(self._update22Thumbnail)
+            vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
-            def onName(name, lbl=lbl): # save lbl in scope
+            def on_name(name, lbl=lbl):  # save lbl in scope
                 lbl.SetLabel(name)
 
             btn.Freeze()
-            vp.microscope_view.name.subscribe(onName, init=True)
+            vp.microscope_view.name.subscribe(on_name, init=True)
             btn.Parent.Layout()
             btn.Thaw()
 
-            self._subscriptions[btn]["label"] = onName
+            self._subscriptions[btn]["label"] = on_name
 
     def toggleButtonForView(self, microscope_view):
         """
@@ -694,7 +697,7 @@ class ViewSelector(object):
                 b.SetToggle(False)
 
     @call_after
-    def _update22Thumbnail(self, im):
+    def _update_22_thumbnail(self, im):
         """
         Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
         the first button.
@@ -704,7 +707,7 @@ class ViewSelector(object):
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
         btn_all = [b for b, (vp, _) in self.buttons.items() if vp is None][0]
-        border_width = 2 # px
+        border_width = 2  # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
                     max(1, (size[1] - border_width) // 2))
@@ -716,7 +719,7 @@ class ViewSelector(object):
         i = 0
 
         for vp, _ in self.buttons.values():
-            if vp is None: # 2x2 layout
+            if vp is None:  # 2x2 layout
                 continue
 
             im = vp.microscope_view.thumbnail.value
@@ -745,7 +748,7 @@ class ViewSelector(object):
             else:
                 # black image
                 # Should never happen
-                pass #sim = wx.EmptyImage(*size_sub)
+                pass  #sim = wx.EmptyImage(*size_sub)
 
             i += 1
 
@@ -773,7 +776,6 @@ class ViewSelector(object):
 
                 for b, (vp, lbl) in self.buttons.items():
                     if vp == old_viewport:
-                        # pylint: disable=E1103
                         # Remove the subscription of the old viewport
                         old_viewport.microscope_view.thumbnail.unsubscribe(
                                                 self._subscriptions[b]["thumb"])

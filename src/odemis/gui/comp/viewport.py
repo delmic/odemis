@@ -212,15 +212,18 @@ class OverviewVierport(ViewPort):
 
     def setView(self, microscope_view, tab_data):
         """ Attach the MicroscopeView associated with the overview """
-        # Hide the cross hair overlay
-        microscope_view.show_crosshair.value = False
-        self.canvas.setView(microscope_view, tab_data)
 
+        self._microscope_view = microscope_view
         self.tab_data = tab_data
 
         # Track chamber state if possible
         if tab_data.main.chamber:
             tab_data.main.chamberState.subscribe(self._on_chamber_state_change)
+
+        # Hide the cross hair overlay
+        microscope_view.show_crosshair.value = False
+
+        self.canvas.setView(microscope_view, tab_data)
 
     def _on_chamber_state_change(self, chamber_state):
         """ Watch position changes in the PointSelectOverlay if the chamber is ready """
