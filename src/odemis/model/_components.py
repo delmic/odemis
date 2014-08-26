@@ -809,6 +809,7 @@ class CombinedActuator(Actuator):
         self._axis_to_child = {} # axis name => (Actuator, axis name)
         self._position = {}
         self._speed = {}
+        self._referenced = {}
         axes = {}
         for axis, child in children.items():
             #self._children.add(child)
@@ -823,8 +824,12 @@ class CombinedActuator(Actuator):
                 raise ValueError("Child %s is not an actuator." % str(child))
             axes[axis] = child.axes[axes_map[axis]]
             self._position[axis] = child.position.value[axes_map[axis]]
-            if isinstance(child.speed, _vattributes.VigilantAttributeBase):
+            if (hasattr(child, "speed") and
+                isinstance(child.speed, _vattributes.VigilantAttributeBase)):
                 self._speed[axis] = child.speed.value[axes_map[axis]]
+            if (hasattr(child, "referenced") and
+                isinstance(child.referenced, _vattributes.VigilantAttributeBase)):
+                self._referenced[axis] = child.referenced.value[axes_map[axis]]
 
         # TODO: test/finish conversion to Axis
         # this set ._axes and ._children
@@ -861,7 +866,8 @@ class CombinedActuator(Actuator):
         # TODO: change the speed range to a dict of speed ranges
         self.speed = _vattributes.MultiSpeedVA(self._speed, [0., 10.], setter=self._setSpeed)
         for c, ax in children_axes.items():
-            if not isinstance(c.speed, _vattributes.VigilantAttributeBase):
+            if not (hasattr(child, "speed") and
+                    isinstance(c.speed, _vattributes.VigilantAttributeBase)):
                 continue
             def update_speed_per_child(value, ax=ax):
                 for a in ax:
@@ -872,6 +878,22 @@ class CombinedActuator(Actuator):
                 self._updateSpeed()
             c.speed.subscribe(update_speed_per_child)
             self._subfun.append(update_speed_per_child)
+
+        # whether the axes are referenced
+        self.referenced = _vattributes.VigilantAttribute(self._referenced, readonly=True)
+        for c, ax in children_axes.items():
+            if not (hasattr(child, "referenced") and
+                    isinstance(c.referenced, _vattributes.VigilantAttributeBase)):
+                continue
+            def update_ref_per_child(value, ax=ax):
+                for a in ax:
+                    try:
+                        self._referenced[a] = value[axes_map[a]]
+                    except KeyError:
+                        logging.error("Child %s is not reporting reference of axis %s", c.name, a)
+                self._updateReferenced()
+            c.referenced.subscribe(update_ref_per_child)
+            self._subfun.append(update_ref_per_child)
 
         #TODO hwVersion swVersion
 
@@ -892,6 +914,14 @@ class CombinedActuator(Actuator):
         # we must not call the setter, so write directly the raw value
         self.speed._value = self._speed
         self.speed.notify(self._speed)
+
+    def _updateReferenced(self):
+        """
+        update the referenced VA
+        """
+        # it's read-only, so we change it via _value
+        self.referenced._value = self._referenced
+        self.referenced.notify(self._referenced)
 
     def _setSpeed(self, value):
         """
@@ -942,11 +972,9 @@ class CombinedActuator(Actuator):
 
     @isasync
     def moveAbs(self, pos):
-        u"""
+        """
         Move the stage to the defined position in m for each axis given.
         pos dict(string-> float): name of the axis and position in m
-        sync (boolean): whether the moves should be done asynchronously or the
-        method should return only when all the moves are over (sync=True)
         """
         if not pos:
             return _futures.InstantaneousFuture()
@@ -969,6 +997,30 @@ class CombinedActuator(Actuator):
         else:
             #TODO return future composed of multiple futures
             return futures[0]
+
+    @isasync
+    def reference(self, axes):
+        if not axes:
+            return _futures.InstantaneousFuture()
+        self._checkReference(axes)
+
+        child_to_move = collections.defaultdict(set) # child -> reference argument
+        for axis in axes:
+            child, child_axis = self._axis_to_child[axis]
+            child_to_move[child].add(child_axis)
+            logging.debug("Referencing axis %s (-> %s)", axis, child_axis)
+
+        futures = []
+        for child, a in child_to_move.items():
+            f = child.reference(a)
+            futures.append(f)
+
+        if len(futures) == 1:
+            return futures[0]
+        else:
+            # TODO return future composed of multiple futures
+            return futures[0]
+    reference.__doc__ = Actuator.reference.__doc__
 
     def stop(self, axes=None):
         """

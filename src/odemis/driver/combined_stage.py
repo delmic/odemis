@@ -39,10 +39,6 @@ class CombinedStage(model.Actuator):
         """
         children (dict str -> actuator): names to ConvertStage and SEM sample stage
         """
-        self._metadata = {model.MD_HW_NAME: "CombinedStage"}
-        axes_def = {}
-        self._position = {}
-
         # SEM stage
         self._master = None
         # Optical stage
@@ -53,15 +49,28 @@ class CombinedStage(model.Actuator):
 
             # Check if children are actuators
             if not isinstance(child, model.ComponentBase):
-                raise ValueError("Child %s is not a component." % str(child))
+                raise ValueError("Child %s is not a component." % child)
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
-                raise ValueError("Child %s is not an actuator." % str(child))
+                raise ValueError("Child %s is not an actuator." % child.name)
             if type == "slave":
                 self._slave = child
             elif type == "master":
                 self._master = child
             else:
-                raise IOError("Child given to CombinedStage is not a stage.")
+                raise ValueError("Child given to CombinedStage must be either master or slave.")
+
+        if self._master is None:
+            raise ValueError("CombinedStage needs a master child")
+        if self._slave is None:
+            raise ValueError("CombinedStage needs a slave child")
+
+        # TODO: limit the range to the minimum of master/slave?
+        axes_def = {"x": self._master.axes["x"],
+                    "y": self._master.axes["y"]}
+
+        model.Actuator.__init__(self, name, role, axes=axes_def, children=children,
+                                **kwargs)
+        self._metadata = {model.MD_HW_NAME: "CombinedStage"}
 
         self._stage_conv = ConvertStage("converter-xy", "align",
                             children={"aligner": self._slave},
@@ -70,28 +79,30 @@ class CombinedStage(model.Actuator):
                             rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
                             offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
 
-        rng = [-0.5, 0.5]
-        axes_def["x"] = model.Axis(unit="m", range=rng)
-        axes_def["y"] = model.Axis(unit="m", range=rng)
-
-        # Just initialization, actual position updated once stage is moved
-        self._position["x"] = 0
-        self._position["y"] = 0
-
-        model.Actuator.__init__(self, name, role, axes=axes_def, children=children
-                                , **kwargs)
-
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
+        self._position = {}
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
                                     self._applyInversionAbs(self._position),
                                     unit="m", readonly=True)
+        self._updatePosition()
+        # TODO: listen to master position to update the position? => but
+        # then it might get updated too early, before the slave has finished
+        # moving.
+
+        self.referenced = model.VigilantAttribute({}, readonly=True)
+        # listen to changes from children
+        for c in self.children:
+            if (hasattr(c, "referenced") and
+                isinstance(c.referenced, model.VigilantAttributeBase)):
+                c.referenced.subscribe(self._onChildReferenced)
+        self._updateReferenced()
 
     def updateMetadata(self, md):
         self._metadata.update(md)
-        # Re-initialiaze ConvertStage with the new transformation values
+        # Re-initialize ConvertStage with the new transformation values
         # Called after every sample holder insertion
         self._stage_conv = ConvertStage("converter-xy", "align",
                     children={"aligner": self._slave},
@@ -99,9 +110,6 @@ class CombinedStage(model.Actuator):
                     scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                     rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
                     offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
-
-    def getMetadata(self):
-        return self._metadata
 
     def _updatePosition(self):
         """
@@ -115,6 +123,28 @@ class CombinedStage(model.Actuator):
         self.position._value = self._applyInversionAbs(self._position)
         self.position.notify(self.position.value)
 
+    def _onChildReferenced(self, ref):
+        # ref can be from any child, so we don't use it
+        self._updateReferenced()
+
+    def _updateReferenced(self):
+        """
+        update the referenced VA
+        """
+        ref = {} # str (axes name) -> boolean (is referenced)
+        # consider an axis referenced iff it's referenced in every children
+        for c in self.children:
+            if not (hasattr(c, "referenced") and
+                    isinstance(c.referenced, model.VigilantAttributeBase)):
+                continue
+            cref = c.referenced.value
+            for a in (set(self.axes.keys()) & set(cref.keys())):
+                ref[a] = ref.get(a, True) and cref[a]
+
+        # it's read-only, so we change it via _value
+        self.referenced._value = ref
+        self.referenced.notify(ref)
+
     def _doMoveAbs(self, pos):
         """
         move to the position 
@@ -125,7 +155,10 @@ class CombinedStage(model.Actuator):
         absMove = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
         # Move SEM sample stage
         f = self._master.moveAbs({"x":absMove[0], "y":absMove[1]})
+        # TODO: handle exception (=> still try to move to the same position as master)
         f.result()
+        # TODO: Is it really needed to read back the position? It'd save time
+        # to move the slave stage simultaneously
         abs_pos = self._master.position.value
         # Move objective lens
         f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
@@ -172,19 +205,37 @@ class CombinedStage(model.Actuator):
     def stop(self, axes=None):
         # Empty the queue for the given axes
         self._executor.cancel()
+        self._master.stop(axes)
         self._stage_conv.stop(axes)
-        logging.warning("Stopping all axes: %s", ", ".join(self.axes))
+        logging.warning("Stopping all axes: %s", ", ".join(axes or self.axes))
 
-    def _doReference(self):
-        axes = set(["x", "y"])
-        # f = self._master.reference(axes)
-        # f.result()
-        f = self._stage_conv.reference(axes)
+    def _doReference(self, axes):
+        fs = []
+        for c in self.children:
+            # only do the referencing for the stages that support it
+            if not (hasattr(c, "referenced") and
+                    isinstance(c.referenced, model.VigilantAttributeBase)):
+                continue
+            ax = axes & set(c.referenced.value.keys())
+            fs.append(c.reference(ax))
+
+        # wait for all referencing to be over
+        for f in fs:
+            f.result()
+
+        # Re-synchronize the 2 stages by moving the slave where the master is
+        abs_pos = self._master.position.value
+        f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
         f.result()
+
+        self._updatePosition()
 
     @isasync
     def reference(self, axes):
-        return self._executor.submit(self._doReference)
+        if not axes:
+            return model.InstantaneousFuture()
+        self._checkReference(axes)
+        return self._executor.submit(self._doReference, axes)
 
     def terminate(self):
         if self._executor:

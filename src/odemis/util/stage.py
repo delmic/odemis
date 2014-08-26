@@ -280,3 +280,9 @@ class AntiBacklashStage(model.Actuator):
     def stop(self, axes=None):
         # This is normally never used (child is directly stopped)
         self._child.stop()
+
+    @isasync
+    def reference(self, axes):
+        # TODO, implement reference for objective lens
+        f = self._child.reference(axes)
+        return f

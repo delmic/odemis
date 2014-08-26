@@ -39,7 +39,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 ODEMISD_CMD = ["/usr/bin/python2", os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
 ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-SECOM_LENS_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"  # 7x7
+SECOM_LENS_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"
 
 class TestCombinedStage(unittest.TestCase):
     backend_was_running = False
@@ -99,11 +99,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-1e-06, "y":-2e-06})
+        self.assertPosAlmostEqual(align.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -114,11 +114,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-1e-05, "y":-2e-05})
+        self.assertPosAlmostEqual(align.position.value, {"x":-1e-05, "y":-2e-05})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -129,11 +129,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":2e-06, "y":-1e-06})
+        self.assertPosAlmostEqual(align.position.value, {"x":2e-06, "y":-1e-06})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -144,11 +144,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(align.position.value, {"x":1e-06, "y":2e-06})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -159,11 +159,11 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":0, "y":0})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":1e-05, "y":2e-05})
+        self.assertPosAlmostEqual(align.position.value, {"x":1e-05, "y":2e-05})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -184,7 +184,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-1e-06, "y":-2e-06})
+        self.assertPosAlmostEqual(align.position.value, {"x":-1e-06, "y":-2e-06})
 
         # scaling
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -193,7 +193,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":-1e-05, "y":-2e-05})
+        self.assertPosAlmostEqual(align.position.value, {"x":-1e-05, "y":-2e-05})
 
         # rotation
         stage.updateMetadata({model.MD_ROTATION_COR: 1.57})
@@ -202,7 +202,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":2e-06, "y":-1e-06})
+        self.assertPosAlmostEqual(align.position.value, {"x":2e-06, "y":-1e-06})
 
         # offset
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -211,7 +211,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
 
         # offset + scaling
         stage.updateMetadata({model.MD_ROTATION_COR: 0})
@@ -220,7 +220,7 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":1e-06, "y":2e-06})
         f.result()
         self.assertEqual(sem_stage.position.value, {"x":1e-06, "y":2e-06})
-        self.assertPosAlmostEqual(self, align.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(align.position.value, {"x":0, "y":0})
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
@@ -232,7 +232,7 @@ class TestCombinedStage(unittest.TestCase):
         self.left = left
         self.updates += 1
 
-    def assertPosAlmostEqual(self, test_case, actual, expected, *args, **kwargs):
+    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
         """
         Asserts that two stage positions have almost equal coordinates.
         """
@@ -240,9 +240,34 @@ class TestCombinedStage(unittest.TestCase):
             if expected.viewkeys() != actual.viewkeys():
                 raise AssertionError("Dimensions of coordinates do not match")
             for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
-                test_case.assertAlmostEqual(actual[dim_act], expected[dim_exp])
+                self.assertAlmostEqual(actual[dim_act], expected[dim_exp])
         except AssertionError as exc:
             raise AssertionError(exc.message)
+
+    def test_reference(self):
+        """
+        Try referencing each axis
+        """
+
+        # first try one by one
+        axes = set(self.stage.referenced.value.keys())
+        for a in axes:
+            self.stage.moveRel({a:-1e-3}) # move a bit to make it a bit harder
+            f = self.stage.reference({a})
+            f.result()
+            self.assertTrue(self.stage.referenced.value[a])
+            # The following is not true if the master is not referenciable, in
+            # which case the final position will be the same as the original
+            # position
+            # self.assertAlmostEqual(self.stage.position.value[a], 0)
+
+        # try all axes simultaneously
+        mv = dict((a, 1e-3) for a in axes)
+        self.stage.moveRel(mv)
+        f = self.stage.reference(axes)
+        f.result()
+        for a in axes:
+            self.assertTrue(self.stage.referenced.value[a])
 
 if __name__ == "__main__":
     unittest.main()
