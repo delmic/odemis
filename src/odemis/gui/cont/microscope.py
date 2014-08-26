@@ -33,6 +33,14 @@ import wx
 import odemis.gui.img.data as imgdata
 import odemis.util.units as units
 
+# Sample holder types in the Delphi, as defined by Phenom World
+PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
+# FIXME: need to find out the real type number
+PHENOM_SH_TYPE_OPTICAL = 1  # sample holder for the Delphi, containing a lens
+
+DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
+DELPHI_OVERVIEW_FOCUS = {"z":-0.017885} # good focus position for overview
+
 
 class MicroscopeStateController(object):
     """
@@ -413,7 +421,10 @@ class SecomStateController(MicroscopeStateController):
                 # TODO: check if we already are in overview state ?
                 # _start_overview_acquisition() will take care of going further
                 f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-                f.add_done_callback(self._start_overview_acquisition)
+                if self._main_data.role == "delphi":
+                    f.add_done_callback(self._delphi_prepare_stage)
+                else:
+                    f.add_done_callback(self._start_overview_acquisition)
             else:
                 f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
@@ -476,6 +487,45 @@ class SecomStateController(MicroscopeStateController):
             # This can happen at initialisation if the chamber pressure is changing
             logging.info("Pressure position unknown: %s", currentp)
             #self._main_data.chamberState.value = CHAMBER_UNKNOWN
+
+    def _delphi_prepare_stage(self, unused):
+        """
+        Check the sample holder and moves the stage to the default position if
+        it's a delphi sample holder (= with a lens and a stage)
+        Should be called in Overview (navcam) position
+        """
+        # TODO: just subscribe to the change? So we could detect a new sample
+        # holder even before it's in overview position?
+        try:
+            shid, sht = self._main_data.chamber.sampleHolder.value
+        except Exception:
+            # for simulator
+            logging.info("Failed to find sampleholder id, will assume it's fine")
+            shid, sht = 1, PHENOM_SH_TYPE_OPTICAL
+        logging.debug("Detected sample holder type %d, id %d", sht, shid)
+
+        # TODO: look in the config file if the sample holder is known, or needs
+        # first-time calibration (and ask the user to continue), and otherwise
+        # update the metadata
+
+        # Move the focus to a good position
+        self._main_data.stage.moveAbs(DELPHI_OVERVIEW_FOCUS)
+        # Move to stage to center to be at a good position in overview
+        f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
+
+        if sht == PHENOM_SH_TYPE_OPTICAL:
+            f.result() # to be sure referencing doesn't cancel the move
+            # Reference the (optical) stage
+            f = self._main_data.stage.reference({"x", "y"})
+            # TODO: shall we also reference the optical focus? It'd be handy only
+            # if the absolute position is used.
+
+        # continue business as usual
+        f.add_done_callback(self._start_overview_acquisition)
+
+
+    # TODO: move the optical stage of the delphi to 0,0 when ejecting the sample,
+    # so that the referencing will be fast next time.
 
     def _start_overview_acquisition(self, unused=None):
         logging.debug("Starting overview acquisition")
