@@ -556,7 +556,7 @@ class View(object):
         self.name = model.StringVA(name)
 
         # a thumbnail version of what is displayed
-        self.thumbnail = VigilantAttribute(None) # contains a wx.Image
+        self.thumbnail = VigilantAttribute(None)  # contains a wx.Image
 
         # Last time the image of the view was changed. It's actually mostly
         # a trick to allow other parts of the GUI to know when the (theoretical)
@@ -570,7 +570,7 @@ class View(object):
         return "{}".format(self.name.value)
 
 
-MAX_SAFE_MOVE_DISTANCE = 1000e-3 # 100 cm
+MAX_SAFE_MOVE_DISTANCE = 1000e-3  # 100 cm
 
 
 class MicroscopeView(View):
@@ -651,10 +651,16 @@ class MicroscopeView(View):
 
     def _moveFocus(self):
         time_last_move = 0
+        axis = self.focus.axes["z"]
+        try:
+            rng = axis.range
+        except AttributeError:
+            rng = None
         try:
             while True:
                 # wait until there is something to do
                 shift = self._focus_queue.get()
+                pos = self.focus.position.value["z"]
 
                 # rate limit to 20 Hz
                 sleept = time_last_move + 0.05 - time.time()
@@ -668,8 +674,18 @@ class MicroscopeView(View):
                         shift += self._focus_queue.get(block=False)
                 except Queue.Empty:
                     pass
+                logging.debug("Moving focus by %f μm", shift * 1e6)
 
-                logging.error("Moving focus by %f μm", shift * 1e6)
+                # clip to the range
+                if rng:
+                    new_pos = pos + shift
+                    new_pos = max(rng[0], min(new_pos, rng[1]))
+                    req_shift = shift
+                    shift = new_pos - pos
+                    if abs(shift - req_shift) > 1e-9:
+                        logging.info("Restricting focus move to %f µm as it reached the end",
+                                     shift * 1e6)
+
                 f = self.focus.moveRel({"z": shift})
                 time_last_move = time.time()
                 # wait until it's finished so that we don't accumulate requests,

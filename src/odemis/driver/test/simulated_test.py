@@ -155,6 +155,33 @@ class ActuatorTest(object):
 #            self.fail("Speed not consistent: ratio of " + str(ratio) +
 #                         "instead of " + str(expected_ratio) + ".")
 
+
+    def test_reference(self):
+        """
+        Try referencing each axis
+        """
+
+        if not hasattr(self.dev, "referenced"):
+            self.skipTest("Actuator doesn't support referencing")
+
+        # first try one by one
+        axes = set(self.dev.referenced.value.keys())
+        for a in axes:
+            self.dev.moveRel({a:-1e-3}) # move a bit to make it a bit harder
+            f = self.dev.reference({a})
+            f.result()
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertAlmostEqual(self.dev.position.value[a], 0)
+
+        # try all axes simultaneously
+        mv = dict((a, 1e-3) for a in axes)
+        self.dev.moveRel(mv)
+        f = self.dev.reference(axes)
+        f.result()
+        for a in axes:
+            self.assertTrue(self.dev.referenced.value[a])
+            self.assertAlmostEqual(self.dev.position.value[a], 0)
+
 #@skip("simple")
 class StageTest(unittest.TestCase, ActuatorTest):
 

@@ -32,7 +32,7 @@ from odemis.gui.util import call_after
 import wx
 
 import odemis.gui.util.widgets as util
-from odemis.model._vattributes import VigilantAttributeBase
+from odemis.model import VigilantAttributeBase
 
 
 class ViewController(object):
@@ -77,8 +77,8 @@ class ViewController(object):
 
         # subscribe to layout and view changes
         tab_data.visible_views.subscribe(self._on_visible_views)
-        tab_data.viewLayout.subscribe(self._onViewLayout, init=True)
-        tab_data.focussedView.subscribe(self._onView, init=True)
+        tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
+        tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
 
     @property
     def viewports(self):
@@ -275,8 +275,6 @@ class ViewController(object):
             if len(self._viewports) == 5:
                 vpv[self._viewports[4]] = {
                     "name": "Overview",
-                    # "stage": None,
-                    # "focus": None,
                     "stream_classes": (RGBCameraStream, BrightfieldStream),
                 }
 
@@ -284,7 +282,7 @@ class ViewController(object):
 
             # Track the mpp of the SEM view in order to set the magnification
             if (self._main_data_model.ebeam and
-                isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
+                    isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
                 logging.info("Tracking mpp value of '%s'", self._viewports[0])
                 self._viewports[0].track_view_mpp()  # = Live SEM viewport
 
@@ -347,7 +345,6 @@ class ViewController(object):
         a 2x2 display, and that hidden_idx is outside this 2x2 layout and
         invisible.
         """
-
         # Small shorthand local variable
         vp = self._viewports
 
@@ -411,9 +408,8 @@ class ViewController(object):
         parent_sizer.Layout()
 
     def _on_visible_views(self, visible_views):
-        """ This method is called when the visible views in the data model
-        change.
-        """
+        """ This method is called when the visible views in the data model change """
+
         logging.debug("Visible view change detected")
         # Test if all provided views are known
         for view in visible_views:
@@ -426,69 +422,139 @@ class ViewController(object):
         if self._data_model.focussedView.value not in visible_views:
             self._data_model.focussedView.value = visible_views[0]
 
-    def _onView(self, view):
+    def _on_focussed_view(self, view):
         """ Called when another focussed view changes.
 
         :param view: (MicroscopeView) The newly focussed view
-        """
-        logging.debug("Changing focus to view %s", view.name.value)
-        layout = self._data_model.viewLayout.value
 
-        self._viewports[0].Parent.Freeze()
+        """
+
+        logging.debug("Changing focus to view %s", view.name.value)
+
+        containing_window = self._viewports[0].Parent
+        containing_window.Freeze()
 
         try:
-            for viewport in self._viewports[:4]:
-                if viewport.microscope_view == view:
-                    viewport.SetFocus(True)
-                    if layout == model.VIEW_LAYOUT_ONE:
-                        viewport.Show()
-                    # Enable/disable ZOOM_FIT tool according to view ability
-                    if self._toolbar:
-                        can_fit = hasattr(viewport.canvas, "fit_view_to_content")
-                        self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
-                else:
-                    viewport.SetFocus(False)
-                    if layout == model.VIEW_LAYOUT_ONE:
-                        viewport.Hide()
+            try:
+                viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
+            except IndexError:
+                logging.exception("No associated ViewPort found for view %s", view)
+                raise
 
-            if layout == model.VIEW_LAYOUT_ONE:
-                self._viewports[0].Parent.Layout()  # resize viewport
+            if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
+                self._show_viewport(containing_window.GetSizer(), viewport)
+                # Enable/disable ZOOM_FIT tool according to view ability
+                if self._toolbar:
+                    can_fit = hasattr(viewport.canvas, "fit_view_to_content")
+                    self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
+            else:
+                for vp in self._viewports:
+                    vp.SetFocus(False)
+                viewport.SetFocus(True)
+
         finally:
-            self._viewports[0].Parent.Thaw()
+            containing_window.Thaw()
 
-    def _onViewLayout(self, layout):
+    def _show_viewport(self, gb, visible_viewport=None):
+        """ Show the given viewport or show the first four in the 2x2 grid if none is given
+
+        :param sizer: wx.GridBagSizer
+        :param viewport: ViewPort
+
+
+        ..note:
+            This method still handles sizers different from the GridBagSizer for backward
+            compatibility reasons. That part of the code should be removed at a future point.
+
+        """
+
+        if isinstance(gb, wx.GridBagSizer):
+
+            # Detach and hide all viewports
+
+            for viewport_sizer_item in gb.GetChildren():
+                viewport = viewport_sizer_item.GetWindow()
+                if viewport:
+                    # If the initial position has not been cached yet...
+                    if not viewport.sizer_pos:
+                        gb.SetEmptyCellSize((0, 0))
+                        viewport.sizer_pos = viewport_sizer_item.GetPos()
+                    viewport.Hide()
+                    # Only clear the focus on the other viewports if a visible one is given
+                    if visible_viewport:
+                        viewport.SetFocus(False)
+                    gb.Detach(viewport)
+
+            # If a visible viewport is given...
+            if visible_viewport in self._viewports:
+                gb.Add(visible_viewport, (0, 0), flag=wx.EXPAND)
+                visible_viewport.Show()
+                visible_viewport.SetFocus(True)
+            else:  # If the 2x2 grid is to be shown...
+
+                # Assign all viewports their initial position
+                for viewport in self._viewports:
+                    gb.Add(viewport, viewport.sizer_pos, flag=wx.EXPAND)
+
+                # Show the first 4 (2x2) viewports
+                for viewport in self._viewports[:4]:
+                    viewport.Show()
+
+                # If the viewport that currently has the focus is not one in the 2x2 grid, we
+                # move the focus to the top left viewport by default
+                focussed_view = self._data_model.focussedView.value
+                if not focussed_view in [v.microscope_view for v in self._viewports[:4]]:
+                    self._viewports[0].SetFocus(True)
+
+        else:
+            # Assume legacy sizer construction
+
+            if visible_viewport in self._viewports:
+                for viewport in self._viewports:
+                    if visible_viewport == viewport:
+                        viewport.Show()
+                        viewport.SetFocus(True)
+                    else:
+                        viewport.Hide()
+                        viewport.SetFocus(False)
+            else:
+                for viewport in self._viewports[:4]:
+                    viewport.Show()
+                for viewport in self._viewports[4:]:
+                    viewport.Hide()
+
+        gb.Layout()
+
+    def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
 
         This method only manipulates ViewPort, since the only thing it needs to
         change is the visibility of ViewPorts.
+
         """
 
         containing_window = self._viewports[0].Parent
-
         containing_window.Freeze()
 
         try:
             if layout == model.VIEW_LAYOUT_ONE:
-                logging.debug("Showing only one view")
-                for viewport in self._viewports[:4]:
+                logging.debug("Displaying single viewport")
+                for viewport in self._viewports:
                     if viewport.microscope_view == self._data_model.focussedView.value:
-                        viewport.Show()
-                    else:
-                        viewport.Hide()
+                        self._show_viewport(containing_window.GetSizer(), viewport)
+                        break
+                else:
+                    raise ValueError("No foccused view found!")
 
             elif layout == model.VIEW_LAYOUT_22:
-                logging.debug("Showing all views")
-                # We limit the showing of viewports to the first 4, because more
-                # than 4 may be present
-                for viewport in self._viewports[:4]:
-                    viewport.Show()
+                logging.debug("Displaying 2x2 viewport grid")
+                self._show_viewport(containing_window.GetSizer(), None)
 
             elif layout == model.VIEW_LAYOUT_FULLSCREEN:
                 raise NotImplementedError()
             else:
                 raise NotImplementedError()
 
-            containing_window.Layout()  # resize the viewports
         finally:
             containing_window.Thaw()
 
@@ -521,7 +587,7 @@ class ViewController(object):
                 pviews.append(v)
 
         if fv in pviews:
-            return # nothing to do
+            return  # nothing to do
         if pviews:
             self._data_model.focussedView.value = pviews[0]
             return
@@ -583,32 +649,32 @@ class ViewSelector(object):
 
         # subscribe to change of name
         for btn, (vp, lbl) in self.buttons.items():
-            if vp is None: # 2x2 layout
-                lbl.SetLabel("Overview")
+            if vp is None:  # 2x2 layout
+                lbl.SetLabel("All")
                 continue
 
             @call_after
-            def onThumbnail(im, btn=btn): # save btn in scope
+            def on_thumbnail(im, btn=btn):  # save btn in scope
                 # import traceback
                 # traceback.print_stack()
                 btn.set_overlay_image(im)
 
-            vp.microscope_view.thumbnail.subscribe(onThumbnail, init=True)
+            vp.microscope_view.thumbnail.subscribe(on_thumbnail, init=True)
             # keep ref of the functions so that they are not dropped
-            self._subscriptions[btn] = {"thumb" : onThumbnail}
+            self._subscriptions[btn] = {"thumb": on_thumbnail}
 
             # also subscribe for updating the 2x2 button
-            vp.microscope_view.thumbnail.subscribe(self._update22Thumbnail)
+            vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
-            def onName(name, lbl=lbl): # save lbl in scope
+            def on_name(name, lbl=lbl):  # save lbl in scope
                 lbl.SetLabel(name)
 
             btn.Freeze()
-            vp.microscope_view.name.subscribe(onName, init=True)
+            vp.microscope_view.name.subscribe(on_name, init=True)
             btn.Parent.Layout()
             btn.Thaw()
 
-            self._subscriptions[btn]["label"] = onName
+            self._subscriptions[btn]["label"] = on_name
 
     def toggleButtonForView(self, microscope_view):
         """
@@ -631,7 +697,7 @@ class ViewSelector(object):
                 b.SetToggle(False)
 
     @call_after
-    def _update22Thumbnail(self, im):
+    def _update_22_thumbnail(self, im):
         """
         Called when any thumbnail is changed, to recompute the 2x2 thumbnail of
         the first button.
@@ -641,7 +707,7 @@ class ViewSelector(object):
         # border. The button without a viewport attached is assumed to be the
         # one assigned to the 2x2 view
         btn_all = [b for b, (vp, _) in self.buttons.items() if vp is None][0]
-        border_width = 2 # px
+        border_width = 2  # px
         size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
         size_sub = (max(1, (size[0] - border_width) // 2),
                     max(1, (size[1] - border_width) // 2))
@@ -653,7 +719,7 @@ class ViewSelector(object):
         i = 0
 
         for vp, _ in self.buttons.values():
-            if vp is None: # 2x2 layout
+            if vp is None:  # 2x2 layout
                 continue
 
             im = vp.microscope_view.thumbnail.value
@@ -682,7 +748,7 @@ class ViewSelector(object):
             else:
                 # black image
                 # Should never happen
-                pass #sim = wx.EmptyImage(*size_sub)
+                pass  #sim = wx.EmptyImage(*size_sub)
 
             i += 1
 
@@ -710,7 +776,6 @@ class ViewSelector(object):
 
                 for b, (vp, lbl) in self.buttons.items():
                     if vp == old_viewport:
-                        # pylint: disable=E1103
                         # Remove the subscription of the old viewport
                         old_viewport.microscope_view.thumbnail.unsubscribe(
                                                 self._subscriptions[b]["thumb"])
