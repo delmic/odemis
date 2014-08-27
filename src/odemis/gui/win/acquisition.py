@@ -41,8 +41,6 @@ from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
 from odemis.acq.stream import EM_STREAMS, OPTICAL_STREAMS
-from sys import exc_info
-
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
@@ -582,7 +580,6 @@ def ShowAcquisitionFileDialog(parent, filename):
         fn += ext
 
     conf.last_extension = ext
-    conf.write()
 
     return os.path.join(path, fn)
 

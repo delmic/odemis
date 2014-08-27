@@ -406,11 +406,9 @@ class AnalysisGUIData(MicroscopyGUIData):
 
     def _on_ar_cal(self, fn):
         self._conf.set("calibration", "ar_file", fn)
-        self._conf.write()
 
     def _on_spec_cal(self, fn):
         self._conf.set("calibration", "spec_file", fn)
-        self._conf.write()
 
 
 class ActuatorGUIData(MicroscopyGUIData):

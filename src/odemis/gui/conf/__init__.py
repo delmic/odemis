@@ -27,21 +27,19 @@ related configuration files.
 
 """
 
+from ConfigParser import NoOptionError
 import ConfigParser
+from abc import ABCMeta, abstractproperty
 import logging
-import os.path
-
-from odemis import dataio
 from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
+import os.path
+
 
 CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
-CONF_ACQUI = None
 CONF_GENERAL = None
-CONF_CALIBRATION = None
-
 def get_general_conf():
     global CONF_GENERAL
 
@@ -50,6 +48,7 @@ def get_general_conf():
 
     return CONF_GENERAL
 
+CONF_ACQUI = None
 def get_acqui_conf():
     """ Return the Acquisition config object and create/read it first if it does
         not yet exist.
@@ -61,79 +60,84 @@ def get_acqui_conf():
 
     return CONF_ACQUI
 
+CONF_CALIB = None
+def get_calib_conf():
+    """ Return the calibration config object and create/read it first if it does
+        not yet exist.
+    """
+    global CONF_CALIB
+
+    if not CONF_CALIB:
+        CONF_CALIB = CalibrationConfig()
+
+    return CONF_CALIB
+
 
 class Config(object):
     """ Configuration super class
 
         Configurations are built around the
         :py:class:`ConfigParser.SafeConfigParser` class.
+
+        The main difference is that the filename is fixed, and changes are
+        automatically saved.
     """
-    def __init__(self, file_name, read=True):
-        """ If no path is provided, the default path will be loaded using.
-            :py:func:`elit.util.get_config_dir` function.
+    __metaclass__ = ABCMeta
+    @abstractproperty
+    def file_name(self):
+        """Name of the configuration file"""
+        pass
 
-            :param string file_name:    Name of the configuration file
-            :param read: Try and read the config file on creation
-            :type path: string or None:
-        """
-
-        self.file_name = file_name
-
+    def __init__(self):
         # Absolute path to the configuration file
-        self.file_path = os.path.abspath(
-                                    os.path.join(CONF_PATH, self.file_name))
-        # print self.file_path
+        self.file_path = os.path.abspath(os.path.join(CONF_PATH, self.file_name))
         # Attribute that contains the actual configuration
         self.config = ConfigParser.SafeConfigParser()
+
+        # Note: the defaults argument of ConfigParser doesn't do enough, because
+        # it only allows to specify default options values, independent of the
+        # section.
+
         # Default configuration used to check for completeness
         self.default = ConfigParser.SafeConfigParser()
 
-        if read:
-            self.read()
+        self.read()
 
     def read(self):
         """ Will try to read the configuration file and will use the default.
             values when it fails.
         """
-        if self._exists():
+        if os.path.exists(self.file_path):
             self.config.read(self.file_path)
         else:
             logging.warn(u"Using default %s configuration",
                          self.__class__.__name__)
             self.use_default()
 
-    def write(self):
-        """ Write the configuration to the given file if it exists or raise
-        ``IOError`` otherwise
-        """
-        if self._exists():
-            logging.debug(u"Writing configuration file '%s'", self.file_path)
-            f = open(self.file_path, "w")
-            self.config.write(f)
-            f.close()
-        else:
-            self.create()
+            # Create the file and save the default configuration, so the user
+            # will be able to see the option exists. The drawback is that if we
+            # change the default settings later on, the old installs will not
+            # catch them up automatically.
+            # TODO: => save the default settings as comments?
             self.write()
 
-    def use_default(self):
-        """ Assign the default configuration to the main one """
-        self.config = self.default
-
-    def create(self):
-        """ Create the configuration file if it does not exist """
+    def write(self):
+        """
+        Write the configuration file
+        """
         # Create directory structure if it doesn't exist.
         if not os.path.exists(CONF_PATH):
             logging.debug(u"Creating path '%s'", CONF_PATH)
             os.makedirs(CONF_PATH)
 
-        # Create file if it doesn't exist.
-        if not os.path.exists(self.file_path):
-            open(self.file_path, 'w').close()
+        logging.debug(u"Writing configuration file '%s'", self.file_path)
+        f = open(self.file_path, "w")
+        self.config.write(f)
+        f.close()
 
-    def _exists(self):
-        """ Check whether the stored configuration file path exists.
-        """
-        return os.path.exists(self.file_path)
+    def use_default(self):
+        """ Assign the default configuration to the main one """
+        self.config = self.default
 
     def set(self, section, option, value):
         """ Set the value of an option """
@@ -141,6 +145,7 @@ class Config(object):
             logging.warn("Section %s not found, creating...", section)
             self.config.add_section(section)
         self.config.set(section, option, value)
+        self.write()
 
     def get(self, section, option):
         """ Get the value of an option """
@@ -152,10 +157,10 @@ class Config(object):
 class GeneralConfig(Config):
     """ General configuration values """
 
+    file_name = "odemis.config"
     def __init__(self):
-        file_name = "odemis.config"
 
-        super(GeneralConfig, self).__init__(file_name)
+        super(GeneralConfig, self).__init__()
 
         # Define the default settings
         self.default.add_section("help")
@@ -213,10 +218,9 @@ class GeneralConfig(Config):
 
 class AcquisitionConfig(Config):
 
+    file_name = "acquisition.config"
     def __init__(self):
-        file_name = "acquisition.config"
-
-        super(AcquisitionConfig, self).__init__(file_name)
+        super(AcquisitionConfig, self).__init__()
 
         # Define the default settings
         self.default.add_section("acquisition")
@@ -253,31 +257,89 @@ class AcquisitionConfig(Config):
         self.set("acquisition", "last_extension", last_extension)
 
 class CalibrationConfig(Config):
+    """
+    For saving/restoring sample holder calibration data in the Delphi
+    """
 
-    def __init__(self):
-        file_name = "calibration.config"
+    file_name = "calibration.config"
 
-        super(CalibrationConfig, self).__init__(file_name)
+    def _get_section_name(self, shid):
+        return "delphi-%x" % shid
 
-    def insert(self, id, h1, h2, scaling, rotation, offset):
-        self.config.add_section(id)
-        self.set(id, "first_hole", str(h1))
-        self.set(id, "second_hole", str(h2))
-        self.set(id, "scaling", str(scaling))
-        self.set(id, "rotation", str(rotation))
-        self.set(id, "offset", str(offset))
-
-    def get(self, id):
-        if self.config.has_section(id):
-            h1 = self.config.get(id, "first_hole")
-            h2 = self.config.get(id, "second_hole")
-            scaling = self.config.get(id, "scaling")
-            rotation = self.config.get(id, "rotation")
-            offset = self.config.get(id, "offset")
-            return h1, h2, scaling, rotation, offset
+    def set_sh_calib(self, shid, htop, hbot, strans, sscale, srot, iscale, irot):
+        """
+        Store the calibration data for a given sample holder
+        shid (int): the sample holder ID
+        htop (2 floats): position of the top hole
+        hbot (2 floats): position of the bottom hole
+        strans (2 floats): stage translation
+        sscale (2 floats > 0): stage scaling
+        srot (float): stage rotation (rad)
+        iscale (2 floats > 0): image scaling
+        irot (float): image rotation (rad)
+        """
+        sec = self._get_section_name(shid)
+        if self.config.has_section(sec):
+            logging.info("ID %s already exists, overwriting...", sec)
         else:
-            return None
+            self.config.add_section(sec)
 
+        # Don't use self.set() to avoid checking the section/writing every time
+        self.config.set(sec, "top_hole_x", "%.15f" % htop[0])
+        self.config.set(sec, "top_hole_y", "%.15f" % htop[1])
+        self.config.set(sec, "bottom_hole_x", "%.15f" % hbot[0])
+        self.config.set(sec, "bottom_hole_y", "%.15f" % hbot[1])
+        self.config.set(sec, "stage_trans_x", "%.15f" % strans[0])
+        self.config.set(sec, "stage_trans_y", "%.15f" % strans[1])
+        self.config.set(sec, "stage_scaling_x", "%.15f" % sscale[0])
+        self.config.set(sec, "stage_scaling_y", "%.15f" % sscale[1])
+        self.config.set(sec, "stage_rotation", "%.15f" % srot)
+        self.config.set(sec, "image_scaling_x", "%.15f" % iscale[0])
+        self.config.set(sec, "image_scaling_y", "%.15f" % iscale[1])
+        self.config.set(sec, "image_rotation", "%.15f" % irot)
+        self.write()
 
+    def _get_tuple(self, section, option):
+        """
+        Reads a tuple of float with the option name + _x and _y
+        return (2 floats)
+        raises:
+            ValueError: if the config file doesn't contain floats
+            NoOptionError: if not all the options are present
+        """
+        x = self.config.getfloat(section, option + "_x")
+        y = self.config.getfloat(section, option + "_y")
+        return x, y
 
+    def get_sh_calib(self, shid):
+        """
+        Reads the calibration of a given sample holder
+        shid (int): the sample holder ID
+        returns None (if no calibration data available), or :
+            htop (2 floats): position of the top hole
+            hbot (2 floats): position of the bottom hole
+            strans (2 floats): stage translation
+            sscale (2 floats > 0): stage scaling
+            srot (float): stage rotation
+            iscale (2 floats > 0): image scaling
+            irot (float): image rotation
+        """
+        sec = self._get_section_name(shid)
+        if self.config.has_section(sec):
+            try:
+                htop = self._get_tuple(sec, "top_hole")
+                hbot = self._get_tuple(sec, "bottom_hole")
+                strans = self._get_tuple(sec, "stage_trans")
+                sscale = self._get_tuple(sec, "stage_scaling")
+                srot = self.config.getfloat(sec, "stage_rotation")
+                iscale = self._get_tuple(sec, "image_scaling")
+                irot = self.config.getfloat(sec, "image_rotation")
+                return htop, hbot, strans, sscale, srot, iscale, irot
+            except (ValueError, NoOptionError):
+                logging.info("Not all calibration data readable, new calibration is required",
+                             exc_info=True)
+            except Exception:
+                logging.exception("Failed to read calibration data")
+
+        return None
 
