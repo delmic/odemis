@@ -397,6 +397,14 @@ class Scanner(model.Emitter):
          scanned area.
         returns the actual value used
         """
+        # In case of resolution 1,1 store the current fov and set the spot mode
+        if value == (1, 1) and self._resolution != (1, 1):
+            self.last_fov = self.horizontalFoV.value
+            self.horizontalFoV.value = self.horizontalFoV.range[0]
+        # If we are going back from spot mode to normal scanning, reset fov
+        elif self._resolution == (1, 1):
+            self.horizontalFoV.value = self.last_fov
+
         max_size = (int(self._shape[0] // self._scale[0]),
                     int(self._shape[1] // self._scale[1]))
 
@@ -417,11 +425,8 @@ class Scanner(model.Emitter):
           the whole ROI fits the screen.
         returns actual shift accepted
         """
-        # compute the min/max of the shift. It's the same as the margin between
-        # the centered ROI and the border, taking into account the scaling.
-        max_tran = ((self._shape[0] - self._resolution[0] * self._scale[0]) / 2,
-                    (self._shape[1] - self._resolution[1] * self._scale[1]) / 2)
-
+        # TODO change to the actual maximum beam shift
+        max_tran = (10000, 10000)
         # between -margin and +margin
         tran = (max(min(value[0], max_tran[0]), -max_tran[0]),
                 max(min(value[1], max_tran[1]), -max_tran[1]))
@@ -576,17 +581,20 @@ class Detector(model.Detector):
                 # Set scale so the FoV is reduced to something really small
                 # even if the current HFW is the maximum
                 self._scanParams.scale = 1 / 2048
-                self._scanParams.resolution.width = 128
-                self._scanParams.resolution.height = 128
-                if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-SPOT':
-                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-SPOT')
+                self._scanParams.HDR = False
+                self._scanParams.nrOfFrames = 1
+                self._scanParams.resolution.width = 256
+                self._scanParams.resolution.height = 256
+                if self.parent._device.GetSEMViewingMode().parameters.scale != (1 / 2048):
+                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
-                return model.DataArray(numpy.array([], dtype=dataType), metadata)
+                return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
             else:
                 self._scanParams.scale = 1
                 self._scanParams.resolution.width = res[0]
                 self._scanParams.resolution.height = res[1]
-                if self.parent._device.GetSEMViewingMode().mode != 'SEM-SCAN-MODE-IMAGING':
+                if self.parent._device.GetSEMViewingMode().parameters.scale != 1:
                     self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
@@ -611,20 +619,22 @@ class Detector(model.Detector):
         generated output to the Dataflow.
         """
         try:
-            # trans = 0, 0
+            trans = 0, 0
             while not self._acquisition_must_stop.is_set():
-
-#                 new_trans = self.translation.value
-#                 diff_trans = new_trans - trans
-#                 if diff_trans != (0, 0):
-#                     self.moveRel(diff_trans)
-#                 trans = new_trans
+                new_trans = self.parent._scanner.translation.value
+                diff_trans = (new_trans[0] - trans[0], new_trans[1] - trans[1])
+                if diff_trans != (0, 0):
+                    f = self.parent._stage.moveRel({"x":diff_trans[0] * self.parent._scanner.pixelSize.value[0],
+                                                    "y":diff_trans[1] * self.parent._scanner.pixelSize.value[1]})
+                    f.result()
+                trans = new_trans
 
                 callback(self._acquire_image())
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-#             self.moveRel(-trans)
+            f = self.parent._stage.moveRel({"x":-trans[0], "y":-trans[1]})
+            f.result()
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
@@ -1288,7 +1298,7 @@ class ChamberPressure(model.Actuator):
                 else:
                     self.parent._device.UnloadSample()
             except suds.WebFault:
-                raise IOError("Acquisition in progress, cannot move to another state.")
+                logging.warning("Acquisition in progress, cannot move to another state.")
 
             # FIXME
             # Enough time before we start an acquisition
