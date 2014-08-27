@@ -26,7 +26,6 @@ from libtiff import TIFF
 import logging
 import math
 import numpy
-from numpy.polynomial import polynomial
 from odemis import model, util
 import odemis
 from odemis.util import spectrum
