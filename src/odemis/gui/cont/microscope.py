@@ -509,7 +509,7 @@ class SecomStateController(MicroscopeStateController):
         # update the metadata
 
         # Move the focus to a good position
-        self._main_data.stage.moveAbs(DELPHI_OVERVIEW_FOCUS)
+        self._main_data.overview_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
         # Move to stage to center to be at a good position in overview
         f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
 
