@@ -829,7 +829,10 @@ class CombinedActuator(Actuator):
                 self._speed[axis] = child.speed.value[axes_map[axis]]
             if (hasattr(child, "referenced") and
                 isinstance(child.referenced, _vattributes.VigilantAttributeBase)):
-                self._referenced[axis] = child.referenced.value[axes_map[axis]]
+                try:
+                    self._referenced[axis] = child.referenced.value[axes_map[axis]]
+                except KeyError:
+                    pass # the axis is not referencable => fine
 
         # TODO: test/finish conversion to Axis
         # this set ._axes and ._children
