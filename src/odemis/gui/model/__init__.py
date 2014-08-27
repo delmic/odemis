@@ -649,6 +649,9 @@ class MicroscopeView(View):
         # TODO: list of annotations to display
         self.show_crosshair = model.BooleanVA(True)
 
+    def has_stage(self):
+        return self._stage is not None
+
     def _moveFocus(self):
         time_last_move = 0
         axis = self.focus.axes["z"]
@@ -711,6 +714,7 @@ class MicroscopeView(View):
 
         Note: once the move is finished stage_pos will be updated (by the
         back-end)
+
         """
 
         if not self._stage:

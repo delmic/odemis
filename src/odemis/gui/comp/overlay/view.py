@@ -1128,6 +1128,8 @@ class PointSelectOverlay(ViewOverlay):
             self.w_pos.value = w_pos
             if self.p_pos:
                 self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+            logging.debug("Point selected (view, world, physical): %s, %s, %s)",
+                          self.v_pos.value, self.w_pos.value, self.p_pos.value)
         else:
             super(PointSelectOverlay, self).on_left_up(evt)
 
@@ -1149,7 +1151,7 @@ class HistoryOverlay(ViewOverlay):
         self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.fade = True  # Fade older positions in the history list
-        self.length = 60  # Number of positions to track
+        self.length = 100  # Number of positions to track
         self.history = []  # List of (center, size) tuples
         self.marker_size = 5
         self.mouse_over = False

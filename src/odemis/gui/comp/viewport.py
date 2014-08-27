@@ -210,6 +210,10 @@ class OverviewVierport(ViewPort):
         #Remove all abilities, because the overview should have none
         self.tab_data = None
 
+    def OnSize(self, evt):
+        super(OverviewVierport, self).OnSize(evt)
+        self.canvas.fit_view_to_content(True)
+
     def setView(self, microscope_view, tab_data):
         """ Attach the MicroscopeView associated with the overview """
 
@@ -237,9 +241,11 @@ class OverviewVierport(ViewPort):
         """ Set the physical view position """
 
         if self.tab_data:
-            focussed_view = self.tab_data.focussedView.value
-            focussed_view.view_pos.value = p_pos
-            focussed_view.moveStageToView()
+            for view in self.tab_data.views.value:
+                if view.has_stage():
+                    view.view_pos.value = p_pos
+                    view.moveStageToView()
+                    break
 
 
 class MicroscopeViewport(ViewPort):

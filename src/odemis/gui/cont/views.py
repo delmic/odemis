@@ -109,7 +109,6 @@ class ViewController(object):
             views.append(view)
             if vp.Shown:
                 visible_views.append(view)
-
             vp.setView(view, self._data_model)
 
         self._data_model.views.value = views

@@ -817,7 +817,6 @@ def __init_resources():
                   <growablerows>0,1</growablerows>
                   <object class="sizeritem">
                     <object class="OverviewViewport" name="vp_overview_sem">
-                      <hidden>1</hidden>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
