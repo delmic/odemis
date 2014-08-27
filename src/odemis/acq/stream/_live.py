@@ -85,16 +85,13 @@ class SEMStream(Stream):
         self.dcPeriod = model.FloatContinuous(60,  # s, default to one minute
                                               range=[0.1, 1e6], unit="s")
 
-    def _onROI(self, roi):
+    def _computeROISettings(self, roi):
         """
-        Update the scanning area of the SEM according to the roi
+        roi (4 0<=floats<=1)
+        return:
+            res (2 int)
+            trans (2 floats)
         """
-        # only change hw settings if stream is active (and not spot mode)
-        # Note: we could also (un)subscribe whenever these changes, but it's
-        # simple like this.
-        if not self.is_active.value or self.spot.value:
-            return
-
         # We should remove res setting from the GUI when this ROI is used.
         center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
         width = (roi[2] - roi[0], roi[3] - roi[1])
@@ -107,9 +104,27 @@ class SEMStream(Stream):
         res = (max(1, int(round(shape[0] * width[0] / scale[0]))),
                max(1, int(round(shape[1] * width[1] / scale[1]))))
 
+        return res, trans
+
+    def _applyROI(self):
+        """
+        Update the scanning area of the SEM according to the roi
+        """
+        res, trans = self._computeROISettings(self.roi.value)
+
         # always in this order
         self._emitter.resolution.value = res
         self._emitter.translation.value = trans
+
+    def _onROI(self, roi):
+        """
+        Called when the roi VA is updated
+        """
+        # only change hw settings if stream is active (and not spot mode)
+        # Note: we could also (un)subscribe whenever these changes, but it's
+        # simple like this.
+        if self.is_active.value and not self.spot.value:
+            self._applyROI()
 
     def _setDCRegion(self, roi):
         """
@@ -233,7 +248,7 @@ class SEMStream(Stream):
                 # TODO: if can blank => unblank, or done automatically by the driver?
 
                 # update hw settings to our own ROI
-                self._onROI(self.roi.value)
+                self._applyROI()
 
                 if self.dcRegion.value != UNDEFINED_ROI:
                     raise NotImplementedError("SEM drift correction on simple SEM "
@@ -301,6 +316,7 @@ class AlignedSEMStream(SEMStream):
         self._shiftebeam = shiftebeam
         self._calibrated = False # whether the calibration has been already done
         self._last_pos = None # last known position of the stage
+        self._shift = (0, 0) # (float, float): shift to apply in meters
         stage.position.subscribe(self._onStageMove)
 
     def _onStageMove(self, pos):
@@ -316,19 +332,32 @@ class AlignedSEMStream(SEMStream):
         self._last_pos = pos
         self._calibrated = False
 
-    def _compensateShift(self, shift):
+    # need to override it to support beam shift in the translation
+    def _applyROI(self):
         """
-        Compensate the SEM shift, using either beam shift or metadata update
-        shift (2 floats): shift to apply in meters
+        Update the scanning area of the SEM according to the roi
         """
-        if self._shiftebeam:
+        res, trans = self._computeROISettings(self.roi.value)
+
+        if self._shiftebeam and self._calibrated:
             # convert shift into SEM pixels
             pxs = self._emitter.pixelSize.value
-            trans = tuple(s / p for s, p in zip(shift, pxs))
-            self._emitter.translation.value = trans
+            trans_cor = tuple(s / p for s, p in zip(self._shift, pxs))
+            trans = tuple(t + c for t, c in zip(trans, trans_cor))
+
+        # always in this order
+        self._emitter.resolution.value = res
+        self._emitter.translation.value = trans
+
+    def _compensateShift(self):
+        """
+        Compensate the SEM shift, using either beam shift or metadata update
+        """
+        if self._shiftebeam:
+            self._applyROI() # will take care of updating the translation
         else:
             # update the correction metadata
-            self._detector.updateMetadata({MD_POS_COR: shift})
+            self._detector.updateMetadata({MD_POS_COR: self._shift})
 
     def onActive(self, active):
         if active and not self._calibrated and not self.spot.value:
@@ -345,7 +374,8 @@ class AlignedSEMStream(SEMStream):
                 logging.error("Aligning SEM image using shift of %s", shift)
                 self._calibrated = True
 
-            self._compensateShift(shift)
+            self._shift = shift
+            self._compensateShift()
 
         super(AlignedSEMStream, self).onActive(active)
 

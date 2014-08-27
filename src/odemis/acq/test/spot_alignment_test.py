@@ -95,7 +95,7 @@ class TestAlignment(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
-    @skip("skip")
+#     @skip("skip")
     def test_spot_alignment(self):
         """
         Test AlignSpot
@@ -109,7 +109,7 @@ class TestAlignment(unittest.TestCase):
         with self.assertRaises(IOError):
             f.result()
 
-    @skip("faster")
+#     @skip("faster")
     def test_spot_alignment_cancelled(self):
         """
         Test AlignSpot cancellation
@@ -141,7 +141,8 @@ class TestAlignment(unittest.TestCase):
         Test the AlignedSEMStream
         """
         # FIXME: the test currently fails because the simulated CCD image doesn't
-        # allow to find just one spot. => use a different simulated image
+        # allow to find just one spot. => use a different simulated image, or
+        # change the find spot algo to pick the brightest spot
 
         # first try using the metadata correction
         st = stream.AlignedSEMStream("sem-md", self.sed, self.sed.data, self.ebeam,
