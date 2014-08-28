@@ -2336,7 +2336,6 @@ class FakeAndorV2DLL(object):
 
 class FakeAndorCam2(AndorCam2):
     def __init__(self, name, role, device=None, **kwargs):
-        logging.debug("Received arguments: %s", kwargs)
         AndorCam2.__init__(self, name, role, device="fake", **kwargs)
     @staticmethod
     def scan():

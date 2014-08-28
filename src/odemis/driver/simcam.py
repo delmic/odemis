@@ -136,6 +136,7 @@ class Camera(model.DigitalCamera):
         metadata[model.MD_ACQ_DATE] = time.time() - exp
         metadata[model.MD_EXP_TIME] = exp
 
+        logging.debug("Generating new fake image")
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
