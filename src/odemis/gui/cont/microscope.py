@@ -23,6 +23,8 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq import align, stream
+from odemis.gui.win import delphi
+from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_after
@@ -32,6 +34,7 @@ import wx
 
 import odemis.gui.img.data as imgdata
 import odemis.util.units as units
+
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
@@ -59,6 +62,8 @@ class MicroscopeStateController(object):
         main_frame: (wx.Frame): the main frame of the GUI
         btn_prefix (string): common prefix of the names of the buttons
         """
+        self._tab_data = tab_data
+        self._main_frame = main_frame
 
         # Look for which buttons actually exist, and which VAs exist. Bind the
         # fitting ones
@@ -203,12 +208,15 @@ class ChamberButtonController(HardwareButtonController):
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.
             self.btn.SetToggle(True)
-        else:
+        elif state in {CHAMBER_VENTED, CHAMBER_UNKNOWN}:
             self.btn.SetBitmapLabel(self._btn_faces['normal']['normal'])
             self.btn.SetBitmaps(
                 bmp_h=self._btn_faces['normal']['hover'],
                 bmp_sel=self._btn_faces['normal']['active']
             )
+            self.btn.SetToggle(False)
+        else:
+            logging.error("Unknown chamber state %d", state)
 
         # Set the tooltip
         if state in self._tooltips:
@@ -255,7 +263,6 @@ class SecomStateController(MicroscopeStateController):
     def __init__(self, tab_data, main_frame, btn_prefix, st_ctrl):
         super(SecomStateController, self).__init__(tab_data, main_frame, btn_prefix)
 
-        self._tab_data = tab_data
         self._main_data = tab_data.main
         self._stream_controller = st_ctrl
 
@@ -433,6 +440,11 @@ class SecomStateController(MicroscopeStateController):
         elif state == CHAMBER_VENTING:
             self._main_data.chamber.stop()
 
+            # On the DELPHI, we also move the optical stage to 0,0 (= reference
+            # position), so that referencing will be faster on next load
+            if self._main_data.role == "delphi":
+                self._main_data.aligner.move({"x": 0, "y": 0})
+
             # Pause all streams (SEM streams are most important, but it's
             # simpler for the user to stop all of them)
             for s in self._tab_data.streams.value:
@@ -492,40 +504,114 @@ class SecomStateController(MicroscopeStateController):
         """
         Check the sample holder and moves the stage to the default position if
         it's a delphi sample holder (= with a lens and a stage)
-        Should be called in Overview (navcam) position
+        Should be called in overview position
         """
-        # TODO: just subscribe to the change? So we could detect a new sample
-        # holder even before it's in overview position?
         try:
-            shid, sht = self._main_data.chamber.sampleHolder.value
+            # Move the focus to a good position
+            self._main_data.overview_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
+            # Move to stage to center to be at a good position in overview
+            f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
+
+            # TODO: just subscribe to the change? So we could detect a new sample
+            # holder even before it's in overview position?
+            try:
+                shid, sht = self._main_data.chamber.sampleHolder.value
+                logging.debug("Detected sample holder type %d, id %d", sht, shid)
+            except Exception:
+                logging.exception("Failed to find sample holder ID")
+                shid, sht = 1, PHENOM_SH_TYPE_STANDARD # assume it's a standard holder
+
+            if sht == PHENOM_SH_TYPE_OPTICAL:
+                f.result() # to be sure referencing doesn't cancel the move
+
+                # TODO: look in the config file if the sample holder is known, or needs
+                # first-time calibration (and ask the user to continue), and otherwise
+                # update the metadata
+                calibconf = get_calib_conf()
+                calib = calibconf.get_sh_calib(shid)
+                if calib is None:
+                    self._request_delphi_holder_calib(shid)
+                    return # don't go further, as everything has been taken care of
+                else:
+                    # TODO: to be more precise on the stage rotation, we'll need to
+                    # locate the top and bottom holes of the sample holder, using
+                    # the SEM. So once the sample is fully loaded, new and more
+                    # precise calibration will be set.
+                    self._apply_delphi_holder_calib(*calib)
+
+                # Reference the (optical) stage
+                f = self._main_data.stage.reference({"x", "y"})
+                # TODO: shall we also reference the optical focus? It'd be handy only
+                # if the absolute position is used.
         except Exception:
-            # for simulator
-            logging.info("Failed to find sampleholder id, will assume it's fine")
-            shid, sht = 1, PHENOM_SH_TYPE_OPTICAL
-        logging.debug("Detected sample holder type %d, id %d", sht, shid)
-
-        # TODO: look in the config file if the sample holder is known, or needs
-        # first-time calibration (and ask the user to continue), and otherwise
-        # update the metadata
-
-        # Move the focus to a good position
-        self._main_data.overview_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
-        # Move to stage to center to be at a good position in overview
-        f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
-
-        if sht == PHENOM_SH_TYPE_OPTICAL:
-            f.result() # to be sure referencing doesn't cancel the move
-            # Reference the (optical) stage
-            f = self._main_data.stage.reference({"x", "y"})
-            # TODO: shall we also reference the optical focus? It'd be handy only
-            # if the absolute position is used.
+            logging.exception("Failed to set calibration")
 
         # continue business as usual
         f.add_done_callback(self._start_overview_acquisition)
 
+    @call_after
+    def _request_delphi_holder_calib(self, shid):
+        """
+        Handle all the actions needed when no calibration data is available
+        for a sample holder (eg, it's the first time it is inserted)
+        When this method returns, the sample holder will have been ejected,
+        independently of whether the calibration has worked or not.
+        """
+        logging.info("New sample holder %x inserted", shid)
+        # TODO: tell the user we need to do calibration, and it needs to have
+        # the special sample => Eject (=Cancel) or Calibrate (=Continue)
+        # TODO: the Phenom backend seems to also require a code to allow to
+        # insert a new sample holder => ask the user for it here, and send it
+        # to the phenom backend? How? A special method on the chamber component?
+        # Eventually, it needs to call RegisterSampleHolder.
 
-    # TODO: move the optical stage of the delphi to 0,0 when ejecting the sample,
-    # so that the referencing will be fast next time.
+        dlg = delphi.FirstCalibrationDialog(self._main_frame, register=True)
+        val = dlg.ShowModal() # blocks
+        regcode = dlg.registrationCode
+        dlg.Destroy()
+
+        if val == wx.ID_OK:
+            logging.info("Calibration should ensue with code %s", regcode)
+            # FIXME: actually run the calibration
+            logging.error("Calibration not yet supported")
+        else:
+            logging.info("Calibration cancelled")
+
+        # Eject the sample holder
+        self._main_data.chamberState.value = CHAMBER_VENTING
+
+    def _apply_delphi_holder_calib(self, htop, hbot, strans, sscale, srot, iscale, irot):
+        """
+        Configure/update the components according to the calibration
+        htop (2 floats): position of the top hole (unused)
+        hbot (2 floats): position of the bottom hole (unused)
+        strans (2 floats): stage translation
+        sscale (2 floats > 0): stage scaling
+        srot (float): stage rotation (rad)
+        iscale (2 floats > 0): image scaling
+        irot (float): image rotation (rad)
+        """
+        # update metadata to stage
+        self._main_data.stage.updateMetadata({
+                  model.MD_POS_COR: strans,
+                  model.MD_PIXEL_SIZE_COR: sscale,
+                  model.MD_ROTATION_COR: srot
+                  })
+
+        # use image scaling as scaling correction metadata to ccd
+        self._main_data.ccd.updateMetadata({
+                  model.MD_PIXEL_SIZE_COR: iscale,
+                  })
+
+        # use image rotation as rotation of the SEM (note that this works fine
+        # wrt to the stage referential because the rotation is very small)
+        if self._main_data.ebeam.rotation.readonly:
+            # normally only happens with the simulator
+            self._main_data.ccd.updateMetadata({
+                  model.MD_ROTATION_COR: irot,
+                  })
+        else:
+            self._main_data.ebeam.rotation.value = irot
 
     def _start_overview_acquisition(self, unused=None):
         logging.debug("Starting overview acquisition")
@@ -570,14 +656,14 @@ class SecomStateController(MicroscopeStateController):
         # now acquire one image
         try:
             ovs = self._get_overview_stream()
-        except LookupError:
-            logging.exception("Failed to acquire overview image")
-            return
 
-        ovs.image.subscribe(self._on_overview_image)
-        # start acquisition
-        ovs.should_update.value = True
-        ovs.is_active.value = True
+            ovs.image.subscribe(self._on_overview_image)
+            # start acquisition
+            ovs.should_update.value = True
+            ovs.is_active.value = True
+        except Exception:
+            logging.exception("Failed to start overview image acquisition")
+            self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
         # TODO: have a timer to detect if no image ever comes, give up and move
         # to final pressure
@@ -589,12 +675,10 @@ class SecomStateController(MicroscopeStateController):
         # Stop the stream (the image is immediately displayed in the view)
         try:
             ovs = self._get_overview_stream()
-        except LookupError:
+            ovs.is_active.value = False
+            ovs.should_update.value = False
+        except Exception:
             logging.exception("Failed to acquire overview image")
-            return
-
-        ovs.is_active.value = False
-        ovs.should_update.value = False
 
         if not self._main_data.chamberState.value in {CHAMBER_PUMPING, CHAMBER_VACUUM}:
             logging.warning("Receive an overview image while in state %s",
@@ -602,7 +686,7 @@ class SecomStateController(MicroscopeStateController):
             return # don't ask for vacuum
 
         # move further to fully under vacuum (should do nothing if already there)
-        f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+        self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
 
 # TODO SparcStateController?

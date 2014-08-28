@@ -334,6 +334,8 @@ class CalibrationConfig(Config):
                 srot = self.config.getfloat(sec, "stage_rotation")
                 iscale = self._get_tuple(sec, "image_scaling")
                 irot = self.config.getfloat(sec, "image_rotation")
+                # TODO: check the values are within respectable ranges?
+
                 return htop, hbot, strans, sscale, srot, iscale, irot
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",
