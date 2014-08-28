@@ -35,7 +35,6 @@ import weakref
 # request. That obviously doesn't make much sense, but also means it's not
 # possible to put a global timeout with the current version and threadpool.
 # One possibility is to change ._pyroTimeout on each proxy.
-
 # thread is restricted: it can handle at the same time only
 # MAXTHREADS concurrent connections.
 # After that it simply blocks. As there is one connection per object, it goes fast.
@@ -355,6 +354,9 @@ def _manageContainer(name, isready=None):
     isready (Event): set when the container is (almost) ready to publish objects
     """
     container = Container(name)
+    # TODO: also change the process name/arguments to easily known which process
+    # is what? cf py-setproctitle
+    logging.debug("Container %s runs in PID %d", name, os.getpid())
     if isready is not None:
         isready.set()
     container.run()
