@@ -1196,6 +1196,10 @@ class ChamberPressure(model.Actuator):
 
         # Tuple containing sample holder ID and type, or None, None if absent
         self.sampleHolder = model.TupleVA((None, None), readonly=True)
+
+        # TODO, VA used for the sample holder registration
+        # self.registeredSampleHolder = model.BooleanVA(False)
+
         self._updateSampleHolder()
 
     def _updatePosition(self):
