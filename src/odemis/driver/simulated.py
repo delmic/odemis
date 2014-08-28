@@ -285,4 +285,25 @@ class Chamber(model.Actuator):
         self._executor.cancel()
         logging.warning("Stopped pressure change")
 
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
+# FIXME: need to set the right value once known
+PHENOM_SH_TYPE_OPTICAL = 1
+PHENOM_SH_FAKE_ID = 1234567890
+
+class PhenomChamber(Chamber):
+    """
+    Simulated chamber component that also simulate the special features of
+    the Phenom chamber (eg, sample holder).
+    """
+    def __init__(self, name, role, positions, has_pressure=False, **kwargs):
+        """
+        Initialises the component
+        positions (list of str): each pressure positions supported by the
+          component (among the allowed ones)
+        has_pressure (boolean): if True, has a pressure VA with the current
+         pressure.
+        """
+        super(PhenomChamber, self).__init__(name, role, positions, has_pressure, **kwargs)
+
+        # sample holder VA is a read-only tuple with holder ID/type
+        # TODO: set to None/None when the sample is ejected
+        self.sampleHolder = model.TupleVA((PHENOM_SH_FAKE_ID, PHENOM_SH_TYPE_OPTICAL), readonly=True)

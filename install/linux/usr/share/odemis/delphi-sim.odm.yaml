@@ -70,11 +70,11 @@ Spectra: {
 
 # Allows to change pressure in the chamber (and load/unload the sample)
 "SEM Chamber": {
-    class: simulated.Chamber,
+    class: simulated.PhenomChamber,
     role: chamber,
     init: {
         positions: ["vented", "overview", "vacuum"],
-        has_pressure: False,
+        #has_pressure: False,
     },
 }
 
