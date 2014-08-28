@@ -573,6 +573,7 @@ class Detector(model.Detector):
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
 
+            scan_params_view = self.parent._device.GetSEMViewingMode().parameters
             logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
@@ -580,13 +581,17 @@ class Detector(model.Detector):
                 # Avoid setting resolution to 1,1
                 # Set scale so the FoV is reduced to something really small
                 # even if the current HFW is the maximum
-                self._scanParams.scale = 1 / 2048
-                self._scanParams.HDR = False
-                self._scanParams.nrOfFrames = 1
-                self._scanParams.resolution.width = 256
-                self._scanParams.resolution.height = 256
-                if self.parent._device.GetSEMViewingMode().parameters.scale != (1 / 2048):
-                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+#                self._scanParams.scale = 1 / 2048
+#                self._scanParams.HDR = False
+#                self._scanParams.nrOfFrames = 1
+#                self._scanParams.resolution.width = 256
+#                self._scanParams.resolution.height = 256
+                if scan_params_view.scale != (1 / 2048):
+                    scan_params_view.scale = 1 / 2048
+                    scan_params_view.center.x = 0  # just to be sure it's at the center
+                    scan_params_view.center.y = 0
+                    # self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                    self.parent._device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-SPOT')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
@@ -594,8 +599,9 @@ class Detector(model.Detector):
                 self._scanParams.scale = 1
                 self._scanParams.resolution.width = res[0]
                 self._scanParams.resolution.height = res[1]
-                if self.parent._device.GetSEMViewingMode().parameters.scale != 1:
-                    self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                if scan_params_view.scale != 1:
+                    scan_params_view.scale = 1
+                    self.parent._device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
@@ -633,7 +639,8 @@ class Detector(model.Detector):
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-            f = self.parent._stage.moveRel({"x":-trans[0], "y":-trans[1]})
+            f = self.parent._stage.moveRel({"x":-trans[0] * self.parent._scanner.pixelSize.value[0],
+                                            "y":-trans[1] * self.parent._scanner.pixelSize.value[1]})
             f.result()
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
@@ -1189,6 +1196,10 @@ class ChamberPressure(model.Actuator):
 
         # Tuple containing sample holder ID and type, or None, None if absent
         self.sampleHolder = model.TupleVA((None, None), readonly=True)
+
+        # TODO, VA used for the sample holder registration
+        # self.registeredSampleHolder = model.BooleanVA(False)
+
         self._updateSampleHolder()
 
     def _updatePosition(self):
