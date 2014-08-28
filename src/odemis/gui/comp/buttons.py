@@ -769,25 +769,23 @@ class ViewButton(ImageTextToggleButton):
         """
         ImageTextToggleButton.__init__(self, *args, **kwargs)
 
-        self.overlay_bitmap = None
+        self.thumbnail_bmp = None
 
         # The number of pixels from the right that need to be kept clear so the
         # 'arrow pointer' is visible.
         self.pointer_offset = 16
 
         # The border that will be kept clear.
-        self.overlay_border = 2
-
-        self.overlay_width = None
-        self.overlay_height = None
+        self.thumbnail_border = 2
+        self.thumbnail_size = wx.Size()
 
         self._calc_overlay_size()
 
     def _calc_overlay_size(self):
-        width, height = self.GetSize()
-        overlay_border_size = self.overlay_border * 2
-        self.overlay_width = width - overlay_border_size - self.pointer_offset
-        self.overlay_height = height - overlay_border_size
+        btn_width, btn_height = self.GetSize()
+        total_border = self.thumbnail_border * 2
+        self.thumbnail_size.x = btn_width - total_border - self.pointer_offset
+        self.thumbnail_size.y = btn_height - total_border
 
     def OnLeftDown(self, event):
         """ This event handler is fired on left mouse button events, but it
@@ -803,42 +801,46 @@ class ViewButton(ImageTextToggleButton):
         self.Refresh()
 
     def set_overlay_image(self, image):
-        """ Changes the preview image of the button
+        """ Scales and updates the image on the button
 
-        :param image: (wx.Image or None) Image to be displayed or a default
-                stock image.
+        :param image: (wx.Image or None) Image to be displayed or a default stock image.
+
         """
-        size_tn = self.overlay_width, self.overlay_height
+
         if image:
             # image doesn't have the same aspect ratio as the actual thumbnail
             # => rescale and crop on the center
-            # Rescale to have the smallest axis as big as the thumbnail
-            rsize = list(size_tn)
-            if (size_tn[0] / image.Width) > (size_tn[1] / image.Height):
-                rsize[1] = int(image.Height * (size_tn[0] / image.Width))
-            else:
-                rsize[0] = int(image.Width * (size_tn[1] / image.Height))
-            sim = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
 
-            # crop to the right shape
-            lt = ((size_tn[0] - sim.Width) // 2, (size_tn[1] - sim.Height) // 2)
-            sim.Resize(size_tn, lt)
+            # Rescale to have the smallest axis as big as the thumbnail
+            rsize = wx.Size(*self.thumbnail_size)
+            if (self.thumbnail_size.x / image.Width) > (self.thumbnail_size.y / image.Height):
+                rsize[1] = int(image.Height * (self.thumbnail_size.x / image.Width))
+            else:
+                rsize[0] = int(image.Width * (self.thumbnail_size.y / image.Height))
+
+            scaled_img = image.Scale(*rsize, quality=wx.IMAGE_QUALITY_HIGH)
+
+            # Resize crops or adds a border, without scaling the image data
+            lt = ((self.thumbnail_size.x - scaled_img.Width) // 2,
+                  (self.thumbnail_size.y - scaled_img.Height) // 2)
+
+            scaled_img.Resize(self.thumbnail_size, lt)
         else:
             # black image
-            sim = wx.EmptyImage(*size_tn)
+            scaled_img = wx.EmptyImage(*self.thumbnail_size)
 
-        self.overlay_bitmap = wx.BitmapFromImage(sim)
+        self.thumbnail_bmp = wx.BitmapFromImage(scaled_img)
         self.Refresh()
 
     def DrawLabel(self, dc, width, height, dx=0, dy=0):
         """ Draw method called by the `OnPaint` event handler """
         ImageTextToggleButton.DrawLabel(self, dc, width, height, dx, dy)
 
-        if self.overlay_bitmap is not None:
+        if self.thumbnail_bmp is not None:
             #logging.debug("Painting overlay")
-            dc.DrawBitmap(self.overlay_bitmap,
-                          self.overlay_border,
-                          self.overlay_border,
+            dc.DrawBitmap(self.thumbnail_bmp,
+                          self.thumbnail_border,
+                          self.thumbnail_border,
                           True)
 
 

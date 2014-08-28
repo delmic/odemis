@@ -633,8 +633,7 @@ class ViewSelector(object):
         # subscribe to layout and view changes
         self._data_model.viewLayout.subscribe(self._on_layout_change)
         self._data_model.visible_views.subscribe(self._on_visible_views_change)
-        self._data_model.focussedView.subscribe(self._on_focus_change,
-                                                init=True)
+        self._data_model.focussedView.subscribe(self._on_focus_change, init=True)
 
     def _subscribe(self):
 
@@ -707,7 +706,7 @@ class ViewSelector(object):
         # one assigned to the 2x2 view
         btn_all = [b for b, (vp, _) in self.buttons.items() if vp is None][0]
         border_width = 2  # px
-        size = max(1, btn_all.overlay_width), max(1, btn_all.overlay_height)
+        size = max(1, btn_all.thumbnail_size.x), max(1, btn_all.thumbnail_size.y)
         size_sub = (max(1, (size[0] - border_width) // 2),
                     max(1, (size[1] - border_width) // 2))
         # starts with an empty image with the border colour everywhere

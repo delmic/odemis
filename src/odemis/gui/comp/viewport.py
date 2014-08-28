@@ -238,7 +238,13 @@ class OverviewVierport(ViewPort):
             self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
 
     def _on_position_select(self, p_pos):
-        """ Set the physical view position """
+        """ Set the physical view position
+
+        TODO: We could also use the stage directly to move to the desired position, using a MoveAbs
+            call on the tab_data.main.stage attribute. But the moveStageToView has some nice, built
+            in, safety features.
+
+        """
 
         if self.tab_data:
             for view in self.tab_data.views.value:

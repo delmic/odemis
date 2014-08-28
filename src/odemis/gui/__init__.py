@@ -57,3 +57,4 @@ HOVER_SELECTION = 5
 
 SELECTION_MINIMUM = 10  # Minimum dimensions for a selection, in pixels
 
+VIEW_BTN_SIZE = (160, 116)  # Hard-coded work around to resize thumbnails in the Canvas class
