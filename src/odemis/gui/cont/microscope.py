@@ -20,15 +20,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from abc import ABCMeta
 import logging
+import math
 import numpy
 from odemis import model
 from odemis.acq import align, stream
-from odemis.gui.win import delphi
 from odemis.gui.conf import get_calib_conf
 from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_after
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.win import delphi
 from odemis.model import getVAs
 import wx
 
@@ -443,7 +444,7 @@ class SecomStateController(MicroscopeStateController):
             # On the DELPHI, we also move the optical stage to 0,0 (= reference
             # position), so that referencing will be faster on next load
             if self._main_data.role == "delphi":
-                self._main_data.aligner.move({"x": 0, "y": 0})
+                self._main_data.aligner.moveAbs({"x": 0, "y": 0})
 
             # Pause all streams (SEM streams are most important, but it's
             # simpler for the user to stop all of them)
@@ -608,10 +609,13 @@ class SecomStateController(MicroscopeStateController):
         if self._main_data.ebeam.rotation.readonly:
             # normally only happens with the simulator
             self._main_data.ccd.updateMetadata({
-                  model.MD_ROTATION_COR: irot,
+                  model.MD_ROTATION_COR: (-irot) % (2 * math.pi),
                   })
         else:
             self._main_data.ebeam.rotation.value = irot
+            # need to also set the rotation correction to indicate that the
+            # acquired image should be seen straight (not rotated)
+            self._main_data.ccd.updateMetadata({model.MD_ROTATION_COR: irot})
 
     def _start_overview_acquisition(self, unused=None):
         logging.debug("Starting overview acquisition")
