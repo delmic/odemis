@@ -38,7 +38,8 @@ from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
-from odemis.gui.cont.microscope import SecomStateController
+from odemis.gui.cont.microscope import SecomStateController, \
+    DelphiStateController
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
@@ -298,7 +299,12 @@ class SecomStreamsTab(Tab):
             self.main_frame
         )
 
-        self._state_controller = SecomStateController(
+        if main_data.role == "delphi":
+            state_controller_cls = DelphiStateController
+        else:
+            state_controller_cls = SecomStateController
+
+        self._state_controller = state_controller_cls(
             self.tab_data_model,
             self.main_frame,
             "live_btn_",
