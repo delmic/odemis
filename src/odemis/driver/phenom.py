@@ -491,7 +491,7 @@ class Detector(model.Detector):
         self.parent._scanner.horizontalFoV.value = fov
 
         rotation = self.parent._device.GetSEMRotation()
-        self.parent._scanner.rotation.value = rotation
+        self.parent._scanner.rotation.value = -rotation % (2 * math.pi)
 
         volt = self.parent._device.SEMGetHighTension()
         self.parent._scanner.accelVoltage.value = -volt

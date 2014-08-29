@@ -265,16 +265,10 @@ def FindSpot(image):
     spot_coordinates = coordinates.FindCenterCoordinates(subimages)
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
-    # Find brightest spot
-    pos = 0
-    intensity = 0
-    for i in xrange(len(optical_coordinates)):
-        x, y = optical_coordinates[i]
-        if image[x, y] >= intensity:
-            pos = i
-            intensity = image[x, y]
+    if len(optical_coordinates) > 1:
+        raise ValueError()
 
-    return optical_coordinates[pos]
+    return optical_coordinates[0]
 
 def CropFoV(ccd):
     """
