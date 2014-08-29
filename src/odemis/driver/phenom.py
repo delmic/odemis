@@ -582,6 +582,8 @@ class Detector(model.Detector):
             metadata[model.MD_BPP] = bpp
 
             scan_params_view = self.parent._device.GetSEMViewingMode().parameters
+            scan_params_view.resolution.width = 256
+            scan_params_view.resolution.width = 256
             logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
@@ -609,7 +611,7 @@ class Detector(model.Detector):
                 self._scanParams.resolution.height = res[1]
                 if scan_params_view.scale != 1:
                     scan_params_view.scale = 1
-                    self.parent._device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                    self.parent._device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-BLANK')
                 img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
