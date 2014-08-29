@@ -162,7 +162,7 @@ class LLE(model.Emitter):
 
         # Update temperature every 10s
         current_temp = self.GetTemperature()
-        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
         self._temp_timer = util.RepeatingTimer(10, self._updateTemperature,
                                                "LLE temperature update")
         self._temp_timer.start()
