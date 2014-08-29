@@ -298,11 +298,15 @@ class Scanner(model.Emitter):
 
     def _setHorizontalFoV(self, value):
         #Make sure you are in the current range
-        rng = self.parent._device.GetSEMHFWRange()
-        new_fov = numpy.clip(value, rng.min, rng.max)
-        self.parent._device.SetSEMHFW(new_fov)
+        try:
+            rng = self.parent._device.GetSEMHFWRange()
+            new_fov = numpy.clip(value, rng.min, rng.max)
+            self.parent._device.SetSEMHFW(new_fov)
+            return new_fov
+        except suds.WebFault:
+            logging.debug("Cannot set HFW when the sample is not in SEM.")
 
-        return new_fov
+        return self.horizontalFoV.value
 
     def _updateMagnification(self):
 
@@ -328,7 +332,7 @@ class Scanner(model.Emitter):
 
     def _onRotation(self, rot):
         with self.parent._acq_progress_lock:
-            self.parent._device.SetSEMRotation(rot)
+            self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
         self.parent._device.SEMSetHighTension(-volt)
@@ -343,9 +347,13 @@ class Scanner(model.Emitter):
         self._probeCurrent = value
         volt = self.accelVoltage.value
         new_spotSize = value / math.sqrt(volt)
-        self.parent._device.SEMSetSpotSize(new_spotSize)
+        try:
+            self.parent._device.SEMSetSpotSize(new_spotSize)
+            return self._probeCurrent
+        except suds.WebFault:
+            logging.debug("Cannot set PC when the sample is not in SEM.")
 
-        return self._probeCurrent
+        return self.probeCurrent.value
 
     def _onScale(self, s):
         self._updatePixelSize()
@@ -464,8 +472,8 @@ class Detector(model.Detector):
         # The shape is just one point, the depth
         self._shape = (2 ** 16,)  # only one point
 
-        # Get current tilt and use it to unblank the beam
-        self._tilt_unblank = self.parent._device.GetSEMSourceTilt()
+        # Updated by the chamber pressure
+        self._tilt_unblank = None
 
     def start_acquire(self, callback):
         # TODO: that's a weird place to do all these updates. If some values
@@ -586,8 +594,8 @@ class Detector(model.Detector):
 #                self._scanParams.nrOfFrames = 1
 #                self._scanParams.resolution.width = 256
 #                self._scanParams.resolution.height = 256
-                if scan_params_view.scale != (1 / 2048):
-                    scan_params_view.scale = 1 / 2048
+                if scan_params_view.scale != 0:
+                    scan_params_view.scale = 0
                     scan_params_view.center.x = 0  # just to be sure it's at the center
                     scan_params_view.center.y = 0
                     # self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
@@ -607,7 +615,7 @@ class Detector(model.Detector):
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
-                metadata[model.MD_ROTATION] = img_str.aAcqState.rotation
+                metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
                 metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
                                                  img_str.aAcqState.pixelHeight)
@@ -1200,6 +1208,7 @@ class ChamberPressure(model.Actuator):
         # TODO, VA used for the sample holder registration
         # self.registeredSampleHolder = model.BooleanVA(False)
 
+        self._updatePosition()
         self._updateSampleHolder()
 
     def _updatePosition(self):
@@ -1208,6 +1217,10 @@ class ChamberPressure(model.Actuator):
         """
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
         if area == "LOADING-WORK-AREA-SEM":
+            # Once moved in SEM, get current tilt and use as beam unblank value
+            # Then blank the beam and unblank it once SEM stream is started
+            self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
+            self.parent._detector.beam_blank(True)
             self._position = PRESSURE_SEM
         elif area == "LOADING-WORK-AREA-NAVCAM":
             self._position = PRESSURE_NAVCAM
