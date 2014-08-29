@@ -267,11 +267,11 @@ class PVCam(model.DigitalCamera):
             # target temp
             ttemp = self.get_param(pv.PARAM_TEMP_SETPOINT) / 100 # C
             ranges = self.GetTemperatureRange()
-            self.targetTemperature = model.FloatContinuous(ttemp, ranges, unit="C",
+            self.targetTemperature = model.FloatContinuous(ttemp, ranges, unit=u"°C",
                                                            setter=self.setTargetTemperature)
 
             temp = self.GetTemperature()
-            self.temperature = model.FloatVA(temp, unit="C", readonly=True)
+            self.temperature = model.FloatVA(temp, unit=u"°C", readonly=True)
             self._metadata[model.MD_SENSOR_TEMP] = temp
             self._temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                               "PVCam temperature update")

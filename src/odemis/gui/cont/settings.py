@@ -44,7 +44,6 @@ from wx.lib.pubsub import pub
 from odemis import model
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -404,15 +403,15 @@ class SettingsController(object):
 
         # Get the range and choices
         min_val, max_val, choices, unit = self._get_va_meta(comp, vigil_attr, conf)
-        format = conf.get("format", True)
 
         if choices:
+            formatted = conf.get("format", True)
             # choice_fmt is an iterable of tuples: choice -> formatted choice
             # (like a dict, but keeps order)
             if isinstance(choices, dict):
                 # it's then already value -> string (user-friendly display)
                 choices_fmt = choices.items()
-            elif (format and len(choices) > 1 and
+            elif (formatted and len(choices) > 1 and
                   all([isinstance(c, numbers.Real) for c in choices])):
                 # choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
@@ -426,6 +425,11 @@ class SettingsController(object):
         # Get the defined type of control or assign a default one
         try:
             control_type = conf['control_type']
+            if callable(control_type):
+                control_type = control_type(comp, vigil_attr, conf)
+            # read-only takes precedence (unless it was requested to hide it)
+            if vigil_attr.readonly and control_type != odemis.gui.CONTROL_NONE:
+                control_type = odemis.gui.CONTROL_LABEL
         except KeyError:
             control_type = self._determine_default_control(vigil_attr)
 
@@ -449,8 +453,6 @@ class SettingsController(object):
             self.entries.append(ne)
             # don't increase num_entries, as it doesn't add any graphical element
             return
-
-
 
         # Format label
         label = conf.get('label', self._label_to_human(name))
