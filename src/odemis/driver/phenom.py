@@ -583,7 +583,7 @@ class Detector(model.Detector):
 
             scan_params_view = self.parent._device.GetSEMViewingMode().parameters
             scan_params_view.resolution.width = 256
-            scan_params_view.resolution.width = 256
+            scan_params_view.resolution.height = 256
             logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
