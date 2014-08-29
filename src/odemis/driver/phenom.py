@@ -41,7 +41,7 @@ import weakref
 # Fixed dwell time of Phenom SEM
 DWELL_TIME = 1.92e-07  # s
 # Fixed max number of frames per acquisition
-MAX_FRAMES = 128
+MAX_FRAMES = 255
 # For a 2048x2048 image with the maximum dt we need about 205 seconds plus some
 # additional overhead for the transfer. In any case, 300 second should be enough
 SOCKET_TIMEOUT = 300  # s, timeout for suds client
@@ -317,9 +317,7 @@ class Scanner(model.Emitter):
 
     def _setDwellTime(self, dt):
         # Calculate number of frames
-        nr_frames = int(math.ceil(dt / DWELL_TIME))
-        # Limit to powers of 2
-        self._nr_frames = 1 << (nr_frames - 1).bit_length()
+        self._nr_frames = int(math.ceil(dt / DWELL_TIME))
         new_dt = DWELL_TIME * self._nr_frames
 
         # Abort current scanning when dwell time is changed
@@ -582,6 +580,9 @@ class Detector(model.Detector):
             metadata[model.MD_BPP] = bpp
 
             scan_params_view = self.parent._device.GetSEMViewingMode().parameters
+            scan_params_view.resolution.width = 256
+            scan_params_view.resolution.height = 256
+            scan_params_view.nrOfFrames = 1
             logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                           res, bpp, self._scanParams.nrOfFrames)
             # Check if spot mode is required
