@@ -27,16 +27,16 @@ panel and various private support functions.
 
 """
 
-from odemis.model import NotApplicableError
 import logging
 import math
+from odemis import model
 import odemis.gui
+from odemis.model import NotApplicableError
+
 
 # ==============================================================================
 # The following function can be used to set dynamic configuration values
 # ==============================================================================
-
-
 def _resolution_from_range(comp, va, conf):
     """ Construct a list of resolutions depending on range values """
 
@@ -140,6 +140,20 @@ def _hfw_choices(comp, va, conf):
 
     return choices
 
+def _mag_if_no_hfw_ctype(comp, va, conf):
+    """
+    Return the control type of ebeam magnification, which is only really useful
+    if horizontalFoV is available.
+    return (int): the control type
+    """
+    if (hasattr(comp, "horizontalFoV")
+        and isinstance(comp.horizontalFoV, model.VigilantAttributeBase)):
+        return odemis.gui.CONTROL_NONE
+    else:
+        # Just use a text field => it's for copy-paste
+        return odemis.gui.CONTROL_FLT
+
+
 # ==============================================================================
 # All values in CONFIG are optional
 #
@@ -228,10 +242,10 @@ CONFIG = {
             "choices": _hfw_choices,
             "accuracy": 2,
         },
-        # force using just a text field => it's for copy-paste
         "magnification":
         {
-            "control_type": odemis.gui.CONTROL_FLT,
+            # Depends whether horizontalFoV is available or not
+            "control_type": _mag_if_no_hfw_ctype,
         },
         "resolution":
         {
@@ -253,12 +267,12 @@ CONFIG = {
         "accelVoltage":
         {
             "label": "Accel. voltage",
-            # TODO: tooltip: "Acceleration voltage"
+            "tooltip": "Acceleration voltage"
         },
         "bpp":
         {
             "label": "BPP",
-            # TODO: tooltip: "Bits per pixel"
+            "tooltip": "Bits per pixel",
         },
         # what we don't want to display:
         "translation":
