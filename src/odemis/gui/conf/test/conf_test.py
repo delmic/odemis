@@ -154,7 +154,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         sscale = (1.1, 0.9)
         srot = 0.1
         iscale = (13.1, 13.1)
-        irot = -0.0006
+        irot = 5.9606
 
         orig_calib = htop, hbot, strans, sscale, srot, iscale, irot
         conf.set_sh_calib(shid, *orig_calib)

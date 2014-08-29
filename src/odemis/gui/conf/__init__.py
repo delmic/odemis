@@ -31,6 +31,7 @@ from ConfigParser import NoOptionError
 import ConfigParser
 from abc import ABCMeta, abstractproperty
 import logging
+import math
 from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
 import os.path
@@ -330,11 +331,22 @@ class CalibrationConfig(Config):
                 htop = self._get_tuple(sec, "top_hole")
                 hbot = self._get_tuple(sec, "bottom_hole")
                 strans = self._get_tuple(sec, "stage_trans")
+
                 sscale = self._get_tuple(sec, "stage_scaling")
+                if not (sscale[0] > 0 and sscale[1] > 0):
+                    raise ValueError("stage_scaling %s must be > 0", sscale)
+
                 srot = self.config.getfloat(sec, "stage_rotation")
+                if not 0 <= srot <= math.pi:
+                    raise ValueError("stage_rotation %f out of range", srot)
+
                 iscale = self._get_tuple(sec, "image_scaling")
+                if not (iscale[0] > 0 and iscale[1] > 0):
+                    raise ValueError("image_scaling %s must be > 0", iscale)
+
                 irot = self.config.getfloat(sec, "image_rotation")
-                # TODO: check the values are within respectable ranges?
+                if not 0 <= irot <= (2 * math.pi):
+                    raise ValueError("image_rotation %f out of range", irot)
 
                 return htop, hbot, strans, sscale, srot, iscale, irot
             except (ValueError, NoOptionError):
