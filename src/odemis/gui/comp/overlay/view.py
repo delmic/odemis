@@ -1128,6 +1128,8 @@ class PointSelectOverlay(ViewOverlay):
             self.w_pos.value = w_pos
             if self.p_pos:
                 self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+            logging.debug("Point selected (view, world, physical): %s, %s, %s)",
+                          self.v_pos.value, self.w_pos.value, self.p_pos.value)
         else:
             super(PointSelectOverlay, self).on_left_up(evt)
 
@@ -1138,10 +1140,7 @@ class PointSelectOverlay(ViewOverlay):
 
 
 class HistoryOverlay(ViewOverlay):
-    """ This overlay displays rectangles on locations that the microscope was previously positioned
-    1at
-
-    """
+    """ Display rectangles on locations that the microscope was previously positioned at """
 
     def __init__(self, cnvs):
         super(HistoryOverlay, self).__init__(cnvs)
@@ -1149,10 +1148,9 @@ class HistoryOverlay(ViewOverlay):
         self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.fade = True  # Fade older positions in the history list
-        self.length = 60  # Number of positions to track
+        self.length = 100  # Number of positions to track
         self.history = []  # List of (center, size) tuples
         self.marker_size = 5
-        self.mouse_over = False
 
     def add_location(self, p_center, p_size=None):
         """ Add a view location to the history list
@@ -1169,7 +1167,7 @@ class HistoryOverlay(ViewOverlay):
             self.history.pop(0)
 
         self.history.append((p_center, p_size))
-        self.cnvs.Refresh()
+        self.cnvs.update_drawing()
 
     # Event Handlers
 
@@ -1185,39 +1183,45 @@ class HistoryOverlay(ViewOverlay):
 
     # END Event Handlers
 
-    def Draw(self, ctx):
+    def Draw(self, ctx, scaled_size=None):
 
         ctx.set_line_width(1)
         offset = self.cnvs.get_half_view_size()
-        half_size = self.marker_size / 2.0
 
-        if self.mouse_over and self.history:
-            history = self.history[-1:]
-        else:
-            history = self.history
-
-        for i, (p_center, _) in enumerate(history):
-            alpha = (i + 1) * (0.8 / len(history)) + 0.2 if self.fade else 1.0
+        for i, (p_center, p_size) in enumerate(self.history):
+            alpha = (i + 1) * (0.8 / len(self.history)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
 
-            ctx.set_source_rgba(0, 0, 0, 0.5)
-            # Render rectangles of 3 pixels wide
-            ctx.rectangle(int(v_center[0]) - half_size - 1,
-                          int(v_center[1]) - half_size - 1,
-                          self.marker_size + 2,
-                          self.marker_size + 2)
-            ctx.stroke()
+            if scaled_size:
+                v_center = (v_center[0] * (scaled_size[0] / self.cnvs.ClientSize.x),
+                            v_center[1] * (scaled_size[1] / self.cnvs.ClientSize.y))
+                marker_size = (2, 2)
+            # elif p_size:
+            #     marker_size = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_size), (0, 0))
+            #     print marker_size
+            else:
+                marker_size = (5, 5)
 
-            if i < len(history) - 1:
+            if i < len(self.history) - 1:
                 colour = self.trail_colour
             else:
                 colour = self.pos_colour
 
-            ctx.set_source_rgba(colour[0], colour[1], colour[2], alpha)
+            self._draw_rect(ctx, v_center, marker_size, colour, alpha)
 
-            # Render rectangles of 3 pixels wide
-            ctx.rectangle(int(v_center[0]) - half_size,
-                          int(v_center[1]) - half_size,
-                          self.marker_size,
-                          self.marker_size)
-            ctx.stroke()
+    @staticmethod
+    def _draw_rect(ctx, v_center, v_size, colour, alpha):
+
+        ctx.set_source_rgba(0, 0, 0, 0.5)
+
+        x = int(v_center[0] - v_size[0] / 2.0) + 0.5
+        y = int(v_center[1] - v_size[1] / 2.0) + 0.5
+
+        ctx.rectangle(x - 1, y - 1, int(v_size[0] + 2), int(v_size[1] + 2))
+        ctx.stroke()
+
+        ctx.set_source_rgba(colour[0], colour[1], colour[2], alpha)
+
+        # Render rectangles of 3 pixels wide
+        ctx.rectangle(x, y, int(v_size[0]), int(v_size[1]))
+        ctx.stroke()

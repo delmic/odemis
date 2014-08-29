@@ -30,6 +30,7 @@ import weakref
 
 from decorator import decorator
 import wx
+import wx.lib.wxcairo as wxcairo
 
 from odemis import util, model
 from odemis.acq import stream
@@ -771,12 +772,55 @@ class OverviewCanvas(DblMicroscopeCanvas):
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
         self.point_select_overlay.activate()
 
+    @call_after
     def on_stage_pos_change(self, p_pos):
-        self.history_overlay.add_location(
-            (p_pos['x'], p_pos['y']),
-            (self.microscope_view.mpp.value * self.ClientSize.x,
-             self.microscope_view.mpp.value * self.ClientSize.y))
-        wx.CallAfter(self.Refresh)
+        active_streams = [s for s in self._tab_data_model.streams.value if s.is_active.value]
+
+        p_size = None
+
+        if active_streams:
+            image = active_streams[0].image.value
+            pixel_size = image.metadata.get('Pixel size', None)
+
+            if pixel_size:
+                x, y, _ = image.shape
+                p_size = (x * pixel_size[0], y * pixel_size[1])
+
+        self.history_overlay.add_location((p_pos['x'], p_pos['y']), p_size)
+
+    @wxlimit_invocation(2)  # max 1/2 Hz
+    @call_after  # needed as it accesses the DC
+    @ignore_dead
+    def _updateThumbnail(self):
+        if self.ClientSize.x * self.ClientSize.y <= 0:
+            return  # nothing to update
+
+        # new bitmap to copy the DC
+        bitmap = wx.EmptyBitmap(*self.ClientSize)
+        dc = wx.MemoryDC()
+        dc.SelectObject(bitmap)
+
+        # simplified version of on_paint()
+        margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
+                  (self._bmp_buffer_size[1] - self.ClientSize.x) // 2)
+
+        dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
+
+        image = wx.ImageFromBitmap(bitmap)
+        image = image.Scale(*gui.VIEW_BTN_SIZE, quality=wx.IMAGE_QUALITY_HIGH)
+
+        del dc
+
+        dc = wx.MemoryDC()
+        bitmap = wx.BitmapFromImage(image)
+        dc.SelectObject(bitmap)
+
+        ctx = wxcairo.ContextFromDC(dc)
+        self.history_overlay.Draw(ctx, gui.VIEW_BTN_SIZE)
+
+        # close the DC, to be sure the bitmap can be used safely
+        image = wx.ImageFromBitmap(bitmap)
+        self.microscope_view.thumbnail.value = image
 
 
 class SecomCanvas(DblMicroscopeCanvas):
@@ -840,8 +884,6 @@ class SecomCanvas(DblMicroscopeCanvas):
     def on_right_up(self, event):
         if self.current_mode not in SECOM_MODES:
             super(SecomCanvas, self).on_right_up(event)
-
-
 
 
 class SparcAcquiCanvas(DblMicroscopeCanvas):
