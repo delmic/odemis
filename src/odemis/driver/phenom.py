@@ -287,6 +287,7 @@ class Scanner(model.Emitter):
         Reads again the hardware setting and update the VA
         """
         fov = self.parent._device.GetSEMHFW()
+
         # we don't set it explicitly, to avoid calling .SetSEMHFW()
         self.horizontalFoV._value = fov
         self.horizontalFoV.notify(fov)
@@ -1179,6 +1180,7 @@ class ChamberPressure(model.Actuator):
         self._swVersion = parent._swVersion
 
         self._imagingDevice = self.parent._objects.create('ns0:imagingDevice')
+        self.wakeUpTime = 0
 
         # Handle the cases of stand-by and hibernate mode
         mode = self.parent._device.GetInstrumentMode()
@@ -1293,12 +1295,14 @@ class ChamberPressure(model.Actuator):
         """
         Estimates move procedure duration
         """
-        # TODO: get better estimate, based on the current status, it can go
-        # up to 12 hours!
-
         # Just an indicative time. It will be updated by polling the remaining
         # time.
-        timeRemaining = 20
+        if (self.parent._device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
+            self.parent._device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
+            # Usually about five minutes
+            timeRemaining = 5 * 60
+        else:
+            timeRemaining = 20
         return timeRemaining  # s
 
     def _changePressure(self, future, p):
@@ -1314,6 +1318,10 @@ class ChamberPressure(model.Actuator):
 
             try:
                 if p["pressure"] == PRESSURE_SEM:
+                    if (self.parent._device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
+                        self.parent._device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
+                        # If in standby or currently waking up, open event channel
+                        self._wakeUp()
                     self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
                 elif p["pressure"] == PRESSURE_NAVCAM:
                     if self.parent._device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
@@ -1333,4 +1341,27 @@ class ChamberPressure(model.Actuator):
 
     def _updateTime(self, future, target):
         remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-        future.set_end_time(time.time() + remainingTime + 5)
+        future.set_end_time(time.time() + self.wakeUpTime + remainingTime + 5)
+
+    def _wakeUp(self):
+        # Make sure system is waking up
+        self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+
+        # Event for remaining time update
+        eventID = self.parent._objects.create('ns0:EventIdentifier')
+        eventID = "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID"
+        eventSpec = self.parent._objects.create('ns0:EventSpec')
+        eventSpec.eventID = eventID
+        eventSpec.compressed = False
+
+        eventSpecArray.item = [eventSpec]
+        ch_id = self.parent._device.OpenEventChannel(eventSpecArray)
+
+        while(True):
+            self.wakeUpTime = self.parent._device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
+            if self.wakeUpTime == 0:
+                break
+        self.parent._device.CloseEventChannel(ch_id)
+        # Wait before move
+        time.sleep(1)
