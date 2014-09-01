@@ -209,9 +209,16 @@ class OverviewVierport(ViewPort):
         super(OverviewVierport, self).__init__(*args, **kwargs)
         #Remove all abilities, because the overview should have none
         self.tab_data = None
+        # self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
         super(OverviewVierport, self).OnSize(evt)
+
+        self.canvas.SetSize(self.Parent.Size)
+        if self.canvas.horizontal_field_width < 10e-3:
+            self.canvas.horizontal_field_width = 10e-3
+            logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
+
         self.canvas.fit_view_to_content(True)
 
     def setView(self, microscope_view, tab_data):

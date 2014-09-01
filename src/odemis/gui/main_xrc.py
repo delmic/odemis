@@ -821,6 +821,8 @@ def __init_resources():
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
                     <cellpos>2,2</cellpos>
                   </object>
                 </object>
