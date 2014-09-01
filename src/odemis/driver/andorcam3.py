@@ -270,7 +270,7 @@ class AndorCam3(model.DigitalCamera):
         try:
             tmp_rng = self._getTargetTemperatureRange()
             self.targetTemperature = model.FloatContinuous(tmp_rng[0], tmp_rng,
-                                   unit="C", setter=self.setTargetTemperature)
+                                   unit=u"°C", setter=self.setTargetTemperature)
             self.setTargetTemperature(self.targetTemperature.value)
         except NotImplementedError:
             pass
@@ -339,7 +339,7 @@ class AndorCam3(model.DigitalCamera):
         # cf FrameRate
 
         current_temp = self.GetFloat(u"SensorTemperature")
-        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam3 temperature update")

@@ -454,7 +454,7 @@ class AndorCam2(model.DigitalCamera):
             else:
                 ranges = [-275, 100]
             # TODO Clara must be cooled to the specified temperature: -45 C with fan, -15 C without.
-            self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit="C",
+            self.targetTemperature = model.FloatContinuous(ranges[0], ranges, unit=u"°C",
                                                             setter=self._setTargetTemperature)
             self._setTargetTemperature(ranges[0], force=True)
 
@@ -527,7 +527,7 @@ class AndorCam2(model.DigitalCamera):
                              "form [[rr, gain, emgain], ...]: '%s'" % (emgains,))
 
         current_temp = self.GetTemperature()
-        self.temperature = model.FloatVA(current_temp, unit="C", readonly=True)
+        self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
         self._metadata[model.MD_SENSOR_TEMP] = current_temp
         self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
                                          "AndorCam2 temperature update")

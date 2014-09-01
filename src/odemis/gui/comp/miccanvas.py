@@ -780,11 +780,11 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         if active_streams:
             image = active_streams[0].image.value
-            pixel_size = image.metadata.get('Pixel size', None)
-
-            if pixel_size:
-                x, y, _ = image.shape
-                p_size = (x * pixel_size[0], y * pixel_size[1])
+            if image is not None:
+                pixel_size = image.metadata.get('Pixel size', None)
+                if pixel_size is not None:
+                    x, y, _ = image.shape
+                    p_size = (x * pixel_size[0], y * pixel_size[1])
 
         self.history_overlay.add_location((p_pos['x'], p_pos['y']), p_size)
 

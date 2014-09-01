@@ -209,6 +209,12 @@ class AcquisitionDialog(xrcfr_acq):
         streams (iterable of Stream)
         return (bool): True if at least a SEM and an optical stream are present
         """
+        # FIXME: the phenom currently doesn't support fine overlay (because
+        # 4x4 scanning doesn't work). Once fine overlay works, this can be
+        # removed.
+        if self._tab_data_model.main.role == "delphi":
+            return False
+
         # check for a SEM stream
         for s in streams:
             if isinstance(s, EM_STREAMS):

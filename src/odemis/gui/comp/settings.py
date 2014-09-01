@@ -78,6 +78,7 @@ class SettingsPanel(wx.Panel):
             c.Destroy()
         self.num_rows = 0
 
+    # TODO: unused?
     def add_label(self, label, value=None, selectable=True):
         """ Adds a label to the settings panel, accompanied by an immutable
         value if one's provided.
@@ -101,14 +102,14 @@ class SettingsPanel(wx.Panel):
 
         if value and not selectable:
             value_ctrl = wx.StaticText(self.panel, label=unicode(value))
-            value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
+            value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
             self.panel._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                                flag=wx.ALL, border=5)
         elif value and selectable:
             value_ctrl = wx.TextCtrl(self.panel, value=unicode(value),
                                      style=wx.BORDER_NONE | wx.TE_READONLY)
-            value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+            value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+            value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
             self.panel._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
                                flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                                border=5)

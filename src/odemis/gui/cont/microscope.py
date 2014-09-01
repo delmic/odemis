@@ -627,9 +627,9 @@ class DelphiStateController(SecomStateController):
 
     def _check_holder_calib(self):
         """
-        Check whether the calibration data for the current sample holder is 
+        Check whether the calibration data for the current sample holder is
         available and do the Right Thing accordingly (either load it, or run
-        the calibration procedure) 
+        the calibration procedure)
         """
         try:
             # TODO: just subscribe to the change? So we could detect a new sample
