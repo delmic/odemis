@@ -1,3 +1,10 @@
+odemis (1.7.1-1ubuntu1) precise; urgency=low
+
+  * Version 1.7.1:
+  * Fixes latency issue with Andor CMOS cameras
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 01 Sep 2014 14:47:38 +0200
+
 odemis (1.7-1ubuntu1) precise; urgency=low
 
   * New version: 1.7
