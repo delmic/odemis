@@ -611,10 +611,9 @@ class DelphiStateController(SecomStateController):
         # Move to stage to center to be at a good position in overview
         f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
         f.result() # to be sure referencing doesn't cancel the move
-        self._check_holder_calib()
-
-        # continue business as usual
-        f.add_done_callback(self._start_overview_acquisition)
+        if self._check_holder_calib():
+            # continue business as usual
+            f.add_done_callback(self._start_overview_acquisition)
 
     def _start_overview_acquisition(self, unused=None):
         logging.debug("Starting overview acquisition")
@@ -630,6 +629,7 @@ class DelphiStateController(SecomStateController):
         Check whether the calibration data for the current sample holder is
         available and do the Right Thing accordingly (either load it, or run
         the calibration procedure)
+        return (bool): Whether the loading should continue
         """
         try:
             # TODO: just subscribe to the change? So we could detect a new sample
@@ -648,8 +648,8 @@ class DelphiStateController(SecomStateController):
                 calibconf = get_calib_conf()
                 calib = calibconf.get_sh_calib(shid)
                 if calib is None:
-                    self._request_holder_calib(shid)
-                    return # don't go further, as everything has been taken care of
+                    self._request_holder_calib(shid) # async
+                    return False # don't go further, as everything will be taken care
                 else:
                     # TODO: to be more precise on the stage rotation, we'll need to
                     # locate the top and bottom holes of the sample holder, using
@@ -658,11 +658,14 @@ class DelphiStateController(SecomStateController):
                     self._apply_holder_calib(*calib)
 
                 # Reference the (optical) stage
-                self._main_data.stage.reference({"x", "y"})
+                f = self._main_data.stage.reference({"x", "y"})
+                f.result()
                 # TODO: shall we also reference the optical focus? It'd be handy only
                 # if the absolute position is used.
         except Exception:
             logging.exception("Failed to set calibration")
+
+        return True
 
     @call_after
     def _request_holder_calib(self, shid):
@@ -671,14 +674,16 @@ class DelphiStateController(SecomStateController):
         for a sample holder (eg, it's the first time it is inserted)
         When this method returns, the sample holder will have been ejected,
         independently of whether the calibration has worked or not.
+        This method is asynchronous (running in the main GUI thread)
         """
         logging.info("New sample holder %x inserted", shid)
-        # TODO: tell the user we need to do calibration, and it needs to have
-        # the special sample => Eject (=Cancel) or Calibrate (=Continue)
-        # TODO: the Phenom backend seems to also require a code to allow to
-        # insert a new sample holder => ask the user for it here, and send it
-        # to the phenom backend? How? A special method on the chamber component?
-        # Eventually, it needs to call RegisterSampleHolder.
+        # Tell the user we need to do calibration, and it needs to have
+        # the special sample => Eject (=Cancel) or Calibrate (=OK)
+        # TODO: the Phenom backend also requires a code to allow to
+        # insert a new sample holder => if sample is not registered, ask the
+        # user for it.
+        # How? A special VA .sampleRegistered + method .registerSample() on the
+        # chamber component? Eventually, it needs to call RegisterSampleHolder.
 
         dlg = delphi.FirstCalibrationDialog(self._main_frame, register=True)
         val = dlg.ShowModal() # blocks

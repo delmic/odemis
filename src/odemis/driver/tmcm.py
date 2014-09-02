@@ -444,14 +444,21 @@ class TMCM3110(model.Actuator):
         """
         # cf TMCL reference p. 50
         # http://pandrv.com/ttdg/phpBB3/viewtopic.php?f=13&t=992
-#         To download a TMCL program into a module, the following steps have to be performed:
-#         - Send the "enter download mode command" to the module (command 132 with value as address of the program)
-#         - Send your commands to the module as usual (status byte return 101)
-#         - Send the "exit download mode" command (command 133 with all 0)
+        # To download a TMCL program into a module, the following steps have to be performed:
+        # - Send the "enter download mode command" to the module (command 132 with value as address of the program)
+        # - Send your commands to the module as usual (status byte return 101)
+        # - Send the "exit download mode" command (command 133 with all 0)
         # Each instruction is numbered +1, starting from 0
+
         self.SendInstruction(132, val=addr)
         for inst in prog:
-            self.SendInstruction(*inst)
+            # TODO: the controller sometimes fails to return the correct response
+            # when uploading a program... not sure why, but for now we hope it
+            # worked anyway.
+            try:
+                self.SendInstruction(*inst)
+            except IOError:
+                logging.warning("Controller returned wrong answer, but will assume it's fine")
         self.SendInstruction(133)
 
     def RunProgram(self, addr):
