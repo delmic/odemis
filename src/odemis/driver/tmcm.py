@@ -176,7 +176,7 @@ class TMCM3110(model.Actuator):
         self.SetAxisParam(axis, 4, 1398) # maximum velocity to 1398 == 2 mm/s
         self.SetAxisParam(axis, 5, 7)    # maximum acc to 7 == 20 mm/s2
         self.SetAxisParam(axis, 140, 8)  # number of usteps ==2^8 =256 per fullstep
-        self.SetAxisParam(axis, 6, 7)    # maximum RMS-current to 7 == 7/255 x 2.8 =82mA
+        self.SetAxisParam(axis, 6, 15)   # maximum RMS-current to 15 == 15/255 x 2.8 = 165mA
         self.SetAxisParam(axis, 7, 0)    # standby current to 0
         self.SetAxisParam(axis, 204, 100) # power off after 100 ms standstill
         self.SetAxisParam(axis, 154, 0)  # step divider to 0 ==2^0 ==1
