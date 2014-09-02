@@ -99,9 +99,16 @@ def findOptimalRange(hist, edges, outliers=0):
     else:
         # accumulate each bin into the next bin
         cum_hist = hist.cumsum()
+        nval = cum_hist[-1]
+
+        # trick: if there are lots (>1%) of complete black and not a single
+        # value just above it, it's a sign that the black is not part of the
+        # signal and so is all outliers
+        if hist[1] == 0 and cum_hist[0] / nval > 0.01 and cum_hist[0] < nval:
+            cum_hist -= cum_hist[0] # don't count 0's in the outliers
+            nval = cum_hist[-1]
 
         # find out how much is the value corresponding to outliers
-        nval = cum_hist[-1]
         oval = int(round(outliers * nval))
         lowv, highv = oval, nval - oval
 
