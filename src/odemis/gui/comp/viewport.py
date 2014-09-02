@@ -209,9 +209,16 @@ class OverviewVierport(ViewPort):
         super(OverviewVierport, self).__init__(*args, **kwargs)
         #Remove all abilities, because the overview should have none
         self.tab_data = None
+        # self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
         super(OverviewVierport, self).OnSize(evt)
+
+        self.canvas.SetSize(self.Parent.Size)
+        if self.canvas.horizontal_field_width < 10e-3:
+            self.canvas.horizontal_field_width = 10e-3
+            logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
+
         self.canvas.fit_view_to_content(True)
 
     def setView(self, microscope_view, tab_data):
@@ -468,6 +475,8 @@ class SecomViewport(MicroscopeViewport):
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
         self._orig_abilities = set()
+        # This attribute is set to True if this object (i.e. 'self') was responsible for chaning
+        # the HFW value
         self.self_set_hfw = False
 
     def setView(self, microscope_view, tab_data):
@@ -516,6 +525,8 @@ class SecomViewport(MicroscopeViewport):
 
         """
 
+        # If this ViewPort was not responsible for updating the hardware HFW, update the MPP value
+        # of the canvas (which is done in the `horizontal_field_width` setter)
         if not self.self_set_hfw:
             logging.info("Calculating mpp from hfw for viewport %s" % self)
             self.canvas.horizontal_field_width = hfw
@@ -539,6 +550,8 @@ class SecomViewport(MicroscopeViewport):
         except NotApplicableError:
             hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
 
+        # Indicate that this object was responsible for updating the hardware's HFW, so it won't
+        # get updated again in `_on_hfw_set_mpp`
         self.self_set_hfw = True
         self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
 

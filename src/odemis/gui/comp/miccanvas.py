@@ -481,8 +481,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         """
 
-        if self.microscope_view:
-            return self.microscope_view.mpp.value * self.ClientSize.x
+        width = self.ClientSize.x
+        if self.microscope_view and width:
+            return self.microscope_view.mpp.value * width
 
         return None
 
@@ -490,8 +491,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     def horizontal_field_width(self, hfw):
         """ Set the mpp of the microscope view according to the given HFW """
 
-        if self.microscope_view:
-            self.microscope_view.mpp.value = hfw / self.ClientSize.x
+        width = self.ClientSize.x
+
+        if self.microscope_view and width:
+            self.microscope_view.mpp.value = hfw / width
 
     def on_size(self, event):
         new_size = event.Size
@@ -785,7 +788,6 @@ class OverviewCanvas(DblMicroscopeCanvas):
                 if pixel_size is not None:
                     x, y, _ = image.shape
                     p_size = (x * pixel_size[0], y * pixel_size[1])
-
         self.history_overlay.add_location((p_pos['x'], p_pos['y']), p_size)
 
     @wxlimit_invocation(2)  # max 1/2 Hz
