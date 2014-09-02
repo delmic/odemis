@@ -341,7 +341,7 @@ class AlignedSEMStream(SEMStream):
         """
         res, trans = self._computeROISettings(self.roi.value)
 
-        if self._shiftebeam and self._calibrated:
+        if (self._shiftebeam == "Ebeam shift") and self._calibrated:
             # convert shift into SEM pixels
             pxs = self._emitter.pixelSize.value
             trans_cor = tuple(s / p for s, p in zip(self._shift, pxs))

@@ -133,7 +133,7 @@ Spectra: {
     role: align,
     init: {
         axes: ["x", "y"],
-        backlash: {"x": 20.e-6, "y": 20.e-6},
+        backlash: {"x": 100.e-6, "y": 100.e-6},
     },
     children: {"slave": "Optical stage"},
 }

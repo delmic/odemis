@@ -246,6 +246,10 @@ class AntiBacklashStage(model.Actuator):
         # it's just a conversion from the child's position
         self._child.position.subscribe(self._updatePosition, init=True)
 
+        if (hasattr(self._child, "referenced") and
+            isinstance(self._child.referenced, model.VigilantAttributeBase)):
+            self.referenced = self._child.referenced
+
     def _updatePosition(self, pos_child):
         """
         update the position VA when the child's position is updated
