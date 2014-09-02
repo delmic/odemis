@@ -1196,9 +1196,9 @@ class HistoryOverlay(ViewOverlay):
                 v_center = (v_center[0] * (scaled_size[0] / self.cnvs.ClientSize.x),
                             v_center[1] * (scaled_size[1] / self.cnvs.ClientSize.y))
                 marker_size = (2, 2)
+            # FIXME: Marker size calculation is broken
             # elif p_size:
-            #     marker_size = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_size), (0, 0))
-            #     print marker_size
+            #     marker_size = self.cnvs.world_to_view(p_size, offset)
             else:
                 marker_size = (5, 5)
 

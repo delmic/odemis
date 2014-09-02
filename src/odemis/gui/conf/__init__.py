@@ -337,7 +337,7 @@ class CalibrationConfig(Config):
                     raise ValueError("stage_scaling %s must be > 0", sscale)
 
                 srot = self.config.getfloat(sec, "stage_rotation")
-                if not 0 <= srot <= math.pi:
+                if not 0 <= srot <= (2 * math.pi):
                     raise ValueError("stage_rotation %f out of range", srot)
 
                 iscale = self._get_tuple(sec, "image_scaling")
