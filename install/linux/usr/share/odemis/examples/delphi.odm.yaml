@@ -141,7 +141,7 @@ Spectra: {
 # Use 2 CombinedActuators to separate the axes of the TMCM over different roles
 "Optical stage": {
     class: CombinedActuator,
-    role: align,
+    role: None,
     affects: ["Zyla"],
     children: {"x": TMCM, "y": TMCM},
     init: {
