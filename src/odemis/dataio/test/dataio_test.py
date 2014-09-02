@@ -25,7 +25,6 @@ import unittest
 class TestDataIO(unittest.TestCase):
 
     def test_get_available_formats(self):
-        all_fmts = set()
         for mode in [os.O_RDONLY, os.O_WRONLY, os.O_RDWR]:
             fmts = get_available_formats(mode)
             self.assertGreaterEqual(len(dataio.__all__), len(fmts))
@@ -34,11 +33,10 @@ class TestDataIO(unittest.TestCase):
                 for ext in exts:
                     self.assertTrue(ext.startswith("."),
                             "extension '%s' doesn't start with a dot" % ext)
-            
-            all_fmts |= set(fmts)
 
+        # including lossy formats
+        all_fmts = get_available_formats(os.O_RDWR, allowlossy=True)
         self.assertEqual(len(dataio.__all__), len(all_fmts))
-
 
     def test_get_exporter(self):
         fmts = get_available_formats()
