@@ -304,11 +304,13 @@ class AlignedSEMStream(SEMStream):
     by just updating the image position.
     """
     def __init__(self, name, detector, dataflow, emitter,
-                 ccd, stage, shiftebeam=False):
+                 ccd, stage, shiftebeam="Metadata update"):
         """
-        shiftebeam (bool): if True, will correct the SEM position using beam shift
-         (iow, using emitter.translation). If False, it will just update the
-         position correction metadata on the SEM images.
+        shiftebeam (str): if "Ebeam shift", will correct the SEM position using beam shift
+         (iow, using emitter.translation). If "Metadata update", it will just update the
+         position correction metadata on the SEM images. If "Stage move", it will
+         move the stage or beam (depending on how large is the move) and then update
+         the correction metadata.
         """
         SEMStream.__init__(self, name, detector, dataflow, emitter)
         self._ccd = ccd
@@ -353,8 +355,19 @@ class AlignedSEMStream(SEMStream):
         """
         Compensate the SEM shift, using either beam shift or metadata update
         """
-        if self._shiftebeam:
+        if self._shiftebeam == "Ebeam shift":
             self._applyROI() # will take care of updating the translation
+        elif self._shiftebeam == "Stage move":
+            for child in self._stage.children:
+                if child.role == "sem-stage":
+                    f = child.moveRel({"x":self._shift[0], "y":self._shift[1]})
+                    f.result()
+
+            shift = (0, 0)
+            shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+            self._shift = shift
+            # update the correction metadata
+            self._detector.updateMetadata({MD_POS_COR: self._shift})
         else:
             # update the correction metadata
             self._detector.updateMetadata({MD_POS_COR: self._shift})

@@ -4,7 +4,7 @@ DELPHI: {
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "SED Phenom", "NavCam"],
     actuators: ["Stage Phenom", "Optical stage", "Optical focus",
-                "Chamber Phenom", "EBeam focus", "NavCam focus", "CombinedStage"],
+                "Chamber Phenom", "EBeam focus", "NavCam focus", "CombinedStage", "AntiBacklash Stage"],
 }
 
 Spectra: {
@@ -125,7 +125,17 @@ Spectra: {
     role: stage,
     affects: ["EBeam Phenom", "Zyla"],
     init: {},
-    children: {"master": "Stage Phenom", "slave": "Optical stage"},
+    children: {"master": "Stage Phenom", "slave": "AntiBacklash Stage"},
+}
+
+"AntiBacklash Stage": {
+    class: combined_stage.AntiBacklashStage,
+    role: align,
+    init: {
+        axes: ["x", "y"],
+        backlash: {"x": 20.e-6, "y": 20.e-6},
+    },
+    children: {"slave": "Optical stage"},
 }
 
 # Use 2 CombinedActuators to separate the axes of the TMCM over different roles

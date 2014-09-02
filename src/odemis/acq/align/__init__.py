@@ -76,7 +76,7 @@ def FindEbeamCenter(ccd, detector, escan):
         while exp < 2:  # above 2 s it means something went wrong
             ccd.exposureTime.value = exp
 
-            img = ccd.data.get()
+            img = ccd.data.get(False)
             hdf5.export("FindEbeamCenter.h5", img)
             if prev_img is not None:
                 img += prev_img  # accumulate, to increase the signal

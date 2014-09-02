@@ -21,10 +21,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from odemis.model import isasync
 import math
 import numpy
 from odemis import model
+from odemis.model import isasync
 
 
 class InclinedStage(model.Actuator):
@@ -215,7 +215,7 @@ class AntiBacklashStage(model.Actuator):
     This is a stage wrapper that takes a stage and ensures that every move 
     always finishes in the same direction.
     """
-    def __init__(self, name, role, children, axes, backlash):
+    def __init__(self, name, role, children, axes, backlash, **kwargs):
         """
         children (dict str -> Stage): dict containing one component, the stage 
         to wrap
@@ -236,7 +236,8 @@ class AntiBacklashStage(model.Actuator):
 
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}
-        model.Actuator.__init__(self, name, role, axes=axes_def)
+        model.Actuator.__init__(self, name, role, axes=axes_def, children=children,
+                                **kwargs)
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
@@ -258,22 +259,30 @@ class AntiBacklashStage(model.Actuator):
 
     @isasync
     def moveRel(self, shift):
-        # TODO, not implemented
-        pass
+        # shift is a vector, conversion is identical to a point
+        vshift = [shift.get("x", 0), shift.get("y", 0)]
+
+        # move with the backlash subtracted
+        sub_shift = {self._axes_child["x"]: vshift[0] - self._backlash["x"],
+                     self._axes_child["y"]: vshift[1] - self._backlash["y"]}
+        f = self._child.moveRel(sub_shift)
+        f.result()
+
+        # backlash move
+        f = self._child.moveRel(self._backlash)
+        return f
 
     @isasync
     def moveAbs(self, pos):
-        # shift is a vector, conversion is identical to a point
         vpos = [pos.get("x", 0), pos.get("y", 0)]
 
-#         pos_child = {self._axes_child["x"]: vpos[0],
-#                        self._axes_child["y"]: vpos[1]}
-#
+        # move with the backlash subtracted
         sub_move = {self._axes_child["x"]: vpos[0] - self._backlash["x"],
                     self._axes_child["y"]: vpos[1] - self._backlash["y"]}
         f = self._child.moveAbs(sub_move)
         f.result()
 
+        # backlash move
         f = self._child.moveRel(self._backlash)
         return f
 
@@ -283,6 +292,5 @@ class AntiBacklashStage(model.Actuator):
 
     @isasync
     def reference(self, axes):
-        # TODO, implement reference for objective lens
         f = self._child.reference(axes)
         return f
