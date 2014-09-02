@@ -209,7 +209,7 @@ class OverviewVierport(ViewPort):
         super(OverviewVierport, self).__init__(*args, **kwargs)
         #Remove all abilities, because the overview should have none
         self.tab_data = None
-        # self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
+        self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
         super(OverviewVierport, self).OnSize(evt)

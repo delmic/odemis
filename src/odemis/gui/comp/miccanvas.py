@@ -804,7 +804,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         # simplified version of on_paint()
         margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                  (self._bmp_buffer_size[1] - self.ClientSize.x) // 2)
+                  (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
 
         dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
 
