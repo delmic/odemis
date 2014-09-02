@@ -1576,6 +1576,15 @@ class AndorCam3(model.DigitalCamera):
         if self.temp_timer is not None:
             self.temp_timer.cancel()
             self.temp_timer = None
+
+        # Stop the acquisition if it's active, as some hardware don't like to
+        # be disconnected while acquiring, and stop responding afterwards.
+        try:
+            if not self.acquire_must_stop.is_set():
+                self.req_stop_flow()
+                self.wait_stopped_flow()
+        except Exception:
+            logging.exception("Failed to stop the active acquisition")
             
         if self.handle is not None:
             self.Close()
