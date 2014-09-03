@@ -1152,6 +1152,12 @@ class HistoryOverlay(ViewOverlay):
         self.history = []  # List of (center, size) tuples
         self.marker_size = 5
 
+    def clear(self):
+        self.history = []
+
+    def __len__(self):
+        return len(self.history)
+
     def add_location(self, p_center, p_size=None):
         """ Add a view location to the history list
 

@@ -444,6 +444,8 @@ class OverviewVierport(MicroscopeViewport):
             self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
         elif self.canvas.active_overlays:
             self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
+            if len(self.canvas.history_overlay) > 1:
+                self.canvas.history_overlay.clear()
 
     def _on_position_select(self, p_pos):
         """ Set the physical view position
