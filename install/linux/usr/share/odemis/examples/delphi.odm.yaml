@@ -52,7 +52,10 @@ Spectra: {
     # Internal child of SEM Phenom, so no class
     role: e-beam,
     init: {},
-    affects: ["SED Phenom", "Zyla"] # affects the CCD in case of cathodoluminescence
+    affects: ["SED Phenom", "Zyla"], # affects the CCD in case of cathodoluminescence
+    properties: {
+        bpp: 8,  # 8 bit per pixel by default as it has a much faster refresh rate
+    },
 }
 
 "EBeam focus": {
@@ -118,6 +121,9 @@ Spectra: {
     init: {device: 0,
            transpose: [-2, -1], # rotated 90° clockwise
     },
+    properties: {
+        resolution: [2160, 2160],  # Crop Y axis which doesn't receive light anyway
+    },
 }
 
 "CombinedStage": {
@@ -133,7 +139,7 @@ Spectra: {
     role: align,
     init: {
         axes: ["x", "y"],
-        backlash: {"x": 100.e-6, "y": 100.e-6},
+        backlash: {"x": 100.e-06, "y": 100.e-06},
     },
     children: {"slave": "Optical stage"},
 }
@@ -167,8 +173,10 @@ TMCM: {
     role: none,
     init: {
         port: "/dev/ttyTMCM0",
+        #port: "/dev/fake",
         axes: ["x", "y", "z"],
         ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
+        #refproc: "FakeReferencing", # referencing procedure for simulator
         refproc: "2xFinalForward", # official referencing procedure for the Delphi
         # inverted: ["y"],
     },
