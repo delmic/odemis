@@ -76,6 +76,9 @@ class SEM(model.HwComponent):
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         # you can change the 'localhost' string and provide another SEM addres
+        self._host = host
+        self._username = username
+        self._password = password
         client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
         self._device = client.service
         # Access to service objects
@@ -481,6 +484,12 @@ class Detector(model.Detector):
         # Otherwise, just listen to events, and update the information as the
         # events arrive.
 
+        # Start dedicated connection for acquisition stream
+        acq_client = Client(self.parent._host + "?om", location=self.parent._host,
+                        username=self.parent._username, password=self.parent._password,
+                        timeout=SOCKET_TIMEOUT)
+        self._acq_device = acq_client.service
+
         # Update stage and focus position
         self.parent._stage._updatePosition()
         self.parent._focus._updatePosition()
@@ -488,23 +497,23 @@ class Detector(model.Detector):
 
         # Update all the Scanner VAs upon stream start
         # Get current field of view and compute magnification
-        fov = self.parent._device.GetSEMHFW()
+        fov = self._acq_device.GetSEMHFW()
         self.parent._scanner.horizontalFoV.value = fov
 
-        rotation = self.parent._device.GetSEMRotation()
+        rotation = self._acq_device.GetSEMRotation()
         self.parent._scanner.rotation.value = -rotation % (2 * math.pi)
 
-        volt = self.parent._device.SEMGetHighTension()
+        volt = self._acq_device.SEMGetHighTension()
         self.parent._scanner.accelVoltage.value = -volt
 
         # Calculate current pc
-        self.parent._scanner._spotSize = self.parent._device.SEMGetSpotSize()
+        self.parent._scanner._spotSize = self._acq_device.SEMGetSpotSize()
         self.parent._scanner._probeCurrent = self.parent._scanner._spotSize * math.sqrt(-volt)
         self.parent._scanner.probeCurrent.value = self.parent._scanner._probeCurrent
 
 
         # Check if Phenom is in the proper mode
-        area = self.parent._device.GetProgressAreaSelection().target
+        area = self._acq_device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-SEM":
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
 
@@ -523,15 +532,15 @@ class Detector(model.Detector):
 
     def beam_blank(self, blank):
         if blank == True:
-            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+            self._acq_device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
         else:
-            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+            self._acq_device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
 
     def stop_acquire(self):
         try:
             # "Blank" the beam
             try:
-                self.parent._device.SEMAbortImageAcquisition()
+                self._acq_device.SEMAbortImageAcquisition()
             except suds.WebFault:
                 logging.debug("No acquisition in progress to be aborted.")
             self.beam_blank(True)
@@ -580,7 +589,7 @@ class Detector(model.Detector):
             metadata[model.MD_ACQ_DATE] = time.time()
             metadata[model.MD_BPP] = bpp
 
-            scan_params_view = self.parent._device.GetSEMViewingMode().parameters
+            scan_params_view = self._acq_device.GetSEMViewingMode().parameters
             scan_params_view.resolution.width = 256
             scan_params_view.resolution.height = 256
             scan_params_view.nrOfFrames = 1
@@ -600,8 +609,8 @@ class Detector(model.Detector):
                     scan_params_view.scale = 0
                     scan_params_view.center.x = 0  # just to be sure it's at the center
                     scan_params_view.center.y = 0
-                    # self.parent._device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
-                    self.parent._device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-SPOT')
+                    # self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
+                    self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-SPOT')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
@@ -611,8 +620,8 @@ class Detector(model.Detector):
                 self._scanParams.resolution.height = res[1]
                 if scan_params_view.scale != 1:
                     scan_params_view.scale = 1
-                    self.parent._device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
-                img_str = self.parent._device.SEMAcquireImageCopy(self._scanParams)
+                    self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
                 # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
