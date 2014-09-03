@@ -622,6 +622,19 @@ class TMCM3110(model.Actuator):
                 pos_dir = self._doInputReference(axis, 350) # fast (~0.5 mm/s)
                 if pos_dir: # always finish first by negative direction
                     self._doInputReference(axis, 350) # fast (~0.5 mm/s)
+
+                # Go back far enough that the slow referencing always need quite
+                # a bit of move. This is not part of the official NTS procedure
+                # but without that, the final reference position is affected by
+                # the original position.
+                self.MoveRelPos(axis, -20000) # ~ 100µm
+                for i in range(100):
+                    time.sleep(0.01)
+                    if self._isOnTarget(axis):
+                        break
+                else:
+                    logging.warning("Relative move failed to finish in time")
+
                 pos_dir = self._doInputReference(axis, 50) # slow (~0.07 mm/s)
                 if not pos_dir: # if it was done in negative direction (unlikely), redo
                     logging.debug("Doing one last reference move, in positive dir")
