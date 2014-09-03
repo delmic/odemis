@@ -56,9 +56,24 @@ class FakeEBeam(model.Emitter):
     def __init__(self, name):
         model.Emitter.__init__(self, name, "fakeebeam", parent=None)
         self._shape = (2048, 2048)
+        self.dwellTime = model.FloatContinuous(1e-6, (1e-6, 1), unit="s")
         self.resolution = model.ResolutionVA((256, 256), [(1, 1), self._shape])
         self.pixelSize = model.VigilantAttribute((1e-9, 1e-9), unit="m", readonly=True)
         self.magnification = model.FloatVA(1000.)
+        self.scale = model.TupleContinuous((1, 1), [(1, 1), self._shape],
+                                           cls=(int, long, float), unit="")
+        self.translation = model.TupleContinuous((0, 0), ((0, 0), (0, 0)),
+                                           cls=(int, long, float), unit="px")
+
+class FakeDetector(model.Detector):
+    """
+    Imitates an SEM detector, but you need to send the data yourself (using
+    comp.data.notify(d)
+    """
+    def __init__(self, name):
+        model.Detector.__init__(self, name, "fakedet", parent=None)
+        self.data = model.DataFlow()
+        self._shape = (2 ** 16,)
 
 # @skip("simple")
 class StreamTestCase(unittest.TestCase):
@@ -221,6 +236,64 @@ class StreamTestCase(unittest.TestCase):
         img2 = rgbs.image.value
         self.assertIs(img, img2)
 
+    def test_histogram(self):
+        """
+        Check the histogram updates correctly, including if the BPP changes
+        """
+        ebeam = FakeEBeam("ebeam")
+        se = FakeDetector("se")
+        ss = stream.SEMStream("test", se, se.data, ebeam)
+
+        # without data, the histogram should be empty, and the intensity range
+        # based on the depth of the detector
+        h = ss.histogram.value
+        ir = ss.intensityRange.range
+        self.assertEqual(len(h), 0)
+        self.assertEqual((ir[0][0], ir[1][1]), (0, se.shape[0] - 1))
+
+        # "start" the stream, so it expects data
+        ss.should_update.value = True
+        ss.is_active.value = True
+
+        # send a simple 8 bit image (with correct metadata) =>
+        #  * The intensity range should update to 8-bit
+        #  * The histogram should be 256 long
+        d = numpy.zeros(ebeam.shape[::-1], "uint8")
+        md = {model.MD_BPP: 8,
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    }
+        da = model.DataArray(d, md)
+        se.data.notify(da)
+
+        time.sleep(0.5) # make sure all the delayed code is executed
+        self.assertIsInstance(ss.image.value, model.DataArray)
+        h = ss.histogram.value
+        ir = ss.intensityRange.range
+        self.assertEqual(len(h), 256)
+        self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 8) - 1))
+
+        # Send a 16 bit image with 16 BPP =>
+        #  * The intensity range should update to 16-bit
+        #  * The histogram should stay not too long (<=1024 values)
+        d = numpy.zeros(ebeam.shape[::-1], "uint16")
+        md = {model.MD_BPP: 16,
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    }
+        da = model.DataArray(d, md)
+        se.data.notify(da)
+
+        time.sleep(0.5) # make sure all the delayed code is executed
+        self.assertIsInstance(ss.image.value, model.DataArray)
+        h = ss.histogram.value
+        ir = ss.intensityRange.range
+        self.assertLessEqual(len(h), 1024)
+        self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 16) - 1))
+
+
+
+# @skip("faster")
 class SECOMTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SECOM
