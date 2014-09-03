@@ -1198,7 +1198,12 @@ class HistoryOverlay(ViewOverlay):
                 marker_size = (2, 2)
             # FIXME: Marker size calculation is broken
             # elif p_size:
-            #     marker_size = self.cnvs.world_to_view(p_size, offset)
+            #     # marker_size = self.cnvs.world_to_view(p_size, offset)
+            #     marker_size = (int(p_size[0] * self.cnvs.scale),
+            #                    int(p_size[0] * self.cnvs.scale))
+            #
+            #     if marker_size[0] < 2 or marker_size[1] < 2:
+            #         marker_size = (2, 2)
             else:
                 marker_size = (5, 5)
 

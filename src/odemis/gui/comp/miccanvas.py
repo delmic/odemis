@@ -765,7 +765,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.history_overlay = HistoryOverlay(self)
         self.add_view_overlay(self.history_overlay)
 
-        self.add_active_overlay(self.history_overlay)
+        # self.add_active_overlay(self.history_overlay)
         self.add_active_overlay(self.point_select_overlay)
 
     def setView(self, microscope_view, tab_data):
@@ -788,6 +788,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
                 if pixel_size is not None:
                     x, y, _ = image.shape
                     p_size = (x * pixel_size[0], y * pixel_size[1])
+
         self.history_overlay.add_location((p_pos['x'], p_pos['y']), p_size)
 
     @wxlimit_invocation(2)  # max 1/2 Hz
