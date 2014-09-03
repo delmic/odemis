@@ -197,70 +197,6 @@ class ViewPort(wx.Panel):
         super(ViewPort, self).Refresh(*args, **kwargs)
 
 
-class OverviewVierport(ViewPort):
-    """ A Viewport containing a downscaled overview image of the loaded sample
-
-    If a chamber state can be tracked,
-    """
-
-    canvas_class = miccanvas.OverviewCanvas
-
-    def __init__(self, *args, **kwargs):
-        super(OverviewVierport, self).__init__(*args, **kwargs)
-        #Remove all abilities, because the overview should have none
-        self.tab_data = None
-        # self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
-
-    def OnSize(self, evt):
-        super(OverviewVierport, self).OnSize(evt)
-
-        self.canvas.SetSize(self.Parent.Size)
-        if self.canvas.horizontal_field_width < 10e-3:
-            self.canvas.horizontal_field_width = 10e-3
-            logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
-
-        self.canvas.fit_view_to_content(True)
-
-    def setView(self, microscope_view, tab_data):
-        """ Attach the MicroscopeView associated with the overview """
-
-        self._microscope_view = microscope_view
-        self.tab_data = tab_data
-
-        # Track chamber state if possible
-        if tab_data.main.chamber:
-            tab_data.main.chamberState.subscribe(self._on_chamber_state_change)
-
-        # Hide the cross hair overlay
-        microscope_view.show_crosshair.value = False
-
-        self.canvas.setView(microscope_view, tab_data)
-
-    def _on_chamber_state_change(self, chamber_state):
-        """ Watch position changes in the PointSelectOverlay if the chamber is ready """
-
-        if chamber_state == CHAMBER_VACUUM:
-            self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
-        elif self.canvas.active_overlays:
-            self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
-
-    def _on_position_select(self, p_pos):
-        """ Set the physical view position
-
-        TODO: We could also use the stage directly to move to the desired position, using a MoveAbs
-            call on the tab_data.main.stage attribute. But the moveStageToView has some nice, built
-            in, safety features.
-
-        """
-
-        if self.tab_data:
-            for view in self.tab_data.views.value:
-                if view.has_stage():
-                    view.view_pos.value = p_pos
-                    view.moveStageToView()
-                    break
-
-
 class MicroscopeViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 
@@ -280,7 +216,6 @@ class MicroscopeViewport(ViewPort):
             # Bind on EVT_SLIDER to update even while the user is moving
             self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
             self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
-
 
     def setView(self, microscope_view, tab_data):
         """
@@ -466,6 +401,68 @@ class MicroscopeViewport(ViewPort):
         evt.Skip()
 
     ## END Event handling
+
+
+class OverviewVierport(MicroscopeViewport):
+    """ A Viewport containing a downscaled overview image of the loaded sample
+
+    If a chamber state can be tracked,
+    """
+
+    canvas_class = miccanvas.OverviewCanvas
+    legend_class = InfoLegend
+
+    def __init__(self, *args, **kwargs):
+        super(OverviewVierport, self).__init__(*args, **kwargs)
+        self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
+
+    def OnSize(self, evt):
+        self.canvas.SetSize(self.Parent.Size)
+        if self.canvas.horizontal_field_width < 10e-3:
+            self.canvas.horizontal_field_width = 10e-3
+            logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
+
+        super(OverviewVierport, self).OnSize(evt)
+        self.canvas.fit_view_to_content(True)
+
+    def setView(self, microscope_view, tab_data):
+        """ Attach the MicroscopeView associated with the overview """
+
+        super(OverviewVierport, self).setView(microscope_view, tab_data)
+
+        # Track chamber state if possible
+        if tab_data.main.chamber:
+            tab_data.main.chamberState.subscribe(self._on_chamber_state_change)
+
+        # Hide the cross hair overlay
+        microscope_view.show_crosshair.value = False
+
+    def _on_chamber_state_change(self, chamber_state):
+        """ Watch position changes in the PointSelectOverlay if the chamber is ready """
+
+        if chamber_state == CHAMBER_VACUUM:
+            self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
+        elif self.canvas.active_overlays:
+            self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
+            if len(self.canvas.history_overlay) > 1:
+                self.canvas.history_overlay.clear()
+
+    def _on_position_select(self, p_pos):
+        """ Set the physical view position
+
+        TODO: We could also use the stage directly to move to the desired position, using a MoveAbs
+            call on the tab_data.main.stage attribute. But the moveStageToView has some nice, built
+            in, safety features.
+            Also: move this to OverviewCanvas?
+
+        """
+
+        if self._tab_data_model:
+            for view in self._tab_data_model.views.value:
+                if view.has_stage():
+                    view.view_pos.value = p_pos
+                    view.moveStageToView()
+                    break
 
 
 class SecomViewport(MicroscopeViewport):

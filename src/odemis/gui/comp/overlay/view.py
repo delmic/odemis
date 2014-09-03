@@ -1152,14 +1152,24 @@ class HistoryOverlay(ViewOverlay):
         self.history = []  # List of (center, size) tuples
         self.marker_size = 5
 
+    def clear(self):
+        self.history = []
+
+    def __len__(self):
+        return len(self.history)
+
+    def __str__(self):
+        return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history[-5:]])
+
     def add_location(self, p_center, p_size=None):
         """ Add a view location to the history list
 
         :param p_center: Physical coordinates of the view center
         :param p_size: Physical size of the the view
         """
+
         # If the 'new' position is identical to the last one in the history, ignore
-        if self.history and p_center == self.history[-1][0]:
+        if self.history and (p_center, p_size) == self.history[-1]:
             return
 
         # If max length reached, remove the oldest
@@ -1197,8 +1207,13 @@ class HistoryOverlay(ViewOverlay):
                             v_center[1] * (scaled_size[1] / self.cnvs.ClientSize.y))
                 marker_size = (2, 2)
             # FIXME: Marker size calculation is broken
-            # elif p_size:
-            #     marker_size = self.cnvs.world_to_view(p_size, offset)
+            elif p_size:
+                marker_size = (int(p_size[0] * self.cnvs.scale),
+                               int(p_size[0] * self.cnvs.scale))
+
+                # Prevent the marker from becomming too small
+                if marker_size[0] < 2 or marker_size[1] < 2:
+                    marker_size = (3, 3)
             else:
                 marker_size = (5, 5)
 

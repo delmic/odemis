@@ -38,8 +38,9 @@ from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
+from odemis.model._metadata import MD_PIXEL_SIZE
 from odemis.util import units
-from odemis.acq.stream import UNDEFINED_ROI
+from odemis.acq.stream import UNDEFINED_ROI, EM_STREAMS
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
@@ -765,7 +766,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.history_overlay = HistoryOverlay(self)
         self.add_view_overlay(self.history_overlay)
 
-        self.add_active_overlay(self.history_overlay)
+        # self.add_active_overlay(self.history_overlay)
         self.add_active_overlay(self.point_select_overlay)
 
     def setView(self, microscope_view, tab_data):
@@ -777,18 +778,48 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
     @call_after
     def on_stage_pos_change(self, p_pos):
-        active_streams = [s for s in self._tab_data_model.streams.value if s.is_active.value]
+        """ Store the new position in the overview history when the stage moves """
+        p_size = self._calc_stream_size()
+        self.history_overlay.add_location((p_pos['x'], p_pos['y']), p_size)
+
+    def track_hfw_history(self, mpp):
+        """ Add a new position to the overview history when the HFW changes
+
+        The last position will be re-uased, but the size should be different.
+        """
+
+        if self.history_overlay.history:
+            p_pos = self.history_overlay.history[-1][0]
+            p_size = self._calc_stream_size()
+            self.history_overlay.add_location((p_pos[0], p_pos[1]), p_size)
+
+    def _calc_stream_size(self):
+        """ Calculate the physical size of the current view """
 
         p_size = None
 
-        if active_streams:
-            image = active_streams[0].image.value
-            if image is not None:
-                pixel_size = image.metadata.get('Pixel size', None)
-                if pixel_size is not None:
-                    x, y, _ = image.shape
-                    p_size = (x * pixel_size[0], y * pixel_size[1])
-        self.history_overlay.add_location((p_pos['x'], p_pos['y']), p_size)
+        # Calculate the stream size if the the ebeam is active
+        for strm in self._tab_data_model.streams.value:
+            if strm.is_active and isinstance(strm, EM_STREAMS):
+                image = strm.image.value
+                if image is not None:
+                    pixel_size = image.metadata.get(MD_PIXEL_SIZE, None)
+                    if pixel_size is not None:
+                        x, y, _ = image.shape
+                        p_size = (x * pixel_size[0], y * pixel_size[1])
+
+                        # TODO: tracking doesn't work, since the  pixel size
+                        # might not be updated before `track_hfw_history` is
+                        # called
+
+                        # for view in self._tab_data_model.views.value:
+                        #     if strm in view.stream_tree:
+                        #         view.mpp.subscribe(self.track_hfw_history)
+                        #         break
+
+                        break
+        return p_size
+
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
@@ -804,7 +835,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
 
         # simplified version of on_paint()
         margin = ((self._bmp_buffer_size[0] - self.ClientSize.x) // 2,
-                  (self._bmp_buffer_size[1] - self.ClientSize.x) // 2)
+                  (self._bmp_buffer_size[1] - self.ClientSize.y) // 2)
 
         dc.BlitPointSize((0, 0), self.ClientSize, self._dc_buffer, margin)
 

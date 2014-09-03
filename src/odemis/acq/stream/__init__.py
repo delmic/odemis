@@ -48,6 +48,7 @@ AR_STREAMS = (ARStream,
               StaticARStream,
               SEMARMDStream)
 
+
 # TODO: make it like a VA, so that it's possible to know when it changes
 class StreamTree(object):
     """ Object which contains a set of streams, and how they are merged to
@@ -97,6 +98,14 @@ class StreamTree(object):
     def __getitem__(self, index):
         """ Return the Stream of StreamTree using index reference val[i] """
         return self.streams[index]
+
+    def __contains__(self, the_stream):
+        for stream in self.streams:
+            if isinstance(the_stream, StreamTree) and the_stream in stream:
+                return True
+            elif stream == the_stream:
+                return True
+        return False
 
     def add_stream(self, stream):
         if isinstance(stream, (Stream, StreamTree)):
