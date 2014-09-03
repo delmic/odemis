@@ -64,7 +64,7 @@ class SettingsPanel(wx.Panel):
 
         # The default message text is added here, because at least control needs to be present
         # before the growable column can be added.
-        self.message_text = None
+        self.message_ctrl = None
         # A default message need to be inserted here, because otherwise AddGrowableCol will cause
         # an exception, since there wouldn't be any columns yet.
         self.set_default_message(default_msg)
@@ -78,18 +78,18 @@ class SettingsPanel(wx.Panel):
     def set_default_message(self, msg):
         """ Set the default message in the settings panel """
 
-        if not self.message_text:
-            self.message_text = wx.StaticText(self, -1, msg)
-            self._gb_sizer.Add(self.message_text, (0, 0), (1, 2))
+        if not self.message_ctrl:
+            self.message_ctrl = wx.StaticText(self, -1, msg)
+            self._gb_sizer.Add(self.message_ctrl, (0, 0), (1, 2))
             self.num_rows = 1
         else:
-            self.message_text.SetLabel(msg)
-        self.message_text.Show()
+            self.message_ctrl.SetLabel(msg)
+        self.message_ctrl.Show()
 
     def clear_default_message(self):
         """ Remove the default message if it exists """
-        if self.message_text:
-            self.message_text.Hide()
+        if self.message_ctrl:
+            self.message_ctrl.Hide()
 
     def clear_all(self):
         """ Remove all children """
@@ -191,23 +191,6 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = UnitIntegerSlider(self, value=value, **conf)
-        self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        return lbl_ctrl, value_ctrl
-
-    @control_bookkeeper
-    def add_float_slider(self, label_text, value=None, conf=None):
-        """ Add a float value slider to the settings panel
-
-        :param label_text: (str) Label text to display
-        :param value: (None or float) Value to display
-        :param conf: (None or dict) Dictionary containing parameters for the control
-
-        """
-
-        lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = UnitFloatSlider(self, value=value, **conf)
         self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 

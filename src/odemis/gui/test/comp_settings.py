@@ -47,9 +47,9 @@ class SettingsPanelTestCase(test.GuiTestCase):
 
     def test_clear_default_message(self):
         self.settings_panel.set_default_message("Default msg test")
-        self.assertEqual(True, self.settings_panel.message_text.IsShown())
+        self.assertEqual(True, self.settings_panel.message_ctrl.IsShown())
         self.settings_panel.clear_default_message()
-        self.assertEqual(False, self.settings_panel.message_text.IsShown())
+        self.assertEqual(False, self.settings_panel.message_ctrl.IsShown())
         gui_loop(500)
 
     def test_clear_all(self):
