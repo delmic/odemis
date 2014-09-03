@@ -532,9 +532,9 @@ class Detector(model.Detector):
 
     def beam_blank(self, blank):
         if blank == True:
-            self._acq_device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
         else:
-            self._acq_device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
 
     def stop_acquire(self):
         try:
