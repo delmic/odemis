@@ -1194,6 +1194,8 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"BaselineLevel"):
             self._metadata[model.MD_BASELINE] = self.GetInt(u"BaselineLevel")
             # TODO: check if must be multiplied by binning?
+        elif self.isImplemented(u"Baseline"): # Renamed in SDK 3.8
+            self._metadata[model.MD_BASELINE] = self.GetInt(u"Baseline")
 
         self._prev_settings = [self._binning, self._resolution, self._translation,
                                self._exp_time, readout_rate, gain, synchronised]
