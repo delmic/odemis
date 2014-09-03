@@ -399,6 +399,13 @@ class Detector(model.Detector):
                      [int(round(lt[1] + i * scale[1])) for i in range(res[1])])
             sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])]
             
+            # reduce image depth if requested
+            if metadata.get(model.MD_BPP, 16) < 16:
+                minv = sim_img.min()
+                maxv = (2 ** metadata[model.MD_BPP]) - 1
+                sim_img -= minv
+                sim_img = numpy.clip(sim_img, 0, maxv)
+
             if scanner.power.value == 0:
                 sim_img[...] = 0 # black it out
             elif self.parent._focus:
