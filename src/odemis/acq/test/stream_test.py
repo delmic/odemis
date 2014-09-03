@@ -291,7 +291,23 @@ class StreamTestCase(unittest.TestCase):
         self.assertLessEqual(len(h), 1024)
         self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 16) - 1))
 
+        # Send a 16 bit image with 12 BPP =>
+        #  * The intensity range should update to 12-bit
+        #  * The histogram should stay not too long (<=1024 values)
+        d = numpy.zeros(ebeam.shape[::-1], "uint16")
+        md = {model.MD_BPP: 12,
+                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
+                    model.MD_POS: (1e-3, -30e-3), # m
+                    }
+        da = model.DataArray(d, md)
+        se.data.notify(da)
 
+        time.sleep(0.5) # make sure all the delayed code is executed
+        self.assertIsInstance(ss.image.value, model.DataArray)
+        h = ss.histogram.value
+        ir = ss.intensityRange.range
+        self.assertLessEqual(len(h), 1024)
+        self.assertEqual((ir[0][0], ir[1][1]), (0, (2 ** 12) - 1))
 
 # @skip("faster")
 class SECOMTestCase(unittest.TestCase):
