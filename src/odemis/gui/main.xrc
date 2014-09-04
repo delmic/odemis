@@ -298,8 +298,11 @@
               <size>32,-1</size>
             </object>
             <object class="sizeritem">
-              <object class="wxStaticBitmap">
+              <object class="wxStaticBitmap" name="logo">
                 <bitmap>img/logo_h30.png</bitmap>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <flag>wxTOP|wxRIGHT</flag>
               <border>10</border>
