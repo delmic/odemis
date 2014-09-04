@@ -310,7 +310,8 @@ class AlignedSEMStream(SEMStream):
          (iow, using emitter.translation). If "Metadata update", it will just update the
          position correction metadata on the SEM images. If "Stage move", it will
          move the stage or beam (depending on how large is the move) and then update
-         the correction metadata.
+         the correction metadata (note that if the stage has moved, the optical
+         stream will need to be updated too).
         """
         SEMStream.__init__(self, name, detector, dataflow, emitter)
         self._ccd = ccd
@@ -356,19 +357,10 @@ class AlignedSEMStream(SEMStream):
         Compensate the SEM shift, using either beam shift or metadata update
         """
         if self._shiftebeam == "Ebeam shift":
-            self._applyROI() # will take care of updating the translation
-        elif self._shiftebeam == "Stage move":
-            for child in self._stage.children:
-                if child.role == "sem-stage":
-                    f = child.moveRel({"x":self._shift[0], "y":self._shift[1]})
-                    f.result()
-
-            shift = (0, 0)
-            shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
-            self._shift = shift
-            # update the correction metadata
-            self._detector.updateMetadata({MD_POS_COR: self._shift})
-        else:
+            pass
+            # not needed here, as it will be call in onActive anyway
+            # self._applyROI() # will take care of updating the translation
+        else: # "Metadata update" or "Stage move"
             # update the correction metadata
             self._detector.updateMetadata({MD_POS_COR: self._shift})
 
@@ -379,6 +371,14 @@ class AlignedSEMStream(SEMStream):
             try:
                 logging.info("Determining the Ebeam center position")
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                if self._shiftebeam == "Stage move":
+                    for child in self._stage.children:
+                        if child.role == "sem-stage":
+                            f = child.moveRel({"x": shift[0], "y": shift[1]})
+                            f.result()
+
+                    shift = (0, 0) # just in case of failure
+                    shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
             except LookupError:
                 logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
             except Exception:

@@ -199,6 +199,7 @@ class StreamController(object):
                       self._main_data_model.sed, self._main_data_model.sed.data,
                       self._main_data_model.ebeam, self._main_data_model.ccd,
                       self._main_data_model.stage, shiftebeam="Metadata update")
+                # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it
         else:
             s = SEMStream("Secondary electrons",
