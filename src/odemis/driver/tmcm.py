@@ -307,23 +307,24 @@ class TMCM3110(model.Actuator):
                 ra, rt, status, rn, rval, chk = struct.unpack('>BBBBiB', res)
 
                 # Check it's a valid message
-                if rt != self._target:
-                    logging.warning("Received a message from %d while expected %d",
-                                    rt, self._target)
-                if rn != n:
-                    logging.info("Skipping a message about instruction %d (waiting for %d)",
-                                  rn, n)
-                    continue
                 npres = numpy.frombuffer(res, dtype=numpy.uint8)
                 good_chk = numpy.sum(npres[:-1], dtype=numpy.uint8)
-                if chk != good_chk:
-                    logging.warning("Message checksum incorrect (%d), skipping it", chk)
-                    continue
-                if not status in TMCL_OK_STATUS:
-                    raise TMCLError(status, rval, self._instr_to_str(msg))
+                if chk == good_chk:
+                    if rt != self._target:
+                        logging.warning("Received a message from %d while expected %d",
+                                        rt, self._target)
+                    if rn != n:
+                        logging.info("Skipping a message about instruction %d (waiting for %d)",
+                                      rn, n)
+                        continue
+                    if not status in TMCL_OK_STATUS:
+                        raise TMCLError(status, rval, self._instr_to_str(msg))
+                else:
+                    # TODO: investigate more why once in a while (~1/1000 msg)
+                    # the message is garbled
+                    logging.warning("Message checksum incorrect (%d), will assume it's all fine", chk)
 
                 return rval
-
 
     # Low level functions
     def GetVersion(self):
