@@ -1122,7 +1122,7 @@ class PointSelectOverlay(ViewOverlay):
     def on_left_up(self, evt):
         if self.active:
             v_pos = evt.GetPositionTuple()
-            w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_view_size())
+            w_pos = self.cnvs.view_to_world(v_pos, self.cnvs.get_half_buffer_size())
 
             self.v_pos.value = v_pos
             self.w_pos.value = w_pos
@@ -1196,7 +1196,7 @@ class HistoryOverlay(ViewOverlay):
     def Draw(self, ctx, scaled_size=None):
 
         ctx.set_line_width(1)
-        offset = self.cnvs.get_half_view_size()
+        offset = self.cnvs.get_half_buffer_size()
 
         for i, (p_center, p_size) in enumerate(self.history):
             alpha = (i + 1) * (0.8 / len(self.history)) + 0.2 if self.fade else 1.0

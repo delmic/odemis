@@ -1136,6 +1136,10 @@ class BitmapCanvas(BufferedCanvas):
             offset)
 
     def world_to_view(self, pos, offset=None):
+        # TODO: either indicate what should be offset (half the buffer size?)
+        # or remove from argument and always use the right value
+        # TODO: there is probably no reason we need to include the buffer size
+        # into the computations
         return super(BitmapCanvas, self).world_to_view_pos(
             pos,
             self.w_buffer_center,
