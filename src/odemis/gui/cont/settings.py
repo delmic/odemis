@@ -403,6 +403,7 @@ class SettingsController(object):
 
         # Get the range and choices
         min_val, max_val, choices, unit = self._get_va_meta(comp, vigil_attr, conf)
+        prefix = None
 
         if choices:
             formatted = conf.get("format", True)
@@ -416,7 +417,6 @@ class SettingsController(object):
                 # choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
-                unit = prefix + unit
             else:
                 choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
@@ -639,7 +639,7 @@ class SettingsController(object):
 
             # Set choices
             for choice, formatted in choices_fmt:
-                new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
+                new_ctrl.Append(u"%s %s" % (formatted, (prefix or "") + unit), choice)
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
