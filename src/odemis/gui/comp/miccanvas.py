@@ -594,6 +594,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         shift (int): relative amount of pixel moved
             >0: toward up/right
         """
+
         if axis == 1 and self.microscope_view.focus is not None:
             # conversion: 1 unit => 0.1 μm (so a whole screen, ~44000u, is a
             # couple of mm)

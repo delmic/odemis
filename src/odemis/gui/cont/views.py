@@ -109,6 +109,7 @@ class ViewController(object):
             views.append(view)
             if vp.Shown:
                 visible_views.append(view)
+
             vp.setView(view, self._data_model)
 
         self._data_model.views.value = views
@@ -344,6 +345,7 @@ class ViewController(object):
         a 2x2 display, and that hidden_idx is outside this 2x2 layout and
         invisible.
         """
+
         # Small shorthand local variable
         vp = self._viewports
 
