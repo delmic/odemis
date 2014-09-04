@@ -435,7 +435,7 @@ class SettingsController(object):
                 control_type = control_type(comp, vigil_attr, conf)
             # read-only takes precedence (unless it was requested to hide it)
             if vigil_attr.readonly and control_type != odemis.gui.CONTROL_NONE:
-                control_type = odemis.gui.CONTROL_LABEL
+                control_type = odemis.gui.CONTROL_READONLY
         except KeyError:
             control_type = self._determine_default_control(vigil_attr)
 
