@@ -197,11 +197,15 @@ class OdemisGUIApp(wx.App):
                                                         self.main_data,
                                                         self.main_frame)
 
-            self.main_frame.Maximize() # must be done before Show()
+            if self.main_data.role == "delphi":
+                from odemis.gui.img.data import getlogo_delphiBitmap
+                self.main_frame.logo.SetBitmap(getlogo_delphiBitmap())
+
+            self.main_frame.Maximize()  # must be done before Show()
             # making it very late seems to make it smoother
             wx.CallAfter(self.main_frame.Show)
             logging.debug("Frame will be displayed soon")
-        except Exception:  #pylint: disable=W0703
+        except Exception:
             self.excepthook(*sys.exc_info())
             # Re-raise the exception, so the program will exit. If this is not
             # done and exception will prevent the GUI from being shown, while
