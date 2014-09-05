@@ -37,6 +37,7 @@ import threading
 import time
 
 EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
+HOLE_RADIUS = 175e-06  # Expected hole radius
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
 # Positions to scan for rotation and scaling calculation
@@ -694,29 +695,19 @@ def FindHoleCenter(image):
     raises:    
         IOError if hole not found
     """
-    image = scipy.misc.bytescale(image)
-    contours, hierarchy = cv2.findContours(image, cv2.RETR_LIST , cv2.CHAIN_APPROX_SIMPLE)
-    if contours == []:
+    img = cv2.medianBlur(image, 5)
+    pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+
+    # search for holes of HOLE_RADIUS with -+3 pixels precision
+    min, max = ((HOLE_RADIUS / pixelSize) - 3), ((HOLE_RADIUS / pixelSize) + 3)
+    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, 1, 20, param1=50,
+                               param2=30, minRadius=min, maxRadius=max)
+
+    circles = numpy.uint16(numpy.around(circles))
+    if len(circles[0, :]) != 1:
         raise IOError("Hole not found.")
 
-    area = 0
-    max_cnt = None
-    whole_area = numpy.prod(image.shape)
-    for cnt in contours:
-        new_area = cv2.contourArea(cnt)
-        #Make sure you dont detect the whole image frame or just a spot
-        if new_area > area and new_area < 0.8 * whole_area and new_area > 0.005 * whole_area:
-            area = new_area
-            max_cnt = cnt
-
-    if max_cnt is None:
-        raise IOError("Hole not found.")
-
-    # Find center of hole
-    center_x = numpy.mean([min(max_cnt[:, :, 0]), max(max_cnt[:, :, 0])])
-    center_y = numpy.mean([min(max_cnt[:, :, 1]), max(max_cnt[:, :, 1])])
-
-    return (center_x, center_y)
+    return circles[0, 0][0], circles[0, 0][1]
 
 # TODO: rename to UpdateOffsetAndRotation ?
 def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
