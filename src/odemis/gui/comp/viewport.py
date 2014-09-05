@@ -37,7 +37,7 @@ from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
-from odemis.gui.model import CHAMBER_VACUUM
+from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_PUMPING
 from odemis.gui.util import call_after
 from odemis.model import VigilantAttributeBase, NotApplicableError
 from odemis.util import units
@@ -442,10 +442,12 @@ class OverviewVierport(MicroscopeViewport):
 
         if chamber_state == CHAMBER_VACUUM:
             self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
-        elif self.canvas.active_overlays:
-            self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
+        elif chamber_state == CHAMBER_PUMPING:
+            # Clear the history trail when the chamber starts to pump
             if len(self.canvas.history_overlay) > 1:
                 self.canvas.history_overlay.clear()
+        elif self.canvas.active_overlays:
+            self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
 
     def _on_position_select(self, p_pos):
         """ Set the physical view position

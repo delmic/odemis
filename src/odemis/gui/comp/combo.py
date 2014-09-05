@@ -50,10 +50,15 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
     """
 
     def __init__(self, *args, **kwargs):
+
+        labels = kwargs.pop('labels', [])
+        choices = kwargs.pop('choices', [])
+
         wx.combo.OwnerDrawnComboBox.__init__(self, *args, **kwargs)
         # SetMargins allow the left margin to be set to 0, but the top
         # margin won't move and stays at the default -1.
         self.SetMargins(0, 0)
+
         self.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
         # Even those this colour sets the right
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
@@ -61,6 +66,13 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
 
         self.Bind(wx.EVT_KEY_DOWN, self.on_key)
         self.Bind(wx.EVT_PAINT, self.on_paint)
+
+        # If no labels are provided, create them from the choices
+        if not labels and choices:
+            labels = [unicode(c) for c in choices]
+
+        for label, choice in zip(labels, choices):
+            self.Append(label, choice)
 
     def on_paint(self, evt):
         """ Handle the paint event

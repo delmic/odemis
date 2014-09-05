@@ -226,7 +226,7 @@ class SettingsController(object):
         if va.readonly:
             # Uncomment this line to hide Read only VAs by default
             # return odemis.gui.CONTROL_NONE
-            return odemis.gui.CONTROL_LABEL
+            return odemis.gui.CONTROL_READONLY
         else:
             try:
                 # This statement will raise an exception when no choices are
@@ -241,7 +241,7 @@ class SettingsController(object):
                 choices_str = "".join([str(c) for c in va.choices])
                 if len(va.choices) <= 1:
                     # not much choices really
-                    return odemis.gui.CONTROL_LABEL
+                    return odemis.gui.CONTROL_READONLY
                 elif (len(va.choices) < max_items and
                       len(choices_str) < max_items * max_len):
                     return odemis.gui.CONTROL_RADIO
@@ -343,13 +343,13 @@ class SettingsController(object):
         return ne
 
     def add_browse_button(self, label, label_tl=None, clearlabel=None):
-        self.panel.clear_message()
+        self.panel.clear_default_message()
 
         # Create label
         lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
         if label_tl:
             lbl_ctrl.SetToolTipString(label_tl)
-        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+        self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         config = guiconf.get_acqui_conf()
@@ -363,27 +363,33 @@ class SettingsController(object):
         value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
 
         self.panel._gb_sizer.Add(value_ctrl,
-                           (self.num_entries, 1),
+                           (self.panel.num_rows, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
 
         # Add the corresponding setting entry
         ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
         self.entries.append(ne)
-        self.num_entries += 1
+        self.panel.num_rows += 1
 
         return ne
 
-    def add_divider(self):
-        line = wx.StaticLine(self.panel, size=(-1, 1))
-        self.panel._gb_sizer.Add(
-                line,
-                (self.num_entries, 0),
-                span=(1, 2),
-                flag=wx.ALL | wx.EXPAND,
-                border=5
-        )
-        self.num_entries += 1
+    def _get_number_formatter(self, value_ctrl, val, val_unit):
+        """ TODO: replace/refactor. This method was added as a quick fix """
+        value_formatter = None
+
+        if (
+                isinstance(val, (int, long, float)) or
+                (
+                    isinstance(val, collections.Iterable) and
+                    len(val) > 0 and
+                    isinstance(val[0], (int, long, float))
+                )
+        ):
+            def value_formatter(value, unit=val_unit):
+                value_ctrl.SetValue(readable_str(value, unit, sig=3))
+
+        return value_formatter
 
     def add_value(self, name, vigil_attr, comp, conf=None):
         """ Add a name/value pair to the settings panel.
@@ -396,23 +402,23 @@ class SettingsController(object):
         assert isinstance(vigil_attr, VigilantAttributeBase)
 
         # Remove any 'empty panel' warning
-        self.panel.clear_message()
+        self.panel.clear_default_message()
 
         # If no conf provided, set it to an empty dictionary
         conf = conf or {}
 
         # Get the range and choices
         min_val, max_val, choices, unit = self._get_va_meta(comp, vigil_attr, conf)
+        ctrl_format = conf.get("format", True)
         prefix = None
 
         if choices:
-            formatted = conf.get("format", True)
             # choice_fmt is an iterable of tuples: choice -> formatted choice
             # (like a dict, but keeps order)
             if isinstance(choices, dict):
                 # it's then already value -> string (user-friendly display)
                 choices_fmt = choices.items()
-            elif (formatted and len(choices) > 1 and
+            elif (ctrl_format and len(choices) > 1 and
                   all([isinstance(c, numbers.Real) for c in choices])):
                 # choices = sorted(choices)
                 fmt, prefix = utun.si_scale_list(choices)
@@ -429,14 +435,14 @@ class SettingsController(object):
                 control_type = control_type(comp, vigil_attr, conf)
             # read-only takes precedence (unless it was requested to hide it)
             if vigil_attr.readonly and control_type != odemis.gui.CONTROL_NONE:
-                control_type = odemis.gui.CONTROL_LABEL
+                control_type = odemis.gui.CONTROL_READONLY
         except KeyError:
             control_type = self._determine_default_control(vigil_attr)
 
         # Change radio type to fitting type depending on its content
         if control_type == odemis.gui.CONTROL_RADIO:
             if len(choices_fmt) <= 1:  # only one choice => force label
-                control_type = odemis.gui.CONTROL_LABEL
+                control_type = odemis.gui.CONTROL_READONLY
             elif len(choices_fmt) > 10:  # too many choices => combo
                 control_type = odemis.gui.CONTROL_COMBO
             else:
@@ -451,132 +457,125 @@ class SettingsController(object):
             # Just an empty entry, so that the settings are saved during acquisition
             ne = SettingEntry(name, vigil_attr, comp)
             self.entries.append(ne)
-            # don't increase num_entries, as it doesn't add any graphical element
+            # don't increase panel.num_rows, as it doesn't add any graphical element
             return
 
         # Format label
-        label = conf.get('label', self._label_to_human(name))
+        label_text = conf.get('label', self._label_to_human(name))
         tooltip = conf.get('tooltip', "")
-        # Add the label to the panel
-        lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
-        lbl_ctrl.SetToolTipString(tooltip)
-        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0), flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         # the Vigilant Attribute Connector connects the wx control to the
         # vigilant attribute.
         vac = None
 
-        logging.debug("Adding VA %s", label)
+        logging.debug("Adding VA %s", label_text)
         # Create the needed wxPython controls
-        if control_type == odemis.gui.CONTROL_LABEL:
-            new_ctrl, vac = self._create_label(self.panel, vigil_attr, unit)
+
+        if control_type == odemis.gui.CONTROL_READONLY:
+            val = vigil_attr.value  # only format if it's a number
+            lbl_ctrl, value_ctrl = self.panel.add_readonly_field(label_text, val)
+            value_formatter = self._get_number_formatter(value_ctrl, val, unit)
+            vac = VigilantAttributeConnector(vigil_attr,
+                                             value_ctrl,
+                                             va_2_ctrl=value_formatter)
 
         elif control_type == odemis.gui.CONTROL_TEXT:
-            # TODO: should be a free entry text, like combobox
-            new_ctrl = wx.TextCtrl(self.panel, style=wx.BORDER_NONE | wx.TE_READONLY)
-            new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            new_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-
-            val = vigil_attr.value # only format if it's a number
-            if (isinstance(val, (int, long, float)) or
-                (isinstance(val, collections.Iterable) and len(val) > 0
-                  and isinstance(val[0], (int, long, float)))
-                ):
-                def format_value(value, unit=unit):
-                    new_ctrl.SetValue(readable_str(value, unit, sig=3))
-            else:
-                format_value = None
+            val = vigil_attr.value  # only format if it's a number
+            lbl_ctrl, value_ctrl = self.panel.add_text_field(label_text, val)
+            value_formatter = self._get_number_formatter(value_ctrl, val, unit)
             vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
-                                             format_value)
+                                             value_ctrl,
+                                             va_2_ctrl=value_formatter)
 
         elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
 
             if "type" in conf:
                 if conf["type"] == "integer":
-                    klass = UnitIntegerSlider
+                    # add_integer_slider
+                    factory = self.panel.add_integer_slider
                 else:
-                    klass = UnitFloatSlider
+                    factory = self.panel.add_float_slider
             else:
                 # guess from value(s)
                 known_values = [vigil_attr.value, min_val, max_val]
                 if choices is not None:
                     known_values.extend(list(choices))
                 if any(isinstance(v, float) for v in known_values):
-                    klass = UnitFloatSlider
+                    factory = self.panel.add_float_slider
                 else:
-                    klass = UnitIntegerSlider
+                    factory = self.panel.add_integer_slider
 
-            new_ctrl = klass(self.panel,
-                             value=vigil_attr.value,
-                             min_val=min_val,
-                             max_val=max_val,
-                             scale=conf.get('scale', None),
-                             unit=unit,
-                             t_size=(50, -1),
-                             accuracy=conf.get('accuracy', 4))
+            ctrl_conf = {
+                'min_val': min_val,
+                'max_val': max_val,
+                'scale': conf.get('scale', None),
+                'unit': unit,
+                't_size': (50, -1),
+                'accuracy': conf.get('accuracy', 4),
+            }
 
+            lbl_ctrl, value_ctrl = factory(label_text, vigil_attr.value, ctrl_conf)
             vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
+                                             value_ctrl,
                                              events=wx.EVT_SLIDER)
 
-            new_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
+            value_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_INT:
             if unit == "":  # don't display unit prefix if no unit
                 unit = None
-            new_ctrl = text.UnitIntegerCtrl(self.panel,
-                                            style=wx.NO_BORDER,
-                                            unit=unit,
-                                            min_val=min_val,
-                                            max_val=max_val,
-                                            choices=choices)
-            new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            ctrl_conf = {
+                'min_val': min_val,
+                'max_val': max_val,
+                'unit': unit,
+                'choices': choices,
+            }
+
+            lbl_ctrl, value_ctrl = self.panel.add_int_field(label_text, conf=ctrl_conf)
 
             vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
+                                             value_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
-            new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
-            # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
+            value_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_FLT:
             if unit == "": # don't display unit prefix if no unit
                 unit = None
-            new_ctrl = text.UnitFloatCtrl(self.panel,
-                                          style=wx.NO_BORDER,
-                                          unit=unit,
-                                          min_val=min_val,
-                                          max_val=max_val,
-                                          choices=choices,
-                                          accuracy=conf.get('accuracy', 5))
-            new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-            new_ctrl.SetBackgroundColour(self.panel.GetBackgroundColour())
+
+            ctrl_conf = {
+                'min_val': min_val,
+                'max_val': max_val,
+                'unit': unit,
+                'choices': choices,
+                'accuracy': conf.get('accuracy', 5),
+            }
+
+            lbl_ctrl, value_ctrl = self.panel.add_float_field(label_text, conf=ctrl_conf)
 
             vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
+                                             value_ctrl,
                                              events=wx.EVT_COMMAND_ENTER)
 
-            new_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
-            # new_ctrl.Bind(wx.EVT_TEXT, self.on_setting_changed)
+            value_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
-            new_ctrl = GraphicalRadioButtonControl(
-                self.panel,
-                - 1,
-                size=(-1, 16),
-                choices=[c for c, _ in choices_fmt],
-                style=wx.NO_BORDER,
-                labels=[f for _, f in choices_fmt],
-                units=unit
-            )
+
+            ctrl_conf = {
+                'size': (-1, 16),
+                'units': unit,
+                'choices': choices,
+                'labels': [f for _, f in choices_fmt],
+            }
+
+            lbl_ctrl, value_ctrl = self.panel.add_radio_control(label_text, conf=ctrl_conf)
 
             if conf.get('type', None) == "1d_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=new_ctrl):
+                def radio_set(value, ctrl=value_ctrl):
                     v = value[0]
                     logging.debug("Setting Radio value to %d", v)
                     # it's fine to set a value not in the choices, it will
@@ -584,13 +583,13 @@ class SettingsController(object):
                     return ctrl.SetValue(v)
 
                 # from 1D to 2D (both identical)
-                def radio_get(ctrl=new_ctrl):
+                def radio_get(ctrl=value_ctrl):
                     value = ctrl.GetValue()
                     return (value, value)
             elif conf.get('type', None) == "1std_binning":
                 # need to convert back and forth between 1D and 2D
                 # from 2D to 1D (just pick X)
-                def radio_set(value, ctrl=new_ctrl):
+                def radio_set(value, ctrl=value_ctrl):
                     v = value[0]
                     logging.debug("Setting Radio value to %d", v)
                     # it's fine to set a value not in the choices, it will
@@ -598,7 +597,7 @@ class SettingsController(object):
                     return ctrl.SetValue(v)
 
                 # from 1D to 2D (don't change dimensions >1)
-                def radio_get(ctrl=new_ctrl, va=vigil_attr):
+                def radio_get(ctrl=value_ctrl, va=vigil_attr):
                     value = ctrl.GetValue()
                     new_val = list(va.value)
                     new_val[0] = value
@@ -608,42 +607,29 @@ class SettingsController(object):
                 radio_set = None
 
             vac = VigilantAttributeConnector(vigil_attr,
-                                             new_ctrl,
+                                             value_ctrl,
                                              va_2_ctrl=radio_set,
                                              ctrl_2_va=radio_get,
                                              events=wx.EVT_BUTTON)
 
-            new_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
+            value_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_COMBO:
 
-            new_ctrl = ComboBox(
-                self.panel,
-                wx.ID_ANY,
-                value='', pos=(0, 0), size=(100, 16),
-                style=wx.BORDER_NONE | wx.TE_PROCESS_ENTER
-            )
+            ctrl_conf = {
 
-            def _eat_event(evt):
-                """ Quick and dirty empty function used to 'eat'
-                mouse wheel events
-                """
-                # TODO: This solution only makes sure that the control's value
-                # doesn't accidentally get altered when it gets hit by a mouse
-                # wheel event. However, it also stop the event from propagating
-                # so the containing scrolled window will not scroll either.
-                # (If the event is skipped, the control will change value again)
-                pass
+            }
 
-            new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+            # TODO: Might need size=(100, 16)!!
+            lbl_ctrl, value_ctrl = self.panel.add_combobox_control(label_text, '', ctrl_conf)
 
             # Set choices
             for choice, formatted in choices_fmt:
-                new_ctrl.Append(u"%s %s" % (formatted, (prefix or "") + unit), choice)
+                value_ctrl.Append(u"%s %s" % (formatted, (prefix or "") + unit), choice)
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def cb_set(value, ctrl=new_ctrl, u=unit):
+            def cb_set(value, ctrl=value_ctrl, u=unit):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
@@ -658,7 +644,7 @@ class SettingsController(object):
                     return ctrl.SetValue(txt)
 
             # equivalent wrapper function to retrieve the actual value
-            def cb_get(ctrl=new_ctrl, va=vigil_attr):
+            def cb_get(ctrl=value_ctrl, va=vigil_attr):
                 value = ctrl.GetValue()
                 # Try to use the predefined value if it's available
                 for i in range(ctrl.Count):
@@ -682,26 +668,22 @@ class SettingsController(object):
 
             vac = VigilantAttributeConnector(
                 vigil_attr,
-                new_ctrl,
+                value_ctrl,
                 va_2_ctrl=cb_set,
                 ctrl_2_va=cb_get,
                 events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
             )
 
-            new_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
-            new_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
+            value_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
+            value_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
 
         else:
             logging.error("Unknown control type %s", control_type)
 
-        new_ctrl.SetToolTipString(tooltip)
+        value_ctrl.SetToolTipString(tooltip)
 
-        self.panel._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, new_ctrl, vac)
+        ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, value_ctrl, vac)
         self.entries.append(ne)
-        self.num_entries += 1
 
         if self.highlight_change:
             bind_menu(ne)
@@ -709,32 +691,6 @@ class SettingsController(object):
         self.panel.Parent.Parent.Layout()
 
         return ne
-
-    @staticmethod
-    def _create_label(panel, vigil_attr, unit):
-        """ Create a read-only TextCtrl connected to the given va
-
-        :return: The newly created control and its vig
-        """
-        # Read only value
-        new_ctrl = wx.TextCtrl(panel, style=wx.BORDER_NONE | wx.TE_READONLY)
-        new_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-        new_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-
-        val = vigil_attr.value # only format if it's a number
-        if (isinstance(val, (int, long, float)) or
-            (isinstance(val, collections.Iterable) and len(val) > 0
-              and isinstance(val[0], (int, long, float)))
-            ):
-            def format_value(value, unit=unit):
-                new_ctrl.SetValue(readable_str(value, unit, sig=3))
-        else:
-            format_value = None
-        vac = VigilantAttributeConnector(vigil_attr,
-                                         new_ctrl,
-                                         va_2_ctrl=format_value)
-
-        return new_ctrl, vac
 
     def add_axis(self, name, comp, conf=None):
         """
@@ -751,7 +707,7 @@ class SettingsController(object):
         label = conf.get('label', self._label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
-        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
+        self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
                            flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         logging.debug("Adding Axis control %s", label)
@@ -765,7 +721,7 @@ class SettingsController(object):
         if hasattr(ad, "range"):
             minv, maxv = ad.range
 
-            new_ctrl = UnitFloatSlider(
+            value_ctrl = UnitFloatSlider(
                 self.panel,
                 value=pos,
                 min_val=minv,
@@ -779,7 +735,7 @@ class SettingsController(object):
             # but to EVT_SCROLL_CHANGED, which happens when the user has made his
             # mind. This avoid too many unnecessary actuator moves and disabling the
             # widget too early.
-            ac = AxisConnector(name, comp, new_ctrl, events=wx.EVT_SCROLL_CHANGED)
+            ac = AxisConnector(name, comp, value_ctrl, events=wx.EVT_SCROLL_CHANGED)
         else:
             # format the choices
             choices = ad.choices
@@ -796,7 +752,7 @@ class SettingsController(object):
 
             choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
 
-            new_ctrl = ComboBox(
+            value_ctrl = ComboBox(
                 self.panel,
                 wx.ID_ANY,
                 value='', pos=(0, 0), size=(100, 16),
@@ -809,17 +765,17 @@ class SettingsController(object):
                 mouse wheel events
                 """
                 pass
-            new_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
+            value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
 
             # Set choices
             if unit is None:
                 unit = ""
             for choice, formatted in choices_fmt:
-                new_ctrl.Append(u"%s %s" % (formatted, unit), choice)
+                value_ctrl.Append(u"%s %s" % (formatted, unit), choice)
 
             # A small wrapper function makes sure that the value can
             # be set by passing the actual value (As opposed to the text label)
-            def cb_set(value, ctrl=new_ctrl, unit=unit):
+            def cb_set(value, ctrl=value_ctrl, unit=unit):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
@@ -829,7 +785,7 @@ class SettingsController(object):
                     return ctrl.GetValue()
 
             # equivalent wrapper function to retrieve the actual value
-            def cb_get(ctrl=new_ctrl, name=name):
+            def cb_get(ctrl=value_ctrl, name=name):
                 value = ctrl.GetValue()
                 # Try to use the predefined value if it's available
                 for i in range(ctrl.Count):
@@ -839,19 +795,19 @@ class SettingsController(object):
                 else:
                     logging.error("Failed to find value %s for axis %s", value, name)
 
-            ac = AxisConnector(name, comp, new_ctrl,
+            ac = AxisConnector(name, comp, value_ctrl,
                                 pos_2_ctrl=cb_set,
                                 ctrl_2_pos=cb_get,
                                 events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
-        self.panel._gb_sizer.Add(new_ctrl, (self.num_entries, 1),
+        self.panel._gb_sizer.Add(value_ctrl, (self.panel.num_rows, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
         # AxisConnector follows VigilantAttributeConnector interface, so can be
         # used (duck typing).
-        ne = SettingEntry(name, None, comp, lbl_ctrl, new_ctrl, ac)
+        ne = SettingEntry(name, None, comp, lbl_ctrl, value_ctrl, ac)
         self.entries.append(ne)
-        self.num_entries += 1
+        self.panel.num_rows += 1
 
         if self.highlight_change:
             bind_menu(ne)
@@ -870,10 +826,10 @@ class SettingsController(object):
             span = wx.DefaultSpan
 
         for i, w in enumerate(wdg):
-            self.panel._gb_sizer.Add(w, (self.num_entries, i), span=span,
+            self.panel._gb_sizer.Add(w, (self.panel.num_rows, i), span=span,
                                flag=wx.ALL | wx.EXPAND,
                                border=5)
-        self.num_entries += 1
+        self.panel.num_rows += 1
 
     def add_metadata(self, key, value):
         """
@@ -903,7 +859,7 @@ class SettingsController(object):
             logging.exception("Trying to convert metadata %s", key)
             nice_str = "N/A"
 
-        self.add_label(label, nice_str)
+        self.panel.add_readonly_field(label, nice_str)
 
     def on_setting_changed(self, evt):
         logging.debug("Setting has changed")
@@ -1034,7 +990,7 @@ class SecomSettingsController(SettingsBarController):
                                 self._optical_panel)
 
             if main_data.light:
-                self._optical_panel.add_divider()
+                self._optical_panel.panel.add_divider()
 
                 self._optical_panel.add_value(
                                         "power",
@@ -1123,7 +1079,7 @@ class SparcSettingsController(SettingsBarController):
                 self._spectrum_panel.add_axis("band", main_data.light_filter,
                                               CONFIG["filter"]["band"])
 
-            self._spectrum_panel.add_divider()
+            self._spectrum_panel.panel.add_divider()
             if spec_stream:
                 self.spectro_rep_ent = self._spectrum_panel.add_value(
                     "repetition",
@@ -1183,7 +1139,7 @@ class SparcSettingsController(SettingsBarController):
                 self._angular_panel.add_axis("band", main_data.light_filter,
                                              CONFIG["filter"]["band"])
 
-            self._angular_panel.add_divider()
+            self._angular_panel.panel.add_divider()
             if ar_stream is not None:
                 self.angular_rep_ent = self._angular_panel.add_value(
                     "repetition",
@@ -1331,11 +1287,12 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_acqfile.panel.clear_all()
 
         if file_info:
-            se_file = self._pnl_acqfile.add_label("File",
-                                                  file_info.file_basename)
+            l, lc, vc = self._pnl_acqfile.panel.add_readonly_field("File", file_info.file_basename)
+            se_file = SettingEntry(l, lc, vc)
             se_file.ctrl.SetInsertionPointEnd()
 
-            se_path = self._pnl_acqfile.add_label("Path", file_info.file_path)
+            l, lc, vc = self._pnl_acqfile.panel.add_readonly_field("Path", file_info.file_path)
+            se_path = SettingEntry(l, lc, vc)
             # Make sure the file name is visible
             se_path.ctrl.SetInsertionPointEnd()
 
@@ -1394,9 +1351,9 @@ class AnalysisSettingsController(SettingsBarController):
         spec (boolean or None): show, hide or don't change spec calib panel
         """
         if ar is not None:
-            self._pnl_arfile.show_panel()
+            self._pnl_arfile.show_panel(ar)
         if spec is not None:
-            self._pnl_specfile.show_panel()
+            self._pnl_specfile.show_panel(spec)
 
         self.parent.Layout()
 
