@@ -123,39 +123,11 @@ class ChamberButtonController(HardwareButtonController):
         super(ChamberButtonController, self).__init__(btn_ctrl, va, main_data)
         self.main_data = main_data
 
-        # Since there are various factors that determine what images will be used as button faces,
-        # (so, not just the button state!) we will explicitly define them in this class.
-        self._btn_faces = self._determine_button_faces(main_data.role)
-        self._tooltips = self._determine_tooltip(main_data.role)
-
+        # If pressure information, assume it is a complete SEM chamber,
+        # otherwise assume it uses a sample loader like the Phenom or Delphi.
         if 'pressure' in getVAs(main_data.chamber):
             main_data.chamber.pressure.subscribe(self._update_label, init=True)
-        else:
-            self.btn.SetLabel("CHAMBER")
-
-    def _determine_button_faces(self, role):
-        """ Determine what button faces to use depending on values found in main_data """
-
-        if role == "delphi":
-            return {
-                'normal': {
-                    'normal': imgdata.btn_eject.Bitmap,
-                    'hover': imgdata.btn_eject_h.Bitmap,
-                    'active': imgdata.btn_eject_a.Bitmap,
-                },
-                'working': {
-                    'normal': imgdata.btn_eject_orange.Bitmap,
-                    'hover': imgdata.btn_eject_orange_h.Bitmap,
-                    'active': imgdata.btn_eject_orange_a.Bitmap,
-                },
-                'vacuum': {
-                    'normal': imgdata.btn_eject_green.Bitmap,
-                    'hover': imgdata.btn_eject_green_h.Bitmap,
-                    'active': imgdata.btn_eject_green_a.Bitmap,
-                }
-            }
-        else:
-            return {
+            self._btn_faces = {
                 'normal': {
                     'normal': imgdata.btn_press.Bitmap,
                     'hover': imgdata.btn_press_h.Bitmap,
@@ -172,21 +144,36 @@ class ChamberButtonController(HardwareButtonController):
                     'active': imgdata.btn_press_green_a.Bitmap,
                 }
             }
-
-    def _determine_tooltip(self, role):
-        if role == "delphi":
-            return {
-                CHAMBER_PUMPING: "Loading...",
-                CHAMBER_VENTING: "Ejecting...",
-                CHAMBER_VENTED: "Load the sample",
-                CHAMBER_VACUUM: "Eject the sample",
-            }
-        else:
-            return {
+            self._tooltips = {
                 CHAMBER_PUMPING: "Pumping...",
                 CHAMBER_VENTING: "Venting...",
                 CHAMBER_VENTED: "Pump the chamber",
                 CHAMBER_VACUUM: "Vent the chamber",
+            }
+        else:
+            self.btn.SetLabel("CHAMBER")
+            self._btn_faces = {
+                'normal': {
+                    'normal': imgdata.btn_eject.Bitmap,
+                    'hover': imgdata.btn_eject_h.Bitmap,
+                    'active': imgdata.btn_eject_a.Bitmap,
+                },
+                'working': {
+                    'normal': imgdata.btn_eject_orange.Bitmap,
+                    'hover': imgdata.btn_eject_orange_h.Bitmap,
+                    'active': imgdata.btn_eject_orange_a.Bitmap,
+                },
+                'vacuum': {
+                    'normal': imgdata.btn_eject_green.Bitmap,
+                    'hover': imgdata.btn_eject_green_h.Bitmap,
+                    'active': imgdata.btn_eject_green_a.Bitmap,
+                }
+            }
+            self._tooltips = {
+                CHAMBER_PUMPING: "Loading...",
+                CHAMBER_VENTING: "Ejecting...",
+                CHAMBER_VENTED: "Load the sample",
+                CHAMBER_VACUUM: "Eject the sample",
             }
 
     def _va_to_btn(self, state):

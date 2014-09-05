@@ -224,14 +224,6 @@ class TestCombinedStage(unittest.TestCase):
         f = stage.moveAbs({"x":0, "y":0})
         f.result()
 
-    def on_done(self, future):
-        self.done += 1
-
-    def on_progress_update(self, future, past, left):
-        self.past = past
-        self.left = left
-        self.updates += 1
-
     def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
         """
         Asserts that two stage positions have almost equal coordinates.

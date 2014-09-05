@@ -77,7 +77,7 @@ class CombinedStage(model.Actuator):
                             axes=["x", "y"],
                             scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                             rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
-                            offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
+                            translation=self._metadata.get(model.MD_POS_COR, (0, 0)))
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -109,7 +109,7 @@ class CombinedStage(model.Actuator):
                     axes=["x", "y"],
                     scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                     rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
-                    offset=self._metadata.get(model.MD_POS_COR, (0, 0)))
+                    translation=self._metadata.get(model.MD_POS_COR, (0, 0)))
 
     def _updatePosition(self):
         """

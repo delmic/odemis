@@ -138,7 +138,6 @@ Spectra: {
     class: combined_stage.AntiBacklashStage,
     role: align,
     init: {
-        axes: ["x", "y"],
         backlash: {"x": 100.e-06, "y": 100.e-06},
     },
     children: {"slave": "Optical stage"},
