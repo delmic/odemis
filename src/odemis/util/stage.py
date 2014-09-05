@@ -147,79 +147,73 @@ class AntiBacklashStage(model.Actuator):
     This is a stage wrapper that takes a stage and ensures that every move 
     always finishes in the same direction.
     """
-    def __init__(self, name, role, children, axes, backlash, **kwargs):
+    def __init__(self, name, role, children, backlash, **kwargs):
         """
         children (dict str -> Stage): dict containing one component, the stage 
         to wrap
-        axes (list of string): names of the axes for x and y
         backlash (dict str -> float): for each axis of the stage, the additional 
         distance to move (and the direction). If an axis of the stage is not 
         present, then it’s the same as having 0 as backlash (=> no antibacklash 
         motion is performed for this axis)
 
         """
-        assert len(axes) == 2
         if len(children) != 1:
             raise ValueError("AntiBacklashStage needs 1 child")
 
         self._child = children.values()[0]
-        self._axes_child = {"x": axes[0], "y": axes[1]}
         self._backlash = backlash
+        axes_def = self._child.axes
 
-        axes_def = {"x": self._child.axes[axes[0]],
-                    "y": self._child.axes[axes[1]]}
-        model.Actuator.__init__(self, name, role, axes=axes_def, children=children,
-                                **kwargs)
+        # look for axes in backlash not existing in the child
+        missing = set(backlash.keys()) - set(axes_def.keys())
+        if missing:
+            raise ValueError("Child actuator doesn't have the axes %s", missing)
 
-        # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    {"x": 0, "y": 0},
-                                    unit="m", readonly=True)
-        # it's just a conversion from the child's position
-        self._child.position.subscribe(self._updatePosition, init=True)
+        model.Actuator.__init__(self, name, role, axes=axes_def,
+                                children=children, **kwargs)
+
+        # Duplicate VAs which are just identical
+        # TODO: shall we "hide" the antibacklash move by not updating position
+        # while doing this move?
+        self.position = self._child.position
 
         if (hasattr(self._child, "referenced") and
             isinstance(self._child.referenced, model.VigilantAttributeBase)):
             self.referenced = self._child.referenced
-
-    def _updatePosition(self, pos_child):
-        """
-        update the position VA when the child's position is updated
-        """
-        # it's read-only, so we change it via _value
-        vpos_child = [pos_child[self._axes_child["x"]],
-                      pos_child[self._axes_child["y"]]]
-        self.position._value = {"x": vpos_child[0],
-                                "y": vpos_child[1]}
-        self.position.notify(self.position.value)
+        if (hasattr(self._child, "speed") and
+            isinstance(self._child.speed, model.VigilantAttributeBase)):
+            self.speed = self._child.speed
 
     @isasync
     def moveRel(self, shift):
-        # shift is a vector, conversion is identical to a point
-        vshift = [shift.get("x", 0), shift.get("y", 0)]
-
         # move with the backlash subtracted
-        sub_shift = {self._axes_child["x"]: vshift[0] - self._backlash["x"],
-                     self._axes_child["y"]: vshift[1] - self._backlash["y"]}
+        sub_shift = {}
+        sub_backlash = {} # same as backlash but only contains the axes moved
+        for a, v in shift.items():
+            sub_shift[a] = v - self._backlash.get(a, 0)
+            if a in self._backlash:
+                sub_backlash[a] = self._backlash[a]
+        # TODO: merge the two moves into one future (and immediately finish the call)
         f = self._child.moveRel(sub_shift)
         f.result()
 
         # backlash move
-        f = self._child.moveRel(self._backlash)
+        f = self._child.moveRel(sub_backlash)
         return f
 
     @isasync
     def moveAbs(self, pos):
-        vpos = [pos.get("x", 0), pos.get("y", 0)]
-
-        # move with the backlash subtracted
-        sub_move = {self._axes_child["x"]: vpos[0] - self._backlash["x"],
-                    self._axes_child["y"]: vpos[1] - self._backlash["y"]}
-        f = self._child.moveAbs(sub_move)
+        sub_pos = {}
+        fpos = {} # same as pos but only contains the axes moved due to backlash
+        for a, v in pos.items():
+            sub_pos[a] = v - self._backlash.get(a, 0)
+            if a in self._backlash:
+                fpos[a] = pos[a]
+        f = self._child.moveAbs(sub_pos)
         f.result()
 
         # backlash move
-        f = self._child.moveRel(self._backlash)
+        f = self._child.moveAbs(fpos)
         return f
 
     def stop(self, axes=None):

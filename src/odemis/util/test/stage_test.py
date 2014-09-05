@@ -192,7 +192,6 @@ class TestAntiBacklashStage(unittest.TestCase):
     def test_simple(self):
         child = simulated.Stage("stage", "test", axes=["x", "y"])
         stage = AntiBacklashStage("absact", "align", {"orig": child},
-                                  axes=["x", "y"],
                                   backlash={"x": 100e-6, "y":-80e-6})
         
         # moves should just go the same positions
@@ -226,6 +225,60 @@ class TestAntiBacklashStage(unittest.TestCase):
         self.assertPosAlmostEqual(stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(child.position.value, {"x":0, "y":0})
 
+
+    def test_limited_backlash(self):
+        """
+        Test when backlash doesn't involve all axes
+        """
+        child = simulated.Stage("stage", "test", axes=["a", "b"])
+        stage = AntiBacklashStage("absact", "align", {"orig": child},
+                                  backlash={"a": 100e-6})
+
+        # moves should just go the same positions
+        # abs
+        self.assertPosAlmostEqual(stage.position.value, {"a":0, "b":0})
+        f = stage.moveAbs({"a":1e-06, "b":2e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":1e-06, "b":2e-06})
+        self.assertPosAlmostEqual(child.position.value, {"a":1e-06, "b":2e-06})
+        f = stage.moveAbs({"b":0})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":1e-06, "b":0})
+        self.assertPosAlmostEqual(child.position.value, {"a":1e-06, "b":0})
+        f = stage.moveAbs({"a":-23e-06, "b":-15e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":-23e-06, "b":-15e-06})
+        self.assertPosAlmostEqual(child.position.value, {"a":-23e-06, "b":-15e-06})
+
+        # rel
+        f = stage.moveAbs({"a":0})
+        f = stage.moveAbs({"b":0})
+        f = stage.moveRel({"a":1e-06, "b":2e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":1e-06, "b":2e-06})
+        self.assertPosAlmostEqual(child.position.value, {"a":1e-06, "b":2e-06})
+        f = stage.moveRel({"a":0, "b":0})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":1e-06, "b":2e-06})
+        self.assertPosAlmostEqual(child.position.value, {"a":1e-06, "b":2e-06})
+        f = stage.moveRel({"a":-1e-06, "b":-2e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":0, "b":0})
+        self.assertPosAlmostEqual(child.position.value, {"a":0, "b":0})
+
+    def test_error(self):
+        child = simulated.Stage("stage", "test", axes=["a", "b"])
+
+        # backlash on non-existing axis
+        with self.assertRaises(ValueError):
+            stage = AntiBacklashStage("absact", "align", {"orig": child},
+                                      backlash={"a": 100e-6, "x": 50e-6})
+
+        # move on non-existing axis
+        stage = AntiBacklashStage("absact", "align", {"orig": child},
+                                  backlash={"a": 100e-6, "b": 50e-6})
+        with self.assertRaises(ValueError):
+            stage.moveRel({"a":-5e-6, "x": 5e-6})
 
     def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
         """
