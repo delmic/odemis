@@ -196,22 +196,6 @@ class StageTest(unittest.TestCase, ActuatorTest):
     def tearDown(self):
         ActuatorTest.tearDown(self)
 
-class CombinedTest(unittest.TestCase, ActuatorTest):
-
-    actuator_type = model.CombinedActuator
-    def setUp(self):
-        # create 2 children and then combine one axis each with CombinedActuator
-        self.child1 = simulated.Stage("sstage1", "test", {"a", "b"})
-        self.child2 = simulated.Stage("sstage2", "test", {"c", "d"})
-        self.dev = self.actuator_type("stage", "stage",
-                                     {"x": self.child1, "y": self.child2},
-                                     {"x": "a", "y": "d"})
-
-    # force to not use the default method from TestCase
-    def tearDown(self):
-        ActuatorTest.tearDown(self)
-
-
 class ChamberTest(unittest.TestCase):
 
     actuator_type = simulated.Chamber

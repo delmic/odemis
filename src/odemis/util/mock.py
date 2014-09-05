@@ -36,7 +36,7 @@ class MockComponent(model.HwComponent):
         if len(kwargs) > 0:
             logging.debug("Component '%s' got init arguments %r", name, kwargs)
 
-        # Special handling of actuators, for CombinedActuator
+        # Special handling of actuators, for actuator wrappers
         # Can not be generic for every roattribute, as we don't know what to put as value
         if issubclass(_realcls, model.Actuator):
             self.axes = {"x": model.Axis(range=[-1, 1])}

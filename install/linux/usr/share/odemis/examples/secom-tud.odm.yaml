@@ -98,13 +98,13 @@ Clara: {
     }
 }
 
-# Use 3 CombinedActuators to separate the axes of the PIGCS over different roles
+# Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
 
 # Axes should be synchronized with the camera
 # Stage axes are moving the sample, so they should opposite direction than convention
 # (so the stage "position" is the current position observed)
 "OLStage": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: stage,
     affects: [Clara, "EBeam ExtXY"],
     children: {"x": PIGCS, "y": PIGCS},
@@ -115,7 +115,7 @@ Clara: {
 }
 
 "SEM-Optical Alignment": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: align,
     affects: [Clara],
     children: {"a": PIGCS, "b": PIGCS},
@@ -131,7 +131,7 @@ Clara: {
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)
 "OpticalZ actuator": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: focus,
     affects: [Clara],
     children: {"z": PIGCS},

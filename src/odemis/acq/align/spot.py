@@ -28,7 +28,7 @@ import logging
 import math
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.util.stage import ConvertStage
+from odemis.driver.actuator import ConvertStage
 import threading
 import time
 import numpy
@@ -294,7 +294,7 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=STAGE_MOVE):
     """
     Wrapper for _DoCenterSpot.
     ccd (model.DigitalCamera): The CCD
-    stage (model.CombinedActuator): The stage
+    stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
     mx_steps (int): Maximum number of steps to reach the center
     type (string): Type of move in order to align
@@ -328,7 +328,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
     steps is reached.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The CCD
-    stage (model.CombinedActuator): The stage
+    stage (model.Actuator): The stage
     escan (model.Emitter): The e-beam scanner
     mx_steps (int): Maximum number of steps to reach the center
     type (string): Type of move in order to align

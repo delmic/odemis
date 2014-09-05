@@ -51,7 +51,7 @@ Spectra: {
 
 # Using Z as X doesn't make sense, but it makes it easy for testing
 "Stage": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: stage,
     # affects: ["Cam"],
     children: {"x": "Cam focus", "y": "Second Axis"},

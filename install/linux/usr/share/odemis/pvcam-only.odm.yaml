@@ -44,9 +44,9 @@ Pixis: {
     }
 }
 
-# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
+# Use 2 MultiplexActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: align,
     affects: [Pixis],
     children: {"a": FakePIGCS, "b": FakePIGCS},
@@ -59,7 +59,7 @@ Pixis: {
     }
 }
 "OpticalZ actuator": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: focus,
     affects: [Pixis],
     children: {"z": FakePIGCS},

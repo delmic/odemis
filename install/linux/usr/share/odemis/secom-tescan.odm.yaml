@@ -142,9 +142,9 @@ Spectra: {
     init: {},
 }
 
-# Use 2 CombinedActuators to separate the axes of the PIGCS over different roles
+# Use 2 MultiplexActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: align,
     affects: ["Andor SimCam"],
     children: {"a": PIGCS, "b": PIGCS},
@@ -160,7 +160,7 @@ Spectra: {
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
 "OpticalZ actuator": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Andor SimCam"],
     children: {"z": PIGCS},

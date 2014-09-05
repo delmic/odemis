@@ -127,7 +127,7 @@ Spectra: {
 }
 
 "CombinedStage": {
-    class: combined_stage.CombinedStage,
+    class: actuator.CoupledStage,
     role: stage,
     affects: ["EBeam Phenom", "Zyla"],
     init: {},
@@ -135,7 +135,7 @@ Spectra: {
 }
 
 "AntiBacklash Stage": {
-    class: combined_stage.AntiBacklashActuator,
+    class: actuator.AntiBacklashActuator,
     role: align,
     init: {
         backlash: {"x": 100.e-06, "y": 100.e-06},
@@ -143,9 +143,9 @@ Spectra: {
     children: {"slave": "Optical stage"},
 }
 
-# Use 2 CombinedActuators to separate the axes of the TMCM over different roles
+# Use 2 MultiplexActuators to separate the axes of the TMCM over different roles
 "Optical stage": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: None,
     affects: ["Zyla"],
     children: {"x": TMCM, "y": TMCM},
@@ -157,7 +157,7 @@ Spectra: {
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
 "Optical focus": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Zyla"],
     children: {"z": TMCM},

@@ -59,7 +59,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
-from odemis.util.stage import ConvertStage
+from odemis.driver.actuator import ConvertStage
 
 
 class Tab(object):

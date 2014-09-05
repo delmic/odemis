@@ -64,7 +64,7 @@ Spectra: {
 }
 
 "SEM-Optical Alignment": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: align,
     affects: ["Andor SimCam"],
     children: {"a": FakePIGCS, "b": FakePIGCS},
@@ -78,7 +78,7 @@ Spectra: {
 }
 
 "OpticalZ actuator": {
-    class: CombinedActuator,
+    class: actuator.MultiplexActuator,
     role: focus,
     affects: ["Andor SimCam"],
     children: {"z": FakePIGCS},

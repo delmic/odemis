@@ -74,8 +74,10 @@ def get_instantiation_model(inst_file):
 
 # the classes that we provide in addition to the device drivers 
 # Nice name => actual class name
-internal_classes = {"Microscope": "odemis.model.Microscope", 
-                    "CombinedActuator": "odemis.model.CombinedActuator",
+internal_classes = {"Microscope": "odemis.model.Microscope",
+                    # The following is deprecated, as it can now be directly used
+                    # as "actuator.MultiplexActuator"
+                    "CombinedActuator": "odemis.driver.actuator.MultiplexActuator",
                     }
 def get_class(name):
     """

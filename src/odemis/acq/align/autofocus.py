@@ -71,7 +71,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
     thres_factor: threshold factor depending on type of detector and binning
     et: exposure time if detector is a ccd, 
         dwellTime*prod(resolution) if detector is an SEM
-    focus (model.CombinedActuator): The optical focus
+    focus (model.Actuator): The optical focus
     returns (float):    Focus position #m
                         Focus level
     raises:    
@@ -275,7 +275,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
     procedure or even cancel it.
     detector (model.DigitalCamera or model.Detector): Type of detector
     scanner (None or model.Scanner): In case of a SED this is the scanner used
-    focus (model.CombinedActuator): The optical focus
+    focus (model.Actuator): The optical focus
     accuracy (float): Focus precision #m
     returns (model.ProgressiveFuture):    Progress of DoAutoFocus, whose result() will return:
             Focus position #m
