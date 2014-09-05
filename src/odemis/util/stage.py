@@ -142,7 +142,7 @@ class ConvertStage(model.Actuator):
         return f
 
 
-class AntiBacklashStage(model.Actuator):
+class AntiBacklashActuator(model.Actuator):
     """
     This is a stage wrapper that takes a stage and ensures that every move 
     always finishes in the same direction.
@@ -158,7 +158,7 @@ class AntiBacklashStage(model.Actuator):
 
         """
         if len(children) != 1:
-            raise ValueError("AntiBacklashStage needs 1 child")
+            raise ValueError("AntiBacklashActuator needs 1 child")
 
         self._child = children.values()[0]
         self._backlash = backlash

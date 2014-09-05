@@ -135,7 +135,7 @@ Spectra: {
 }
 
 "AntiBacklash Stage": {
-    class: combined_stage.AntiBacklashStage,
+    class: combined_stage.AntiBacklashActuator,
     role: align,
     init: {
         backlash: {"x": 100.e-06, "y": 100.e-06},

@@ -21,7 +21,7 @@ from odemis.driver import simulated
 import unittest
 from unittest.case import skip
 
-from odemis.util.stage import ConvertStage, AntiBacklashStage
+from odemis.util.stage import ConvertStage, AntiBacklashActuator
 
 
 class TestConvertStage(unittest.TestCase):
@@ -187,11 +187,11 @@ class TestConvertStage(unittest.TestCase):
             self.assertAlmostEqual(actual[dim_act], expected[dim_exp])
 
 
-class TestAntiBacklashStage(unittest.TestCase):
+class TestAntiBacklashActuator(unittest.TestCase):
 
     def test_simple(self):
         child = simulated.Stage("stage", "test", axes=["x", "y"])
-        stage = AntiBacklashStage("absact", "align", {"orig": child},
+        stage = AntiBacklashActuator("absact", "align", {"orig": child},
                                   backlash={"x": 100e-6, "y":-80e-6})
         
         # moves should just go the same positions
@@ -231,7 +231,7 @@ class TestAntiBacklashStage(unittest.TestCase):
         Test when backlash doesn't involve all axes
         """
         child = simulated.Stage("stage", "test", axes=["a", "b"])
-        stage = AntiBacklashStage("absact", "align", {"orig": child},
+        stage = AntiBacklashActuator("absact", "align", {"orig": child},
                                   backlash={"a": 100e-6})
 
         # moves should just go the same positions
@@ -271,11 +271,11 @@ class TestAntiBacklashStage(unittest.TestCase):
 
         # backlash on non-existing axis
         with self.assertRaises(ValueError):
-            stage = AntiBacklashStage("absact", "align", {"orig": child},
+            stage = AntiBacklashActuator("absact", "align", {"orig": child},
                                       backlash={"a": 100e-6, "x": 50e-6})
 
         # move on non-existing axis
-        stage = AntiBacklashStage("absact", "align", {"orig": child},
+        stage = AntiBacklashActuator("absact", "align", {"orig": child},
                                   backlash={"a": 100e-6, "b": 50e-6})
         with self.assertRaises(ValueError):
             stage.moveRel({"a":-5e-6, "x": 5e-6})

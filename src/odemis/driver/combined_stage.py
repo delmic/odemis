@@ -25,7 +25,7 @@ from __future__ import division
 from Pyro4.core import isasync
 import logging
 from odemis import model
-from odemis.util.stage import ConvertStage, AntiBacklashStage
+from odemis.util.stage import ConvertStage, AntiBacklashActuator
 from odemis.model._futures import CancellableThreadPoolExecutor
 
 
