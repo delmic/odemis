@@ -85,7 +85,6 @@ class SEM(model.HwComponent):
         self._objects = client.factory
 
         info = self._device.VersionInfo().versionInfo
-        # TODO: Use an XML parser to parse it more robustly? At least don't fail if cannot find version
         try:
             start = info.index("'Product Name'>") + len("'Product Name'>")
             end = info.index("</Property", start)
@@ -188,10 +187,7 @@ class Scanner(model.Emitter):
 
         self._shape = (2048, 2048)
 
-        # Distance between borders if magnification = 1. It should be found out
-        # via calibration. We assume that image is square, i.e., VFW = HFW
         # TODO: document where this funky number comes from
-        # Could we relate it to GetSEMHFWCalib()? At least move to a constant.
         self._hfw_nomag = 0.268128  # m
 
         # Just the initialization of the FoV. The actual value will be acquired
@@ -477,19 +473,13 @@ class Detector(model.Detector):
         # Updated by the chamber pressure
         self._tilt_unblank = None
 
-    def start_acquire(self, callback):
-        # TODO: that's a weird place to do all these updates. If some values
-        # cannot be known before the SEM mode is reached, then better put all
-        # this in a special update() function called from the chamber.
-        # Otherwise, just listen to events, and update the information as the
-        # events arrive.
-
         # Start dedicated connection for acquisition stream
         acq_client = Client(self.parent._host + "?om", location=self.parent._host,
                         username=self.parent._username, password=self.parent._password,
                         timeout=SOCKET_TIMEOUT)
         self._acq_device = acq_client.service
 
+    def update_parameters(self):
         # Update stage and focus position
         self.parent._stage._updatePosition()
         self.parent._focus._updatePosition()
@@ -511,7 +501,7 @@ class Detector(model.Detector):
         self.parent._scanner._probeCurrent = self.parent._scanner._spotSize * math.sqrt(-volt)
         self.parent._scanner.probeCurrent.value = self.parent._scanner._probeCurrent
 
-
+    def start_acquire(self, callback):
         # Check if Phenom is in the proper mode
         area = self._acq_device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-SEM":
@@ -600,16 +590,10 @@ class Detector(model.Detector):
                 # Avoid setting resolution to 1,1
                 # Set scale so the FoV is reduced to something really small
                 # even if the current HFW is the maximum
-#                self._scanParams.scale = 1 / 2048
-#                self._scanParams.HDR = False
-#                self._scanParams.nrOfFrames = 1
-#                self._scanParams.resolution.width = 256
-#                self._scanParams.resolution.height = 256
                 if scan_params_view.scale != 0:
                     scan_params_view.scale = 0
                     scan_params_view.center.x = 0  # just to be sure it's at the center
                     scan_params_view.center.y = 0
-                    # self._acq_device.SetSEMViewingMode(self._scanParams, 'SEM-SCAN-MODE-IMAGING')
                     self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-SPOT')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
@@ -732,11 +716,6 @@ class Stage(model.Actuator):
 
         # TODO, may be needed in case setting a referencial point is required
         # cf .reference() and .referenced
-#         calib_pos = parent._device.GetStageCenterCalib()
-#         if calib_pos.x != 0 or calib_pos.y != 0:
-#             logging.warning("Stage was not calibrated. We are performing calibration now.")
-#             self._stagePos.x, self._stagePos.y = 0, 0
-#             parent._device.SetStageCenterCalib(self._stagePos)
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
         self._hwVersion = parent._hwVersion
@@ -1231,6 +1210,7 @@ class ChamberPressure(model.Actuator):
         if area == "LOADING-WORK-AREA-SEM":
             # Once moved in SEM, get current tilt and use as beam unblank value
             # Then blank the beam and unblank it once SEM stream is started
+            self.parent._detector.update_parameters()
             self.parent._detector._tilt_unblank = self.parent._device.GetSEMSourceTilt()
             self.parent._detector.beam_blank(True)
             self._position = PRESSURE_SEM
@@ -1244,9 +1224,6 @@ class ChamberPressure(model.Actuator):
         self.position._value = {"pressure": self._position}
         self.position.notify(self.position.value)
         logging.debug("Chamber in position: %s", self.position)
-
-        # TODO: ensure the position always stay as is (ie, prevent
-        # standby/hibernate while in SEM or navcam), or detect the position changed.
 
     def _updateSampleHolder(self):
         """
