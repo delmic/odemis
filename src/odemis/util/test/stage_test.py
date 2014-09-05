@@ -21,7 +21,7 @@ from odemis.driver import simulated
 import unittest
 from unittest.case import skip
 
-from odemis.util.stage import ConvertStage, InclinedStage
+from odemis.util.stage import ConvertStage
 
 
 class TestConvertStage(unittest.TestCase):
@@ -33,8 +33,6 @@ class TestConvertStage(unittest.TestCase):
         child = simulated.Stage("stage", "test", axes=["a", "b"])
         stage = ConvertStage("inclined", "align", {"orig": child},
                              axes=["b", "a"], rotation=math.radians(-135))
-#         stage = InclinedStage("inclined", "align", {"orig": child},
-#                              axes=["b", "a"], angle=135)
 
         f = stage.moveRel({"x":1e-06, "y":2e-06})
         f.result()

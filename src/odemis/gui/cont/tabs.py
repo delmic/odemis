@@ -43,7 +43,6 @@ from odemis.gui.cont.microscope import SecomStateController, \
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
-from odemis.util.stage import InclinedStage
 import os.path
 import pkg_resources
 import scipy.misc
@@ -60,6 +59,7 @@ import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
+from odemis.util.stage import ConvertStage
 
 
 class Tab(object):
@@ -1394,14 +1394,10 @@ class LensAlignTab(Tab):
         # fashion). By improving the model (=conversion A/B <-> X/Y), the GUI
         # could behave in a more expected way to the user, but the current
         # approximation is enough to do the calibration relatively quickly.
-        self._stage_ab = InclinedStage("converter-ab", "stage",
-                                             children={"aligner": main_data.aligner},
-                                             axes=["b", "a"],
-                                             angle=135)
-#         self._stage_ab = ConvertStage("converter-ab", "stage",
-#                                       children={"orig": main_data.aligner},
-#                                       axes=["b", "a"],
-#                                       rotation=math.radians(-135))
+        self._stage_ab = ConvertStage("converter-ab", "stage",
+                                      children={"orig": main_data.aligner},
+                                      axes=["b", "a"],
+                                      rotation=math.radians(-135))
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
             (main_frame.vp_align_ccd,  # focused view
@@ -1686,9 +1682,7 @@ class LensAlignTab(Tab):
         xc, yc = (fov_size[0] * ((l + r) / 2 - 0.5),
                   fov_size[1] * ((t + b) / 2 - 0.5))
 
-        # same formula as InclinedStage._convertPosToChild()
-        # TODO: check it's correct on the real hardware (-135 seemed to go
-        # opposite direction)
+        # same formula as ConvertStage._convertPosToChild()
         ang = math.radians(45)
         ac, bc = [xc * math.cos(ang) - yc * math.sin(ang),
                   xc * math.sin(ang) + yc * math.cos(ang)]

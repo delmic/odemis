@@ -28,7 +28,7 @@ import logging
 import math
 from odemis import model
 from odemis.acq._futures import executeTask
-from odemis.util.stage import InclinedStage
+from odemis.util.stage import ConvertStage
 import threading
 import time
 import numpy
@@ -338,10 +338,10 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
     """
     try:
         if type == STAGE_MOVE:
-            stage_ab = InclinedStage("converter-ab", "stage",
-                                children={"aligner": stage},
-                                axes=["b", "a"],
-                                angle=135)
+            stage_ab = ConvertStage("converter-ab", "stage",
+                                    children={"orig": stage},
+                                    axes=["b", "a"],
+                                    rotation=math.radians(-135))
         image = ccd.data.get(asap=False)
     
         # Center of optical image
