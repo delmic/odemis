@@ -21,7 +21,7 @@ from odemis.driver import simulated
 import unittest
 from unittest.case import skip
 
-from odemis.util.stage import ConvertStage
+from odemis.util.stage import ConvertStage, AntiBacklashStage
 
 
 class TestConvertStage(unittest.TestCase):
@@ -176,6 +176,56 @@ class TestConvertStage(unittest.TestCase):
         f.result()
         self.assertPosAlmostEqual(stage.position.value, {"x":0, "y":0})
         self.assertPosAlmostEqual(child.position.value, {"x":1e-05, "y":2e-05})
+
+    def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
+        """
+        Asserts that two stage positions have almost equal coordinates.
+        """
+        if expected.keys() != actual.keys():
+            raise AssertionError("Dimensions of coordinates do not match")
+        for dim_exp, dim_act in zip(expected.keys(), actual.keys()):
+            self.assertAlmostEqual(actual[dim_act], expected[dim_exp])
+
+
+class TestAntiBacklashStage(unittest.TestCase):
+
+    def test_simple(self):
+        child = simulated.Stage("stage", "test", axes=["x", "y"])
+        stage = AntiBacklashStage("absact", "align", {"orig": child},
+                                  axes=["x", "y"],
+                                  backlash={"x": 100e-6, "y":-80e-6})
+        
+        # moves should just go the same positions
+        # abs
+        self.assertPosAlmostEqual(stage.position.value, {"x":0, "y":0})
+        f = stage.moveAbs({"x":1e-06, "y":2e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(child.position.value, {"x":1e-06, "y":2e-06})
+        f = stage.moveAbs({"x":0, "y":0})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(child.position.value, {"x":0, "y":0})
+        f = stage.moveAbs({"x":-23e-06, "y":-15e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"x":-23e-06, "y":-15e-06})
+        self.assertPosAlmostEqual(child.position.value, {"x":-23e-06, "y":-15e-06})
+
+        # rel
+        f = stage.moveAbs({"x":0, "y":0})
+        f = stage.moveRel({"x":1e-06, "y":2e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(child.position.value, {"x":1e-06, "y":2e-06})
+        f = stage.moveRel({"x":0, "y":0})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"x":1e-06, "y":2e-06})
+        self.assertPosAlmostEqual(child.position.value, {"x":1e-06, "y":2e-06})
+        f = stage.moveRel({"x":-1e-06, "y":-2e-06})
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"x":0, "y":0})
+        self.assertPosAlmostEqual(child.position.value, {"x":0, "y":0})
+
 
     def assertPosAlmostEqual(self, actual, expected, *args, **kwargs):
         """
