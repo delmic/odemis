@@ -35,6 +35,7 @@ import unittest
 
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, \
     MultiplexActuator
+import simulated_test
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -46,7 +47,7 @@ ODEMISD_ARG = ["--log-level=2" , "--log-target=testdaemon.log", "--daemonize"]
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SECOM_LENS_CONFIG = CONFIG_PATH + "delphi-sim.odm.yaml"
 
-class MultiplexTest(unittest.TestCase, simulated.ActuatorTest):
+class MultiplexTest(unittest.TestCase, simulated_test.ActuatorTest):
 
     actuator_type = MultiplexActuator
     def setUp(self):
