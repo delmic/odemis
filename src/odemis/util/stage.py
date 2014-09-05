@@ -116,36 +116,42 @@ class ConvertStage(model.Actuator):
     the two stages, as for each SEM stage move it is able to perform the 
     corresponding “compensate” move in objective lens.
     """
-    def __init__(self, name, role, children, axes, scale, rotation, offset):
+    def __init__(self, name, role, children, axes,
+                 rotation=0, scale=None, translation=None):
         """
         children (dict str -> actuator): name to objective lens actuator
-        axes (list of string): names of the axes for x and y
-        scale (tuple of floats): scale factor from SEM to optical
-        rotation (float in degrees): rotation factor #radians
-        offset (tuple of floats): offset factor #m, m
+        axes (list of 2 strings): names of the axes for x and y
+        scale (None tuple of 2 floats): scale factor from exported to original position
+        rotation (float): rotation factor (in radians)
+        translation (None or tuple of 2 floats): translation offset (in m)
         """
         assert len(axes) == 2
         if len(children) != 1:
-            raise ValueError("StageConverted needs 1 child")
+            raise ValueError("ConvertStage needs 1 child")
 
         self._child = children.values()[0]
         self._axes_child = {"x": axes[0], "y": axes[1]}
-        self._scale = scale
-        self._rotation = rotation
-        self._offset = offset
-
-        # Axis rotation
-        self._R = numpy.array([[math.cos(self._rotation), -math.sin(self._rotation)],
-                         [math.sin(self._rotation), math.cos(self._rotation)]])
-        # Scaling between the axis
-        self._L = numpy.array([[self._scale[0], 0],
-                         [0, self._scale[1]]])
-        # Offset between origins of the coordinate systems
-        self._O = numpy.transpose([-self._offset[0], -self._offset[1]])
-
+        if scale is None:
+            scale = (1, 1)
+        if translation is None:
+            translation = (0, 0)
+        # TODO: range of axes could at least be updated with scale + translation
         axes_def = {"x": self._child.axes[axes[0]],
                     "y": self._child.axes[axes[1]]}
         model.Actuator.__init__(self, name, role, axes=axes_def)
+
+        # Rotation * scaling for convert back/forth between exposed and child
+        self._MtoChild = numpy.array(
+                     [[math.cos(rotation) * scale[0], -math.sin(rotation) * scale[0]],
+                      [math.sin(rotation) * scale[1], math.cos(rotation) * scale[1]]])
+
+        self._MfromChild = numpy.array(
+                     [[math.cos(-rotation) / scale[0], -math.sin(-rotation) / scale[1]],
+                      [math.sin(-rotation) / scale[0], math.cos(-rotation) / scale[1]]])
+
+        # Offset between origins of the coordinate systems
+        self._O = numpy.array([translation[0], translation[1]], dtype=numpy.float)
+
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(
@@ -157,55 +163,63 @@ class ConvertStage(model.Actuator):
         # No speed, not needed
         # self.speed = model.MultiSpeedVA(init_speed, [0., 10.], "m/s")
 
-    def _convertPosFromChild(self, pos_child):
+    def _convertPosFromChild(self, pos_child, absolute=True):
         # Object lens position vector
-        Q = numpy.transpose([pos_child[0], pos_child[1]])
+        Q = numpy.array([pos_child[0], pos_child[1]], dtype=numpy.float)
         # Transform to coordinates in the reference frame of the sample stage
-        p = numpy.add(self._O, numpy.linalg.inv(self._R).dot(numpy.linalg.inv(self._L)).dot(Q))
+        p = self._MfromChild.dot(Q)
+        if absolute:
+            p -= self._O
         return p.tolist()
 
-    def _convertPosToChild(self, pos):
+    def _convertPosToChild(self, pos, absolute=True):
         # Sample stage position vector
-        P = numpy.transpose([pos[0], pos[1]])
+        P = numpy.array([pos[0], pos[1]], dtype=numpy.float)
+        if absolute:
+            P += self._O
         # Transform to coordinates in the reference frame of the objective stage
-        q = self._L.dot(self._R).dot(numpy.subtract(P, self._O))
+        q = self._MtoChild.dot(P)
         return q.tolist()
 
     def _updatePosition(self, pos_child):
         """
         update the position VA when the child's position is updated
         """
-        # it's read-only, so we change it via _value
         vpos_child = [pos_child[self._axes_child["x"]],
                       pos_child[self._axes_child["y"]]]
         vpos = self._convertPosFromChild(vpos_child)
+        # it's read-only, so we change it via _value
         self.position._value = {"x": vpos[0],
                                 "y": vpos[1]}
         self.position.notify(self.position.value)
 
     @isasync
     def moveRel(self, shift):
-        # TODO, not implemented
-        pass
+        # shift is a vector, so relative conversion
+        vshift = [shift.get("x", 0), shift.get("y", 0)]
+        vshift_child = self._convertPosToChild(vshift, absolute=False)
+
+        shift_child = {self._axes_child["x"]: vshift_child[0],
+                       self._axes_child["y"]: vshift_child[1]}
+        f = self._child.moveRel(shift_child)
+        return f
 
     @isasync
     def moveAbs(self, pos):
-        # shift is a vector, conversion is identical to a point
+        # pos is a position, so absolute conversion
         vpos = [pos.get("x", 0), pos.get("y", 0)]
         vpos_child = self._convertPosToChild(vpos)
 
         pos_child = {self._axes_child["x"]: vpos_child[0],
-                       self._axes_child["y"]: vpos_child[1]}
+                     self._axes_child["y"]: vpos_child[1]}
         f = self._child.moveAbs(pos_child)
         return f
 
     def stop(self, axes=None):
-        # This is normally never used (child is directly stopped)
         self._child.stop()
 
     @isasync
     def reference(self, axes):
-        # TODO, implement reference for objective lens
         f = self._child.reference(axes)
         return f
 
@@ -291,7 +305,6 @@ class AntiBacklashStage(model.Actuator):
         return f
 
     def stop(self, axes=None):
-        # This is normally never used (child is directly stopped)
         self._child.stop()
 
     @isasync

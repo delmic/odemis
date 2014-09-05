@@ -1398,6 +1398,10 @@ class LensAlignTab(Tab):
                                              children={"aligner": main_data.aligner},
                                              axes=["b", "a"],
                                              angle=135)
+#         self._stage_ab = ConvertStage("converter-ab", "stage",
+#                                       children={"orig": main_data.aligner},
+#                                       axes=["b", "a"],
+#                                       rotation=math.radians(-135))
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
             (main_frame.vp_align_ccd,  # focused view
