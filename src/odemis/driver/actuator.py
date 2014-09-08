@@ -310,7 +310,7 @@ class CoupledStage(model.Actuator):
         # Optical stage
         self._slave = None
 
-        for type, child in children.items():
+        for crole, child in children.items():
             child.parent = self
 
             # Check if children are actuators
@@ -318,12 +318,15 @@ class CoupledStage(model.Actuator):
                 raise ValueError("Child %s is not a component." % child)
             if not hasattr(child, "axes") or not isinstance(child.axes, dict):
                 raise ValueError("Child %s is not an actuator." % child.name)
-            if type == "slave":
+            if not "x" in child.axes or not "y" in child.axes:
+                raise ValueError("Child %s doesn't have both x and y axes" % child.name)
+
+            if crole == "slave":
                 self._slave = child
-            elif type == "master":
+            elif crole == "master":
                 self._master = child
             else:
-                raise ValueError("Child given to CoupledStage must be either master or slave.")
+                raise ValueError("Child given to CoupledStage must be either 'master' or 'slave', but got %s." % crole)
 
         if self._master is None:
             raise ValueError("CoupledStage needs a master child")
@@ -336,23 +339,14 @@ class CoupledStage(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes_def, children=children,
                                 **kwargs)
-        self._metadata = {model.MD_HW_NAME: "CoupledStage"}
+        self._metadata[model.MD_HW_NAME] = "CoupledStage"
 
-        self._stage_conv = ConvertStage("converter-xy", "align",
-                            children={"aligner": self._slave},
-                            axes=["x", "y"],
-                            scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
-                            rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
-                            translation=self._metadata.get(model.MD_POS_COR, (0, 0)))
-
-        # will take care of executing axis move asynchronously
+        # will take care of executing axis moves asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
         self._position = {}
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
-        self.position = model.VigilantAttribute(
-                                    self._applyInversionAbs(self._position),
-                                    unit="m", readonly=True)
+        self.position = model.VigilantAttribute({}, unit="m", readonly=True)
         self._updatePosition()
         # TODO: listen to master position to update the position? => but
         # then it might get updated too early, before the slave has finished
@@ -366,16 +360,28 @@ class CoupledStage(model.Actuator):
                 c.referenced.subscribe(self._onChildReferenced)
         self._updateReferenced()
 
+        self._stage_conv = None
+        self._createConvertStage()
+
     def updateMetadata(self, md):
         self._metadata.update(md)
         # Re-initialize ConvertStage with the new transformation values
         # Called after every sample holder insertion
+        self._createConvertStage()
+
+    def _createConvertStage(self):
+        """
+        (Re)create the convert stage, based on the metadata
+        """
         self._stage_conv = ConvertStage("converter-xy", "align",
                     children={"aligner": self._slave},
                     axes=["x", "y"],
                     scale=self._metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1)),
                     rotation=self._metadata.get(model.MD_ROTATION_COR, 0),
                     translation=self._metadata.get(model.MD_POS_COR, (0, 0)))
+        # Schedule a null relative move, just to ensure the stages are
+        # synchronised again.
+        self._executor.submit(self._doMoveRel, {})
 
     def _updatePosition(self):
         """
@@ -415,38 +421,31 @@ class CoupledStage(model.Actuator):
         """
         move to the position 
         """
-        next_pos = {}
-        for axis, new_pos in pos.items():
-            next_pos[axis] = new_pos
-        absMove = next_pos.get("x", self._position["x"]), next_pos.get("y", self._position["y"])
-        # Move SEM sample stage
-        f = self._master.moveAbs({"x":absMove[0], "y":absMove[1]})
-        # TODO: handle exception (=> still try to move to the same position as master)
-        f.result()
-        # TODO: Is it really needed to read back the position? It'd save time
-        # to move the slave stage simultaneously
-        abs_pos = self._master.position.value
-        # Move objective lens
-        f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
-        f.result()
+        f = self._master.moveAbs(pos)
+        try:
+            f.result()
+        finally: # synchornise slave position even if move failed
+            # TODO: Move simultaneously based on the expected position, and
+            # only if the final master position is different, move again.
+            mpos = self._master.position.value
+            # Move objective lens
+            f = self._stage_conv.moveAbs({"x": mpos["x"], "y": mpos["y"]})
+            f.result()
 
         self._updatePosition()
 
     def _doMoveRel(self, shift):
         """
-        move by the shift 
+        move by the shift
         """
-        rel = {}
-        for axis, change in shift.items():
-            rel[axis] = change
-        relMove = rel.get("x", 0), rel.get("y", 0)
-        # Move SEM sample stage
-        f = self._master.moveRel({"x":relMove[0], "y":relMove[1]})
-        f.result()
-        abs_pos = self._master.position.value
-        # Move objective lens
-        f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
-        f.result()
+        f = self._master.moveRel(shift)
+        try:
+            f.result()
+        finally:
+            mpos = self._master.position.value
+            # Move objective lens
+            f = self._stage_conv.moveAbs({"x": mpos["x"], "y": mpos["y"]})
+            f.result()
 
         self._updatePosition()
 
@@ -490,8 +489,8 @@ class CoupledStage(model.Actuator):
             f.result()
 
         # Re-synchronize the 2 stages by moving the slave where the master is
-        abs_pos = self._master.position.value
-        f = self._stage_conv.moveAbs({"x":-abs_pos["x"], "y":-abs_pos["y"]})
+        mpos = self._master.position.value
+        f = self._stage_conv.moveAbs({"x": mpos["x"], "y": mpos["y"]})
         f.result()
 
         self._updatePosition()

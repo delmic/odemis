@@ -4,7 +4,7 @@ DELPHI: {
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "SED Phenom", "NavCam"],
     actuators: ["Stage", "Optical stage", "Optical focus",
-                "SEM Chamber", "EBeam focus", "NavCam focus", "CombinedStage", "AntiBacklash Stage"],
+                "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage"],
 }
 
 Spectra: {
@@ -123,7 +123,10 @@ Spectra: {
     },
 }
 
-"CombinedStage": {
+# Special stage that actually moves the SEM stage as requested, and the optical
+# stage oppositely (based on a transformation matrix passed via metadata) to
+# compensate for the lens move.
+"TwinStage": {
     class: actuator.CoupledStage,
     role: stage,
     affects: ["EBeam Phenom", "Zyla"],
@@ -148,6 +151,7 @@ Spectra: {
     children: {"x": TMCM, "y": TMCM},
     init: {
         axes_map: {"x": "x", "y": "y"},
+        inverted: ["x", "y"], # inverted so it moves oppositely to the SEM stage
     },
 }
 
