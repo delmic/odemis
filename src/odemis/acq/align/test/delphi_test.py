@@ -24,7 +24,7 @@ import numpy
 from odemis import model
 from odemis.util import driver
 import odemis
-from odemis.acq.align import delphi
+from odemis.acq.align import delphi, pattern
 from odemis.dataio import hdf5
 import os
 import subprocess
@@ -185,7 +185,7 @@ class TestCalibration(unittest.TestCase):
                      combined_stage, True)
         first_hole, second_hole, offset, rotation, scaling = f.result()
 
-    # @unittest.skip("skip")
+    @unittest.skip("skip")
     def test_scan_pattern(self):
         """
         Test PatternDetection
@@ -195,9 +195,9 @@ class TestCalibration(unittest.TestCase):
         escan = self.ebeam
         opt_stage = self.opt_stage
         focus = self.focus
-        pattern = numpy.random.randint(2, size=(21, 21))
-        f = delphi.PatternDetection(ccd, detector, escan, opt_stage, focus, pattern)
-        f.result(5)
+        pat = numpy.random.randint(2, size=(21, 21))
+        scanner = pattern.PatternScanner(ccd, detector, escan, opt_stage, focus, pat)
+        scanner.DoPattern()
 
 if __name__ == '__main__':
     unittest.main()
