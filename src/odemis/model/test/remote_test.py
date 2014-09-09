@@ -30,7 +30,7 @@ import numpy
 from odemis import model
 from odemis.model import roattribute, oneway, isasync
 from odemis.model._vattributes import VigilantAttributeBase
-from odemis.util import mock
+from odemis.util import mock, timeout
 import os
 import pickle
 from threading import Thread
@@ -137,7 +137,7 @@ class SerializerTest(unittest.TestCase):
               "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
               }
         sem = mock.MockComponent(daemon=daemon, _realcls=model.HwComponent, **CONFIG_SEM)
-                
+
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
@@ -239,6 +239,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         model.getContainer("testscont").terminate()
         model.getContainer("testscont2").terminate()
 
+    @timeout(20)
     def test_dataflow(self):
         comp = model.createInNewContainer("testscont", MyComponent, 
                                           {"name":"MyComp"})
@@ -271,6 +272,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         model.getContainer("testscont2").terminate()
         time.sleep(0.1) # give it some time to terminate
     
+    @timeout(20)
     def test_dataflow_unsub(self):
         """
         Check the dataflow is automatically unsubscribed when the subscriber
@@ -556,7 +558,26 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.1)
         self.assertEqual(count_end, self.count)
         self.assertGreaterEqual(count_end, 1)
+
+    def test_dataflow_empty(self):
+        """
+        test passing empty DataArray
+        """
+        self.count = 0
+        self.data_arrays_sent = 0
+        self.comp.data.setShape((0,), 16)
+        self.expected_shape = (0,)
+
+        self.comp.data.subscribe(self.receive_data)
+        time.sleep(0.5)
+        self.comp.data.unsubscribe(self.receive_data)
+        count_end = self.count
+        print "received %d stridden arrays over %d" % (self.count, self.data_arrays_sent)
         
+        time.sleep(0.1)
+        self.assertEqual(count_end, self.count)
+        self.assertGreaterEqual(count_end, 1)
+
     def receive_data(self, dataflow, data):
         self.count += 1
         self.assertEqual(data.shape, self.expected_shape)
@@ -904,8 +925,12 @@ class FakeDataFlow(model.DataFlow):
             self._startAcquire.notify()
             time.sleep(0.1) # if test events => simulate slow acquisition
         array = numpy.zeros(shape, dtype=("uint%d" % bpp)).view(model.DataArray)
-        array[index % shape[0],:] = 255
-        return array[:, self.cut:]
+        if shape[0] > 0:
+            array[index % shape[0], :] = 255
+        if self.cut:
+            return array[:, self.cut:]
+        else:
+            return array
     
     def reset(self):
         self.count = 0
@@ -918,7 +943,8 @@ class FakeDataFlow(model.DataFlow):
         
     def get(self):
         array = self._create_one(self.shape, self.bpp, 0)
-        array[0][0] = 0
+        if len(array):
+            array[0][0] = 0
         return array
             
     def start_generate(self):
@@ -944,7 +970,8 @@ class FakeDataFlow(model.DataFlow):
         while not self._stop.isSet():
             self.count += 1
             array = self._create_one(self.shape, self.bpp, self.count)
-            array[0][0] = self.count
+            if len(array):
+                array[0][0] = self.count
 #            print "generating array %d" % self.count
             self.notify(array)
             time.sleep(0.05) # wait a bit see if the subscribers still want data

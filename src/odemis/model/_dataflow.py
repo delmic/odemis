@@ -542,7 +542,10 @@ class SubscribeProxyThread(threading.Thread):
 #                         logging.debug("Dataflow %s dropped %d arrays", self.uri, discarded)
                     discarded = 0
                     # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
-                    array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
+                    if len(array_buf):
+                        array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
+                    else: # frombuffer doesn't support zero length array
+                        array = numpy.empty((0,), dtype=array_format["dtype"])
                     array.shape = array_format["shape"]
                     darray = DataArray(array, metadata=array_md)
 
