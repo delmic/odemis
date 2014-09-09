@@ -702,9 +702,6 @@ class MicroscopeView(View):
         # FIXME: "stop all axes" should also clear the queue
         self._focus_queue.put(shift)
 
-    def has_stage(self):
-        return self._stage is not None
-
     def moveStageToView(self):
         """ Move the stage to the current view_pos
 
