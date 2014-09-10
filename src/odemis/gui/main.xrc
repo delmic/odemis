@@ -173,7 +173,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -199,7 +198,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -225,7 +223,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -256,7 +253,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -282,7 +278,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -628,7 +623,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -657,7 +651,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -683,7 +676,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -785,7 +777,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -864,7 +855,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -880,7 +870,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -896,7 +885,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -913,7 +901,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -932,7 +919,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -957,7 +943,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -982,7 +967,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1007,7 +991,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1240,7 +1223,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -1266,7 +1248,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -1441,7 +1422,6 @@
                         <style>normal</style>
                         <weight>normal</weight>
                         <underlined>0</underlined>
-                        <family>default</family>
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
@@ -1508,7 +1488,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1526,7 +1505,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1544,7 +1522,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1563,7 +1540,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1584,7 +1560,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1609,7 +1584,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1634,7 +1608,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1657,7 +1630,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1684,7 +1656,6 @@
                         <style>normal</style>
                         <weight>normal</weight>
                         <underlined>0</underlined>
-                        <family>default</family>
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
@@ -1724,7 +1695,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1742,7 +1712,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1760,7 +1729,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1779,7 +1747,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1800,7 +1767,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1825,7 +1791,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1850,7 +1815,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -1873,7 +1837,6 @@
                             <style>normal</style>
                             <weight>bold</weight>
                             <underlined>0</underlined>
-                            <family>default</family>
                             <face>Ubuntu</face>
                             <encoding>UTF-8</encoding>
                           </font>
@@ -2055,7 +2018,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -2080,7 +2042,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -2214,7 +2175,6 @@
                                             <style>normal</style>
                                             <weight>normal</weight>
                                             <underlined>0</underlined>
-                                            <family>default</family>
                                             <face>Ubuntu</face>
                                             <encoding>UTF-8</encoding>
                                           </font>
@@ -2266,7 +2226,6 @@
                                     <style>normal</style>
                                     <weight>normal</weight>
                                     <underlined>0</underlined>
-                                    <family>default</family>
                                     <face>Ubuntu</face>
                                     <encoding>UTF-8</encoding>
                                   </font>
@@ -2308,7 +2267,6 @@
                                         <style>normal</style>
                                         <weight>normal</weight>
                                         <underlined>0</underlined>
-                                        <family>default</family>
                                         <face>Ubuntu</face>
                                         <encoding>UTF-8</encoding>
                                       </font>
@@ -2345,7 +2303,6 @@
                               <style>normal</style>
                               <weight>normal</weight>
                               <underlined>0</underlined>
-                              <family>default</family>
                               <face>Ubuntu</face>
                               <encoding>UTF-8</encoding>
                             </font>
@@ -2398,7 +2355,6 @@
                         <style>normal</style>
                         <weight>normal</weight>
                         <underlined>0</underlined>
-                        <family>default</family>
                         <face>Ubuntu</face>
                         <encoding>UTF-8</encoding>
                       </font>
@@ -2800,7 +2756,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Courier 10 Pitch</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -2833,7 +2788,6 @@
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <family>default</family>
       <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
@@ -3056,7 +3010,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -3090,7 +3043,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -3118,7 +3070,6 @@
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <family>default</family>
                   <face>Ubuntu</face>
                   <encoding>UTF-8</encoding>
                 </font>
@@ -3143,7 +3094,6 @@
       <style>normal</style>
       <weight>normal</weight>
       <underlined>0</underlined>
-      <family>default</family>
       <face>Ubuntu</face>
       <encoding>UTF-8</encoding>
     </font>
