@@ -209,7 +209,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             # Update progress of the future
             future.set_end_time(time.time() + 1)
             logging.debug("Calculate extra offset and rotation...")
-            updated_offset, updated_rotation = CalculateExtraOffset(first_hole,
+            updated_offset, updated_rotation = UpdateOffsetAndRotation(first_hole,
                                                                     second_hole,
                                                                     known_first_hole,
                                                                     known_second_hole,
@@ -473,7 +473,6 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
             # of the CCD FoV
             # Simplified version of AlignSpot() but without autofocus, with
             # different error margin, and moves the SEM stage.
-            # TODO => reuse/factorize the code?
             dist = None
             steps = 0
             while True:
@@ -488,14 +487,13 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                     raise IOError("CL spot not found.")
                 pixelSize = image.metadata[model.MD_PIXEL_SIZE]
                 center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-                # TODO: tab? better name?
-                tab_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
-                tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-                dist = math.hypot(*tab)
+                vector_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
+                vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+                dist = math.hypot(*vector)
                 # Move to spot until you are close enough
                 if dist <= ERR_MARGIN:
                     break
-                f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
+                f = sem_stage.moveRel({"x":vector[0], "y":vector[1]})
                 f.result()
                 steps += 1
                 # Update progress of the future
@@ -503,8 +501,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                     estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
 
             # Save Phenom sample stage position and Delmic optical stage position
-            sem_spots.append((sem_stage.position.value["x"] + tab[0],
-                              sem_stage.position.value["y"] + tab[1]))
+            sem_spots.append((sem_stage.position.value["x"] + vector[0],
+                              sem_stage.position.value["y"] + vector[1]))
             opt_spots.append((opt_stage.position.value["x"],
                               opt_stage.position.value["y"]))
 
@@ -626,18 +624,18 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             # the SEM
             image = detector.data.get(asap=False)
             try:
-                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 3)
+                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 5)
             except IOError:
                 raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
             center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-            tab_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
-            tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-            dist = math.hypot(*tab)
+            vector_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
+            vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+            dist = math.hypot(*vector)
 
             #SEM stage position plus offset from hole detection
-            holes_found.append({"x": sem_stage.position.value["x"] + tab[0],
-                                "y": sem_stage.position.value["y"] + tab[1]})
+            holes_found.append({"x": sem_stage.position.value["x"] + vector[0],
+                                "y": sem_stage.position.value["y"] + vector[1]})
         
         first_hole = (holes_found[0]["x"], holes_found[0]["y"])
         second_hole = (holes_found[1]["x"], holes_found[1]["y"])
@@ -690,18 +688,17 @@ def FindCircleCenter(image, radius, max_diff):
     pixelSize = image.metadata[model.MD_PIXEL_SIZE]
 
     # search for circles of radius with "max_diff" number of pixels precision
-    min, max = ((radius / pixelSize) - max_diff), ((radius / pixelSize) + max_diff)
+    min, max = int((radius / pixelSize[0]) - max_diff), int((radius / pixelSize[0]) + max_diff)
     circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, 1, 20, param1=50,
                                param2=30, minRadius=min, maxRadius=max)
 
-    circles = numpy.uint16(numpy.around(circles))
-    if len(circles[0, :]) != 1:
+    # Do not change the sequence of conditions
+    if (circles is None) or len(circles[0, :]) != 1:
         raise IOError("Circle not found.")
 
     return circles[0, 0][0], circles[0, 0][1]
 
-# TODO: rename to UpdateOffsetAndRotation ?
-def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
+def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole,
                          expected_second_hole, offset, rotation, scaling):
     """
     Given the hole coordinates found in the calibration file and the new ones, 
@@ -726,6 +723,8 @@ def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
     updated_rotation = rotation + e_rotation
     return updated_offset, updated_rotation
 
+# LensAlignment is called by the GUI after the objective stage is referenced and
+# SEM stage to (0,0).
 def LensAlignment(navcam, sem_stage):
     """
     Wrapper for DoLensAlignment. It provides the ability to check the progress 
@@ -776,24 +775,24 @@ def _DoLensAlignment(future, navcam, sem_stage):
             # Detect lens with navcam
             image = navcam.data.get(asap=False)
             try:
-                lens_coordinates = FindCircleCenter(image, LENS_RADIUS, 3)
+                lens_coordinates = FindCircleCenter(image, LENS_RADIUS, 5)
             except IOError:
                 raise IOError("Lens not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
             center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-            tab_pxs = [a - b for a, b in zip(lens_coordinates, center_pxs)]
-            tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-            dist = math.hypot(*tab)
+            vector_pxs = [a - b for a, b in zip(lens_coordinates, center_pxs)]
+            vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+            dist = math.hypot(*vector)
             # Move to lens center until you are close enough
             if dist <= ERR_MARGIN:
                 break
-            f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
+            f = sem_stage.moveRel({"x":vector[0], "y":vector[1]})
             f.result()
             steps += 1
             # Update progress of the future
             future.set_end_time(time.time() +
                 estimateLensAlignmentTime(dist))
-        return (sem_stage.position.value["x"] + tab[0], sem_stage.position.value["y"] + tab[1])
+        return (sem_stage.position.value["x"] + vector[0], sem_stage.position.value["y"] + vector[1])
     finally:
         with future._lens_lock:
             if future._lens_alignment_state == CANCELLED:

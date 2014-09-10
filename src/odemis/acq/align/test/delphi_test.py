@@ -71,6 +71,7 @@ class TestCalibration(unittest.TestCase):
         cls.ccd = model.getComponent(role="ccd")
         cls.sem_stage = model.getComponent(role="sem-stage")
         cls.opt_stage = model.getComponent(role="align")
+        cls.ebeam_focus = model.getComponent(role="ebeam-focus")
         cls.focus = model.getComponent(role="focus")
         cls.align = model.getComponent(role="align")
         cls.light = model.getComponent(role="light")
@@ -91,7 +92,7 @@ class TestCalibration(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
-    @unittest.skip("skip")
+    # @unittest.skip("skip")
     def test_find_hole_center(self):
         """
         Test FindHoleCenter
@@ -100,11 +101,11 @@ class TestCalibration(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        hole_coordinates = delphi.FindHoleCenter(data[0])
-        expected_coordinates = (385.0, 267.5)
+        hole_coordinates = delphi.FindCircleCenter(data[0], 0.02032, 3)
+        expected_coordinates = (390.5, 258.5)
         numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
 
-    @unittest.skip("skip")
+    # @unittest.skip("skip")
     def test_no_hole(self):
         """
         Test FindHoleCenter raises exception
@@ -113,7 +114,7 @@ class TestCalibration(unittest.TestCase):
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
 
-        self.assertRaises(IOError, delphi.FindHoleCenter, data[0])
+        self.assertRaises(IOError, delphi.FindCircleCenter, data[0], 0.02032, 3)
 
     @unittest.skip("skip")
     def test_hole_detection(self):
@@ -123,7 +124,8 @@ class TestCalibration(unittest.TestCase):
         detector = self.sed
         escan = self.ebeam
         sem_stage = self.sem_stage
-        f = delphi.HoleDetection(detector, escan, sem_stage)
+        ebeam_focus = self.ebeam_focus
+        f = delphi.HoleDetection(detector, escan, sem_stage, ebeam_focus)
         holes_found = f.result()
 
     @unittest.skip("skip")
@@ -132,13 +134,13 @@ class TestCalibration(unittest.TestCase):
         Test CalculateExtraOffset
         """
 
-        updated_offset, updated_rotation = delphi.CalculateExtraOffset((1, 0),
-                                                                       (1, 1),
-                                                                       (0, 0),
-                                                                       (0, 1),
-                                                                       (1, 0),
-                                                                       0,
-                                                                       (2, 2))
+        updated_offset, updated_rotation = delphi.UpdateOffsetAndRotation((1, 0),
+                                                                           (1, 1),
+                                                                           (0, 0),
+                                                                           (0, 1),
+                                                                           (1, 0),
+                                                                           0,
+                                                                           (2, 2))
         numpy.testing.assert_almost_equal(updated_offset, (1.5, 0))
         numpy.testing.assert_almost_equal(updated_rotation, 0)
 
@@ -165,8 +167,7 @@ class TestCalibration(unittest.TestCase):
         sem_stage = self.sem_stage
         opt_stage = self.opt_stage
         focus = self.focus
-        f = delphi.AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, (1, 1),
-                   (1, 0))
+        f = delphi.AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus)
         offset = f.result()
 
     @unittest.skip("skip")
@@ -179,11 +180,12 @@ class TestCalibration(unittest.TestCase):
         escan = self.ebeam
         sem_stage = self.sem_stage
         opt_stage = self.opt_stage
+        ebeam_focus = self.ebeam_focus
         focus = self.focus
         combined_stage = self.combined_stage
-        f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
-                     combined_stage, True)
-        first_hole, second_hole, offset, rotation, scaling = f.result()
+        f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
+                                    focus, combined_stage, True)
+        first_hole, second_hole, hole_focus, offset, rotation, scaling = f.result()
 
     @unittest.skip("skip")
     def test_scan_pattern(self):
