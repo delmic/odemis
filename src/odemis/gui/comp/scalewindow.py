@@ -35,11 +35,11 @@ SM_NORMAL_DC = 0
 SM_BUFFERED_DC = 1
 
 #----------------------------------------------------------------------
-# BUFFERENDWINDOW Class
+# BUFFEREDWINDOW Class
 # This Class Has Been Taken From The wxPython Wiki, And Slightly
 # Adapted To Fill My Needs. See:
 #
-# http://wiki.wxpython.org/index.cgi/DoubleBufferedDrawing
+# http://wiki.wxpython.org/DoubleBufferedDrawing
 #
 # For More Info About DC And Double Buffered Drawing.
 #----------------------------------------------------------------------
@@ -147,18 +147,12 @@ class BufferedWindow(wx.Control):
         elsewhere in the system. if that data changes, the drawing needs to
         be updated.
         """
-
-        if self._bufferedstyle == SM_BUFFERED_DC:
-            dc = wx.BufferedDC(wx.ClientDC(self), self._Buffer)
-            self.Draw(dc)
-        else:
-            # update the buffer
-            dc = wx.MemoryDC()
-            dc.SelectObject(self._Buffer)
-
-            self.Draw(dc)
-            # update the screen
-            wx.ClientDC(self).Blit(0, 0, self.Width, self.Height, dc, 0, 0)
+        dc = wx.MemoryDC()
+        dc.SelectObject(self._Buffer)
+        self.Draw(dc)
+        del dc # need to get rid of the MemoryDC before Update() is called.
+        self.Refresh(eraseBackground=False)
+        self.Update()
 
 # FIXME: with wx30, the borders of the window seem to be smaller, and the whole
 # drawing is clipped
