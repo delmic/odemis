@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 """ This custom XRCED launcher allows a small wx function to be wrapped
 so it provides a little extra needed functionality.
 
@@ -16,11 +18,14 @@ import sys
 
 if __name__ == '__main__':
     try:
-        from XRCed.xrced import main
+        from wx.tools.XRCed.xrced import main
     except ImportError:
-        print >> sys.stderr, 'XRCed parent directory must be in PYTHONPATH'
-        raise
-    sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
+        try:
+            from XRCed.xrced import main
+        except ImportError:
+            print >> sys.stderr, 'XRCed parent directory must be in PYTHONPATH'
+            raise
+        sys.modules['wx.tools.XRCed'] = sys.modules['XRCed']
 
     from wx.tools import pywxrc
 
