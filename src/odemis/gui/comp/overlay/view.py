@@ -1211,7 +1211,7 @@ class HistoryOverlay(ViewOverlay):
                 marker_size = (int(p_size[0] * self.cnvs.scale),
                                int(p_size[0] * self.cnvs.scale))
 
-                # Prevent the marker from becomming too small
+                # Prevent the marker from becoming too small
                 if marker_size[0] < 2 or marker_size[1] < 2:
                     marker_size = (3, 3)
             else:
