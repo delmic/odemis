@@ -82,15 +82,13 @@ class BufferedWindow(wx.Control):
         wx.Control.__init__(self, parent, id, pos=pos, size=size, style=style)
         self._bufferedstyle = bufferedstyle
 
+        # Initialise the buffer to "something". It will be updated as soon as
+        # OnSize is called
+        self._Buffer = wx.EmptyBitmap(1, 1)
+
         self.Bind(wx.EVT_PAINT, self.OnPaint)
         self.Bind(wx.EVT_SIZE, self.OnSize)
         self.Bind(wx.EVT_ERASE_BACKGROUND, lambda x: None)
-
-        # OnSize called to make sure the buffer is initialized.
-        # This might result in OnSize getting called twice on some
-        # platforms at initialization, but little harm done.
-        # self.OnSize(None) # very annoying as it calls the methods before the init is done
-
 
     def Draw(self, dc):
         """
@@ -162,7 +160,8 @@ class BufferedWindow(wx.Control):
             # update the screen
             wx.ClientDC(self).Blit(0, 0, self.Width, self.Height, dc, 0, 0)
 
-
+# FIXME: with wx30, the borders of the window seem to be smaller, and the whole
+# drawing is clipped
 class ScaleWindow(BufferedWindow):
     """
     Little control that display a horizontal scale for a given screen density
@@ -180,9 +179,6 @@ class ScaleWindow(BufferedWindow):
         self.background_col = self.Parent.GetBackgroundColour()
         self.foreground_col = self.Parent.GetForegroundColour()
         self.line_width = 1
-
-        # OnSize called to make sure the buffer is initialized.
-        self.OnSize(None)
 
     def SetMPP(self, mpp):
         """
