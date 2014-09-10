@@ -104,7 +104,6 @@ class TestCalibration(unittest.TestCase):
         expected_coordinates = (390.5, 258.5)
         numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
 
-
     # @unittest.skip("skip")
     def test_find_lens_center(self):
         """

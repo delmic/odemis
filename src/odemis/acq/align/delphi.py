@@ -624,7 +624,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             # the SEM
             image = detector.data.get(asap=False)
             try:
-                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 3)
+                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 5)
             except IOError:
                 raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
