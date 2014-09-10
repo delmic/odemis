@@ -212,10 +212,9 @@ class MicroscopeViewport(ViewPort):
         # Call parent constructor at the end, because it needs the legend panel
         ViewPort.__init__(self, *args, **kwargs)
 
-        if self.legend:
-            # Bind on EVT_SLIDER to update even while the user is moving
-            self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-            self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
+        # Bind on EVT_SLIDER to update even while the user is moving
+        self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
 
     def setView(self, microscope_view, tab_data):
         """
@@ -665,9 +664,6 @@ class AngularResolvedViewport(ViewPort):
     # Default class
     canvas_class = miccanvas.AngularResolvedCanvas
     legend_class = None
-
-    def __init__(self, *args, **kwargs):
-        ViewPort.__init__(self, *args, **kwargs)
 
     def setView(self, microscope_view, tab_data):
         """

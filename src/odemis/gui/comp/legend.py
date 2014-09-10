@@ -129,7 +129,7 @@ class InfoLegend(wx.Panel):
         control_sizer.Add(self.magnification_text, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT
                                                                       | wx.EXPAND)
         control_sizer.Add(self.hfw_text, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.scale_win, 1, border=10,flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.scale_win, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 
         # legend_panel_sizer is needed to add a border around the legend
