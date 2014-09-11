@@ -402,7 +402,7 @@ class MicroscopeViewport(ViewPort):
     ## END Event handling
 
 
-class OverviewVierport(MicroscopeViewport):
+class OverviewViewport(MicroscopeViewport):
     """ A Viewport containing a downscaled overview image of the loaded sample
 
     If a chamber state can be tracked,
@@ -412,7 +412,7 @@ class OverviewVierport(MicroscopeViewport):
     legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
-        super(OverviewVierport, self).__init__(*args, **kwargs)
+        super(OverviewViewport, self).__init__(*args, **kwargs)
         self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
@@ -421,13 +421,13 @@ class OverviewVierport(MicroscopeViewport):
             self.canvas.horizontal_field_width = 10e-3
             logging.debug("Canvas HFW too small! Setting it to %s", 10e-3)
 
-        super(OverviewVierport, self).OnSize(evt)
+        super(OverviewViewport, self).OnSize(evt)
         self.canvas.fit_view_to_content(True)
 
     def setView(self, microscope_view, tab_data):
         """ Attach the MicroscopeView associated with the overview """
 
-        super(OverviewVierport, self).setView(microscope_view, tab_data)
+        super(OverviewViewport, self).setView(microscope_view, tab_data)
 
         # Track chamber state if possible
         if tab_data.main.chamber:

@@ -640,7 +640,7 @@ HANDLER_CLASS_LIST.append(UnitFloatCtrlHandler)
 
 class OverviewViewportXmlHandler(xrc.XmlResourceHandler):
 
-    klass = vport.OverviewVierport
+    klass = vport.OverviewViewport
 
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
