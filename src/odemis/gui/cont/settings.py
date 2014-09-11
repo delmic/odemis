@@ -651,7 +651,7 @@ class SettingsController(object):
 
                 # Note: with wxpython < 3.0, use:
 #                 for i in range(ctrl.Count):
-                # Warning: if the user types an unknown value, GetSelection will
+                # Warning: if the text contains an unknown value, GetSelection will
                 # not return wx.NOT_FOUND (as expected), but the last selection value
                 if i != wx.NOT_FOUND and ctrl.Items[i] == value:
                     logging.debug("Getting CB value %s", ctrl.GetClientData(i))
