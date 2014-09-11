@@ -119,25 +119,15 @@ class BufferedWindow(wx.Control):
 
         :param `event`: a `wx.SizeEvent` event to be processed.
         """
-
-        self.Width, self.Height = self.GetClientSizeTuple()
+        Width, Height = self.GetClientSizeTuple()
+        Width = max(Width, 1)
+        Height = max(Height, 1)
 
         # Make new off screen bitmap: this bitmap will always have the
         # current drawing in it, so it can be used to save the image to
         # a file, or whatever.
-
-        # This seems required on MacOS, it doesn't like wx.EmptyBitmap with
-        # size = (0, 0)
-        # Thanks to Gerard Grazzini
-
-        if self.Width == 0:
-            self.Width = 1
-        if self.Height == 0:
-            self.Height = 1
-
-        self._Buffer = wx.EmptyBitmap(self.Width, self.Height)
+        self._Buffer = wx.EmptyBitmap(Width, Height)
         self.update_drawing()
-
 
     def update_drawing(self):
         """
@@ -147,8 +137,7 @@ class BufferedWindow(wx.Control):
         elsewhere in the system. if that data changes, the drawing needs to
         be updated.
         """
-        dc = wx.MemoryDC()
-        dc.SelectObject(self._Buffer)
+        dc = wx.MemoryDC(self._Buffer)
         self.Draw(dc)
         del dc # need to get rid of the MemoryDC before Update() is called.
         self.Refresh(eraseBackground=False)

@@ -689,8 +689,14 @@ class MicroscopeViewportXmlHandler(xrc.XmlResourceHandler):
                            pos=self.GetPosition(),
                            size=self.GetSize(),
                            style=self.GetStyle())
+
+        # Set standard window attributes
         self.SetupWindow(panel)
+        # Create any child windows of this node
+        self.CreateChildren(panel)
         return panel
+
+
 HANDLER_CLASS_LIST.append(MicroscopeViewportXmlHandler)
 
 
@@ -791,11 +797,11 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "UnitFloatSlider")
-        return capable
+        return self.IsOfClass(node, "UnitFloatSlider")
 
+    # TODO: can be removed once it's available in wxPython (3.0... ?)
     def GetFloat(self, param, defaultv=0):
-        # there is a bug in wxWidgets, which doesn't export GetFloat
+        # there is a bug in wxPython, which doesn't export GetFloat
         # => recreate in Python
         # self, String param, long defaultv=0
 
@@ -874,8 +880,7 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "BandwidthSlider")
-        return capable
+        return self.IsOfClass(node, "BandwidthSlider")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -914,8 +919,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
 
     # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
-        capable = self.IsOfClass(node, "OwnerDrawnComboBox")
-        return capable
+        return self.IsOfClass(node, "OwnerDrawnComboBox")
 
     def DoCreateResource(self):
         assert self.GetInstance() is None
@@ -971,5 +975,6 @@ class ToolBarHandler(xrc.XmlResourceHandler):
 
         # Set standard window attributes
         self.SetupWindow(toolbar)
+        self.CreateChildren(toolbar)
         return toolbar
 HANDLER_CLASS_LIST.append(ToolBarHandler)
