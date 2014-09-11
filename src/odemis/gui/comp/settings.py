@@ -278,7 +278,7 @@ class SettingsPanel(wx.Panel):
         """
 
         lbl_ctrl = self._add_side_label(label_text)
-        value_ctrl = ComboBox(self, -1, value='', pos=(0, 0), size=(-1, 12),
+        value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
                               style=wx.NO_BORDER | wx.TE_PROCESS_ENTER, **conf)
 
         self._gb_sizer.Add(value_ctrl, (self.num_rows, 1),

@@ -134,7 +134,7 @@ class InfoLegend(wx.Panel):
 
         # legend_panel_sizer is needed to add a border around the legend
         border_sizer = wx.BoxSizer(wx.VERTICAL)
-        border_sizer.Add(control_sizer, border=10, flag=wx.ALL | wx.EXPAND)
+        border_sizer.Add(control_sizer, border=6, flag=wx.ALL | wx.EXPAND)
 
         self.SetSizerAndFit(border_sizer)
 
