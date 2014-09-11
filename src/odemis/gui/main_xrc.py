@@ -2984,7 +2984,7 @@ def __init_resources():
                   <style>normal</style>
                   <weight>normal</weight>
                   <underlined>0</underlined>
-                  <face>Courier 10 Pitch</face>
+                  <face>Monospace</face>
                   <encoding>UTF-8</encoding>
                 </font>
                 <style>wxBORDER_NONE|wxTE_MULTILINE</style>
