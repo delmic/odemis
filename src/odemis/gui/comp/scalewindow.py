@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from __future__ import division
 
 from odemis.util import units
 import wx
@@ -29,18 +30,14 @@ import wx
 #----------------------------------------------------------------------
 # DC Drawing Options
 #----------------------------------------------------------------------
-# SM_NORMAL_DC Uses The Normal wx.PaintDC
-# SM_BUFFERED_DC Uses The Double Buffered Drawing Style
-SM_NORMAL_DC = 0
-SM_BUFFERED_DC = 1
+SM_NORMAL_DC = 0 # Uses The Normal wx.PaintDC
+SM_BUFFERED_DC = 1 # Uses The Double Buffered Drawing Style
 
 #----------------------------------------------------------------------
-# BUFFEREDWINDOW Class
+# BufferedWindow Class
 # This Class Has Been Taken From The wxPython Wiki, And Slightly
 # Adapted To Fill My Needs. See:
-#
 # http://wiki.wxpython.org/DoubleBufferedDrawing
-#
 # For More Info About DC And Double Buffered Drawing.
 #----------------------------------------------------------------------
 
@@ -53,10 +50,8 @@ class BufferedWindow(wx.Control):
     you want. The window will automatically be double buffered, and the
     screen will be automatically updated when a Paint event is received.
 
-    When the drawing needs to change, you app needs to call the
-    L{BufferedWindow.update_drawing} method. Since the drawing is stored in a bitmap, you
-    can also save the drawing to file by calling the
-    `SaveToFile(self, file_name, file_type)` method.
+    When the drawing needs to change, your app needs to call the
+    BufferedWindow.update_drawing() method.
 
     This is a wx.Control for the main reason that it gets the right colour
     and font.
@@ -143,8 +138,6 @@ class BufferedWindow(wx.Control):
         self.Refresh(eraseBackground=False)
         self.Update()
 
-# FIXME: with wx30, the borders of the window seem to be smaller, and the whole
-# drawing is clipped
 class ScaleWindow(BufferedWindow):
     """
     Little control that display a horizontal scale for a given screen density
@@ -152,16 +145,14 @@ class ScaleWindow(BufferedWindow):
     def __init__(self, *args, **kwargs):
         BufferedWindow.__init__(self, *args, **kwargs)
         self.mpp = None # unknown
-        # self.MinSize = (120, 20) # we want at least a bit of space
-        # This is called before the end of __init__()
-        # self.va = self.GetDefaultAttributes()
         self.nod = 4 # heigh of the nods (the end of the scale)
         self.significant = 1 # significant numbers to keep in the length
 
         self.gap = 3 # gap between line and text
-        self.background_col = self.Parent.GetBackgroundColour()
-        self.foreground_col = self.Parent.GetForegroundColour()
         self.line_width = 1
+
+        # we want at least a bit of space for the text + line
+        self.MinSize = (-1, 13 + self.gap + self.nod)
 
     def SetMPP(self, mpp):
         """
@@ -184,40 +175,40 @@ class ScaleWindow(BufferedWindow):
         maxWidth = max(5, size[0] - 3)
         maxActualWidth = maxWidth * self.mpp
         actualWidth = units.round_down_significant(maxActualWidth, self.significant)
-        width = int(actualWidth / self.mpp)
-        return (width, actualWidth)
+        width = int(round(actualWidth / self.mpp))
+        return width, actualWidth
 
     def Draw(self, dc):
         # return self.DrawGC(dc)
         nod = self.nod
-        vmiddle = self.GetClientSize()[1] / 2
+        vmiddle = self.GetClientSize()[1] // 2
 
-        self.background_col = self.Parent.GetBackgroundColour()
-        self.foreground_col = self.Parent.GetForegroundColour()
+        background_col = self.Parent.GetBackgroundColour()
+        foreground_col = self.Parent.GetForegroundColour()
 
         dc.SetBackgroundMode(wx.SOLID)
-        dc.SetBackground(wx.Brush(self.background_col))
+        dc.SetBackground(wx.Brush(background_col))
         dc.Clear()
 
         if not self.mpp: # unknown mpp => blank
             return
 
-        dc.SetFont(self.GetFont()) # before GetLineWidth(), which needs it
-        dc.SetTextForeground(self.foreground_col)
-        dc.SetTextBackground(self.background_col)
+        dc.SetFont(self.GetFont())
+        dc.SetTextForeground(foreground_col)
+        dc.SetTextBackground(background_col)
 
         length, actual = self.GetLineWidth(dc)
 
         # Draw the text below
         charSize = dc.GetTextExtent("M")
         height = self.gap + charSize[1] + self.nod
-        main_line_y = vmiddle - (height /2) + self.nod
+        main_line_y = vmiddle - (height // 2) + self.nod
 
         dc.DrawText(units.readable_str(actual, "m", sig=2),
                     0, main_line_y + self.gap)
 
         # Draw the scale itself
-        pen = wx.Pen(self.foreground_col, self.line_width)
+        pen = wx.Pen(foreground_col, self.line_width)
         pen.Cap = wx.CAP_PROJECTING # how to draw the border of the lines
         dc.SetPen(pen)
 
