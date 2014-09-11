@@ -38,7 +38,7 @@ from . import autofocus
 
 EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
 HOLE_RADIUS = 175e-06  # Expected hole radius
-LENS_RADIUS = 300e-06   #Expected lens radius
+LENS_RADIUS = 0.00235  # Expected lens radius
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
 # Positions to scan for rotation and scaling calculation
