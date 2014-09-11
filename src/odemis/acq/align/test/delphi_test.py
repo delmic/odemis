@@ -73,7 +73,6 @@ class TestCalibration(unittest.TestCase):
         cls.opt_stage = model.getComponent(role="align")
         cls.ebeam_focus = model.getComponent(role="ebeam-focus")
         cls.focus = model.getComponent(role="focus")
-        cls.align = model.getComponent(role="align")
         cls.light = model.getComponent(role="light")
         cls.light_filter = model.getComponent(role="filter")
         cls.combined_stage = model.getComponent(role="stage")
