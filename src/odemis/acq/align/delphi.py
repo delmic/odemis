@@ -624,7 +624,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             # the SEM
             image = detector.data.get(asap=False)
             try:
-                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 5)
+                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
                 raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
@@ -775,7 +775,7 @@ def _DoLensAlignment(future, navcam, sem_stage):
             # Detect lens with navcam
             image = navcam.data.get(asap=False)
             try:
-                lens_coordinates = FindCircleCenter(image, LENS_RADIUS, 5)
+                lens_coordinates = FindCircleCenter(image, LENS_RADIUS, 6)
             except IOError:
                 raise IOError("Lens not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
