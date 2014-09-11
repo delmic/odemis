@@ -42,7 +42,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
     of the ComboCtrl cannot be set. Any call to that method will only result in
     the TextCtrl changing colour.
 
-    Getting rid op margins also didn't help, since the top margin is 'stuck' at
+    Getting rid of margins also didn't help, since the top margin is 'stuck' at
     -1, which causes the ComboCtrl's white background colour to show.
 
     In the end, the solution was to draw the background ourselves, using the correct colour.
@@ -64,7 +64,7 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         self.SetBackgroundColour(self.Parent.GetBackgroundColour())
         self.SetButtonBitmaps(img.getbtn_downBitmap(), pushButtonBg=False)
 
-        self.Bind(wx.EVT_KEY_DOWN, self.on_key)
+#         self.Bind(wx.EVT_KEY_DOWN, self.on_key)
         self.Bind(wx.EVT_PAINT, self.on_paint)
 
         # If no labels are provided, create them from the choices
@@ -94,20 +94,22 @@ class ComboBox(wx.combo.OwnerDrawnComboBox):
         dc.SetBackground(back_brush)
         dc.Clear()
 
-    def on_key(self, evt):
-        """ The OwnerDrawnComboBox makes the left/right keys change the
-        selection instead of moving the caret. This method corrects that problem
-        """
-        if self.TextCtrl and self.Enabled:
-            key = evt.GetKeyCode()
-            ip = self.TextCtrl.GetInsertionPoint()
-
-            if key == wx.WXK_RIGHT:
-                self.TextCtrl.SetInsertionPoint(ip + 1)
-            elif key == wx.WXK_LEFT:
-                if ip > 0:
-                    self.TextCtrl.SetInsertionPoint(ip - 1)
-            else:
-                evt.Skip()
-        else:
-            evt.Skip()
+    # Doesn't seem needed anymore with wx3.0
+#     def on_key(self, evt):
+#         """ The OwnerDrawnComboBox makes the left/right keys change the
+#         selection instead of moving the caret. This method corrects that problem
+#         """
+#         if self.TextCtrl and self.Enabled:
+#             key = evt.GetKeyCode()
+#             ip = self.TextCtrl.GetInsertionPoint()
+#
+#             if key == wx.WXK_RIGHT:
+#                 self.TextCtrl.SetInsertionPoint(ip + 1)
+#             elif key == wx.WXK_LEFT:
+#                 if ip > 0:
+#                     self.TextCtrl.SetInsertionPoint(ip - 1)
+#             else:
+#                 evt.Skip()
+#         else:
+#             evt.Skip()
+#         evt.Skip()
