@@ -633,9 +633,9 @@ class SettingsController(object):
                 for i in range(ctrl.Count):
                     if ctrl.GetClientData(i) == value:
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
-                        # FIXME: once updated to wxpython 3.0, SetSelection() will work correctly
-                        # ctrl.SetSelection(i)
-                        ctrl.SetValue(ctrl.Items[i])
+                        ctrl.SetSelection(i)
+                        # Note: with wxpython < 3.0, use:
+#                         ctrl.SetValue(ctrl.Items[i])
                         break
                 else:
                     logging.debug("No existing label found for value %s", value)
@@ -647,10 +647,15 @@ class SettingsController(object):
             def cb_get(ctrl=value_ctrl, va=vigil_attr):
                 value = ctrl.GetValue()
                 # Try to use the predefined value if it's available
-                for i in range(ctrl.Count):
-                    if ctrl.Items[i] == value:
-                        logging.debug("Getting CB value %s", ctrl.GetClientData(i))
-                        return ctrl.GetClientData(i)
+                i = ctrl.GetSelection()
+
+                # Note: with wxpython < 3.0, use:
+#                 for i in range(ctrl.Count):
+                # Warning: if the user types an unknown value, GetSelection will
+                # not return wx.NOT_FOUND (as expected), but the last selection value
+                if i != wx.NOT_FOUND and ctrl.Items[i] == value:
+                    logging.debug("Getting CB value %s", ctrl.GetClientData(i))
+                    return ctrl.GetClientData(i)
                 else:
                     logging.debug("Trying to parse CB free value %s", value)
                     cur_val = va.value

@@ -1195,15 +1195,15 @@ class StreamPanel(wx.PyPanel):
         Called when the text is changed (by the user).
         returns a value to set for the VA
         """
-        # FIXME: once updated to wxpython 3.0, GetSelection() will work correctly
-#         return self._txt_excitation.GetClientData(self._txt_excitation.Selection)
-        val = self._txt_excitation.GetValue()
-        logging.debug("Excitation changed to %s", val)
-        for i in range(self._txt_excitation.Count):
-            if self._txt_excitation.Items[i] == val:
-                return self._txt_excitation.GetClientData(i)
-        else:
-            logging.error("No existing label found for value %s", val)
+        return self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
+        # Note: with wxpython < 3.0, use:
+#         val = self._txt_excitation.GetValue()
+#         logging.debug("Excitation changed to %s", val)
+#         for i in range(self._txt_excitation.Count):
+#             if self._txt_excitation.Items[i] == val:
+#                 return self._txt_excitation.GetClientData(i)
+#         else:
+#             logging.error("No existing label found for value %s", val)
 
     def _excitation_2_ctrl(self, value):
         """
@@ -1214,8 +1214,9 @@ class StreamPanel(wx.PyPanel):
         # when it's a combo-box
         for i in range(self._txt_excitation.Count):
             if self._txt_excitation.GetClientData(i) == value:
-                # FIXME: once updated to wxpython 3.0, use SetSelection(i)
-                self._txt_excitation.SetValue(self._txt_excitation.Items[i])
+                self._txt_excitation.SetSelection(i)
+                # Note: with wxpython < 3.0, use:
+                # self._txt_excitation.SetValue(self._txt_excitation.Items[i])
                 break
         else:
             logging.error("No existing label found for value %s", value)
@@ -1233,13 +1234,15 @@ class StreamPanel(wx.PyPanel):
         Also updates the tint as a side-effect.
         returns a value to set for the VA
         """
-        val = self._txt_emission.GetValue()
-        logging.debug("Excitation changed to %s", val)
-        for i in range(self._txt_emission.Count):
-            if self._txt_emission.Items[i] == val:
-                return self._txt_emission.GetClientData(i)
-        else:
-            logging.error("No existing label found for value %s", val)
+        return self._txt_emission.GetClientData(self._txt_emission.GetSelection())
+        # Note: with wxpython < 3.0, use:
+#         val = self._txt_emission.GetValue()
+#         logging.debug("Excitation changed to %s", val)
+#         for i in range(self._txt_emission.Count):
+#             if self._txt_emission.Items[i] == val:
+#                 return self._txt_emission.GetClientData(i)
+#         else:
+#             logging.error("No existing label found for value %s", val)
 
     def _emission_2_ctrl(self, value):
         """
@@ -1248,8 +1251,9 @@ class StreamPanel(wx.PyPanel):
         """
         for i in range(self._txt_emission.Count):
             if self._txt_emission.GetClientData(i) == value:
-                # FIXME: once updated to wxpython 3.0, use SetSelection(i)
-                self._txt_emission.SetValue(self._txt_emission.Items[i])
+                self._txt_emission.SetSelection(i)
+                # Note: with wxpython < 3.0, use:
+#                 self._txt_emission.SetValue(self._txt_emission.Items[i])
                 break
         else:
             logging.error("No existing label found for value %s", value)
