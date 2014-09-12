@@ -31,103 +31,101 @@ import odemis
 import os
 import re
 import serial
-import sys
 import threading
 import time
 
-"""
-Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
-Command Set). In particular it handle the PI E-861 controller. Information can
-be found the manual E-861_User_PZ205E121.pdf (p.107). See PIRedStone for the PI C-170.
+# Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
+# Command Set). In particular it handle the PI E-861 controller. Information can
+# be found the manual E-861_User_PZ205E121.pdf (p.107). See PIRedStone for the PI C-170.
+#
+# In a daisy-chain, connected via USB or via RS-232, there must be one
+# controller with address 1 (=DIP 1111). There is also a broadcast address: 255.
+#
+# The controller contains many parameters in flash memory. These parameters must
+# have been previously written correctly to fit the stage it is driving. This
+# driver uses and expects the parameters to be correct.
+# The configuration database is available in a file called pistages2.dat. The
+# PIMikroMove Windows program allows to load it, but by default doesn't copy it to
+# the non-volatile memory, so you need to explicitly save them in persistent
+# memory. (Can also be done with the WPA command and password "100".)
+# In particular, for closed-loop stages, ensure that the settling windows and time
+# are correctly set so that a move is considered on target quickly (< 1 s).
+#
+# The controller support closed-loop mode (i.e., absolute positioning) but only
+# if it is associated to a sensor (not software detectable). It can also work in
+# open-loop mode but to avoid damaging the hardware (which is moved by this
+# actuator):
+# * Do not switch servo on (SVO command)
+# * Do not send commands for closed-loop motion, like MOV or MVR
+# * Do not send the open-loop commands OMA and OMR, since they
+#    use a sensor, too
+#
+# The controller accepts several baud rates. We choose 38400 (DIP=01) as it's fast
+# and it seems accepted by every version. Other settings are 8 data, 1 stop,
+# no parity.
+#
+#
+# In open-loop, the controller has 2 ways to move the actuators:
+#  * Nanostepping: high-speed, and long distance
+#       1 step ~ 10 μm without load (less with load)
+#  * Analog: very precise, but moves maximum ~5μm
+#      "40 volts corresponds to a motion of approx. 3.3μm"
+#      "20 volts corresponds to a motion of approx. 1μm"
+#
+# As an exception, the C-867 only supports officially closed-loop. However, there
+# is a "testing" command, SMO, that allows to move in open-loop by simulating the input
+# to the PID controller. PI assured us that as long as the stage used can reach
+# the limit without getting damaged, it is safe. It's pretty straightforward to
+# use the command. The voltage defines the speed (and direction) of the move. The
+# voltage should be set to 0 again when the position desired is reached. 3V is
+# approximately the minimum to move, and 10V is the maximum. Voltage is more or
+# less linear between -32766 and 32766 -> -10 and 10V. So the distance moved
+# depends on the time the SMO is set, which is obviously very imprecise.
+#
+# In closed-loop, it's almost all automagical.
+# There are two modes in closed-loop: before and after referencing. Referencing
+# consists in going to at least one "reference" point so that the actual position
+# is known.
+#  * Non referenced: that's the only one possible just after boot. It's only
+#    possible to do relative moves.
+#  * Referenced: both absolute and relative moves are possible. It's the default
+#    mode.
+# The problem with referencing is that for some cases, it might be dangerous to
+# move the actuator, so a user feedback is needed. This means an explicit request
+# via the API must be done before this is going on, and stopping must be possible.
+# In addition, in many cases, relative move is sufficient.
+# Note that for the closed-loop to work, in addition to the actuator there must
+# be:
+#   * a sensor (which indicates a distance)
+#   * a reference switch (which indicates a point, usually in the middle)
+#   * 2 limit switches (which indicate the borders)
+# Most of the time, all of these are present, but the controller can do with just
+# either the ref switch or the limit switches.
+#
+# The recommended maximum step frequency is 800 Hz.
+#
+# The architecture of the driver relies on four main classes:
+#  * Controller: represent one controller with one or several axes (E-861 has only
+#     one). Each subclass defines a different type of control. The subclass is
+#     picked dynamically according to the physical controller.
+#  * Bus: represent the whole group of controllers daisy-chained from the same
+#     serial port. It's also the Actuator interface for the rest of Odemis.
+#  * BusAccesser: wrapper around the serial port which handles the low-level GCS
+#     protocol.
+#  * ActionManager: handles all the actions (move/stop) sent to the controller so
+#     that the asynchronous ones are ordered.
+#
+# In the typical usage, Odemis ask to moveRel() an axis to the Bus. The Bus converts
+# it into an action, returns a Future and queue the action on the ActionManager.
+# When the Controller is free, the ActionManager pick the next action and convert
+# it into a command for the Controller, which sends it to the actual PI controller
+# and waits for it to finish.
+#
+# Note: in some rare cases, the controller might not answer to commands correctly,
+# reporting error 555. In that case, it's possible to do a factory reset with the
+# hidden command (which must be followed by the reconfiguration of the parameters):
+# zzz 100 parameter
 
-In a daisy-chain, connected via USB or via RS-232, there must be one
-controller with address 1 (=DIP 1111). There is also a broadcast address: 255.
-
-The controller contains many parameters in flash memory. These parameters must
-have been previously written correctly to fit the stage it is driving. This
-driver uses and expects the parameters to be correct.
-The configuration database is available in a file called pistages2.dat. The
-PIMikroMove Windows program allows to load it, but by default doesn't copy it to
-the non-volatile memory, so you need to explicitly save them in persistent
-memory. (Can also be done with the WPA command and password "100".)
-In particular, for closed-loop stages, ensure that the settling windows and time
-are correctly set so that a move is considered on target quickly (< 1 s).
-
-The controller support closed-loop mode (i.e., absolute positioning) but only
-if it is associated to a sensor (not software detectable). It can also work in 
-open-loop mode but to avoid damaging the hardware (which is moved by this
-actuator): 
-* Do not switch servo on (SVO command)
-* Do not send commands for closed-loop motion, like MOV or MVR
-* Do not send the open-loop commands OMA and OMR, since they
-   use a sensor, too
-
-The controller accepts several baud rates. We choose 38400 (DIP=01) as it's fast
-and it seems accepted by every version. Other settings are 8 data, 1 stop, 
-no parity.
-
-
-In open-loop, the controller has 2 ways to move the actuators:
- * Nanostepping: high-speed, and long distance
-      1 step ~ 10 μm without load (less with load)
- * Analog: very precise, but moves maximum ~5μm
-     "40 volts corresponds to a motion of approx. 3.3μm"
-     "20 volts corresponds to a motion of approx. 1μm"
-
-As an exception, the C-867 only supports officially closed-loop. However, there
-is a "testing" command, SMO, that allows to move in open-loop by simulating the input
-to the PID controller. PI assured us that as long as the stage used can reach 
-the limit without getting damaged, it is safe. It's pretty straightforward to
-use the command. The voltage defines the speed (and direction) of the move. The
-voltage should be set to 0 again when the position desired is reached. 3V is 
-approximately the minimum to move, and 10V is the maximum. Voltage is more or 
-less linear between -32766 and 32766 -> -10 and 10V. So the distance moved 
-depends on the time the SMO is set, which is obviously very imprecise.
-
-In closed-loop, it's almost all automagical.
-There are two modes in closed-loop: before and after referencing. Referencing
-consists in going to at least one "reference" point so that the actual position
-is known. 
- * Non referenced: that's the only one possible just after boot. It's only 
-   possible to do relative moves.
- * Referenced: both absolute and relative moves are possible. It's the default
-   mode.
-The problem with referencing is that for some cases, it might be dangerous to
-move the actuator, so a user feedback is needed. This means an explicit request
-via the API must be done before this is going on, and stopping must be possible.
-In addition, in many cases, relative move is sufficient.
-Note that for the closed-loop to work, in addition to the actuator there must
-be:
-  * a sensor (which indicates a distance)
-  * a reference switch (which indicates a point, usually in the middle)
-  * 2 limit switches (which indicate the borders)
-Most of the time, all of these are present, but the controller can do with just
-either the ref switch or the limit switches.
-
-The recommended maximum step frequency is 800 Hz.
-
-The architecture of the driver relies on four main classes:
- * Controller: represent one controller with one or several axes (E-861 has only
-    one). Each subclass defines a different type of control. The subclass is
-    picked dynamically according to the physical controller.
- * Bus: represent the whole group of controllers daisy-chained from the same
-    serial port. It's also the Actuator interface for the rest of Odemis.
- * BusAccesser: wrapper around the serial port which handles the low-level GCS
-    protocol. 
- * ActionManager: handles all the actions (move/stop) sent to the controller so
-    that the asynchronous ones are ordered. 
-    
-In the typical usage, Odemis ask to moveRel() an axis to the Bus. The Bus converts
-it into an action, returns a Future and queue the action on the ActionManager.
-When the Controller is free, the ActionManager pick the next action and convert
-it into a command for the Controller, which sends it to the actual PI controller
-and waits for it to finish.  
-
-Note: in some rare cases, the controller might not answer to commands correctly,
-reporting error 555. In that case, it's possible to do a factory reset with the
-hidden command (which must be followed by the reconfiguration of the parameters):
-zzz 100 parameter
-"""
 # constants for model number
 MODEL_C867 = 867
 MODEL_E861 = 861
