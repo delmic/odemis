@@ -29,13 +29,68 @@ import logging
 import math
 import numpy
 from odemis import model, util
-from odemis.model import isasync
-from odemis.model._futures import CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor
 import suds
 from suds.client import Client
 import threading
 import time
 import weakref
+
+# The Phenom API relies on the SOAP protocol. One good thing is that the standard
+# Phenom GUI uses it. So anything the GUI can do can be performed via the
+# API. The documentation is not very complete, and is written for the C++
+# wrapper only. Reading the WSDL file can hint you on a lot of additional
+# features. It is relatively straightforward to use in general however several
+# peculiarities have to be taken into account:
+#     * Viewing mode refers to the repeated acquisitions performed by Phenom
+#       GUI. When an image is acquired via Odemis the acquisition is independent
+#       of those performed by Phenom GUI. Thus when the SEM stream is active both
+#       Phenom GUI and Odemis sequentially do separate scannings. To increase the
+#       acquisition rate of Odemis we set the viewing mode settings to
+#       minimum resolution and number of frames, so the Phenom GUI acquisitions
+#       last the shortest time possible. Setting the scan parameters to some
+#       (legal) values which are not handled by the Phenom GUI can crash the
+#       GUI, and this often leads to a looping reboot of the Phenom, so beware.
+#     * To make an acquisition via Odemis we call the SEMAcquireImageCopy
+#       function of Phenom API. The scan parameters provided are explained below:
+#       - resolution .width and .height (0 < int): dimensions of image to scan
+#         in pixels.
+#       - nrOfFrames (0 < int <= 255): Number of frames to average (to
+#         improve the signal to noise ratio). Phenom uses a fixed dwell time,
+#         thus from the "dwell time" VA actually changes the number of frames
+#         required to be averaged.
+#       - HDR (boolean): True to acquire 16 bits image (with a huge time
+#         overhead), False for 8 bits.
+#       - scale (0<=float<=1): Scale of the acquisition ROI within the field
+#         of view. The minimum is 0, which can be used to force a spot (see
+#         below about the "Spot Mode").
+#       - center .x and .y (-0.5<=float<=0.5): Center of the acquisition ROI
+#         within the field of view (0 is at the center of the field of view).
+#     * "Spot Mode": The Phenom accepts scanning mode either "Imaging" or
+#       "Spot". "Spot mode" is not what it sounds like. The main point
+#       of Spot mode is to pause the Phenom GUI with a message letting the
+#       user know that spot mode is active. It also disable the settling time
+#       of the e-beam so that the e-beam position is only within the given ROI.
+#       However spot mode does not reduce further the scanning area, and an
+#       image can still be acquired (although the border will be wiggly as
+#       there is no settle time). To actually get a spot, you must set the
+#       scan parameter scale to 0. To be sure the center is at the same place
+#       as the center of the standard scanning, we also temporarily reset the
+#       HFW to minimum value.
+#     * Not all values are readable all the time. Some values, like the SEM
+#       settings can only be read (and written) only when the sample holder is
+#       in SEM mode.
+#     * SUDS doesn't support simultaneous calls to the server (from different
+#       threads). Doing so will cause from time to time the answers to be
+#       mixed up. Thus, one connection needs to be opened per thread, or locks
+#       should be used. That is why we use a dedicated client for the SEM
+#       acquisition thread (and probably some locks would be needed to be
+#       entirely safe).
+#     * SUDS has been somehow abandoned, and one of the things it doesn't handle
+#       well is errors. Passing the wrong login/password will cause some weird
+#       error instead of a clear 403 message. A fork of SUDS by "jurko" fixes a
+#       lot of such problems and might be worth to use if the standard SUDS
+#       version gets really too much annoying.
 
 
 # Fixed dwell time of Phenom SEM
@@ -56,38 +111,7 @@ NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 class SEM(model.HwComponent):
     '''
-    This represents the bare Phenom SEM. In general it works as a regular SEM,
-    however several peculiarities have to be taken into account:
-        * Viewing mode refers to the repeatedly acquisitions performed by Phenom 
-          GUI. When an image is acquired via odemis the acquisition is independent
-          of those performed by Phenom GUI. Thus when SEM stream is active both
-          Phenom GUI and odemis sequentially do separate scannings. To increase the 
-          acquisition rate of odemis we set the viewing mode settings to
-          minimum resolution and number of frames, so the Phenom GUI acquisitions
-          last the shortest time possible.
-        * To make an acquisition via odemis we call the SEMAcquireImageCopy 
-          function of Phenom API. The parameters given are explained below:
-          - resolution .width and .height (integers): dimensions of image to scan
-            in pixels.
-          - nrOfFrames (int): Number of frames to average for signal to noise 
-            improvement. Phenom uses a pre-defined dwell time, thus from the
-            odemis dwell time we deduce the number of frames required to be
-            averaged.
-          - HDR (boolean): True to acquire 16 bits image (with a huge time 
-            overhead), False for 8 bits.
-          - scale (float): Scale of the acquisition within the field of view. 
-            The minimum is 0, thus we set it in Spot Mode (see below).
-          - center .x and .y (integers): Center of the acquisition within the 
-            field of view in pixels.  
-        * Spot Mode: Keep in mind that just setting Spot Mode as viewing mode 
-          does not automatically set resolution to 1,1 (or to any other value).
-          Even more, resolution values less than (256, 256) should be prevented
-          since acquiring to such a high rate cannot be handled by Phenom GUI.
-          To scan a spot we set the viewing mode to minimum working resolution 
-          (256, 256) and scale (0) as also temporarily reset the HFW to minimum
-          value.
-        * Simultaneous calls to Phenom API from different threads is not 
-          supported thus we use a dedicated client for the SEM stream.
+    This represents the bare Phenom SEM.
     '''
     def __init__(self, name, role, children, host, username, password, daemon=None, **kwargs):
         '''
