@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import collections
 from decorator import decorator
 import errno
 from functools import wraps
@@ -70,6 +71,19 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
 
     return False
 
+def rec_update(d, other):
+    """
+    Recursively update a dictionary with another one
+    d (dict): dictionary to update
+    other (dict): dictionary containing keys to add/overwrite
+    """
+    for k, v in other.iteritems():
+        if isinstance(v, collections.Mapping):
+            r = rec_update(d.get(k, {}), v)
+            d[k] = r
+        else:
+            d[k] = other[k]
+    return d
 
 def rect_intersect(ra, rb):
     """

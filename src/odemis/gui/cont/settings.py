@@ -30,38 +30,34 @@ setting column of the user interface.
 """
 
 from __future__ import division
-from abc import ABCMeta
 
+from abc import ABCMeta
 import collections
 import logging
 import numbers
-import re
-import time
-
-import wx
-from wx.lib.pubsub import pub
-
-from odemis import model
+from odemis import model, util
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.settings import SettingsPanel
-from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
-import odemis.gui.comp.hist as hist
-from odemis.gui.conf.settingspanel import CONFIG
+from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
+from odemis.gui.comp.slider import UnitFloatSlider
+from odemis.gui.conf.settingspanel import CONFIG, CONFIG_PER_ROLE
 import odemis.gui.util
 from odemis.gui.util.widgets import VigilantAttributeConnector, AxisConnector
 from odemis.model import getVAs, NotApplicableError, VigilantAttributeBase
 from odemis.util.driver import reproduceTypedValue
 from odemis.util.units import readable_str
-from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
-import odemis.gui.comp.text as text
+import re
+import time
+import wx
+from wx.lib.pubsub import pub
+
+import odemis.gui.comp.hist as hist
+from odemis.gui.comp.settings import SettingsPanel
 import odemis.gui.conf as guiconf
 import odemis.util.units as utun
 
+
 ####### Utility functions #######
-
-
 def choice_to_str(choice):
     if not isinstance(choice, collections.Iterable):
         choice = [unicode(choice)]
@@ -899,6 +895,8 @@ class SpectrumSettingsController(SettingsController):
 class FileInfoSettingsController(SettingsController):
     pass
 
+
+
 class SettingsBarController(object):
     """ The main controller class for the settings panel in the live view and
     acquisition frame.
@@ -914,6 +912,12 @@ class SettingsBarController(object):
         # TODO: see if we need to listen to main.is_acquiring, and automatically
         # pause + enable. For now, it's done by the acquisition controllers,
         # and it avoids pausing the settings controllers from other tabs.
+
+        # build the default config value based on the global one + the role
+        self._va_config = CONFIG.copy()
+        if tab_data.main.role in CONFIG_PER_ROLE:
+            util.rec_update(self._va_config, CONFIG_PER_ROLE[tab_data.main.role])
+
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
@@ -957,8 +961,8 @@ class SettingsBarController(object):
             # panel.add_label(label, comp.name, selectable=False)
             vigil_attrs = getVAs(comp)
             for name, value in vigil_attrs.items():
-                if comp.role in CONFIG and name in CONFIG[comp.role]:
-                    conf = CONFIG[comp.role][name]
+                if comp.role in self._va_config and name in self._va_config[comp.role]:
+                    conf = self._va_config[comp.role][name]
                 else:
                     logging.info("No config found for %s: %s", comp.role, name)
                     conf = None
@@ -1001,7 +1005,7 @@ class SecomSettingsController(SettingsBarController):
                                         "power",
                                         main_data.light.power,
                                         main_data.light,
-                                        CONFIG["light"]["power"]
+                                        self._va_config["light"]["power"]
                                         )
 
         if main_data.ebeam:
@@ -1082,7 +1086,7 @@ class SparcSettingsController(SettingsBarController):
             # TODO: also add it to the Mirror alignment tab?
             if main_data.light_filter:
                 self._spectrum_panel.add_axis("band", main_data.light_filter,
-                                              CONFIG["filter"]["band"])
+                                              self._va_config["filter"]["band"])
 
             self._spectrum_panel.panel.add_divider()
             if spec_stream:
@@ -1090,7 +1094,7 @@ class SparcSettingsController(SettingsBarController):
                     "repetition",
                     spec_stream.repetition,
                     None,  #component
-                    CONFIG["streamspec"]["repetition"]
+                    self._va_config["streamspec"]["repetition"]
                 )
                 spec_stream.repetition.subscribe(self.on_spec_rep)
 
@@ -1098,7 +1102,7 @@ class SparcSettingsController(SettingsBarController):
                     "pixelSize",
                     spec_stream.pixelSize,
                     None,  #component
-                    CONFIG["streamspec"]["pixelSize"]
+                    self._va_config["streamspec"]["pixelSize"]
                 )
             else:
                 logging.warning("Spectrometer available, but no spectrum "
@@ -1112,12 +1116,12 @@ class SparcSettingsController(SettingsBarController):
                     self._spectrum_panel.add_axis(
                         "wavelength",
                         main_data.spectrograph,
-                        CONFIG["spectrograph"]["wavelength"])
+                        self._va_config["spectrograph"]["wavelength"])
                 if "grating" in main_data.spectrograph.axes:
                     self._spectrum_panel.add_axis(
                         "grating",
                         main_data.spectrograph,
-                        CONFIG["spectrograph"]["grating"])
+                        self._va_config["spectrograph"]["grating"])
 
             # Add a intensity/time graph
             self.spec_graph = hist.Histogram(self._spectrum_panel.panel,
@@ -1142,7 +1146,7 @@ class SparcSettingsController(SettingsBarController):
 
             if main_data.light_filter:
                 self._angular_panel.add_axis("band", main_data.light_filter,
-                                             CONFIG["filter"]["band"])
+                                             self._va_config["filter"]["band"])
 
             self._angular_panel.panel.add_divider()
             if ar_stream is not None:
@@ -1150,7 +1154,7 @@ class SparcSettingsController(SettingsBarController):
                     "repetition",
                     ar_stream.repetition,
                     None,  #component
-                    CONFIG["streamar"]["repetition"]
+                    self._va_config["streamar"]["repetition"]
                 )
 
                 ar_stream.repetition.subscribe(self.on_ar_rep)

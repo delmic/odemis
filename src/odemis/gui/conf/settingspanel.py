@@ -182,7 +182,7 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_SLIDER,
             "scale": "log",
-            "range": (0.01, 60.0),  # TODO: SECOM => 1e-3 -> 60, SPARC => 0.01 -> 500
+            "range": (0.001, 60.0),
             "type": "float",
             "accuracy": 2,
         },
@@ -320,6 +320,38 @@ CONFIG = {
             "control_type": odemis.gui.CONTROL_NONE,
         },
     },
+    "spectrograph":
+    {
+        "wavelength":
+        {
+            "control_type": odemis.gui.CONTROL_SLIDER,
+            "accuracy": 3,
+        },
+        "grating": # that select the bandwidth observed
+        {
+            "control_type": odemis.gui.CONTROL_COMBO,
+        },
+    },
+}
+
+# Allows to override some values based on the microscope role
+CONFIG_PER_ROLE = {
+"sparc": {
+    "ccd":
+    {
+        "exposureTime":
+        {
+            "range": (0.01, 500.0),  # Typically much longer than on a SECOM
+        },
+    },
+    "filter":
+    {
+        "band": # to select the filter used
+        {
+            "label": "Filter",
+            "control_type": odemis.gui.CONTROL_COMBO,
+        },
+    },
     "streamspec":
     {
         # VAs from the stream, temporarily here
@@ -342,24 +374,5 @@ CONFIG = {
             "choices": _resolution_from_range,
         },
     },
-    "spectrograph":
-    {
-        "wavelength":
-        {
-            "control_type": odemis.gui.CONTROL_SLIDER,
-            "accuracy": 3,
-        },
-        "grating": # that select the bandwidth observed
-        {
-            "control_type": odemis.gui.CONTROL_COMBO,
-        },
-    },
-    "filter": # For the SPARC
-    {
-        "band": # to select the filter used
-        {
-            "label": "Filter",
-            "control_type": odemis.gui.CONTROL_COMBO,
-        },
-    },
+}
 }
