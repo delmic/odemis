@@ -56,11 +56,39 @@ NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 
 class SEM(model.HwComponent):
     '''
-    This is an extension of the model.HwComponent class. It instantiates the scanner
-    and se-detector children components and provides an update function for its
-    metadata.
+    This represents the bare Phenom SEM. In general it works as a regular SEM,
+    however several peculiarities have to be taken into account:
+        * Viewing mode refers to the repeatedly acquisitions performed by Phenom 
+          GUI. When an image is acquired via odemis the acquisition is independent
+          of those performed by Phenom GUI. Thus when SEM stream is active both
+          Phenom GUI and odemis sequentially do separate scannings. To increase the 
+          acquisition rate of odemis we set the viewing mode settings to
+          minimum resolution and number of frames, so the Phenom GUI acquisitions
+          last the shortest time possible.
+        * To make an acquisition via odemis we call the SEMAcquireImageCopy 
+          function of Phenom API. The parameters given are explained below:
+          - resolution .width and .height (integers): dimensions of image to scan
+            in pixels.
+          - nrOfFrames (int): Number of frames to average for signal to noise 
+            improvement. Phenom uses a pre-defined dwell time, thus from the
+            odemis dwell time we deduce the number of frames required to be
+            averaged.
+          - HDR (boolean): True to acquire 16 bits image (with a huge time 
+            overhead), False for 8 bits.
+          - scale (float): Scale of the acquisition within the field of view. 
+            The minimum is 0, thus we set it in Spot Mode (see below).
+          - center .x and .y (integers): Center of the acquisition within the 
+            field of view in pixels.  
+        * Spot Mode: Keep in mind that just setting Spot Mode as viewing mode 
+          does not automatically set resolution to 1,1 (or to any other value).
+          Even more, resolution values less than (256, 256) should be prevented
+          since acquiring to such a high rate cannot be handled by Phenom GUI.
+          To scan a spot we set the viewing mode to minimum working resolution 
+          (256, 256) and scale (0) as also temporarily reset the HFW to minimum
+          value.
+        * Simultaneous calls to Phenom API from different threads is not 
+          supported thus we use a dedicated client for the SEM stream.
     '''
-
     def __init__(self, name, role, children, host, username, password, daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
