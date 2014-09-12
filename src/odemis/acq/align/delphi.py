@@ -38,7 +38,7 @@ from . import autofocus
 
 EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
 HOLE_RADIUS = 175e-06  # Expected hole radius
-LENS_RADIUS = 0.00235  # Expected lens radius
+LENS_RADIUS = 0.0024  # Expected lens radius
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
 # Positions to scan for rotation and scaling calculation
@@ -624,7 +624,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             # the SEM
             image = detector.data.get(asap=False)
             try:
-                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
+                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 3)
             except IOError:
                 raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
@@ -765,33 +765,19 @@ def _DoLensAlignment(future, navcam, sem_stage):
     """
     logging.debug("Starting lens alignment...")
     try:
-        steps = 0
-        while True:
-            if future._lens_alignment_state == CANCELLED:
-                raise CancelledError()
-            if steps >= MAX_STEPS:
-                logging.warning("Could not center to the lens within %d trials", steps)
-                break
-            # Detect lens with navcam
-            image = navcam.data.get(asap=False)
-            try:
-                lens_coordinates = FindCircleCenter(image, LENS_RADIUS, 6)
-            except IOError:
-                raise IOError("Lens not found.")
-            pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-            center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-            vector_pxs = [a - b for a, b in zip(lens_coordinates, center_pxs)]
-            vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
-            dist = math.hypot(*vector)
-            # Move to lens center until you are close enough
-            if dist <= ERR_MARGIN:
-                break
-            f = sem_stage.moveRel({"x":vector[0], "y":vector[1]})
-            f.result()
-            steps += 1
-            # Update progress of the future
-            future.set_end_time(time.time() +
-                estimateLensAlignmentTime(dist))
+        if future._lens_alignment_state == CANCELLED:
+            raise CancelledError()
+        # Detect lens with navcam
+        image = navcam.data.get(asap=False)
+        try:
+            lens_coordinates = FindCircleCenter(image, LENS_RADIUS, 6)
+        except IOError:
+            raise IOError("Lens not found.")
+        pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+        center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+        vector_pxs = [a - b for a, b in zip(lens_coordinates, center_pxs)]
+        vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+
         return (sem_stage.position.value["x"] + vector[0], sem_stage.position.value["y"] + vector[1])
     finally:
         with future._lens_lock:
@@ -813,15 +799,9 @@ def _CancelLensAlignment(future):
 
     return True
 
-def estimateLensAlignmentTime(dist=None):
+def estimateLensAlignmentTime():
     """
     Estimates lens alignment procedure duration
     returns (float):  process estimated time #s
     """
-    if dist is None:
-        steps = MAX_STEPS
-    else:
-        err_mrg = ERR_MARGIN
-        steps = math.log(dist / err_mrg) / math.log(2)
-        steps = min(steps, MAX_STEPS)
-    return steps  # s
+    return 1  # s
