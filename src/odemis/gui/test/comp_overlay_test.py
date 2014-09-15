@@ -358,16 +358,8 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         hol = vol.HistoryOverlay(cnvs)
-        hol.length = 200
+        hol.length = 2000
         cnvs.add_view_overlay(hol)
-
-        steps = 100
-        for i in range(steps):
-            phi = (math.pi * 2) / steps
-            x = (50 + i) * math.cos(i * phi) + 500
-            y = (50 + i) * math.sin(i * phi) - 500
-
-            hol.add_location((x, y))
 
         test.gui_loop()
 
@@ -387,6 +379,20 @@ class OverlayTestCase(test.GuiTestCase):
                 hol.add_location(((j * i) + offset, (j * i) - offset))
 
         test.gui_loop()
+
+        steps = 1000
+        step_size = 10
+        for i in xrange(0, steps * step_size, step_size):
+            phi = (math.pi * 2) / steps
+            x = (100 * i / (steps * 5)) * math.cos(i * phi) + 500
+            y = (100 * i / (steps * 5)) * math.sin(i * phi) - 500
+            # hol.history.append(((x, y), None))
+            hol.add_location((x, y))
+        # print "Done generating history"
+
+        test.gui_loop()
+
+
 
 # END View overlay test cases
 

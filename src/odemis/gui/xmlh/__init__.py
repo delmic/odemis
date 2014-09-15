@@ -6,15 +6,15 @@ Copyright © 2012 Rinze de Laat, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # replacement should take place before any references are made to the frames,
 # dialog and controls defined within the main_xrc.py module.
 
+
 def odemis_get_resources():
     """ This function provides access to the XML handlers needed for
         non-standard controls defined in the XRC file.
@@ -33,12 +34,13 @@ def odemis_get_resources():
 
     import odemis.gui.main_xrc
 
-    if odemis.gui.main_xrc.__res == None:
+    if odemis.gui.main_xrc.__res is None:
         from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
         odemis.gui.main_xrc.__init_resources()
         for handler_klass in HANDLER_CLASS_LIST:
             odemis.gui.main_xrc.__res.InsertHandler(handler_klass())
     return odemis.gui.main_xrc.__res
+
 
 def odemis_get_test_resources():
     """ This function provides access to the XML handlers needed by
@@ -46,7 +48,7 @@ def odemis_get_test_resources():
     """
     import odemis.gui.test.test_gui
 
-    if odemis.gui.test.test_gui.__res == None:
+    if odemis.gui.test.test_gui.__res is None:
         from odemis.gui.xmlh.xh_delmic import HANDLER_CLASS_LIST
         odemis.gui.test.test_gui.__init_resources()
         for handler_klass in HANDLER_CLASS_LIST:
