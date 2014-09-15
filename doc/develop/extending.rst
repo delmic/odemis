@@ -303,23 +303,8 @@ familiar with Odemis' code. In particular, there is no API for extending the
 interface, and therefore you'll most likely need to modify the code in many
 different files.
 
-
 To edit the interface, you should use XRCed.
-First, ensure that the Odemis plugin is available.
-
-- Find the location where wxPython is installed::
-
-    WXPATH=$(python -c "import wx; import os; print os.path.dirname(wx.__file__)")
-
-- Create symbolic links to xh_delmic.py and delmic.py files in the
-  XRCed plugins directory::
-
-    sudo ln -s ~/development/odemis/src/odemis/gui/xmlh/xh_delmic.py \
-    $WXPATH/tools/XRCed/plugins/xh_delmic.py
-    sudo ln -s ~/development/odemis/src/odemis/gui/xmlh/delmic.py \
-    $WXPATH/tools/XRCed/plugins/delmic.py
-
-Then launch the tool by typing this (from ``~/development/odemis``)::
+Launch it by typing this (from ``~/development/odemis``)::
 
     PYTHONPATH=./src/ ./util/launch_xrced.py src/odemis/gui/main.xrc
 
