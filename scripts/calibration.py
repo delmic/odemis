@@ -38,6 +38,8 @@ from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+DELPHI_OVERVIEW_FOCUS = {"z":-0.017885}  # good focus position for overview
+
 def main(args):
     """
     Handles the command line arguments
@@ -67,11 +69,13 @@ def main(args):
                 opt_stage = c
             elif c.role == "ebeam-focus":
                 ebeam_focus = c
+            elif c.role == "overview-focus":
+                navcam_focus = c
             elif c.role == "focus":
                 focus = c
             elif c.role == "stage":
                 comb_stage = c
-            elif c.role == "navcam":
+            elif c.role == "overview-ccd":
                 navcam = c
             elif c.role == "chamber":
                 chamber = c
@@ -94,6 +98,10 @@ def main(args):
         f = sem_stage.moveAbs({"x":0, "y":0})
         f.result()
 
+        #NavCam to a good focus position
+        f = navcam_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
+        f.result()
+        
         # Calculate offset approximation
         logging.debug("Starting lens alignment...")
         try:
@@ -102,6 +110,10 @@ def main(args):
             logging.debug("\nSEM position after lens alignment: %s \n", sem_position)
         except IOError:
             raise IOError("Lens alignment failed.")
+
+        # Just to check if move makes sense
+        f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+        f.result()
 
         # Move to SEM
         f = chamber.moveAbs({"pressure":1e-02})
