@@ -82,7 +82,7 @@ class SEMStream(Stream):
                                          setter=self._setDCRegion)
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                          range=emitter.dwellTime.range, unit="s")
-        self.dcPeriod = model.FloatContinuous(60,  # s, default to one minute
+        self.dcPeriod = model.FloatContinuous(10,  # s, default to "fairly frequent" to work hopefully in most cases
                                               range=[0.1, 1e6], unit="s")
 
     def _computeROISettings(self, roi):
