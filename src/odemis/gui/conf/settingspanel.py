@@ -167,7 +167,7 @@ CONFIG = {
         {
             "control_type": odemis.gui.CONTROL_SLIDER,
             "scale": "log",
-            "range": (0.01, 60.0), # TODO: SECOM => 1e-3 -> 60, SPARC => 0.01 -> 500
+            "range": (0.01, 500.0), # TODO: SECOM => 1e-3 -> 60, SPARC => 0.01 -> 500
             "type": "float",
             "accuracy": 2,
         },
