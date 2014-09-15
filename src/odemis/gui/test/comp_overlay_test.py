@@ -363,20 +363,20 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-        for j in range(1, 5):
-            offset = 300 + (j * 75)
+        for j in range(4):
+            offset = ((j - 2) * 75)
 
             for i in range(10):
-                hol.add_location(((j * i) + offset, (j * -i) - offset))
+                hol.add_location(((j * i) + offset, (j * -i) + offset))
 
             for i in range(10):
-                hol.add_location(((j * -i) + offset, (j * -i) - offset))
+                hol.add_location(((j * -i) + offset, (j * -i) + offset))
 
             for i in range(10):
-                hol.add_location(((j * -i) + offset, (j * i) - offset))
+                hol.add_location(((j * -i) + offset, (j * i) + offset))
 
             for i in range(10):
-                hol.add_location(((j * i) + offset, (j * i) - offset))
+                hol.add_location(((j * i) + offset, (j * i) + offset))
 
         test.gui_loop()
 
@@ -384,11 +384,9 @@ class OverlayTestCase(test.GuiTestCase):
         step_size = 10
         for i in xrange(0, steps * step_size, step_size):
             phi = (math.pi * 2) / steps
-            x = (100 * i / (steps * 5)) * math.cos(i * phi) + 500
-            y = (100 * i / (steps * 5)) * math.sin(i * phi) - 500
-            # hol.history.append(((x, y), None))
+            x = (100 * i / (steps * 5)) * math.cos(i * phi)
+            y = (100 * i / (steps * 5)) * math.sin(i * phi)
             hol.add_location((x, y))
-        # print "Done generating history"
 
         test.gui_loop()
 
