@@ -179,10 +179,10 @@ class SettingsController(object):
         self.entries = []  # list of SettingEntry
 
     def hide_panel(self):
-        self.panel.Hide()
+        self.show_panel(False)
 
-    def show_panel(self):
-        self.panel.Show()
+    def show_panel(self, show=True):
+        self.panel.Show(show)
 
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
