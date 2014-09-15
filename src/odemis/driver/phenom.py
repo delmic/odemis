@@ -1008,12 +1008,13 @@ class NavCam(model.DigitalCamera):
     Represents the optical camera that is activated after the Phenom door is
     closed and the sample is transferred to the optical imaging position.
     """
-    def __init__(self, name, role, parent, contrast=0, brightness=1, **kwargs):
+    def __init__(self, name, role, parent, contrast=0, brightness=1, hfw=None, **kwargs):
         """
         Initialises the device.
         contrast (0<=float<=1): "Contrast" ratio where 1 means bright-field, and 0
          means dark-field
         brightness (0<=float<=1): light intensity between 0 and 1
+        hfw (float): NavCam HFW #m
         Raise an exception if the device cannot be opened.
         """
         model.DigitalCamera.__init__(self, name, role, parent=parent, **kwargs)
@@ -1027,6 +1028,7 @@ class NavCam(model.DigitalCamera):
             raise ValueError("brightness argument = %s, not between 0 and 1", brightness)
         self._contrast = contrast
         self._brightness = brightness
+        self._hfw = hfw
 
         resolution = NAVCAM_RESOLUTION
         # RGB
@@ -1092,6 +1094,17 @@ class NavCam(model.DigitalCamera):
         The core of the acquisition thread. Runs until acquire_must_stop is set.
         """
         try:
+            # Common call for SEM and NavCam HFW. Set max if None
+            try:
+                range = self.parent._device.GetSEMHFWRange()
+                if self._hfw is None:
+                    self.parent._device.SetSEMHFW(range.max)
+                elif not range.min <= self._hfw <= range.max:
+                    raise ValueError("NavCam hfw out of range %s" [range.min, range.max])
+                else:
+                    self.parent._device.SetSEMHFW(self._hfw)
+            except suds.WebFault as e:
+                logging.warning("Failed to set HFW to %f: %s", self._hfw, e)
             try:
                 self.parent._device.SetNavCamContrast(self._contrast)
             except suds.WebFault as e:
