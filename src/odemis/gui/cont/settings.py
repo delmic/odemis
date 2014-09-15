@@ -1218,8 +1218,10 @@ class AnalysisSettingsController(SettingsBarController):
         # individually
         self._pnl_acqfile = None
         self._pnl_arfile = None
-        self._arfile_ctrl = None
         self._pnl_specfile = None
+
+        self._arfile_ctrl = None
+        self._spec_bckfile_ctrl = None
         self._specfile_ctrl = None
 
         self._create_controls()
@@ -1228,11 +1230,12 @@ class AnalysisSettingsController(SettingsBarController):
         # All these VAs contain FileInfo object
         tab_data.acq_fileinfo.subscribe(self.on_acqfile_change, init=True)
 
-        # The following two can be replaced by callables taking a unicode and
+        # The following three can be replaced by callables taking a unicode and
         # returning a unicode (or raising a ValueError exception). They are
         # "filters" on what value can be accepted when changing the calibration
         # files. (Typically, the tab controller will put some of its functions)
         self.setter_ar_file = None
+        self.setter_spec_bck_file = None
         self.setter_spec_file = None
 
     def _create_controls(self):
@@ -1268,16 +1271,23 @@ class AnalysisSettingsController(SettingsBarController):
         self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
         self.tab_data.ar_cal.subscribe(self._on_ar_cal, init=True)
 
-        ###  Panel with spectrum efficiency compensation file information
-        # It's displayed only if there are Spectrum streams
+        # Panel with spectrum background + efficiency compensation file information
+        # They are displayed only if there are Spectrum streams
         self._pnl_specfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
+        self._spec_bckfile_ctrl = self._pnl_specfile.add_browse_button(
+                                            "Spec. background",
+                                            "Spectrum background correction file",
+                                            "None").ctrl
+        self._spec_bckfile_ctrl.SetWildcard(wildcards)
+        self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
+        self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
+
         self._specfile_ctrl = self._pnl_specfile.add_browse_button(
                                             "Spec. correction",
                                             "Spectrum efficiency correction file",
                                             "None").ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
         self._pnl_specfile.hide_panel()
-        # connect
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
@@ -1296,14 +1306,12 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_acqfile.panel.clear_all()
 
         if file_info:
-            l, lc, vc = self._pnl_acqfile.panel.add_readonly_field("File", file_info.file_basename)
-            se_file = SettingEntry(l, lc, vc)
-            se_file.ctrl.SetInsertionPointEnd()
+            lc, vc = self._pnl_acqfile.panel.add_readonly_field("File", file_info.file_basename)
+            # Make sure the end is visible
+            vc.SetInsertionPointEnd()
 
-            l, lc, vc = self._pnl_acqfile.panel.add_readonly_field("Path", file_info.file_path)
-            se_path = SettingEntry(l, lc, vc)
-            # Make sure the file name is visible
-            se_path.ctrl.SetInsertionPointEnd()
+            lc, vc = self._pnl_acqfile.panel.add_readonly_field("Path", file_info.file_path)
+            vc.SetInsertionPointEnd()
 
             # Add any meta data as labels
             for key, value in file_info.metadata.items():
@@ -1311,6 +1319,7 @@ class AnalysisSettingsController(SettingsBarController):
 
         self._pnl_acqfile.Refresh()
 
+    # TODO: refactor into widgets.FileConnector
     def _on_ar_file_select(self, evt):
         """ Pass the selected AR background file on to the VA """
         logging.debug("AR background selected by user")
@@ -1328,6 +1337,24 @@ class AnalysisSettingsController(SettingsBarController):
                 raise
 
         self.tab_data.ar_cal.value = fn
+
+    def _on_spec_bck_file_select(self, evt):
+        """ Pass the selected spec background file on to the VA """
+        logging.debug("Spectrum background file selected by user")
+        fn = evt.selected_file or u""
+        if self.setter_spec_bck_file:
+            try:
+                fn = self.setter_spec_bck_file(fn)
+            except ValueError:
+                logging.debug(u"Setter refused the file '%s'", fn)
+                # Put back old file name
+                self._spec_bckfile_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
+                return
+            except Exception:
+                self._spec_bckfile_ctrl.SetValue(self.tab_data.spec_bck_cal.value)
+                raise
+
+        self.tab_data.spec_bck_cal.value = fn
 
     def _on_spec_file_select(self, evt):
         """ Pass the selected efficiency compensation file on to the VA """
@@ -1350,12 +1377,15 @@ class AnalysisSettingsController(SettingsBarController):
     def _on_ar_cal(self, val):
         self._arfile_ctrl.SetValue(val)
 
+    def _on_spec_bck_cal(self, val):
+        self._spec_bckfile_ctrl.SetValue(val)
+
     def _on_spec_cal(self, val):
         self._specfile_ctrl.SetValue(val)
 
     def ShowCalibrationPanel(self, ar=None, spec=None):
         """
-        show_panel/hide the ar/spec panels
+        show/hide the the ar/spec panels
         ar (boolean or None): show, hide or don't change AR calib panel
         spec (boolean or None): show, hide or don't change spec calib panel
         """

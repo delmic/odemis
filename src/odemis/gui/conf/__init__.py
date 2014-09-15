@@ -180,6 +180,7 @@ class GeneralConfig(Config):
         self.default.add_section("calibration")
         self.default.set("calibration", "ar_file", u"")
         self.default.set("calibration", "spec_file", u"")
+        self.default.set("calibration", "spec_bck_file", u"")
 
     def get_manual(self, role=None):
         """ This method returns the path to the user manual

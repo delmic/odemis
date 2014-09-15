@@ -967,6 +967,7 @@ class AnalysisTab(Tab):
             self.tab_data_model
         )
         self._settings_controller.setter_ar_file = self.set_ar_background
+        self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
         buttons = collections.OrderedDict([
@@ -1222,6 +1223,13 @@ class AnalysisTab(Tab):
 
         if spec_found:
             try:
+                self.set_spec_background(self.tab_data_model.spec_bck_cal.value)
+            except ValueError:
+                logging.warning(u"Calibration file not accepted any more '%s'",
+                                self.tab_data_model.spec_bck_cal.value)
+                self.tab_data_model.spec_bck_cal.value = u""  # remove the calibration
+
+            try:
                 self.set_spec_comp(self.tab_data_model.spec_cal.value)
             except ValueError:
                 logging.warning(u"Calibration file not accepted any more '%s'",
@@ -1270,6 +1278,41 @@ class AnalysisTab(Tab):
 
         return fn
 
+    def set_spec_background(self, fn):
+        """
+        Load the data from a spectrum (background) file and apply to streams
+        return (unicode): the filename as it has been accepted
+        raise ValueError if the file is not correct or calibration cannot be applied
+        """
+        try:
+            if fn == u"":
+                logging.debug("Clearing spectrum background")
+                cdata = None
+            else:
+                logging.debug("Loading spectrum background")
+                converter = dataio.find_fittest_exporter(fn)
+                data = converter.read_data(fn)
+                # will raise exception if doesn't contain good calib data
+                cdata = calibration.get_spectrum_data(data) # FIXME
+
+            spec_strms = [s for s in self.tab_data_model.streams.value
+                          if isinstance(s, streammod.SPECTRUM_STREAMS)]
+
+            for strm in spec_strms:
+                strm.background.value = cdata # FIXME
+
+        except Exception, err:  # pylint: disable=W0703
+            msg = "File '%s' not suitable for spectrum background:\n\n%s"
+            dlg = wx.MessageDialog(self.main_frame,
+                                   msg % (fn, err),
+                                   "Unusable spectrum background file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+            raise ValueError("File '%s' not suitable" % fn)
+
+        return fn
+
     def set_spec_comp(self, fn):
         """
         Load the data from a spectrum calibration file and apply to streams
@@ -1304,6 +1347,7 @@ class AnalysisTab(Tab):
             raise ValueError("File '%s' not suitable" % fn)
 
         return fn
+
 
     @guiutil.call_after
     def _onTool(self, tool):
