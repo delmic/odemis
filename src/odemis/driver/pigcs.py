@@ -126,6 +126,194 @@ import time
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
 
+
+
+
+class PIGCSError(Exception):
+
+    def __init__(self, errno):
+        self.errno = errno
+        self.strerror = self._errordict.get(errno, "Unknown error")
+
+    def __str__(self):
+        return "PIGCS error %d: %s" % (self.errno, self.strerror)
+
+    _errordict = {
+        0: "No error",
+        1: "Parameter syntax error",
+        2: "Unknown command",
+        3: "Command length out of limits or command buffer overrun",
+        4: "Error while scanning",
+        5: "Unallowable move attempted on unreferenced axis, or move attempted with servo off",
+        6: "Parameter for SGA not valid",
+        7: "Position out of limits",
+        8: "Velocity out of limits",
+        9: "Attempt to set pivot point while U,V and W not all 0",
+        10: "Controller was stopped by command",
+        11: "Parameter for SST or for one of the embedded scan algorithms out of range",
+        12: "Invalid axis combination for fast scan",
+        13: "Parameter for NAV out of range",
+        14: "Invalid analog channel",
+        15: "Invalid axis identifier",
+        16: "Unknown stage name",
+        17: "Parameter out of range",
+        18: "Invalid macro name",
+        19: "Error while recording macro",
+        20: "Macro not found",
+        21: "Axis has no brake",
+        22: "Axis identifier specified more than once",
+        23: "Illegal axis",
+        24: "Incorrect number of parameters",
+        25: "Invalid floating point number",
+        26: "Parameter missing",
+        27: "Soft limit out of range",
+        28: "No manual pad found",
+        29: "No more step-response values",
+        30: "No step-response values recorded",
+        31: "Axis has no reference sensor",
+        32: "Axis has no limit switch",
+        33: "No relay card installed",
+        34: "Command not allowed for selected stage(s)",
+        35: "No digital input installed",
+        36: "No digital output configured",
+        37: "No more MCM responses",
+        38: "No MCM values recorded",
+        39: "Controller number invalid",
+        40: "No joystick configured",
+        41: "Invalid axis for electronic gearing, axis cannot be slave",
+        42: "Position of slave axis is out of range",
+        43: "Slave axis cannot be commanded directly when electronic gearing is enabled",
+        44: "Calibration of joystick failed",
+        45: "Referencing failed",
+        46: "OPM (Optical Power Meter) missing",
+        47: "OPM (Optical Power Meter) not initialized or cannot be initialized",
+        48: "OPM (Optical Power Meter) Communication Error",
+        49: "Move to limit switch failed",
+        50: "Attempt to reference axis with referencing disabled",
+        51: "Selected axis is controlled by joystick",
+        52: "Controller detected communication error",
+        53: "MOV! motion still in progress",
+        54: "Unknown parameter",
+        55: "No commands were recorded with REP",
+        56: "Password invalid",
+        57: "Data Record Table does not exist",
+        58: "Source does not exist; number too low or too high",
+        59: "Source Record Table number too low or too high",
+        60: "Protected Param: current Command Level (CCL) too low",
+        61: "Command execution not possible while Autozero is running",
+        62: "Autozero requires at least one linear axis",
+        63: "Initialization still in progress",
+        64: "Parameter is read-only",
+        65: "Parameter not found in non- volatile memory",
+        66: "Voltage out of limits",
+        67: "Not enough memory available for requested wave curve",
+        68: "Not enough memory available for DDL table; DDL cannot be started",
+        69: "Time delay larger than DDL table; DDL cannot be started",
+        70: "The requested arrays have different lengths; query them separately",
+        71: "Attempt to restart the generator while it is running in single step mode",
+        72: "Motion commands and wave generator activation are not allowed when analog target is active",
+        73: "Motion commands are not allowed when wave generator is active",
+        74: "No sensor channel or no piezo channel connected to selected axis (sensor and piezo matrix)",
+        75: "Generator started (WGO) without having selected a wave table (WSL).",
+        76: "Interface buffer did overrun and command couldn't be received correctly",
+        77: "Data Record Table does not hold enough recorded data",
+        78: "Data Record Table is not configured for recording",
+        79: "Open-loop commands (SVA, SVR) are not allowed when servo is on",
+        80: "Hardware error affecting RAM",
+        81: "Not macro command",
+        82: "Macro counter out of range",
+        83: "Joystick is active",
+        84: "Motor is off",
+        85: "Macro-only command",
+        86: "Invalid joystick axis",
+        87: "Joystick unknown",
+        88: "Move without referenced stage",
+        89: "Command not allowed in current motion mode",
+        90: "No tracing possible while digital IOs are used on this HW revision. Reconnect to switch operation mode.",
+        91: "Move not possible, would cause collision",
+        92: "Stage is not capable of following the master. Check the gear ratio.",
+        100: "PI LabVIEW driver reports error. See source control for details.",
+        200: "No stage connected to axis",
+        201: "File with axis parameters not found",
+        202: "Invalid axis parameter file",
+        203: "Backup file with axis parameters not found",
+        204: "PI internal error code 204",
+        205: "SMO with servo on",
+        206: "uudecode: incomplete header",
+        207: "uudecode: nothing to decode",
+        208: "uudecode: illegal UUE format",
+        209: "CRC32 error",
+        210: "Illegal file name (must be 8-0 format)",
+        211: "File not found on controller",
+        212: "Error writing file on controller",
+        213: "VEL command not allowed in DTR Command Mode",
+        214: "Position calculations failed",
+        215: "The connection between controller and stage may be broken",
+        216: "The connected stage has driven into a limit switch, some controllers need CLR to resume operation",
+        217: "Strut test command failed because of an unexpected strut stop",
+        218: "While MOV! is running position can only be estimated!",
+        219: "Position was calculated during MOV motion",
+        230: "Invalid handle",
+        231: "No bios found",
+        232: "Save system configuration failed",
+        233: "Load system configuration failed",
+        301: "Send buffer overflow",
+        302: "Voltage out of limits",
+        303: "Open-loop motion attempted when servo ON",
+        304: "Received command is too long",
+        305: "Error while reading/writing EEPROM",
+        306: "Error on I2C bus",
+        307: "Timeout while receiving command",
+        308: "A lengthy operation has not finished in the expected time",
+        309: "Insufficient space to store macro",
+        310: "Configuration data has old version number",
+        311: "Invalid configuration data",
+        333: "Internal hardware error",
+        400: "Wave generator index error",
+        401: "Wave table not defined",
+        402: "Wave type not supported",
+        403: "Wave length exceeds limit",
+        404: "Wave parameter number error",
+        405: "Wave parameter out of range",
+        406: "WGO command bit not supported",
+        502: "Position consistency check failed",
+        503: "Hardware collision sensor(s) are activated",
+        504: "Strut following error occurred, e.g. caused by overload or encoder failure",
+        555: "BasMac: unknown controller error",
+        601: "not enough memory",
+        602: "hardware voltage error",
+        603: "hardware temperature out of range",
+        1000: "Too many nested macros",
+        1001: "Macro already defined",
+        1002: "Macro recording not activated",
+        1003: "Invalid parameter for MAC",
+        1004: "PI internal error code 1004",
+        1005: "Controller is busy with some lengthy operation (e.g. reference move, fast scan algorithm)",
+        2000: "Controller already has a serial number",
+        4000: "Sector erase failed",
+        4001: "Flash program failed",
+        4002: "Flash read failed",
+        4003: "HW match code missing/invalid",
+        4004: "FW match code missing/invalid",
+        4005: "HW version missing/invalid",
+        4006: "FW version missing/invalid",
+        4007: "FW update failed",
+        5000: "PicoCompensation scan data is not valid",
+        5001: "PicoCompensation is running, some actions cannot be executed during scanning/recording",
+        5002: "Given axis cannot be defined as PPC axis",
+        5003: "Defined scan area is larger than the travel range",
+        5004: "Given PicoCompensation type is not defined",
+        5005: "PicoCompensation parameter error",
+        5006: "PicoCompensation table is larger than maximum table length",
+        5100: "Common error in NEXLINE® firmware module",
+        5101: "Output channel for NEXLINE® cannot be redefined for other usage",
+        5102: "Memory for NEXLINE® signals is too small",
+        5103: "RNP cannot be executed if axis is in closed loop",
+        5104: "Relax procedure (RNP) needed",
+        5200: "Axis must be configured for this action",
+        - 1024: "Motion error: position error too large, servo is switched off automatically",
+    }
+
 # constants for model number
 MODEL_C867 = 867
 MODEL_E861 = 861
@@ -277,7 +465,7 @@ class Controller(object):
 
         return lines
 
-    err_ans_re = "\\d+$" # ex: ("0 1 ")[54](\n)
+    err_ans_re = r"\d+$" # ex: ("0 1 ")[54](\n)
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
@@ -289,7 +477,7 @@ class Controller(object):
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
             if re.match(self.err_ans_re, resp): # looks like an answer to err?
-                # TODO Check if error == 307 or 308?
+                # TODO if err != 0, raise PIGCSError (as it's a sign the previous command just was wrong)
                 return True
         except IOError:
             pass
@@ -1312,7 +1500,7 @@ class OLController(Controller):
         except (IOError, ValueError) as err:
             # TODO detect better that it's just a problem of sending unsupported command/value
             # Put default (large values)
-            self.GetErrorNum() # reset error
+            self.GetErrorNum() # reset error (just in case)
             logging.debug("Using default speed and acceleration value after error '%s'", err)
 
         self._speed = dict([(a, (self.min_speed + self.max_speed) / 2) for a in axes]) # m/s
