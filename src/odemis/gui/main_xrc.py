@@ -104,7 +104,7 @@ class xrcfr_main(wx.Frame):
         self.btn_fine_align = xrc.XRCCTRL(self, "btn_fine_align")
         self.lbl_fine_align = xrc.XRCCTRL(self, "lbl_fine_align")
         self.gauge_fine_align = xrc.XRCCTRL(self, "gauge_fine_align")
-        self.html_alignment = xrc.XRCCTRL(self, "html_alignment")
+        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.vp_align_ccd = xrc.XRCCTRL(self, "vp_align_ccd")
         self.lens_align_btn_sem = xrc.XRCCTRL(self, "lens_align_btn_sem")
         self.lens_align_btn_opt = xrc.XRCCTRL(self, "lens_align_btn_opt")
@@ -1399,7 +1399,7 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxHtmlWindow" name="html_alignment">
+                    <object class="wxHtmlWindow" name="html_alignment_doc">
                       <size>-1,700</size>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>

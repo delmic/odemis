@@ -1171,7 +1171,7 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxHtmlWindow" name="html_alignment">
+                    <object class="wxHtmlWindow" name="html_alignment_doc">
                       <size>-1,700</size>
                       <fg>#BBBBBB</fg>
                       <bg>#333333</bg>

@@ -28,6 +28,17 @@ import collections
 import logging
 import math
 import numpy
+import os.path
+import scipy.misc
+import weakref
+
+import pkg_resources
+import wx
+# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
+# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
+# This is not related to any particular wxPython version and is most likely permanent.
+from wx import html
+
 from odemis import dataio, model
 from odemis.acq import calibration
 from odemis.gui.comp import overlay
@@ -38,20 +49,10 @@ from odemis.gui.comp.stream import StreamPanel
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.cont import settings, tools
 from odemis.gui.cont.actuators import ActuatorController
-from odemis.gui.cont.microscope import SecomStateController, \
-    DelphiStateController
+from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
 from odemis.gui.util import call_after
 from odemis.gui.util.img import scale_to_alpha
 from odemis.util import units
-import os.path
-import pkg_resources
-import scipy.misc
-import weakref
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-from wx import html  # pylint: disable=W0611
-import wx
-
 import odemis.acq.stream as streammod
 import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.streams as streamcont
@@ -1528,19 +1529,19 @@ class LensAlignTab(Tab):
                                                           self._settings_controller)
 
         self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
-                                                  main_frame,
-                                                  self._settings_controller)
+                                                           main_frame,
+                                                           self._settings_controller)
 
         # Documentation text on the left panel
         path = os.path.join(guiutil.get_installation_folder(), "doc/alignment.html")
-        main_frame.html_alignment.SetBorders(0)  # sizer already give us borders
-        main_frame.html_alignment.LoadPage(path)
+        main_frame.html_alignment_doc.SetBorders(0)  # sizer already give us borders
+        main_frame.html_alignment_doc.LoadPage(path)
 
         # Trick to allow easy html editing: double click to reload
-#         def reload_page(evt):
-#             evt.GetEventObject().LoadPage(path)
+        # def reload_page(evt):
+        #     evt.GetEventObject().LoadPage(path)
 
-        # main_frame.html_alignment.Bind(wx.EVT_LEFT_DCLICK, reload_page)
+        # main_frame.html_alignment_doc.Bind(wx.EVT_LEFT_DCLICK, reload_page)
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
