@@ -682,6 +682,7 @@ class SettingsController(object):
             logging.error("Unknown control type %s", control_type)
 
         value_ctrl.SetToolTipString(tooltip)
+        lbl_ctrl.SetToolTipString(tooltip)
 
         ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, value_ctrl, vac)
         self.entries.append(ne)
