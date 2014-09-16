@@ -603,8 +603,7 @@ class StaticSpectrumStream(StaticStream):
 
             try:
                 self._calibrated = calibration.compensate_spectrum_efficiency(
-                                                                    data,
-                                                                    calib_data)
+                                            data, coef=calib_data)
             except ValueError:
                 logging.info("Failed to apply spectrum efficiency compensation")
                 raise

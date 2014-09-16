@@ -121,7 +121,38 @@ class TestSpectrum(unittest.TestCase):
     """
     
     
-    def test_load_simple(self):
+    def test_load_background(self):
+        # Background data
+        dcalib = numpy.array([1, 2, 2, 3, 4, 5, 4, 6, 9], dtype=numpy.uint16)
+        dcalib.shape += (1, 1, 1, 1)
+        wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
+        calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
+
+        # Give one DA, the correct one, so expect to get it back
+        out = calibration.get_spectrum_data([calib])
+        numpy.testing.assert_equal(out, calib)
+        numpy.testing.assert_almost_equal(out.metadata[model.MD_WL_LIST],
+                                          calib.metadata[model.MD_WL_LIST])
+
+        # More DataArrays, just to make it slightly harder to find the data
+        data1 = model.DataArray(numpy.ones((1, 1, 1, 520, 230), dtype=numpy.uint16))
+        out = calibration.get_spectrum_data([data1, calib])
+        numpy.testing.assert_equal(out, calib)
+        numpy.testing.assert_almost_equal(out.metadata[model.MD_WL_LIST],
+                                          calib.metadata[model.MD_WL_LIST])
+
+        # should also load spectra with more than one points (then return just
+        # the first point)
+        dcalibxy = numpy.empty(dcalib.shape[0:1] + (1, 1, 10, 12), dtype=dcalib.dtype)
+        dcalibxy[:, :, :] = dcalib
+        dcalibxy[0, 0, 0, 0, 0] = 0
+        calibxy = model.DataArray(dcalibxy, metadata={model.MD_WL_LIST: wl_calib})
+        out = calibration.get_spectrum_data([data1, calibxy])
+        numpy.testing.assert_equal(out, calibxy[:, :, :, 0:1, 0:1])
+        numpy.testing.assert_almost_equal(out.metadata[model.MD_WL_LIST],
+                                          calib.metadata[model.MD_WL_LIST])
+
+    def test_load_compensation(self):
         # Compensation data
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
@@ -146,6 +177,14 @@ class TestSpectrum(unittest.TestCase):
         Check the whole sequence: saving calibration data to file, loading it 
         back from file, finding it.
         """
+        # Background data
+        dbckg = numpy.array([1, 2, 2, 3, 4, 5, 4, 6, 9], dtype=numpy.uint16)
+        dbckg.shape += (1, 1, 1, 1)
+        wl_calib = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
+        bckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_calib})
+
+        # Give one DA, the correct one, so expect to get it back
+
         # Compensation data
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
@@ -159,20 +198,29 @@ class TestSpectrum(unittest.TestCase):
         # RGB image
         thumb = model.DataArray(numpy.ones((520, 230, 3), dtype=numpy.uint8))
         
-        full_data = [data1, calib, data2]
+        full_coef = [data1, calib, data2]
+        full_bckg = [data1, bckg, data2]
 
         for fmt in dataio.get_available_formats():
             exporter = dataio.get_exporter(fmt)
             logging.info("Trying to export/import with %s", fmt)
-            fn = u"test_spec" + exporter.EXTENSIONS[0]
-            exporter.export(fn, full_data, thumb)
+            fn_coef = u"test_spec" + exporter.EXTENSIONS[0]
+            exporter.export(fn_coef, full_coef, thumb)
+            fn_bckg = u"test_bckg" + exporter.EXTENSIONS[0]
+            exporter.export(fn_bckg, full_bckg, thumb)
 
-            idata = exporter.read_data(fn)
-            icalib = calibration.get_spectrum_efficiency(idata)
-            numpy.testing.assert_equal(icalib, calib)
-            numpy.testing.assert_almost_equal(icalib.metadata[model.MD_WL_LIST],
+            data_bckg = exporter.read_data(fn_bckg)
+            ibckg = calibration.get_spectrum_data(data_bckg)
+            data_coef = exporter.read_data(fn_coef)
+            icoef = calibration.get_spectrum_efficiency(data_coef)
+            numpy.testing.assert_equal(icoef, calib)
+            numpy.testing.assert_almost_equal(icoef.metadata[model.MD_WL_LIST],
                                               calib.metadata[model.MD_WL_LIST])
-            os.remove(fn)
+            numpy.testing.assert_equal(ibckg, bckg)
+            numpy.testing.assert_almost_equal(ibckg.metadata[model.MD_WL_LIST],
+                                              bckg.metadata[model.MD_WL_LIST])
+            os.remove(fn_coef)
+            os.remove(fn_bckg)
 
     
     def test_compensate(self):
@@ -188,7 +236,7 @@ class TestSpectrum(unittest.TestCase):
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        compensated = calibration.compensate_spectrum_efficiency(spec, calib)
+        compensated = calibration.compensate_spectrum_efficiency(spec, coef=calib)
 
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
@@ -219,7 +267,7 @@ class TestSpectrum(unittest.TestCase):
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        compensated = calibration.compensate_spectrum_efficiency(spec, calib)
+        compensated = calibration.compensate_spectrum_efficiency(spec, coef=calib)
         
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
