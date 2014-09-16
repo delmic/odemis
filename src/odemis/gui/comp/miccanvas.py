@@ -771,18 +771,24 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.point_select_overlay = PointSelectOverlay(self)
         self.add_view_overlay(self.point_select_overlay)
 
-        # This canvas has a special overlay for tracking position history
-        self.history_overlay = HistoryOverlay(self)
-        self.add_view_overlay(self.history_overlay)
+        # This canvas can have a special overlay for tracking position history
+        self.history_overlay = None
 
         # self.add_active_overlay(self.history_overlay)
         self.add_active_overlay(self.point_select_overlay)
 
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
+
         # Keep track of old stage positions
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change, init=True)
+
+        # If the model has a stage history VA...
+        if tab_data.main.stage_history:
+            self.history_overlay = HistoryOverlay(self, tab_data.main.stage_history, 2000)
+            self.add_view_overlay(self.history_overlay)
+
         self.point_select_overlay.activate()
 
     @call_after
@@ -797,8 +803,8 @@ class OverviewCanvas(DblMicroscopeCanvas):
         The last position will be re-uased, but the size should be different.
         """
 
-        if self.history_overlay.history:
-            p_pos = self.history_overlay.history[-1][0]
+        if self.history_overlay.history.value:
+            p_pos = self.history_overlay.history.value[-1][0]
             p_size = self._calc_stream_size()
             self.history_overlay.add_location((p_pos[0], p_pos[1]), p_size)
 

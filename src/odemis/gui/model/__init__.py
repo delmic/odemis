@@ -126,6 +126,7 @@ class MainGUIData(object):
         self.overview_ccd = None  # global view from above the sample
         self.overview_focus = None  # focus of the overview CCD
         self.overview_light = None  # light of the overview CCD
+        self.stage_history = None  # history list of visited stage positions
 
         # Indicates whether the microscope is acquiring a high quality image
         self.is_acquiring = model.BooleanVA(False)
@@ -183,6 +184,7 @@ class MainGUIData(object):
                     self.lens = e
                 elif e.role == "e-beam":
                     self.ebeam = e
+                    self.stage_history = model.ListVA()
                 elif e.role == "chamber-light":
                     self.chamber_light = e
                 elif e.role == "overview-light":
@@ -294,7 +296,7 @@ class MicroscopyGUIData(object):
         self.views = model.ListVA()
 
         # Current tool selected (from the toolbar, cf cont.tools)
-        self.tool = None # Needs to be overridden by a IntEnumerated
+        self.tool = None  # Needs to be overridden by a IntEnumerated
 
         # The MicroscopeView currently focused, it is one of the `views`
         # or `None`.

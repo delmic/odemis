@@ -356,9 +356,9 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         cnvs.disable_drag()
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        history_va = omodel.ListVA()
 
-        hol = vol.HistoryOverlay(cnvs)
-        hol.length = 2000
+        hol = vol.HistoryOverlay(cnvs, history_va, 2000)
         cnvs.add_view_overlay(hol)
 
         test.gui_loop()
@@ -386,7 +386,9 @@ class OverlayTestCase(test.GuiTestCase):
             phi = (math.pi * 2) / steps
             x = (100 * i / (steps * 5)) * math.cos(i * phi)
             y = (100 * i / (steps * 5)) * math.sin(i * phi)
+            # hol.history.append(((x, y), None))
             hol.add_location((x, y))
+        # print "Done generating history"
 
         test.gui_loop()
 

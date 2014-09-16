@@ -1142,24 +1142,24 @@ class PointSelectOverlay(ViewOverlay):
 class HistoryOverlay(ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """
 
-    def __init__(self, cnvs):
+    def __init__(self, cnvs, history_list_va, max_length=100):
         super(HistoryOverlay, self).__init__(cnvs)
 
         self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.fade = True  # Fade older positions in the history list
-        self.length = 100  # Number of positions to track
-        self.history = []  # List of (center, size) tuples
+        self.max_length = max_length  # Number of positions to track
+        self.history = history_list_va  # List of (center, size) tuples
         self.marker_size = 5
 
     def clear(self):
-        self.history = []
+        self.history.value = []
 
     def __len__(self):
-        return len(self.history)
+        return len(self.history.value)
 
     def __str__(self):
-        return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history[-5:]])
+        return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history.value[-5:]])
 
     def add_location(self, p_center, p_size=None):
         """ Add a view location to the history list
@@ -1169,14 +1169,14 @@ class HistoryOverlay(ViewOverlay):
         """
 
         # If the 'new' position is identical to the last one in the history, ignore
-        if self.history and (p_center, p_size) == self.history[-1]:
+        if self.history.value and (p_center, p_size) == self.history.value[-1]:
             return
 
         # If max length reached, remove the oldest
-        if len(self.history) == self.length:
-            self.history.pop(0)
+        if len(self.history.value) == self.max_length:
+            self.history.value.pop(0)
 
-        self.history.append((p_center, p_size))
+        self.history.value.append((p_center, p_size))
         self.cnvs.update_drawing()
 
     # Event Handlers
@@ -1198,15 +1198,14 @@ class HistoryOverlay(ViewOverlay):
         ctx.set_line_width(1)
         offset = self.cnvs.get_half_buffer_size()
 
-        for i, (p_center, p_size) in enumerate(self.history):
-            alpha = (i + 1) * (0.8 / len(self.history)) + 0.2 if self.fade else 1.0
+        for i, (p_center, p_size) in enumerate(self.history.value):
+            alpha = (i + 1) * (0.8 / len(self.history.value)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
 
             if scaled_size:
                 v_center = (v_center[0] * (scaled_size[0] / self.cnvs.ClientSize.x),
                             v_center[1] * (scaled_size[1] / self.cnvs.ClientSize.y))
                 marker_size = (2, 2)
-            # FIXME: Marker size calculation is broken
             elif p_size:
                 marker_size = (int(p_size[0] * self.cnvs.scale),
                                int(p_size[0] * self.cnvs.scale))
@@ -1217,7 +1216,7 @@ class HistoryOverlay(ViewOverlay):
             else:
                 marker_size = (5, 5)
 
-            if i < len(self.history) - 1:
+            if i < len(self.history.value) - 1:
                 colour = self.trail_colour
             else:
                 colour = self.pos_colour
