@@ -1,3 +1,11 @@
+odemis (1.7.2-1ubuntu1) precise; urgency=low
+
+  * Version 1.7.2:
+    * Reduce drift correction period to 10s (SPARC)
+    * Extend exposure time from 60s to 500s (for SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 16 Sep 2014 18:01:07 +0200
+
 odemis (1.7.1-1ubuntu1) precise; urgency=low
 
   * Version 1.7.1:
