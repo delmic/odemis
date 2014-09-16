@@ -1150,7 +1150,6 @@ class HistoryOverlay(ViewOverlay):
         self.fade = True  # Fade older positions in the history list
         self.max_length = max_length  # Number of positions to track
         self.history = history_list_va  # List of (center, size) tuples
-        self.marker_size = 5
 
     def clear(self):
         self.history.value = []
@@ -1161,23 +1160,23 @@ class HistoryOverlay(ViewOverlay):
     def __str__(self):
         return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history.value[-5:]])
 
-    def add_location(self, p_center, p_size=None):
-        """ Add a view location to the history list
-
-        :param p_center: Physical coordinates of the view center
-        :param p_size: Physical size of the the view
-        """
-
-        # If the 'new' position is identical to the last one in the history, ignore
-        if self.history.value and (p_center, p_size) == self.history.value[-1]:
-            return
-
-        # If max length reached, remove the oldest
-        if len(self.history.value) == self.max_length:
-            self.history.value.pop(0)
-
-        self.history.value.append((p_center, p_size))
-        self.cnvs.update_drawing()
+    # def add_location(self, p_center, p_size=None):
+    #     """ Add a view location to the history list
+    #
+    #     :param p_center: Physical coordinates of the view center
+    #     :param p_size: Physical size of the the view
+    #     """
+    #
+    #     # If the 'new' position is identical to the last one in the history, ignore
+    #     if self.history.value and (p_center, p_size) == self.history.value[-1]:
+    #         return
+    #
+    #     # If max length reached, remove the oldest
+    #     if len(self.history.value) == self.max_length:
+    #         self.history.value.pop(0)
+    #
+    #     self.history.value.append((p_center, p_size))
+    #     self.cnvs.update_drawing()
 
     # Event Handlers
 
@@ -1198,7 +1197,7 @@ class HistoryOverlay(ViewOverlay):
         ctx.set_line_width(1)
         offset = self.cnvs.get_half_buffer_size()
 
-        for i, (p_center, p_size) in enumerate(self.history.value):
+        for i, (p_center, p_size) in enumerate(self.history.value[:self.max_length]):
             alpha = (i + 1) * (0.8 / len(self.history.value)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
 

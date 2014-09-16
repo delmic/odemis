@@ -24,15 +24,17 @@ from __future__ import division
 
 import collections
 import logging
+
+import wx
+
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
 from odemis.gui.util import call_after
-import wx
-
 import odemis.gui.util.widgets as util
 from odemis.model import VigilantAttributeBase
+from odemis.model import MD_PIXEL_SIZE
 
 
 class ViewController(object):
@@ -605,6 +607,71 @@ class ViewController(object):
             self._data_model.focussedView.value = pviews[0]
 
         logging.debug("Failed to find any view compatible with stream %s", stream.name.value)
+
+
+class OverviewController(object):
+    """ Small class to connect stage history and overview canvas together
+    """
+
+    def __init__(self, tab_data, overview_canvas):
+
+        self._data_model = tab_data
+        self.overview_canvas = overview_canvas
+
+        if self._data_model.main.stage_history:
+            self._data_model.main.stage_history.subscribe(self.on_history_change)
+
+        if tab_data.main.stage:
+            tab_data.main.stage.position.subscribe(self.on_stage_pos_change)
+
+    def on_history_change(self, history):
+        self.overview_canvas.update_drawing()
+
+    @call_after
+    def on_stage_pos_change(self, p_pos):
+        """ Store the new position in the overview history when the stage moves """
+
+        p_size = self.calc_stream_size()
+        p_center = (p_pos['x'], p_pos['y'])
+
+        # If the 'new' position is identical to the last one in the history, ignore
+        if self._data_model.main.stage_history.value:
+            if (p_center, p_size) == self._data_model.main.stage_history.value[-1]:
+                return
+
+        # If max length reached, remove the oldest
+        if len(self._data_model.main.stage_history.value) == 2000:
+            self._data_model.main.stage_history.value.pop(0)
+
+        self._data_model.main.stage_history.value.append((p_center, p_size))
+        self.overview_canvas.update_drawing()
+
+    def calc_stream_size(self):
+        """ Calculate the physical size of the current view """
+
+        p_size = None
+
+        # Calculate the stream size if the the ebeam is active
+        for strm in self._data_model.streams.value:
+            if strm.is_active and isinstance(strm, EM_STREAMS):
+                image = strm.image.value
+                if image is not None:
+                    pixel_size = image.metadata.get(MD_PIXEL_SIZE, None)
+                    if pixel_size is not None:
+                        x, y, _ = image.shape
+                        p_size = (x * pixel_size[0], y * pixel_size[1])
+
+                        # TODO: tracking doesn't work, since the  pixel size
+                        # might not be updated before `track_hfw_history` is
+                        # called
+
+                        # for view in self._tab_data_model.views.value:
+                        #     if strm in view.stream_tree:
+                        #         view.mpp.subscribe(self.track_hfw_history)
+                        #         break
+
+                        break
+        return p_size
 
 
 class ViewSelector(object):
