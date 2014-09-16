@@ -1226,16 +1226,16 @@ class HistoryOverlay(ViewOverlay):
     @staticmethod
     def _draw_rect(ctx, v_center, v_size, colour, alpha):
 
-        ctx.set_source_rgba(0, 0, 0, 0.5)
+        ctx.set_source_rgba(0, 0, 0, alpha * 0.4)
 
         x = int(v_center[0] - v_size[0] / 2.0) + 0.5
         y = int(v_center[1] - v_size[1] / 2.0) + 0.5
 
-        ctx.rectangle(x - 1, y - 1, int(v_size[0] + 2), int(v_size[1] + 2))
+        ctx.rectangle(x + 1, y + 1, v_size[0], v_size[1] + 2)
         ctx.stroke()
 
         ctx.set_source_rgba(colour[0], colour[1], colour[2], alpha)
 
         # Render rectangles of 3 pixels wide
-        ctx.rectangle(x, y, int(v_size[0]), int(v_size[1]))
+        ctx.rectangle(x, y, v_size[0], v_size[1])
         ctx.stroke()
