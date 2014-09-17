@@ -395,6 +395,12 @@ class StaticSpectrumStream(StaticStream):
         self.efficiencyCompensation = model.VigilantAttribute(None,
                                                       setter=self._setEffComp)
 
+        # The background data (typically, an acquisition without ebeam).
+        # It is subtracted from the acquisition data.
+        # If set to None, a simple baseline background value is subtracted.
+        self.background = model.VigilantAttribute(None,
+                                                  setter=self._setBackground)
+
         # low/high values of the spectrum displayed
         self.spectrumBandwidth = model.TupleContinuous(
                                     (cwl - width, cwl + width),
@@ -420,7 +426,8 @@ class StaticSpectrumStream(StaticStream):
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
-        self.efficiencyCompensation.subscribe(self._onEffComp)
+        self.efficiencyCompensation.subscribe(self._onCalib)
+        self.background.subscribe(self._onCalib)
 
         self.raw = [image] # for compatibility with other streams (like saving...)
         self._calibrated = image # the raw data after calibration
@@ -585,37 +592,60 @@ class StaticSpectrumStream(StaticStream):
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
 
+    # We don't have problems of rerunning this when the data is updated,
+    # as the data is static.
+    def _updateCalibratedData(self, bckg=None, coef=None):
+        """
+        Try to update the data with new calibration. The two parameters are
+        the same as compensate_spectrum_efficiency(). The input data comes from
+        .raw and the calibrated data is saved in ._calibrated
+        bckg (DataArray or None): If None, uses the .background value
+        coef (DataArray or None): If None, uses the .efficiencyCompensation value
+        raise ValueError: if the data and calibration data are not valid or
+          compatible. In that case the current calibrated data is unchanged.
+        """
+        if bckg is None:
+            bckg = self.background.value
+        if coef is None:
+            coef = self.efficiencyCompensation.value
+        data = self.raw[0]
 
-    def _setEffComp(self, calib_data):
+        if data is None:
+            self._calibrated = None
+            return
+
+        if not (set(data.metadata.keys()) &
+                {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
+            raise ValueError("Spectrum data contains no wavelength information")
+
+        # will raise an exception if incompatible
+        calibrated = calibration.compensate_spectrum_efficiency(
+                                                    data, bckg=bckg, coef=coef)
+        self._calibrated = calibrated
+
+    def _setBackground(self, bckg):
+        """
+        Setter of the spectrum background
+        raises ValueError if it's impossible to apply it (eg, no wavelength info)
+        """
+        # If the coef data is wrong, this function will fail with an exception,
+        # and the value never be set.
+        self._updateCalibratedData(bckg=bckg, coef=None)
+        return bckg
+    
+    def _setEffComp(self, coef):
         """
         Setter of the spectrum efficiency compensation
         raises ValueError if it's impossible to apply it (eg, no wavelength info)
         """
-        data = self.raw[0]
+        # If the coef data is wrong, this function will fail with an exception,
+        # and the value never be set.
+        self._updateCalibratedData(bckg=None, coef=coef)
+        return coef
 
-        # We don't have problems of rerunning this when the data is updated,
-        # as the data is static.
-        self._calibrated = data
-        if calib_data is not None:
-            if not (set(data.metadata.keys()) &
-                    {model.MD_WL_LIST, model.MD_WL_POLYNOMIAL}):
-                raise ValueError("Spectrum data contains no wavelength information")
-
-            try:
-                self._calibrated = calibration.compensate_spectrum_efficiency(
-                                            data, coef=calib_data)
-            except ValueError:
-                logging.info("Failed to apply spectrum efficiency compensation")
-                raise
-            except Exception:
-                logging.exception("Failed to apply spectrum efficiency compensation")
-                raise
-
-        return calib_data
-
-    def _onEffComp(self, calib_data):
+    def _onCalib(self, unused):
         """
-        called when the efficiency compensation is changed
+        called when the background or efficiency compensation is changed
         """
 
         # histogram will change as the pixel intensity is different
