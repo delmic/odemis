@@ -1,0 +1,34 @@
+# bash completion for odemis-convert
+
+have odemis-convert &&
+_odemis_convert()
+{
+    local cur prev
+    COMPREPLY=()
+    _get_comp_words_by_ref cur prev
+    case $prev in
+        --output|-o|--input|-i|--effcomp|--minus|-m)
+            COMPREPLY=($(compgen -o filenames -o plusdirs -f -- "$cur"))
+            return 0
+            ;;
+    esac
+
+    case $cur in
+        *)
+            COMPREPLY=( $(compgen -W '--help --version \
+                --input --output --effcomp --minus' -- "$cur") )
+            return 0
+            ;;
+    esac
+
+    return 0
+} &&
+complete -F _odemis_convert odemis-convert -o filenames
+
+# Local variables:
+# mode: shell-script
+# sh-basic-offset: 4
+# sh-indent-comment: t
+# indent-tabs-mode: nil
+# End:
+# ex: ts=4 sw=4 et filetype=sh

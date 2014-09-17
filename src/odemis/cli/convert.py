@@ -26,7 +26,7 @@ import argparse
 from gettext import ngettext
 import logging
 import numpy
-from odemis import dataio
+from odemis import dataio, model
 import odemis
 from odemis.util import spectrum
 import os
@@ -77,17 +77,18 @@ def open_ec(fn):
     """
     try:
         coef = numpy.loadtxt(fn)
-        # check that the values are probably correct (in particular not in m)
     except IOError: # file not openable
         raise
     except Exception:
-        raise ValueError("File is not in the format wavelength {TAB} coefficient")
+        raise ValueError("File is not in the format wavelength (nm) {TAB} coefficient")
 
+    # check that the values are probably correct (in particular not in m)
     wl = coef[:, 0]
     if not (all(1000e-9 < wl) and all(wl <= 10000)):
         raise ValueError("Wavelength must be between 1 and 10000 (nm)")
 
     da = spectrum.coefficients_to_dataarray(coef)
+    da.metadata[model.MD_DESCRIPTION] = "Spectrum efficiency compensation"
 
     return [da]
 
