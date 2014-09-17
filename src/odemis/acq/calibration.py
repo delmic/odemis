@@ -95,14 +95,17 @@ def get_spectrum_data(das):
             specs.append(da)
 
     if not specs:
-        # be more flexible, and allow X/Y shape > 1
+        # be more flexible, and allow X/Y shape > 1, which permits to directly
+        # use multiple acquisitions and average them to remove the noise
         for da in das:
             if ((model.MD_WL_LIST in da.metadata or model.MD_WL_POLYNOMIAL in da.metadata)
                 and len(da.shape) == 5 and da.shape[-5] > 4
                 ):
-                # keep only the first element (without losing the dimensions)
-                da0 = da[:, 0:1, 0:1, 0:1, 0:1]
-                specs.append(da0)
+                # take the average for each wavelength (accumulated with a float64)
+                dam = da.reshape((da.shape[0], -1)).mean(axis=1)
+                dam = dam.astype(da.dtype) # put back into original dtype
+                dam.shape += (1,1,1,1)
+                specs.append(dam)
 
     if not specs:
         raise LookupError("Failed to find any Spectrum data within the %d data acquisitions" %
@@ -189,6 +192,7 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
     # Need to get the calibration data for each wavelength of the data
     wl_data = spectrum.get_wavelength_per_pixel(data)
     
+    # TODO: use MD_BASELINE as a fallback?
     if bckg is not None:
         if bckg.shape[1:] != (1,1,1,1):
             raise ValueError("bckg should have shape C1111")
@@ -200,7 +204,7 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
 
         wl_bckg = spectrum.get_wavelength_per_pixel(bckg)
         # Warn if not the same wavelength
-        if wl_bckg != wl_data:
+        if numpy.array_equal(wl_bckg, wl_data):
             logging.warning("Spectrum background is only between "
                             "%g->%g nm, while the spectrum is between %g->%g nm.",
                             wl_bckg[0] * 1e9, wl_bckg[-1] * 1e9,

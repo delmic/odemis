@@ -143,14 +143,17 @@ class TestSpectrum(unittest.TestCase):
 
         # should also load spectra with more than one points (then return just
         # the first point)
-        dcalibxy = numpy.empty(dcalib.shape[0:1] + (1, 1, 10, 12), dtype=dcalib.dtype)
-        dcalibxy[:, :, :] = dcalib
+        dcalibxy = numpy.ones((128, 1, 1, 24, 25), dtype=numpy.uint8)
+        dcalibxy[:, :, :, :] = range(dcalibxy.shape[-1])
         dcalibxy[0, 0, 0, 0, 0] = 0
-        calibxy = model.DataArray(dcalibxy, metadata={model.MD_WL_LIST: wl_calib})
+        wl_calibxy = 400e-9 + numpy.array(range(dcalibxy.shape[0])) * 10e-9
+        calibxy = model.DataArray(dcalibxy, metadata={model.MD_WL_LIST: wl_calibxy})
         out = calibration.get_spectrum_data([data1, calibxy])
-        numpy.testing.assert_equal(out, calibxy[:, :, :, 0:1, 0:1])
+        eout = calibxy[:, 0:1, 0:1, 0:1, (dcalibxy.shape[-1] - 1) // 2] # middle should contain average
+        eout.shape += (1,)
+        numpy.testing.assert_equal(out, eout)
         numpy.testing.assert_almost_equal(out.metadata[model.MD_WL_LIST],
-                                          calib.metadata[model.MD_WL_LIST])
+                                          calibxy.metadata[model.MD_WL_LIST])
 
     def test_load_compensation(self):
         # Compensation data
