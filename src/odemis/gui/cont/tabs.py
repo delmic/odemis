@@ -1271,7 +1271,7 @@ class AnalysisTab(Tab):
                 strm.background.value = cdata
 
         except Exception, err:  #pylint: disable=W0703
-            #            logging.exception("Problem loading file")
+            logging.info("Failed using file %s as AR background", fn, exc_info=True)
             msg = "File '%s' not suitable as angular resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1304,9 +1304,10 @@ class AnalysisTab(Tab):
                           if isinstance(s, streammod.SPECTRUM_STREAMS)]
 
             for strm in spec_strms:
-                strm.background.value = cdata # FIXME
+                strm.background.value = cdata
 
         except Exception, err:  # pylint: disable=W0703
+            logging.info("Failed using file %s as spectrum background", fn, exc_info=True)
             msg = "File '%s' not suitable for spectrum background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
@@ -1342,6 +1343,7 @@ class AnalysisTab(Tab):
                 strm.efficiencyCompensation.value = cdata
 
         except Exception, err:  #pylint: disable=W0703
+            logging.info("Failed using file %s as spec eff coef", fn, exc_info=True)
             msg = "File '%s' not suitable for spectrum efficiency compensation:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
