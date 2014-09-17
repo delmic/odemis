@@ -229,31 +229,37 @@ class TestSpectrum(unittest.TestCase):
     def test_compensate(self):
         """Test applying efficiency compensation"""
         # Spectrum
-        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
+        data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16") + 1
         wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
         spec = model.DataArray(data, metadata={model.MD_WL_LIST: wld})
         
+        # Background data
+        dbckg = numpy.ones(data.shape, dtype=numpy.uint16)
+        wl_bckg = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
+        obckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg})
+        bckg = calibration.get_spectrum_data([obckg])
+
         # Compensation data
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
-        compensated = calibration.compensate_spectrum_efficiency(spec, coef=calib)
+        compensated = calibration.compensate_spectrum_efficiency(spec, bckg, calib)
 
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
                                    compensated.metadata[model.MD_WL_LIST])
-        
+
         for i in range(dcalib.shape[0] - 1):
             ca, cb = calib[i], calib[i + 1]
             wla, wlb = wl_calib[i], wl_calib[i + 1]
             # All the values between the 2 wavelengths should be compensated
             # between the 2 factors
 
-            for vo, vc, wl in zip(spec[..., 3, 3], compensated[..., 3, 3], wld):
+            for vo, vb, vc, wl in zip(spec[..., 3, 3], bckg[..., 0, 0], compensated[..., 3, 3], wld):
                 if wla <= wl <= wlb:
-                    expa, expb = ca * vo, cb * vo
+                    expa, expb = (vo - vb) * ca, (vo - vb) * cb
                     minc, maxc = min(expa, expb), max(expa, expb)
                     self.assertTrue(minc <= vc <= maxc)
 
@@ -263,7 +269,7 @@ class TestSpectrum(unittest.TestCase):
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16")
         wld = 333e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
         spec = model.DataArray(data, metadata={model.MD_WL_LIST: wld})
-        
+
         # Only from 400 nm => need to use the border (=1) for everything below
         dcalib = numpy.array([1, 1, 2, 3, 4, 5, 1, 6, 9], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)

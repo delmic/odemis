@@ -25,7 +25,7 @@ import logging
 import numpy
 from odemis import model
 import odemis
-from odemis.acq import stream
+from odemis.acq import stream, calibration
 from odemis.driver import simcam
 from odemis.util import driver, conversion, timeout
 import os
@@ -883,12 +883,20 @@ class TestStaticStreams(unittest.TestCase):
 
         # Check efficiency compensation
         prev_im2d = specs.image.value
+
+        dbckg = numpy.ones(spec.shape, dtype=numpy.uint16)
+        wl_bckg = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
+        obckg = model.DataArray(dbckg, metadata={model.MD_WL_LIST: wl_bckg})
+        bckg = calibration.get_spectrum_data([obckg])
+
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         specs.efficiencyCompensation.value = calib
+
+        specs.background.value = bckg
 
         # Control spatial spectrum
         im2d = specs.image.value
