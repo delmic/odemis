@@ -199,12 +199,12 @@ def compensate_spectrum_efficiency(data, bckg=None, coef=None):
         # It must be fitting the data
         # TODO: support if the data is binned?
         if data.shape[0] != bckg.shape[0]:
-            raise ValueError("bckg should have same length as the data, but got %d != %d",
-                             bckg.shape[0], data.shape[0])
+            raise ValueError("Background should have same length as the data, but got %d != %d" %
+                             (bckg.shape[0], data.shape[0]))
 
         wl_bckg = spectrum.get_wavelength_per_pixel(bckg)
         # Warn if not the same wavelength
-        if numpy.array_equal(wl_bckg, wl_data):
+        if not numpy.allclose(wl_bckg, wl_data):
             logging.warning("Spectrum background is only between "
                             "%g->%g nm, while the spectrum is between %g->%g nm.",
                             wl_bckg[0] * 1e9, wl_bckg[-1] * 1e9,

@@ -599,15 +599,11 @@ class StaticSpectrumStream(StaticStream):
         Try to update the data with new calibration. The two parameters are
         the same as compensate_spectrum_efficiency(). The input data comes from
         .raw and the calibrated data is saved in ._calibrated
-        bckg (DataArray or None): If None, uses the .background value
-        coef (DataArray or None): If None, uses the .efficiencyCompensation value
+        bckg (DataArray or None) 
+        coef (DataArray or None)
         raise ValueError: if the data and calibration data are not valid or
           compatible. In that case the current calibrated data is unchanged.
         """
-        if bckg is None:
-            bckg = self.background.value
-        if coef is None:
-            coef = self.efficiencyCompensation.value
         data = self.raw[0]
 
         if data is None:
@@ -630,7 +626,7 @@ class StaticSpectrumStream(StaticStream):
         """
         # If the coef data is wrong, this function will fail with an exception,
         # and the value never be set.
-        self._updateCalibratedData(bckg=bckg, coef=None)
+        self._updateCalibratedData(bckg=bckg, coef=self.efficiencyCompensation.value)
         return bckg
     
     def _setEffComp(self, coef):
@@ -640,7 +636,7 @@ class StaticSpectrumStream(StaticStream):
         """
         # If the coef data is wrong, this function will fail with an exception,
         # and the value never be set.
-        self._updateCalibratedData(bckg=None, coef=coef)
+        self._updateCalibratedData(bckg=self.background.value, coef=coef)
         return coef
 
     def _onCalib(self, unused):
