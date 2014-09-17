@@ -21,7 +21,7 @@ import wx
 class FirstCalibrationDialog(wx.Dialog):
     """
     Dialog to ask for confirmation before starting the calibration for a new
-    sample holder. It also allows the user to type the registration code for 
+    sample holder. It also allows the user to type the registration code for
     the sample holder.
     """
     def __init__(self, parent, register=True):
@@ -34,14 +34,13 @@ class FirstCalibrationDialog(wx.Dialog):
         # Little info message
         sizer = wx.BoxSizer(wx.VERTICAL)
         sz_label = self.CreateTextSizer(
-"""
-This sample holder has not yet been calibrated for this microscope.
-
-In order to proceed to the calibration, ensure that the special 
-calibration sample is placed on the holder and press Calibrate.
-Otherwise, press Eject.
-"""
-            )
+            ("\n"
+             "This sample holder has not yet been calibrated for this microscope.\n"
+             "\n"
+             "In order to proceed to the calibration, ensure that the special \n"
+             "calibration sample is placed on the holder and press Calibrate.\n"
+             "Otherwise, press Eject.\n")
+        )
         sizer.Add(sz_label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
 
         # always put .text, for .registrationCode to always work
