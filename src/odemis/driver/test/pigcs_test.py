@@ -55,7 +55,10 @@ KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_C
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
 
-#@skip("faster")
+KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "192.168.92.67", "axes": CONFIG_BUS_TWO}
+
+
+@skip("faster")
 class TestController(unittest.TestCase):
     """
     directly test the low level class
@@ -516,18 +519,30 @@ class TestActuatorCL(TestActuator):
 if __name__ == "__main__":
     unittest.main()
 
-#from odemis.driver import pigcs
-#import logging
-#logging.getLogger().setLevel(logging.DEBUG)
-#CONFIG_CTRL_BASIC = (1, {1: False})
-#CONFIG_CTRL_CL = (1, {1: True})
-#PORT = "/dev/ttyPIGCS"
-#ser = pigcs.Bus.openSerialPort(PORT)
-#busacc = pigcs.BusAccesser(ser)
-#ctrl = pigcs.Controller(busacc, *CONFIG_CTRL_CL)
-#ctrl.GetAvailableCommands()
-#ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
-#ctrl.moveRel(1, 10e-6); ctrl.isMoving()
+# from odemis.driver import pigcs
+# import logging
+# logging.getLogger().setLevel(logging.DEBUG)
+# CONFIG_CTRL_BASIC = (1, {1: False})
+# CONFIG_CTRL_CL = (1, {1: True})
+# PORT = "/dev/ttyPIGCS"
+# ser = pigcs.Bus.openSerialPort(PORT)
+# busacc = pigcs.BusAccesser(ser)
+# ctrl = pigcs.Controller(busacc, *CONFIG_CTRL_CL)
+# ctrl.GetAvailableCommands()
+# ctrl.OLMovePID(1, 10000, 10); ctrl.isMoving()
+# ctrl.moveRel(1, 10e-6); ctrl.isMoving()
+#
+# from odemis.driver import pigcs
+# import logging
+# logging.getLogger().setLevel(logging.DEBUG)
+#
+# CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
+# KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "192.168.92.67", "axes": CONFIG_BUS_TWO}
+# stage = pigcs.Bus(**KWARGS_TWO_IP)
+# move = {'x':0.01e-6}
+# stage.moveRel(move)
+# time.sleep(0.1) # wait for the move to finish
+# stage.terminate()
 
 # Example of macros
 #

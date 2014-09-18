@@ -20,19 +20,23 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from concurrent import futures
-from odemis import model
-from odemis.model import isasync
-from odemis.util import driver
+
+from _curses import baudrate
 import collections
+from concurrent import futures
 import glob
 import logging
+from odemis import model
 import odemis
+from odemis.model import isasync
+from odemis.util import driver
 import os
 import re
 import serial
+import socket
 import threading
 import time
+
 
 # Driver to handle PI's piezo motor controllers that follow the 'GCS' (General
 # Command Set). In particular it handle the PI E-861 controller. Information can
@@ -110,7 +114,7 @@ import time
 #     picked dynamically according to the physical controller.
 #  * Bus: represent the whole group of controllers daisy-chained from the same
 #     serial port. It's also the Actuator interface for the rest of Odemis.
-#  * BusAccesser: wrapper around the serial port which handles the low-level GCS
+#  * SerialBusAccesser: wrapper around the serial port which handles the low-level GCS
 #     protocol.
 #  * ActionManager: handles all the actions (move/stop) sent to the controller so
 #     that the asynchronous ones are ordered.
@@ -125,10 +129,6 @@ import time
 # reporting error 555. In that case, it's possible to do a factory reset with the
 # hidden command (which must be followed by the reconfiguration of the parameters):
 # zzz 100 parameter
-
-
-
-
 class PIGCSError(Exception):
 
     def __init__(self, errno):
@@ -359,7 +359,7 @@ class Controller(object):
     def __init__(self, busacc, address=None, axes=None,
                  dist_to_steps=None, min_dist=None):
         """
-        busacc: a BusAccesser (with at least a serial port opened)
+        busacc: a SerialBusAccesser (with at least a serial port opened)
         address 1<int<16: address as configured on the controller
         If not address is given, it just allows to do some raw commands
         axes (dict int -> boolean): determine which axis will be used and whether
@@ -1863,6 +1863,8 @@ class Bus(model.Actuator):
                  _addresses=None, **kwargs):
         """
         port (string): name of the serial port to connect to the controllers
+         (starting with /dev on Linux or COM on windows) or "autoip" for
+         automatically finding an ip address or a "host[:port]".
         axes (dict string -> 3-tuple(1<=int<=16, 1<=int, boolean): the configuration
          of the network. For each axis name associates the controller address,
          channel, and whether it's closed-loop (absolute positioning) or not.
@@ -1875,8 +1877,7 @@ class Bus(model.Actuator):
         min_dist (dict string -> (0 <= float < 1)): axis name -> value
         vpms (dict string -> (0 < float)): axis name -> value
         """
-        ser = self.openSerialPort(port, baudrate, _addresses)
-        self.accesser = BusAccesser(ser)
+        self.accesser = self._openPort(port, baudrate, _addresses)
 
         dist_to_steps = dist_to_steps or {}
         min_dist = min_dist or {}
@@ -2109,15 +2110,35 @@ class Bus(model.Actuator):
 
         return passed
 
+    def _openPort(self, port, baudrate, _addresses):
+        if port.startswith("/dev/") or port.startswith("COM"):
+            ser = self._openSerialPort(port, baudrate, _addresses)
+            return SerialBusAccesser(ser)
+        else: # ip address
+            if port == "autoip": # Search for IP (and hope there is only one result)
+                ipmasters = self._scanIPMasters()
+                if not ipmasters:
+                    raise IOError("Failed to find any PI network master controller")
+                host, ipport = ipmasters[0]
+            else:
+                # split the (IP) port, separated by a :
+                if ":" in port:
+                    host, ipport_str = port.split(":")
+                    ipport = int(ipport_str)
+                else:
+                    host = port
+                    ipport = 50000 # default
+            
+            sock = self._openIPSocket(host, ipport)
+            return IPBusAccesser(sock)
+
     @classmethod
-    def scan(cls, port=None, _cls=None):
+    def scan(cls, port=None):
         """
         port (string): name of the serial port. If None, all the serial ports are tried
-        _cls (class): only used for testing, override the class for opening the serial port
         returns (list of 2-tuple): name, kwargs (port, axes(channel -> CL?)
         Note: it's obviously not advised to call this function if moves on the motors are ongoing
         """
-        _cls = _cls or cls # use _cls if forced
         if port:
             ports = [port]
         else:
@@ -2135,8 +2156,8 @@ class Bus(model.Actuator):
                 # check all possible baud rates, in the most likely order
                 for br in [38400, 9600, 19200, 115200]:
                     logging.debug("Trying port %s at baud rate %d", p, br)
-                    ser = _cls.openSerialPort(p, br)
-                    controllers = Controller.scan(BusAccesser(ser))
+                    ser = cls._openSerialPort(p, br)
+                    controllers = Controller.scan(SerialBusAccesser(ser))
                     if controllers:
                         axis_num = 0
                         arg = {}
@@ -2147,16 +2168,57 @@ class Bus(model.Actuator):
                         found.append(("Actuator " + os.path.basename(p),
                                      {"port": p, "baudrate": br, "axes": arg}))
                         # it implies the baud rate was correct, and as it's impossible
-                        # to have devices on different devices, we are done
+                        # to have devices on different baud rate, so we are done
                         break
             except serial.SerialException:
                 # not possible to use this port? next one!
                 pass
 
+        # TODO: scan for controllers via each IP master controller
+        ipmasters = cls._scanIPMasters()
+        
+        return found
+    
+    @classmethod
+    def _scanIPMasters(cls):
+        """
+        Scans the IP network for master controllers
+        return (list of tuple of str, int): list of ip add and port of the master
+          controllers found.
+        """
+        logging.info("Ethernet network scanning for PI-GCS controllers in progress...")
+        found = []  # (list of 2-tuple): ip address, ip port
+        for port in [50000]: # TODO: the PI program tries on more ports
+            # Special protocol by PI (reversed-engineered):
+            # * Broadcast "PI" on a (known) port
+            # * Listen for an answer
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            try:
+                s.bind(('', 0))
+                s.sendto('PI', ('<broadcast>', port)) # FIXME: this can fail if no network connection
+                s.settimeout(1.0)  # It should take less than 1 s to answer
+
+                try:
+                    while True:
+                        data, addr = s.recvfrom(1024)
+                        if not data:
+                            break
+                        # data should contain something like "PI C-863K016 SN 0 -- listening on port 50000 --"
+                        if data.startswith("PI"):
+                            found.append((addr, port))
+                        else:
+                            logging.info("Received %s from %s", data.encode('string_escape'), addr)
+                except socket.timeout:
+                    pass
+            except Exception:
+                logging.exception("Failed to broadcast on port %d", port)
+
         return found
 
     @staticmethod
-    def openSerialPort(port, baudrate=38400, _addresses=None):
+    def _openSerialPort(port, baudrate=38400, _addresses=None):
         """
         Opens the given serial port the right way for the PI controllers.
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
@@ -2170,12 +2232,25 @@ class Bus(model.Actuator):
             bytesize=serial.EIGHTBITS,
             parity=serial.PARITY_NONE,
             stopbits=serial.STOPBITS_ONE,
-            timeout=0.5 #s
+            timeout=0.5 # s
         )
 
         return ser
 
-class BusAccesser(object):
+    @staticmethod
+    def _openIPSocket(host, port=50000):
+        """
+        Opens a socket connection to an PI master controller over IP.
+        host (string): the IP address or host name of the master controller
+        port (int): the (IP) port number
+        return (socket): the opened socket connection
+        """
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(0.5) # s
+        sock.connect((host, port))
+        return sock
+
+class SerialBusAccesser(object):
     """
     Manages connections to the low-level bus
     """
@@ -2273,6 +2348,103 @@ class BusAccesser(object):
             self.serial.flushInput()
             while self.serial.read():
                 pass
+
+
+class IPBusAccesser(object):
+    """
+    Manages connections to the low-level bus
+    """
+    def __init__(self, socket):
+        self.socket = socket
+        # to acquire before sending anything on the socket
+        self.ser_access = threading.Lock()
+
+    def sendOrderCommand(self, addr, com):
+        """
+        Send a command which does not expect any report back
+        addr (None or 1<=int<=16): address of the controller. If None, no address
+        is used (and it's typically controller 1 answering)
+        com (string): command to send (including the \n if necessary)
+        """
+        assert(len(com) <= 100) # commands can be quite long (with floats)
+        assert(1 <= addr <= 16 or addr == 255)
+        if addr is None:
+            full_com = com
+        else:
+            full_com = "%d %s" % (addr, com)
+        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+        with self.ser_access:
+            self.socket.sendall(full_com)
+
+    def sendQueryCommand(self, addr, com):
+        """
+        Send a command and return its report (raw)
+        addr (None or 1<=int<=16): address of the controller
+        com (string): the command to send (without address prefix but with \n)
+        return (string or list of strings): the report without prefix 
+           (e.g.,"0 1") nor newline. 
+           If answer is multiline: returns a list of each line
+        Note: multiline answers seem to always begin with a \x00 character, but
+         it's left as is.
+        """
+        assert(len(com) <= 100) # commands can be quite long (with floats)
+        assert(1 <= addr <= 16)
+        if addr is None:
+            full_com = com
+        else:
+            full_com = "%d %s" % (addr, com)
+        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+        with self.ser_access:
+            self.socket.sendall(full_com)
+
+            try:
+                line = ""
+                lines = []
+                while True:
+                    char = self.socket.recv(1) # TODO: optimise by receiving more
+                    if char == "\n":
+                        if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
+                            not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
+                            lines.append(line[:-1]) # don't include the space
+                            line = ""
+                        else:
+                            # full end
+                            lines.append(line)
+                            break
+                    else:
+                        # normal char
+                        line += char
+            except socket.timeout:
+                raise IOError("Controller %d timeout." % addr)
+
+        assert len(lines) > 0
+
+        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
+        if addr is None:
+            prefix = ""
+        else:
+            prefix = "0 %d " % addr
+        if not lines[0].startswith(prefix):
+            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
+        lines[0] = lines[0][len(prefix):]
+
+        if len(lines) == 1:
+            return lines[0]
+        else:
+            return lines
+
+    def flushInput(self):
+        """
+        Ensure there is no more data queued to be read on the bus
+        """
+        with self.ser_access:
+            try:
+                while True:
+                    data = self.socket.recv(4096)
+            except socket.timeout:
+                pass
+            except Exception:
+                logging.exception("Failed to flush correctly the socket")
 
 
 class ActionManager(threading.Thread):
@@ -3060,10 +3232,10 @@ class FakeBus(Bus):
     @classmethod
     def scan(cls, port=None):
         # force only one port
-        return Bus.scan(port="/fake/ttyPIGCS", _cls=cls)
+        return super(FakeBus, cls).scan(port="/dev/fake")
 
     @staticmethod
-    def openSerialPort(port, baudrate=38400, _addresses=None):
+    def _openSerialPort(port, baudrate=38400, _addresses=None):
         """
         Opens a fake serial port
         port (string): the name of the serial port (e.g., /dev/ttyUSB0)
