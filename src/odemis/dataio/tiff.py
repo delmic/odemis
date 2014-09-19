@@ -83,13 +83,15 @@ def _convertToTiffTag(metadata):
     tiffmd = {}
     # we've got choice between inches and cm... so it's easy
     tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
+    tiffmd[T.TIFFTAG_SOFTWARE] = "%s %s" % (odemis.__shortname__, odemis.__version__)
     for key, val in metadata.items():
-        if key == model.MD_SW_VERSION:
-            tiffmd[T.TIFFTAG_SOFTWARE] = odemis.__shortname__ + " " + val.encode("utf-8")
-        elif key == model.MD_HW_NAME:
+        if key == model.MD_HW_NAME:
             tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8")
         elif key == model.MD_HW_VERSION:
-            tiffmd[T.TIFFTAG_MODEL] = val.encode("utf-8")
+            v = val
+            if model.MD_SW_VERSION in metadata:
+                v += " (driver %s)" % (metadata[model.MD_SW_VERSION],)
+            tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8")
         elif key == model.MD_ACQ_DATE:
             tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
         elif key == model.MD_PIXEL_SIZE:
@@ -176,9 +178,9 @@ def _readTiffTag(tfile):
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
     if val is not None:
         md[model.MD_DESCRIPTION] = val
-    val = tfile.GetField(T.TIFFTAG_SOFTWARE)
-    if val is not None:
-        md[model.MD_SW_VERSION] = val
+#     val = tfile.GetField(T.TIFFTAG_SOFTWARE)
+#     if val is not None:
+#         md[model.MD_SW_VERSION] = val
     val = tfile.GetField(T.TIFFTAG_MAKE)
     if val is not None:
         md[model.MD_HW_NAME] = val
