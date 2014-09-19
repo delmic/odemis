@@ -23,7 +23,6 @@ import logging
 import numpy
 from odemis import model
 from odemis.dataio import hdf5
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 from odemis.acq.align import delphi
 import sys
 import threading
@@ -39,6 +38,7 @@ from odemis.util import img
 logging.getLogger().setLevel(logging.DEBUG)
 
 DELPHI_OVERVIEW_FOCUS = {"z":-0.017885}  # good focus position for overview
+LENS_KNOWN_FOCUS = {"z":0.0377}
 
 def main(args):
     """
@@ -103,55 +103,30 @@ def main(args):
         f.result()
         
         # Calculate offset approximation
-        logging.debug("Starting lens alignment...")
         try:
             future_lens = delphi.LensAlignment(navcam, sem_stage)
-            sem_position = future_lens.result()
-            logging.debug("\nSEM position after lens alignment: %s \n", sem_position)
+            position = future_lens.result()
+            logging.debug("\nSEM position after lens alignment: %s \n", position)
         except IOError:
             raise IOError("Lens alignment failed.")
 
         # Just to check if move makes sense
-        f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+        f = sem_stage.moveAbs({"x":position[0], "y":position[1]})
         f.result()
 
         # Move to SEM
         f = chamber.moveAbs({"pressure":1e-02})
         f.result()
 
-        # Detect the holes/markers of the sample holder
-        logging.debug("Detect the holes/markers of the sample holder...")
-        try:
-            hole_detectionf = HoleDetection(detector, escan, sem_stage, ebeam_focus)
-            first_hole, second_hole, hole_focus = hole_detectionf.result()
-        except IOError:
-            raise IOError("Conversion update failed to find sample holder holes.")
-
-        logging.debug("Move SEM stage to expected offset...")
-        f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
-        f.result()
-        logging.debug("Move objective stage to (0,0)...")
-        f = opt_stage.moveAbs({"x":0, "y":0})
+        # Lens to a good focus position
+        f = focus.moveAbs(LENS_KNOWN_FOCUS)
         f.result()
 
-        # Calculate offset
-        logging.debug("Initial calibration to align and calculate the offset...")
-        try:
-            align_offsetf = AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus)
-            offset = align_offsetf.result()
-        except IOError:
-            raise IOError("Conversion update failed to align and calculate offset.")
+        # Compute calibration values
+        f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
+                                    focus, comb_stage, True, sem_position=position)
+        first_hole, second_hole, hole_focus, offset, rotation, scaling = f.result()
 
-        # Calculate rotation and scaling
-        logging.debug("Calculate rotation and scaling...")
-        try:
-            rotation_scalingf = RotationAndScaling(ccd, escan, sem_stage,
-                                                           opt_stage, focus, offset)
-            rotation, scaling = rotation_scalingf.result()
-        except IOError:
-            raise IOError("Conversion update failed to calculate rotation and scaling.")
-
-        offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
     except:
         logging.exception("Unexpected error while performing action.")
         return 127

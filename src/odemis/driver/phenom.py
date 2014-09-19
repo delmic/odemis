@@ -456,12 +456,12 @@ class Scanner(model.Emitter):
         returns the actual value used
         """
         # In case of resolution 1,1 store the current fov and set the spot mode
-        if value == (1, 1) and self._resolution != (1, 1):
-            self.last_fov = self.horizontalFoV.value
-            self.horizontalFoV.value = self.horizontalFoV.range[0]
+        # if value == (1, 1) and self._resolution != (1, 1):
+        #    self.last_fov = self.horizontalFoV.value
+        #    self.horizontalFoV.value = self.horizontalFoV.range[0]
         # If we are going back from spot mode to normal scanning, reset fov
-        elif self._resolution == (1, 1):
-            self.horizontalFoV.value = self.last_fov
+        # elif self._resolution == (1, 1):
+        #    self.horizontalFoV.value = self.last_fov
 
         max_size = (int(self._shape[0] // self._scale[0]),
                     int(self._shape[1] // self._scale[1]))
@@ -646,7 +646,7 @@ class Detector(model.Detector):
                     scan_params_view.scale = 0
                     scan_params_view.center.x = 0  # just to be sure it's at the center
                     scan_params_view.center.y = 0
-                    self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-SPOT')
+                    self._acq_device.SetSEMViewingMode(scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata
                 return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)

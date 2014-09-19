@@ -117,17 +117,6 @@ class TestCalibration(unittest.TestCase):
         expected_coordinates = (450.5, 445.5)
         numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
 
-    # @unittest.skip("skip")
-    def test_find_lens_center(self):
-        """
-        Test FindCircleCenter for lenses
-        """
-        data = hdf5.read_data("navcam-calib2.h5")
-        Z, Y, X = data[0].shape
-
-        lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 6)
-        expected_coordinates = (450.5, 445.5)
-        numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
 
     # @unittest.skip("skip")
     def test_no_hole(self):
