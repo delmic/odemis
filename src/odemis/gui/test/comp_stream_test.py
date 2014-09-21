@@ -23,13 +23,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #===============================================================================
 
 import numpy
-from odemis.acq.stream import Stream
-from odemis.gui.cont.streams import StreamController
-from odemis.util import conversion
 import time
 import unittest
 import wx
 
+from odemis.acq.stream import Stream
+from odemis.gui.cont.streams import StreamController
+from odemis.util import conversion
 import odemis.acq.stream as stream_mod
 import odemis.gui.comp.stream as stream_comp
 import odemis.gui.model as guimodel
@@ -38,6 +38,8 @@ import odemis.model as model
 
 
 test.goto_manual()
+# test.goto_inspect()
+
 
 class FakeBrightfieldStream(stream_mod.BrightfieldStream):
     """
@@ -45,7 +47,7 @@ class FakeBrightfieldStream(stream_mod.BrightfieldStream):
     """
 
     def __init__(self, name):
-        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        Stream.__init__(self, name, None, None, None)
         self.histogram._edges = (0, 0)
 
     def _updateImage(self, tint=(255, 255, 255)):
@@ -61,7 +63,7 @@ class FakeSEMStream(stream_mod.SEMStream):
     """
 
     def __init__(self, name):
-        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        Stream.__init__(self, name, None, None, None)
         self.histogram._edges = (0, 0)
 
     def _updateImage(self, tint=(255, 255, 255)):
@@ -70,6 +72,7 @@ class FakeSEMStream(stream_mod.SEMStream):
     def onActive(self, active):
         pass
 
+
 class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
     """
     A fake stream, which receives no data. Only for testing purposes.
@@ -77,10 +80,10 @@ class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
 
     def __init__(self, name):
         self._calibrated = None
-        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        Stream.__init__(self, name, None, None, None)
         self.histogram._edges = (0, 0)
 
-        minb, maxb = 0, 1 # unknown/unused
+        minb, maxb = 0, 1  # unknown/unused
         pixel_width = 0.01
 
         self.centerWavelength = model.FloatContinuous((1 + minb) / 2,
@@ -93,14 +96,14 @@ class FakeSpectrumStream(stream_mod.StaticSpectrumStream):
 
         self.fitToRGB = model.BooleanVA(True)
 
-    def _updateImage(self, tint=(255, 255, 255)):  #pylint: disable=W0221
+    def _updateImage(self, tint=(255, 255, 255)):
         pass
 
     def onActive(self, active):
         pass
 
     def getMeanSpectrum(self):
-        return [5, 1, 4, 10, 8, 3] # fake spectrum
+        return [5, 1, 4, 10, 8, 3]  # fake spectrum
 
 
 class FakeFluoStream(stream_mod.FluoStream):
@@ -109,31 +112,34 @@ class FakeFluoStream(stream_mod.FluoStream):
     """
 
     def __init__(self, name):
-        Stream.__init__(self, name, None, None, None) #pylint: disable=W0233
+        Stream.__init__(self, name, None, None, None)
 
         # For imitating a FluoStream
-        self.excitation = model.VAEnumerated((4.2e-07, 4.3e-07, 4.38e-07, 4.45e-07, 4.55e-07),
-                    # multiple spectra
-                    choices=set([(4.2e-07, 4.3e-07, 4.38e-07, 4.45e-07, 4.55e-07),
-                                 (3.75e-07, 3.9e-07, 4e-07, 4.02e-07, 4.05e-07),
-                                 (5.65e-07, 5.7e-07, 5.75e-07, 5.8e-07, 5.95e-07),
-                                 (5.25e-07, 5.4e-07, 5.5e-07, 5.55e-07, 5.6e-07),
-                                 (4.95e-07, 5.05e-07, 5.13e-07, 5.2e-07, 5.3e-07)]),
-                    unit="m")
-        self.emission = model.VAEnumerated((500e-9, 520e-9),
-                # one (fixed) multi-band
-                choices=set([((100e-9, 150e-9), (500e-9, 520e-9), (600e-9, 650e-9))]),
-                unit="m")
-        defaultTint = conversion.wave2rgb(488e-9)
-        self.tint = model.VigilantAttribute(defaultTint, unit="RGB")
+        self.excitation = model.VAEnumerated(
+            (4.2e-07, 4.3e-07, 4.38e-07, 4.45e-07, 4.55e-07),
+            # multiple spectra
+            choices={(4.2e-07, 4.3e-07, 4.38e-07, 4.45e-07, 4.55e-07),
+                     (3.75e-07, 3.9e-07, 4e-07, 4.02e-07, 4.05e-07),
+                     (5.65e-07, 5.7e-07, 5.75e-07, 5.8e-07, 5.95e-07),
+                     (5.25e-07, 5.4e-07, 5.5e-07, 5.55e-07, 5.6e-07),
+                     (4.95e-07, 5.05e-07, 5.13e-07, 5.2e-07, 5.3e-07)},
+            unit="m")
+        self.emission = model.VAEnumerated(
+            (500e-9, 520e-9),
+            # one (fixed) multi-band
+            choices={((100e-9, 150e-9), (500e-9, 520e-9), (600e-9, 650e-9))},
+            unit="m")
+        default_tint = conversion.wave2rgb(488e-9)
+        self.tint = model.VigilantAttribute(default_tint, unit="RGB")
 
         self.histogram._edges = (0, 0)
 
-    def _updateImage(self, tint=(255, 255, 255)):  #pylint: disable=W0221
+    def _updateImage(self, tint=(255, 255, 255)):
         pass
 
     def onActive(self, active):
         pass
+
 
 class FoldPanelBarTestCase(test.GuiTestCase):
 
@@ -148,10 +154,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         _ = StreamController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
-        stream_panel = stream_comp.StreamPanel(
-                                     stream_bar,
-                                    fake_sem_stream,
-                                    tab_mod)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
         stream_bar.add_stream(stream_panel)
         test.gui_loop()
 
@@ -241,10 +244,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         _ = StreamController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("First Fixed Stream")
-        stream_panel = stream_comp.StreamPanel(
-                                    stream_bar,
-                                    fake_sem_stream,
-                                    tab_mod)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
         stream_bar.add_stream(stream_panel)
         test.gui_loop()
 
@@ -266,17 +266,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         _ = StreamController(tab_mod, stream_bar)
 
         fake_fluo_stream = FakeFluoStream("Fluo Stream")
-        dye_panel = stream_comp.StreamPanel(
-                                    stream_bar,
-                                    fake_fluo_stream,
-                                    tab_mod)
+        dye_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
         stream_bar.add_stream(dye_panel)
 
         # print stream_panel._expander.GetSize()
-        stream_panel = stream_comp.StreamPanel(
-                                    stream_bar,
-                                    fake_fluo_stream,
-                                    tab_mod)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_fluo_stream, tab_mod)
         stream_bar.add_stream(stream_panel)
         # print stream_panel._expander.GetSize()
         test.gui_loop()
@@ -293,22 +287,25 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         stream_bar = self.app.test_frame.stream_bar
         stream_cont = StreamController(tab_mod, stream_bar)
 
-        fluomd = {model.MD_DESCRIPTION: "test",
-                 model.MD_ACQ_DATE: time.time(),
-                 model.MD_BPP: 12,
-                 model.MD_BINNING: (1, 2), # px, px
-                 model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                 model.MD_POS: (13.7e-3, -30e-3), # m
-                 model.MD_EXP_TIME: 1.2, # s
-                 model.MD_IN_WL: (500e-9, 520e-9), # m
-                 model.MD_OUT_WL: (600e-9, 630e-9), # m
-                }
+        fluomd = {
+            model.MD_DESCRIPTION: "test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_POS: (13.7e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+            model.MD_OUT_WL: (600e-9, 630e-9),  # m
+        }
+
         fluod = model.DataArray(numpy.zeros((512, 256), dtype="uint16"), fluomd)
         # Create the streams the same way as when opening a file, in
         # cont.tabs.AnalysisTab.display_new_data()
-        fluo_panel = stream_cont.addStatic("Fluo Stream", fluod,
-                                          cls=stream_mod.StaticFluoStream,
-                                          add_to_all_views=True)
+        fluo_panel = stream_cont.addStatic("Fluo Stream",
+                                           fluod,
+                                           cls=stream_mod.StaticFluoStream,
+                                           add_to_all_views=True)
 
         # Check it indeed created a panel entry to a static fluo stream
         self.assertIsInstance(fluo_panel.stream, stream_mod.StaticFluoStream)
@@ -319,14 +316,16 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertIsInstance(fluo_panel._txt_excitation, wx.TextCtrl)
         test.gui_loop()
 
-        semmd = {model.MD_DESCRIPTION: "test",
-                 model.MD_ACQ_DATE: time.time(),
-                 model.MD_BPP: 12,
-                 model.MD_BINNING: (1, 2), # px, px
-                 model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                 model.MD_POS: (13.7e-3, -30e-3), # m
-                 model.MD_EXP_TIME: 1.2, # s
-                }
+        semmd = {
+            model.MD_DESCRIPTION: "test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_POS: (13.7e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+        }
+
         semd = model.DataArray(numpy.zeros((256, 256), dtype="uint16"), semmd)
         # Create the streams the same way as when opening a file, in
         # cont.tabs.AnalysisTab.display_new_data()
@@ -346,7 +345,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertEqual(stream_bar.get_size(), 0)
 
-
     def test_bandwidth_stream_panel(self):
 
         tab_mod = self.create_simple_tab_model()
@@ -355,10 +353,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         _ = StreamController(tab_mod, stream_bar)
 
         fake_spec_stream = FakeSpectrumStream("First Fixed Stream")
-        stream_panel = stream_comp.StreamPanel(
-                                    stream_bar,
-                                    fake_spec_stream,
-                                    tab_mod)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_spec_stream, tab_mod)
         stream_bar.add_stream(stream_panel)
         test.gui_loop()
 
@@ -384,8 +379,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # Add an editable entry
         fake_cstream = FakeFluoStream("First Custom Stream")
-        custom_entry = stream_comp.StreamPanel(stream_bar,
-                                      fake_cstream, tab_mod)
+        custom_entry = stream_comp.StreamPanel(stream_bar, fake_cstream, tab_mod)
         stream_bar.add_stream(custom_entry)
         test.gui_loop()
 
@@ -396,8 +390,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # Add a fixed stream
         fake_fstream1 = FakeSEMStream("First Fixed Stream")
-        fixed_entry = stream_comp.StreamPanel(stream_bar,
-                                           fake_fstream1, tab_mod)
+        fixed_entry = stream_comp.StreamPanel(stream_bar, fake_fstream1, tab_mod)
         stream_bar.add_stream(fixed_entry)
         test.gui_loop()
 
@@ -411,8 +404,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # Add a fixed stream
         fake_fstream2 = FakeSEMStream("Second Fixed Stream")
-        fixed_entry2 = stream_comp.StreamPanel(stream_bar,
-                                           fake_fstream2, tab_mod)
+        fixed_entry2 = stream_comp.StreamPanel(stream_bar, fake_fstream2, tab_mod)
         stream_bar.add_stream(fixed_entry2)
         test.gui_loop()
 
@@ -455,15 +447,13 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertEqual(stream_bar.btn_add_stream.IsShown(), True)
 
-
         # No actions should be linked to the add stream button
         self.assertEqual(len(stream_bar.get_actions()), 0)
 
         # Add a callback/name combo to the add button
         def brightfield_callback():
             fake_stream = FakeBrightfieldStream("Brightfield")
-            fixed_entry = stream_comp.StreamPanel(stream_bar,
-                                                fake_stream, tab_mod)
+            fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
             stream_bar.add_stream(fixed_entry)
 
         stream_bar.add_action("Brightfield", brightfield_callback)
@@ -476,8 +466,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add another callback/name combo to the add button
         def sem_callback():
             fake_stream = FakeSEMStream("SEM:EDT")
-            fixed_entry = stream_comp.StreamPanel(stream_bar,
-                                           fake_stream, tab_mod)
+            fixed_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
             stream_bar.add_stream(fixed_entry)
 
         stream_bar.add_action("SEM:EDT", sem_callback)
@@ -487,7 +476,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(len(stream_bar.get_actions()), 2)
         self.assertEqual(stream_bar.get_size(), 2)
 
-
         # Remove the Brightfield stream
         stream_bar.remove_action("Brightfield")
         test.gui_loop()
@@ -496,8 +484,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Add another callback/name combo to the add button
         def custom_callback():
             fake_stream = FakeFluoStream("Custom")
-            custom_entry = stream_comp.StreamPanel(stream_bar,
-                                                 fake_stream, tab_mod)
+            custom_entry = stream_comp.StreamPanel(stream_bar, fake_stream, tab_mod)
             stream_bar.add_stream(custom_entry)
 
         stream_bar.add_action("Custom", custom_callback)
@@ -516,10 +503,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         _ = StreamController(tab_mod, stream_bar)
 
         fake_sem_stream = FakeSEMStream("Flatten Test")
-        stream_panel = stream_comp.StreamPanel(
-                                    stream_bar,
-                                    fake_sem_stream,
-                                    tab_mod)
+        stream_panel = stream_comp.StreamPanel(stream_bar, fake_sem_stream, tab_mod)
         stream_bar.add_stream(stream_panel)
         test.gui_loop()
 
