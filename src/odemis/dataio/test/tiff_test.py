@@ -30,6 +30,7 @@ from numpy.polynomial import polynomial
 from odemis import model
 import odemis
 from odemis.dataio import tiff
+from odemis.util import img
 import os
 import re
 import time
@@ -648,6 +649,10 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (400e-9, 630e-9), # m
                      model.MD_OUT_WL: (400e-9, 630e-9), # m
+                     # correction metadata
+                     model.MD_POS_COR: (-1e-6, 3e-6), # m
+                     model.MD_PIXEL_SIZE_COR: (1.2, 1.2),
+                     model.MD_ROTATION_COR: 6.27, # rad
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -704,7 +709,8 @@ class TestTiffIO(unittest.TestCase):
 
         # TODO: rdata and ldata don't have to be in the same order
         for i, im in enumerate(rdata):
-            md = metadata[i]
+            md = metadata[i].copy()
+            img.mergeMetadata(md)
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
             numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
             numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])

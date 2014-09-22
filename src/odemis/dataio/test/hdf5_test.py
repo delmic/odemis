@@ -21,16 +21,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 from __future__ import division
-from numpy.polynomial import polynomial
-from odemis import model
-from odemis.dataio import hdf5
-from unittest.case import skip
+
 import h5py
 import logging
 import numpy
+from numpy.polynomial import polynomial
+from odemis import model
+from odemis.dataio import hdf5
+from odemis.util import img
 import os
 import time
 import unittest
+from unittest.case import skip
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -591,6 +594,10 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (400e-9, 630e-9), # m
                      model.MD_OUT_WL: (400e-9, 630e-9), # m
+                     # correction metadata
+                     model.MD_POS_COR: (-1e-6, 3e-6), # m
+                     model.MD_PIXEL_SIZE_COR: (1.2, 1.2),
+                     model.MD_ROTATION_COR: 6.27, # rad
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -646,7 +653,8 @@ class TestHDF5IO(unittest.TestCase):
 
         # TODO: rdata and ldata don't have to be in the same order
         for i, im in enumerate(rdata):
-            md = metadata[i]
+            md = metadata[i].copy()
+            img.mergeMetadata(md)
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
             self.assertAlmostEqual(im.metadata[model.MD_POS][0], md[model.MD_POS][0])
             self.assertAlmostEqual(im.metadata[model.MD_POS][1], md[model.MD_POS][1])
@@ -668,7 +676,6 @@ class TestHDF5IO(unittest.TestCase):
 #            self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
             self.assertEqual(im.metadata[model.MD_EXP_TIME], md[model.MD_EXP_TIME])
             self.assertEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
-
 
         # check thumbnail
         rthumbs = hdf5.read_thumbnail(FILENAME)

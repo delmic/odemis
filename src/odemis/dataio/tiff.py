@@ -28,7 +28,7 @@ import math
 import numpy
 from odemis import model, util
 import odemis
-from odemis.util import spectrum
+from odemis.util import spectrum, img
 import os
 import re
 import sys
@@ -1178,14 +1178,16 @@ def _createPointROI(rois, name, p, shp_attrib=None):
     rois[rid] = roie
     return rid
 
-
-def _saveAsTiffLT(filename, data, thumbnail):
+def _mergeCorrectionMetadata(da):
     """
-    Saves a DataArray as a TIFF file.
-    filename (string): name of the file to save
-    data (ndarray): 2D data of int or float
+    Create a new DataArray with metadata updated to with the correction metadata
+    merged.
+    da (DataArray): the original data
+    return (DataArray): new DataArray (view) with the updated metadata
     """
-    _saveAsMultiTiffLT(filename, [data], thumbnail)
+    md = da.metadata.copy() # to avoid modifying the original one
+    img.mergeMetadata(md)
+    return model.DataArray(da, md) # create a view
 
 def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     """
@@ -1205,8 +1207,12 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         compression = None
 
+    # merge correction metadata (as we cannot save them separatly in OME-TIFF)
+    ldata = [_mergeCorrectionMetadata(da) for da in ldata]
+
     # OME tags: a XML document in the ImageDescription of the first image
     if thumbnail is not None:
+        thumbnail = _mergeCorrectionMetadata(thumbnail)
         # OME expects channel as 5th dimension. If thumbnail is RGB as HxWx3,
         # reorganise as 3x1x1xHxW
         if len(thumbnail.shape) == 3:
@@ -1217,8 +1223,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         alldata = [OME_thumbnail] + ldata
     else:
         alldata = ldata
-    # TODO: reorder the data so that data from the same sensor are together
 
+    # TODO: reorder the data so that data from the same sensor are together
     ometxt = _convertToOMEMD(alldata)
 
     if thumbnail is not None:
@@ -1422,7 +1428,7 @@ def export(filename, data, thumbnail=None):
     else:
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
-        _saveAsTiffLT(filename, data, thumbnail)
+        _saveAsMultiTiffLT(filename, [data], thumbnail)
 
 def read_data(filename):
     """
