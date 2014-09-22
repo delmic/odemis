@@ -550,10 +550,10 @@ class BufferedCanvas(wx.Panel):
         """ Draw checkered background """
 
         # Only support wx.SOLID, and anything else is checkered
-        if self.background_brush == wx.SOLID:
-            ctx.set_source_rgb(*wxcol_to_frgb(self.BackgroundColour))
-            ctx.paint()
-            return
+        # if self.background_brush == wx.SOLID:
+        #     ctx.set_source_rgb(*wxcol_to_frgb(self.BackgroundColour))
+        #     ctx.paint()
+        #     return
 
         surface = wxcairo.ImageSurfaceFromBitmap(self.background_img)
 
@@ -841,14 +841,16 @@ class BitmapCanvas(BufferedCanvas):
         nb_firsts = len(first_ims)
 
         for i, im in enumerate(first_ims):
-            r = 1.0 - i / nb_firsts # display as if they are averages
+            if im is None:
+                continue
+            # r = 1.0 - i / nb_firsts # display as if they are averages
             self._draw_image(
                 ctx,
                 im,
                 im.metadata['dc_center'],
-                r,
+                1.0,
                 im_scale=im.metadata['dc_scale'],
-                rotation=im.metadata['dc_rotation']
+                rotation=im.metadata['dc_rotation'],
             )
 
         for im in self.images[-1:]: # the last image (or nothing)
@@ -865,10 +867,12 @@ class BitmapCanvas(BufferedCanvas):
                 im.metadata['dc_center'],
                 merge_ratio,
                 im_scale=im.metadata['dc_scale'],
-                rotation=im.metadata['dc_rotation']
+                rotation=im.metadata['dc_rotation'],
+                blend_mode=15  # 15 is SCREEN
             )
 
-    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0, im_scale=1.0, rotation=None):
+    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0, im_scale=1.0, rotation=None,
+                    blend_mode=cairo.OPERATOR_CLEAR):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -994,6 +998,8 @@ class BitmapCanvas(BufferedCanvas):
         # set the filter used for scaling. Using set_source instead
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
+
+        ctx.set_operator(blend_mode)
 
         if opacity < 1.0:
             ctx.paint_with_alpha(opacity)
