@@ -23,17 +23,19 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' custom FoldPanelBar in gui.comp
 #===============================================================================
 
-from odemis.gui import test, comp
-import odemis.gui.test as test
 import unittest
+
 import wx
 
-# test.goto_manual() # Keep the test frame open after the tests are run
+from odemis.gui import comp
+import odemis.gui.test as test
+
+
+test.goto_manual()  # Keep the test frame open after the tests are run
 # logging.getLogger().setLevel(logging.DEBUG)
 
 FPB_SPACING = 0
 
-test.goto_manual()
 
 class FoldPanelBarTestCase(test.GuiTestCase):
 
@@ -77,7 +79,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
             self.assertIsInstance(item.GetChildren()[0],
                                   comp.foldpanelbar.CaptionBar)
 
-
     def test_scrollbar_on_collapse(self):
         """ A vertical scroll bar should appear when a panel is expanded and
             its content will not fit within the parent window. """
@@ -102,8 +103,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(fpb.has_vert_scrollbar(), False, false_pos_warn)
         self.assertEqual(fpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        bottom_panel_2 = self.app.test_frame.panel_2.GetPosition()[1] + \
-                         self.app.test_frame.panel_2.GetSize().GetHeight()
+        bottom_panel_2 = (self.app.test_frame.panel_2.GetPosition()[1] +
+                          self.app.test_frame.panel_2.GetSize().GetHeight())
         top_panel_3 = self.app.test_frame.panel_3.GetPosition()[1]
 
         # The top of panel 3 should align with the bottom of panel 2
@@ -129,7 +130,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         # Scroll bar should be hidden again
         self.assertEqual(fpb.has_vert_scrollbar(), False)
         self.assertEqual(fpb.has_horz_scrollbar(), False)
-
 
     def test_scrollbar_on_resize(self):
         """ Test the scroll bar """
@@ -180,7 +180,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.app.test_frame.Layout()
         test.gui_loop()
         test.gui_loop()
-
 
     def test_caption_position(self):
         """ Test if the caption positions don't when expanding and collapsing"""
@@ -284,7 +283,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         test.gui_loop()
         wx.MilliSleep(test.SLEEP_TIME)
         test.gui_loop()
-
 
         # Vertical scroll bar should have appeared
         self.assertEqual(fpb.has_vert_scrollbar(), True)
@@ -402,7 +400,6 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         #wx.lib.inspection.InspectionTool().Show()
 
         wx.MilliSleep(test.SLEEP_TIME)
-
 
 
 if __name__ == "__main__":
