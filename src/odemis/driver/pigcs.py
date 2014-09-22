@@ -1960,8 +1960,7 @@ class Bus(model.Actuator):
         self._setSpeed(speed)
 
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
-                                                      driver.getSerialDriver(port))
+        self._swVersion = self.accesser.driverInfo
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
             hwversions.append("'%s': %s (GCS %s) for %s" %
@@ -1973,23 +1972,18 @@ class Bus(model.Actuator):
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
     
-    def _getPosition(self):
-        """
-        return (dict string -> float): axis name to (absolute) position
-        """
-        position = {}
-        # request position from each controller
-        for axis, (controller, channel) in self._axis_to_cc.items():
-            position[axis] = controller.getPosition(channel)
-
-        return self._applyInversionAbs(position)
-
     def _updatePosition(self):
         """
         update the position VA
         Note: it should not be called while holding the lock to the serial port
         """
-        pos = self._getPosition() # TODO: improve efficiency (don't ask all controllers every times)
+        position = {}
+        # TODO: improve efficiency (don't ask all controllers every times)
+        # request position from each controller
+        for axis, (controller, channel) in self._axis_to_cc.items():
+            position[axis] = controller.getPosition(channel)
+
+        pos = self._applyInversionAbs(position)
         logging.debug("Reporting new position at %s", pos)
 
         # it's read-only, so we change it via _value
@@ -2258,6 +2252,7 @@ class SerialBusAccesser(object):
         self.serial = serial
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
+        self.driverInfo = "serial driver: %s" % (driver.getSerialDriver(serial.port),)
 
     def sendOrderCommand(self, addr, com):
         """
@@ -2358,6 +2353,10 @@ class IPBusAccesser(object):
         self.socket = socket
         # to acquire before sending anything on the socket
         self.ser_access = threading.Lock()
+
+        # Get the master controller version
+        version = self.sendQueryCommand(254, "*IDN?\n")
+        self.driverInfo = "IP %s" % (version,)
 
     def sendOrderCommand(self, addr, com):
         """
@@ -2796,6 +2795,7 @@ class E861Simulator(object):
         address (1<=int<=16): the address of the controller
         closedloop (bool): whether it simulates a closed-loop actuator or not
         """
+        self.port = port
         self._address = address
         self._has_encoder = closedloop
         # we don't care about the actual parameters but timeout
@@ -3156,10 +3156,11 @@ class DaisyChainSimulator(object):
     Simulated serial port that can simulate daisy chain on the controllers
     Same interface as the serial port + list of (fake) serial ports to connect 
     """
-    def __init__(self, timeout=0, *args, **kwargs):
+    def __init__(self, port, timeout=0, *args, **kwargs):
         """
         subports (list of open ports): the ports to receive the data
         """
+        self.port = port
         self.timeout = timeout
         self._subports = kwargs["subports"]
         self._output_buf = "" # TODO: probably cleaner to user lock to access it
