@@ -1575,7 +1575,8 @@ class OLController(Controller):
         return distance
 
     def stopMotion(self):
-        Controller.stopMotion(self)
+        # Controller.stopMotion(self)
+        super(OLController, self).stopMotion()
         for c in self._channels:
             self._storeStop(c)
 
@@ -2092,6 +2093,8 @@ class Bus(model.Actuator):
             if controller not in controllers:
                 controller.terminate()
 
+        self.accesser.terminate()
+
     def selfTest(self):
         """
         No move should be going one while doing a self-test
@@ -2114,6 +2117,7 @@ class Bus(model.Actuator):
                 if not ipmasters:
                     raise IOError("Failed to find any PI network master controller")
                 host, ipport = ipmasters[0]
+                logging.info("Will connect to %s:%d", host, ipport)
             else:
                 # split the (IP) port, separated by a :
                 if ":" in port:
@@ -2196,14 +2200,14 @@ class Bus(model.Actuator):
 
                 try:
                     while True:
-                        data, addr = s.recvfrom(1024)
+                        data, fulladdr = s.recvfrom(1024)
                         if not data:
                             break
                         # data should contain something like "PI C-863K016 SN 0 -- listening on port 50000 --"
                         if data.startswith("PI"):
-                            found.append((addr, port))
+                            found.append(fulladdr)
                         else:
-                            logging.info("Received %s from %s", data.encode('string_escape'), addr)
+                            logging.info("Received %s from %s", data.encode('string_escape'), fulladdr)
                 except socket.timeout:
                     pass
             except Exception:
@@ -2254,6 +2258,9 @@ class SerialBusAccesser(object):
         self.ser_access = threading.Lock()
         self.driverInfo = "serial driver: %s" % (driver.getSerialDriver(serial.port),)
 
+    def terminate(self):
+        self.serial.close()
+
     def sendOrderCommand(self, addr, com):
         """
         Send a command which does not expect any report back
@@ -2262,7 +2269,7 @@ class SerialBusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 255)
+        assert(1 <= addr <= 16 or addr == 254 or addr == 255)
         if addr is None:
             full_com = com
         else:
@@ -2284,7 +2291,7 @@ class SerialBusAccesser(object):
          it's left as is.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16)
+        assert(1 <= addr <= 16 or addr == 254)
         if addr is None:
             full_com = com
         else:
@@ -2354,9 +2361,15 @@ class IPBusAccesser(object):
         # to acquire before sending anything on the socket
         self.ser_access = threading.Lock()
 
+        # recover the main controller from previous errors (just in case)
+        err = self.sendQueryCommand(254, "ERR?\n")
+
         # Get the master controller version
         version = self.sendQueryCommand(254, "*IDN?\n")
-        self.driverInfo = "IP %s" % (version,)
+        self.driverInfo = "%s" % (version.encode('string_escape'),)
+
+    def terminate(self):
+        self.socket.close()
 
     def sendOrderCommand(self, addr, com):
         """
@@ -2366,7 +2379,7 @@ class IPBusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 255)
+        assert(1 <= addr <= 16 or addr == 254 or addr == 255)
         if addr is None:
             full_com = com
         else:
@@ -2387,7 +2400,7 @@ class IPBusAccesser(object):
          it's left as is.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16)
+        assert(1 <= addr <= 16 or addr == 254)
         if addr is None:
             full_com = com
         else:
