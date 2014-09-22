@@ -34,7 +34,6 @@ import time
 import numpy
 import coordinates
 from . import autofocus
-from odemis.dataio import hdf5
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move

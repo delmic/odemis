@@ -22,7 +22,6 @@ from __future__ import division
 import logging
 import numpy
 from odemis import model
-from odemis.dataio import hdf5
 from odemis.acq.align import delphi
 import sys
 import threading

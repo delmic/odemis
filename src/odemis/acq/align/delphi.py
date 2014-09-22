@@ -35,7 +35,6 @@ from odemis.acq.align import spot
 import threading
 import time
 from . import autofocus
-from odemis.dataio import hdf5
 
 EXPECTED_HOLES = ({"x":0, "y":11.5e-03}, {"x":0, "y":-11.5e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius
