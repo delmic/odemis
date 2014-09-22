@@ -37,10 +37,10 @@ from odemis.gui.img import data
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
+
 class FileBrowser(wx.Panel):
-    """
-    Widget that displays a file name and allows to change it by selecting a
-    different file.
+    """ Widget that displays a file name and allows to change it by selecting a different file.
+
     It will generate a EVT_FILE_SELECT when the file changes.
     Note that like most of the wx widgets, SetValue does not generate an event.
     """
@@ -72,7 +72,8 @@ class FileBrowser(wx.Panel):
         self.create_dialog(parent, id, pos, size, style, name, clear_btn)
 
     def create_dialog(self, parent, id, pos, size, style, name, clear_btn):
-        """Setup the graphic representation of the dialog"""
+        """ Setup the graphic representation of the dialog """
+
         wx.Panel.__init__(self, parent, id, pos, size, style, name)
         self.SetBackgroundColour(parent.GetBackgroundColour())
 
@@ -94,7 +95,7 @@ class FileBrowser(wx.Panel):
                                           (18, 18),
                                           background_parent=parent)
             self._btn_clear.SetBitmaps(data.getico_clear_hBitmap())
-            self._btn_clear.SetToolTipString("Clear calibration") # FIXME: do not hard code
+            self._btn_clear.SetToolTipString("Clear calibration")  # FIXME: do not hard code
             self._btn_clear.Hide()
             self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
             box.Add(self._btn_clear, 0, wx.LEFT, 10)
