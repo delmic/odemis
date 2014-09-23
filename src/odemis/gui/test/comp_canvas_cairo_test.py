@@ -18,7 +18,7 @@ import numpy
 import wx
 
 from odemis import model
-from odemis.gui import test
+from odemis.gui import test, BLEND_SCREEN
 from odemis.gui.test import generate_img_data
 from odemis.model import DataArray, FloatContinuous
 import odemis.gui.comp.miccanvas as miccanvas
@@ -37,7 +37,7 @@ class TestCanvas(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
 
-    def tearDown(self):
+    def setUp(self):
         self.remove_all()
 
     def xtest_cairo_wander_bug_demo(self):
@@ -146,8 +146,6 @@ class TestCanvas(test.GuiTestCase):
     def test_calc_img_buffer_rect(self):
 
         # Setting up test frame
-        # pylint: disable=E1103
-
         self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
@@ -228,7 +226,6 @@ class TestCanvas(test.GuiTestCase):
             for ev, v in zip(rect, cnvs._calc_img_buffer_rect(img, im_scale, im_pos)):
                 self.assertAlmostEqual(ev, v)
             test.gui_loop(100)
-
 
         return
 
@@ -368,17 +365,14 @@ class TestCanvas(test.GuiTestCase):
         old_canvas.setView(view, tab)
         self.add_control(old_canvas, flags=wx.EXPAND, proportion=1)
 
-
         # new_canvas = DraggableCanvas(self.panel)
         # self.add_control(new_canvas, flags=wx.EXPAND, proportion=1)
-
 
         # # Test images: (im, w_pos, scale, keepalpha)
         # images = [
         #     (gettest_patternImage(), (0.0, 0.0), 1, False),
         #     (gettest_patternImage(), (0.0, 0.0), 1, True),
         # ]
-
 
         # shape = (250, 250, 4)
         # rgb = numpy.empty(shape, dtype=numpy.uint8)
@@ -415,7 +409,6 @@ class TestCanvas(test.GuiTestCase):
 
         darray_one = generate_img_data(250, 250, 4)
 
-
         images = [
             (darray_one, (0.0, 0.0), 0.0000003, True, None),
             # (darray_two, (0.0, 0.0), 0.33, True, None),
@@ -446,6 +439,29 @@ class TestCanvas(test.GuiTestCase):
 
         print "Done"
 
+    def test_blending(self):
+        self.app.test_frame.SetSize((500, 500))
+        self.app.test_frame.Center()
+        self.app.test_frame.Layout()
+
+        tab = self.create_simple_tab_model()
+        view = tab.focussedView.value
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+        # cnvs.background_brush = wx.SOLID  # no special background
+        cnvs.setView(view, tab)
+        self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
+
+        darray_red = generate_img_data(250, 250, 4, 255, (0, 140, 255))
+        darray_blue = generate_img_data(250, 250, 4, 102, (128, 0, 128))
+        darray_green = generate_img_data(250, 250, 4, 204, (50, 205, 154))
+
+        images = [
+            (darray_red, (0.0, 0.0), 0.0000003, True, -0.5),
+            (darray_blue, (0.0, 0.0), 0.0000003, True, 0.5, BLEND_SCREEN),
+            (darray_green, (0.0, 0.0), 0.0000003, True, 1.5, BLEND_SCREEN),
+        ]
+
+        cnvs.set_images(images)
 
     def test_nanana(self):
 
@@ -507,18 +523,17 @@ class TestCanvas(test.GuiTestCase):
         tab.focussedView.value.mpp = mpp
 
         view = tab.focussedView.value
-        canvas = miccanvas.DblMicroscopeCanvas(self.panel)
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
-
-        canvas.setView(view, tab)
-        # self.add_control(canvas, flags=wx.EXPAND, proportion=1)
+        cnvs.setView(view, tab)
+        # self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
         # test.gui_loop()
         # # Set the mpp again, because the on_size handler will have recalculated it
         # view.mpp.value = 1
 
         # images = [(format_rgba_darray(darray), (0.0, 0.0), 2, True)]
-        # canvas.set_images(images)
-        # canvas.scale = 1
+        # cnvs.set_images(images)
+        # cnvs.scale = 1
         # test.gui_loop()
 
         # shape = (5, 5, 4)
@@ -538,14 +553,11 @@ class TestCanvas(test.GuiTestCase):
         #             [0, 0, 127, 255]
         #         ][:shape[1]]
 
-
-
         # rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
         # reshaped_array = DataArray(rgb)
         # self.assertTrue(reshaped_array == format_rgba_darray(darray))
 
     # @unittest.skip("simple")
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -58,3 +58,8 @@ HOVER_SELECTION = 5
 SELECTION_MINIMUM = 10  # Minimum dimensions for a selection, in pixels
 
 VIEW_BTN_SIZE = (160, 116)  # Hard-coded work around to resize thumbnails in the Canvas class
+
+# PyCairo does not bind the newer blend operators, so we define them here for code clarity
+
+BLEND_DEFAULT = 2  # CAIRO_OPERATOR_SOURCE or CAIRO_OPERATOR_CLEAR can be used (values 1 and 2)
+BLEND_SCREEN = 15  # CAIRO_OPERATOR_SCREEN

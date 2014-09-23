@@ -34,6 +34,7 @@ import wx.lib.wxcairo as wxcairo
 
 from odemis import util, model
 from odemis.acq import stream
+from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
@@ -331,6 +332,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # add the images in order
         ims = []
+
         for rgbim in images:
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # Canvas needs to accept the NDArray (+ specific attributes
@@ -342,7 +344,17 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
 
-            ims.append((rgba_im, pos, scale, keepalpha, rot))
+            ims.append([rgba_im, pos, scale, keepalpha, rot, BLEND_SCREEN])
+            # print "%s %s" % (c, rgbim.shape)
+
+        # If there's one image, it should always be rendered using the default blend operator.
+        # If the last image has a different shape than the first one, consider it to be a SEM
+        # image and also rendering it using the default blend operator.
+        if ims:
+            ims[0][-1] = BLEND_DEFAULT
+            if ims[0][0].shape != ims[-1][0].shape:
+                ims[-1][-1] = BLEND_DEFAULT
+
         self.set_images(ims)
 
         # For debug only:
