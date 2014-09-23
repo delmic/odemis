@@ -30,7 +30,6 @@ import gc
 import logging
 import numpy
 from odemis import model, util, dataio
-import odemis
 from odemis.util import img
 import os
 import threading
