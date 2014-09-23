@@ -32,6 +32,7 @@ import odemis.gui.test as test
 
 
 test.goto_manual()  # Keep the test frame open after the tests are run
+# test.goto_inspect()
 # logging.getLogger().setLevel(logging.DEBUG)
 
 FPB_SPACING = 0
@@ -51,11 +52,10 @@ class FoldPanelBarTestCase(test.GuiTestCase):
     @classmethod
     def build_caption_event(cls, foldpanelitem):
 
-        cap_bar = foldpanelitem.GetCaptionBar()
-        event = comp.foldpanelbar.CaptionBarEvent(
-                                    comp.foldpanelbar.wxEVT_CAPTIONBAR)
+        cap_bar = foldpanelitem.caption_bar
+        event = comp.foldpanelbar.CaptionBarEvent(comp.foldpanelbar.wxEVT_CAPTIONBAR)
         event.SetEventObject(cap_bar)
-        event.SetBar(cap_bar)
+        event.set_bar(cap_bar)
 
         return event
 
@@ -88,14 +88,14 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         wx.MilliSleep(test.SLEEP_TIME)
 
         # Put back into more or less original state
-        self.app.test_frame.panel_1.Expand()
-        self.app.test_frame.panel_2.Collapse()
-        self.app.test_frame.panel_3.Expand()
+        self.app.test_frame.panel_1.expand()
+        self.app.test_frame.panel_2.collapse()
+        self.app.test_frame.panel_3.expand()
 
         # The first and third panel should be expanded, the second one collapsed
-        self.assertEqual(self.app.test_frame.panel_1.IsExpanded(), True)
-        self.assertEqual(self.app.test_frame.panel_2.IsExpanded(), False)
-        self.assertEqual(self.app.test_frame.panel_3.IsExpanded(), True)
+        self.assertEqual(self.app.test_frame.panel_1.is_expanded(), True)
+        self.assertEqual(self.app.test_frame.panel_2.is_expanded(), False)
+        self.assertEqual(self.app.test_frame.panel_3.is_expanded(), True)
 
         false_pos_warn = ("This might be a false positive. "
                           "Run test module stand-alone to verify")
@@ -136,14 +136,14 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         wx.MilliSleep(test.SLEEP_TIME)
 
         # Put back into more or less original state
-        self.app.test_frame.panel_1.Expand()
-        self.app.test_frame.panel_2.Collapse()
-        self.app.test_frame.panel_3.Expand()
+        self.app.test_frame.panel_1.expand()
+        self.app.test_frame.panel_2.collapse()
+        self.app.test_frame.panel_3.expand()
 
         # The first and third panel should be expanded, the second one collapsed
-        self.assertEqual(self.app.test_frame.panel_1.IsExpanded(), True)
-        self.assertEqual(self.app.test_frame.panel_2.IsExpanded(), False)
-        self.assertEqual(self.app.test_frame.panel_3.IsExpanded(), True)
+        self.assertEqual(self.app.test_frame.panel_1.is_expanded(), True)
+        self.assertEqual(self.app.test_frame.panel_2.is_expanded(), False)
+        self.assertEqual(self.app.test_frame.panel_3.is_expanded(), True)
 
         fpb = self.app.test_frame.fpb
         false_pos_warn = ("This might be a false positive. "
