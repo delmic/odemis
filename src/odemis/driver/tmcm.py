@@ -28,7 +28,7 @@ from concurrent.futures._base import CancelledError
 import glob
 import logging
 import numpy
-from odemis import model
+from odemis import model, util
 import odemis
 from odemis.model import isasync, CancellableThreadPoolExecutor, CancellableFuture
 from odemis.util import driver
@@ -70,7 +70,7 @@ class TMCM3110(model.Actuator):
     Represents one Trinamic TMCM-3110 controller.
     Note: it must be set to binary communication mode (that's the default).
     """
-    def __init__(self, name, role, port, axes, ustepsize, refproc=None, **kwargs):
+    def __init__(self, name, role, port, axes, ustepsize, refproc=None, temp=False, **kwargs):
         """
         port (str): port name (use /dev/fake for a simulator)
         axes (list of str): names of the axes, from the 1st to the 3rd.
@@ -79,6 +79,8 @@ class TMCM3110(model.Actuator):
         refproc (str or None): referencing (aka homing) procedure type. Use
           None to indicate it's not possible (no reference/limit switch) or the
           name of the procedure. For now only "2xFinalForward" is accepted.
+        temp (bool): if True, will read the temperature from the analogue input
+         (10 mV <-> 1 °C)
         inverted (set of str): names of the axes which are inverted (IOW, either
          empty or the name of the axis)
         """
@@ -156,11 +158,24 @@ class TMCM3110(model.Actuator):
             axes_ref = dict([(a, False) for a in axes])
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
+        if temp:
+            # TODO: only pick one of the temperature sensors?
+            self.temperature = model.FloatVA(0, unit=u"°C", readonly=True)
+            self.temperature1 = model.FloatVA(0, unit=u"°C", readonly=True)
+            self._temp_timer = util.RepeatingTimer(10, self._updateTemperatureVA,
+                                                  "TMCM temperature update")
+            self._updateTemperatureVA() # make sure the temperature is correct
+            self._temp_timer.start()
+
     def terminate(self):
         if self._executor:
             self.stop()
             self._executor.shutdown(wait=True)
             self._executor = None
+        
+        if hasattr(self, "_temp_timer"):
+            self._temp_timer.cancel()
+            del self._temp_timer
 
         with self._ser_access:
             if self._serial:
@@ -545,7 +560,7 @@ class TMCM3110(model.Actuator):
         self.SetAxisParam(axis, 194, speed) # maximum home velocity
         self.SetAxisParam(axis, 195, speed) # maximum switching point velocity (useless for us)
         # Set direction
-        edge = self.GetIO(0, 1 + axis) # IN1 = bank 0, port 1
+        edge = self.GetIO(0, 1 + axis) # IN1 = bank 0, port 1->3
         logging.debug("Going to do reference search in dir %d", edge)
         if edge == 1: # Edge is high, so we need to go positive dir
             self.SetAxisParam(axis, 193, 7 + 128) # RFS with positive dir
@@ -703,6 +718,32 @@ class TMCM3110(model.Actuator):
         # it's read-only, so we change it via _value
         self.speed._value = speed
         self.speed.notify(self.speed.value)
+
+    def _updateTemperatureVA(self):
+        """
+        Update the temperature VAs, assuming that the 2 analogue inputs are
+        connected to a temperature sensor with mapping 10 mV <-> 1 °C. That's
+        conveniently what is in the Delphi. 
+        """
+        try:
+            # The analogue port return 0..4095 -> 0..10 V
+            val = self.GetIO(1, 0) # 0 = first (analogue) port
+            v = val * 10 / 4095 # V
+            t0 = v / 10e-3 # °C
+
+            val = self.GetIO(1, 4) # 4 = second (analogue) port
+            v = val * 10 / 4095 # V
+            t1 = v / 10e-3 # °C
+        except Exception:
+            logging.exception("Failed to read the temperature")
+            return
+
+        logging.info("Temperature 0 = %g °C, temperature 1 = %g °C", t0, t1)
+
+        self.temperature._value = t0
+        self.temperature.notify(t0)
+        self.temperature1._value = t1
+        self.temperature1.notify(t1)
 
     def _createFuture(self):
         """
@@ -1114,6 +1155,20 @@ class TMCM3110Simulator(object):
                 rval = 0 if self._axis_move[mot][1] > time.time() else 1
             else:
                 rval = self._astates[mot].get(typ, 0) # default to 0
+            self._sendReply(inst, val=rval)
+        elif inst == 15: # Get IO
+            if not 0 <= mot <= 2:
+                self._sendReply(inst, status=4) # invalid value
+                return
+            if not 0 <= typ <= 7:
+                self._sendReply(inst, status=3) # wrong type
+                return
+            if mot == 0: # digital inputs
+                rval = 0 # between 0..1
+            elif mot == 1: # analogue inputs
+                rval = 178 # between 0..4095
+            elif mot == 2: # digital outputs
+                rval = 0 # between 0..1
             self._sendReply(inst, val=rval)
         elif inst == 136: # Get firmware version
             if typ == 0: # string

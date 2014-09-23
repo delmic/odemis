@@ -37,11 +37,12 @@ KWARGS = dict(name="test", role="stage", port=PORT,
               axes=["x", "y", "z"],
               ustepsize=[5.9e-9, 5.8e-9, 5e-9],
               refproc="2xFinalForward",
+              temp=True,
               inverted=["y"])
 KWARGS_SIM = dict(KWARGS)
 KWARGS_SIM["refproc"] = "FakeReferencing" # simulator doesn't support running program (=> fancy referencing)
 KWARGS_SIM["port"] = "/dev/fake"
-# KWARGS = KWARGS_SIM # uncomment to force using only the simulator
+KWARGS = KWARGS_SIM # uncomment to force using only the simulator
 
 # @skip("faster")
 class TestStatic(unittest.TestCase):
