@@ -677,7 +677,7 @@ class SettingsController(object):
         conf = conf or {}
 
         # Format label
-        label = conf.get('label', self._label_to_human(name))
+        label = conf.get('label', label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
         self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
@@ -852,21 +852,25 @@ class SettingsController(object):
             else:
                 p = p.Parent
 
+
 class SemSettingsController(SettingsController):
     pass
+
 
 class OpticalSettingsController(SettingsController):
     pass
 
+
 class AngularSettingsController(SettingsController):
     pass
+
 
 class SpectrumSettingsController(SettingsController):
     pass
 
+
 class FileInfoSettingsController(SettingsController):
     pass
-
 
 
 class SettingsBarController(object):
