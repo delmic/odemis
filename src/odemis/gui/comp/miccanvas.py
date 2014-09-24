@@ -310,16 +310,28 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
     def _get_ordered_images(self):
         """ Return the list of images to display, ordered bottom to top (=last to draw) """
-        st = self.microscope_view.stream_tree
-        images = st.getImages()
+
+        streams = self.microscope_view.getStreams()
+        images = []
+
+        # Non-SEM stream images will always be blended using the screen blend operator
+        for s in streams:
+            if isinstance(s, stream.EM_STREAMS):
+                images.append((s.image.value, BLEND_DEFAULT))
+            else:
+                images.append((s.image.value, BLEND_SCREEN))
 
         # Sort by size, so that the biggest picture is first drawn (no opacity)
         images.sort(
             lambda a, b: cmp(
-                numpy.prod(b.shape[0:2]) * b.metadata[model.MD_PIXEL_SIZE][0],
-                numpy.prod(a.shape[0:2]) * a.metadata[model.MD_PIXEL_SIZE][0]
+                numpy.prod(b[0].shape[0:2]) * b[0].metadata[model.MD_PIXEL_SIZE][0],
+                numpy.prod(a[0].shape[0:2]) * a[0].metadata[model.MD_PIXEL_SIZE][0]
             )
         )
+
+        # Reset the first image to be drawn to the default blend operator
+        if images:
+            images[0] = (images[0][0], BLEND_DEFAULT)
 
         return images
 
@@ -333,7 +345,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # add the images in order
         ims = []
 
-        for rgbim in images:
+        for rgbim, blend_mode in images:
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
@@ -344,27 +356,20 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
 
-            ims.append([rgba_im, pos, scale, keepalpha, rot, BLEND_SCREEN])
+            ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode])
             # print "%s %s" % (c, rgbim.shape)
-
-        # If there's one image, it should always be rendered using the default blend operator.
-        # If the last image has a different shape than the first one, consider it to be a SEM
-        # image and also rendering it using the default blend operator.
-        if ims:
-            ims[0][-1] = BLEND_DEFAULT
-            if ims[0][0].shape != ims[-1][0].shape:
-                ims[-1][-1] = BLEND_DEFAULT
 
         self.set_images(ims)
 
         # For debug only:
         if images:
-            self._latest = max(i.metadata.get(model.MD_ACQ_DATE, 0) for i in images)
+            self._lastest_datetime = max(im.metadata.get(model.MD_ACQ_DATE, 0) for im, _ in images)
         else:
-            self._latest = 0
-            if self._latest > 0:
-                logging.debug("Updated canvas list %g s after acquisition",
-                              time.time() - self._latest)
+            self._lastest_datetime = 0
+
+        if self._lastest_datetime > 0:
+            logging.debug("Updated canvas list %g s after acquisition",
+                          time.time() - self._lastest_datetime)
 
         # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
@@ -842,9 +847,9 @@ class SecomCanvas(DblMicroscopeCanvas):
         # pattern
         self.background_brush = wx.SOLID
 
-    # Special version which put the SEM images first, as with the current
+    # Special version which put the SEM images last, as with the current
     # display mechanism in the canvas, the fluorescent images must be displayed
-    # together last
+    # together first
     def _get_ordered_images(self):
         """
         return the list of images to display, in order from lowest to topest
@@ -868,15 +873,22 @@ class SecomCanvas(DblMicroscopeCanvas):
                 continue
 
             if isinstance(s, stream.EM_STREAMS):
-                # as last
-                images.append(rgbim)
+                # Add as last image, always use default blend operator with SEM images
+                images.append((rgbim, BLEND_DEFAULT))
+
                 # FIXME: See the log warning
                 if has_sem_image:
                     logging.warning(("Multiple SEM images are not handled "
                                      "correctly for now"))
                 has_sem_image = True
             else:
-                images.insert(0, rgbim)  # as first
+                # Use screen blending for non-SEM images. The first image will later be reset to
+                # default blending, so it can serve as a base for the following screen 'layers'.
+                images.insert(0, (rgbim, BLEND_SCREEN))
+
+        # Fix the blend operator for the first image
+        if images:
+            images[0] = (images[0][0], BLEND_DEFAULT)
 
         return images
 
