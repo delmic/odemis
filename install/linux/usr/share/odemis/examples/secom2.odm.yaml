@@ -1,0 +1,176 @@
+SECOMv2: {
+    class: Microscope,
+    role: secom,
+    emitters: [Spectra, "Nikon Super Duper", "FW102C", "EBeam ExtXY"],
+    detectors: ["Andor SimCam", "SED ExtXY"],
+    actuators: ["Sample stage", "Optical stage", "Optical focus", "EBeam Focus"],
+}
+
+Spectra: {
+    class: lle.FakeLLE,
+    role: light,
+    init: {
+        port: "/dev/ttyLLE",
+        # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
+        sources: {"red": [615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
+                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
+                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
+                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
+                  "yellow": [565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9],
+                  "blue": [420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9],
+                  "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
+                 }
+        },
+    affects: ["Andor SimCam"],
+}
+
+"SEM ExtXY": {
+    class: simsem.SimSEM,
+    role: none,
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           drift_period: 5, # s, comment out to disable drift
+    },
+    children: {scanner: "EBeam ExtXY",
+               detector0: "SED ExtXY",
+               focus: "EBeam Focus",
+    }
+}
+
+"EBeam ExtXY": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
+}
+
+"SED ExtXY": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+"EBeam Focus": {
+    # Internal child of SimSEM, so no class
+    role: ebeam-focus,
+}
+
+"Nikon Super Duper": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {mag: 60.0}, # ratio
+    affects: ["Andor SimCam"]
+}
+
+#"MultiBand Fixed Filter": {
+#    class: static.LightFilter,
+#    role: filter,
+#    init: {band: [[420.e-9, 460.e-9],
+#                  [510.e-9, 532.e-9], 
+#                  [590.e-9, 624.e-9],
+#                  [677.e-9, 723.e-9]]}, # m,m
+#    affects: ["Andor SimCam"]
+#}
+
+# Thorlabs FW102C with 6 filters
+"FW102C": {
+    class: tlfw.FakeFW102c,
+    role: filter,
+    init: {port: "/dev/ttyFTDI*", # will automatically find the right port
+           bands: {1: [420.e-9, 460.e-9], # pos -> m,m
+                   2: [500.e-9, 550.e-9], 
+                   3: [553.e-9, 577.e-9],
+                   4: [582.e-9, 636.e-9],
+                   5: [635.e-9, 675.e-9],
+                   6: [633.e-9, 1200.e-9]}, 
+           },
+    affects: ["Andor SimCam"]
+}
+
+
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Andor SimCam": {
+    class: andorcam2.FakeAndorCam2,
+    role: ccd,
+    init: {device: 0,
+           transpose: [-2, 1], # rotated 90° clockwise
+           # Look-up table for recommended EMCCD Real Gain
+           # readout rate, gain, real gain (integer)
+           emgains: [[10.e+6, 1, 50],
+                     [1.e+6, 1, 150],
+                    ],
+           image: "andorcam2-fake-clara.tiff", # only for simulator
+    },
+    properties: {
+        targetTemperature: -75, # °C
+    }
+}
+
+# Axes should be synchronized with the camera
+# Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
+"Sample stage": {
+    class: actuator.MultiplexActuator,
+    role: stage,
+    affects: ["Andor SimCam", "EBeam ExtXY"],
+    children: {"x": PIGCS, "y": PIGCS},
+    init: {
+        axes_map: {"x": "sx", "y": "sy"},
+    },
+}
+
+# FIXME: these axes need to be renamed to x, y (but the GUI is sad without A/B for now)
+"Optical stage": {
+    class: actuator.MultiplexActuator,
+    role: align,
+    affects: ["Andor SimCam"],
+    children: {"a": PIGCS, "b": PIGCS},
+    init: {
+        axes_map: {"a": "ox", "b": "oy"},
+    },
+}
+
+# Axis Z: (Physical) bottom->top when looking at the door
+#         (On screen) bottom->top (so distance to sample is smaller when going up)
+"Optical focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    affects: ["Andor SimCam"],
+    children: {"z": PIGCS},
+    init: {
+        axes_map: {"z": "oz"}
+    },
+}
+
+# Network should be set up and the C-863 should be configured for DHCP.
+# Each E-861 should be configured for the right stage.
+# PI E-861 addresses and stage configuration:
+# stage X = 1 (??1 closed loop)
+# stage Y = 2 (??1 closed loop)
+# optical X = 3 (??2 open loop)
+# optical Y = 4 (??2 open loop)
+# optical Z = 5 (??1 closed loop)
+
+PIGCS: {
+    class: pigcs.Bus,
+    role: none,
+    init: {
+        port: "192.168.92.67", # put "autoip" to automatically detect it
+        # axis -> controller, channel, closed-loop?
+        # FIXME: for now the controllers are not properly configured and not connected
+        # to the encoder, so only open loop
+#        axes: {"sx": [1, 1, True], "sy": [2, 1, True],
+#               "ox": [3, 1, False], "oy": [4, 1, False],
+#               "oz": [5, 1, True]},
+        axes: {"sx": [1, 1, False], "sy": [2, 1, False],
+               "ox": [3, 1, False], "oy": [4, 1, False],
+               "oz": [5, 1, False]},
+        inverted: ["ox", "oy", "oz"], # TODO: check stage X/Y
+        #dist_to_steps: {"sx": 100000, "sy": 100000}, # step/m
+    },
+}
+
