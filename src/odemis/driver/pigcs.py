@@ -2243,9 +2243,8 @@ class Bus(model.Actuator):
         port (int): the (IP) port number
         return (socket): the opened socket connection
         """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock = socket.create_connection((host, port), timeout=5)
         sock.settimeout(0.5) # s
-        sock.connect((host, port))
         return sock
 
 class SerialBusAccesser(object):
@@ -2274,8 +2273,8 @@ class SerialBusAccesser(object):
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.serial.write(full_com)
             # We don't flush, as it will be done anyway if an answer is needed
 
@@ -2296,8 +2295,8 @@ class SerialBusAccesser(object):
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.serial.write(full_com)
 
             # ensure everything is received, before expecting an answer
@@ -2384,8 +2383,8 @@ class IPBusAccesser(object):
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.socket.sendall(full_com)
 
     def sendQueryCommand(self, addr, com):
@@ -2396,8 +2395,6 @@ class IPBusAccesser(object):
         return (string or list of strings): the report without prefix 
            (e.g.,"0 1") nor newline. 
            If answer is multiline: returns a list of each line
-        Note: multiline answers seem to always begin with a \x00 character, but
-         it's left as is.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
         assert(1 <= addr <= 16 or addr == 254)
@@ -2405,40 +2402,61 @@ class IPBusAccesser(object):
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.socket.sendall(full_com)
 
-            try:
-                line = ""
-                lines = []
-                while True:
-                    char = self.socket.recv(1) # TODO: optimise by receiving more
-                    if char == "\n":
-                        if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
-                            not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
-                            lines.append(line[:-1]) # don't include the space
-                            line = ""
-                        else:
-                            # full end
-                            lines.append(line)
-                            break
-                    else:
-                        # normal char
-                        line += char
-            except socket.timeout:
-                raise IOError("Controller %d timeout." % addr)
+            # read the answer
+            end_time = time.time() + 0.5
+            ans = ""
+            while True:
+                try:
+                    data = self.socket.recv(4096)
+                except socket.timeout:
+                    raise IOError("Controller %d timeout." % addr)
+                # If the master is already accessed from somewhere else it will just
+                # immediately answer an empty message
+                if not data:
+                    if time.time() > end_time:
+                        raise IOError("Master controller not answering. It might be already connected with another client.")
+                    time.sleep(0.01)
+                    continue
 
-        assert len(lines) > 0
+                ans += data
+                # does it look like we received the end of an answer?
+                # To be really sure we'd need to wait until timeout, but that
+                # would slow down a lot. Normally, if we've received one full
+                # answer, there's 99% chance we've received everything.
+                # An answer ends with \n (and not " \n", which indicates multi-
+                # line).
+                if (ans[-1] == "\n" and (
+                     ans[-2] != " " or  # multiline: "... \n"
+                     re.match(r"0 \d+ $", ans))):  # excepted empty line "0 1 \n"
+                    break
 
-        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
+        logging.debug("Received: '%s'", ans.encode('string_escape'))
+
+        # remove the prefix and last newline
         if addr is None:
             prefix = ""
         else:
             prefix = "0 %d " % addr
-        if not lines[0].startswith(prefix):
-            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
-        lines[0] = lines[0][len(prefix):]
+        if not ans.startswith(prefix):
+            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, ans))
+        ans = ans[len(prefix):-1]
+
+        # Interpret the answer
+        lines = []
+        for i, l in enumerate(ans.split("\n")):
+            if l[-1] == " ": # remove the spaces indicating multi-line
+                l = l[:-1]
+            elif i != len(lines):
+                logging.warning("Skipping previous answer from hardware %s",
+                                "\n".join(lines + [l]).encode('string_escape'))
+                lines = []
+                continue
+            lines.append(l)
 
         if len(lines) == 1:
             return lines[0]
