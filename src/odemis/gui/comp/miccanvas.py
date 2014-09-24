@@ -317,9 +317,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Non-SEM stream images will always be blended using the screen blend operator
         for s in streams:
             if isinstance(s, stream.EM_STREAMS):
-                images.append((s.image.value, BLEND_DEFAULT))
+                images.append((s.image.value, BLEND_DEFAULT, s.name.value))
             else:
-                images.append((s.image.value, BLEND_SCREEN))
+                images.append((s.image.value, BLEND_SCREEN, s.name.value))
 
         # Sort by size, so that the biggest picture is first drawn (no opacity)
         images.sort(
@@ -331,7 +331,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Reset the first image to be drawn to the default blend operator
         if images:
-            images[0] = (images[0][0], BLEND_DEFAULT)
+            images[0] = (images[0][0], BLEND_DEFAULT, images[0][2])
 
         return images
 
@@ -345,7 +345,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # add the images in order
         ims = []
 
-        for rgbim, blend_mode in images:
+        for rgbim, blend_mode, name in images:
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
             # Canvas needs to accept the NDArray (+ specific attributes
             # recorded separately).
@@ -356,14 +356,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             pos = self.physical_to_world_pos(rgbim.metadata[model.MD_POS])
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
 
-            ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode])
+            ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
             # print "%s %s" % (c, rgbim.shape)
 
         self.set_images(ims)
 
         # For debug only:
         if images:
-            self._lastest_datetime = max(im.metadata.get(model.MD_ACQ_DATE, 0) for im, _ in images)
+            self._lastest_datetime = max(im[0].metadata.get(model.MD_ACQ_DATE, 0) for im in images)
         else:
             self._lastest_datetime = 0
 
@@ -371,7 +371,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             logging.debug("Updated canvas list %g s after acquisition",
                           time.time() - self._lastest_datetime)
 
-        # set merge_ratio
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
     # FIXME: it shouldn't need to ignore deads, as the subscription should go
@@ -874,7 +873,7 @@ class SecomCanvas(DblMicroscopeCanvas):
 
             if isinstance(s, stream.EM_STREAMS):
                 # Add as last image, always use default blend operator with SEM images
-                images.append((rgbim, BLEND_DEFAULT))
+                images.append((rgbim, BLEND_DEFAULT, s.name.value))
 
                 # FIXME: See the log warning
                 if has_sem_image:
@@ -884,11 +883,11 @@ class SecomCanvas(DblMicroscopeCanvas):
             else:
                 # Use screen blending for non-SEM images. The first image will later be reset to
                 # default blending, so it can serve as a base for the following screen 'layers'.
-                images.insert(0, (rgbim, BLEND_SCREEN))
+                images.insert(0, (rgbim, BLEND_SCREEN, s.name.value))
 
         # Fix the blend operator for the first image
         if images:
-            images[0] = (images[0][0], BLEND_DEFAULT)
+            images[0] = (images[0][0], BLEND_DEFAULT, images[0][2])
 
         return images
 
@@ -1161,10 +1160,10 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
 
             if s.name.value == "Goal":
                 # goal image => add at the end
-                ims.append((wim, pos, scale, keepalpha, None))
+                ims.append((wim, pos, scale, keepalpha, None, None, s.name.value))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None)
+                ims[0] = (wim, pos, scale, keepalpha, None, None. s.name.value)
 
         self.set_images(ims)
 
@@ -1354,24 +1353,25 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
-    def _convertStreamsToImages(self):
+    def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as
         the canvas currently expects.
         """
+
         # Normally the view.streamtree should have only one image anyway
-        st = self.microscope_view.stream_tree
-        images = st.getImages()
+        streams = self.microscope_view.getStreams()
 
         # add the images in order
         ims = []
-        for rgbim in images:
+        for s in streams:
             # image is always centered, fitting the whole canvas
-            wim = img.format_rgba_darray(rgbim)
-            ims.append((wim, (0, 0), 0.1, False, None))
+            wim = img.format_rgba_darray(s.image.value)
+            ims.append((wim, (0, 0), 0.1, False, None, None, s.name.value))
+
         self.set_images(ims)
 
     def _onViewImageUpdate(self, t):
-        self._convertStreamsToImages()
+        self._convert_streams_to_images()
         self.fit_to_content(recenter=True)
         wx.CallAfter(self.request_drawing_update)
 

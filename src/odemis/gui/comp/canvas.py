@@ -743,16 +743,17 @@ class BitmapCanvas(BufferedCanvas):
     def set_images(self, im_args):
         """ Set (or update)  image
 
-        im_args (list of tuple): Each element is either None or:
-            im, w_pos, scale, keepalpha:
-            im (wx.Image): the image
-            w_pos (2-tuple of float): position of the center of the image (in world
-                units)
-            scale (float): scaling of the image
-            keepalpha (boolean): whether the alpha channel must be used to draw
-            rotation (float): clockwise rotation in radians on the center of the image
-            blend_mode (int): optional blend mode to use for the image. Defaults to `source` which
-                just overrides underlying layers.
+        im_args (list of tuple): Each element is either None or
+            (im, w_pos, scale, keepalpha, rotation, name, blend_mode)
+
+            0. im (wx.Image): the image
+            1. w_pos (2-tuple of float): position of the center of the image (in world units)
+            2. scale (float): scaling of the image
+            3. keepalpha (boolean): whether the alpha channel must be used to draw
+            4. rotation (float): clockwise rotation in radians on the center of the image
+            5. name (str): name of the stream that the image originated from
+            6. blend_mode (int): blend mode to use for the image. Defaults to `source` which
+                    just overrides underlying layers.
 
         note: call request_drawing_update() to actually get the image redrawnafterwards
 
@@ -770,11 +771,9 @@ class BitmapCanvas(BufferedCanvas):
             if args is None:
                 images.append(None)
             else:
-                im, w_pos, scale, keepalpha, rotation = args[:5]
+                im, w_pos, scale, keepalpha, rotation, blend_mode, name = args
 
-                if len(args) == 6:
-                    blend_mode = args[-1]
-                else:
+                if not blend_mode:
                     blend_mode = BLEND_DEFAULT
 
                 if im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
@@ -785,6 +784,7 @@ class BitmapCanvas(BufferedCanvas):
                 im.metadata['dc_rotation'] = rotation
                 im.metadata['dc_keepalpha'] = keepalpha
                 im.metadata['blend_mode'] = blend_mode
+                im.metadata['name'] = name
 
                 images.append(im)
 
@@ -857,7 +857,10 @@ class BitmapCanvas(BufferedCanvas):
 
             # For every image, except the last
             for im in images:
-                print "Drawing %s %s %s" % (id(im), im.shape, im.metadata['blend_mode'])
+                # print "Drawing %s %s %s %s" % (id(im),
+                #                                im.shape,
+                #                                im.metadata['blend_mode'],
+                #                                im.metadata['name'])
                 self._draw_image(
                     ctx,
                     im,
@@ -871,7 +874,11 @@ class BitmapCanvas(BufferedCanvas):
             merge_ratio = self.merge_ratio if images else 1.0
             # merge_ratio = 1.0
 
-            print "Drawing last %s %s %s" % (id(last_image), last_image.shape, last_image.metadata['blend_mode'])
+            # print "Drawing last %s %s %s %s merge: %s" % (id(last_image),
+            #                                               last_image.shape,
+            #                                               last_image.metadata['blend_mode'],
+            #                                               last_image.metadata['name'],
+            #                                               merge_ratio)
             self._draw_image(
                 ctx,
                 last_image,
