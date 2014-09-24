@@ -46,12 +46,12 @@ class xrctext_frame(wx.Frame):
 #!XRCED:begin-block:xrctext_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrctext_frame.PreCreate
 
     def __init__(self, parent):
@@ -74,12 +74,12 @@ class xrcbutton_frame(wx.Frame):
 #!XRCED:begin-block:xrcbutton_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcbutton_frame.PreCreate
 
     def __init__(self, parent):
@@ -98,12 +98,12 @@ class xrccanvas_frame(wx.Frame):
 #!XRCED:begin-block:xrccanvas_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrccanvas_frame.PreCreate
 
     def __init__(self, parent):
@@ -122,12 +122,12 @@ class xrcfpb_frame(wx.Frame):
 #!XRCED:begin-block:xrcfpb_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcfpb_frame.PreCreate
 
     def __init__(self, parent):
@@ -146,6 +146,15 @@ class xrcfpb_frame(wx.Frame):
 
 
 
+class xrcmenu_bar(wx.MenuBar):
+    def __init__(self):
+        pre = get_resources().LoadMenuBar("menu_bar")
+        self.PostCreate(pre)
+        
+        # Define variables for the menu items
+
+
+
 
 
 # ------------------------ Resource data ----------------------
@@ -157,8 +166,9 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="stream_frame">
+    <object_ref ref="menu_bar"/>
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
@@ -461,6 +471,15 @@ def __init_resources():
     </object>
     <title>Fold Panel Bar Test Frame</title>
     <bg>#666666</bg>
+  </object>
+  <object class="wxMenuBar" name="menu_bar">
+    <object class="wxMenu">
+      <object class="wxMenuItem" name="item_inspect">
+        <label>Inspect</label>
+        <accel>Ctrl+V</accel>
+      </object>
+      <label>Extra</label>
+    </object>
   </object>
 </resource>'''
 

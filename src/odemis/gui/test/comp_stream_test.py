@@ -507,16 +507,10 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         stream_bar.add_stream(stream_panel)
         test.gui_loop()
 
-        stream_panel.flatten()
+        # stream_panel.flatten()
 
         test.gui_loop()
 
 
 if __name__ == "__main__":
     unittest.main()
-
-    # suit = unittest.TestSuite()
-    # suit.addTest(FoldPanelBarTestCase("test_zflatten"))
-
-    # runner = unittest.TextTestRunner()
-    # runner.run(suit)
