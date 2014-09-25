@@ -159,7 +159,7 @@ PIGCS: {
     class: pigcs.Bus,
     role: none,
     init: {
-        port: "192.168.92.67", # put "autoip" to automatically detect it
+        port: "autoip", # put "autoip" or the IP address (if fixed)
         # axis -> controller, channel, closed-loop?
         # FIXME: for now the controllers are not properly configured and not connected
         # to the encoder, so only open loop

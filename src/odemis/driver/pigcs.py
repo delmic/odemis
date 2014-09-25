@@ -2185,35 +2185,54 @@ class Bus(model.Actuator):
           controllers found.
         """
         logging.info("Ethernet network scanning for PI-GCS controllers in progress...")
-        found = []  # (list of 2-tuple): ip address, ip port
-        for port in [50000]: # TODO: the PI program tries on more ports
-            # Special protocol by PI (reversed-engineered):
-            # * Broadcast "PI" on a (known) port
-            # * Listen for an answer
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            try:
-                s.bind(('', 0))
-                s.sendto('PI', ('<broadcast>', port)) # FIXME: this can fail if no network connection
-                s.settimeout(1.0)  # It should take less than 1 s to answer
+        found = set()  # (set of 2-tuple): ip address, ip port
 
+        # Find all the broadcast addresses possible (one or more per network interfaces)
+        # In the ideal world, we could just use '<broadcast>', but apprently if
+        # there is not gateway to WAN, it will not work.
+        bdc = []
+        try:
+            import netifaces
+            for itf in netifaces.interfaces():
                 try:
+                    for addrinfo in netifaces.ifaddresses(itf)[socket.AF_INET]:
+                        bdc.append(addrinfo["broadcast"])
+                except KeyError:
+                    pass # no INET or no "broadcast"
+        except ImportError:
+            bdc = ['<broadcast>']
+
+        for bdcaddr in bdc:
+            for port in [50000]: # TODO: the PI program tries on more ports
+                # Special protocol by PI (reversed-engineered):
+                # * Broadcast "PI" on a (known) port
+                # * Listen for an answer
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    s.bind(('', 0))
+                    logging.debug("Broadcasting on %s:%d", bdcaddr, port)
+                    s.sendto('PI', (bdcaddr, port))
+                    s.settimeout(1.0)  # It should take less than 1 s to answer
+
                     while True:
                         data, fulladdr = s.recvfrom(1024)
                         if not data:
                             break
                         # data should contain something like "PI C-863K016 SN 0 -- listening on port 50000 --"
                         if data.startswith("PI"):
-                            found.append(fulladdr)
+                            found.add(fulladdr)
                         else:
                             logging.info("Received %s from %s", data.encode('string_escape'), fulladdr)
                 except socket.timeout:
                     pass
-            except Exception:
-                logging.exception("Failed to broadcast on port %d", port)
+                except socket.error:
+                    logging.info("Couldn't broadcast on %s:%d", bdcaddr, port)
+                except Exception:
+                    logging.exception("Failed to broadcast on %s:%d", bdcaddr, port)
 
-        return found
+        return list(found)
 
     @staticmethod
     def _openSerialPort(port, baudrate=38400, _addresses=None):
