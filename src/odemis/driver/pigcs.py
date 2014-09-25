@@ -2186,7 +2186,7 @@ class Bus(model.Actuator):
                         for a, cl in axes.items():
                             arg[axes_names[axis_num]] = (add, a, cl)
                             axis_num += 1
-                    found.append(("Actuator " + os.path.basename(p),
+                    found.append(("Actuator IP",
                                  {"port": "%s:%d" % ipadd, "axes": arg}))
             except IOError:
                 logging.info("Failed to scan on master %s:%d", ipadd[0], ipadd[1])
