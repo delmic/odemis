@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+from Pyro4.core import isasync
 import collections
 from concurrent import futures
 from concurrent.futures._base import CancelledError
@@ -33,11 +34,10 @@ import logging
 import math
 import numpy
 from odemis import model
-from Pyro4.core import isasync
 from odemis.acq import _futures
 from odemis.acq.stream import FluoStream, OPTICAL_STREAMS, EM_STREAMS, SEMCCDMDStream, \
     OverlayStream
-from odemis.util import img
+from odemis.util import img, fluo
 import sys
 import threading
 import time
@@ -145,7 +145,7 @@ def _weight_stream(stream):
         # wavelengths first because there is no chance their emission light
         # affects the other dyes (and which could lead to a little bit of
         # bleaching).
-        ewl_bonus = stream.emission.value # normally, between 0 and 1
+        ewl_bonus = fluo.get_center(stream.emission.value) # normally, between 0 and 1
         return 100 + ewl_bonus
     elif isinstance(stream, OPTICAL_STREAMS):
         return 90 # any other kind of optical after fluorescence
