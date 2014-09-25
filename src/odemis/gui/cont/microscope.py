@@ -40,7 +40,7 @@ import odemis.util.units as units
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
 # FIXME: need to find out the real type number
-PHENOM_SH_TYPE_OPTICAL = 1  # sample holder for the Delphi, containing a lens
+PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
 
@@ -624,7 +624,8 @@ class DelphiStateController(SecomStateController):
                 logging.exception("Failed to find sample holder ID")
                 shid, sht = 1, PHENOM_SH_TYPE_STANDARD # assume it's a standard holder
 
-            if sht == PHENOM_SH_TYPE_OPTICAL:
+            # FIXME: remove PHENOM_SH_TYPE_STANDARD once all the sample holders are confirmed to be of the correct type
+            if sht == PHENOM_SH_TYPE_OPTICAL or sht == PHENOM_SH_TYPE_STANDARD:
                 # TODO: look in the config file if the sample holder is known, or needs
                 # first-time calibration (and ask the user to continue), and otherwise
                 # update the metadata
