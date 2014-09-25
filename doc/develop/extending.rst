@@ -27,7 +27,7 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 12.04 (x86 32 bits, preferably with kernel 3.5 aka linux-generic-lts-quantal)
+ * `Ubuntu <http://www.ubuntu.com>`_ 12.04 (x86 32 or 64 bits)
  * Eclipse + PyDev plug-in + Pylint
  * XRCed (package python-wxtools) for GUI edition
 
@@ -43,7 +43,7 @@ Detailed instructions
 ---------------------
 
 Download Ubuntu 12.04 at this address:
-http://www.ubuntu.com/download/desktop/thank-you?release=lts&bits=32&distro=desktop&status=zeroc
+http://www.ubuntu.com/download/desktop/thank-you?release=lts&bits=64&distro=desktop&status=zeroc
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-desktop-long-term-support
@@ -64,7 +64,7 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo adduser $(whoami) odemis
     mkdir development
     cd development
-    git clone git@github.com:delmic/odemis.git
+    git clone https://github.com/delmic/odemis.git
     cd odemis
     python setup.py build_ext --inplace
 
@@ -84,7 +84,7 @@ like ``sparc-sim`` or ``secom-sim``). For example::
 
     MODEL="$CONFIGPATH/sparc-sim.odm.yaml"
     
-If you want to use a simulated microscope, you need to set-up the simulated
+For some simulated microscopes, you need to set-up the simulated
 acquisition board of the SEM with the following commands::
 
     sudo modprobe comedi comedi_num_legacy_minors=4
@@ -99,12 +99,15 @@ Install Eclipse and the plugins
 """""""""""""""""""""""""""""""
 Type the following commands::
 
+    sudo add-apt-repository ppa:webupd8team/java
+    sudo apt-get update
+    sudo apt-get install oracle-java7-installer
     sudo easy_install --upgrade pylint
     cd ~
     mkdir usr
     cd usr
-    wget http://download.eclipse.org/technology/epp/downloads/release/kepler/SR1/eclipse-standard-kepler-SR1-linux-gtk.tar.gz
-    tar xf eclipse-standard-kepler-SR1-linux-gtk.tar.gz
+    wget http://download.eclipse.org/technology/epp/downloads/release/luna/R/eclipse-standard-luna-R-linux-gtk-x86_64.tar.gz
+    tar xf eclipse-standard-luna-R-linux-gtk-x86_64.tar.gz
     ~/usr/eclipse/eclipse
 
 Go to *Help/Marketplace...*. Search for PyDev, and install it.
@@ -127,10 +130,17 @@ Edit Odemis with Eclipse
 2. Enter "odemis" as project name
 
 3. Select a directory for project contents: the place where Odemis was downloaded (i.e., ``/home/.../development/odemis``)
- 
+
 4. Select "Create 'src' folder and add it to the PYTHONPATH"
 
 5. Click on Finish
+
+Learning Python
+"""""""""""""""
+Allmost all Odemis is written in Python. If you are not familliar with this
+programming language, it is recommended you first have a look at a tutorial.
+For instance, read 
+`A Crash Course in Python for Scientists <http://nbviewer.ipython.org/gist/rpmuller/5920182>`_.
 
 Using Git
 """""""""

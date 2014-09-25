@@ -46,7 +46,7 @@ class BaseSlider(wx.PyControl):
     # The abstract methods must be implemented by any class inheriting from
     # BaseSlider
 
-    def Disable(self): #pylint: disable=W0221
+    def Disable(self):
         return self.Enable(False)
 
     @abstractmethod
@@ -124,7 +124,6 @@ class BaseSlider(wx.PyControl):
         evt.SetEventObject(self)
         self.GetEventHandler().ProcessEvent(evt)
 
-
     @staticmethod
     def _linear_val_to_perc(r0, r1, v):
         if r0 == r1: # Division by 0
@@ -171,7 +170,7 @@ class BaseSlider(wx.PyControl):
         """
         assert(r0 < r1)
         p = abs((v - r0) / (r1 - r0))
-        p = p ** (1 / 3)
+        p **= 1 / 3
         return p
 
     @staticmethod
@@ -180,9 +179,10 @@ class BaseSlider(wx.PyControl):
         a cube.
         """
         assert(r0 < r1)
-        p = p ** 3
+        p **= 3
         v = (r1 - r0) * p + r0
         return v
+
 
 class Slider(BaseSlider):
     """ This class describes a Slider control.
@@ -263,13 +263,13 @@ class Slider(BaseSlider):
 
         # If the user is dragging the NumberSlider, and thus it has the mouse
         # captured, a call to SetValue will not result in the value of the
-        # slider chaning. This is to prevent the slider from jumping back and
+        # slider changing. This is to prevent the slider from jumping back and
         # forth, while the user is trying to drag.
         # A side effect of that is, that when another part of the system (e.g.
         # a VirtualAttribute) is trying to set the value, it will be ignored.
         # Instead of ignoring the value, it is now stored in the last_set
         # attribute, which is used to call _SetValue when the mouse button is
-        # released (i.e. end of draggin).
+        # released (i.e. end of dragging).
 
         self.last_set = None
 
@@ -317,7 +317,6 @@ class Slider(BaseSlider):
             pix_x = self._val_to_pixel(v) + self.half_h_width
             dc.DrawLine(pix_x, half_height - 1,
                         pix_x, half_height + 2)
-
 
         if self.Enabled:
             dc.DrawBitmap(self.bitmap,
@@ -517,9 +516,9 @@ class Slider(BaseSlider):
         """ Return the maximum value of the range """
         return self.max_value
 
+
 class NumberSlider(Slider):
-    """ A Slider with an extra linked text field showing the current value.
-    """
+    """ A Slider with an extra linked text field showing the current value. """
 
     def __init__(self, parent, wid=wx.ID_ANY, value=0, min_val=0.0,
                  max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
@@ -549,10 +548,16 @@ class NumberSlider(Slider):
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
 
+    def OnSize(self, event=None):
+        super(NumberSlider, self).OnSize(event)
+        # Set the height of the linked field to make it's middle line up with the
+        # horizontal line of the slider
+        height = self.GetHeight() + 4
+        self.linked_field.SetSize((self.linked_field.Size[0], height))
+
     def SetForegroundColour(self, colour, *args, **kwargs):
         Slider.SetForegroundColour(self, colour)
         self.linked_field.SetForegroundColour(colour)
-
 
     def __del__(self):
         try:
@@ -625,6 +630,7 @@ class NumberSlider(Slider):
         self.linked_field.SetValueRange(min_value, max_value)
         super(NumberSlider, self).SetRange(min_value, max_value)
 
+
 class UnitIntegerSlider(NumberSlider):
 
     def __init__(self, *args, **kwargs):
@@ -634,6 +640,7 @@ class UnitIntegerSlider(NumberSlider):
     def _update_linked_field(self, value):
         value = int(value)
         NumberSlider._update_linked_field(self, value)
+
 
 class UnitFloatSlider(NumberSlider):
 
@@ -661,9 +668,9 @@ class VisualRangeSlider(BaseSlider):
 
     """
 
-    sel_alpha = 0.5 # %
-    sel_alpha_h = 0.7 # %
-    min_sel_width = 2 # px
+    sel_alpha = 0.5  # %
+    sel_alpha_h = 0.7  # %
+    min_sel_width = 2  # px
 
     def __init__(self, parent, wid=wx.ID_ANY, value=(0.0, 1.0), min_val=0.0,
                  max_val=1.0, size=(-1, -1), pos=wx.DefaultPosition,
@@ -722,7 +729,7 @@ class VisualRangeSlider(BaseSlider):
         # platforms at initialization, but little harm done.
         self.OnSize(None)
 
-    def SetForegroundColour(self, col):  #pylint: disable=W0221
+    def SetForegroundColour(self, col):
         ret = super(VisualRangeSlider, self).SetForegroundColour(col)
         self.content_color = wxcol_to_frgb(self.GetForegroundColour())
         # FIXME: content_color will have wrong value if currently Disabled
@@ -1001,6 +1008,7 @@ class VisualRangeSlider(BaseSlider):
         _, height = self.ClientSize
         ctx = wxcairo.ContextFromDC(dc)
         self._draw_selection(ctx, height)
+
 
 class BandwidthSlider(VisualRangeSlider):
 

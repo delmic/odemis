@@ -70,6 +70,7 @@ OPT_BTN_VISIBLE = 4 # show/hide the stream image
 OPT_BTN_UPDATED = 8 # update/stop the stream acquisition
 OPT_BTN_TINT = 16 # tint of the stream (if the VA exists)
 
+
 class Expander(wx.PyControl):
     """ This class describes a clickable control responsible for showing and
     hiding settings belonging to a specific stream.
@@ -778,14 +779,15 @@ class StreamPanel(wx.PyPanel):
 
         lbl_bc_outliers = wx.StaticText(self._panel, -1, "Outliers")
         self._sld_bc_outliers = UnitFloatSlider(
-                                    self._panel,
-                                    value=self.stream.auto_bc_outliers.value,
-                                    min_val=self.stream.auto_bc_outliers.range[0],
-                                    max_val=self.stream.auto_bc_outliers.range[1],
-                                    t_size=(40, -1),
-                                    unit="%",
-                                    scale="cubic",
-                                    accuracy=2)
+            self._panel,
+            value=self.stream.auto_bc_outliers.value,
+            min_val=self.stream.auto_bc_outliers.range[0],
+            max_val=self.stream.auto_bc_outliers.range[1],
+            t_size=(50, -1),
+            unit="%",
+            scale="cubic",
+            accuracy=2
+        )
 
         self._sld_bc_outliers.SetToolTipString("Percentage of values to ignore "
                                                "in auto brightness and contrast")
@@ -1159,7 +1161,7 @@ class StreamPanel(wx.PyPanel):
         it fits to the given band setting.
         lbl_ctrl (wx.StaticText): control to update the foreground colour
         col_ctrl (wx.ButtonColour): just to update the tooltip
-        wl (None or float): the wavelength of peak of the dye or None if no dye 
+        wl (None or float): the wavelength of peak of the dye or None if no dye
         band ((list of) tuple of 2 or 5 floats): the band of the hw setting
         """
         if wl is None:
@@ -1474,16 +1476,15 @@ class StreamBar(wx.Panel):
     DEFAULT_STYLE = wx.BOTTOM | wx.EXPAND
     # the order in which the streams are displayed
     STREAM_ORDER = [
-                acq.stream.SEMStream,
-                acq.stream.StaticSEMStream,
-                acq.stream.BrightfieldStream,
-                acq.stream.CameraNoLightStream,
-                acq.stream.StaticStream,
-                acq.stream.FluoStream,
-                acq.stream.SpectrumStream,
-                acq.stream.ARStream,
+        acq.stream.SEMStream,
+        acq.stream.StaticSEMStream,
+        acq.stream.BrightfieldStream,
+        acq.stream.CameraNoLightStream,
+        acq.stream.StaticStream,
+        acq.stream.FluoStream,
+        acq.stream.SpectrumStream,
+        acq.stream.ARStream,
     ]
-
 
     def __init__(self, *args, **kwargs):
 

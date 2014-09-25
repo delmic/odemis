@@ -21,20 +21,25 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from numpy.polynomial import polynomial
-from odemis import model
-from odemis.dataio import tiff
-from unittest.case import skip
+
 import Image
 import libtiff
-import libtiff.libtiff_ctypes as T # for the constant names
 import logging
 import numpy
+from numpy.polynomial import polynomial
+from odemis import model
+import odemis
+from odemis.dataio import tiff
+from odemis.util import img
 import os
 import re
 import time
 import unittest
+from unittest.case import skip
+
+import libtiff.libtiff_ctypes as T # for the constant names
 import xml.etree.ElementTree as ET
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -191,6 +196,8 @@ class TestTiffIO(unittest.TestCase):
         size = (512, 256)
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake spec",
+                    model.MD_HW_VERSION: "1.23",
+                    model.MD_SW_VERSION: "aa 4.56",
                     model.MD_DESCRIPTION: "test3d",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
@@ -330,6 +337,7 @@ class TestTiffIO(unittest.TestCase):
         dtype = numpy.dtype("uint64")
         metadata = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake hw",
+                    model.MD_HW_VERSION: "2.54",
                     model.MD_DESCRIPTION: "test",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
@@ -359,8 +367,10 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(T.SAMPLEFORMAT_UINT, ifd.get_value("SampleFormat")[0])
         
         # check metadata
-        self.assertEqual("Odemis " + metadata[model.MD_SW_VERSION], ifd.get_value("Software"))
+        self.assertEqual("Odemis " + odemis.__version__, ifd.get_value("Software"))
         self.assertEqual(metadata[model.MD_HW_NAME], ifd.get_value("Make"))
+        self.assertEqual(metadata[model.MD_HW_VERSION] + " (driver %s)" % metadata[model.MD_SW_VERSION],
+                         ifd.get_value("Model"))
         self.assertEqual(metadata[model.MD_DESCRIPTION], ifd.get_value("PageName"))
         yres = rational2float(ifd.get_value("YResolution"))
         self.assertAlmostEqual(1 / metadata[model.MD_PIXEL_SIZE][1], yres * 100)
@@ -639,6 +649,10 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_EXP_TIME: 1.2, # s
                      model.MD_IN_WL: (400e-9, 630e-9), # m
                      model.MD_OUT_WL: (400e-9, 630e-9), # m
+                     # correction metadata
+                     model.MD_POS_COR: (-1e-6, 3e-6), # m
+                     model.MD_PIXEL_SIZE_COR: (1.2, 1.2),
+                     model.MD_ROTATION_COR: 6.27, # rad
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -695,7 +709,8 @@ class TestTiffIO(unittest.TestCase):
 
         # TODO: rdata and ldata don't have to be in the same order
         for i, im in enumerate(rdata):
-            md = metadata[i]
+            md = metadata[i].copy()
+            img.mergeMetadata(md)
             self.assertEqual(im.metadata[model.MD_DESCRIPTION], md[model.MD_DESCRIPTION])
             numpy.testing.assert_allclose(im.metadata[model.MD_POS], md[model.MD_POS], rtol=1e-4)
             numpy.testing.assert_allclose(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])

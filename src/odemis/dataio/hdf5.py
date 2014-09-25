@@ -25,7 +25,7 @@ import h5py
 import logging
 import numpy
 from odemis import model
-from odemis.util import spectrum
+from odemis.util import spectrum, img
 import os
 import time
 
@@ -1015,6 +1015,17 @@ def _dataFromHDF5(filename):
     f.visititems(addIfWorthy)
     return data
 
+def _mergeCorrectionMetadata(da):
+    """
+    Create a new DataArray with metadata updated to with the correction metadata
+    merged.
+    da (DataArray): the original data
+    return (DataArray): new DataArray (view) with the updated metadata
+    """
+    md = da.metadata.copy() # to avoid modifying the original one
+    img.mergeMetadata(md)
+    return model.DataArray(da, md) # create a view
+
 def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
     Saves a list of DataArray as a HDF5 (SVI) file.
@@ -1039,11 +1050,15 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
         compression = None
 
     if thumbnail is not None:
+        thumbnail = _mergeCorrectionMetadata(thumbnail)
         # Save the image as-is in a special group "Preview"
         prevg = f.create_group("Preview")
         _updateRGBMD(thumbnail) # ensure RGB info is there if needed
         ids = _create_image_dataset(prevg, "Image", thumbnail, compression=compression)
         _add_image_info(prevg, ids, thumbnail)
+
+    # merge correction metadata (as we cannot save them separatly in OME-TIFF)
+    ldata = [_mergeCorrectionMetadata(da) for da in ldata]
 
     # list ndarray/list of list of metadata (one per channel)
     acq, mds = _groupImages(ldata)

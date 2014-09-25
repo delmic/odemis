@@ -1575,7 +1575,8 @@ class OLController(Controller):
         return distance
 
     def stopMotion(self):
-        Controller.stopMotion(self)
+        # Controller.stopMotion(self)
+        super(OLController, self).stopMotion()
         for c in self._channels:
             self._storeStop(c)
 
@@ -1960,8 +1961,7 @@ class Bus(model.Actuator):
         self._setSpeed(speed)
 
         # set HW and SW version
-        self._swVersion = "%s (serial driver: %s)" % (odemis.__version__,
-                                                      driver.getSerialDriver(port))
+        self._swVersion = self.accesser.driverInfo
         hwversions = []
         for axis, (ctrl, channel) in self._axis_to_cc.items():
             hwversions.append("'%s': %s (GCS %s) for %s" %
@@ -1973,23 +1973,18 @@ class Bus(model.Actuator):
         self._action_mgr = ActionManager(self)
         self._action_mgr.start()
     
-    def _getPosition(self):
-        """
-        return (dict string -> float): axis name to (absolute) position
-        """
-        position = {}
-        # request position from each controller
-        for axis, (controller, channel) in self._axis_to_cc.items():
-            position[axis] = controller.getPosition(channel)
-
-        return self._applyInversionAbs(position)
-
     def _updatePosition(self):
         """
         update the position VA
         Note: it should not be called while holding the lock to the serial port
         """
-        pos = self._getPosition() # TODO: improve efficiency (don't ask all controllers every times)
+        position = {}
+        # TODO: improve efficiency (don't ask all controllers every times)
+        # request position from each controller
+        for axis, (controller, channel) in self._axis_to_cc.items():
+            position[axis] = controller.getPosition(channel)
+
+        pos = self._applyInversionAbs(position)
         logging.debug("Reporting new position at %s", pos)
 
         # it's read-only, so we change it via _value
@@ -2098,6 +2093,8 @@ class Bus(model.Actuator):
             if controller not in controllers:
                 controller.terminate()
 
+        self.accesser.terminate()
+
     def selfTest(self):
         """
         No move should be going one while doing a self-test
@@ -2120,6 +2117,7 @@ class Bus(model.Actuator):
                 if not ipmasters:
                     raise IOError("Failed to find any PI network master controller")
                 host, ipport = ipmasters[0]
+                logging.info("Will connect to %s:%d", host, ipport)
             else:
                 # split the (IP) port, separated by a :
                 if ":" in port:
@@ -2149,8 +2147,8 @@ class Bus(model.Actuator):
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
 
         logging.info("Serial network scanning for PI-GCS controllers in progress...")
-        axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        axes_names = "xyzabcdefghijklmnopqrstuvw"
         for p in ports:
             try:
                 # check all possible baud rates, in the most likely order
@@ -2174,8 +2172,24 @@ class Bus(model.Actuator):
                 # not possible to use this port? next one!
                 pass
 
-        # TODO: scan for controllers via each IP master controller
+        # Scan for controllers via each IP master controller
         ipmasters = cls._scanIPMasters()
+        for ipadd in ipmasters:
+            try:
+                logging.debug("Scanning controllers on master %s:%d", ipadd[0], ipadd[1])
+                sock = cls._openIPSocket(*ipadd)
+                controllers = Controller.scan(IPBusAccesser(sock))
+                if controllers:
+                    axis_num = 0
+                    arg = {}
+                    for add, axes in controllers.items():
+                        for a, cl in axes.items():
+                            arg[axes_names[axis_num]] = (add, a, cl)
+                            axis_num += 1
+                    found.append(("Actuator IP",
+                                 {"port": "%s:%d" % ipadd, "axes": arg}))
+            except IOError:
+                logging.info("Failed to scan on master %s:%d", ipadd[0], ipadd[1])
         
         return found
     
@@ -2187,35 +2201,54 @@ class Bus(model.Actuator):
           controllers found.
         """
         logging.info("Ethernet network scanning for PI-GCS controllers in progress...")
-        found = []  # (list of 2-tuple): ip address, ip port
-        for port in [50000]: # TODO: the PI program tries on more ports
-            # Special protocol by PI (reversed-engineered):
-            # * Broadcast "PI" on a (known) port
-            # * Listen for an answer
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-            try:
-                s.bind(('', 0))
-                s.sendto('PI', ('<broadcast>', port)) # FIXME: this can fail if no network connection
-                s.settimeout(1.0)  # It should take less than 1 s to answer
+        found = set()  # (set of 2-tuple): ip address, ip port
 
+        # Find all the broadcast addresses possible (one or more per network interfaces)
+        # In the ideal world, we could just use '<broadcast>', but apprently if
+        # there is not gateway to WAN, it will not work.
+        bdc = []
+        try:
+            import netifaces
+            for itf in netifaces.interfaces():
                 try:
+                    for addrinfo in netifaces.ifaddresses(itf)[socket.AF_INET]:
+                        bdc.append(addrinfo["broadcast"])
+                except KeyError:
+                    pass # no INET or no "broadcast"
+        except ImportError:
+            bdc = ['<broadcast>']
+
+        for bdcaddr in bdc:
+            for port in [50000]: # TODO: the PI program tries on more ports
+                # Special protocol by PI (reversed-engineered):
+                # * Broadcast "PI" on a (known) port
+                # * Listen for an answer
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+                    s.bind(('', 0))
+                    logging.debug("Broadcasting on %s:%d", bdcaddr, port)
+                    s.sendto('PI', (bdcaddr, port))
+                    s.settimeout(1.0)  # It should take less than 1 s to answer
+
                     while True:
-                        data, addr = s.recvfrom(1024)
+                        data, fulladdr = s.recvfrom(1024)
                         if not data:
                             break
                         # data should contain something like "PI C-863K016 SN 0 -- listening on port 50000 --"
                         if data.startswith("PI"):
-                            found.append((addr, port))
+                            found.add(fulladdr)
                         else:
-                            logging.info("Received %s from %s", data.encode('string_escape'), addr)
+                            logging.info("Received %s from %s", data.encode('string_escape'), fulladdr)
                 except socket.timeout:
                     pass
-            except Exception:
-                logging.exception("Failed to broadcast on port %d", port)
+                except socket.error:
+                    logging.info("Couldn't broadcast on %s:%d", bdcaddr, port)
+                except Exception:
+                    logging.exception("Failed to broadcast on %s:%d", bdcaddr, port)
 
-        return found
+        return list(found)
 
     @staticmethod
     def _openSerialPort(port, baudrate=38400, _addresses=None):
@@ -2245,9 +2278,8 @@ class Bus(model.Actuator):
         port (int): the (IP) port number
         return (socket): the opened socket connection
         """
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock = socket.create_connection((host, port), timeout=5)
         sock.settimeout(0.5) # s
-        sock.connect((host, port))
         return sock
 
 class SerialBusAccesser(object):
@@ -2258,6 +2290,10 @@ class SerialBusAccesser(object):
         self.serial = serial
         # to acquire before sending anything on the serial port
         self.ser_access = threading.Lock()
+        self.driverInfo = "serial driver: %s" % (driver.getSerialDriver(serial.port),)
+
+    def terminate(self):
+        self.serial.close()
 
     def sendOrderCommand(self, addr, com):
         """
@@ -2267,13 +2303,13 @@ class SerialBusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 255)
+        assert(1 <= addr <= 16 or addr == 254 or addr == 255)
         if addr is None:
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.serial.write(full_com)
             # We don't flush, as it will be done anyway if an answer is needed
 
@@ -2289,13 +2325,13 @@ class SerialBusAccesser(object):
          it's left as is.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16)
+        assert(1 <= addr <= 16 or addr == 254)
         if addr is None:
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.serial.write(full_com)
 
             # ensure everything is received, before expecting an answer
@@ -2359,6 +2395,16 @@ class IPBusAccesser(object):
         # to acquire before sending anything on the socket
         self.ser_access = threading.Lock()
 
+        # recover the main controller from previous errors (just in case)
+        err = self.sendQueryCommand(254, "ERR?\n")
+
+        # Get the master controller version
+        version = self.sendQueryCommand(254, "*IDN?\n")
+        self.driverInfo = "%s" % (version.encode('string_escape'),)
+
+    def terminate(self):
+        self.socket.close()
+
     def sendOrderCommand(self, addr, com):
         """
         Send a command which does not expect any report back
@@ -2367,13 +2413,13 @@ class IPBusAccesser(object):
         com (string): command to send (including the \n if necessary)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16 or addr == 255)
+        assert(1 <= addr <= 16 or addr == 254 or addr == 255)
         if addr is None:
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.socket.sendall(full_com)
 
     def sendQueryCommand(self, addr, com):
@@ -2384,49 +2430,68 @@ class IPBusAccesser(object):
         return (string or list of strings): the report without prefix 
            (e.g.,"0 1") nor newline. 
            If answer is multiline: returns a list of each line
-        Note: multiline answers seem to always begin with a \x00 character, but
-         it's left as is.
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
-        assert(1 <= addr <= 16)
+        assert(1 <= addr <= 16 or addr == 254)
         if addr is None:
             full_com = com
         else:
             full_com = "%d %s" % (addr, com)
-        logging.debug("Sending: '%s'", full_com.encode('string_escape'))
+
         with self.ser_access:
+            logging.debug("Sending: '%s'", full_com.encode('string_escape'))
             self.socket.sendall(full_com)
 
-            try:
-                line = ""
-                lines = []
-                while True:
-                    char = self.socket.recv(1) # TODO: optimise by receiving more
-                    if char == "\n":
-                        if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
-                            not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
-                            lines.append(line[:-1]) # don't include the space
-                            line = ""
-                        else:
-                            # full end
-                            lines.append(line)
-                            break
-                    else:
-                        # normal char
-                        line += char
-            except socket.timeout:
-                raise IOError("Controller %d timeout." % addr)
+            # read the answer
+            end_time = time.time() + 0.5
+            ans = ""
+            while True:
+                try:
+                    data = self.socket.recv(4096)
+                except socket.timeout:
+                    raise IOError("Controller %d timeout." % addr)
+                # If the master is already accessed from somewhere else it will just
+                # immediately answer an empty message
+                if not data:
+                    if time.time() > end_time:
+                        raise IOError("Master controller not answering. It might be already connected with another client.")
+                    time.sleep(0.01)
+                    continue
 
-        assert len(lines) > 0
+                ans += data
+                # does it look like we received the end of an answer?
+                # To be really sure we'd need to wait until timeout, but that
+                # would slow down a lot. Normally, if we've received one full
+                # answer, there's 99% chance we've received everything.
+                # An answer ends with \n (and not " \n", which indicates multi-
+                # line).
+                if (ans[-1] == "\n" and (
+                     ans[-2] != " " or  # multiline: "... \n"
+                     re.match(r"0 \d+ $", ans))):  # excepted empty line "0 1 \n"
+                    break
 
-        logging.debug("Received: '%s'", "\n".join(lines).encode('string_escape'))
+        logging.debug("Received: '%s'", ans.encode('string_escape'))
+
+        # remove the prefix and last newline
         if addr is None:
             prefix = ""
         else:
             prefix = "0 %d " % addr
-        if not lines[0].startswith(prefix):
-            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, lines[0]))
-        lines[0] = lines[0][len(prefix):]
+        if not ans.startswith(prefix):
+            raise IOError("Report prefix unexpected after '%s': '%s'." % (com, ans))
+        ans = ans[len(prefix):-1]
+
+        # Interpret the answer
+        lines = []
+        for i, l in enumerate(ans.split("\n")):
+            if l[-1] == " ": # remove the spaces indicating multi-line
+                l = l[:-1]
+            elif i != len(lines):
+                logging.warning("Skipping previous answer from hardware %s",
+                                "\n".join(lines + [l]).encode('string_escape'))
+                lines = []
+                continue
+            lines.append(l)
 
         if len(lines) == 1:
             return lines[0]
@@ -2796,6 +2861,7 @@ class E861Simulator(object):
         address (1<=int<=16): the address of the controller
         closedloop (bool): whether it simulates a closed-loop actuator or not
         """
+        self.port = port
         self._address = address
         self._has_encoder = closedloop
         # we don't care about the actual parameters but timeout
@@ -3156,10 +3222,11 @@ class DaisyChainSimulator(object):
     Simulated serial port that can simulate daisy chain on the controllers
     Same interface as the serial port + list of (fake) serial ports to connect 
     """
-    def __init__(self, timeout=0, *args, **kwargs):
+    def __init__(self, port, timeout=0, *args, **kwargs):
         """
         subports (list of open ports): the ports to receive the data
         """
+        self.port = port
         self.timeout = timeout
         self._subports = kwargs["subports"]
         self._output_buf = "" # TODO: probably cleaner to user lock to access it

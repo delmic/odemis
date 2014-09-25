@@ -21,7 +21,6 @@ This file is part of Odemis.
 
 """
 
-from odemis.gui import test
 from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.cont.settings import SettingsController
 from odemis.gui.test import gui_loop
@@ -37,19 +36,16 @@ test.goto_manual()
 
 class SettingsControllerTestCase(test.GuiTestCase):
 
-    frame_class = test.test_gui.xrcstream_frame
+    frame_class = test.test_gui.xrcfpb_frame
 
     @classmethod
     def setUpClass(cls):
         super(SettingsControllerTestCase, cls).setUpClass()
-        cls.frame.stream_bar.Destroy()
         cls.frame.Layout()
 
     def test_grrr(self):
 
         sc = SettingsController(self.frame.fpb.GetChildren()[0], "Settings test")
-
-        sc.add_component("neus", comp, sc.panel)
 
 if __name__ == "__main__":
     # gen_test_data()

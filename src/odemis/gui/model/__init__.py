@@ -635,8 +635,8 @@ class MicroscopeView(View):
         self.view_pos = model.ListVA(view_pos_init, unit="m")
 
         # current density (meter per pixel, ~ scale/zoom level)
-        # 10µm/px => ~large view of the sample
-        self.mpp = FloatContinuous(10e-6, range=(10e-12, 1e-3), unit="m/px")
+        # 1µm/px => ~large view of the sample (view width ~= 1000 px)
+        self.mpp = FloatContinuous(1e-6, range=(10e-12, 50e-6), unit="m/px")
 
         # How much one image is displayed on the other one. Value used by
         # StreamTree

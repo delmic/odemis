@@ -30,7 +30,6 @@ import gc
 import logging
 import numpy
 from odemis import model, util, dataio
-import odemis
 from odemis.util import img
 import os
 import threading
@@ -426,8 +425,8 @@ class AndorCam2(model.DigitalCamera):
         if not caps.CameraType in AndorCapabilities.CameraTypes:
             logging.warning("This driver has not been tested for this camera type")
 
-        # odemis + drivers
-        self._swVersion = "%s (%s)" % (odemis.__version__, self.getSwVersion())
+        # drivers/hardware info
+        self._swVersion = self.getSwVersion()
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         hwv = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = hwv

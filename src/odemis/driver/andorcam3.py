@@ -236,8 +236,8 @@ class AndorCam3(model.DigitalCamera):
         # up-to-date metadata to be included in dataflow
         self._metadata[model.MD_HW_NAME] = self.getModelName()
         
-        # odemis + sdk
-        self._swVersion = "%s (driver %s)" % (odemis.__version__, self.getSDKVersion())
+        # sdk + hardware versions
+        self._swVersion = self.getSDKVersion()
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         self._hwVersion = self.getHwVersion()
         self._metadata[model.MD_HW_VERSION] = self._hwVersion

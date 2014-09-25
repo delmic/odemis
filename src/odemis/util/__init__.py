@@ -267,7 +267,7 @@ class RepeatingTimer(threading.Thread):
         except Exception:
             logging.exception("Failure while calling a repeating timer")
         finally:
-            logging.debug("Repeating timer thread over")
+            logging.debug("Repeating timer thread '%s' over", self.name)
 
     def cancel(self):
         self._must_stop.set()

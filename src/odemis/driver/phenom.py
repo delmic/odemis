@@ -144,6 +144,9 @@ class SEM(model.HwComponent):
             self._hwVersion = "%s" % (info[start:end])
             self._metadata[model.MD_HW_NAME] = self._hwVersion
 
+            # TODO: how to retrieve the edition information?
+            self._metadata[model.MD_HW_VERSION] = "G4"
+
             start = info.index("'Version'>") + len("'Version'>")
             end = info.index("</Property", start)
             self._swVersion = "%s" % (info[start:end])
@@ -758,6 +761,7 @@ class Detector(model.Detector):
                 metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
                 metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
                                                  img_str.aAcqState.pixelHeight)
+                metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
 
                 # image to ndarray
                 sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),

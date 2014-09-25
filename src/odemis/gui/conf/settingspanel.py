@@ -37,8 +37,12 @@ from odemis.model import NotApplicableError
 # ==============================================================================
 # The following function can be used to set dynamic configuration values
 # ==============================================================================
-def _resolution_from_range(comp, va, conf):
-    """ Construct a list of resolutions depending on range values """
+def _resolution_from_range(comp, va, conf, init=None):
+    """
+    Construct a list of resolutions depending on range values
+    init (set or None): values that will be always in the choices. If None, it
+      will just ensure that the current value is present.
+    """
 
     cur_val = va.value
     if len(cur_val) != 2:
@@ -46,7 +50,10 @@ def _resolution_from_range(comp, va, conf):
         return [cur_val]
 
     try:
-        choices = set([cur_val, (1, 1)])
+        if init is None:
+            choices = {cur_val}
+        else:
+            choices = init
         num_pixels = cur_val[0] * cur_val[1]
         res = va.range[1] # start with max resolution
 
@@ -61,6 +68,11 @@ def _resolution_from_range(comp, va, conf):
     except NotApplicableError:
         return [cur_val]
 
+def _resolution_from_range_plus_point(comp, va, conf):
+    """
+    Same as _resolution_from_range() but also add a 1x1 value
+    """
+    return _resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
 
 def _binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings available in one dimension (pixel always square)
@@ -358,7 +370,7 @@ CONFIG_PER_ROLE = {
         "repetition":
         {
             "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": _resolution_from_range,
+            "choices": _resolution_from_range_plus_point,
         },
         "pixelSize":
         {
@@ -371,7 +383,7 @@ CONFIG_PER_ROLE = {
         "repetition":
         {
             "control_type": odemis.gui.CONTROL_COMBO,
-            "choices": _resolution_from_range,
+            "choices": _resolution_from_range_plus_point,
         },
     },
 }

@@ -52,13 +52,15 @@ CLASS = pigcs.FakeBus # use FakeBus if no hardware present
 KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC}
 #KWARGS = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_BASIC, "vmin":{"x": 2.4}}
 KWARGS_CL = {"name": "test", "role": "stage", "port": PORT, "axes": CONFIG_BUS_CL}
+
 KWARGS_TWO = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO}
 KWARGS_TWO_CL = {"name": "test", "role": "stage2d", "port": PORT, "axes": CONFIG_BUS_TWO_CL}
 
-KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "192.168.92.67", "axes": CONFIG_BUS_TWO}
+KWARGS_IP = {"name": "test", "role": "stage", "port": "autoip", "axes": CONFIG_BUS_BASIC}
+KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CONFIG_BUS_TWO}
 
 
-@skip("faster")
+# @skip("faster")
 class TestController(unittest.TestCase):
     """
     directly test the low level class
@@ -515,6 +517,12 @@ class TestActuatorCL(TestActuator):
     def setUp(self):
         self.kwargs = KWARGS_CL
         self.kwargs_two = KWARGS_TWO_CL
+
+class TestActuatorIP(TestActuator):
+    def setUp(self):
+        self.kwargs = KWARGS_IP
+        self.kwargs_two = KWARGS_TWO_IP
+
 
 if __name__ == "__main__":
     unittest.main()

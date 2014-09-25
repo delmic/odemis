@@ -23,6 +23,7 @@ Depends: python (>= 2.7.1),
          python-pkg-resources,
          python-yaml,
          python-serial,
+         python-netifaces,
          python-imaging,
          python-cairo,
          python-zmq (>= 2.1),
@@ -36,7 +37,7 @@ Depends: python (>= 2.7.1),
          python-xdg,
          python-suds,
          python-matplotlib,
-         python-opencv,
+         python-opencv (>= 2.4),
          python-pyro4-delmic,
          cgroup-bin,
          odemis-doc,
@@ -47,7 +48,7 @@ Depends: python (>= 2.7.1),
 Suggests: imagej
 Description: Open Delmic Microscope Software
  Odemis is the acquisition software for the Delmic microscopes. In particular,
- it supports the SECOM and SPARC systems. Odemis provides a simple graphical
+ it supports the SECOM, DELPHI, and SPARC systems. Odemis provides a simple graphical
  interface to manipulate the microscope settings and acquire an image. It
  also provides a command line interface and Python bindings for advanced 
  usage.

@@ -28,7 +28,7 @@ import math
 import numpy
 from odemis import model, util
 import odemis
-from odemis.util import spectrum
+from odemis.util import spectrum, img
 import os
 import re
 import sys
@@ -83,13 +83,15 @@ def _convertToTiffTag(metadata):
     tiffmd = {}
     # we've got choice between inches and cm... so it's easy
     tiffmd[T.TIFFTAG_RESOLUTIONUNIT] = T.RESUNIT_CENTIMETER
+    tiffmd[T.TIFFTAG_SOFTWARE] = "%s %s" % (odemis.__shortname__, odemis.__version__)
     for key, val in metadata.items():
-        if key == model.MD_SW_VERSION:
-            tiffmd[T.TIFFTAG_SOFTWARE] = odemis.__shortname__ + " " + val.encode("utf-8")
-        elif key == model.MD_HW_NAME:
+        if key == model.MD_HW_NAME:
             tiffmd[T.TIFFTAG_MAKE] = val.encode("utf-8")
         elif key == model.MD_HW_VERSION:
-            tiffmd[T.TIFFTAG_MODEL] = val.encode("utf-8")
+            v = val
+            if model.MD_SW_VERSION in metadata:
+                v += " (driver %s)" % (metadata[model.MD_SW_VERSION],)
+            tiffmd[T.TIFFTAG_MODEL] = v.encode("utf-8")
         elif key == model.MD_ACQ_DATE:
             tiffmd[T.TIFFTAG_DATETIME] = time.strftime("%Y:%m:%d %H:%M:%S", time.gmtime(val))
         elif key == model.MD_PIXEL_SIZE:
@@ -176,9 +178,9 @@ def _readTiffTag(tfile):
     val = tfile.GetField(T.TIFFTAG_PAGENAME)
     if val is not None:
         md[model.MD_DESCRIPTION] = val
-    val = tfile.GetField(T.TIFFTAG_SOFTWARE)
-    if val is not None:
-        md[model.MD_SW_VERSION] = val
+#     val = tfile.GetField(T.TIFFTAG_SOFTWARE)
+#     if val is not None:
+#         md[model.MD_SW_VERSION] = val
     val = tfile.GetField(T.TIFFTAG_MAKE)
     if val is not None:
         md[model.MD_HW_NAME] = val
@@ -1176,14 +1178,16 @@ def _createPointROI(rois, name, p, shp_attrib=None):
     rois[rid] = roie
     return rid
 
-
-def _saveAsTiffLT(filename, data, thumbnail):
+def _mergeCorrectionMetadata(da):
     """
-    Saves a DataArray as a TIFF file.
-    filename (string): name of the file to save
-    data (ndarray): 2D data of int or float
+    Create a new DataArray with metadata updated to with the correction metadata
+    merged.
+    da (DataArray): the original data
+    return (DataArray): new DataArray (view) with the updated metadata
     """
-    _saveAsMultiTiffLT(filename, [data], thumbnail)
+    md = da.metadata.copy() # to avoid modifying the original one
+    img.mergeMetadata(md)
+    return model.DataArray(da, md) # create a view
 
 def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     """
@@ -1203,8 +1207,12 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
     else:
         compression = None
 
+    # merge correction metadata (as we cannot save them separatly in OME-TIFF)
+    ldata = [_mergeCorrectionMetadata(da) for da in ldata]
+
     # OME tags: a XML document in the ImageDescription of the first image
     if thumbnail is not None:
+        thumbnail = _mergeCorrectionMetadata(thumbnail)
         # OME expects channel as 5th dimension. If thumbnail is RGB as HxWx3,
         # reorganise as 3x1x1xHxW
         if len(thumbnail.shape) == 3:
@@ -1215,8 +1223,8 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True):
         alldata = [OME_thumbnail] + ldata
     else:
         alldata = ldata
-    # TODO: reorder the data so that data from the same sensor are together
 
+    # TODO: reorder the data so that data from the same sensor are together
     ometxt = _convertToOMEMD(alldata)
 
     if thumbnail is not None:
@@ -1420,7 +1428,7 @@ def export(filename, data, thumbnail=None):
     else:
         # TODO should probably not enforce it: respect duck typing
         assert(isinstance(data, model.DataArray))
-        _saveAsTiffLT(filename, data, thumbnail)
+        _saveAsMultiTiffLT(filename, [data], thumbnail)
 
 def read_data(filename):
     """
