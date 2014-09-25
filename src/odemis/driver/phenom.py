@@ -740,7 +740,6 @@ class Detector(model.Detector):
                     self._spot_scanner.cancel()
                     self._scanning_state = False
 
-                self._spot_scanner.cancel()
                 self._scanParams.scale = 1
                 self._scanParams.resolution.width = res[0]
                 self._scanParams.resolution.height = res[1]
