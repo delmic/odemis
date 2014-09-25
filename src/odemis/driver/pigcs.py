@@ -2147,8 +2147,8 @@ class Bus(model.Actuator):
                 ports = glob.glob('/dev/ttyS?*') + glob.glob('/dev/ttyUSB?*')
 
         logging.info("Serial network scanning for PI-GCS controllers in progress...")
-        axes_names = "xyzabcdefghijklmnopqrstuvw"
         found = []  # (list of 2-tuple): name, args (port, axes(channel -> CL?)
+        axes_names = "xyzabcdefghijklmnopqrstuvw"
         for p in ports:
             try:
                 # check all possible baud rates, in the most likely order
@@ -2172,8 +2172,24 @@ class Bus(model.Actuator):
                 # not possible to use this port? next one!
                 pass
 
-        # TODO: scan for controllers via each IP master controller
+        # Scan for controllers via each IP master controller
         ipmasters = cls._scanIPMasters()
+        for ipadd in ipmasters:
+            try:
+                logging.debug("Scanning controllers on master %s:%d", ipadd[0], ipadd[1])
+                sock = cls._openIPSocket(*ipadd)
+                controllers = Controller.scan(IPBusAccesser(sock))
+                if controllers:
+                    axis_num = 0
+                    arg = {}
+                    for add, axes in controllers.items():
+                        for a, cl in axes.items():
+                            arg[axes_names[axis_num]] = (add, a, cl)
+                            axis_num += 1
+                    found.append(("Actuator " + os.path.basename(p),
+                                 {"port": "%s:%d" % ipadd, "axes": arg}))
+            except IOError:
+                logging.info("Failed to scan on master %s:%d", ipadd[0], ipadd[1])
         
         return found
     
