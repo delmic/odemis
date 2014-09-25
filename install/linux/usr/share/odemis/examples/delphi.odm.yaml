@@ -181,6 +181,7 @@ TMCM: {
         ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
         #refproc: "FakeReferencing", # referencing procedure for simulator
         refproc: "2xFinalForward", # official referencing procedure for the Delphi
+        temp: True,
         # inverted: ["y"],
     },
 }
