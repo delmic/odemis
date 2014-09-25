@@ -357,7 +357,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             rot = -rgbim.metadata.get(model.MD_ROTATION, 0)  # ccw -> cw
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
-            # print "%s %s" % (c, rgbim.shape)
 
         self.set_images(ims)
 
