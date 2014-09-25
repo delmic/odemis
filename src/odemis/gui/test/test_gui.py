@@ -478,6 +478,11 @@ def __init_resources():
         <label>Inspect</label>
         <accel>Ctrl+V</accel>
       </object>
+      <object class="separator"/>
+      <object class="wxMenuItem">
+        <label>Quit</label>
+        <accel>Ctrl+Q</accel>
+      </object>
       <label>Extra</label>
     </object>
   </object>
