@@ -36,7 +36,6 @@ from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-DELPHI_OVERVIEW_FOCUS = {"z":-0.017885}  # good focus position for overview
 LENS_KNOWN_FOCUS = {"z":0.0377}
 
 def main(args):
@@ -95,10 +94,6 @@ def main(args):
 
         # SEM stage to (0,0)
         f = sem_stage.moveAbs({"x":0, "y":0})
-        f.result()
-
-        #NavCam to a good focus position
-        f = navcam_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
         f.result()
         
         # Calculate offset approximation
