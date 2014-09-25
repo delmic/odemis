@@ -97,6 +97,24 @@ class GuiTestApp(wx.App):
         self.test_frame.Center()
         self.test_frame.Layout()
 
+        # Process menu items if any
+        menu_bar = self.test_frame.GetMenuBar()
+        if menu_bar:
+
+            for item in menu_bar.GetMenu(0).GetMenuItems():
+
+                if item.Label == "Inspect":
+                    def inspect(event):
+                        from wx.lib import inspection
+                        inspection.InspectionTool().Show()
+
+                    wx.EVT_MENU(self.test_frame, item.GetId(), inspect)
+                elif item.Label == "Quit":
+                    def close(event):
+                        self.test_frame.Close()
+
+                    wx.EVT_MENU(self.test_frame, item.GetId(), close)
+
         import __main__
         self.module_name = os.path.basename(__main__.__file__)
         self.test_frame.SetTitle(self.module_name)

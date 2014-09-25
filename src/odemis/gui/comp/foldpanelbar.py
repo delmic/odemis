@@ -44,7 +44,7 @@ class FoldPanelBar(wx.Panel):
 
     """
 
-    def __init__(self, parent, id= -1, pos=(0, 0), size=wx.DefaultSize,
+    def __init__(self, parent, id=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER):
 
         wx.Panel.__init__(self, parent, id, pos, size, style)
@@ -52,7 +52,7 @@ class FoldPanelBar(wx.Panel):
         self._sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sizer)
 
-        self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
+        self.Bind(EVT_CAPTIONBAR, self.on_caption_press)
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
         global SCROLLBAR_WIDTH
@@ -60,12 +60,11 @@ class FoldPanelBar(wx.Panel):
 
         assert isinstance(parent, wx.ScrolledWindow)
 
-
-    def OnPressCaption(self, evt):
-        if evt.GetFoldStatus():
-            evt.GetTag().Collapse()
+    def on_caption_press(self, evt):
+        if evt.get_fold_status():
+            evt.get_tag().collapse()
         else:
-            evt.GetTag().Expand()
+            evt.get_tag().expand()
 
     def has_vert_scrollbar(self):
         size = self.Parent.GetSize()
@@ -123,7 +122,7 @@ class FoldPanelItem(wx.Panel):
 
     """
 
-    def __init__(self, parent, id= -1, pos=(0, 0), size=wx.DefaultSize,
+    def __init__(self, parent, id=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.TAB_TRAVERSAL | wx.NO_BORDER, label="",
                  collapsed=False, nocaption=False):
 
@@ -132,7 +131,6 @@ class FoldPanelItem(wx.Panel):
         self.grandparent = self.Parent.Parent
         assert isinstance(self.grandparent, wx.ScrolledWindow)
 
-        self.childvis = {}  # Keep track of the child visibility
         self._sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sizer)
 
@@ -142,48 +140,35 @@ class FoldPanelItem(wx.Panel):
                             flag=wx.EXPAND | wx.BOTTOM,
                             border=1)
 
-        self.Bind(EVT_CAPTIONBAR, self.OnPressCaption)
+        self.Bind(EVT_CAPTIONBAR, self.on_caption_press)
 
-    def OnPressCaption(self, evt):
-        evt.SetTag(self)
+    def on_caption_press(self, evt):
+        evt.set_tag(self)
         evt.Skip()
 
-    def GetCaptionBar(self):
-        return self.caption_bar
-
-    def Collapse(self):
-        self.caption_bar.Collapse()
-        first = True
-        for child in self.GetChildren():
-            if not first:
-                self.childvis[child] = child.IsShown()
-                child.Hide()
-            first = False
-
+    def collapse(self):
+        self.caption_bar.collapse()
+        children = list(self.GetChildren())
+        for child in children[1:]:
+            child.Hide()
         self._refresh()
 
-    def Expand(self):
-        self.caption_bar.Expand()
-        first = True
-        for child in self.GetChildren():
-            if not first:
-                if child in self.childvis:
-                    child.Show(self.childvis[child])
-                else:
-                    child.Show()
-            first = False
-
+    def expand(self):
+        self.caption_bar.expand()
+        children = list(self.GetChildren())
+        for child in children[1:]:
+            child.Show()
         self._refresh()
 
-    def Show(self, show=True): #pylint: disable=W0221
-        wx.Panel.Show(self, show)
+    def Show(self, show=True):
+        super(FoldPanelItem, self).Show(show)
         self._refresh()
 
-    def Hide(self): #pylint: disable=W0221
+    def Hide(self):
         self.Show(False)
 
-    def IsExpanded(self):
-        return not self.caption_bar.IsCollapsed()
+    def is_expanded(self):
+        return not self.caption_bar.is_collapsed()
 
     def has_vert_scrollbar(self):
         return self.Parent.has_vert_scrollbar()
@@ -242,8 +227,8 @@ class FoldPanelItem(wx.Panel):
                                 flag=wx.EXPAND | wx.BOTTOM,
                                 border=1)
 
-        if hasattr(self, 'caption_bar') and self.caption_bar.IsCollapsed():
-            self.Collapse()
+        if hasattr(self, 'caption_bar') and self.caption_bar.is_collapsed():
+            self.collapse()
 
 
 class CaptionBar(wx.Window):
@@ -288,15 +273,14 @@ class CaptionBar(wx.Window):
             self.Bind(wx.EVT_MOUSE_EVENTS, self.OnMouseEvent)
         # self.Bind(wx.EVT_CHAR, self.OnChar)
 
-
     def set_caption(self, caption):
         self._caption = caption
 
-    def IsCollapsed(self):
+    def is_collapsed(self):
         """ Returns wether the status of the bar is expanded or collapsed. """
         return self._collapsed
 
-    def Collapse(self):
+    def collapse(self):
         """
         This sets the internal state/representation to collapsed.
 
@@ -304,10 +288,9 @@ class CaptionBar(wx.Window):
          parent.
         """
         self._collapsed = True
-        self.RedrawIconBitmap()
+        self.redraw_icon_bitmap()
 
-
-    def Expand(self):
+    def expand(self):
         """
         This sets the internal state/representation to expanded.
 
@@ -315,8 +298,7 @@ class CaptionBar(wx.Window):
          parent.
         """
         self._collapsed = False
-        self.RedrawIconBitmap()
-
+        self.redraw_icon_bitmap()
 
     def OnPaint(self, event):
         """
@@ -330,19 +312,17 @@ class CaptionBar(wx.Window):
             return
 
         dc = wx.PaintDC(self)
-        wndRect = self.GetRect()
+        win_rect = self.GetRect()
 
         #self.FillCaptionBackground(dc)
-
 
         dc.SetPen(wx.TRANSPARENT_PEN)
 
         # draw simple rectangle
         dc.SetBrush(wx.Brush(self.parent.GetBackgroundColour(), wx.SOLID))
-        dc.DrawRectangleRect(wndRect)
+        dc.DrawRectangleRect(win_rect)
 
-        self._draw_gradient(dc, wndRect)
-
+        self._draw_gradient(dc, win_rect)
 
         caption_font = self.parent.GetFont()
         dc.SetFont(caption_font)
@@ -353,38 +333,37 @@ class CaptionBar(wx.Window):
             dc.SetTextForeground(self.GetForegroundColour())
         #dc.SetTextForeground("#000000")
 
-        y_pos = (wndRect.GetHeight() - \
+        y_pos = (win_rect.GetHeight() - \
                 abs(caption_font.GetPixelSize().GetHeight())) / 2
 
         dc.DrawText(self._caption, CAPTION_PADDING_LEFT, y_pos)
 
         # draw small icon, either collapsed or expanded
-        # based on the state of the bar. If we have any bmp's
-
+        # based on the state of the bar.
         index = self._collapsed
 
         if hasattr(self.Parent, "grandparent"):
-            x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
-                    self._iconWidth - CAPTION_PADDING_RIGHT
+            x_pos = (self.Parent.grandparent.GetSize().GetWidth() -  self._iconWidth -
+                     CAPTION_PADDING_RIGHT)
         else:
             x_pos = 10
 
-        if (hasattr(self.Parent, "has_vert_scrollbar") and
-            self.Parent.has_vert_scrollbar()):
+        if hasattr(self.Parent, "has_vert_scrollbar") and self.Parent.has_vert_scrollbar():
             x_pos -= SCROLLBAR_WIDTH
 
         if hasattr(self.Parent, "grandparent"):
-            self._foldIcons.Draw(index, dc, x_pos,
-                             (wndRect.GetHeight() - self._iconHeight) / 2,
-                             wx.IMAGELIST_DRAW_TRANSPARENT)
-
+            self._foldIcons.Draw(
+                index, dc, x_pos,
+                (win_rect.GetHeight() - self._iconHeight) / 2,
+                wx.IMAGELIST_DRAW_TRANSPARENT
+            )
 
     def _draw_gradient(self, dc, rect):
         """ Draw a vertical gradient background, using the background colour
         as a starting point.
         """
 
-        if  rect.height < 1 or rect.width < 1:
+        if rect.height < 1 or rect.width < 1:
             return
 
         dc.SetPen(wx.TRANSPARENT_PEN)
@@ -407,8 +386,8 @@ class CaptionBar(wx.Window):
 
         rf, gf, bf = col1
         for y in range(rect.y, rect.y + rect.height):
-            currCol = (rf * 255, gf * 255, bf * 255)
-            dc.SetBrush(wx.Brush(currCol, wx.SOLID))
+            cur_col = (rf * 255, gf * 255, bf * 255)
+            dc.SetBrush(wx.Brush(cur_col, wx.SOLID))
             dc.DrawRectangle(rect.x,
                              rect.y + (y - rect.y),
                              rect.width,
@@ -443,13 +422,12 @@ class CaptionBar(wx.Window):
             event = CaptionBarEvent(wxEVT_CAPTIONBAR)
             event.SetId(self.GetId())
             event.SetEventObject(self)
-            event.SetBar(self)
+            event.set_bar(self)
             self.GetEventHandler().ProcessEvent(event)
         else:
             event.Skip()
 
-
-    def RedrawIconBitmap(self):
+    def redraw_icon_bitmap(self):
         """ Redraws the icons (if they exists). """
 
         rect = self.GetRect()
@@ -459,8 +437,7 @@ class CaptionBar(wx.Window):
         if not self.Parent.has_vert_scrollbar():
             padding_right += SCROLLBAR_WIDTH
 
-        x_pos = self.Parent.grandparent.GetSize().GetWidth() - \
-                self._iconWidth - padding_right
+        x_pos = self.Parent.grandparent.GetSize().GetWidth() -  self._iconWidth - padding_right
 
         rect.SetX(x_pos)
         rect.SetWidth(self._iconWidth + padding_right)
@@ -470,27 +447,24 @@ class CaptionBar(wx.Window):
 class CaptionBarEvent(wx.PyCommandEvent):
     """ Custom event class containing extra data """
 
-    def __init__(self, evtType):
-        wx.PyCommandEvent.__init__(self, evtType)
+    def __init__(self, evt_type):
+        wx.PyCommandEvent.__init__(self, evt_type)
+        self._bar = None
+        self._parent_foldbar = None
 
-    def GetFoldStatus(self):
-        return not self._bar.IsCollapsed()
+    def get_fold_status(self):
+        return not self._bar.is_collapsed()
 
-
-    def GetBar(self):
+    def get_bar(self):
         """ Returns the selected L{CaptionBar}. """
         return self._bar
 
-
-    def SetTag(self, tag):
+    def set_tag(self, tag):
         self._parent_foldbar = tag
 
-
-    def GetTag(self):
+    def get_tag(self):
         """ Returns the tag assigned to the selected L{CaptionBar}. """
         return self._parent_foldbar
 
-
-    def SetBar(self, foldbar):
+    def set_bar(self, foldbar):
         self._bar = foldbar
-

@@ -251,7 +251,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self._repetition = (0, 0)
         self._roa = roa
         if roa:
-            self._roa.subscribe(self._on_roa, init=True)
+            self._roa.subscribe(self.on_roa, init=True)
 
         self._bmp = None  # used to cache repetition with FILL_POINT
         # ROI for which the bmp is valid
@@ -277,7 +277,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         self._repetition = val
         self._bmp = None
 
-    def _on_roa(self, roa):
+    def on_roa(self, roa):
         """ Update the ROA overlay with the new roa VA data
 
         roi (tuple of 4 floats): top, left, bottom, right position relative to the SEM image
@@ -300,9 +300,9 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     # intermediary values as the VA is modified by the stream further on, and
                     # VA don't ensure the notifications are ordered (so the listener could
                     # receive the final value, and then our requested ROI value).
-                    self._roa.unsubscribe(self._on_roa)
+                    self._roa.unsubscribe(self.on_roa)
                     self._roa.value = rel_rect
-                    self._roa.subscribe(self._on_roa, init=True)
+                    self._roa.subscribe(self.on_roa, init=True)
                 else:
                     self._roa.value = UNDEFINED_ROI
 

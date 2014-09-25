@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="ImageTextToggleButton" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="stream_frame">
+    <object_ref ref="menu_bar"/>
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
@@ -303,5 +304,19 @@
     </object>
     <title>Fold Panel Bar Test Frame</title>
     <bg>#666666</bg>
+  </object>
+  <object class="wxMenuBar" name="menu_bar">
+    <object class="wxMenu">
+      <object class="wxMenuItem" name="item_inspect">
+        <label>Inspect</label>
+        <accel>Ctrl+V</accel>
+      </object>
+      <object class="separator"/>
+      <object class="wxMenuItem">
+        <label>Quit</label>
+        <accel>Ctrl+Q</accel>
+      </object>
+      <label>Extra</label>
+    </object>
   </object>
 </resource>
