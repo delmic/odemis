@@ -155,7 +155,7 @@ class ViewPort(wx.Panel):
         self.legend.Show(show)  #pylint: disable=E1103
 
     def HasFocus(self, *args, **kwargs):
-        return self._has_focus == True
+        return self._has_focus is True
 
     def SetFocus(self, focus):   #pylint: disable=W0221
         """ Set the focus on the viewport according to the focus parameter.
@@ -346,17 +346,24 @@ class MicroscopeViewport(ViewPort):
         if ("merge" in self._microscope_view.stream_tree.kwargs and
             len(self._microscope_view.stream_tree) >= 2):
 
-            # How is the order guaranteed? (Left vs Right)
-            sc = self._microscope_view.stream_tree[0]
-            self.legend.set_stream_type(wx.LEFT, sc.__class__)
+            streams = self._microscope_view.getStreams()
+            all_opt = all(isinstance(s, OPTICAL_STREAMS) for s in streams)
 
-            sc = self._microscope_view.stream_tree[1]
-            self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+            # If all images are optical, assume they are merged using screen blending and no
+            # merge ratio is required
+            if all_opt:
+                self.ShowMergeSlider(False)
+            else:
+                # How is the order guaranteed? (Left vs Right)
+                sc = self._microscope_view.stream_tree[0]
+                self.legend.set_stream_type(wx.LEFT, sc.__class__)
 
-            self.ShowMergeSlider(True)
+                sc = self._microscope_view.stream_tree[1]
+                self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+
+                self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
-
 
     @call_after
     def _onImageUpdate(self, timestamp):

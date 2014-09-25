@@ -185,12 +185,12 @@ class InfoLegend(wx.Panel):
         """
 
         stream_to_icon = [
-          (stream.AR_STREAMS, imgdata.getico_blending_angBitmap()),
-          (stream.SPECTRUM_STREAMS, imgdata.getico_blending_specBitmap()),
-          (stream.OPTICAL_STREAMS, imgdata.getico_blending_optBitmap()),
-          (stream.EM_STREAMS, imgdata.getico_blending_semBitmap()),
-          (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
-          ]
+            (stream.AR_STREAMS, imgdata.getico_blending_angBitmap()),
+            (stream.SPECTRUM_STREAMS, imgdata.getico_blending_specBitmap()),
+            (stream.OPTICAL_STREAMS, imgdata.getico_blending_optBitmap()),
+            (stream.EM_STREAMS, imgdata.getico_blending_semBitmap()),
+            (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
+        ]
 
         for group_of_classes, class_icon in stream_to_icon:
             if issubclass(stream_class, group_of_classes):
