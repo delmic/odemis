@@ -100,10 +100,16 @@ class AcquisitionDialog(xrcfr_acq):
             # Set to True to make it the default, but will be automatically
             # disabled later if the current visible streams don't allow it.
             self.chkbox_fine_align.Value = True
-            main_data = self._tab_data_model.main
-            self._ovrl_stream = stream.OverlayStream("fine alignment", main_data.ccd,
-                                         main_data.ebeam, main_data.sed)
-            self._ovrl_stream.dwellTime.value = main_data.fineAlignDwellTime.value
+
+            for s in self._tab_data_model.streams.value:
+                if isinstance(s, EM_STREAMS):
+                    em_det = s.detector
+                    em_emt = s.emitter
+                elif isinstance(s, OPTICAL_STREAMS):
+                    opt_det = s.detector
+            self._ovrl_stream = stream.OverlayStream("Fine alignment",
+                                                     opt_det, em_emt, em_det)
+            self._ovrl_stream.dwellTime.value = self._tab_data_model.main.fineAlignDwellTime.value
         else:
             self.chkbox_fine_align.Show(False)
             self.chkbox_fine_align.Value = False

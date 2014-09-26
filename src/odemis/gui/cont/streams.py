@@ -136,19 +136,22 @@ class StreamController(object):
                                     self.addBrightfield,
                                     brightfield_capable)
 
+        def sem_capable():
+            enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+            view = self._tab_data_model.focussedView.value
+            compatible = view.is_compatible(SEMStream)
+            return enabled and compatible
+
         # SED
         if self._main_data_model.ebeam and self._main_data_model.sed:
-
-            def sem_capable():
-                enabled = self._main_data_model.chamberState.value in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
-                view = self._tab_data_model.focussedView.value
-                compatible = view.is_compatible(SEMStream)
-                return enabled and compatible
-
             self._stream_bar.add_action("Secondary electrons",
                                     self.addSEMSED,
                                     sem_capable)
-
+        # BSED
+        if self._main_data_model.ebeam and self._main_data_model.bsd:
+            self._stream_bar.add_action("Backscattered electrons",
+                                    self.addSEMBSD,
+                                    sem_capable)
 
     def addFluo(self, **kwargs):
         """
@@ -204,6 +207,27 @@ class StreamController(object):
         else:
             s = SEMStream("Secondary electrons",
                       self._main_data_model.sed, self._main_data_model.sed.data,
+                      self._main_data_model.ebeam)
+        return self._addStream(s, **kwargs)
+
+    def addSEMBSD(self, **kwargs):
+        """
+        Creates a new backscattered electron stream and panel in the stream bar
+        returns (StreamPanel): the panel created
+        """
+        if self._main_data_model.role == "delphi":
+            # For the Delphi, the SEM stream needs to be more "clever" because
+            # it needs to run a simple spot alignment every time the stage has
+            # moved before starting to acquire.
+            s = AlignedSEMStream("Backscattered electrons",
+                      self._main_data_model.bsd, self._main_data_model.bsd.data,
+                      self._main_data_model.ebeam, self._main_data_model.ccd,
+                      self._main_data_model.stage, shiftebeam="Metadata update")
+                # Select between "Metadata update" and "Stage move"
+            # TODO: use shiftebeam once the phenom driver supports it
+        else:
+            s = SEMStream("Backscattered electrons",
+                      self._main_data_model.bsd, self._main_data_model.bsd.data,
                       self._main_data_model.ebeam)
         return self._addStream(s, **kwargs)
 
