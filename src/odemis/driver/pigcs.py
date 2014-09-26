@@ -2466,7 +2466,7 @@ class IPBusAccesser(object):
                 # An answer ends with \n (and not " \n", which indicates multi-
                 # line).
                 if (ans[-1] == "\n" and (
-                     ans[-2] != " " or  # multiline: "... \n"
+                     ans[-2:-1] != " " or  # multiline: "... \n"
                      re.match(r"0 \d+ $", ans))):  # excepted empty line "0 1 \n"
                     break
 
