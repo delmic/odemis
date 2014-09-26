@@ -2,7 +2,7 @@ DELPHI: {
     class: Microscope,
     role: delphi,
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
-    detectors: ["Zyla", "SED Phenom", "NavCam"],
+    detectors: ["Zyla", "BSED Phenom", "NavCam"],
     actuators: ["Stage", "Optical stage", "Optical focus",
                 "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage"],
 }
@@ -11,15 +11,13 @@ Spectra: {
     class: lle.FakeLLE,
     role: light,
     init: {
-        port: "/dev/ttyLLE",
+        port: "/dev/ttyFTDI*",
         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        sources: {"red": [615.e-9, 625.e-9, 633.e-9, 640.e-9, 650.e-9],
-                  "green": [525.e-9, 540.e-9, 550.e-9, 555.e-9, 560.e-9],
-                  "cyan": [455.e-9, 465.e-9, 475.e-9, 485.e-9, 495.e-9],
-                  "UV": [375.e-9, 390.e-9, 400.e-9, 402.e-9, 405.e-9],
-                  "yellow": [565.e-9, 570.e-9, 575.e-9, 580.e-9, 595.e-9],
-                  "blue": [420.e-9, 430.e-9, 438.e-9, 445.e-9, 455.e-9],
-                  "teal": [495.e-9, 505.e-9, 513.e-9, 520.e-9, 530.e-9],
+        # Values are quite approximate (only centre is pretty sure)
+        sources: {"UV": [372.e-9, 382.e-9, 390.e-9, 398.e-9, 408.e-9],
+                  "cyan": [465.e-9, 475.e-9, 485.e-9, 495.e-9, 505.e-9],
+                  "green": [535.e-9, 545.e-9, 560.e-9, 575.e-9, 585.e-9],
+                  "red": [637.e-9, 645.e-9, 650.e-9, 655.e-9, 663.e-9],
                  }
         },
     affects: ["Zyla"],
@@ -33,7 +31,7 @@ Spectra: {
            drift_period: 5, # seconds
     },
     children: {scanner: "EBeam Phenom",
-               detector0: "SED Phenom",
+               detector0: "BSED Phenom",
                focus: "EBeam focus",
     }
 }
@@ -45,12 +43,12 @@ Spectra: {
     properties: {
         dwellTime: 10.e-6, # s
     },
-    affects: ["SED Phenom", "Zyla"] # affects the CCD in case of cathodoluminescence
+    affects: ["BSED Phenom", "Zyla"] # affects the CCD in case of cathodoluminescence
 }
 
-"SED Phenom": { # aka ETD
+"BSED Phenom": {
     # Internal child of SimSEM, so no class
-    role: se-detector,
+    role: bs-detector,
     init: {},
 }
 
@@ -64,7 +62,7 @@ Spectra: {
     role: sem-stage,
     init: {axes: ["x", "y"]},
     properties: {
-        speed: {"x": 0.01, "y": 0.01} #m/s
+        speed: {"x": 0.01, "y": 0.01} # m/s
     }
 }
 
