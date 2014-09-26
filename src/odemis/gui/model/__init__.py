@@ -115,7 +115,7 @@ class MainGUIData(object):
         self.ebeam = None
         self.ebeam_focus = None  # change the e-beam focus
         self.sed = None  # secondary electron detector
-        self.bsd = None  # back-scatter electron detector
+        self.bsd = None  # backscattered electron detector
         self.spectrometer = None  # spectrometer
         self.spectrograph = None  # actuator to change the wavelength
         self.ar_spec_sel = None  # actuator to select AR/Spectrometer (SPARC)
