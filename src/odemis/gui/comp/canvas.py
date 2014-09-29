@@ -858,10 +858,10 @@ class BitmapCanvas(BufferedCanvas):
             # For every image, except the last
             for im in images:
                 # print "Drawing %s %s %s %s merge: %s" % (id(im),
-                #                                im.shape,
-                #                                im.metadata['blend_mode'],
-                #                                im.metadata['name']),
-                #                                merge_ratio)
+                #                                          im.shape,
+                #                                          im.metadata['blend_mode'],
+                #                                          im.metadata['name'],
+                #                                          1.0)
                 self._draw_image(
                     ctx,
                     im,
@@ -872,7 +872,7 @@ class BitmapCanvas(BufferedCanvas):
                     blend_mode=im.metadata['blend_mode']
                 )
 
-            if last_image.metadata['blend_mode'] == BLEND_SCREEN:
+            if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN:
                 merge_ratio = 1.0
             else:
                 merge_ratio = self.merge_ratio
