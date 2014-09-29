@@ -147,7 +147,7 @@ import collections
 from decorator import decorator
 import logging
 import math
-from odemis.gui import BLEND_DEFAULT
+from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
@@ -857,10 +857,11 @@ class BitmapCanvas(BufferedCanvas):
 
             # For every image, except the last
             for im in images:
-                # print "Drawing %s %s %s %s" % (id(im),
+                # print "Drawing %s %s %s %s merge: %s" % (id(im),
                 #                                im.shape,
                 #                                im.metadata['blend_mode'],
-                #                                im.metadata['name'])
+                #                                im.metadata['name']),
+                #                                merge_ratio)
                 self._draw_image(
                     ctx,
                     im,
@@ -871,8 +872,10 @@ class BitmapCanvas(BufferedCanvas):
                     blend_mode=im.metadata['blend_mode']
                 )
 
-            merge_ratio = self.merge_ratio if images else 1.0
-            # merge_ratio = 1.0
+            if last_image.metadata['blend_mode'] == BLEND_SCREEN:
+                merge_ratio = 1.0
+            else:
+                merge_ratio = self.merge_ratio
 
             # print "Drawing last %s %s %s %s merge: %s" % (id(last_image),
             #                                               last_image.shape,
