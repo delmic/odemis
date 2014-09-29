@@ -22,10 +22,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis.gui.comp.buttons import GraphicRadioButton
 import logging
-import odemis.gui.img.data as img
+from odemis import gui
+from odemis.gui.comp.buttons import GraphicRadioButton
 import wx
+
+import odemis.gui.img.data as img
 
 
 class GraphicalRadioButtonControl(wx.Panel):
@@ -69,7 +71,7 @@ class GraphicalRadioButtonControl(wx.Panel):
 
         if self.units:
             lbl = wx.StaticText(self, -1, self.units)
-            lbl.SetForegroundColour("#DDDDDD")
+            lbl.SetForegroundColour(gui.FG_COLOUR_MAIN)
             sizer.Add(lbl, flag=wx.RIGHT, border=5)
 
         self.SetSizer(sizer)

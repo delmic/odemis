@@ -32,10 +32,10 @@ def get_center(band):
     Return the center wavelength of a emission/excitation band
     band ((list of) tuple of 2 or 5 floats): either the min/max
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
-    return ((list of) float): wavelength in m or list of wavelength for each band
+    return ((tuple of) float): wavelength in m or list of wavelength for each band
     """
     if isinstance(band[0], collections.Iterable):
-        return [get_center(b) for b in band]
+        return tuple(get_center(b) for b in band)
 
     if len(band) % 2 == 0:
         center = sum(band) / len(band) # works well at least with 2 values

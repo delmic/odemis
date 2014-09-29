@@ -2,7 +2,7 @@ DELPHI: {
     class: Microscope,
     role: delphi,
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
-    detectors: ["Zyla", "SED Phenom", "NavCam"],
+    detectors: ["Zyla", "BSED Phenom", "NavCam"],
     actuators: ["Stage Phenom", "Optical stage", "Optical focus",
                 "Chamber Phenom", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage"],
 }
@@ -40,7 +40,7 @@ Spectra: {
     },
     children: {scanner: "EBeam Phenom",
                focus: "EBeam focus",
-               detector: "SED Phenom",
+               detector: "BSED Phenom",
                stage: "Stage Phenom",
                navcam: "NavCam",
                navcam-focus: "NavCam focus",
@@ -52,7 +52,7 @@ Spectra: {
     # Internal child of SEM Phenom, so no class
     role: e-beam,
     init: {},
-    affects: ["SED Phenom", "Zyla"], # affects the CCD in case of cathodoluminescence
+    affects: ["BSED Phenom", "Zyla"], # affects the CCD in case of cathodoluminescence
     properties: {
         bpp: 8,  # 8 bit per pixel by default as it has a much faster refresh rate
     },
@@ -64,8 +64,8 @@ Spectra: {
     affects: ["EBeam Phenom"]
 }
 
-"SED Phenom": { # aka ETD
-    role: se-detector,
+"BSED Phenom": {
+    role: bs-detector,
     init: {}
 }
 

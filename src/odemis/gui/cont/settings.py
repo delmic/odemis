@@ -558,12 +558,13 @@ class SettingsController(object):
             value_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_RADIO:
+            unit_fmt = (prefix or "") + (unit or "")
 
             ctrl_conf = {
                 'size': (-1, 16),
-                'units': unit,
-                'choices': choices,
-                'labels': [f for _, f in choices_fmt],
+                'units': unit_fmt,
+                'choices': [v for v, _ in choices_fmt],
+                'labels': [l for _, l in choices_fmt],
             }
 
             lbl_ctrl, value_ctrl = self.panel.add_radio_control(label_text, conf=ctrl_conf)

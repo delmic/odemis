@@ -52,7 +52,7 @@ The microscope component can have as role:
 Typical detectors found in a microscope can be of the following roles:
  * ccd: the main optical camera
  * se-detector: secondary electron detector of the SEM
- * bs-detector: backscatter electron detector of the SEM
+ * bs-detector: backscattered electron detector of the SEM
  * spectrometer: A spectrometer. 
    It provides the same interface as a DigitalCamera,
    but the Y dimension of the shape is 1.

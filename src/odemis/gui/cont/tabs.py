@@ -319,8 +319,6 @@ class SecomStreamsTab(Tab):
         # For remembering which streams are paused when hiding the tab
         self._streams_to_restart = set() # set of weakref to the streams
 
-        self._ensure_base_streams()
-
         # To automatically play/pause a stream when turning on/off a microscope,
         # and add the stream on the first time.
         if hasattr(tab_data, 'opticalState'):
@@ -328,12 +326,19 @@ class SecomStreamsTab(Tab):
 
         if hasattr(tab_data, 'emState'):
             tab_data.emState.subscribe(self.onEMState)
+            # decide which kind of EM stream to add by default
+            if main_data.sed:
+                self._add_em_stream = self._stream_controller.addSEMSED
+            elif main_data.bsd:
+                self._add_em_stream = self._stream_controller.addSEMBSD
+            else:
+                logging.error("No EM detector found")
 
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
         if not main_data.chamber:
             main_frame.live_btn_press.Hide()
 
-        # TODO: state == play/pause of current opt/sem stream (+focus view with stream)
+        self._ensure_base_streams()
 
     @property
     def settings_controller(self):
@@ -365,7 +370,7 @@ class SecomStreamsTab(Tab):
             has_sem = any(isinstance(s, streammod.EM_STREAMS)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
-                sp = self._stream_controller.addSEMSED(add_to_all_views=True, play=False)
+                sp = self._add_em_stream(add_to_all_views=True, play=False)
                 sp.show_remove_btn(False)
 
     @call_after
@@ -403,7 +408,7 @@ class SecomStreamsTab(Tab):
                     sems = s
                     break
             else: # Could happen if the user has deleted all the optical streams
-                sp = self._stream_controller.addSEMSED(add_to_all_views=True)
+                sp = self._add_em_stream(add_to_all_views=True)
                 sp.show_remove_btn(False)
                 sems = sp.stream
 
