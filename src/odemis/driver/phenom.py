@@ -296,7 +296,7 @@ class Scanner(model.Emitter):
         # Just the initialization of rotation. The actual value will be acquired
         # once we start the stream
         rotation = 0
-        rot_range = (0, 2 * math.pi)
+        rot_range = (-2 * math.pi, 2 * math.pi)
         self.rotation = model.FloatContinuous(rotation, rot_range, unit="rad")
         self.rotation.subscribe(self._onRotation)
 
@@ -385,8 +385,7 @@ class Scanner(model.Emitter):
         return new_dt
 
     def _onRotation(self, rot):
-        with self.parent._acq_progress_lock:
-            self.parent._device.SetSEMRotation(-rot)
+        self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
         self.parent._device.SEMSetHighTension(-volt)
@@ -580,7 +579,7 @@ class Detector(model.Detector):
         self.parent._scanner.horizontalFoV.value = fov
 
         rotation = self._acq_device.GetSEMRotation()
-        self.parent._scanner.rotation.value = -rotation % (2 * math.pi)
+        self.parent._scanner.rotation.value = -rotation
 
         volt = self._acq_device.SEMGetHighTension()
         self.parent._scanner.accelVoltage.value = -volt
@@ -1481,19 +1480,20 @@ class ChamberPressure(model.Actuator):
                         # If in standby or currently waking up, open event channel
                         self._wakeUp()
                     self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                    # Take care of the calibration that takes place when we move to SEM
+                    self._waitForDevice()
                 elif p["pressure"] == PRESSURE_NAVCAM:
                     if self.parent._device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
                         self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
                     self._updateSampleHolder()  # in case new sample holder was loaded
                     self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+                    # Wait for NavCam
+                    self._waitForDevice()
                 else:
                     self.parent._device.UnloadSample()
             except suds.WebFault:
                 logging.warning("Acquisition in progress, cannot move to another state.")
 
-            # FIXME
-            # Enough time before we start an acquisition
-            time.sleep(5)
             self._updatePosition()
             TimeUpdater.cancel()
 
@@ -1518,8 +1518,48 @@ class ChamberPressure(model.Actuator):
 
         while(True):
             self.wakeUpTime = self.parent._device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
+            logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
             if self.wakeUpTime == 0:
                 break
         self.parent._device.CloseEventChannel(ch_id)
         # Wait before move
+        time.sleep(1)
+
+    def _waitForDevice(self):
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+
+        # Event for performed calibration
+        eventID1 = self.parent._objects.create('ns0:EventIdentifier')
+        eventID1 = "SEM-IMAGE-UPDATED-CHANGED-ID"
+        eventSpec1 = self.parent._objects.create('ns0:EventSpec')
+        eventSpec1.eventID = eventID1
+        eventSpec1.compressed = False
+
+        # Event for NavCam viewing mode
+        eventID2 = self.parent._objects.create('ns0:EventIdentifier')
+        eventID2 = "NAV-CAM-IMAGE-UPDATED-CHANGED-ID"
+        eventSpec2 = self.parent._objects.create('ns0:EventSpec')
+        eventSpec2.eventID = eventID2
+        eventSpec2.compressed = False
+
+        eventSpecArray.item = [eventSpec1, eventSpec2]
+        ch_id = self.parent._device.OpenEventChannel(eventSpecArray)
+
+        api_frames = 0
+        while(True):
+            newEvent = self.parent._device.ReadEventChannel(ch_id)[0][0].eventID
+            logging.debug("Try to read event: %s", newEvent)
+            if (newEvent == eventID1):
+                # Allow few phenom api acquisitions before you start acquiring
+                # via odemis. An alternative would be to wait for the second
+                # ACB performed by phenom API each time we load to SEM.
+                api_frames += 1
+                if api_frames >= 20:
+                    break
+            elif (newEvent == eventID2):
+                break
+            else:
+                logging.debug("Unexpected event received")
+        self.parent._device.CloseEventChannel(ch_id)
+        # Wait before allow acquisition
         time.sleep(1)
