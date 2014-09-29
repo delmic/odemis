@@ -63,7 +63,7 @@ class FileBrowser(wx.Panel):
 
         self.dialog_title = dialog_title
         self.wildcard = wildcard
-        self.label = clear_label # Text to show when the control is cleared
+        self.label = clear_label  # Text to show when the control is cleared
 
         self.text_ctrl = None
         self.btn_ctrl = None

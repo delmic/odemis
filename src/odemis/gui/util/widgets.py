@@ -96,8 +96,7 @@ class VigilantAttributeConnector(object):
 
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
-        self.va_2_ctrl = call_after_wrapper(
-                            dead_object_wrapper(va_2_ctrl or ctrl.SetValue))
+        self.va_2_ctrl = call_after_wrapper(dead_object_wrapper(va_2_ctrl or ctrl.SetValue))
         self.ctrl_2_va = ctrl_2_va or ctrl.GetValue
         if events is None:
             self.change_events = ()
@@ -141,7 +140,6 @@ class VigilantAttributeConnector(object):
         for event in self.change_events:
             self.ctrl.Unbind(event, handler=self._on_value_change)
         self.vigilattr.unsubscribe(self.va_2_ctrl)
-
 
 
 class AxisConnector(object):

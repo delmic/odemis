@@ -38,7 +38,7 @@ import numbers
 from odemis import model, util
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
+from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG, CONFIG_PER_ROLE
 import odemis.gui.util
@@ -69,15 +69,6 @@ def label_to_human(camel_label):
     # add space after each upper case
     # then, make the first letter uppercase and all the other ones lowercase
     return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
-
-# def traverse(seq_val):
-#     """ """
-#     if isinstance(seq_val, collections.Iterable):
-#         for value in seq_val:
-#             for subvalue in traverse(value):
-#                 yield subvalue
-#     else:
-#         yield seq_val
 
 
 def bind_menu(se):
@@ -113,45 +104,45 @@ def bind_menu(se):
     se.ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
     se.label.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
+
 ####### Classes #######
 
-
-class SettingEntry(object):
-    """ Represents a setting entry in the panel. It merely associates the VA to
-    the widgets that allow to control it.
+class SettingEntry(VigilantAttributeConnector):
+    """
     """
 
-    # TODO: merge with VAC?
-    def __init__(self, name, va=None, comp=None, label=None, ctrl=None, vac=None):
+    def __init__(self, va=None, lbl_ctrl=None, value_ctrl=None,
+                 va_2_ctrl=None, ctrl_2_va=None, events=None):
         """
-        :param name: (string): name of the va in the component (as-is)
-        :param va: (VA): the actual VigilantAttribute
-        :param comp: (model.Component): the component that has this VA
-        :param label: (wx.LabelTxt): a widget which displays the name of the VA
-        :param ctrl: (wx.Window): a widget that allows to change the value
-        :param vac: (VigilantAttributeController): the object that ensures the
-            connection between the VA and the widget
+        :param va: (VA): The VigilantAttribute associated with the setting
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        See the VigilantAttributeConnector class for a description of the other parameters.
+
         """
 
-        self.name = name
-        self.va = va
-        self.comp = comp
-        self.label = label
-        self.ctrl = ctrl
-        self.vac = vac
+        self.label = lbl_ctrl
+        self.value_ctrl = value_ctrl
+
+        if None not in (va, value_ctrl):
+            super(SettingEntry, self).__init__(va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
+        elif any([va_2_ctrl, ctrl_2_va, events]):
+            logging.error("Cannot create VigilantAttributeConnector")
+        else:
+            logging.debug("Cannot create VigilantAttributeConnector")
 
     def __repr__(self):
-        msg = "Name: %s, label: %s, comp: %s, ctrl: %s"
-        return msg % (self.name,
-                      self.label.GetLabel() if self.label else None,
-                      self.comp.name if self.comp else None,
-                      type(self.ctrl) if self.ctrl else None)
+        return "Label: %s, ctrl: %s" % (self.label.GetLabel() if self.label else None,
+                                        type(self.ctrl) if self.ctrl else None)
 
     def highlight(self, active=True):
-        """
-        Highlight the setting entry (ie, the name label becomes bright coloured)
+        """ Highlight the setting entry by adjusting its colour
+
         active (boolean): whether it should be highlighted or not
+
         """
+
         if not self.label:
             return
 
@@ -304,41 +295,21 @@ class SettingsController(object):
         except (AttributeError, NotApplicableError):
             pass
 
-        # Get unit from config, vattribute or use an empty one
+        # Get unit from config, vigilant attribute or use an empty one
         unit = conf.get('unit', va.unit or "")
 
         return minv, maxv, choices, unit
 
     def add_browse_button(self, label, label_tl=None, clearlabel=None):
-        self.panel.clear_default_message()
-
-        # Create label
-        lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
-        if label_tl:
-            lbl_ctrl.SetToolTipString(label_tl)
-        self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
-                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-
         config = guiconf.get_acqui_conf()
+        lbl_ctrl, value_ctrl = self.panel.add_file_button(label, config.last_path, clearlabel)
 
-        value_ctrl = FileBrowser(self.panel,
-                                 style=wx.BORDER_NONE | wx.TE_READONLY,
-                                 clear_label=clearlabel,
-                                 clear_btn=(clearlabel != None),
-                                 default_dir=config.last_path)
-        value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-
-        self.panel._gb_sizer.Add(value_ctrl,
-                           (self.panel.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-                           border=5)
+        lbl_ctrl.SetToolTipString(label_tl)
+        value_ctrl.SetToolTipString(label_tl)
 
         # Add the corresponding setting entry
-        ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
+        ne = SettingEntry(lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
         self.entries.append(ne)
-        self.panel.num_rows += 1
-
         return ne
 
     def _get_number_formatter(self, value_ctrl, val, val_unit):
@@ -422,7 +393,7 @@ class SettingsController(object):
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
             # Just an empty entry, so that the settings are saved during acquisition
-            ne = SettingEntry(name, vigil_attr, comp)
+            ne = SettingEntry(va=vigil_attr)
             self.entries.append(ne)
             # don't increase panel.num_rows, as it doesn't add any graphical element
             return
@@ -656,7 +627,7 @@ class SettingsController(object):
         value_ctrl.SetToolTipString(tooltip)
         lbl_ctrl.SetToolTipString(tooltip)
 
-        ne = SettingEntry(name, vigil_attr, comp, lbl_ctrl, value_ctrl, vac)
+        ne = SettingEntry(va=vigil_attr, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
         self.entries.append(ne)
 
         if self.highlight_change:
@@ -779,7 +750,7 @@ class SettingsController(object):
                            border=5)
         # AxisConnector follows VigilantAttributeConnector interface, so can be
         # used (duck typing).
-        ne = SettingEntry(name, None, comp, lbl_ctrl, value_ctrl, ac)
+        ne = SettingEntry(va=None, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, ac)
         self.entries.append(ne)
         self.panel.num_rows += 1
 
@@ -875,11 +846,10 @@ class FileInfoSettingsController(SettingsController):
 
 
 class SettingsBarController(object):
-    """ The main controller class for the settings panel in the live view and
-    acquisition frame.
+    """ The main controller class for the settings panel in the live view and acquisition frame
 
-    This class can be used to set, get and otherwise manipulate the content
-    of the setting panel.
+    This class can be used to set, get and otherwise manipulate the content of the setting panel.
+
     """
 
     def __init__(self, tab_data, highlight_change=False):
@@ -895,7 +865,6 @@ class SettingsBarController(object):
         if tab_data.main.role in CONFIG_PER_ROLE:
             util.rec_update(self._va_config, CONFIG_PER_ROLE[tab_data.main.role])
 
-
     def pause(self):
         """ Pause VigilantAttributeConnector related control updates """
         for panel in self.settings_panels:
@@ -908,21 +877,11 @@ class SettingsBarController(object):
 
     @property
     def entries(self):
-        """
-        A list of all the setting entries of all the panels
-        """
+        """ Return a list of all the setting entries of all the panels """
         entries = []
         for panel in self.settings_panels:
             entries.extend(panel.entries)
         return entries
-
-    def get_entry(self, name):
-        """ TODO: not very useful, because name are not unique """
-        for panel in self.settings_panels:
-            for entry in panel.entries:
-                if entry.name == name:
-                    return entry
-        return None
 
     def enable(self, enabled):
         for panel in self.settings_panels:
@@ -1238,8 +1197,8 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_arfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
             "AR background",
-            "Angle-resolved background acquisition file",
-            "None").ctrl
+            "Angular resolved background acquisition file",
+            "None").value_ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(
                                         odemis.dataio.get_available_formats(),
                                         include_all=True)
@@ -1254,7 +1213,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._spec_bckfile_ctrl = self._specfile_controller.add_browse_button(
                                             "Spec. background",
                                             "Spectrum background correction file",
-                                            "None").ctrl
+                                            "None").value_ctrl
         self._spec_bckfile_ctrl.SetWildcard(wildcards)
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
@@ -1262,7 +1221,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._specfile_ctrl = self._specfile_controller.add_browse_button(
                                             "Spec. correction",
                                             "Spectrum efficiency correction file",
-                                            "None").ctrl
+                                            "None").value_ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
         self._specfile_controller.hide_panel()
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
