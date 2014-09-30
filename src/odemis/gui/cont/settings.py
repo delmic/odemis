@@ -64,21 +64,27 @@ def choice_to_str(choice):
     return u" x ".join([unicode(c) for c in choice])
 
 
-def traverse(seq_val):
-    """ """
-    if isinstance(seq_val, collections.Iterable):
-        for value in seq_val:
-            for subvalue in traverse(value):
-                yield subvalue
-    else:
-        yield seq_val
+def label_to_human(camel_label):
+    """ Converts a camel-case label into a human readable one """
+    # add space after each upper case
+    # then, make the first letter uppercase and all the other ones lowercase
+    return re.sub(r"([A-Z])", r" \1", camel_label).capitalize()
+
+# def traverse(seq_val):
+#     """ """
+#     if isinstance(seq_val, collections.Iterable):
+#         for value in seq_val:
+#             for subvalue in traverse(value):
+#                 yield subvalue
+#     else:
+#         yield seq_val
 
 
 def bind_menu(se):
     """ Add a menu to reset a setting entry to the original (current) value
 
     .. note:
-        se must at least have a valid label, ctrl and va
+        `se` must at least have a valid label, ctrl and va
 
     :param se: (SettingEntry)
 
@@ -119,7 +125,7 @@ class SettingEntry(object):
     def __init__(self, name, va=None, comp=None, label=None, ctrl=None, vac=None):
         """
         :param name: (string): name of the va in the component (as-is)
-        :param va: (VA): the actual VigilanAttribute
+        :param va: (VA): the actual VigilantAttribute
         :param comp: (model.Component): the component that has this VA
         :param label: (wx.LabelTxt): a widget which displays the name of the VA
         :param ctrl: (wx.Window): a widget that allows to change the value
@@ -201,20 +207,16 @@ class SettingsController(object):
             if entry.ctrl:
                 entry.ctrl.Enable(enabled)
 
+    @staticmethod
+    def _determine_default_control(va):
+        """ Determine the default control to use to represent a vigilant attribute
 
-    def _label_to_human(self, label):
-        """ Converts a camel-case label into a human readable one
-        """
-        # add space after each upper case
-        # then, make the first letter uppercase and all the other ones lowercase
-        return re.sub(r"([A-Z])", r" \1", label).capitalize()
+        :param va: (VigilantAttribute)
 
-    def _determine_default_control(self, va):
-        """ Determine the default control to use to represent a vigilant
-        attribute in the settings panel.
-        va (VigillantAttribute)
         return (odemis.gui.CONTROL_*)
+
         """
+
         if not va:
             logging.warn("No VA provided!")
             return odemis.gui.CONTROL_NONE
@@ -225,21 +227,21 @@ class SettingsController(object):
             return odemis.gui.CONTROL_READONLY
         else:
             try:
-                # This statement will raise an exception when no choices are
-                # present
+                # This statement will raise an exception when no choices are present
                 logging.debug("found choices %s", va.choices)
 
-                max_items = 5
-                max_len = 5
+                max_num_choices = 5
+                max_value_len = 5
+
                 # If there are too many choices, or their values are too long
-                # in string representation, use a dropdown box
+                # in string representation, use a drop-down box
 
                 choices_str = "".join([str(c) for c in va.choices])
                 if len(va.choices) <= 1:
                     # not much choices really
                     return odemis.gui.CONTROL_READONLY
-                elif (len(va.choices) < max_items and
-                      len(choices_str) < max_items * max_len):
+                elif (len(va.choices) < max_num_choices and
+                      len(choices_str) < max_num_choices * max_value_len):
                     return odemis.gui.CONTROL_RADIO
                 else:
                     return odemis.gui.CONTROL_COMBO
@@ -249,6 +251,7 @@ class SettingsController(object):
             try:
                 # An exception will be raised if no range attribute is found
                 logging.debug("found range %s", va.range)
+
                 # TODO: if unit is "s" => scale=exp
                 if isinstance(va.value, (int, long, float)):
                     return odemis.gui.CONTROL_SLIDER
@@ -258,19 +261,23 @@ class SettingsController(object):
             # Return default control
             return odemis.gui.CONTROL_TEXT
 
-    def _get_va_meta(self, comp, va, conf):
+    @staticmethod
+    def _get_va_meta(comp, va, conf):
         """ Retrieve the range and choices values from the vigilant attribute
         or override them with the values provided in the configuration.
+
         """
 
         r = conf.get("range", (None, None))
         minv, maxv = (None, None)
+
         try:
             if callable(r):
                 minv, maxv = r(comp, va, conf)
             elif r == (None, None):
                 minv, maxv = va.range
-            else: # merge
+            else:
+                # Intersect the two ranges
                 # TODO: handle iterables
                 minv, maxv = r
                 minv, maxv = max(minv, va.range[0]), min(maxv, va.range[1])
@@ -278,7 +285,7 @@ class SettingsController(object):
             pass
 
         # Ensure the range encompasses the current value
-        if minv is not None and maxv is not None:
+        if None not in (minv, maxv):
             val = va.value
             if isinstance(val, numbers.Real):
                 minv, maxv = min(minv, val), max(maxv, val)
@@ -289,7 +296,8 @@ class SettingsController(object):
                 choices = choices(comp, va, conf)
             elif choices is None:
                 choices = va.choices
-            else: # merge = intersection
+            else:
+                # Intersect the two choice sets
                 # TODO: if va.range but no va.choices, ensure that
                 # choices is within va.range
                 choices &= va.choices
@@ -300,43 +308,6 @@ class SettingsController(object):
         unit = conf.get('unit', va.unit or "")
 
         return minv, maxv, choices, unit
-
-    def add_label(self, label, value=None, selectable=True):
-        """ Adds a label to the settings panel, accompanied by an immutable
-        value if one's provided.
-
-        value (None or stringable): value to display after the label
-        selectable (boolean): whether the value can be selected by the user
-          (iow, copy/pasted)
-        returns (SettingEntry): the new SettingEntry created
-        """
-        self.panel.clear_message()
-        # Create label
-        lbl_ctrl = wx.StaticText(self.panel, wx.ID_ANY, unicode(label))
-        self.panel._gb_sizer.Add(lbl_ctrl, (self.num_entries, 0),
-                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
-
-        if value and not selectable:
-            value_ctrl = wx.StaticText(self.panel, label=unicode(value))
-            value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            self.panel._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
-                               flag=wx.ALL, border=5)
-        elif value and selectable:
-            value_ctrl = wx.TextCtrl(self.panel, value=unicode(value),
-                                     style=wx.BORDER_NONE | wx.TE_READONLY)
-            value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_DIS)
-            value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
-            self.panel._gb_sizer.Add(value_ctrl, (self.num_entries, 1),
-                               flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-                               border=5)
-        else:
-            value_ctrl = None
-
-        ne = SettingEntry(name=label, label=lbl_ctrl, ctrl=value_ctrl)
-        self.entries.append(ne)
-        self.num_entries += 1
-
-        return ne
 
     def add_browse_button(self, label, label_tl=None, clearlabel=None):
         self.panel.clear_default_message()
@@ -457,7 +428,7 @@ class SettingsController(object):
             return
 
         # Format label
-        label_text = conf.get('label', self._label_to_human(name))
+        label_text = conf.get('label', label_to_human(name))
         tooltip = conf.get('tooltip', "")
 
         # the Vigilant Attribute Connector connects the wx control to the
@@ -707,7 +678,7 @@ class SettingsController(object):
         conf = conf or {}
 
         # Format label
-        label = conf.get('label', self._label_to_human(name))
+        label = conf.get('label', label_to_human(name))
         # Add the label to the panel
         lbl_ctrl = wx.StaticText(self.panel, -1, u"%s" % label)
         self.panel._gb_sizer.Add(lbl_ctrl, (self.panel.num_rows, 0),
@@ -882,21 +853,25 @@ class SettingsController(object):
             else:
                 p = p.Parent
 
+
 class SemSettingsController(SettingsController):
     pass
+
 
 class OpticalSettingsController(SettingsController):
     pass
 
+
 class AngularSettingsController(SettingsController):
     pass
+
 
 class SpectrumSettingsController(SettingsController):
     pass
 
+
 class FileInfoSettingsController(SettingsController):
     pass
-
 
 
 class SettingsBarController(object):
@@ -1220,7 +1195,7 @@ class AnalysisSettingsController(SettingsBarController):
         # individually
         self._pnl_acqfile = None
         self._pnl_arfile = None
-        self._pnl_specfile = None
+        self._specfile_controller = None
 
         self._arfile_ctrl = None
         self._spec_bckfile_ctrl = None
@@ -1275,8 +1250,8 @@ class AnalysisSettingsController(SettingsBarController):
 
         # Panel with spectrum background + efficiency compensation file information
         # They are displayed only if there are Spectrum streams
-        self._pnl_specfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
-        self._spec_bckfile_ctrl = self._pnl_specfile.add_browse_button(
+        self._specfile_controller = FileInfoSettingsController(self.parent.fp_fileinfo, "")
+        self._spec_bckfile_ctrl = self._specfile_controller.add_browse_button(
                                             "Spec. background",
                                             "Spectrum background correction file",
                                             "None").ctrl
@@ -1284,12 +1259,12 @@ class AnalysisSettingsController(SettingsBarController):
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
-        self._specfile_ctrl = self._pnl_specfile.add_browse_button(
+        self._specfile_ctrl = self._specfile_controller.add_browse_button(
                                             "Spec. correction",
                                             "Spectrum efficiency correction file",
                                             "None").ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
-        self._pnl_specfile.hide_panel()
+        self._specfile_controller.hide_panel()
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
@@ -1394,7 +1369,7 @@ class AnalysisSettingsController(SettingsBarController):
         if ar is not None:
             self._pnl_arfile.show_panel(ar)
         if spec is not None:
-            self._pnl_specfile.show_panel(spec)
+            self._specfile_controller.show_panel(spec)
 
         self.parent.Layout()
 

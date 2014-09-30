@@ -137,18 +137,21 @@ class StreamTree(object):
             self.should_update.value = False
 
     def getStreams(self):
-        """
-        Return the set of streams used to compose the picture. In other words,
-        the leaves of the tree.
-        """
-        leaves = set()
-        for s in self.streams:
-            if isinstance(s, Stream):
-                leaves.add(s)
-            elif isinstance(s, StreamTree):
-                leaves |= s.getStreams()
+        """ Return the list of streams used to compose the picture """
 
-        return leaves
+        streams = []
+
+        for s in self.streams:
+            if isinstance(s, Stream) and s not in streams:
+                streams.append(s)
+            elif isinstance(s, StreamTree):
+                sub_streams = s.getStreams()
+                for sub_s in sub_streams:
+                    if sub_s not in streams:
+                        streams.append(sub_s)
+
+        # print [s.name.value for s in streams]
+        return streams
 
     def getImage(self, rect, mpp):
         """

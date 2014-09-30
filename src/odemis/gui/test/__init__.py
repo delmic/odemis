@@ -97,6 +97,24 @@ class GuiTestApp(wx.App):
         self.test_frame.Center()
         self.test_frame.Layout()
 
+        # Process menu items if any
+        menu_bar = self.test_frame.GetMenuBar()
+        if menu_bar:
+
+            for item in menu_bar.GetMenu(0).GetMenuItems():
+
+                if item.Label == "Inspect":
+                    def inspect(event):
+                        from wx.lib import inspection
+                        inspection.InspectionTool().Show()
+
+                    wx.EVT_MENU(self.test_frame, item.GetId(), inspect)
+                elif item.Label == "Quit":
+                    def close(event):
+                        self.test_frame.Close()
+
+                    wx.EVT_MENU(self.test_frame, item.GetId(), close)
+
         import __main__
         self.module_name = os.path.basename(__main__.__file__)
         self.test_frame.SetTitle(self.module_name)
@@ -215,17 +233,32 @@ def set_img_meta(img, pixel_size, pos):
     img.metadata[omodel.MD_POS] = pos
 
 
-def generate_img_data(width, height, depth, alpha=255):
-    """ Create an image of the given dimensions """
+def generate_img_data(width, height, depth, alpha=255, color=None):
+    """ Create an image of the given dimensions
+
+    :type width: int
+    :type height: int
+    :type depth: int
+    :type alpha: int
+    :param color: (int, int, int) If a color is defined, that color will be used to fill the image
+
+    """
 
     shape = (height, width, depth)
     rgb = numpy.empty(shape, dtype=numpy.uint8)
 
     if width > 100 or height > 100:
-        tl = random_color(alpha=alpha)
-        tr = random_color(alpha=alpha)
-        bl = random_color(alpha=alpha)
-        br = random_color(alpha=alpha)
+        if color:
+            color += (alpha,)
+            tl = color
+            tr = color
+            bl = color
+            br = color
+        else:
+            tl = random_color(alpha=alpha)
+            tr = random_color(alpha=alpha)
+            bl = random_color(alpha=alpha)
+            br = random_color(alpha=alpha)
 
         rgb = numpy.zeros(shape, dtype=numpy.uint8)
 
@@ -251,13 +284,17 @@ def generate_img_data(width, height, depth, alpha=255):
     else:
         for w in xrange(width):
             for h in xrange(height):
-                rgb[h, w] = random_color((230, 230, 255), alpha)
+                if color:
+                    rgb[h, w] = color + (alpha,)
+                else:
+                    rgb[h, w] = random_color((230, 230, 255), alpha)
 
     return omodel.DataArray(rgb)
 
 
 def random_color(mix_color=None, alpha=255):
     """ Generate a random color, possibly tinted using mix_color """
+
     red = random.randint(0, 255)
     green = random.randint(0, 255)
     blue = random.randint(0, 255)

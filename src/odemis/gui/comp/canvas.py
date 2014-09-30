@@ -147,6 +147,7 @@ import collections
 from decorator import decorator
 import logging
 import math
+from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
 from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
 from odemis.util import intersect
 from odemis.util.conversion import wxcol_to_frgb
@@ -742,36 +743,48 @@ class BitmapCanvas(BufferedCanvas):
     def set_images(self, im_args):
         """ Set (or update)  image
 
-        im_args (list of tuple): Each element is either None or:
-            im, w_pos, scale, keepalpha:
-            im (wx.Image): the image
-            w_pos (2-tuple of float): position of the center of the image (in world
-                units)
-            scale (float): scaling of the image
-            keepalpha (boolean): whether the alpha channel must be used to draw
-            rotation (float): clockwise rotation in radians on the center of the image
-        Note: call request_drawing_update() to actually get the image redrawn
-            afterwards
+        im_args (list of tuple): Each element is either None or
+            (im, w_pos, scale, keepalpha, rotation, name, blend_mode)
+
+            0. im (wx.Image): the image
+            1. w_pos (2-tuple of float): position of the center of the image (in world units)
+            2. scale (float): scaling of the image
+            3. keepalpha (boolean): whether the alpha channel must be used to draw
+            4. rotation (float): clockwise rotation in radians on the center of the image
+            5. name (str): name of the stream that the image originated from
+            6. blend_mode (int): blend mode to use for the image. Defaults to `source` which
+                    just overrides underlying layers.
+
+        note: call request_drawing_update() to actually get the image redrawnafterwards
+
         """
+
         # TODO:
         # * take an image composition tree (operator + images + scale + pos)
-        # * keepalpha not needed => just use alpha iff the image has it
+        # * keepalpha not needed => just use alpha if the image has it
         # * allow to indicate just one image has changed (and so the rest
         #   doesn't need to be recomputed)
+
         images = []
+
         for args in im_args:
             if args is None:
                 images.append(None)
             else:
-                im, w_pos, scale, keepalpha, rotation = args
+                im, w_pos, scale, keepalpha, rotation, blend_mode, name = args
 
-                if im.shape[2] != 4: # Both ARGB32 and RGB24 need 4 bytes
+                if not blend_mode:
+                    blend_mode = BLEND_DEFAULT
+
+                if im.shape[2] != 4:  # Both ARGB32 and RGB24 need 4 bytes
                     raise ValueError("Unsupported colour byte size (%s)!" % (im.shape[2],))
 
                 im.metadata['dc_center'] = w_pos
                 im.metadata['dc_scale'] = scale
                 im.metadata['dc_rotation'] = rotation
                 im.metadata['dc_keepalpha'] = keepalpha
+                im.metadata['blend_mode'] = blend_mode
+                im.metadata['name'] = name
 
                 images.append(im)
 
@@ -837,38 +850,50 @@ class BitmapCanvas(BufferedCanvas):
         # * display the last image (SEM => expected smaller), with the given
         #   mergeratio (or 1 if it's the only one)
 
-        first_ims = [im for im in self.images[:-1] if im is not None]
-        nb_firsts = len(first_ims)
+        images = [im for im in self.images if im is not None]
 
-        for i, im in enumerate(first_ims):
-            r = 1.0 - i / nb_firsts # display as if they are averages
-            self._draw_image(
-                ctx,
-                im,
-                im.metadata['dc_center'],
-                r,
-                im_scale=im.metadata['dc_scale'],
-                rotation=im.metadata['dc_rotation']
-            )
+        if images:
+            last_image = images.pop()
 
-        for im in self.images[-1:]: # the last image (or nothing)
-            if im is None:
-                continue
-            if nb_firsts == 0:
-                merge_ratio = 1.0 # no transparency if it's alone
+            # For every image, except the last
+            for im in images:
+                # print "Drawing %s %s %s %s merge: %s" % (id(im),
+                #                                          im.shape,
+                #                                          im.metadata['blend_mode'],
+                #                                          im.metadata['name'],
+                #                                          1.0)
+                self._draw_image(
+                    ctx,
+                    im,
+                    im.metadata['dc_center'],
+                    1.0,
+                    im_scale=im.metadata['dc_scale'],
+                    rotation=im.metadata['dc_rotation'],
+                    blend_mode=im.metadata['blend_mode']
+                )
+
+            if not images or last_image.metadata['blend_mode'] == BLEND_SCREEN:
+                merge_ratio = 1.0
             else:
                 merge_ratio = self.merge_ratio
 
+            # print "Drawing last %s %s %s %s merge: %s" % (id(last_image),
+            #                                               last_image.shape,
+            #                                               last_image.metadata['blend_mode'],
+            #                                               last_image.metadata['name'],
+            #                                               merge_ratio)
             self._draw_image(
                 ctx,
-                im,
-                im.metadata['dc_center'],
+                last_image,
+                last_image.metadata['dc_center'],
                 merge_ratio,
-                im_scale=im.metadata['dc_scale'],
-                rotation=im.metadata['dc_rotation']
+                im_scale=last_image.metadata['dc_scale'],
+                rotation=last_image.metadata['dc_rotation'],
+                blend_mode=last_image.metadata['blend_mode']
             )
 
-    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0, im_scale=1.0, rotation=None):
+    def _draw_image(self, ctx, im_data, w_im_center, opacity=1.0, im_scale=1.0, rotation=None,
+                    blend_mode=BLEND_DEFAULT):
         """ Draw the given image to the Cairo context
 
         The buffer is considered to have it's 0,0 origin at the top left
@@ -994,6 +1019,8 @@ class BitmapCanvas(BufferedCanvas):
         # set the filter used for scaling. Using set_source instead
         # ctx.set_source_surface(imgsurface)
         ctx.set_source(surfpat)
+
+        ctx.set_operator(blend_mode)
 
         if opacity < 1.0:
             ctx.paint_with_alpha(opacity)

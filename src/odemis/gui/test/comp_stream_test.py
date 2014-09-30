@@ -38,7 +38,6 @@ import odemis.model as model
 
 
 test.goto_manual()
-# test.goto_inspect()
 
 
 class FakeBrightfieldStream(stream_mod.BrightfieldStream):
@@ -165,7 +164,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         stream_panel.show_remove_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander._btn_rem.IsShown())
+        self.assertFalse(stream_panel._expander.btn_rem.IsShown())
 
         new_label_pos = stream_panel._expander._label_ctrl.GetPosition()
 
@@ -174,7 +173,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         stream_panel.show_remove_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander._btn_rem.IsShown())
+        self.assertTrue(stream_panel._expander.btn_rem.IsShown())
 
         new_label_pos = stream_panel._expander._label_ctrl.GetPosition()
 
@@ -189,7 +188,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         stream_panel.show_visible_btn(False)
         test.gui_loop()
 
-        self.assertFalse(stream_panel._expander._btn_vis.IsShown())
+        self.assertFalse(stream_panel._expander.btn_vis.IsShown())
 
         new_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
 
@@ -198,7 +197,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         stream_panel.show_visible_btn(True)
         test.gui_loop()
 
-        self.assertTrue(stream_panel._expander._btn_vis.IsShown())
+        self.assertTrue(stream_panel._expander.btn_vis.IsShown())
 
         new_pbtn_pos = stream_panel._expander._btn_updated.GetPosition()
 
@@ -208,14 +207,14 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         # PLAY BUTTON TEST
 
-        old_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
+        old_vbtn_pos = stream_panel._expander.btn_vis.GetPosition()
 
         stream_panel.show_updated_btn(False)
         test.gui_loop()
 
         self.assertFalse(stream_panel._expander._btn_updated.IsShown())
 
-        new_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
+        new_vbtn_pos = stream_panel._expander.btn_vis.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
@@ -224,7 +223,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         self.assertTrue(stream_panel._expander._btn_updated.IsShown())
 
-        new_vbtn_pos = stream_panel._expander._btn_vis.GetPosition()
+        new_vbtn_pos = stream_panel._expander.btn_vis.GetPosition()
 
         self.assertEqual(old_vbtn_pos, new_vbtn_pos)
 
@@ -514,9 +513,3 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-    # suit = unittest.TestSuite()
-    # suit.addTest(FoldPanelBarTestCase("test_zflatten"))
-
-    # runner = unittest.TextTestRunner()
-    # runner.run(suit)

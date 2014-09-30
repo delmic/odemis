@@ -303,5 +303,35 @@ class SettingsPanel(wx.Panel):
 
         return lbl_ctrl, value_ctrl
 
+    @control_bookkeeper
+    def add_file_button(self, label_text, label_tl=None, clearlabel=None):
+
+        # Create label
+        lbl_ctrl = self._add_side_label(label_text)
+
+        # if label_tl:
+        #     lbl_ctrl.SetToolTipString(label_tl)
+
+        config = guiconf.get_acqui_conf()
+
+        value_ctrl = FileBrowser(self.panel,
+                                 style=wx.BORDER_NONE | wx.TE_READONLY,
+                                 clear_label=clearlabel,
+                                 clear_btn=(clearlabel != None),
+                                 default_dir=config.last_path)
+        value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+
+        self.panel._gb_sizer.Add(value_ctrl,
+                           (self.panel.num_rows, 1),
+                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                           border=5)
+
+        # Add the corresponding setting entry
+        ne = SettingEntry(name=label_text, label=lbl_ctrl, ctrl=value_ctrl)
+        self.entries.append(ne)
+        self.panel.num_rows += 1
+
+        return ne
 
 # END Control methods

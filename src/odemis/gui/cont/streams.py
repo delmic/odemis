@@ -345,14 +345,14 @@ class StreamController(object):
         for e in self._stream_bar.stream_panels:
             e.Show(isinstance(e.stream, allowed_classes))
         # self.Refresh()
-        self._stream_bar._fitStreams()
+        self._stream_bar._fit_streams()
 
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
         visible_streams = view.stream_tree.getStreams()
 
         for e in self._stream_bar.stream_panels:
-            e.setVisible(e.stream in visible_streams)
+            e.set_visible(e.stream in visible_streams)
 
         logging.debug("Sending stream.ctrl message")
         pub.sendMessage('stream.ctrl',

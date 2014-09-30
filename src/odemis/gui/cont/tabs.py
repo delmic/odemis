@@ -114,7 +114,7 @@ class Tab(object):
                     self.tab_data_model.viewLayout.value = guimod.VIEW_LAYOUT_22
 
             # Bind the function to the menu item, so it keeps the reference.
-            # The VigillantAttribute will not unsubscribe it, until replaced.
+            # The VigilantAttribute will not unsubscribe it, until replaced.
             self.main_frame.menu_item_22view.vamethod = set_22_menu_check
             self.tab_data_model.viewLayout.subscribe(set_22_menu_check, init=True)
             # Assigning an event handler to the menu item, overrides
@@ -154,7 +154,7 @@ class Tab(object):
                     foccused_view.show_crosshair.value = show
 
             # Bind the function to the menu item, so it keeps the reference.
-            # The VigillantAttribute will not unsubscribe it, until replaced.
+            # The VigilantAttribute will not unsubscribe it, until replaced.
             self.main_frame.menu_item_cross.vamethod = set_cross_check
             self.tab_data_model.focussedView.subscribe(set_cross_check, init=True)
             # Assigning an event handler to the menu item, overrides
