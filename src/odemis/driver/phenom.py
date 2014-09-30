@@ -1208,10 +1208,6 @@ class NavCam(model.DigitalCamera):
                 self.parent._device.SetNavCamBrightness(self._brightness)
             except suds.WebFault:
                 logging.warning("Failed to set brightness to %f: %s", self._brightness, e)
-            # Start to a good focus position
-            logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
-            f = self.parent._navcam_focus.moveAbs({"z":DELPHI_OVERVIEW_FOCUS})
-            f.result()
 
             while not self.acquire_must_stop.is_set():
                 with self.parent._acq_progress_lock:
@@ -1386,6 +1382,10 @@ class ChamberPressure(model.Actuator):
             self.parent._detector.beam_blank(True)
             self._position = PRESSURE_SEM
         elif area == "LOADING-WORK-AREA-NAVCAM":
+            # Start to a good focus position
+            logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
+            f = self.parent._navcam_focus.moveAbs({"z":DELPHI_OVERVIEW_FOCUS})
+            f.result()
             self._position = PRESSURE_NAVCAM
         else:
             self._position = PRESSURE_UNLOADED
