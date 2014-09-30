@@ -385,7 +385,8 @@ class Scanner(model.Emitter):
         return new_dt
 
     def _onRotation(self, rot):
-        self.parent._device.SetSEMRotation(-rot)
+        with self.parent._acq_progress_lock:
+            self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
         self.parent._device.SEMSetHighTension(-volt)
@@ -659,7 +660,7 @@ class Detector(model.Detector):
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
             # TODO beam shift/translation
-            self._scanParams.center.x = 0 # m
+            self._scanParams.center.x = 0
             self._scanParams.center.y = 0
 
             # update changed metadata
@@ -1208,6 +1209,10 @@ class NavCam(model.DigitalCamera):
                 self.parent._device.SetNavCamBrightness(self._brightness)
             except suds.WebFault:
                 logging.warning("Failed to set brightness to %f: %s", self._brightness, e)
+            # Start to a good focus position
+            logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
+            f = self.parent._navcam_focus.moveAbs({"z":DELPHI_OVERVIEW_FOCUS})
+            f.result()
 
             while not self.acquire_must_stop.is_set():
                 with self.parent._acq_progress_lock:
@@ -1382,10 +1387,6 @@ class ChamberPressure(model.Actuator):
             self.parent._detector.beam_blank(True)
             self._position = PRESSURE_SEM
         elif area == "LOADING-WORK-AREA-NAVCAM":
-            # Start to a good focus position
-            logging.debug("Setting initial overview focus to %f", DELPHI_OVERVIEW_FOCUS)
-            f = self.parent._navcam_focus.moveAbs({"z":DELPHI_OVERVIEW_FOCUS})
-            f.result()
             self._position = PRESSURE_NAVCAM
         else:
             self._position = PRESSURE_UNLOADED
