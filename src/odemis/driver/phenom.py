@@ -660,7 +660,7 @@ class Detector(model.Detector):
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
             # TODO beam shift/translation
-            self._scanParams.center.x = 0
+            self._scanParams.center.x = 0.03
             self._scanParams.center.y = 0
 
             # update changed metadata
@@ -707,12 +707,12 @@ class Detector(model.Detector):
                 # and scan spot by spot
                 # Start scanning
                 if self._scanning_state == False:
-                    fov = 1.0
-                    spot_dist = (fov / (res[0] - 1),
-                                 fov / (res[1] - 1))
+                    fov = (1.0 - (1.0 / res[0]), 1.0 - (1.0 / res[1]))
+                    spot_dist = (fov[0] / (res[0] - 1),
+                                 fov[1] / (res[1] - 1))
                     self._coordinates = []
-                    bound = (fov / 2.0,
-                             fov / 2.0)
+                    bound = (fov[0] / 2.0,
+                             fov[1] / 2.0)
 
                     pos = self.parent._device.GetStageModeAndPosition()
                     cur_pos = pos.position.x, pos.position.y
@@ -1468,12 +1468,11 @@ class ChamberPressure(model.Actuator):
         Change of the pressure
         p (float): target pressure
         """
+        # Keep remaining time up to date
+        updater = functools.partial(self._updateTime, future, p)
+        TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
+        TimeUpdater.start()
         with self.parent._acq_progress_lock:
-            # Keep remaining time up to date
-            updater = functools.partial(self._updateTime, future, p)
-            TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
-            TimeUpdater.start()
-
             try:
                 if p["pressure"] == PRESSURE_SEM:
                     if (self.parent._device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
@@ -1495,8 +1494,8 @@ class ChamberPressure(model.Actuator):
             except suds.WebFault:
                 logging.warning("Acquisition in progress, cannot move to another state.")
 
-            self._updatePosition()
-            TimeUpdater.cancel()
+        self._updatePosition()
+        TimeUpdater.cancel()
 
     def _updateTime(self, future, target):
         remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
