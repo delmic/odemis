@@ -710,9 +710,10 @@ class MicroscopeView(View):
         # FIXME: "stop all axes" should also clear the queue
         self._focus_queue.put(shift)
 
-    def moveStageToView(self):
+    def moveStageToView(self, relative=True):
         """ Move the stage to the current view_pos
 
+        :param relative: (bool) If True, make a relative move. Absolute otherwise
         :return (None or Future): a future (that allows to know when the move is finished)
 
         Note: once the move is finished stage_pos will be updated (by the
@@ -723,35 +724,37 @@ class MicroscopeView(View):
         if not self._stage:
             return
 
-        # Absolute move would work too, but by using relative move we can do a
-        # couple more checks, to be sure we will not do crazy things.
-        #     move = {"x": pos[0], "y": pos[1]}
-        #     self._stage.moveAbs(move)
-
-        # TODO: Use the max FoV of the streams to determine what's a big
-        # distance (because on the overview cam a  move can be much bigger than
-        # on a SEM image at high mag).
-
         view_pos = self.view_pos.value
-        # relative
-        prev_pos = self.stage_pos.value
-        move = {
-            "x": view_pos[0] - prev_pos["x"],
-            "y": view_pos[1] - prev_pos["y"]
-        }
-        if abs(move["x"]) < 1e-12 and abs(move["y"]) < 1e-12:
-            logging.debug("skipping move request of 0")
-            return
 
-        # Check it makes sense (=> not too big)
-        distance = math.sqrt(sum([v ** 2 for v in move.values()]))
-        if distance > MAX_SAFE_MOVE_DISTANCE:
-            logging.error("Cancelling request to move by %f m (because > %f m)",
-                          distance, MAX_SAFE_MOVE_DISTANCE)
-            return
+        if relative:
+            # TODO: Use the max FoV of the streams to determine what's a big
+            # distance (because on the overview cam a  move can be much bigger than
+            # on a SEM image at high mag).
 
-        logging.debug("Sending move request of %s", move)
-        return self._stage.moveRel(move)
+            # relative
+            prev_pos = self.stage_pos.value
+            move = {
+                "x": view_pos[0] - prev_pos["x"],
+                "y": view_pos[1] - prev_pos["y"]
+            }
+            if abs(move["x"]) < 1e-12 and abs(move["y"]) < 1e-12:
+                logging.debug("skipping move request of 0")
+                return
+
+            # Check it makes sense (=> not too big)
+            distance = math.sqrt(sum([v ** 2 for v in move.values()]))
+            if distance > MAX_SAFE_MOVE_DISTANCE:
+                logging.error("Cancelling request to move by %f m (because > %f m)",
+                              distance, MAX_SAFE_MOVE_DISTANCE)
+                return
+
+            logging.debug("Sending move request of %s", move)
+            return self._stage.moveRel(move)
+        else:
+            # Absolute move would work too, but by using relative move we can do a
+            # couple more checks, to be sure we will not do crazy things.
+            move = {"x": view_pos[0], "y": view_pos[1]}
+            self._stage.moveAbs(move)
 
     # def onStagePos(self, pos):
     #     # we want to recenter the viewports whenever the stage moves

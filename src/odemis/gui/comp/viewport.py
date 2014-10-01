@@ -469,7 +469,7 @@ class OverviewViewport(MicroscopeViewport):
             for view in self._tab_data_model.views.value:
                 if view.has_stage():
                     view.view_pos.value = p_pos
-                    view.moveStageToView()
+                    view.moveStageToView(relative=False)
                     break
 
 

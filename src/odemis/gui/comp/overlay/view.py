@@ -1230,7 +1230,7 @@ class HistoryOverlay(ViewOverlay):
         x = int(v_center[0] - v_size[0] / 2.0) + 0.5
         y = int(v_center[1] - v_size[1] / 2.0) + 0.5
 
-        ctx.rectangle(x + 1, y + 1, v_size[0], v_size[1] + 2)
+        ctx.rectangle(x + 1, y + 1, v_size[0], v_size[1])
         ctx.stroke()
 
         ctx.set_source_rgba(colour[0], colour[1], colour[2], alpha)
