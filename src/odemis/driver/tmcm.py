@@ -104,7 +104,7 @@ class TMCM3110(model.Actuator):
         self._serial = self._openSerialPort(port)
         self._port = port
         self._ser_access = threading.Lock()
-        self._target = 1 # TODO: need to be selected by user? When is it not 1?
+        self._target = 1 # Always one, when directly connected via USB
 
         self._resynchonise()
 
@@ -159,7 +159,9 @@ class TMCM3110(model.Actuator):
             self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
 
         if temp:
-            # TODO: only pick one of the temperature sensors?
+            # One sensor is at the top, one at the bottom of the sample holder.
+            # The most interesting is the temperature difference, so just
+            # report both.
             self.temperature = model.FloatVA(0, unit=u"°C", readonly=True)
             self.temperature1 = model.FloatVA(0, unit=u"°C", readonly=True)
             self._temp_timer = util.RepeatingTimer(10, self._updateTemperatureVA,
