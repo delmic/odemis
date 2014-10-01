@@ -397,13 +397,21 @@ class SettingsController(object):
                 choices_fmt = choices.items()
             elif (ctrl_format and len(choices) > 1 and
                   all([isinstance(c, numbers.Real) for c in choices])):
-                # choices = sorted(choices)
-                fmt, prefix = utun.si_scale_list(choices)
-                choices_fmt = zip(choices, [u"%g" % c for c in fmt])
+
+                # Skip formatting of choices if the range is too big
+                if isinstance(min_val, numbers.Real) and isinstance(max_val, numbers.Real):
+                    if (
+                        min_val and (max_val or 0) / min_val > 1000 or
+                        max_val and (min_val or 0) / max_val > 1000
+                    ):
+                        choices_fmt = [(c, choice_to_str(c)) for c in choices]
+                else:
+                    fmt, prefix = utun.si_scale_list(choices)
+                    choices_fmt = zip(choices, [u"%g" % c for c in fmt])
             else:
                 choices_fmt = [(c, choice_to_str(c)) for c in choices]
 
-            choices_fmt = sorted(choices_fmt) # sort 2-tuples = according to first value in tuple
+            choices_fmt = sorted(choices_fmt)  # sort 2-tuples = according to first value in tuple
 
         # Get the defined type of control or assign a default one
         try:
@@ -779,8 +787,8 @@ class SettingsController(object):
                                   events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
         self.panel._gb_sizer.Add(value_ctrl, (self.panel.num_rows, 1),
-                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
-                           border=5)
+                                 flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                                 border=5)
 
         self.entries.append(ne)
         self.panel.num_rows += 1
