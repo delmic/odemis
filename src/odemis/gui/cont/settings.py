@@ -101,40 +101,29 @@ def bind_menu(se):
         menu.AppendItem(mi)
         eo.PopupMenu(menu)
 
-    se.ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
-    se.label.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    se.value_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
+    se.lbl_ctrl.Bind(wx.EVT_CONTEXT_MENU, show_reset_menu)
 
 
 ####### Classes #######
 
-class SettingEntry(VigilantAttributeConnector):
-    """
-    """
+class Entry(object):
 
-    def __init__(self, va=None, lbl_ctrl=None, value_ctrl=None,
-                 va_2_ctrl=None, ctrl_2_va=None, events=None):
-        """
-        :param va: (VA): The VigilantAttribute associated with the setting
-        :param lbl_ctrl: (wx.StaticText): The setting label
-        :param value_ctrl: (wx.Window): The widget containing the current value
-
-        See the VigilantAttributeConnector class for a description of the other parameters.
-
-        """
-
-        self.label = lbl_ctrl
+    def __init__(self, name, comp, lbl_ctrl, value_ctrl):
+        self.name = name
+        self.comp = comp
+        self.lbl_ctrl = lbl_ctrl
         self.value_ctrl = value_ctrl
 
-        if None not in (va, value_ctrl):
-            super(SettingEntry, self).__init__(va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
-        elif any([va_2_ctrl, ctrl_2_va, events]):
-            logging.error("Cannot create VigilantAttributeConnector")
-        else:
-            logging.debug("Cannot create VigilantAttributeConnector")
-
     def __repr__(self):
-        return "Label: %s, ctrl: %s" % (self.label.GetLabel() if self.label else None,
-                                        type(self.ctrl) if self.ctrl else None)
+        return "Label: %s" % self.lbl_ctrl.GetLabel() if self.lbl_ctrl else None
+
+    @property
+    def va(self):
+        """ Added for quick & dirty backwards compatibility. Can/should be replaced """
+        if hasattr(self, 'vigilattr'):
+            return self.vigilattr
+        return None
 
     def highlight(self, active=True):
         """ Highlight the setting entry by adjusting its colour
@@ -143,13 +132,63 @@ class SettingEntry(VigilantAttributeConnector):
 
         """
 
-        if not self.label:
+        if not self.lbl_ctrl:
             return
 
         if active:
-            self.label.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
+            self.lbl_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_HIGHLIGHT)
         else:
-            self.label.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+            self.lbl_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
+
+
+class SettingEntry(VigilantAttributeConnector, Entry):
+
+    def __init__(self, name, va=None, comp=None, lbl_ctrl=None, value_ctrl=None,
+                 va_2_ctrl=None, ctrl_2_va=None, events=None):
+        """
+        :param name: (str): The name of the setting
+        :param va: (VA): The VigilantAttribute associated with the setting
+        :param comp: (HardwareComponent): The component to which the setting belongs
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        See the VigilantAttributeConnector class for a description of the other parameters.
+
+        """
+
+        Entry.__init__(self, name, comp, lbl_ctrl, value_ctrl)
+
+        if None not in (va, value_ctrl):
+            super(SettingEntry, self).__init__(va, value_ctrl, va_2_ctrl, ctrl_2_va, events)
+        elif any([va_2_ctrl, ctrl_2_va, events]):
+            logging.error("Cannot create VigilantAttributeConnector")
+        else:
+            logging.debug("Cannot create VigilantAttributeConnector")
+
+
+class AxisSettingEntry(AxisConnector, Entry):
+
+    def __init__(self, name, comp, lbl_ctrl=None, value_ctrl=None,
+                 pos_2_ctrl=None, ctrl_2_pos=None, events=None):
+        """
+        :param name: (str): The name of the setting
+        :param comp: (HardwareComponent): The component to which the setting belongs
+        :param lbl_ctrl: (wx.StaticText): The setting label
+        :param value_ctrl: (wx.Window): The widget containing the current value
+
+        See the AxisConnector class for a description of the other parameters.
+
+        """
+
+        Entry.__init__(self, name, comp, lbl_ctrl, value_ctrl)
+
+        if None not in (name, value_ctrl):
+            super(AxisSettingEntry, self).__init__(name, comp, value_ctrl,
+                                                   pos_2_ctrl, ctrl_2_pos, events)
+        elif any([pos_2_ctrl, ctrl_2_pos, events]):
+            logging.error("Cannot create AxisConnector")
+        else:
+            logging.debug("Cannot create AxisConnector")
 
 
 class SettingsController(object):
@@ -182,21 +221,21 @@ class SettingsController(object):
         self.panel.Show(show)
 
     def pause(self):
-        """ Pause VigilantAttributeConnector related control updates """
+        """ Pause SettingEntry related control updates """
         for entry in self.entries:
-            if entry.vac:
-                entry.vac.pause()
+            if hasattr(entry, 'vigilattr') and entry.vigilattr:
+                entry.pause()
 
     def resume(self):
-        """ Pause VigilantAttributeConnector related control updates """
+        """ Pause SettingEntry related control updates """
         for entry in self.entries:
-            if entry.vac:
-                entry.vac.resume()
+            if hasattr(entry, 'vigilattr') and entry.vigilattr:
+                entry.resume()
 
     def enable(self, enabled):
         for entry in self.entries:
-            if entry.ctrl:
-                entry.ctrl.Enable(enabled)
+            if entry.value_ctrl:
+                entry.value_ctrl.Enable(enabled)
 
     @staticmethod
     def _determine_default_control(va):
@@ -308,7 +347,7 @@ class SettingsController(object):
         value_ctrl.SetToolTipString(label_tl)
 
         # Add the corresponding setting entry
-        ne = SettingEntry(lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
+        ne = SettingEntry(name=label, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
         self.entries.append(ne)
         return ne
 
@@ -393,7 +432,7 @@ class SettingsController(object):
         if control_type == odemis.gui.CONTROL_NONE:
             # No value, not even label
             # Just an empty entry, so that the settings are saved during acquisition
-            ne = SettingEntry(va=vigil_attr)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp)
             self.entries.append(ne)
             # don't increase panel.num_rows, as it doesn't add any graphical element
             return
@@ -413,17 +452,17 @@ class SettingsController(object):
             val = vigil_attr.value  # only format if it's a number
             lbl_ctrl, value_ctrl = self.panel.add_readonly_field(label_text, val)
             value_formatter = self._get_number_formatter(value_ctrl, val, unit)
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             value_ctrl,
-                                             va_2_ctrl=value_formatter)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              va_2_ctrl=value_formatter)
 
         elif control_type == odemis.gui.CONTROL_TEXT:
             val = vigil_attr.value  # only format if it's a number
             lbl_ctrl, value_ctrl = self.panel.add_text_field(label_text, val)
             value_formatter = self._get_number_formatter(value_ctrl, val, unit)
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             value_ctrl,
-                                             va_2_ctrl=value_formatter)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              va_2_ctrl=value_formatter)
 
         elif control_type == odemis.gui.CONTROL_SLIDER:
             # The slider is accompanied by an extra number text field
@@ -454,9 +493,9 @@ class SettingsController(object):
             }
 
             lbl_ctrl, value_ctrl = factory(label_text, vigil_attr.value, ctrl_conf)
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             value_ctrl,
-                                             events=wx.EVT_SLIDER)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              events=wx.EVT_SLIDER)
 
             value_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
@@ -473,9 +512,9 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_int_field(label_text, conf=ctrl_conf)
 
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             value_ctrl,
-                                             events=wx.EVT_COMMAND_ENTER)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              events=wx.EVT_COMMAND_ENTER)
 
             value_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
 
@@ -493,9 +532,9 @@ class SettingsController(object):
 
             lbl_ctrl, value_ctrl = self.panel.add_float_field(label_text, conf=ctrl_conf)
 
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             value_ctrl,
-                                             events=wx.EVT_COMMAND_ENTER)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              events=wx.EVT_COMMAND_ENTER)
 
             value_ctrl.Bind(wx.EVT_COMMAND_ENTER, self.on_setting_changed)
 
@@ -545,11 +584,9 @@ class SettingsController(object):
                 radio_get = None
                 radio_set = None
 
-            vac = VigilantAttributeConnector(vigil_attr,
-                                             value_ctrl,
-                                             va_2_ctrl=radio_set,
-                                             ctrl_2_va=radio_get,
-                                             events=wx.EVT_BUTTON)
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              va_2_ctrl=radio_set, ctrl_2_va=radio_get, events=wx.EVT_BUTTON)
 
             value_ctrl.Bind(wx.EVT_BUTTON, self.on_setting_changed)
 
@@ -574,7 +611,7 @@ class SettingsController(object):
                         logging.debug("Setting ComboBox value to %s", ctrl.Items[i])
                         ctrl.SetSelection(i)
                         # Note: with wxpython < 3.0, use:
-#                         ctrl.SetValue(ctrl.Items[i])
+                        # ctrl.SetValue(ctrl.Items[i])
                         break
                 else:
                     logging.debug("No existing label found for value %s", value)
@@ -589,7 +626,7 @@ class SettingsController(object):
                 i = ctrl.GetSelection()
 
                 # Note: with wxpython < 3.0, use:
-#                 for i in range(ctrl.Count):
+                # for i in range(ctrl.Count):
                 # Warning: if the text contains an unknown value, GetSelection will
                 # not return wx.NOT_FOUND (as expected), but the last selection value
                 if i != wx.NOT_FOUND and ctrl.Items[i] == value:
@@ -610,13 +647,10 @@ class SettingsController(object):
                         cb_set(cur_val)
                     return new_val
 
-            vac = VigilantAttributeConnector(
-                vigil_attr,
-                value_ctrl,
-                va_2_ctrl=cb_set,
-                ctrl_2_va=cb_get,
-                events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER)
-            )
+            ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
+                              lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                              va_2_ctrl=cb_set, ctrl_2_va=cb_get, events=(wx.EVT_COMBOBOX,
+                                                                          wx.EVT_TEXT_ENTER))
 
             value_ctrl.Bind(wx.EVT_COMBOBOX, self.on_setting_changed)
             value_ctrl.Bind(wx.EVT_TEXT_ENTER, self.on_setting_changed)
@@ -627,7 +661,6 @@ class SettingsController(object):
         value_ctrl.SetToolTipString(tooltip)
         lbl_ctrl.SetToolTipString(tooltip)
 
-        ne = SettingEntry(va=vigil_attr, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl)
         self.entries.append(ne)
 
         if self.highlight_change:
@@ -680,7 +713,8 @@ class SettingsController(object):
             # but to EVT_SCROLL_CHANGED, which happens when the user has made his
             # mind. This avoid too many unnecessary actuator moves and disabling the
             # widget too early.
-            ac = AxisConnector(name, comp, value_ctrl, events=wx.EVT_SCROLL_CHANGED)
+            ne = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                  events=wx.EVT_SCROLL_CHANGED)
         else:
             # format the choices
             choices = ad.choices
@@ -740,17 +774,14 @@ class SettingsController(object):
                 else:
                     logging.error("Failed to find value %s for axis %s", value, name)
 
-            ac = AxisConnector(name, comp, value_ctrl,
-                                pos_2_ctrl=cb_set,
-                                ctrl_2_pos=cb_get,
-                                events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
+            ne = AxisSettingEntry(name, comp, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
+                                  pos_2_ctrl=cb_set, ctrl_2_pos=cb_get,
+                                  events=(wx.EVT_COMBOBOX, wx.EVT_TEXT_ENTER))
 
         self.panel._gb_sizer.Add(value_ctrl, (self.panel.num_rows, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
-        # AxisConnector follows VigilantAttributeConnector interface, so can be
-        # used (duck typing).
-        ne = SettingEntry(va=None, lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl, ac)
+
         self.entries.append(ne)
         self.panel.num_rows += 1
 
@@ -866,12 +897,12 @@ class SettingsBarController(object):
             util.rec_update(self._va_config, CONFIG_PER_ROLE[tab_data.main.role])
 
     def pause(self):
-        """ Pause VigilantAttributeConnector related control updates """
+        """ Pause SettingEntry related control updates """
         for panel in self.settings_panels:
             panel.pause()
 
     def resume(self):
-        """ Resume VigilantAttributeConnector related control updates """
+        """ Resume SettingEntry related control updates """
         for panel in self.settings_panels:
             panel.resume()
 
@@ -946,6 +977,7 @@ class SecomSettingsController(SettingsBarController):
 
         if main_data.ebeam:
             self.add_component("SEM", main_data.ebeam, self._sem_panel)
+
 
 class LensAlignSettingsController(SettingsBarController):
 
@@ -1102,10 +1134,10 @@ class SparcSettingsController(SettingsBarController):
             parent_frame.fp_settings_sparc_angular.Hide()
 
     def on_spec_rep(self, rep):
-        self._on_rep(rep, self.spectro_rep_ent.va, self.spectro_rep_ent.ctrl)
+        self._on_rep(rep, self.spectro_rep_ent.va, self.spectro_rep_ent.value_ctrl)
 
     def on_ar_rep(self, rep):
-        self._on_rep(rep, self.angular_rep_ent.va, self.angular_rep_ent.ctrl)
+        self._on_rep(rep, self.angular_rep_ent.va, self.angular_rep_ent.value_ctrl)
 
     @staticmethod
     def _on_rep(rep, rep_va, rep_ctrl):

@@ -167,6 +167,7 @@ def call_after_wrapper(f, *args, **kwargs):
             return wx.CallAfter(f, *args, **kwargs)
     return call_after_wrapzor
 
+
 def dead_object_wrapper(f, *args, **kwargs):
     """ This simple wrapper suppresses errors caused code trying to access
     wxPython widgets that have already been destroyed
