@@ -284,7 +284,7 @@ class AcquisitionDialog(xrcfr_acq):
         streams = self._tab_data_model.focussedView.value.getStreams()
         if streams:
             if self.chkbox_fine_align.Value:
-                streams.add(self._ovrl_stream)
+                streams.append(self._ovrl_stream)
             acq_time = acq.estimateTime(streams)
             acq_time = math.ceil(acq_time) # round a bit pessimistically
             txt = "The estimated acquisition time is {}."
@@ -425,7 +425,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # Add the overlay stream if the fine alignment check box is checked
         if self.chkbox_fine_align.Value:
-            streams.add(self._ovrl_stream)
+            streams.append(self._ovrl_stream)
 
         # Turn off the fan to avoid vibrations (in all acquisitions)
         self._set_fan(False)
