@@ -66,8 +66,8 @@ class TestController(unittest.TestCase):
     directly test the low level class
     """
     def setUp(self):
-        self.ser = CLASS.openSerialPort(PORT)
-        self.accesser = pigcs.BusAccesser(self.ser)
+        self.ser = CLASS._openSerialPort(PORT)
+        self.accesser = pigcs.SerialBusAccesser(self.ser)
         self.config_ctrl = CONFIG_CTRL_BASIC
 
     def test_scan(self):
@@ -115,9 +115,11 @@ class TestController(unittest.TestCase):
 
         self.assertIn("Physik Instrumente", ctrl.GetIdentification())
         self.assertTrue(ctrl.IsReady())
-        ctrl._sendOrderCommand("\x24") # known to fail
-        # the next command is going to have to use recovery from timeout
-        self.assertTrue(ctrl.IsReady())
+        with self.assertRaises(pigcs.PIGCSError):
+            ctrl._sendOrderCommand("\x24") # known to fail
+            # the next command is going to fail, and report the error from the previous command
+            ctrl.IsReady()
+        self.assertTrue(ctrl.IsReady()) # all should be fine again
         self.assertEqual(0, ctrl.GetErrorNum())
 
 #@skip("faster")
@@ -126,8 +128,8 @@ class TestFake(TestController):
     very basic test of the simulator, to ensure we always test it.
     """
     def setUp(self):
-        self.ser = pigcs.FakeBus.openSerialPort(PORT)
-        self.accesser = pigcs.BusAccesser(self.ser)
+        self.ser = pigcs.FakeBus._openSerialPort(PORT)
+        self.accesser = pigcs.SerialBusAccesser(self.ser)
         self.config_ctrl = CONFIG_CTRL_BASIC
 
 #@skip("faster")
@@ -136,8 +138,8 @@ class TestFakeCL(TestController):
     very basic test of the simulator and CL controller, to ensure we always test it.
     """
     def setUp(self):
-        self.ser = pigcs.FakeBus.openSerialPort(PORT, _addresses={1: True})
-        self.accesser = pigcs.BusAccesser(self.ser)
+        self.ser = pigcs.FakeBus._openSerialPort(PORT, _addresses={1: True})
+        self.accesser = pigcs.SerialBusAccesser(self.ser)
         self.config_ctrl = CONFIG_CTRL_CL
 
 
@@ -512,12 +514,13 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(future.done())
         self.called += 1
 
-#@skip("faster")
+# @skip("faster")
 class TestActuatorCL(TestActuator):
     def setUp(self):
         self.kwargs = KWARGS_CL
         self.kwargs_two = KWARGS_TWO_CL
 
+# @skip("faster")
 class TestActuatorIP(TestActuator):
     def setUp(self):
         self.kwargs = KWARGS_IP

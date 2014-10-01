@@ -465,26 +465,32 @@ class Controller(object):
 
         return lines
 
-    err_ans_re = r"\d+$" # ex: ("0 1 ")[54](\n)
+    err_ans_re = r"(-?\d+)$" # ex: ("0 1 ")[-54](\n)
     def recoverTimeout(self):
         """
         Try to recover from error in the controller state
         return (boolean): True if it recovered
+        raise PIGCSError: if the timeout was due to a controller error (in which
+            case the controller will be set back to working state if possible)
         """
         self.busacc.flushInput()
 
         # It makes the controller more comfortable...
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
-            if re.match(self.err_ans_re, resp): # looks like an answer to err?
-                # TODO if err != 0, raise PIGCSError (as it's a sign the previous command just was wrong)
-                return True
+            m = re.match(self.err_ans_re, resp)
+            if m: # looks like an answer to err?
+                err = int(m.group(1))
+                if err == 0:
+                    return True
+                else:
+                    raise PIGCSError(err)
         except IOError:
             pass
 
         # We timed out again, try harder: reboot
         self.Reboot()
-        self._sendOrderCommand("ERR?\n")
+        self.busacc.sendOrderCommand("ERR?\n")
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
             if re.match(self.err_ans_re, resp): # looks like an answer to err?
@@ -495,8 +501,6 @@ class Controller(object):
 
         # that's getting pretty hopeless
         return False
-
-    
 
     # The following are function directly mapping to the controller commands.
     # In general it should not be need to use them directly from outside this class
@@ -726,7 +730,7 @@ class Controller(object):
         """
         #ERR? (Get Error Number): get error code of last error
         answer = self._sendQueryCommand("ERR?\n")
-        error = int(answer, 10)
+        error = int(answer)
         return error
 
     def Reboot(self):
@@ -2512,6 +2516,7 @@ class IPBusAccesser(object):
                 logging.exception("Failed to flush correctly the socket")
 
 
+# TODO: simplify, by using CancellableFuture, as in tmcm
 class ActionManager(threading.Thread):
     """
     Thread running the requested actions (=moves)
@@ -2545,7 +2550,7 @@ class ActionManager(threading.Thread):
             except futures.CancelledError:
                 # cancelled in the mean time: skip the action
                 continue
-            
+
             while not self.current_action._wait_action(0.2):
                 # regularly update position (5 Hz)
                 self._bus._updatePosition()
@@ -2744,7 +2749,7 @@ class ActionFuture(object):
                 end_wait = self._timeout + 1 # => will never be triggered
             else:
                 end_wait = time.time() + timeout
-                
+
             # it's over when either all axes are finished moving, it's too late,
             # or the action was cancelled
             logging.debug("Waiting %f s for the move to finish", self._expected_end - time.time())
@@ -2759,7 +2764,8 @@ class ActionFuture(object):
                 duration = (self._expected_end - now) / 2
                 duration = max(0.01, duration)
                 self._condition.wait(duration)
-                if not self._isMoving(controllers):
+                if not self._isMoving(controllers): # we are done!
+                    self._checkError(controllers)
                     break
 
             # if cancelled, we don't update state
@@ -2798,6 +2804,17 @@ class ActionFuture(object):
             else:
                 moving |= controller.isMoving(set(channels))
         return moving
+
+    def _checkError(self, axes):
+        """
+        axes (dict: Controller -> list (int)): controller to channel which must be check for error
+        return nothing
+        raise PIGCSError if an error on a controller happened
+        """
+        for controller in axes.keys():
+            err = controller.GetErrorNum()
+            if err:
+                raise PIGCSError(err)
 
     def _stopMotion(self, axes):
         """
