@@ -822,8 +822,7 @@ class StreamPanel(wx.Panel):
                                            size=(-1, 40),
                                            value=self.stream.intensityRange.value,
                                            min_val=hist_min,
-                                           max_val=hist_max,
-        )
+                                           max_val=hist_max)
 
         self._sld_hist.SetBackgroundColour("#000000")
         self._vac_hist = VigilantAttributeConnector(self.stream.intensityRange,
@@ -1046,9 +1045,9 @@ class StreamPanel(wx.Panel):
                           border=5)
         else:
             hw_set = ComboBox(self._panel,
-                            value=self._to_readable_band(band),
-                            size=(-1, 16),
-                            style=wx.CB_READONLY | wx.BORDER_NONE)
+                              value=self._to_readable_band(band),
+                              size=(-1, 16),
+                              style=wx.CB_READONLY | wx.BORDER_NONE)
 
             ex_choices = sorted(va.choices, key=self._get_one_center)
             for b in ex_choices:
@@ -1057,12 +1056,13 @@ class StreamPanel(wx.Panel):
             # To avoid catching mouse wheels events when scrolling the panel
             hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
 
-            vac = VigilantAttributeConnector(
-                  va, hw_set,
-                  va_2_ctrl, # to convert to selection + update btn
-                  ctrl_2_va, # to convert from selection to VA
-                  events=wx.EVT_COMBOBOX)
-            self._vacs.append(vac) # make sure it doesn't get dereferenced
+            vac = VigilantAttributeConnector(va,
+                                             hw_set,
+                                             va_2_ctrl,  # to convert to selection + update btn
+                                             ctrl_2_va,  # to convert from selection to VA
+                                             events=wx.EVT_COMBOBOX)
+
+            self._vacs.append(vac)  # make sure it doesn't get dereferenced
 
             exc_sizer.Add(hw_set, 1,
                           flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
