@@ -152,7 +152,7 @@ class ScaleWindow(BufferedWindow):
         self.line_width = 1
 
         # we want at least a bit of space for the text + line
-        self.MinSize = (-1, 13 + self.gap + self.nod)
+        self.MinSize = (40, 13 + self.gap + self.nod)
 
     def SetMPP(self, mpp):
         """
