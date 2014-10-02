@@ -433,6 +433,7 @@ def Average(images, rect, mpp, merge=0.5):
     # TODO: (once the operator callable is clearly defined)
     raise NotImplementedError()
 
+# TODO: add operator Screen
 
 def mergeMetadata(current, correction=None):
     """

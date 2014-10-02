@@ -27,10 +27,8 @@ from __future__ import division
 
 import collections
 import logging
-
-import wx
-
 from odemis import gui, model
+from odemis.acq import stream
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
@@ -41,6 +39,7 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_PUMPING
 from odemis.gui.util import call_after
 from odemis.model import VigilantAttributeBase, NotApplicableError
 from odemis.util import units
+import wx
 
 
 class ViewPort(wx.Panel):
@@ -330,12 +329,20 @@ class MicroscopeViewport(ViewPort):
             if all_opt:
                 self.ShowMergeSlider(False)
             else:
-                # How is the order guaranteed? (Left vs Right)
-                sc = self._microscope_view.stream_tree[0]
-                self.legend.set_stream_type(wx.LEFT, sc.__class__)
+                # TODO: How is the order guaranteed? (Left vs Right)
+                # => it should be done in the MicroscopeView when adding a stream
+                # For now, special hack for the SecomCanvas which always sets
+                # the EM image as "right"
+                if (any(isinstance(s, EM_STREAMS) for s in streams)
+                    and any(isinstance(s, OPTICAL_STREAMS) for s in streams)):
+                    self.legend.set_stream_type(wx.LEFT, stream.CameraStream)
+                    self.legend.set_stream_type(wx.RIGHT, stream.SEMStream)
+                else:
+                    sc = self._microscope_view.stream_tree[0]
+                    self.legend.set_stream_type(wx.LEFT, sc.__class__)
 
-                sc = self._microscope_view.stream_tree[1]
-                self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+                    sc = self._microscope_view.stream_tree[1]
+                    self.legend.set_stream_type(wx.RIGHT, sc.__class__)
 
                 self.ShowMergeSlider(True)
         else:
