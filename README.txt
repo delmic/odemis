@@ -1,7 +1,7 @@
 Odemis, Open Delmic Microscope Software
 
 = Requirements = 
-Linux (tested on Ubuntu 12.04 32-bits) or Windows (7)
+Linux (tested on Ubuntu 12.04 x86 32-bits and 64-bits)
 Python (v2.7)
 
 = Installation =
@@ -10,8 +10,7 @@ See the doc/INSTALL.txt document for the complete installation procedure.
 = Basic usage =
 Launch the "Odemis" program, or type on a terminal:
 odemis-start
-On the first time, it will ask for the password. Eventually the GUI (Graphical
-User Interface) will appear.
+Eventually the GUI (Graphical User Interface) will appear.
 
 It is not usually necessary, but if you want, to fully stop odemis (GUI and back-end), type:
 odemis-stop
@@ -43,10 +42,16 @@ odemis-cli --set-attr Spectra emissions "0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0"
 GPLv2, see the LICENSE.txt file for the complete license.
 
 = Extending =
-For information on how to extend the software, see the doc/DEVELOP.txt document.
+For information on how to extend the software, see the developer documentation.
+It must be first compiled, with: 
+cd doc/develop/
+make html
+
+Then it can be opened with:
+firefox _build/html/index.html
 
 = Testing =
 To test the software, there are several unit-test classes in each directory (in 
 their test/ sub-directory). There are also a few example microscope 
-configuration file in the odemisd/test.
+configuration file in the install/linux/usr/share/odemis/.
 

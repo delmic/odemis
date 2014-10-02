@@ -40,6 +40,7 @@ FLUODB_PATHS = [u"/usr/share/odemis/fluodb/",
 # TODO: Should support having multiple peaks, orderer by strength
 DyeDatabase = None
 
+
 def LoadDyeDatabase():
     """ Try to fill the dye database from known files
     returns (boolean): True if a database was found, false otherwise

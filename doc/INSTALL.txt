@@ -3,33 +3,32 @@ How to install Odemis
 
 = Installing the dependencies =
 
-You need Ubuntu 12.04 (x86 - 32 bits).
-sudo apt-get install python-imaging python-yaml python-serial python-zmq python-concurrent.futures python-scipy python-decorator cgroup-bin python-libtiff python-comedilib python-h5py libhdf5-serial-1.8.4
+You need Ubuntu 12.04 (x86 - 32/64 bits). 
+The dependencies can be found in the file debian/control. Basically, they can be
+installed with:
+sudo apt-get install python-imaging python-yaml python-serial python-zmq \
+python-concurrent.futures python-scipy python-decorator cgroup-bin \
+python-libtiff python-comedilib python-h5py libhdf5-serial-1.8.4 \
+python-pkg-resources python-netifaces python-cairo python-numpy python-scipy \
+python-decorator python-xdg python-suds python-matplotlib python-opencv
 
-wxPython 2.9 is also required, but it has to be built form source as described
-in the following section.
+Some of these packages need newer version than what is available in the default
+Ubuntu repository. They can be found on Delmic's PPA, or it's possible to
+install them from source.
 
-python-h5py version 2.1+ is required. It can be built from source as described in
-its specific section.
+To install the PPA:
+sudo add-apt-repository ppa:delmic-soft/odemis
 
-comedilib version 0.10+ is required. It can be built from source as described in
-its specific section.
+Otherwise, follow the instructions below.
 
-== wxPython 2.9 ==
-
-Installing wxpython 2.9
-
-- Download wxPython 2.9.4.0 source code
-    wget http://downloads.sourceforge.net/project/wxpython/wxPython/2.9.4.0/wxPython-src-2.9.4.0.tar.bz2?r=&ts=1345106877&use_mirror=switch -O wxPython-src-2.9.4.0.tar.bz2
-- Download the 2.9.4.1 patch file into /wxPython-src-2.9.4.0
-    wget http://sourceforge.net/projects/wxpython/files/wxPython/2.9.4.0/wxPython-src-2.9.4.1.patch/download -O wxPython-src-2.9.4.1.patch
-- Unpack and patch the source:
-tar xf wxPython-src-2.9.4.0.tar.bz2
-cd wxPython-src-2.9.4.0/
-patch -p0 -i ../wxPython-src-2.9.4.1.patch
+== wxPython 3.0 ==
 
 - Make sure the following dependencies are installed:
 sudo apt-get install libgtk2.0-dev freeglut3 freeglut3-dev freeglut3-dbg libgl1-mesa-glx libglu1-mesa libgl1-mesa-dev libglu1-mesa-dev libgstreamer0.10-dev libgconf2-dev libsdl1.2-dev zlib1g-dev libjpeg-dev libtiff4-dev python-gst0.10-dev python-dev
+
+Download wxPython 3.0 and untar:
+wget http://downloads.sourceforge.net/wxpython/wxPython-src-3.0.1.1.tar.bz2
+tar xf wxPython-src-3.0.1.1.tar.bz2
 
 - Compile:
 cd wxPython
@@ -37,21 +36,6 @@ sudo python2.7 build-wxpython.py --build_dir=../build --install
 
 - *important!* Update library database:
 sudo ldconfig
-
-Optionally, if you want to modify the graphical user interface, you need to
-make the following preparation concerning XRCEd. (XRCED is the GUI editor of
-choice.)
-
-- Find the location where WxPython 2.9 is installed:
-    # This may not return the needed path. In case of errors try:
-    # /usr/local/lib/python2.7/dist-packages/wx-2.9.4-gtk2/wx
-    cd $(python -c "import wx; import os; print os.path.dirname(wx.__file__)")
-- Goto the XRCED directory
-    cd tools/XRCed/plugins
-- Create symbolic links to xh_delmic.py and delmic.py files in the
-  odemis/gui/xmlh directory.
-    sudo ln -s <path to odemis root dir>/gui/xmlh/xh_delmic.py
-    sudo ln -s <path to odemis root dir>/gui/xmlh/delmic.py
 
 = H5Py 2.1 =
 This is require to support DimensionScales.
@@ -144,17 +128,8 @@ ensure full bandwidth availability). To check this you can use:
 lsusb -t
 
 - Install the driver:
-  WARNING! no version works fully, but if we create a Frankenstein one, it does:
-  * v2.93 (and v2.91+) doesn't work because it blocks after a few image acquired
-  * v2.90 doesn't support changing the preamp gain
-  * The firmware of v2.90 (/usr/local/etc/andor) and code from v2.93
-    (/usr/local/lib) works (but use 100% of CPU when acquiring images):
-
-  cd andor-2.93
+  cd andor-2.97
   sudo ./install_andor  # Install "5 (All USB products)"
-  cd ../andor-2.90
-  sudo install etc/* /usr/local/etc/andor/
-
 
 On Linux/Ubuntu you need to install libusb-dev (or have a link from libusb.so to
 libusb-0.1.so.4).
@@ -174,7 +149,7 @@ sudo udevadm control --reload-rules
 
 == Andor Neo camera (used for camera simulator too) ==
 
-- Install Andor SDK v3.1 (3.3 does *not* work for simulator).
+- Install Andor SDK v3.7
 
 On Linux, the bitflow driver has to be reinstalled (recompiled) each time the
 kernel is updated. Note that it is only required if you are using the real camera,

@@ -1305,6 +1305,13 @@ class CLController(Controller):
                                  "%d reports no sensor for axis %d" % (address, a))
 
 
+            # TODO:
+            # * if not referenced => disable reference mode to be able to
+            # move relatively (until referencing happens). Use the position as
+            # is, so that if no referencing ever happens, at least the position
+            # is correctly as long as the controller is powered.
+            # * if referenced => beleive it and stay in this mode.
+
             # Start with servo, non-referenced mode, assume the position is
             # correct, and set units to meters
             self.SetServo(a, True)
@@ -1400,9 +1407,14 @@ class CLController(Controller):
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
         old_pos = self.getPosition(axis)
-        self.MoveAbs(axis, position)
-
         distance = position - old_pos
+
+        # Absolute move is only legal if already referenced.
+        if not self.IsReferenced(axis): # TODO: cache, or just always do relative?
+            self.MoveRel(axis, distance)
+        else:
+            self.MoveAbs(axis, position)
+
         return distance
 
     def getPosition(self, axis):
@@ -1446,9 +1458,8 @@ class CLController(Controller):
             self.ReferenceToLimit(axis)
             # TODO: need to do that after the move is complete
             self.waitEndMotion(set(axis))
-            # Go back to center
-            pmin, pmax = self.GetMinPosition(axis), self.GetMaxPosition(axis)
-            self.MoveAbs(axis, pmin + (pmax - pmin) / 2)
+            # Go to 0 (="home")
+            self.MoveAbs(axis, 0)
 
     def isReferenced(self, axis):
         """
