@@ -995,7 +995,7 @@ class StreamPanel(wx.Panel):
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
             self._expander.set_label_choices(dye.DyeDatabase.keys())
-            self._expander.onLabelChange = self._on_new_dye_name
+            self._expander.label_change_callback = self._on_new_dye_name
 
         # Peak excitation/emission wavelength of the selected dye, to be used
         # for peak text and wavelength colour
@@ -1081,9 +1081,10 @@ class StreamPanel(wx.Panel):
                             bitmap=img.getemptyBitmap(),
                             colour=wave2rgb(ex_center),
                             background_parent=self._panel)
-        self.control_gbsizer.Add(btn_col, (self.row_count, 2),
-                      flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
-                      border=5)
+        self.control_gbsizer.Add(btn_col,
+                                 (self.row_count, 2),
+                                 flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
+                                 border=5)
         self._update_peak_label_fit(lbl_peak, btn_col, None, band)
         self.row_count += 1
 
