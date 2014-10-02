@@ -822,8 +822,7 @@ class StreamPanel(wx.Panel):
                                            size=(-1, 40),
                                            value=self.stream.intensityRange.value,
                                            min_val=hist_min,
-                                           max_val=hist_max,
-        )
+                                           max_val=hist_max)
 
         self._sld_hist.SetBackgroundColour("#000000")
         self._vac_hist = VigilantAttributeConnector(self.stream.intensityRange,
@@ -996,7 +995,7 @@ class StreamPanel(wx.Panel):
             # TODO: mark dye incompatible with the hardware with a "disabled"
             # colour in the list. (Need a special version of the combobox?)
             self._expander.set_label_choices(dye.DyeDatabase.keys())
-            self._expander.onLabelChange = self._on_new_dye_name
+            self._expander.label_change_callback = self._on_new_dye_name
 
         # Peak excitation/emission wavelength of the selected dye, to be used
         # for peak text and wavelength colour
@@ -1046,9 +1045,9 @@ class StreamPanel(wx.Panel):
                           border=5)
         else:
             hw_set = ComboBox(self._panel,
-                            value=self._to_readable_band(band),
-                            size=(-1, 16),
-                            style=wx.CB_READONLY | wx.BORDER_NONE)
+                              value=self._to_readable_band(band),
+                              size=(-1, 16),
+                              style=wx.CB_READONLY | wx.BORDER_NONE)
 
             ex_choices = sorted(va.choices, key=self._get_one_center)
             for b in ex_choices:
@@ -1057,12 +1056,13 @@ class StreamPanel(wx.Panel):
             # To avoid catching mouse wheels events when scrolling the panel
             hw_set.Bind(wx.EVT_MOUSEWHEEL, lambda e: None)
 
-            vac = VigilantAttributeConnector(
-                  va, hw_set,
-                  va_2_ctrl, # to convert to selection + update btn
-                  ctrl_2_va, # to convert from selection to VA
-                  events=wx.EVT_COMBOBOX)
-            self._vacs.append(vac) # make sure it doesn't get dereferenced
+            vac = VigilantAttributeConnector(va,
+                                             hw_set,
+                                             va_2_ctrl,  # to convert to selection + update btn
+                                             ctrl_2_va,  # to convert from selection to VA
+                                             events=wx.EVT_COMBOBOX)
+
+            self._vacs.append(vac)  # make sure it doesn't get dereferenced
 
             exc_sizer.Add(hw_set, 1,
                           flag=wx.ALL | wx.ALIGN_CENTRE_VERTICAL,
@@ -1081,9 +1081,10 @@ class StreamPanel(wx.Panel):
                             bitmap=img.getemptyBitmap(),
                             colour=wave2rgb(ex_center),
                             background_parent=self._panel)
-        self.control_gbsizer.Add(btn_col, (self.row_count, 2),
-                      flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
-                      border=5)
+        self.control_gbsizer.Add(btn_col,
+                                 (self.row_count, 2),
+                                 flag=wx.RIGHT | wx.ALIGN_CENTRE_VERTICAL | wx.ALIGN_RIGHT,
+                                 border=5)
         self._update_peak_label_fit(lbl_peak, btn_col, None, band)
         self.row_count += 1
 

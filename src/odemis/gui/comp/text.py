@@ -62,6 +62,7 @@ class ChoiceListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         wx.ListCtrl.__init__(self, *args, **kwargs)
         listmix.ListCtrlAutoWidthMixin.__init__(self)
 
+
 class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
     def __init__(self, parent, choices=None, drop_down_click=True,
                  col_fetch=-1, col_search=0, hide_on_no_match=True,
@@ -71,19 +72,18 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         Constructor works just like wx.TextCtrl except you can pass in a
         list of choices.  You can also change the choice list at any time
         by calling SetChoices.
+
         When a choice is picked, or the user has finished typing, a
         EVT_COMMAND_ENTER is sent.
-
 
         """
 
         if 'style' in text_kwargs:
-            text_kwargs['style'] = (wx.TE_PROCESS_ENTER |
-                                    wx.BORDER_NONE |
-                                    text_kwargs['style'])
+            text_kwargs['style'] = (wx.TE_PROCESS_ENTER | wx.BORDER_NONE | text_kwargs['style'])
         else:
             text_kwargs['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE
-        wx.TextCtrl.__init__(self, parent, **text_kwargs)
+
+        super(SuggestTextCtrl, self).__init__(parent, **text_kwargs)
 
         #Some variables
         self._drop_down_click = drop_down_click
@@ -110,10 +110,8 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         flags = wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_SORT_ASCENDING
         flags = flags | wx.LC_NO_HEADER
 
-
         #Create the list and bind the events
-        self.dropdownlistbox = ChoiceListCtrl(self.dropdown, style=flags,
-                                 pos=wx.Point(0, 0))
+        self.dropdownlistbox = ChoiceListCtrl(self.dropdown, style=flags, pos=wx.Point(0, 0))
 
         ln = 1
         #else: ln = len(choices)
@@ -123,7 +121,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
 
         gp = self
 
-        while gp != None:
+        while gp is not None:
             gp.Bind(wx.EVT_MOVE, self.onControlChanged, gp)
             gp.Bind(wx.EVT_SIZE, self.onControlChanged, gp)
             gp = gp.GetParent()
@@ -132,20 +130,21 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         self.Bind(wx.EVT_TEXT, self.onEnteredText, self)
         self.Bind(wx.EVT_KEY_DOWN, self.onKeyDown, self)
 
-        #If need drop down on left click
+        # If need drop down on left click
         if drop_down_click:
             self.Bind(wx.EVT_LEFT_DOWN, self.onClickToggleDown, self)
             self.Bind(wx.EVT_LEFT_UP, self.onClickToggleUp, self)
 
-        self.dropdown.Bind(wx.EVT_LISTBOX, self.onListItemSelected,
-                           self.dropdownlistbox)
+        self.dropdown.Bind(wx.EVT_LISTBOX, self.onListItemSelected, self.dropdownlistbox)
+
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DOWN, self.onListClick)
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DCLICK, self.onListDClick)
+        self.dropdown.Bind(wx.EVT_LIST_ITEM_SELECTED, self.onListDClick)
         self.dropdownlistbox.Bind(wx.EVT_LIST_COL_CLICK, self.onListColClick)
+
         self.il = wx.ImageList(16, 16)
         self.dropdownlistbox.SetImageList(self.il, wx.IMAGE_LIST_SMALL)
         self._ascending = True
-
 
     def _send_change_event(self):
         """
@@ -161,6 +160,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
 
     def GetListCtrl(self):
         return self.dropdownlistbox
+
     # -- event methods
 
     def onListClick(self, evt):
@@ -261,6 +261,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
                 self._showDropDown(False)
         except wx.PyDeadObjectError:
             pass
+
         if isinstance(event, wx.FocusEvent):
             # KILL_FOCUS => that means the user is happy with the current value
             self._send_change_event()
