@@ -23,8 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import argparse
 import grp
+from logging import FileHandler
 import logging
-from logging.handlers import RotatingFileHandler
 from odemis import model
 import odemis
 from odemis.odemisd import modelgen
@@ -38,25 +38,10 @@ import sys
 import time
 
 
-# TODO the way metadata is updated has probably to be completely changed
-# cf specification (=> send all the metadata to the data generator)
-def updateMetadata(metadata, parent):
-    """
-    Update/fill the metadata with all the metadata from all the components
-      affecting the given component
-    metadata (dict str -> value): metadata
-    parent (HwComponent): the component which created the data to which the metadata refers to. 
-      Note that the metadata from this very component are not added.
-    """
-    # find every component which affects the parent
-    for comp in model.getComponents():
-        try:
-            if parent in comp.affects:
-                metadata.update(comp.getMetadata())
-        except AttributeError:
-            # no affects == empty set
-            pass
-
+status_to_xtcode = {BACKEND_RUNNING: 0,
+                    BACKEND_DEAD: 1,
+                    BACKEND_STOPPED: 2
+                    }
 
 class BackendContainer(model.Container):
     """
@@ -272,12 +257,32 @@ class BackendRunner(object):
 
         return 0
 
-status_to_xtcode = {BACKEND_RUNNING: 0,
-                    BACKEND_DEAD: 1,
-                    BACKEND_STOPPED: 2
-                    }
+def rotateLog(filename, maxBytes, backupCount=0):
+    """
+    Rotate the log file if it's bigger than the maxBytes.
+    Based on RotatingFileHandler.doRollover()
+    """
+    if not os.path.exists(filename):
+        return
 
+    if os.path.getsize(filename) < maxBytes:
+        return
 
+    # Rename the older logs
+    if backupCount > 0:
+        for i in range(backupCount, 0, -1):
+            if i > 1:
+                sfn = "%s.%d" % (filename, i - 1)
+            else:
+                sfn = filename
+            dfn = "%s.%d" % (filename, i)
+            # print "%s -> %s" % (sfn, dfn)
+            if os.path.exists(sfn):
+                if os.path.exists(dfn):
+                    os.remove(dfn)
+                os.rename(sfn, dfn)
+    else:
+        os.remove(filename)
 
 # This is the cli interface of odemisd, which allows to start the back-end
 # It parses the command line and accordingly reads the microscope instantiation
@@ -334,16 +339,19 @@ def main(args):
     if options.logtarget == "auto":
         # default to SysLogHandler ?
         if options.daemon:
-            # Rotate the log, with max 500Mb used
-            handler = RotatingFileHandler("odemis.log",
-                                    maxBytes=100 * (2 ** 20), backupCount=5)
+            options.logtarget = "odemis.log"
         else:
-            handler = logging.StreamHandler()
-    elif options.logtarget == "stderr":
+            options.logtarget = "stderr"
+    if options.logtarget == "stderr":
         handler = logging.StreamHandler()
     else:
-        handler = RotatingFileHandler(options.logtarget,
-                                      maxBytes=100 * (2 ** 20), backupCount=5)
+        # Rotate the log, with max 5*50Mb used.
+        # Note: we used to rely on RotatingFileHandler, but due to multi-
+        # processes, it would be rotated multiple times every time it reached the
+        # limit. So now, just do it at startup, and hope it doesn't reach huge
+        # size in one run.
+        rotateLog(options.logtarget, maxBytes=50 * (2 ** 20), backupCount=5)
+        handler = FileHandler(options.logtarget)
     logging.getLogger().setLevel(loglev)
     handler.setFormatter(logging.Formatter('%(asctime)s (%(module)s) %(levelname)s: %(message)s'))
     logging.getLogger().addHandler(handler)
