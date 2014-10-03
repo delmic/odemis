@@ -321,14 +321,11 @@ class Scanner(model.Emitter):
         self.bpp = model.IntEnumerated(16, set([8, 16]),
                                           unit="", setter=self._setBpp)
 
-        spt_rng = SPOT_RANGE
-        # Convert A/sqrt(V) to just A
-        pc_range = (spt_rng[0] * math.sqrt(volt_range[0]),
-                    spt_rng[1] * math.sqrt(volt_range[1]))
+        # Directly set spot size instead of probe current due to Phenom API
+        spot_rng = SPOT_RANGE
         self._spotSize = numpy.mean(SPOT_RANGE)
-        self._probeCurrent = self._spotSize * math.sqrt(volt)
-        self.probeCurrent = model.FloatContinuous(self._probeCurrent, pc_range, unit="A",
-                                                  setter=self._setPC)
+        self.spotSize = model.FloatContinuous(self._spotSize, spot_rng, unit="A/sqrt(V)",
+                                                  setter=self._setSpotSize)
 
     def updateMetadata(self, md):
         # we share metadata with our parent
@@ -396,18 +393,16 @@ class Scanner(model.Emitter):
     def _setBpp(self, value):
         return value
 
-    def _setPC(self, value):
+    def _setSpotSize(self, value):
         # Set the corresponding spot size to Phenom SEM
-        self._probeCurrent = value
-        volt = self.accelVoltage.value
-        new_spotSize = value / math.sqrt(volt)
+        self._spotSize = value
         try:
-            self.parent._device.SEMSetSpotSize(new_spotSize)
-            return self._probeCurrent
+            self.parent._device.SEMSetSpotSize(value)
+            return self._spotSize
         except suds.WebFault:
-            logging.debug("Cannot set PC when the sample is not in SEM.")
+            logging.debug("Cannot set Spot Size when the sample is not in SEM.")
 
-        return self.probeCurrent.value
+        return self.spotSize.value
 
     def _onScale(self, s):
         self._updatePixelSize()
@@ -585,10 +580,9 @@ class Detector(model.Detector):
         volt = self._acq_device.SEMGetHighTension()
         self.parent._scanner.accelVoltage.value = -volt
 
-        # Calculate current pc
+        # Get current spot size
         self.parent._scanner._spotSize = self._acq_device.SEMGetSpotSize()
-        self.parent._scanner._probeCurrent = self.parent._scanner._spotSize * math.sqrt(-volt)
-        self.parent._scanner.probeCurrent.value = self.parent._scanner._probeCurrent
+        self.parent._scanner.spotSize.value = self.parent._scanner._spotSize
 
     def start_acquire(self, callback):
         # Check if Phenom is in the proper mode
