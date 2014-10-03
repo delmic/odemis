@@ -43,7 +43,6 @@ PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
-DELPHI_OVERVIEW_FOCUS = {"z":-0.017885} # good focus position for overview
 
 
 class MicroscopeStateController(object):
@@ -608,9 +607,6 @@ class DelphiStateController(SecomStateController):
 
     def _start_overview_acquisition(self, unused=None):
         logging.debug("Starting overview acquisition")
-        # Move the focus to a good position
-        f = self._main_data.overview_focus.moveAbs(DELPHI_OVERVIEW_FOCUS)
-        f.result()
         # FIXME: need to check if autofocus is needed sometimes (and improves
         # over the "good position")
         self._on_overview_focused(None)

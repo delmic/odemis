@@ -108,7 +108,7 @@ class InfoLegend(wx.Panel):
         # Sizer composition:
         #
         # +-------------------------------------------------------+
-        # | Mag | HFW | <Scale> | <> | [Icon|Slider|Icon] |
+        # |  <Mag>  | <HFW> |    <Scale>    |  [Icon|Slider|Icon] |
         # +-------------------------------------------------------+
 
         slider_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -126,10 +126,10 @@ class InfoLegend(wx.Panel):
             flag=wx.ALIGN_CENTER | wx.LEFT | wx.RESERVE_SPACE_EVEN_IF_HIDDEN)
 
         control_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        control_sizer.Add(self.magnification_text, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT
+        control_sizer.Add(self.magnification_text, 2, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT
                                                                       | wx.EXPAND)
-        control_sizer.Add(self.hfw_text, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
-        control_sizer.Add(self.scale_win, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.hfw_text, 2, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.scale_win, 3, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
 
         # legend_panel_sizer is needed to add a border around the legend
@@ -168,10 +168,15 @@ class InfoLegend(wx.Panel):
         evt.Skip()
 
     def set_hfw_label(self, label):
+        approx_width = len(label) * 7
+        self.hfw_text.SetMinSize((approx_width, -1))
         self.hfw_text.SetValue(label)
         self.Layout()
 
     def set_mag_label(self, label):
+        # TODO: compute the real size needed (using GetTextExtent())
+        approx_width = len(label) * 7
+        self.magnification_text.SetMinSize((approx_width, -1))
         self.magnification_text.SetValue(label)
         self.Layout()
 
@@ -213,11 +218,8 @@ class AxisLegend(wx.Panel):
     of a canvas plot.
     """
 
-    HORIZONTAL = 0
-    VERTICAL = 1
-
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
-                 style=wx.NO_BORDER, orientation=None):
+                 style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
 
         style = style | wx.NO_BORDER
         super(AxisLegend, self).__init__(parent, wid, pos, size, style)
@@ -236,7 +238,7 @@ class AxisLegend(wx.Panel):
         self.ticks = None
         # The guiding distance between ticks in pixels
         self.tick_pixel_gap = 120
-        self.orientation = orientation or self.HORIZONTAL
+        self.orientation = orientation
 
         self._unit = None
 
@@ -275,7 +277,7 @@ class AxisLegend(wx.Panel):
             label = units.readable_str(val, self.unit, 3)
             _, _, width, height, _, _ = ctx.text_extents(label)
 
-            if self.orientation == self.HORIZONTAL:
+            if self.orientation == wx.HORIZONTAL:
                 lpos = pos - (width / 2)
                 lpos = max(min(lpos, self.ClientSize.x - width - 2), 2)
                 ctx.move_to(lpos, height + 8)
@@ -298,7 +300,7 @@ class AxisLegend(wx.Panel):
         self.ticks = []
 
         # Get orientation dependant values
-        if self.orientation == self.HORIZONTAL:
+        if self.orientation == wx.HORIZONTAL:
             size = self.ClientSize.x
             min_val = self.Parent.canvas.min_x
             val_size = self.Parent.canvas.data_width
@@ -335,7 +337,7 @@ class AxisLegend(wx.Panel):
         for tick in ticks:
             pos = val_to_pos(tick)
             if (pos, tick) not in self.ticks:
-                if self.orientation == self.HORIZONTAL:
+                if self.orientation == wx.HORIZONTAL:
                     if 0 <= pos <= size - self.tick_pixel_gap / 2:
                         self.ticks.append((pos, tick))
                 else:

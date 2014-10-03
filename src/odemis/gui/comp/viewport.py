@@ -27,10 +27,8 @@ from __future__ import division
 
 import collections
 import logging
-
-import wx
-
 from odemis import gui, model
+from odemis.acq import stream
 from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
@@ -41,6 +39,7 @@ from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_PUMPING, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
 from odemis.model import VigilantAttributeBase, NotApplicableError
 from odemis.util import units
+import wx
 
 
 class ViewPort(wx.Panel):
@@ -83,9 +82,8 @@ class ViewPort(wx.Panel):
                 # FIXME: don't use a list, it will confuse everything.
                 # => Just use legend_bottom, legend_left
                 self.legend = [self.legend_class[0](self),
-                               self.legend_class[1](self)]
+                               self.legend_class[1](self, orientation=wx.VERTICAL)]
 
-                self.legend[1].orientation = self.legend[1].VERTICAL
                 self.legend[1].MinSize = (40, -1)
 
                 grid_sizer = wx.GridBagSizer()
@@ -216,6 +214,12 @@ class MicroscopeViewport(ViewPort):
         self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
         self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
 
+        # Find out screen pixel density for "magnification" value. This works
+        # only with monitors/OS which report correct values. It's unlikely to
+        # work with a projector!
+        # The 24" @ 1920x1200 screens from Dell have an mpp value of 0.00027 m/px
+        self._mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
+
     def setView(self, microscope_view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
@@ -268,16 +272,9 @@ class MicroscopeViewport(ViewPort):
         self.legend.set_hfw_label(label)
 
     def UpdateMagnification(self):
-        # TODO: shall we use the real density of the screen?
-        # We could use real density but how much important is it?
-        # The 24" @ 1920x1200 screens from Dell have an mpp value of 0.000270213
-        mpp_screen = 0.00025  # 0.25 mm/px
-        label = u"Mag: "
-
-        # three possibilities:
-        # * no image => total mag (using current mpp)
-        # * all images have same mpp => mag instrument * mag digital
-        # * >1 mpp => total mag
+        # Total magnification
+        mag = self._mpp_screen / self._microscope_view.mpp.value
+        label = u"Mag: × %s" % units.readable_str(units.round_significant(mag, 3))
 
         # Gather all different image mpp values
         mpps = set()
@@ -287,35 +284,13 @@ class MicroscopeViewport(ViewPort):
             except KeyError:
                 pass
 
-        # If there's only one mpp value (i.e. there's only one image, or they all have the same
-        # mpp value)...
+        # If there's only one mpp value (i.e. there's only one image, or they
+        # all have the same mpp value), indicate the digital zoom.
         if len(mpps) == 1:
-            # Two magnifications:
-            #
-            # 1st: The magnification that occurs by rendering the image to the screen
             mpp_im = mpps.pop()
-            mag_im = mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
-
-            if mag_im >= 1:
-                label += u"×" + units.readable_str(units.round_significant(mag_im, 3))
-            else:
-                label += u"÷" + units.readable_str(units.round_significant(1.0 / mag_im, 3))
-
-            # 2nd: The magnification that occurs by changing the mpp value of the view (i.e digitial
-            # zoom)
+#             mag_im = self._mpp_screen / mpp_im  # as if 1 im.px == 1 sc.px
             mag_dig = mpp_im / self._microscope_view.mpp.value
-
-            if mag_dig >= 1:
-                label += u" ×" + units.readable_str(units.round_significant(mag_dig, 3))
-            else:
-                label += u" ÷" + units.readable_str(units.round_significant(1.0 / mag_dig, 3))
-        else:
-            # One magnification: The image mpp is ignored
-            mag = mpp_screen / self._microscope_view.mpp.value
-            if mag >= 1:
-                label += u"×" + units.readable_str(units.round_significant(mag, 3))
-            else:
-                label += u"÷" + units.readable_str(units.round_significant(1.0 / mag, 3))
+            label += u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
 
         self.legend.set_mag_label(label)
 
@@ -354,12 +329,20 @@ class MicroscopeViewport(ViewPort):
             if all_opt:
                 self.ShowMergeSlider(False)
             else:
-                # How is the order guaranteed? (Left vs Right)
-                sc = self._microscope_view.stream_tree[0]
-                self.legend.set_stream_type(wx.LEFT, sc.__class__)
+                # TODO: How is the order guaranteed? (Left vs Right)
+                # => it should be done in the MicroscopeView when adding a stream
+                # For now, special hack for the SecomCanvas which always sets
+                # the EM image as "right"
+                if (any(isinstance(s, EM_STREAMS) for s in streams)
+                    and any(isinstance(s, OPTICAL_STREAMS) for s in streams)):
+                    self.legend.set_stream_type(wx.LEFT, stream.CameraStream)
+                    self.legend.set_stream_type(wx.RIGHT, stream.SEMStream)
+                else:
+                    sc = self._microscope_view.stream_tree[0]
+                    self.legend.set_stream_type(wx.LEFT, sc.__class__)
 
-                sc = self._microscope_view.stream_tree[1]
-                self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+                    sc = self._microscope_view.stream_tree[1]
+                    self.legend.set_stream_type(wx.RIGHT, sc.__class__)
 
                 self.ShowMergeSlider(True)
         else:

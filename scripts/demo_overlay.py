@@ -26,7 +26,6 @@ import logging
 import numpy
 from odemis import model
 from odemis.dataio import hdf5
-from odemis.model._dataflow import MD_PIXEL_SIZE, MD_POS
 from odemis.acq.align import images, coordinates, transform
 import sys
 import threading
@@ -39,7 +38,7 @@ from scipy import ndimage
 from scipy import misc
 from odemis.util import img
 from odemis.acq import stream
-from odemis.acq import find_overlay
+from odemis.acq.align import find_overlay
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
 
@@ -93,7 +92,7 @@ def main(args):
         
         # f_acq = SEMCCDAcquisition(escan, ccd, detector, light)
 
-        optical_image_1, optical_image_2, optical_image_3, electron_image = f_acq.result()
+        # optical_image_1, optical_image_2, optical_image_3, electron_image = f_acq.result()
         
         f = find_overlay.FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
         trans_val, correction_md = f.result()

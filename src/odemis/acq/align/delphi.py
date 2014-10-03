@@ -32,31 +32,27 @@ from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform
 from odemis.acq.align import spot
-import scipy
 import threading
 import time
+from . import autofocus
 
-EXPECTED_HOLES = ({"x":0, "y":11e-03}, {"x":0, "y":-11e-03})  # Expected hole positions
-HOLE_RADIUS = 175e-06  # Expected hole radius
+EXPECTED_HOLES = ({"x":0, "y":11.5e-03}, {"x":0, "y":-11.5e-03})  # Expected hole positions
+HOLE_RADIUS = 181e-06  # Expected hole radius
+LENS_RADIUS = 0.0024  # Expected lens radius
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
 MAX_STEPS = 10  # To reach the hole
 # Positions to scan for rotation and scaling calculation
-ROTATION_SPOTS = ({"x":5e-03, "y":0}, {"x":-5e-03, "y":0},
-                  {"x":0, "y":5e-03}, {"x":0, "y":-5e-03})
-SCANNING_FOV = 1020e-06  # SEM FoV used for the pattern scanning
-DETECTION_FOV = (220e-06, 220e-06)   #CCD FoV that guarantees at least one  
-                                    #complete subpattern is observed #m 
-SUBPATTERNS = (7,7) #Dimensions of pattern in terms of subpatterns
-SPOT_DIST = 20e-06  #Distance between spots in subpattern #m
-SUBPATTERN_DIMS = (3,3) #Dimensions of subpattern in terms of spots
-SUBPATTERN_DIST = 160e-06  #Distance between 2 neighboor subpatterns 
-                            #(from center to center) #m
+ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
+                  {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
+EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
+                                        #lens alignment failure 
+SEM_KNOWN_FOCUS = 0.0071625  # Fallback sem focus position for the first insertion
 
 
-def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
-                     combined_stage, first_insertion, known_first_hole=None,
-                    known_second_hole=None, known_offset=None, known_rotation=None,
-                    known_scaling=None):
+def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
+                     focus, combined_stage, first_insertion, known_first_hole=None,
+                    known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
+                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET):
     """
     Wrapper for DoUpdateConversion. It provides the ability to check the progress 
     of conversion update procedure or even cancel it.
@@ -65,19 +61,23 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     opt_stage (model.Actuator): The objective stage
+    ebeam_focus (model.Actuator): EBeam focus
     focus (model.Actuator): Focus of objective lens
     combined_stage (model.Actuator): The combined stage
     first_insertion (Boolean): If True it is the first insertion of this sample
                                 holder
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
     known_second_hole (tuple of floats): Hole coordinates found in the calibration file
+    known_focus (float): Focus used for hole detection #m
     known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
     known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    sem_position (tuple of floats): SEM position for rough alignment 
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns first_hole (tuple of floats): Coordinates of first hole
                     second_hole (tuple of floats): Coordinates of second hole
+                    hole_focus (float): Focus used for hole detection
                     (tuple of floats):    offset #m,m 
                     (float):    rotation #radians
                     (tuple of floats):    scaling
@@ -102,16 +102,17 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, focus,
     conversion_thread = threading.Thread(target=executeTask,
                   name="Conversion update",
                   args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
-                        opt_stage, focus, combined_stage, first_insertion, known_first_hole,
-                        known_second_hole, known_offset, known_rotation, known_scaling))
+                        opt_stage, ebeam_focus, focus, combined_stage, first_insertion,
+                        known_first_hole, known_second_hole, known_focus, known_offset,
+                        known_rotation, known_scaling, sem_position))
 
     conversion_thread.start()
     return f
 
-def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, 
-                        focus, combined_stage, first_insertion, known_first_hole=None,
-                        known_second_hole=None, known_offset=None, known_rotation=None,
-                        known_scaling=None):
+def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
+                     focus, combined_stage, first_insertion, known_first_hole=None,
+                    known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
+                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET):
     """
     First calls the HoleDetection to find the hole centers. Then if the current 
     sample holder is inserted for the first time, calls AlignAndOffset, 
@@ -125,18 +126,22 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
     opt_stage (model.Actuator): The objective stage
+    ebeam_focus (model.Actuator): EBeam focus
     focus (model.Actuator): Focus of objective lens
     combined_stage (model.Actuator): The combined stage
     first_insertion (Boolean): If True it is the first insertion of this sample
                                 holder
     known_first_hole (tuple of floats): Hole coordinates found in the calibration file
     known_second_hole (tuple of floats): Hole coordinates found in the calibration file
-    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m
+    known_focus (float): Focus used for hole detection #m
+    known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
     known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
+    sem_position (tuple of floats): SEM position for rough alignment 
     returns 
             first_hole (tuple of floats): Coordinates of first hole
             second_hole (tuple of floats): Coordinates of second hole
+            hole_focus (float): Focus used for hole detection
             (tuple of floats): offset  
             (float): rotation #radians
             (tuple of floats): scaling
@@ -152,8 +157,9 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
         # Detect the holes/markers of the sample holder
         try:
             logging.debug("Detect the holes/markers of the sample holder...")
-            future._hole_detectionf = HoleDetection(detector, escan, sem_stage)
-            first_hole, second_hole = future._hole_detectionf.result()
+            future._hole_detectionf = HoleDetection(detector, escan, sem_stage,
+                                                    ebeam_focus, known_focus)
+            first_hole, second_hole, hole_focus = future._hole_detectionf.result()
         except IOError:
             raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
@@ -163,16 +169,20 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             # Update progress of the future
             future.set_end_time(time.time() +
                 estimateConversionTime(first_insertion) * (2 / 3))
-            logging.debug("Move SEM and objective stage to (0,0)...")
-            f = sem_stage.moveAbs({"x":0, "y":0})
+            logging.debug("Move SEM stage to expected offset...")
+            f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
             f.result()
+            logging.debug("Move objective stage to (0,0)...")
             f = opt_stage.moveAbs({"x":0, "y":0})
             f.result()
+            # Set min fov
+            # We want to be as close as possible to the center when we are zoomed in
+            escan.horizontalFoV.value = escan.horizontalFoV.range[0]
+
             logging.debug("Initial calibration to align and calculate the offset...")
             try:
-                future._align_offsetf = AlignAndOffset(ccd, escan, sem_stage,
-                                                       opt_stage, focus, first_hole,
-                                                       second_hole)
+                future._align_offsetf = AlignAndOffset(ccd, detector, escan, sem_stage,
+                                                       opt_stage, focus)
                 offset = future._align_offsetf.result()
             except IOError:
                 raise IOError("Conversion update failed to align and calculate offset.")
@@ -184,7 +194,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
                 estimateConversionTime(first_insertion) * (1 / 3))
             logging.debug("Calculate rotation and scaling...")
             try:
-                future._rotation_scalingf = RotationAndScaling(ccd, escan, sem_stage,
+                future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
                                                                opt_stage, focus, offset)
                 rotation, scaling = future._rotation_scalingf.result()
             except IOError:
@@ -196,7 +206,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             # also in the given offset
             offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
             # Data returned needs to be filled in the calibration file
-            return first_hole, second_hole, offset, rotation, scaling
+            return first_hole, second_hole, hole_focus, offset, rotation, scaling
 
         else:
             if future._conversion_update_state == CANCELLED:
@@ -204,7 +214,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             # Update progress of the future
             future.set_end_time(time.time() + 1)
             logging.debug("Calculate extra offset and rotation...")
-            updated_offset, updated_rotation = CalculateExtraOffset(first_hole,
+            updated_offset, updated_rotation = UpdateOffsetAndRotation(first_hole,
                                                                     second_hole,
                                                                     known_first_hole,
                                                                     known_second_hole,
@@ -218,7 +228,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage,
             combined_stage.updateMetadata({model.MD_POS_COR: updated_offset})
             combined_stage.updateMetadata({model.MD_PIXEL_SIZE_COR: known_scaling})
             # Data returned should NOT be filled in the calibration file
-            return first_hole, second_hole, updated_offset, updated_rotation, known_scaling
+            return first_hole, second_hole, hole_focus, updated_offset, updated_rotation, known_scaling
 
     finally:
         with future._conversion_lock:
@@ -257,8 +267,13 @@ def estimateConversionTime(first_insertion):
     else:
         return 60
 
-def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
-                   second_hole):
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
+
+def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
     """
     Wrapper for DoAlignAndOffset. It provides the ability to check the progress 
     of the procedure.
@@ -267,8 +282,6 @@ def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
     sem_stage (model.Actuator): The SEM stage
     opt_stage (model.Actuator): The objective stage
     focus (model.Actuator): Focus of objective lens
-    first_hole (tuple of floats): Coordinates of first hole
-    second_hole (tuple of floats): Coordinates of second hole
     returns (ProgressiveFuture): Progress DoAlignAndOffset
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -287,14 +300,13 @@ def AlignAndOffset(ccd, escan, sem_stage, opt_stage, focus, first_hole,
     # Run in separate thread
     offset_thread = threading.Thread(target=executeTask,
                   name="Align and offset",
-                  args=(f, _DoAlignAndOffset, f, ccd, escan, sem_stage, opt_stage,
-                        focus, first_hole, second_hole))
+                  args=(f, _DoAlignAndOffset, f, ccd, detector, escan, sem_stage, opt_stage,
+                        focus))
 
     offset_thread.start()
     return f
 
-def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
-                      first_hole, second_hole):
+def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus):
     """
     Write one CL spot and align it, 
     moving both SEM stage and e-beam (spot alignment). Calculate the offset 
@@ -308,8 +320,6 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
     sem_stage (model.Actuator): The SEM stage
     opt_stage (model.Actuator): The objective stage
     focus (model.Actuator): Focus of objective lens
-    first_hole (tuple of floats): Coordinates of first hole
-    second_hole (tuple of floats): Coordinates of second hole
     returns (tuple of floats): offset #m,m
     raises:    
         CancelledError() if cancelled
@@ -330,34 +340,33 @@ def _DoAlignAndOffset(future, ccd, escan, sem_stage, opt_stage, focus,
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
 
-        opt_pos = opt_stage.position.value
+        sem_pos = sem_stage.position.value
+        detector.data.subscribe(_discard_data)
 
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
         # Apply spot alignment
         try:
-            # Direct move of objective lens, not Inclined stage used
-            # TODO, maybe move the inclined stage out of the AlignSpot and
-            # remove the type of move. Then create a set of "stage wrappers" that
-            # can be used for the SECOM AB, Delphi optical or Delphi SEM. If no
-            # stage is provided use the ebeam shift (or have a wrapper for ebeam
-            # shift -> fake stage??)
-            # TODO, move the sem_stage instead of objective lens
-            future_spot = spot.AlignSpot(ccd, opt_stage, escan, focus, type=spot.OBJECTIVE_MOVE)
-            dist = future_spot.result()
+            image = ccd.data.get(asap=False)
+            # Move the sem_stage instead of objective lens
+            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE)
+            dist, vector = future_spot.result()
             # Almost done
             future.set_end_time(time.time() + 1)
-            opt_pos = opt_stage.position.value
+            image = ccd.data.get(asap=False)
+            sem_pos = sem_stage.position.value
         except IOError:
             raise IOError("Failed to align stages and calculate offset.")
 
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
-        offset = (opt_pos["x"], opt_pos["y"])
-
+        # Add the dist to compensate the stage imprecision
+        offset = (sem_pos["x"] - vector[0], sem_pos["y"] - vector[1])
         return offset
 
     finally:
+        escan.resolution.value = (512, 512)
+        detector.data.unsubscribe(_discard_data)
         with future._offset_lock:
             if future._align_offset_state == CANCELLED:
                 raise CancelledError()
@@ -391,7 +400,7 @@ def estimateOffsetTime(et, dist=None):
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
 
-def RotationAndScaling(ccd, escan, sem_stage, opt_stage, focus, offset):
+def RotationAndScaling(ccd, detector, escan, sem_stage, opt_stage, focus, offset):
     """
     Wrapper for DoRotationAndScaling. It provides the ability to check the 
     progress of the procedure.
@@ -416,13 +425,13 @@ def RotationAndScaling(ccd, escan, sem_stage, opt_stage, focus, offset):
     # Run in separate thread
     rotation_thread = threading.Thread(target=executeTask,
                   name="Rotation and scaling",
-                  args=(f, _DoRotationAndScaling, f, ccd, escan, sem_stage, opt_stage,
+                  args=(f, _DoRotationAndScaling, f, ccd, detector, escan, sem_stage, opt_stage,
                         focus, offset))
 
     rotation_thread.start()
     return f
 
-def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
+def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, focus,
                           offset):
     """
     Move the stages to four diametrically opposite positions in order to 
@@ -452,6 +461,7 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
     escan.dwellTime.value = 5e-06
+    detector.data.subscribe(_discard_data)
 
     try:
         if future._rotation_scaling_state == CANCELLED:
@@ -466,11 +476,11 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
             f = sem_stage.moveAbs(pos)
             f.result()
             # Transform to coordinates in the reference frame of the objective stage
-            vpos = [-pos["x"], -pos["y"]]
+            vpos = [pos["x"], pos["y"]]
 #             P = numpy.transpose([vpos[0], vpos[1]])
 #             O = numpy.transpose([offset[0], offset[1]])
 #             q = numpy.add(P, O).tolist()
-            q = [vpos[0] + offset[0], vpos[1] + offset[1]]
+            q = [vpos[0] - offset[0], vpos[1] - offset[1]]
             # Move objective lens correcting for offset
             cor_pos = {"x": q[0], "y": q[1]}
             f = opt_stage.moveAbs(cor_pos)
@@ -479,7 +489,6 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
             # of the CCD FoV
             # Simplified version of AlignSpot() but without autofocus, with
             # different error margin, and moves the SEM stage.
-            # TODO => reuse/factorize the code?
             dist = None
             steps = 0
             while True:
@@ -494,14 +503,13 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                     raise IOError("CL spot not found.")
                 pixelSize = image.metadata[model.MD_PIXEL_SIZE]
                 center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-                # TODO: tab? better name?
-                tab_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
-                tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-                dist = math.hypot(*tab)
+                vector_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
+                vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+                dist = math.hypot(*vector)
                 # Move to spot until you are close enough
                 if dist <= ERR_MARGIN:
                     break
-                f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
+                f = sem_stage.moveRel({"x":-vector[0], "y":vector[1]})
                 f.result()
                 steps += 1
                 # Update progress of the future
@@ -509,8 +517,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
                     estimateRotationAndScalingTime(ccd.exposureTime.value, dist))
 
             # Save Phenom sample stage position and Delmic optical stage position
-            sem_spots.append((sem_stage.position.value["x"] + tab[0],
-                              sem_stage.position.value["y"] + tab[1]))
+            sem_spots.append((sem_stage.position.value["x"] - vector[0],
+                              sem_stage.position.value["y"] + vector[1]))
             opt_spots.append((opt_stage.position.value["x"],
                               opt_stage.position.value["y"]))
 
@@ -521,6 +529,8 @@ def _DoRotationAndScaling(future, ccd, escan, sem_stage, opt_stage, focus,
         return rotation, scaling
 
     finally:
+        escan.resolution.value = (512, 512)
+        detector.data.unsubscribe(_discard_data)
         with future._rotation_lock:
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()
@@ -553,13 +563,15 @@ def estimateRotationAndScalingTime(et, dist=None):
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
 
-def HoleDetection(detector, escan, sem_stage):
+def HoleDetection(detector, escan, sem_stage, ebeam_focus, known_focus=None):
     """
     Wrapper for DoHoleDetection. It provides the ability to check the 
     progress of the procedure.
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
+    ebeam_focus (model.Actuator): EBeam focus
+    known_focus (float): Focus used for hole detection #m
     returns (ProgressiveFuture): Progress DoHoleDetection
     """
     # Create ProgressiveFuture and update its state to RUNNING
@@ -576,12 +588,13 @@ def HoleDetection(detector, escan, sem_stage):
     # Run in separate thread
     detection_thread = threading.Thread(target=executeTask,
                   name="Hole detection",
-                  args=(f, _DoHoleDetection, f, detector, escan, sem_stage))
+                  args=(f, _DoHoleDetection, f, detector, escan, sem_stage, ebeam_focus,
+                        known_focus))
 
     detection_thread.start()
     return f
 
-def _DoHoleDetection(future, detector, escan, sem_stage):
+def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focus=None):
     """
     Moves to the expected positions of the holes on the sample holder and 
     determines the centers of the holes (acquiring SEM images) with respect to 
@@ -590,7 +603,10 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
     detector (model.Detector): The se-detector
     escan (model.Emitter): The e-beam scanner
     sem_stage (model.Actuator): The SEM stage
+    ebeam_focus (model.Actuator): EBeam focus
+    known_focus (float): Focus used for hole detection #m
     returns (tuple of tuples of floats): first_hole and second_hole #m,m 
+                                         hole_focus(float): focus used for hole detection
     raises:    
         CancelledError() if cancelled
         IOError if holes not found
@@ -603,56 +619,45 @@ def _DoHoleDetection(future, detector, escan, sem_stage):
         escan.dwellTime.value = 6e-06  # good enough for clear SEM image
         holes_found = []
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
+        hole_focus = known_focus
         for pos in EXPECTED_HOLES:
             if future._hole_detection_state == CANCELLED:
                 raise CancelledError()
-            # Set the FoV to 1.2mm
-            escan.horizontalFoV.value = 1.2e-03
-            # Set the voltage to 5.3kV
-            escan.accelVoltage.value = 5.3e03
             # Move Phenom sample stage to expected hole position
             f = sem_stage.moveAbs(pos)
             f.result()
-            dist = None
-            steps = 0
-            while True:
-                if future._hole_detection_state == CANCELLED:
-                    raise CancelledError()
-                if steps >= MAX_STEPS:
-                    logging.warning("Could not center to the hole within %d trials", steps)
-                    break
-                # From SEM image determine marker position relative to the center of
-                # the SEM
-                image = detector.data.get(asap=False)
-                try:
-                    hole_coordinates = FindHoleCenter(image)
-                except IOError:
-                    raise IOError("Holes not found.")
-                pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-                center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-                tab_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
-                tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
-                dist = math.hypot(*tab)
-                # Move to hole until you are close enough
-                if dist <= ERR_MARGIN:
-                    break
-                f = sem_stage.moveRel({"x":tab[0], "y":tab[1]})
+            # Set the FoV to almost 2mm
+            escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+            # Just to force autocontrast
+            escan.accelVoltage.value += 10
+            # Try autofocus or apply the given value
+            if hole_focus is None:
+                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                hole_focus, fm_level = f.result() 
+            else:
+                f = ebeam_focus.moveAbs({"z":hole_focus})
                 f.result()
-                steps += 1
-                # Reset the FoV to 0.6mm
-                if escan.horizontalFoV.value != 0.6e-03:
-                    escan.horizontalFoV.value = 0.6e-03
-                # Update progress of the future
-                future.set_end_time(time.time() +
-                    estimateHoleDetectionTime(et, dist))
+                
+            # From SEM image determine marker position relative to the center of
+            # the SEM
+            image = detector.data.get(asap=False)
+            try:
+                hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 5)
+            except IOError:
+                raise IOError("Holes not found.")
+            pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+            center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+            vector_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
+            vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+            dist = math.hypot(*vector)
 
             #SEM stage position plus offset from hole detection
-            holes_found.append({"x": sem_stage.position.value["x"] + tab[0],
-                                "y": sem_stage.position.value["y"] + tab[1]})
+            holes_found.append({"x": sem_stage.position.value["x"] + vector[0],
+                                "y": sem_stage.position.value["y"] - vector[1]})
         
         first_hole = (holes_found[0]["x"], holes_found[0]["y"])
         second_hole = (holes_found[1]["x"], holes_found[1]["y"])
-        return first_hole, second_hole
+        return first_hole, second_hole, hole_focus
 
     finally:
         with future._detection_lock:
@@ -687,30 +692,40 @@ def estimateHoleDetectionTime(et, dist=None):
         steps = min(steps, MAX_STEPS)
     return steps * (et + 2)  # s
 
-def FindHoleCenter(image):
+def FindCircleCenter(image, radius, max_diff):
     """
-    Detects the center of a hole contained in SEM image.
-    image (model.DataArray): SEM image
-    returns (tuple of floats): Coordinates of hole
+    Detects the center of a circle contained in an image.
+    image (model.DataArray): image
+    radius (float): radius of circle #m
+    max_diff (float): precision of radius in pixels
+    returns (tuple of floats): Coordinates of circle center
     raises:    
-        IOError if hole not found
+        IOError if circle not found
     """
     img = cv2.medianBlur(image, 5)
     pixelSize = image.metadata[model.MD_PIXEL_SIZE]
 
-    # search for holes of HOLE_RADIUS with -+3 pixels precision
-    min, max = ((HOLE_RADIUS / pixelSize) - 3), ((HOLE_RADIUS / pixelSize) + 3)
-    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, 1, 20, param1=50,
-                               param2=30, minRadius=min, maxRadius=max)
+    # search for circles of radius with "max_diff" number of pixels precision
+    min, max = int((radius / pixelSize[0]) - max_diff), int((radius / pixelSize[0]) + max_diff)
+    circles = cv2.HoughCircles(img, cv2.cv.CV_HOUGH_GRADIENT, dp=1, minDist=20, param1=50,
+                               param2=15, minRadius=min, maxRadius=max)
 
-    circles = numpy.uint16(numpy.around(circles))
-    if len(circles[0, :]) != 1:
-        raise IOError("Hole not found.")
+    # Do not change the sequence of conditions
+    if circles is None:
+        raise IOError("Circle not found.")
 
-    return circles[0, 0][0], circles[0, 0][1]
+    cntr = circles[0, 0][0], circles[0, 0][1]
+    # If searching for a hole, pick circle with darkest center
+    if radius == HOLE_RADIUS:
+        intensity = image[circles[0, 0][1], circles[0, 0][0]]
+        for i in circles[0, :]:
+            if image[i[1], i[0]] < intensity:
+                cntr = i[0], i[1]
+                intensity = image[i[1], i[0]]
 
-# TODO: rename to UpdateOffsetAndRotation ?
-def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
+    return cntr
+
+def UpdateOffsetAndRotation(new_first_hole, new_second_hole, expected_first_hole,
                          expected_second_hole, offset, rotation, scaling):
     """
     Given the hole coordinates found in the calibration file and the new ones, 
@@ -735,144 +750,85 @@ def CalculateExtraOffset(new_first_hole, new_second_hole, expected_first_hole,
     updated_rotation = rotation + e_rotation
     return updated_offset, updated_rotation
 
-def PatternDetection(ccd, detector, escan, opt_stage, focus, pattern):
+# LensAlignment is called by the GUI after the objective stage is referenced and
+# SEM stage to (0,0).
+def LensAlignment(navcam, sem_stage):
     """
-    Wrapper for DoPatternDetection. It provides the ability to check the 
-    progress of the procedure.
-    ccd (model.DigitalCamera): The ccd
-    detector (model.Detector): The se-detector
-    escan (model.Emitter): The e-beam scanner
-    opt_stage (model.Actuator): The objective stage
-    focus (model.Actuator): Focus of objective lens
-    pattern (model.DataArray): 21x21 array containing the spot
-                                pattern in binary data. Needs to 
-                                be divided in 3x3 sub-arrays to 
-                                get the actual information
-    returns (ProgressiveFuture): Progress DoPatternDetection
+    Wrapper for DoLensAlignment. It provides the ability to check the progress 
+    of the procedure.
+    navcam (model.DigitalCamera): The NavCam
+    sem_stage (model.Actuator): The SEM stage
+    returns (ProgressiveFuture): Progress DoLensAlignment
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimatePatternDetectionTime())
-    f._pattern_detection_state = RUNNING
+                                end=est_start + estimateLensAlignmentTime())
+    f._lens_alignment_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelPatternDetection
-    f._pattern_lock = threading.Lock()
+    f.task_canceller = _CancelLensAlignment
+    f._lens_lock = threading.Lock()
 
     # Run in separate thread
-    pattern_thread = threading.Thread(target=executeTask,
-                  name="Pattern detection",
-                  args=(f, _DoPatternDetection, f, ccd, detector, escan,
-                        opt_stage, focus, pattern))
+    lens_thread = threading.Thread(target=executeTask,
+                  name="Lens alignment",
+                  args=(f, _DoLensAlignment, f, navcam, sem_stage))
 
-    pattern_thread.start()
+    lens_thread.start()
     return f
 
-def _DoPatternDetection(future, ccd, detector, escan, opt_stage, focus, pattern):
+def _DoLensAlignment(future, navcam, sem_stage):
     """
-    Given an SH Calibration Pattern, it first scans the required spots, acquires 
-    the CCD image, detects the combination of the spots observed and moves 
-    accordingly. It repeats this process until the CCD image contains the center 
-    pattern.
+    Detects the objective lens with the NavCam and moves the SEM stage to center
+    them in the NavCam view. Returns the final SEM stage position.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
-    ccd (model.DigitalCamera): The ccd
-    detector (model.Detector): The se-detector
-    escan (model.Emitter): The e-beam scanner
-    opt_stage (model.Actuator): The objective stage
-    focus (model.Actuator): Focus of objective lens
-    pattern (model.DataArray): 21x21 array containing the spot
-                                pattern in binary data. Needs to 
-                                be divided in 3x3 sub-arrays to 
-                                get the actual information
+    navcam (model.DigitalCamera): The NavCam
+    sem_stage (model.Actuator): The SEM stage
+    returns sem_position (tuple of floats): SEM stage position #m,m 
     raises:    
         CancelledError() if cancelled
-        IOError if pattern not found
+        IOError If objective lens not found
     """
-    # TODO: this should stop after a while... move to it's own object with a
-    # thread that can be started/stopped.
-    # The whole procedure could then be represented by a object similar to GridScanner
-    logging.debug("Starting pattern detection...")
+    logging.debug("Starting lens alignment...")
     try:
-        # Set proper SEM FoV
-        escan.horizontalFoV.value = SCANNING_FOV
-        # Spot mode
-        escan.scale.value = (1, 1)
-        escan.resolution.value = (1, 1)
-        escan.translation.value = (0, 0)
-        escan.dwellTime.value = escan.dwellTime.range[1]
-        ccd.binning.value = (1, 1)
-        # FIXME: the CCD FoV depends on the lens magnification (cf metadata)
-        ccd.resolution.value = (int(DETECTION_FOV[0] / ccd.pixelSize.value[0]),
-                                int(DETECTION_FOV[1] / ccd.pixelSize.value[1]))
-        ccd.exposureTime.value = 900e-03  # s
-        
-        #Distance between spots in subpattern in pixels
-        spot_dist_pxs = SPOT_DIST / escan.pixelSize.value[0]
-        subpattern_dist_pxs = SUBPATTERN_DIST / escan.pixelSize.value[0]
-        # floor rounding to take care of odd number of pixels
-        center_subpattern = (SUBPATTERNS[0] // 2, SUBPATTERNS[1] // 2)
-        center_spot = (SUBPATTERN_DIMS[0] // 2, SUBPATTERN_DIMS[1] // 2)
-        
-        # Iterate until you reach the center pattern
-        while True:
-            if future._pattern_detection_state == CANCELLED:
-                raise CancelledError()
-            detector.data.subscribe(_discard_data)
-            #Go through the 3x3 subpatterns
-            for i, j in numpy.ndindex(SUBPATTERNS):
-                if future._pattern_detection_state == CANCELLED:
-                    raise CancelledError()
-                subpattern = pattern[(i * SUBPATTERN_DIMS[0]):(i * SUBPATTERN_DIMS[0]) + SUBPATTERN_DIMS[0],
-                                     (j * SUBPATTERN_DIMS[1]):(j * SUBPATTERN_DIMS[1]) + SUBPATTERN_DIMS[1]]
-                # Translation to subpattern center
-                center_translation = ((i - center_subpattern[0]) * subpattern_dist_pxs,
-                                      (j - center_subpattern[1]) * subpattern_dist_pxs)
-                for k, l in numpy.ndindex(subpattern.shape):
-                    # If spot has to be scanned
-                    if subpattern[k, l] == 1:
-                        # Translation from subpattern center to particular spot
-                        spot_translation = ((k - center_spot[0]) * spot_dist_pxs,
-                                            (l - center_spot[1]) * spot_dist_pxs)
-                        # Translation from SEM center to particular spot
-                        total_translation = (center_translation[0] + spot_translation[0],
-                                             center_translation[1] + spot_translation[1])
-                        escan.translation.value = total_translation
-            # TODO, pattern detection and move
-            # Maybe autofocus in the first iteration?
-            # image = ccd.data.get()
-            # move = DetectSubpattern(image)
-            # If center subpattern is detected the move will be 0 and we break
-            # opt_stage.moveRel(move)
+        if future._lens_alignment_state == CANCELLED:
+            raise CancelledError()
+        # Detect lens with navcam
+        image = navcam.data.get(asap=False)
+        try:
+            lens_coordinates = FindCircleCenter(image[:, :, 0], LENS_RADIUS, 5)
+        except IOError:
+            raise IOError("Lens not found.")
+        pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+        center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+        vector_pxs = [a - b for a, b in zip(lens_coordinates, center_pxs)]
+        vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+
+        return (sem_stage.position.value["x"] + vector[0], sem_stage.position.value["y"] - vector[1])
     finally:
-        with future._pattern_lock:
-            if future._pattern_detection_state == CANCELLED:
+        with future._lens_lock:
+            if future._lens_alignment_state == CANCELLED:
                 raise CancelledError()
-            future._pattern_detection_state = FINISHED
+            future._lens_alignment_state = FINISHED
 
-def _CancelPatternDetection(future):
+def _CancelLensAlignment(future):
     """
-    Canceller of _DoPatternDetection task.
+    Canceller of _DoLensAlignment task.
     """
-    logging.debug("Cancelling pattern detection...")
+    logging.debug("Cancelling lens alignment...")
 
-    with future._pattern_lock:
-        if future._pattern_detection_state == FINISHED:
+    with future._lens_lock:
+        if future._lens_alignment_state == FINISHED:
             return False
-        future._pattern_detection_state = CANCELLED
-        logging.debug("Pattern detection cancelled.")
+        future._lens_alignment_state = CANCELLED
+        logging.debug("Lens alignment cancelled.")
 
     return True
 
-def estimatePatternDetectionTime():
+def estimateLensAlignmentTime():
     """
-    Estimates hole detection procedure duration
+    Estimates lens alignment procedure duration
     returns (float):  process estimated time #s
     """
-    return 0
-
-def _discard_data(df, data):
-    """
-    Does nothing, just discard the SEM data received (for spot mode)
-    """
-    pass
+    return 1  # s

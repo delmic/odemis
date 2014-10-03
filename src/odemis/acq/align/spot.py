@@ -56,7 +56,7 @@ def MeasureSNR(image):
     
     return snr
 
-def AlignSpot(ccd, stage, escan, focus, type=STAGE_MOVE):
+def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE):
     """
     Wrapper for DoAlignSpot. It provides the ability to check the progress of
     spot mode procedure or even cancel it.
@@ -143,9 +143,11 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
         # Try to find spot
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
+
+        image = ccd.data.get(asap=False)
         logging.debug("Trying to find spot...")
         future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type)
-        dist = future._centerspotf.result()
+        dist, vector = future._centerspotf.result()
 
         # If spot not found, autofocus and then retry
         if dist is None:
@@ -167,31 +169,23 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
                 raise CancelledError()
             logging.debug("Trying again to find spot...")
             future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type)
-            dist = future._centerspotf.result()
+            dist, vector = future._centerspotf.result()
             if dist is None:
                 raise IOError('Spot alignment failure. Spot not found')
 
         # Update progress of the future
         future.set_end_time(time.time() +
                             estimateAlignmentTime(et, dist, 1))
+
+        image = ccd.data.get(asap=False)
         # Limitate FoV to save time
         logging.debug("Crop FoV...")
         CropFoV(ccd)
-
+        image = ccd.data.get(asap=False)
         # Autofocus
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
-        logging.debug("Autofocusing...")
-        try:
-            # When Autofocus set binning 8 if possible
-            ccd.binning.value = min((8, 8), ccd.binning.range[1])
-            future._autofocusf = autofocus.AutoFocus(ccd, None, focus, autofocus.FINE_SPOTMODE_ACCURACY)
-            lens_pos, fm_level = future._autofocusf.result()
-            ccd.binning.value=(1, 1)
-        except IOError:
-            raise IOError('Spot alignment failure. AutoFocus failed.')
-        if future._spot_alignment_state == CANCELLED:
-            raise CancelledError()
+
         # Update progress of the future
         future.set_end_time(time.time() +
                             estimateAlignmentTime(et, dist, 0))
@@ -202,10 +196,10 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
             raise CancelledError()
         logging.debug("Aligning spot...")
         future._centerspotf = CenterSpot(ccd, stage, escan, FINE_MOVE, type)
-        dist = future._centerspotf.result()
+        dist, vector = future._centerspotf.result()
         if dist is None:
             raise IOError('Spot alignment failure. Cannot reach the center.')
-        return dist
+        return dist, vector
     finally:
         ccd.binning.value = init_binning
         ccd.exposureTime.value = init_et
@@ -265,10 +259,19 @@ def FindSpot(image):
     spot_coordinates = coordinates.FindCenterCoordinates(subimages)
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
-    if len(optical_coordinates) > 1:
+    # Too many spots detected
+    if len(optical_coordinates) > 10:
         raise ValueError()
 
-    return optical_coordinates[0]
+    # Pick the brightest one
+    max_intensity = 0
+    max_pos = optical_coordinates[0]
+    for i in optical_coordinates:
+        if image[i[1], i[0]] >= max_intensity:
+            max_pos = i
+            max_intensity = image[i[1], i[0]]
+    return max_pos
+
 
 def CropFoV(ccd):
     """
@@ -290,7 +293,7 @@ def CropFoV(ccd):
     ccd.binning.value = (1, 1)
 
 
-def CenterSpot(ccd, stage, escan, mx_steps, type=STAGE_MOVE):
+def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE):
     """
     Wrapper for _DoCenterSpot.
     ccd (model.DigitalCamera): The CCD
@@ -337,23 +340,21 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
             CancelledError() if cancelled
     """
     try:
-        if type == STAGE_MOVE:
+        logging.debug("Aligning spot...")
+        if type == OBJECTIVE_MOVE:
             stage_ab = ConvertStage("converter-ab", "stage",
                                     children={"orig": stage},
                                     axes=["b", "a"],
                                     rotation=math.radians(-135))
         image = ccd.data.get(asap=False)
-    
         # Center of optical image
         pixelSize = image.metadata[model.MD_PIXEL_SIZE]
         center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
-    
         # Epsilon distance below which the lens is considered centered. The worse of:
         # * 1.5 pixels (because the CCD resolution cannot give us better)
         # * 1 µm (because that's the best resolution of our actuators)
         err_mrg = max(1.5 * pixelSize[0], 1e-06)  # m
         steps = 0
-    
         # Stop once spot is found on the center of the optical image
         dist = None
         while True:
@@ -368,21 +369,20 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
             try:
                 spot_pxs = FindSpot(image)
             except ValueError:
-                return None
+                return None, None
             tab_pxs = [a - b for a, b in zip(spot_pxs, center_pxs)]
             tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
             dist = math.hypot(*tab)
-    
             # If we are already there, stop
             if dist <= err_mrg:
                 break
     
             # Move to the found spot
-            if type == STAGE_MOVE:
+            if type == OBJECTIVE_MOVE:
                 f = stage_ab.moveRel({"x":tab[0], "y":-tab[1]})
                 f.result()
-            elif type == OBJECTIVE_MOVE:
-                f = stage.moveRel({"x":tab[0], "y":-tab[1]})
+            elif type == STAGE_MOVE:
+                f = stage.moveRel({"x":-tab[0], "y":tab[1]})
                 f.result()
             else:
                 escan.translation.value = (-tab_pxs[0], -tab_pxs[1])
@@ -391,7 +391,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
             future.set_end_time(time.time() +
                                 estimateCenterTime(ccd.exposureTime.value, dist))
     
-        return dist
+        return dist, tab
     finally:
         with future._center_lock:
             if future._spot_center_state == CANCELLED:
