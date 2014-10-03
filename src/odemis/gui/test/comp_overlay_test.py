@@ -358,7 +358,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         history_va = omodel.ListVA()
 
-        hol = vol.HistoryOverlay(cnvs, history_va, 2000)
+        hol = vol.HistoryOverlay(cnvs, history_va)
         cnvs.add_view_overlay(hol)
 
         test.gui_loop()
