@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 import logging
 from odemis import model
 from odemis.acq import stream, align
+from odemis.gui.comp.popup import Message
 import odemis.gui.conf
 from odemis.gui.model.dye import DyeDatabase
 from odemis.gui.util import call_after
@@ -62,20 +63,9 @@ class MenuController(object):
                         self._on_reset_align)
 
         if main_data.microscope:
-            # TODO: Display "Esc" as accelerator in the menu (wxPython doesn't
-            # seem to like it). For now [ESC] is mentioned in the menu item text
             wx.EVT_MENU(main_frame,
                         main_frame.menu_item_halt.GetId(),
                         self.on_stop_axes)
-
-            # The escape accelerator has to be added manually, because for some
-            # reason, the 'ESC' key will not register using XRCED.
-            accel_tbl = wx.AcceleratorTable([
-                (wx.ACCEL_NORMAL, wx.WXK_ESCAPE,
-                 main_frame.menu_item_halt.GetId())
-            ])
-
-            main_frame.SetAcceleratorTable(accel_tbl)
         else:
             menu_file = main_frame.GetMenuBar().GetMenu(0)
             menu_file.RemoveItem(main_frame.menu_item_halt)
@@ -159,6 +149,7 @@ class MenuController(object):
 
     def on_stop_axes(self, evt):
         if self._main_data:
+            Message.show_message(self._main_frame, "Stopping motion on every axes")
             self._main_data.stopMotion()
         else:
             evt.Skip()

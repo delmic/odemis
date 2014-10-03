@@ -261,8 +261,8 @@ def __init_resources():
           </XRCED>
         </object>
         <object class="wxMenuItem" name="menu_item_halt">
-          <label>Stop all Axes [ESC]</label>
-          <accel>ESC</accel>
+          <label>Stop all Axes</label>
+          <accel>Pause</accel>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
