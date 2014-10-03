@@ -77,12 +77,7 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
         EVT_COMMAND_ENTER is sent.
 
         """
-
-        if 'style' in text_kwargs:
-            text_kwargs['style'] = (wx.TE_PROCESS_ENTER | wx.BORDER_NONE | text_kwargs['style'])
-        else:
-            text_kwargs['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE
-
+        text_kwargs['style'] = wx.TE_PROCESS_ENTER | wx.BORDER_NONE | text_kwargs.get('style', 0)
         super(SuggestTextCtrl, self).__init__(parent, **text_kwargs)
 
         #Some variables
@@ -139,9 +134,12 @@ class SuggestTextCtrl(wx.TextCtrl, listmix.ColumnSorterMixin):
 
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DOWN, self.onListClick)
         self.dropdownlistbox.Bind(wx.EVT_LEFT_DCLICK, self.onListDClick)
-        self.dropdown.Bind(wx.EVT_LIST_ITEM_SELECTED, self.onListDClick)
+        # This causes the text the user is typing to directly auto-fill with
+        # the closest possibility.
+        # self.dropdown.Bind(wx.EVT_LIST_ITEM_SELECTED, self.onListDClick)
         self.dropdownlistbox.Bind(wx.EVT_LIST_COL_CLICK, self.onListColClick)
 
+        # TODO: needed?
         self.il = wx.ImageList(16, 16)
         self.dropdownlistbox.SetImageList(self.il, wx.IMAGE_LIST_SMALL)
         self._ascending = True
@@ -453,6 +451,7 @@ class NumberValidator(wx.PyValidator):
             event.Skip()
             return
 
+        # TODO: just check if the new value would conform to a regex
         # Allow legal characters to reach the text control
         if chr(key) in self.legal:
             logging.debug("Processing key '%s'", key)
