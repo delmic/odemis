@@ -120,7 +120,7 @@ class StreamController(object):
             # TODO: how to know it's _fluorescent_ microscope?
             #  => multiple source? filter?
             self._stream_bar.add_action("Filtered colour",
-                                    self.addFluo,
+                                    self._userAddFluo,
                                     fluor_capable)
 
         # Bright-field
@@ -153,6 +153,14 @@ class StreamController(object):
                                     self.addSEMBSD,
                                     sem_capable)
 
+    def _userAddFluo(self, **kwargs):
+        """
+        Called when the user request adding a Fluo stream
+        Same as addFluo, but also changes the focus to the name text field
+        """
+        se = self.addFluo(**kwargs)
+        se.set_focus_on_label()
+
     def addFluo(self, **kwargs):
         """
         Creates a new fluorescence stream and a stream panel in the stream bar
@@ -175,7 +183,8 @@ class StreamController(object):
 
         # TODO: automatically pick a good set of excitation/emission which is
         # not yet used by any FluoStream (or the values from the last stream
-        # deleted?)
+        # deleted?) Or is it better to just use the values fitting the current
+        # hardware settings as it is now?
 
         return self._addStream(s, **kwargs)
 
@@ -251,7 +260,7 @@ class StreamController(object):
         """
         return self._addStream(stream, **kwargs)
 
-    def _addStream(self, stream, add_to_all_views=False, visible=True, play=True):
+    def _addStream(self, stream, add_to_all_views=False, visible=True, play=None):
         """
         Adds a stream.
 
@@ -260,7 +269,8 @@ class StreamController(object):
             compatible views, otherwise add only to the current view.
         visible (boolean): If True, create a stream entry, otherwise adds the
           stream but do not create any entry.
-        play (boolean): If True, immediately start it
+        play (None or boolean): If True, immediately start it, if False, let it
+          stopped, and if None, only play if already a stream is playing
         returns (StreamPanel or Stream): stream entry or stream (if visible
          is False) that was created
         """
@@ -287,6 +297,11 @@ class StreamController(object):
         self._scheduleStream(stream)
 
         # start the stream right now (if requested)
+        if play is None:
+            if not visible:
+                play = False
+            else:
+                play = any(s.should_update.value for s in self._tab_data_model.streams.value)
         stream.should_update.value = play
 
         if visible:

@@ -376,6 +376,14 @@ class Expander(wx.Control):
         """
         self._label_ctrl.SetChoices(choices)
 
+    def set_focus_on_label(self):
+        """
+        Set the focus on the label (and select the text if it's editable)
+        """
+        self._label_ctrl.SetFocus()
+        if self._options & OPT_NAME_EDIT:
+            self._label_ctrl.SelectAll()
+
 
 class StreamPanel(wx.Panel):
     """ The StreamPanel class, a special case collapsible panel.
@@ -523,6 +531,9 @@ class StreamPanel(wx.Panel):
         """
         self.collapse(False)
         self._expander.Show(False)
+
+    def set_focus_on_label(self):
+        self._expander.set_focus_on_label()
 
     # API
 
