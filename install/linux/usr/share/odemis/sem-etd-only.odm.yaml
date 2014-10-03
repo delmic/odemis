@@ -4,7 +4,7 @@ SECOM: {
     role: sem,
     emitters: ["EBeam ExtXY"],
     detectors: ["SED ExtXY"],
-    actuators: [],
+    actuators: ["Perfect Stage"],
 }
 
 # Quanta SEM driven via external X/Y connection, using a DAQ board
@@ -61,3 +61,12 @@ SECOM: {
 #}
 #
 
+"Perfect Stage": {
+    class: simulated.Stage,
+    role: stage,
+    init: {axes: [x, y]},
+    affects: ["SED ExtXY"],
+    properties: {
+        speed: {x: 0.1, y: 0.1} #m/s
+    }
+}

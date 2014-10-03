@@ -1,6 +1,6 @@
 SimOptical: {
     class: Microscope,
-    role: brightfield,
+    role: optical,
     emitters: [Spectra, "Nikon Super Duper", "MultiBand Fixed Filter"],
     detectors: ["Andor SimCam"],
     actuators: ["FakeRedStoneStage", "SEM-Optical Alignment", "OpticalZ actuator"],
