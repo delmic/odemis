@@ -151,8 +151,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-        self._focus_overlay = None
-
         if self.microscope_view.focus is not None:
             self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
@@ -171,9 +169,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._calc_bg_offset(world_pos)
         self.requested_world_pos = world_pos
 
-        self.points_overlay = world_overlay.PointsOverlay(self)
-        self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
-
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
 
@@ -183,6 +178,10 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         tab_data.main.debug.subscribe(self._on_debug, init=True)
 
         if tab_data.tool:
+            # only create these overlays if they could be possibly used
+            if guimodel.TOOL_POINT in tab_data.tool.choices:
+                self.points_overlay = world_overlay.PointsOverlay(self)
+                self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
             tab_data.tool.subscribe(self._on_tool, init=True)
 
     def _on_tool(self, tool_mode):
@@ -637,9 +636,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         dragging behaviour. The actual dragging logic is handled in the super class.
 
         """
-
-        cursor = None
-
         if CAN_FOCUS in self.abilities and not self.dragging:
             # Note: Set the cursor before the super method is called.
             # There is a Ubuntu/wxPython related bug that SetCursor does not work once CaptureMouse
@@ -657,7 +653,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         in the super class's method.
 
         """
-
         if CAN_FOCUS in self.abilities and self.right_dragging:
             # The mouse cursor is automatically reset in the super class method
             if self._focus_overlay:

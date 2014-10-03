@@ -394,6 +394,8 @@ class BufferedCanvas(wx.Panel):
         if self.HasCapture():
             self.ReleaseMouse()
 
+        self.reset_dynamic_cursor()
+
     @ignore_if_disabled
     def on_left_down(self, evt):
         """ Standard left mouse button down processor """
@@ -1330,7 +1332,6 @@ class DraggableCanvas(BitmapCanvas):
         # If the canvas was being dragged
         if self._ldragging:
             self._ldragging = False
-            self.reset_dynamic_cursor()
             # Update the position of the buffer to where the view is centered
             # self.drag_shift is the delta we want to apply
             new_pos = (

@@ -514,8 +514,8 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
     def deactivate(self):
         """ Clear the hover pixel when the overlay is deactivated """
         self._pixel_pos = None
-        self.cnvs.update_drawing()
         super(PixelSelectOverlay, self).deactivate()
+        self.cnvs.update_drawing()
 
     # Event handlers
 
@@ -764,52 +764,55 @@ class PointsOverlay(WorldOverlay):
 
     def on_left_up(self, evt):
         """ Set the selected point if the mouse cursor is hovering over one """
-        # Clear the hover when the canvas was dragged
-        if self.active and self.cursor_over_point and not self.cnvs.was_dragged:
-            self.point.value = self.choices[self.cursor_over_point]
-            logging.debug("Point %s selected", self.point.value)
-            self.cnvs.update_drawing()
-        elif self.cnvs.was_dragged:
-            self.cursor_over_point = None
-            self.b_hover_box = None
+        if self.active:
+            # Clear the hover when the canvas was dragged
+            if self.cursor_over_point and not self.cnvs.was_dragged:
+                self.point.value = self.choices[self.cursor_over_point]
+                logging.debug("Point %s selected", self.point.value)
+                self.cnvs.update_drawing()
+            elif self.cnvs.was_dragged:
+                self.cursor_over_point = None
+                self.b_hover_box = None
 
         super(PointsOverlay, self).on_left_up(evt)
 
     def on_wheel(self, evt):
         """ Clear the hover when the canvas is zooming """
-        self.cursor_over_point = None
-        self.b_hover_box = None
+        if self.active:
+            self.cursor_over_point = None
+            self.b_hover_box = None
+
         super(PointsOverlay, self).on_wheel(evt)
 
     def on_motion(self, evt):
         """ Detect when the cursor hovers over a dot """
+        if self.active:
+            if not self.cnvs.left_dragging and self.choices:
+                v_x, v_y = evt.GetPositionTuple()
+                b_x, b_y = self.cnvs.view_to_buffer((v_x, v_y))
+                offset = self.cnvs.get_half_buffer_size()
 
-        if not self.cnvs.left_dragging and self.choices:
-            v_x, v_y = evt.GetPositionTuple()
-            b_x, b_y = self.cnvs.view_to_buffer((v_x, v_y))
-            offset = self.cnvs.get_half_buffer_size()
+                b_hover_box = None
 
-            b_hover_box = None
+                for w_pos in self.choices.keys():
+                    b_box_x, b_box_y = self.cnvs.world_to_buffer(w_pos, offset)
 
-            for w_pos in self.choices.keys():
-                b_box_x, b_box_y = self.cnvs.world_to_buffer(w_pos, offset)
+                    if abs(b_box_x - b_x) <= self.dot_size and abs(b_box_y - b_y) <= self.dot_size:
+                        # Calculate box in buffer coordinates
+                        b_hover_box = (b_box_x - self.dot_size,
+                                       b_box_y - self.dot_size,
+                                       b_box_x + self.dot_size,
+                                       b_box_y + self.dot_size)
+                        break
 
-                if abs(b_box_x - b_x) <= self.dot_size and abs(b_box_y - b_y) <= self.dot_size:
-                    # Calculate box in buffer coordinates
-                    b_hover_box = (b_box_x - self.dot_size,
-                                   b_box_y - self.dot_size,
-                                   b_box_x + self.dot_size,
-                                   b_box_y + self.dot_size)
-                    break
+                if self.b_hover_box != b_hover_box:
+                    self.b_hover_box = b_hover_box
+                    self.cnvs.repaint()
 
-            if self.b_hover_box != b_hover_box:
-                self.b_hover_box = b_hover_box
-                self.cnvs.repaint()
-
-        if self.active and self.cursor_over_point:
-            self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
-        else:
-            self.cnvs.reset_dynamic_cursor()
+            if self.cursor_over_point:
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+            else:
+                self.cnvs.reset_dynamic_cursor()
 
         super(PointsOverlay, self).on_motion(evt)
 
