@@ -240,7 +240,8 @@ class SecomStreamsTab(Tab):
         self.overview_controller = viewcont.OverviewController(
                                                         self.tab_data_model,
                                                         self.main_frame.vp_overview_sem.canvas)
-
+        ovv = self.main_frame.vp_overview_sem.microscope_view
+        ovv.show_crosshair.value = False # make it pretty
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:
@@ -250,12 +251,10 @@ class SecomStreamsTab(Tab):
                 overview_stream = streammod.BrightfieldStream("Overview", main_data.overview_ccd,
                                                               main_data.overview_ccd.data, None)
 
-            self.tab_data_model.views.value[-1].addStream(overview_stream)
+            ovv.addStream(overview_stream)
             # TODO: add it to self.tab_data_model.streams?
             # In any case, to support displaying Overview in the normal 2x2
             # views we'd need to have a special Overview class
-        else:
-            self.main_frame.vp_overview_sem.Hide()
 
         self._settings_controller = settings.SecomSettingsController(
             self.main_frame,

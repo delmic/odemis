@@ -439,6 +439,10 @@ class SecomStateController(MicroscopeStateController):
         # reset the streams to avoid having data from the previous sample
         self._reset_streams()
 
+        # Empty the stage history, as the interesting locations on the previous
+        # sample have probably nothing in common with this new sample
+        self._tab_data.stage_history.value = []
+
     def _start_chamber_venting(self):
         # Pause all streams (SEM streams are most important, but it's
         # simpler for the user to stop all of them)

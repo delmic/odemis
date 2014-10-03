@@ -37,7 +37,7 @@ from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
-from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_PUMPING
+from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_PUMPING, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
 from odemis.model import VigilantAttributeBase, NotApplicableError
 from odemis.util import units
@@ -436,24 +436,20 @@ class OverviewViewport(MicroscopeViewport):
 
         super(OverviewViewport, self).setView(microscope_view, tab_data)
 
-        # Track chamber state if possible
-        if tab_data.main.chamber:
-            tab_data.main.chamberState.subscribe(self._on_chamber_state_change)
-
-        # Hide the cross hair overlay
-        microscope_view.show_crosshair.value = False
+        self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
+        # Only allow moving when chamber is under vacuum
+        tab_data.main.chamberState.subscribe(self._on_chamber_state_change, init=True)
 
     def _on_chamber_state_change(self, chamber_state):
         """ Watch position changes in the PointSelectOverlay if the chamber is ready """
 
-        if chamber_state == CHAMBER_VACUUM:
-            self.canvas.point_select_overlay.p_pos.subscribe(self._on_position_select)
-        elif chamber_state == CHAMBER_PUMPING:
-            # Clear the history trail when the chamber starts to pump
-            if len(self.canvas.history_overlay) > 1:
-                self.canvas.history_overlay.clear()
-        elif self.canvas.active_overlays:
-            self.canvas.point_select_overlay.p_pos.unsubscribe(self._on_position_select)
+        # If state is unknown, it's probably going to be unknown forever, so
+        # we have to allow (and in the worst case the user will be able to move
+        # while the chamber is opened)
+        if chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}:
+            self.canvas.point_select_overlay.activate()
+        else:
+            self.canvas.point_select_overlay.deactivate()
 
     def _on_position_select(self, p_pos):
         """ Set the physical view position

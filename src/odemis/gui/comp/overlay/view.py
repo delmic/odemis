@@ -1095,11 +1095,7 @@ class PointSelectOverlay(ViewOverlay):
         # Physical position of the last click
         self.v_pos = model.VigilantAttribute(None)
         self.w_pos = model.VigilantAttribute(None)
-        self.p_pos = None
-
-        # If the canvas can handle physical coordinates
-        if hasattr(self.cnvs, 'world_to_physical_pos'):
-            self.p_pos = model.VigilantAttribute(None)
+        self.p_pos = model.VigilantAttribute(None)
 
     # Event Handlers
 
@@ -1126,8 +1122,7 @@ class PointSelectOverlay(ViewOverlay):
 
             self.v_pos.value = v_pos
             self.w_pos.value = w_pos
-            if self.p_pos:
-                self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
+            self.p_pos.value = self.cnvs.world_to_physical_pos(w_pos)
             logging.debug("Point selected (view, world, physical): %s, %s, %s)",
                           self.v_pos.value, self.w_pos.value, self.p_pos.value)
         else:
@@ -1142,62 +1137,44 @@ class PointSelectOverlay(ViewOverlay):
 class HistoryOverlay(ViewOverlay):
     """ Display rectangles on locations that the microscope was previously positioned at """
 
-    def __init__(self, cnvs, history_list_va, max_length=100):
+    def __init__(self, cnvs, history_list_va):
         super(HistoryOverlay, self).__init__(cnvs)
 
         self.trail_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.pos_colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)
         self.fade = True  # Fade older positions in the history list
-        self.max_length = max_length  # Number of positions to track
-        self.history = history_list_va  # List of (center, size) tuples
-
-    def clear(self):
-        self.history.value = []
-
-    def __len__(self):
-        return len(self.history.value)
+        self.history = history_list_va  # ListVA  of (center, size) tuples
+        self.history.subscribe(self._on_history_update)
 
     def __str__(self):
         return "History (%d): \n" % len(self) + "\n".join([str(h) for h in self.history.value[-5:]])
 
-    # def add_location(self, p_center, p_size=None):
-    #     """ Add a view location to the history list
-    #
-    #     :param p_center: Physical coordinates of the view center
-    #     :param p_size: Physical size of the the view
-    #     """
-    #
-    #     # If the 'new' position is identical to the last one in the history, ignore
-    #     if self.history.value and (p_center, p_size) == self.history.value[-1]:
-    #         return
-    #
-    #     # If max length reached, remove the oldest
-    #     if len(self.history.value) == self.max_length:
-    #         self.history.value.pop(0)
-    #
-    #     self.history.value.append((p_center, p_size))
-    #     self.cnvs.update_drawing()
+#     # Event Handlers
+#
+#     def on_enter(self, evt):
+#         super(HistoryOverlay, self).on_enter(evt)
+#         self.cnvs.Refresh()
+#
+#     def on_leave(self, evt):
+#         super(HistoryOverlay, self).on_leave(evt)
+#         self.cnvs.Refresh()
+#
+#     # END Event Handlers
 
-    # Event Handlers
-
-    def on_enter(self, evt):
-        super(HistoryOverlay, self).on_enter(evt)
-        # self.mouse_over = True
-        self.cnvs.Refresh()
-
-    def on_leave(self, evt):
-        super(HistoryOverlay, self).on_leave(evt)
-        # self.mouse_over = False
-        self.cnvs.Refresh()
-
-    # END Event Handlers
+    # TODO: might need rate limiter (but normally stage position is changed rarely)
+    def _on_history_update(self, history):
+        self.cnvs.update_drawing()
 
     def Draw(self, ctx, scaled_size=None):
+        """
+        scaled_size (int, int): size in pixel of the drawing area. That's a trick
+          to allow drawing both on the standard view and directly onto the thumbnail
+        """
 
         ctx.set_line_width(1)
         offset = self.cnvs.get_half_buffer_size()
 
-        for i, (p_center, p_size) in enumerate(self.history.value[:self.max_length]):
+        for i, (p_center, p_size) in enumerate(self.history.value):
             alpha = (i + 1) * (0.8 / len(self.history.value)) + 0.2 if self.fade else 1.0
             v_center = self.cnvs.world_to_view(self.cnvs.physical_to_world_pos(p_center), offset)
 

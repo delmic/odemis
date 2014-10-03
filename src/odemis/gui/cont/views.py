@@ -91,15 +91,10 @@ class ViewController(object):
         viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
 
         To be executed only once, at initialisation.
-
-        FIXME: Since we have 2 different Views at the moments and probably more
-        on the way, it's probably going to be beneficial to explicitly define
-        them in the viewport data
-
-        FIXME: Now views are created both in this method and in the
-        _createViewsAuto method. It's probably best to have all stream creation
-        done in the same place.
         """
+#         FIXME: Since we have 2 different Views at the moments and probably more
+#         on the way, it's probably going to be beneficial to explicitly define
+#         them in the viewport data
 
         views = []
         visible_views = []
@@ -149,7 +144,7 @@ class ViewController(object):
                       "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
                       }),
                     (self._viewports[2],
-                     {"name": "Dummy", # will be immediatly swapped for AR
+                     {"name": "Dummy", # will be immediately swapped for AR
                       "stream_classes": (), # Nothing
                      }),
                     (self._viewports[3],
@@ -193,47 +188,22 @@ class ViewController(object):
                      {"name": "Spectrum plot",
                       "stream_classes": SPECTRUM_STREAMS
                      }),
-                    (self._viewports[5],
-                     {"name": "Overview",
-                      "stream_classes": SPECTRUM_STREAMS
-                     }),
+                    # TODO: this one doesn't make sense
+#                     (self._viewports[5],
+#                      {"name": "Overview",
+#                       "stream_classes": SPECTRUM_STREAMS
+#                      }),
                 ])
+            self._create_views_fixed(vpv)
+            return
 
-        # If SEM only: all SEM
-        # Works also for the Sparc, as there is no other emitter, and we don't
-        # need to display anything else anyway
-        elif self._main_data_model.ebeam and not self._main_data_model.light:
-            logging.info("Creating SEM only viewport layout")
-            i = 1
-            vpv = collections.OrderedDict()
-            for viewport in self._viewports:
-                vpv[viewport] = {"name": "SEM %d" % i,
-                                 "stage": self._main_data_model.stage,
-                                 "focus": self._main_data_model.ebeam_focus,
-                                 "stream_classes": EM_STREAMS,
-                                 }
-                i += 1
-
-        # If Optical only: all Optical
-        # TODO: first one is brightfield only?
-        elif not self._main_data_model.ebeam and self._main_data_model.light:
-            logging.info("Creating Optical only viewport layout")
-            i = 1
-            vpv = collections.OrderedDict()
-            for viewport in self._viewports:
-                vpv[viewport] = {"name": "Optical %d" % i,
-                                 "stage": self._main_data_model.stage,
-                                 "focus": self._main_data_model.focus,
-                                 "stream_classes": OPTICAL_STREAMS,
-                                 }
-                i += 1
+        # Streams tab (or acquisition tab for the Sparc)
 
         # If both SEM and Optical are present (= SECOM & DELPHI)
-        # If 5 viewports are present, the last will be considered to be an overview
-        elif (
+        if (
                 self._main_data_model.ebeam and
                 self._main_data_model.light and
-                len(self._viewports) in (4, 5)
+                len(self._viewports) > 4
         ):
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
@@ -263,48 +233,68 @@ class ViewController(object):
                   }),
             ])
 
-            # Insert a Chamber viewport into the lower left position if a chamber camera is present
-            if self._main_data_model.chamber_ccd and self._main_data_model.chamber_light:
-                logging.debug("Inserting Chamber viewport")
-                vpv[self._viewports[2]] = {
-                    "name": "Chamber",
-                    "stage": None,
-                    "focus": None,
-                    "stream_classes": (RGBCameraStream,),
-                }
+        # If SEM only: all SEM
+        # Works also for the Sparc, as there is no other emitter, and we don't
+        # need to display anything else anyway
+        elif self._main_data_model.ebeam and not self._main_data_model.light:
+            logging.info("Creating SEM only viewport layout")
+            vpv = collections.OrderedDict()
+            for i, viewport in enumerate(self._viewports):
+                vpv[viewport] = {"name": "SEM %d" % (i + 1),
+                                 "stage": self._main_data_model.stage,
+                                 "focus": self._main_data_model.ebeam_focus,
+                                 "stream_classes": EM_STREAMS,
+                                 }
 
-            # If there are 5 viewports, we'll assume that the last one is an overview video stream
-            if len(self._viewports) == 5:
-                vpv[self._viewports[4]] = {
-                    "name": "Overview",
-                    "stream_classes": (RGBCameraStream, BrightfieldStream),
-                }
-
-            self._create_views_fixed(vpv)
-
-            # Track the mpp of the SEM view in order to set the magnification
-            if (self._main_data_model.ebeam and
-                    isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
-                logging.info("Tracking mpp value of '%s'", self._viewports[0])
-                self._viewports[0].track_view_mpp()  # = Live SEM viewport
-
-            return
+        # If Optical only: all optical
+        elif not self._main_data_model.ebeam and self._main_data_model.light:
+            logging.info("Creating Optical only viewport layout")
+            vpv = collections.OrderedDict()
+            for i, viewport in enumerate(self._viewports):
+                vpv[viewport] = {"name": "Optical %d" % (i + 1),
+                                 "stage": self._main_data_model.stage,
+                                 "focus": self._main_data_model.focus,
+                                 "stream_classes": OPTICAL_STREAMS,
+                                 }
         else:
             logging.warning("No known microscope configuration, creating %d "
                             "generic views", len(self._viewports))
-            i = 1
             vpv = collections.OrderedDict()
-            for viewport in self._viewports:
+            for i, viewport in enumerate(self._viewports):
                 vpv[viewport] = {
-                    "name": "View %d" % i,
+                    "name": "View %d" % (i + 1),
                      "stage": self._main_data_model.stage,
                      "focus": self._main_data_model.focus,
                      "stream_classes": None, # everything
                 }
-                i += 1
+
+        # Insert a Chamber viewport into the lower left position if a chamber camera is present
+        if self._main_data_model.chamber_ccd and self._main_data_model.chamber_light:
+            logging.debug("Inserting Chamber viewport")
+            vpv[self._viewports[2]] = {
+                "name": "Chamber",
+                "stage": None,
+                "focus": None,
+                "stream_classes": (RGBCameraStream, BrightfieldStream),
+            }
+
+        # If there are 5 viewports, we'll assume that the last one is an overview camera stream
+        if len(self._viewports) == 5:
+            logging.debug("Inserting Overview viewport")
+            vpv[self._viewports[4]] = {
+                "name": "Overview",
+                "stream_classes": (RGBCameraStream, BrightfieldStream),
+            }
 
         self._create_views_fixed(vpv)
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
+
+        # Track the mpp of the SEM view in order to set the magnification
+        if (self._main_data_model.ebeam and
+            isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
+            logging.info("Tracking mpp value of '%s'", self._viewports[0])
+            self._viewports[0].track_view_mpp()  # = Live SEM viewport
+
 
     def _viewport_by_view(self, view):
         """ Return the ViewPort associated with the given view """
@@ -618,14 +608,8 @@ class OverviewController(object):
         self._data_model = tab_data
         self.overview_canvas = overview_canvas
 
-        if self._data_model.main.stage_history:
-            self._data_model.main.stage_history.subscribe(self.on_history_change)
-
         if tab_data.main.stage:
             tab_data.main.stage.position.subscribe(self.on_stage_pos_change)
-
-    def on_history_change(self, history):
-        self.overview_canvas.update_drawing()
 
     @call_after
     def on_stage_pos_change(self, p_pos):
@@ -635,16 +619,17 @@ class OverviewController(object):
         p_center = (p_pos['x'], p_pos['y'])
 
         # If the 'new' position is identical to the last one in the history, ignore
-        if self._data_model.main.stage_history.value:
-            if (p_center, p_size) == self._data_model.main.stage_history.value[-1]:
-                return
+        # TODO: do not care about the p_size, and override,
+        if (self._data_model.stage_history.value and
+            (p_center, p_size) == self._data_model.stage_history.value[-1]):
+            return
 
         # If max length reached, remove the oldest
-        if len(self._data_model.main.stage_history.value) == 2000:
-            self._data_model.main.stage_history.value.pop(0)
+        while len(self._data_model.stage_history.value) > 2000:
+            logging.info("Discarding old stage position")
+            self._data_model.stage_history.value.pop(0)
 
-        self._data_model.main.stage_history.value.append((p_center, p_size))
-        self.overview_canvas.update_drawing()
+        self._data_model.stage_history.value.append((p_center, p_size))
 
     def calc_stream_size(self):
         """ Calculate the physical size of the current view """

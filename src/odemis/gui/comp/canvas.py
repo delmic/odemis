@@ -143,7 +143,6 @@ from __future__ import division
 
 from abc import ABCMeta, abstractmethod
 import cairo
-import collections
 from decorator import decorator
 import logging
 import math
@@ -195,7 +194,10 @@ class BufferedCanvas(wx.Panel):
         self.world_overlays = []
         # Graphical overlays that display in an absolute position
         self.view_overlays = []
-        # The overlay(s) which will receive mouse and keyboard events
+        # TODO: rename to action_overlay?
+        # Or maybe delete as it's unused (the overlays just bind to the
+        # events they care about)
+        # The overlays which will (just) receive mouse and keyboard events
         self.active_overlays = []
 
         # Set default background colour

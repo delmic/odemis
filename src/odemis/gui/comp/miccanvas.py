@@ -778,28 +778,22 @@ class OverviewCanvas(DblMicroscopeCanvas):
     def __init__(self, *args, **kwargs):
         super(OverviewCanvas, self).__init__(*args, **kwargs)
 
-        self.abilities = set()
+        self.abilities = set() # Cannot move, zoom...
         self.background_brush = wx.SOLID
 
         # Point select overlay for stage navigation
         self.point_select_overlay = PointSelectOverlay(self)
-        self.add_view_overlay(self.point_select_overlay)
+        self.add_active_overlay(self.point_select_overlay)
+        # It will be activated by the viewport (when needed)
 
         # This canvas can have a special overlay for tracking position history
         self.history_overlay = None
 
-        # self.add_active_overlay(self.history_overlay)
-        self.add_active_overlay(self.point_select_overlay)
-
     def setView(self, microscope_view, tab_data):
         super(OverviewCanvas, self).setView(microscope_view, tab_data)
 
-        # If the model has a stage history VA...
-        if tab_data.main.stage_history:
-            self.history_overlay = HistoryOverlay(self, tab_data.main.stage_history, 2000)
-            self.add_view_overlay(self.history_overlay)
-
-        self.point_select_overlay.activate()
+        self.history_overlay = HistoryOverlay(self, tab_data.stage_history)
+        self.add_view_overlay(self.history_overlay)
 
     @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
@@ -808,6 +802,8 @@ class OverviewCanvas(DblMicroscopeCanvas):
         if self.ClientSize.x * self.ClientSize.y <= 0:
             return  # nothing to update
 
+        # TODO: could we disable the margins of the buffer (as this canvas doesn't
+        # move), and directly use ._bmp_buffer, instead of blitting _dc_buffer?
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
         dc = wx.MemoryDC()
