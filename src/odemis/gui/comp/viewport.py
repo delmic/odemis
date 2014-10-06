@@ -35,9 +35,9 @@ from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.comp.legend import InfoLegend, AxisLegend
 from odemis.gui.img.data import getico_blending_goalBitmap
-from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_PUMPING, CHAMBER_UNKNOWN
+from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN
 from odemis.gui.util import call_after
-from odemis.model import VigilantAttributeBase, NotApplicableError
+from odemis.model import NotApplicableError
 from odemis.util import units
 import wx
 
@@ -223,6 +223,7 @@ class MicroscopeViewport(ViewPort):
         # This attribute is set to True if this object (i.e. 'self') was responsible for chaning
         # the HFW value
         self.self_set_hfw = False
+        self._fov_va = None # (hardware) VA to follow for HFW
 
     def setView(self, microscope_view, tab_data):
         """
@@ -395,18 +396,19 @@ class MicroscopeViewport(ViewPort):
 
     ## END Event handling
 
-    def track_view_hfw(self):
+    def track_view_hfw(self, fov_va):
         """
         Link the field of view (width) of the view with the field of view of
         a hardware (typically, an EM).
+        fov_va (FloatVA) 
         """
-        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.info("Tracking mpp on %s" % self)
-            # The view FoV changes either when the mpp changes or on resize,
-            # but resize typically causes an update of the mpp (to keep the FoV)
-            # so no need to listen to resize.
-            self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
-            self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp, init=True)
+        logging.info("Tracking mpp on %s" % self)
+        self._fov_va = fov_va
+        # The view FoV changes either when the mpp changes or on resize,
+        # but resize typically causes an update of the mpp (to keep the FoV)
+        # so no need to listen to resize.
+        self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
+        fov_va.subscribe(self._on_hfw_set_mpp, init=True)
 
     def _on_hfw_set_mpp(self, hfw):
         """ Change the mpp value of the MicroscopeView when the HFW changes
@@ -435,16 +437,16 @@ class MicroscopeViewport(ViewPort):
 
         try:
             # TODO: Test with a simulated SEM that has HFW choices
-            choices = self._tab_data_model.main.ebeam.horizontalFoV.choices
+            choices = self._fov_va.choices
             # Get the choice that matches hfw most closely
             hfw = min(choices, key=lambda choice: abs(choice - hfw))
         except NotApplicableError:
-            hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+            hfw = self._fov_va.clip(hfw)
 
         # Indicate that this object was responsible for updating the hardware's HFW, so it won't
         # get updated again in `_on_hfw_set_mpp`
         self.self_set_hfw = True
-        self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
+        self._fov_va.value = hfw
 
 
 

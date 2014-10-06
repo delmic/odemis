@@ -292,9 +292,8 @@ class ViewController(object):
         # Track the mpp of the SEM view in order to set the magnification
         if (self._main_data_model.ebeam and
             isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
-            logging.info("Tracking mpp value of '%s'", self._viewports[0])
-            self._viewports[0].track_view_hfw()  # = Live SEM viewport
-
+            # => Link the SEM FoV with the mpp of the live SEM viewport
+            self._viewports[0].track_view_hfw(self._main_data_model.ebeam.horizontalFoV)
 
     def _viewport_by_view(self, view):
         """ Return the ViewPort associated with the given view """
