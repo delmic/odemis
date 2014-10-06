@@ -80,7 +80,6 @@ class MenuController(object):
         # TODO: disable next 3 if no current stream
         self._prev_streams = None  # latest tab.streams VA represented
         self._prev_stream = None  # latest stream represented by the menu
-        self._autofocus_f = model.InstantaneousFuture() # future of the autofocus
 
         # /View/Play Stream
         wx.EVT_MENU(main_frame,
@@ -146,6 +145,9 @@ class MenuController(object):
         wx.EVT_MENU(main_frame,
                     main_frame.menu_item_about.GetId(),
                     self._on_about)
+
+        tab = self._main_data.tab.value
+        tab.tab_data_model.autofocus_active.subscribe(self._on_auto_focus_state)
 
     def on_stop_axes(self, evt):
         if self._main_data:
@@ -231,7 +233,11 @@ class MenuController(object):
         else:
             self._main_frame.menu_item_auto_focus.Enable(False)
 
-    def _on_auto_focus_done(self, future):
+    def _on_auto_focus_state(self, state):
+        if state == True:
+            self._main_frame.menu_item_auto_focus.Enable(False)
+        else:
+            self._main_frame.menu_item_auto_focus.Enable(True)
         tab = self._main_data.tab.value
         streams = tab.tab_data_model.streams.value
         self._on_current_stream(streams)
@@ -250,7 +256,8 @@ class MenuController(object):
 
         # enable only if focuser is available, and no autofocus happening
         d, e, f = self._get_focus_hw(curr_s)
-        f_enable = all((updated, d, f, self._autofocus_f.done()))
+        tab = self._main_data.tab.value
+        f_enable = all((updated, d, f, (not tab.tab_data_model.autofocus_active.value)))
         self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
     def _on_stream_autobc(self, autobc):
@@ -323,24 +330,8 @@ class MenuController(object):
         return detector, emitter, focus
 
     def _on_auto_focus(self, evt):
-        try:
-            curr_s = self._get_current_stream()
-        except LookupError:
-            return
-
-        detector, emitter, focus = self._get_focus_hw(curr_s)
-        if focus is None or detector is None:
-            logging.debug("Cannot focus stream %s, focus axis unknown", curr_s.name.value)
-
-        try:
-            self._autofocus_f = align.autofocus.AutoFocus(detector, emitter, focus, 0)
-        except Exception:
-            logging.exception("Failed to start auto-focus for stream %s",
-                              curr_s.name.value)
-            return
-
-        self._main_frame.menu_item_auto_focus.Enable(False)
-        self._autofocus_f.add_done_callback(self._on_auto_focus_done)
+        tab = self._main_data.tab.value
+        tab.tab_data_model.autofocus_active.value = True
 
     def _on_open(self, evt):
         """

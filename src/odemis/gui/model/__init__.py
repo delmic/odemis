@@ -33,6 +33,7 @@ from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
 import os
 import threading
 import time
+from odemis.model._vattributes import BooleanVA
 
 
 # The different states of a microscope
@@ -64,6 +65,9 @@ TOOL_LINE = 5  # Select a line (to acquire/display)
 TOOL_DICHO = 6  # Dichotomy mode to select a sub-quadrant (for SECOM lens alignment)
 TOOL_SPOT = 7  # Activate spot mode on the SEM
 TOOL_RO_ANCHOR = 8
+# Autofocus state
+TOOL_AUTO_FOCUS_ON = True
+TOOL_AUTO_FOCUS_OFF = False
 
 
 class MainGUIData(object):
@@ -335,6 +339,9 @@ class LiveViewGUIData(MicroscopyGUIData):
         # history list of visited stage positions, ordered with latest visited
         # as last entry.
         self.stage_history = model.ListVA()
+
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
 
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and

@@ -133,7 +133,13 @@ TOOLS = {TOOL_RO_ZOOM:
                 "btn_view_resize",
                 "Zoom to fit content"
             ),
-         # TODO: AUTO_FOCUS
+        TOOL_AUTO_FOCUS:
+           ModeTool(
+               "btn_view_autofocus",
+                model.TOOL_AUTO_FOCUS_ON,
+                model.TOOL_AUTO_FOCUS_OFF,
+               "Apply autofocus"
+           ),
         }
 
 
