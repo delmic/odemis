@@ -161,6 +161,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
+            ctx.save()
             offset = [v // 2 for v in self.cnvs.buffer_size]
             b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                      self.cnvs.world_to_buffer(self.w_end_pos, offset))
@@ -172,7 +173,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                     b_pos[2] - b_pos[0], b_pos[3] - b_pos[1])
 
             # draws a light black background for the rectangle
-            ctx.set_line_width(2.5)
+            ctx.set_line_width(4)
             ctx.set_source_rgba(0, 0, 0, 0.5)
             ctx.rectangle(*rect)
             ctx.stroke()
@@ -198,6 +199,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
                 self.position_label.pos = pos
                 self.position_label.text = size_lbl
                 self._write_labels(ctx)
+            ctx.restore()
 
     # Event Handlers
 
@@ -473,12 +475,14 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         mode_cache = self.selection_mode
 
         if self.w_start_pos and self.w_end_pos and not 0 in self.repetition:
+            ctx.save()
             if self.fill == self.FILL_POINT:
                 self._draw_points(ctx)
                 self.selection_mode = base.SEL_MODE_EDIT
             elif self.fill == self.FILL_GRID:
                 self._draw_grid(ctx)
                 self.selection_mode = base.SEL_MODE_EDIT
+            ctx.restore()
 
         super(RepetitionSelectOverlay, self).Draw(ctx, shift, scale)
         self.selection_mode = mode_cache
