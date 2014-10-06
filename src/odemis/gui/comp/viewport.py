@@ -25,7 +25,6 @@ Created on 8 Feb 2012
 
 from __future__ import division
 
-import collections
 import logging
 from odemis import gui, model
 from odemis.acq import stream
@@ -47,7 +46,8 @@ class ViewPort(wx.Panel):
     # Default classes for the canvas and the legend. These may be overridden
     # in subclasses
     canvas_class = miccanvas.DblMicroscopeCanvas
-    legend_class = None
+    bottom_legend_class = None
+    left_legend_class = None
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -73,54 +73,49 @@ class ViewPort(wx.Panel):
         self.canvas = self.canvas_class(self)
 
         # Put all together (canvas + legend)
-        self.legend = None
+        self.bottom_legend = None
+        self.left_legend = None
 
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
-        if self.legend_class is not None:
-            if isinstance(self.legend_class, collections.Iterable):
-                # FIXME: don't use a list, it will confuse everything.
-                # => Just use legend_bottom, legend_left
-                self.legend = [self.legend_class[0](self),
-                               self.legend_class[1](self, orientation=wx.VERTICAL)]
+        if self.bottom_legend_class and self.left_legend_class:
+            self.bottom_legend = self.bottom_legend_class(self)
+            self.left_legend = self.left_legend_class(self, orientation=wx.VERTICAL)
+            self.left_legend.MinSize = (40, -1)
 
-                self.legend[1].MinSize = (40, -1)
+            grid_sizer = wx.GridBagSizer()
+            grid_sizer.Add(self.canvas, pos=(0, 1), flag=wx.EXPAND)
+            grid_sizer.Add(self.bottom_legend, pos=(1, 1), flag=wx.EXPAND)
+            grid_sizer.Add(self.left_legend, pos=(0, 0), flag=wx.EXPAND)
 
-                grid_sizer = wx.GridBagSizer()
+            filler = wx.Panel(self)
+            filler.SetBackgroundColour(BG_COLOUR_LEGEND)
+            grid_sizer.Add(filler, pos=(1, 0), flag=wx.EXPAND)
 
-                grid_sizer.Add(self.canvas, pos=(0, 1), flag=wx.EXPAND)
+            grid_sizer.AddGrowableRow(0, 1)
+            grid_sizer.AddGrowableCol(1, 1)
+            # grid_sizer.RemoveGrowableCol(0)
 
-                grid_sizer.Add(self.legend[0], pos=(1, 1), flag=wx.EXPAND)
-                grid_sizer.Add(self.legend[1], pos=(0, 0), flag=wx.EXPAND)
+            # Focus the view when a child element is clicked
+            self.bottom_legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
+            self.left_legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-                filler = wx.Panel(self)
-                filler.SetBackgroundColour(BG_COLOUR_LEGEND)
-                grid_sizer.Add(filler, pos=(1, 0), flag=wx.EXPAND)
+            main_sizer.Add(grid_sizer, 1, border=2, flag=wx.EXPAND | wx.ALL)
+        elif self.bottom_legend_class:
+            main_sizer.Add(self.canvas, proportion=1, border=2,
+                           flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
+            # It's made of multiple controls positioned via sizers
+            # TODO: allow the user to pick which information is displayed
+            # in the legend
+            self.bottom_legend = self.bottom_legend_class(self)
+            self.bottom_legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
 
-                grid_sizer.AddGrowableRow(0, 1)
-                grid_sizer.AddGrowableCol(1, 1)
-                # grid_sizer.RemoveGrowableCol(0)
-
-                # Focus the view when a child element is clicked
-                for lp in self.legend:
-                    lp.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-                main_sizer.Add(grid_sizer, 1,
-                        border=2, flag=wx.EXPAND | wx.ALL)
-            else:
-                main_sizer.Add(self.canvas, proportion=1, border=2,
-                               flag=wx.EXPAND | wx.TOP | wx.LEFT | wx.RIGHT)
-                # It's made of multiple controls positioned via sizers
-                # TODO: allow the user to pick which information is displayed
-                # in the legend
-                self.legend = self.legend_class(self)
-                self.legend.Bind(wx.EVT_LEFT_DOWN, self.OnChildFocus)
-
-                main_sizer.Add(self.legend, proportion=0, border=2,
-                               flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+            main_sizer.Add(self.bottom_legend, proportion=0, border=2,
+                           flag=wx.EXPAND | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+        elif self.left_legend_class:
+            raise NotImplementedError("Only left legend not handled")
         else:
-            main_sizer.Add(self.canvas, 1,
-                border=2, flag=wx.EXPAND | wx.ALL)
+            main_sizer.Add(self.canvas, 1, border=2, flag=wx.EXPAND | wx.ALL)
 
         self.SetSizerAndFit(main_sizer)
         main_sizer.Fit(self)
@@ -150,7 +145,7 @@ class ViewPort(wx.Panel):
 
     def ShowLegend(self, show):
         """ Show or hide the merge slider """
-        self.legend.Show(show)  #pylint: disable=E1103
+        self.bottom_legend.Show(show)  # pylint: disable=E1103
 
     def HasFocus(self, *args, **kwargs):
         return self._has_focus is True
@@ -188,9 +183,10 @@ class ViewPort(wx.Panel):
 
     def Refresh(self, *args, **kwargs):
         """ Refresh the ViewPort while making sure the legends get redrawn as well """
-        if self.legend:
-            for legend in self.legend:
-                    legend.clear()
+        if self.left_legend:
+            self.left_legend.clear()
+        if self.bottom_legend:
+            self.bottom_legend.clear()
 
         super(ViewPort, self).Refresh(*args, **kwargs)
 
@@ -201,7 +197,7 @@ class MicroscopeViewport(ViewPort):
     This is a generic class, that should be inherited by more specific classes.
     """
 
-    legend_class = InfoLegend
+    bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
         """Note: The MicroscopeViewport is not fully initialised until setView()
@@ -211,8 +207,8 @@ class MicroscopeViewport(ViewPort):
         ViewPort.__init__(self, *args, **kwargs)
 
         # Bind on EVT_SLIDER to update even while the user is moving
-        self.legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
-        self.legend.Bind(wx.EVT_SLIDER, self.OnSlider)
+        self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)
+        self.bottom_legend.Bind(wx.EVT_SLIDER, self.OnSlider)
 
         # Find out screen pixel density for "magnification" value. This works
         # only with monitors/OS which report correct values. It's unlikely to
@@ -263,9 +259,9 @@ class MicroscopeViewport(ViewPort):
 
     def ShowMergeSlider(self, show):
         """ Show or hide the merge slider """
-        self.legend.bmp_slider_left.Show(show)
-        self.legend.merge_slider.Show(show)
-        self.legend.bmp_slider_right.Show(show)
+        self.bottom_legend.bmp_slider_left.Show(show)
+        self.bottom_legend.merge_slider.Show(show)
+        self.bottom_legend.bmp_slider_right.Show(show)
 
     def UpdateHFWLabel(self):
         """ Physical width of the display"""
@@ -274,7 +270,7 @@ class MicroscopeViewport(ViewPort):
         hfw = self._microscope_view.mpp.value * self.GetClientSize()[0]
         hfw = units.round_significant(hfw, 4)
         label = u"HFW: %s" % units.readable_str(hfw, "m", sig=3)
-        self.legend.set_hfw_label(label)
+        self.bottom_legend.set_hfw_label(label)
 
     def UpdateMagnification(self):
         # Total magnification
@@ -297,7 +293,7 @@ class MicroscopeViewport(ViewPort):
             mag_dig = mpp_im / self._microscope_view.mpp.value
             label += u" (Digital: × %s)" % units.readable_str(units.round_significant(mag_dig, 2))
 
-        self.legend.set_mag_label(label)
+        self.bottom_legend.set_mag_label(label)
 
     ################################################
     ## VA handling
@@ -307,11 +303,11 @@ class MicroscopeViewport(ViewPort):
     def _onMergeRatio(self, val):
         # round is important because int can cause unstable value
         # int(0.58*100) = 57
-        self.legend.merge_slider.SetValue(round(val * 100))
+        self.bottom_legend.merge_slider.SetValue(round(val * 100))
 
     @call_after
     def _onMPP(self, mpp):
-        self.legend.scale_win.SetMPP(mpp)
+        self.bottom_legend.scale_win.SetMPP(mpp)
         self.UpdateHFWLabel()
         self.UpdateMagnification()
         # the MicroscopeView will send an event that the view has to be redrawn
@@ -340,14 +336,14 @@ class MicroscopeViewport(ViewPort):
                 # the EM image as "right"
                 if (any(isinstance(s, EM_STREAMS) for s in streams)
                     and any(isinstance(s, OPTICAL_STREAMS) for s in streams)):
-                    self.legend.set_stream_type(wx.LEFT, stream.CameraStream)
-                    self.legend.set_stream_type(wx.RIGHT, stream.SEMStream)
+                    self.bottom_legend.set_stream_type(wx.LEFT, stream.CameraStream)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, stream.SEMStream)
                 else:
                     sc = self._microscope_view.stream_tree[0]
-                    self.legend.set_stream_type(wx.LEFT, sc.__class__)
+                    self.bottom_legend.set_stream_type(wx.LEFT, sc.__class__)
 
                     sc = self._microscope_view.stream_tree[1]
-                    self.legend.set_stream_type(wx.RIGHT, sc.__class__)
+                    self.bottom_legend.set_stream_type(wx.RIGHT, sc.__class__)
 
                 self.ShowMergeSlider(True)
         else:
@@ -371,7 +367,7 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        val = self.legend.merge_slider.GetValue() / 100
+        val = self.bottom_legend.merge_slider.GetValue() / 100
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
@@ -385,12 +381,12 @@ class MicroscopeViewport(ViewPort):
         if self._microscope_view is None:
             return
 
-        if evt.GetEventObject() == self.legend.bmp_slider_left:
-            self.legend.merge_slider.set_to_min_val()
+        if evt.GetEventObject() == self.bottom_legend.bmp_slider_left:
+            self.bottom_legend.merge_slider.set_to_min_val()
         else:
-            self.legend.merge_slider.set_to_max_val()
+            self.bottom_legend.merge_slider.set_to_max_val()
 
-        val = self.legend.merge_slider.GetValue() / 100
+        val = self.bottom_legend.merge_slider.GetValue() / 100
         self._microscope_view.merge_ratio.value = val
         evt.Skip()
 
@@ -457,7 +453,7 @@ class OverviewViewport(MicroscopeViewport):
     """
 
     canvas_class = miccanvas.OverviewCanvas
-    legend_class = InfoLegend
+    bottom_legend_class = InfoLegend
 
     def __init__(self, *args, **kwargs):
         super(OverviewViewport, self).__init__(*args, **kwargs)
@@ -564,7 +560,7 @@ class SparcAlignViewport(MicroscopeViewport):
         # TODO: should be done on the fly by _checkMergeSliderDisplay()
         # change SEM icon to Goal
         # pylint: disable=E1103
-        self.legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
+        self.bottom_legend.bmp_slider_right.SetBitmap(getico_blending_goalBitmap())
 
 
 class PlotViewport(ViewPort):
@@ -572,7 +568,8 @@ class PlotViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.ZeroDimensionalPlotCanvas
-    legend_class = (AxisLegend, AxisLegend)
+    bottom_legend_class = AxisLegend
+    left_legend_class = AxisLegend
 
     def __init__(self, *args, **kwargs):
         ViewPort.__init__(self, *args, **kwargs)
@@ -617,7 +614,7 @@ class PlotViewport(ViewPort):
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit
-        self.legend[0].unit = unit_x
+        self.bottom_legend.unit = unit_x
         self.canvas.set_1d_data(domain, data, unit_x)
         self.Refresh()
 
@@ -654,7 +651,7 @@ class AngularResolvedViewport(ViewPort):
 
     # Default class
     canvas_class = miccanvas.AngularResolvedCanvas
-    legend_class = None
+    bottom_legend_class = None
 
     def setView(self, microscope_view, tab_data):
         """
