@@ -590,20 +590,21 @@ class PlotViewport(ViewPort):
     def microscope_view(self):
         return self._microscope_view
 
-    def connect_stream(self, should_update=None):
+    def connect_stream(self, unused=None):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
-        if should_update:
-            ss = self.microscope_view.stream_tree.spectrum_streams
+        ss = self.microscope_view.stream_tree.spectrum_streams
 
-            # There should be exactly one Spectrum stream. In the future there
-            # might be scenarios where there are more than one.
-            if len(ss) != 1:
-                raise ValueError("Unexpected number of Spectrum Streams found!")
+        # There should be exactly one Spectrum stream. In the future there
+        # might be scenarios where there are more than one.
+        if not ss:
+            raise ValueError("No spectrum streams found")
+        elif len(ss) > 1:
+            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
-            self.spectrum_stream = ss[0]
-            self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
+        self.spectrum_stream = ss[0]
+        self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
 
     def _on_pixel_select(self, pixel):
         """ Pixel selection event handler """
@@ -644,8 +645,10 @@ class PlotViewport(ViewPort):
         self.canvas.setView(microscope_view, tab_data)
 
         # Keep an eye on the stream tree, so we can (re)connect when it changes
-        microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
-
+        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
+        # FIXME: it shouldn't listen to should_update, but to modifications of
+        # the stream tree itself... it just there is nothing to do that.
+        microscope_view.lastUpdate.subscribe(self.connect_stream)
 
 class AngularResolvedViewport(ViewPort):
 
