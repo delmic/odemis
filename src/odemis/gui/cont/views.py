@@ -293,7 +293,7 @@ class ViewController(object):
         if (self._main_data_model.ebeam and
             isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
             logging.info("Tracking mpp value of '%s'", self._viewports[0])
-            self._viewports[0].track_view_mpp()  # = Live SEM viewport
+            self._viewports[0].track_view_hfw()  # = Live SEM viewport
 
 
     def _viewport_by_view(self, view):

@@ -220,6 +220,10 @@ class MicroscopeViewport(ViewPort):
         # The 24" @ 1920x1200 screens from Dell have an mpp value of 0.00027 m/px
         self._mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
 
+        # This attribute is set to True if this object (i.e. 'self') was responsible for chaning
+        # the HFW value
+        self.self_set_hfw = False
+
     def setView(self, microscope_view, tab_data):
         """
         Set the microscope view that this viewport is displaying/representing
@@ -391,6 +395,58 @@ class MicroscopeViewport(ViewPort):
 
     ## END Event handling
 
+    def track_view_hfw(self):
+        """
+        Link the field of view (width) of the view with the field of view of
+        a hardware (typically, an EM).
+        """
+        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
+            logging.info("Tracking mpp on %s" % self)
+            # The view FoV changes either when the mpp changes or on resize,
+            # but resize typically causes an update of the mpp (to keep the FoV)
+            # so no need to listen to resize.
+            self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
+            self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp, init=True)
+
+    def _on_hfw_set_mpp(self, hfw):
+        """ Change the mpp value of the MicroscopeView when the HFW changes
+
+        We set the mpp value of the MicroscopeView by assigning the microscope's hfw value to
+        the Canvas' hfw value, which will cause the the Canvas to calculate a new mpp value
+        and assign it to View's mpp attribute.
+
+        """
+
+        # If this ViewPort was not responsible for updating the hardware HFW, update the MPP value
+        # of the canvas (which is done in the `horizontal_field_width` setter)
+        if not self.self_set_hfw:
+            logging.info("Calculating mpp from hfw for viewport %s" % self)
+            self.canvas.horizontal_field_width = hfw
+        self.self_set_hfw = False
+
+    def _on_mpp_set_hfw(self, mpp):
+        """ Set the microscope's hfw when the MicroscopeView's mpp value changes
+
+        The canvas calculates the new hfw value.
+        """
+
+        logging.info("Calculating hfw from mpp for viewport %s" % self)
+        hfw = self.canvas.horizontal_field_width
+
+        try:
+            # TODO: Test with a simulated SEM that has HFW choices
+            choices = self._tab_data_model.main.ebeam.horizontalFoV.choices
+            # Get the choice that matches hfw most closely
+            hfw = min(choices, key=lambda choice: abs(choice - hfw))
+        except NotApplicableError:
+            hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
+
+        # Indicate that this object was responsible for updating the hardware's HFW, so it won't
+        # get updated again in `_on_hfw_set_mpp`
+        self.self_set_hfw = True
+        self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
+
+
 
 class OverviewViewport(MicroscopeViewport):
     """ A Viewport containing a downscaled overview image of the loaded sample
@@ -406,6 +462,7 @@ class OverviewViewport(MicroscopeViewport):
         self.Parent.Bind(wx.EVT_SIZE, self.OnSize)
 
     def OnSize(self, evt):
+        # TODO: this can be avoided by just setting a different minimum mpp
         self.canvas.SetSize(self.Parent.Size)
         if self.canvas.horizontal_field_width < 10e-3:
             self.canvas.horizontal_field_width = 10e-3
@@ -459,19 +516,11 @@ class SecomViewport(MicroscopeViewport):
     def __init__(self, *args, **kwargs):
         super(SecomViewport, self).__init__(*args, **kwargs)
         self._orig_abilities = set()
-        # This attribute is set to True if this object (i.e. 'self') was responsible for chaning
-        # the HFW value
-        self.self_set_hfw = False
 
     def setView(self, microscope_view, tab_data):
         super(SecomViewport, self).setView(microscope_view, tab_data)
         self._orig_abilities = self.canvas.abilities & {CAN_DRAG, CAN_FOCUS}
         self._microscope_view.stream_tree.should_update.subscribe(self.hide_pause, init=True)
-
-        # If a HorizontalFoV VA is present, we keep an eye on it
-        if (self._tab_data_model.main.ebeam and
-            isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase)):
-            self._tab_data_model.main.ebeam.horizontalFoV.subscribe(self._on_hfw_set_mpp)
 
     def hide_pause(self, is_playing):
         self.canvas.icon_overlay.hide_pause(is_playing)
@@ -493,52 +542,6 @@ class SecomViewport(MicroscopeViewport):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
-
-    def track_view_mpp(self):
-        """ Keep track of changes in the MicroscopeView's mpp value """
-        if isinstance(self._tab_data_model.main.ebeam.horizontalFoV, VigilantAttributeBase):
-            logging.info("Tracking mpp on %s" % self)
-            self.microscope_view.mpp.subscribe(self._on_mpp_set_hfw)
-
-    def _on_hfw_set_mpp(self, hfw):
-        """ Change the mpp value of the MicroscopeView when the HFW changes
-
-        We set the mpp value of the MicroscopeView by assigning the microscope's hfw value to
-        the Canvas' hfw value, which will cause the the Canvas to calculate a new mpp value
-        and assign it to View's mpp attribute.
-
-        """
-
-        # If this ViewPort was not responsible for updating the hardware HFW, update the MPP value
-        # of the canvas (which is done in the `horizontal_field_width` setter)
-        if not self.self_set_hfw:
-            logging.info("Calculating mpp from hfw for viewport %s" % self)
-            self.canvas.horizontal_field_width = hfw
-        self.self_set_hfw = False
-
-    def _on_mpp_set_hfw(self, mpp):
-        """ Set the microscope's hfw when the MicroscopeView's mpp value changes
-
-        The canvas calculates the new hfw value.
-
-        """
-
-        logging.info("Calculating hfw from mpp for viewport %s" % self)
-        hfw = self.canvas.horizontal_field_width
-
-        try:
-            # TODO: Test with a simulated SEM that has HFW choices
-            choices = self._tab_data_model.main.ebeam.horizontalFoV.choices
-            # Get the choice that matches hfw most closely
-            hfw = min(choices, key=lambda choice: abs(choice - hfw))
-        except NotApplicableError:
-            hfw = self._tab_data_model.main.ebeam.horizontalFoV.clip(hfw)
-
-        # Indicate that this object was responsible for updating the hardware's HFW, so it won't
-        # get updated again in `_on_hfw_set_mpp`
-        self.self_set_hfw = True
-        self._tab_data_model.main.ebeam.horizontalFoV.value = hfw
-
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
