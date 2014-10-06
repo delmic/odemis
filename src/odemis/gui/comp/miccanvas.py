@@ -487,12 +487,12 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.scale = self.mpwu / mpp
         wx.CallAfter(self.request_drawing_update)
 
+    # TODO: move to viewport?
     @property
     def horizontal_field_width(self):
         """ Return the field width of the canvas in meters
 
         :return: (None or float) Field width in meters
-
         """
 
         width = self.ClientSize.x
@@ -1153,7 +1153,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 ims.append((wim, pos, scale, keepalpha, None, None, s.name.value))
             else:
                 # add at the beginning
-                ims[0] = (wim, pos, scale, keepalpha, None, None. s.name.value)
+                ims[0] = (wim, pos, scale, keepalpha, None, None, s.name.value)
 
         self.set_images(ims)
 
