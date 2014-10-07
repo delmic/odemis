@@ -80,12 +80,16 @@ class CanvasTestCase(test.GuiTestCase):
                 vwp.canvas.set_1d_data(plot[0], plot[1])
                 test.gui_loop()
 
+            vwp.Refresh()
+
             for plot in RANGED_PLOTS:
                 vwp.canvas.set_1d_data(plot[2],
                                        plot[3],
                                        range_x=plot[0],
                                        range_y=plot[1])
                 test.gui_loop()
+
+            vwp.Refresh()
 
             for plot in BAD_RANGED_PLOTS:
                 with self.assertRaises(ValueError):
@@ -95,19 +99,15 @@ class CanvasTestCase(test.GuiTestCase):
                                            range_y=plot[1])
                     test.gui_loop()
 
+            vwp.Refresh()
+
             for plot in BAD_PLOTS:
                 with self.assertRaises(ValueError):
                     vwp.canvas.set_1d_data(plot[0],
                                            plot[1])
                     test.gui_loop()
 
-        # with self.assertRaises(ValueError):
-        #     plot = PLOTS[4]
-        #     vwp.canvas.set_1d_data(plot[0], plot[1])
-        # vwp.clear()
-        # test.gui_loop()
-
-        # test.goto_inspect()
+            vwp.Refresh()
 
 
 if __name__ == "__main__":

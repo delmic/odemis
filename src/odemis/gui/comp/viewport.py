@@ -79,7 +79,7 @@ class ViewPort(wx.Panel):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
         if self.bottom_legend_class and self.left_legend_class:
-            self.bottom_legend = self.bottom_legend_class(self)
+            self.bottom_legend = self.bottom_legend_class(self, size=(-1, 40))
             self.left_legend = self.left_legend_class(self, orientation=wx.VERTICAL)
             self.left_legend.MinSize = (40, -1)
 
@@ -396,7 +396,7 @@ class MicroscopeViewport(ViewPort):
         """
         Link the field of view (width) of the view with the field of view of
         a hardware (typically, an EM).
-        fov_va (FloatVA) 
+        fov_va (FloatVA)
         """
         logging.info("Tracking mpp on %s" % self)
         self._fov_va = fov_va
@@ -579,7 +579,6 @@ class PlotViewport(ViewPort):
         self.spectrum_stream = None
 
     def clear(self):
-        #pylint: disable=E1103, E1101
         self.canvas.clear()
         self.Refresh()
 

@@ -325,6 +325,7 @@ def __init_resources():
     <size>400,400</size>
   </object>
   <object class="wxFrame" name="canvas_frame">
+    <object_ref ref="menu_bar"/>
     <object class="wxPanel" name="canvas_panel">
       <object class="wxBoxSizer">
         <orient>wxVERTICAL</orient>

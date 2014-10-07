@@ -214,9 +214,7 @@ class InfoLegend(wx.Panel):
 
 
 class AxisLegend(wx.Panel):
-    """ This legend can be used to show ticks and values to indicate the scale
-    of a canvas plot.
-    """
+    """ This legend can be used to show ticks and values to indicate the scale of a canvas plot """
 
     def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
