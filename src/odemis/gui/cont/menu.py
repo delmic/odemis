@@ -234,10 +234,12 @@ class MenuController(object):
             self._main_frame.menu_item_auto_focus.Enable(False)
 
     def _on_auto_focus_state(self, state):
+        # Be able to cancel current autofocus
+        accel = self._main_frame.menu_item_auto_focus.GetAccel().ToString()
         if state == True:
-            self._main_frame.menu_item_auto_focus.Enable(False)
+            self._main_frame.menu_item_auto_focus.SetItemLabel("Stop Auto Focus\t" + accel)
         else:
-            self._main_frame.menu_item_auto_focus.Enable(True)
+            self._main_frame.menu_item_auto_focus.SetItemLabel("Auto Focus\t" + accel)
         tab = self._main_data.tab.value
         streams = tab.tab_data_model.streams.value
         self._on_current_stream(streams)
@@ -257,7 +259,7 @@ class MenuController(object):
         # enable only if focuser is available, and no autofocus happening
         d, e, f = self._get_focus_hw(curr_s)
         tab = self._main_data.tab.value
-        f_enable = all((updated, d, f, (not tab.tab_data_model.autofocus_active.value)))
+        f_enable = all((updated, d, f))
         self._main_frame.menu_item_auto_focus.Enable(f_enable)
 
     def _on_stream_autobc(self, autobc):
@@ -331,7 +333,10 @@ class MenuController(object):
 
     def _on_auto_focus(self, evt):
         tab = self._main_data.tab.value
-        tab.tab_data_model.autofocus_active.value = True
+        if tab.tab_data_model.autofocus_active.value == True:
+            tab.tab_data_model.autofocus_active.value = False
+        else:
+            tab.tab_data_model.autofocus_active.value = True
 
     def _on_open(self, evt):
         """
