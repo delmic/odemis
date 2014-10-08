@@ -1502,15 +1502,20 @@ class ChamberPressure(model.Actuator):
         Raise an exception if the sample holder is absent or the code is wrong
         """
         holder = self.parent._device.GetSampleHolder()
-        if holder.status == "SAMPLE-ABSENT":
+        if holder.status == "SAMPLE-ABSENT" or holder.status == "SAMPLE-UNSUPPORTED":
             self.registeredSampleHolder.value = False
-            raise ValueError("Sample holder is absent")
-        try:
-            self.parent._device.RegisterSampleHolder(holder.holderID, code)
-        except Exception:
-            self.registeredSampleHolder.value = False
-            raise ValueError("Wrong sample holder registration code")
-        self.registeredSampleHolder.value = True
+            raise ValueError("Sample holder is absent or unsupported")
+        elif holder.status == "SAMPLE-PRESENT":
+            self.registeredSampleHolder.value = True
+        else:
+            # TODO check if RegisterSampleHolder raises an exception in case
+            # of wrong code
+            try:
+                self.parent._device.RegisterSampleHolder(holder.holderID, code)
+            except Exception:
+                self.registeredSampleHolder.value = False
+                raise ValueError("Wrong sample holder registration code")
+            self.registeredSampleHolder.value = True
 
     def _wakeUp(self):
         # Make sure system is waking up
