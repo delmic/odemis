@@ -61,6 +61,9 @@ import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
 from odemis.driver.actuator import ConvertStage
+from odemis.acq.align import AutoFocus
+from odemis.model._futures import InstantaneousFuture
+from odemis.acq import stream
 
 
 class Tab(object):
@@ -215,7 +218,7 @@ class SecomStreamsTab(Tab):
         tab_data = guimod.LiveViewGUIData(main_data)
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
-
+        self.main_data = main_data
         # Toolbar
         self.tb = self.main_frame.secom_toolbar
         # TODO: Add the buttons when the functionality is there
@@ -265,6 +268,12 @@ class SecomStreamsTab(Tab):
             self.tab_data_model,
             self.main_frame.pnl_secom_streams
         )
+
+        self._autofocus_f = None
+        self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
+        self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
+        self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
+        tab_data.streams.subscribe(self._on_current_stream)
 
         buttons = collections.OrderedDict([
             (
@@ -346,6 +355,100 @@ class SecomStreamsTab(Tab):
     @property
     def stream_controller(self):
         return self._stream_controller
+
+    def _onAutofocus(self, state):
+        main_data = self.main_data
+        # Determine which stream is active
+        if state == guimod.TOOL_AUTO_FOCUS_ON:
+            if self.tab_data_model.main.ccd and (self.tab_data_model.opticalState.value == guimod.STATE_ON):
+                self._autofocus_f = AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, 0)
+            elif self.tab_data_model.main.ebeam and (self.tab_data_model.emState.value == guimod.STATE_ON):
+                self._autofocus_f = AutoFocus(main_data.bsd, main_data.ebeam, main_data.ebeam_focus, 0)
+            else:
+                self._autofocus_f = InstantaneousFuture()
+            self._autofocus_f.add_done_callback(self._on_autofocus_done)
+        else:
+            if self._autofocus_f is not None:
+                self._autofocus_f.cancel()
+
+    @call_after
+    def _on_autofocus_done(self, future):
+        self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+        
+    @call_after
+    def _on_current_stream(self, streams):
+        """
+        Called when some VAs affecting the current stream change
+        """
+        # Try to get the current stream
+        try:
+            curr_s = streams[0]
+        except IndexError:
+            curr_s = None
+
+        if curr_s:
+            curr_s.should_update.subscribe(self._on_stream_update, init=True)
+        else:
+            self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
+
+    def _get_current_stream(self):
+        """
+        Find the current stream of the current tab
+        return (Stream): the current stream
+        raises:
+            LookupError: if no stream present at all
+        """
+        tab_data = self.tab_data_model
+        try:
+            return tab_data.streams.value[0]
+        except IndexError:
+            raise LookupError("No stream")
+
+    def _get_focus_hw(self, s):
+        """
+        Finds the hardware required to focus a given stream
+        s (Stream)
+        return:
+             (HwComponent) detector
+             (HwComponent) emitter
+             (HwComponent) focus
+        """
+        detector = None
+        emitter = None
+        focus = None
+        # Slightly different depending on the stream type, especially as the
+        # stream doesn't have information on the focus, we need to "guess"
+        if isinstance(s, stream.StaticStream):
+            pass
+        elif isinstance(s, stream.SEMStream):
+            detector = s.detector
+            emitter = s.emitter
+            focus = self.main_data.ebeam_focus
+        elif isinstance(s, stream.CameraStream):
+            detector = s.detector
+            focus = self.main_data.focus
+        # TODO: handle overview stream
+        else:
+            logging.info("Doesn't know how to focus stream %s", type(s).__name__)
+
+        return detector, emitter, focus
+
+    def _on_stream_update(self, updated):
+        """
+        Called when the current stream changes play/pause
+        """
+        try:
+            curr_s = self._get_current_stream()
+        except LookupError:
+            return
+
+        static = isinstance(curr_s, stream.StaticStream)
+        self.main_frame.menu_item_play_stream.Check(updated and not static)
+
+        # enable only if focuser is available, and no autofocus happening
+        d, e, f = self._get_focus_hw(curr_s)
+        f_enable = all((updated, d, f, (not self.tab_data_model.autofocus_active.value)))
+        self.tb.enable_button(tools.TOOL_AUTO_FOCUS, f_enable)
 
     def terminate(self):
         super(SecomStreamsTab, self).terminate()

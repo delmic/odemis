@@ -74,6 +74,7 @@ class ViewController(object):
         if toolbar:
             toolbar.add_tool(tools.TOOL_ZOOM_FIT, self.fitViewToContent)
 
+
         # First view is focused
         tab_data.focussedView.value = tab_data.visible_views.value[0]
 

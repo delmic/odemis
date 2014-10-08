@@ -300,7 +300,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
             thres_factor = 5 * thres_factor
     elif role == "overview-ccd":  # NAVCAM
         max_step = 100 * detector.pixelSize.value[0]
-    elif role == "se-detector":  # SEM
+    elif role == "se-detector" or role == "bs-detector":  # SEM
         thres_factor = 5 * thres_factor
         max_step = 5.5e03 * scanner.pixelSize.value[0]
     else:
