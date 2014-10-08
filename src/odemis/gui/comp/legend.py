@@ -216,7 +216,7 @@ class InfoLegend(wx.Panel):
 class AxisLegend(wx.Panel):
     """ This legend can be used to show ticks and values to indicate the scale of a canvas plot """
 
-    def __init__(self, parent, wid=-1, pos=(0, 0), size=wx.DefaultSize,
+    def __init__(self, parent, wid=wx.ID_ANY, pos=(0, 0), size=wx.DefaultSize,
                  style=wx.NO_BORDER, orientation=wx.HORIZONTAL):
 
         style = style | wx.NO_BORDER
@@ -225,8 +225,6 @@ class AxisLegend(wx.Panel):
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
 
-        # Explicitly set the min size
-        # self.SetMinSize((-1, 40))
 
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
@@ -239,6 +237,12 @@ class AxisLegend(wx.Panel):
         self.orientation = orientation
 
         self._unit = None
+
+        # Explicitly set the min size
+        if orientation == wx.HORIZONTAL:
+            self.SetMinSize((-1, 28))
+        else:
+            self.SetMinSize((42, -1)) # TODO: update to fit, when data changes
 
         self.on_size(None)
 
@@ -257,6 +261,7 @@ class AxisLegend(wx.Panel):
             self.clear()
             return
 
+        # TODO: only put label for some of the ticks
         if not self.ticks:
             self.calc_ticks()
 
@@ -342,6 +347,8 @@ class AxisLegend(wx.Panel):
                     if 10 <= pos <= size:
                         self.ticks.append((pos, tick))
 
+    # TODO: rename the function, because it's badly named => it forces to
+    # recompute the tick positions on next draw
     def clear(self):
         self.ticks = None
 

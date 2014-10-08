@@ -79,9 +79,8 @@ class ViewPort(wx.Panel):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
         if self.bottom_legend_class and self.left_legend_class:
-            self.bottom_legend = self.bottom_legend_class(self, size=(-1, 40))
+            self.bottom_legend = self.bottom_legend_class(self)
             self.left_legend = self.left_legend_class(self, orientation=wx.VERTICAL)
-            self.left_legend.MinSize = (40, -1)
 
             grid_sizer = wx.GridBagSizer()
             grid_sizer.Add(self.canvas, pos=(0, 1), flag=wx.EXPAND)
