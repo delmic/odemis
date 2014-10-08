@@ -50,11 +50,12 @@ def FindOverlay(repetitions, dwell_time, max_allowed_diff, escan, ccd, detector)
     escan (model.Emitter): The e-beam scanner
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
-    returns (model.ProgressiveFuture):    Progress of DoFindOverlay, whose result() will return:
-            translation (Tuple of 2 floats), 
-            scaling (Float), 
-            rotation (Float): Transformation parameters
-            transform_data : Transform metadata
+    returns (model.ProgressiveFuture): Progress of DoFindOverlay, whose result() will return:
+            tuple: Transformation parameters
+                translation (Tuple of 2 floats)
+                scaling (Float)
+                rotation (Float)
+            dict : Transformation metadata
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -95,10 +96,11 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
     escan (model.Emitter): The e-beam scanner
     ccd (model.DigitalCamera): The CCD
     detector (model.Detector): The electron detector
-    returns translation (Tuple of 2 floats), 
-            scaling (Float), 
-            rotation (Float): Transformation parameters
-            transform_data : Transformation metadata
+    returns tuple: Transformation parameters
+                translation (Tuple of 2 floats)
+                scaling (Float)
+                rotation (Float)
+            dict : Transformation metadata
     raises:    
             CancelledError if cancelled
             ValueError if procedure failed 
@@ -224,9 +226,6 @@ def _DoFindOverlay(future, repetitions, dwell_time, max_allowed_diff, escan,
         logging.debug("Calculating transform metadata...")
 
         transform_data = _transformMetadata(optical_image, ret, escan, ccd)
-        if transform_data == []:
-            raise ValueError('Metadata is missing')
-
         # Also indicate which dwell time eventually worked
         transform_data[model.MD_DWELL_TIME] = dwell_time
 

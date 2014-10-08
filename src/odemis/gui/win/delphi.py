@@ -24,7 +24,7 @@ class FirstCalibrationDialog(wx.Dialog):
     sample holder. It also allows the user to type the registration code for
     the sample holder.
     """
-    def __init__(self, parent, register=True):
+    def __init__(self, parent, shid, register=True):
         """
         register (boolean): if True, will allow the user to enter the registration
          code. The value can be retrieved by reading .registrationCode
@@ -35,11 +35,12 @@ class FirstCalibrationDialog(wx.Dialog):
         sizer = wx.BoxSizer(wx.VERTICAL)
         sz_label = self.CreateTextSizer(
             ("\n"
-             "This sample holder has not yet been calibrated for this microscope.\n"
+             "This sample holder (%016x) has not yet been calibrated\n"
+             "for this microscope.\n"
              "\n"
-             "In order to proceed to the calibration, ensure that the special \n"
+             "In order to proceed to the calibration, ensure that the special\n"
              "calibration sample is placed on the holder and press Calibrate.\n"
-             "Otherwise, press Eject.\n")
+             "Otherwise, press Eject.\n" % (shid,))
         )
         sizer.Add(sz_label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
 

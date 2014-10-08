@@ -29,11 +29,13 @@ from odemis.gui.model import STATE_ON, CHAMBER_PUMPING, CHAMBER_VENTING, \
     CHAMBER_VACUUM, CHAMBER_VENTED, CHAMBER_UNKNOWN, STATE_OFF
 from odemis.gui.util import call_after
 from odemis.gui.util.widgets import VigilantAttributeConnector
-from odemis.gui.win import delphi
 from odemis.model import getVAs
+from odemis.model._vattributes import VigilantAttributeBase
 import wx
 
+import odemis.acq.align.delphi as aligndelphi
 import odemis.gui.img.data as imgdata
+import odemis.gui.win.delphi as windelphi
 import odemis.util.units as units
 
 
@@ -43,6 +45,7 @@ PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
+DELPHI_OPT_GOOD_FOCUS = 0.0377 # somehow possibly not too bad focus position
 
 
 class MicroscopeStateController(object):
@@ -628,28 +631,32 @@ class DelphiStateController(SecomStateController):
                 logging.exception("Failed to find sample holder ID")
                 shid, sht = 1, PHENOM_SH_TYPE_STANDARD # assume it's a standard holder
 
-            # FIXME: remove PHENOM_SH_TYPE_STANDARD once all the sample holders are confirmed to be of the correct type
-            if sht == PHENOM_SH_TYPE_OPTICAL or sht == PHENOM_SH_TYPE_STANDARD:
-                # TODO: look in the config file if the sample holder is known, or needs
-                # first-time calibration (and ask the user to continue), and otherwise
-                # update the metadata
-                calibconf = get_calib_conf()
-                calib = calibconf.get_sh_calib(shid)
-                if calib is None:
-                    self._request_holder_calib(shid) # async
-                    return False # don't go further, as everything will be taken care
-                else:
-                    # TODO: to be more precise on the stage rotation, we'll need to
-                    # locate the top and bottom holes of the sample holder, using
-                    # the SEM. So once the sample is fully loaded, new and more
-                    # precise calibration will be set.
-                    self._apply_holder_calib(*calib)
+            if sht != PHENOM_SH_TYPE_OPTICAL:
+                logging.info("Sample holder doesn't seem to be an optical one "
+                             "but will pretend it is...")
+                # FIXME: For now it's needed because some sample holders have
+                # not been correctly set and report PHENOM_SH_TYPE_STANDARD
+                # Once they are fixed, just skip the calibration, and disable
+                # the optical microscope.
+            # Look in the config file if the sample holder is known, or needs
+            # first-time calibration, and otherwise update the metadata
+            calibconf = get_calib_conf()
+            calib = calibconf.get_sh_calib(shid)
+            if calib is None:
+                self._request_holder_calib(shid) # async
+                return False # don't go further, as everything will be taken care
 
-                # Reference the (optical) stage
-                f = self._main_data.stage.reference({"x", "y"})
-                f.result()
-                # TODO: shall we also reference the optical focus? It'd be handy only
-                # if the absolute position is used.
+            # TODO: to be more precise on the stage rotation, we'll need to
+            # locate the top and bottom holes of the sample holder, using
+            # the SEM. So once the sample is fully loaded, new and more
+            # precise calibration will be set.
+            self._apply_holder_calib(*calib)
+
+            # Reference the (optical) stage
+            f = self._main_data.stage.reference({"x", "y"})
+            f.result()
+            # TODO: shall we also reference the optical focus? It'd be handy only
+            # if the absolute position is used.
         except Exception:
             logging.exception("Failed to set calibration")
 
@@ -673,20 +680,148 @@ class DelphiStateController(SecomStateController):
         # How? A special VA .sampleRegistered + method .registerSample() on the
         # chamber component? Eventually, it needs to call RegisterSampleHolder.
 
-        dlg = delphi.FirstCalibrationDialog(self._main_frame, register=True)
+        if isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase):
+            need_register = not self._main_data.chamber.registeredSampleHolder.value
+        else:
+            need_register = False
+
+        dlg = windelphi.FirstCalibrationDialog(self._main_frame, shid, need_register)
         val = dlg.ShowModal() # blocks
         regcode = dlg.registrationCode
         dlg.Destroy()
 
         if val == wx.ID_OK:
-            logging.info("Calibration should ensue with code %s", regcode)
-            # FIXME: actually run the calibration
-            logging.error("Calibration not yet supported")
+            if need_register:
+                logging.debug("Trying to register sample holder with code %s", regcode)
+                try:
+                    self._main_data.chamber.registerSampleHolder(regcode)
+                except ValueError as ex:
+                    dlg = wx.MessageDialog(self._main_frame,
+                                           "Failed to register: %s" % ex,
+                                           "Sample holder registration failed",
+                                           wx.OK | wx.ICON_WARNING)
+                    dlg.ShowModal()
+                    dlg.Destroy()
+                    # looks like recursive, but as it's call_after, it will
+                    # return immediately and be actually called later
+                    self._request_holder_calib(shid)
+                    return
+
+            # Now run the full calibration
+            logging.info("Starting first time calibration for sample holder")
+            self._run_full_calibration(shid)
         else:
-            logging.info("Calibration cancelled")
+            logging.info("Calibration cancelled, ejecting the sample holder")
 
         # Eject the sample holder
         self._main_data.chamberState.value = CHAMBER_VENTING
+
+    def _run_full_calibration(self, shid):
+        tot_time = 3 * 60 # ~ 3 min (rough estimation)
+        dlg = wx.ProgressDialog("Calibrating...",
+                   "Calibration of the sample holder in progress",
+                   parent=self._main_frame,
+                   maximum=100,
+                   style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT
+                         # | wx.PD_ESTIMATED_TIME
+                         | wx.PD_REMAINING_TIME # automatically computed
+                  )
+
+
+        (cont, skip) = dlg.Pulse()
+        try:
+            # TODO: Actually link to the ProgessiveFutures
+    #         cont = True # Will be False if the user presses "Cancel"
+    #         while cont and not f.done():
+    #             wx.MilliSleep(250)
+    #             wx.Yield()
+    #             (cont, skip) = dlg.Update(count)
+
+            # Clear all the previous calibration
+            self._main_data.stage.updateMetadata({
+                      model.MD_POS_COR: (0, 0),
+                      model.MD_PIXEL_SIZE_COR: (1, 1),
+                      model.MD_ROTATION_COR: 0
+                      })
+
+            # We need access to the separate sem and optical stages, which form
+            # the "stage". They are not found in the model (and don't even have
+            # official roles), but we can find them as master and slave of the
+            # stage (on the DELPHI)
+            sem_stage = None
+            opt_stage = None
+            for role, c in self._main_data.stage.children.items():
+                if role == "master":
+                    sem_stage = c
+                elif role == "slave":
+                    opt_stage = c
+
+            if not sem_stage or not opt_stage:
+                raise KeyError("Failed to find SEM and optical stages")
+
+            # Reference the (optical) stage
+            f = opt_stage.reference({"x", "y"})
+            f.result()
+
+            f = self._main_data.focus.reference({"z"})
+            f.result()
+
+            # SEM stage to (0,0)
+            f = sem_stage.moveAbs({"x":0, "y":0})
+            f.result()
+
+            # Calculate offset approximation
+            try:
+                f = aligndelphi.LensAlignment(self._main_data.overview_ccd, sem_stage)
+                position = f.result()
+                logging.debug("SEM position after lens alignment: %s", position)
+            except IOError:
+                raise IOError("Lens alignment failed.")
+
+            # Just to check if move makes sense
+            f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
+            f.result()
+
+            # Move to SEM
+            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
+            f.result()
+
+            # Lens to a good optical focus position
+            f = self._main_data.focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
+            f.result()
+
+            # Compute stage calibration values
+            f = aligndelphi.UpdateConversion(self._main_data.ccd,
+                                             self._main_data.bsd,
+                                             self._main_data.ebeam,
+                                             sem_stage, opt_stage,
+                                             self._main_data.ebeam_focus,
+                                             self._main_data.focus,
+                                             self._main_data.stage,
+                                             first_insertion=True,
+                                             sem_position=position)
+            htop, hbot, hole_focus, strans, srot, sscale = f.result()
+
+            # Run the optical fine alignment
+            # TODO: reuse the exposure time
+            f = align.FindOverlay((4, 4),
+                                  0.5, # s, dwell time
+                                  10e-06, # m, maximum difference allowed
+                                  self._main_data.ebeam,
+                                  self._main_data.ccd,
+                                  self._main_data.bsd)
+            trans_val, cor_md = f.result()
+            iscale = cor_md[model.MD_PIXEL_SIZE_COR]
+            irot = cor_md[model.MD_ROTATION_COR]
+        except Exception:
+            logging.exception("Calibration failed")
+
+        # TODO: once the hole focus is not fixed, save it in the config too
+        # Update the calibration file
+        calibconf = get_calib_conf()
+        calibconf.set_sh_calib(shid, htop, hbot, strans, sscale, srot, iscale, irot)
+
+        dlg.Destroy()
 
     def _apply_holder_calib(self, htop, hbot, strans, sscale, srot, iscale, irot):
         """
