@@ -1,3 +1,30 @@
+odemis (1.8-1ubuntu1) precise; urgency=low
+
+  * New version: 1.8
+  * Main new features:
+    - Support for the DELPHI
+    - Direct selection of the hardware settings for excitation and emission wavelengths
+      in filtered colour streams (SECOM/DELPHI)
+    - History of the stage positions and possibility to move based on the overview
+      image (SECOM/DELPHI)
+    - Use "Screen" blending to merge multiple filtered colour streams (SECOM/DELPHI)
+    - Background subtraction option for spectra (SPARC)
+    - SEM view HFW is linked to the actual SEM HFW (DELPHI)
+    - Support for connecting to PI controllers over IP
+  * Main bugs fixed and improvements:
+    - Autofocus can be run from the toolbar, and can be interrupted (SECOM/DELPHI)
+    - Fix latency issue with Andor sCMOS cameras (for Neo and Zyla cameras)
+    - Allow up to 500s acquisition time for the CCDs (SPARC)
+    - Anchor region is scanned at least every 10s, to improve drift correction (SPARC)
+    - Add vertical center line in goal image for easier alignment (SPARC)
+    - Shortcut to "Stop all axes" is now Pause, instead of ESC (which is used in other places)
+    - Add referencing procedure to the TMCM driver and support it in odemis-cli
+    - Reduce latency in focus move (mainly visible on closed-loop actuators such as DELPHI)
+    - Rename CombinedActuator to MultiplexActuator
+    - Now works with wx3.0, latest stable version instead of wx2.9
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Wed, 08 Oct 2014 10:54:09 +0200
+
 odemis (1.7-1ubuntu1) precise; urgency=low
 
   * New version: 1.7
