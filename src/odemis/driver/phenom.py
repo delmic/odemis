@@ -1364,6 +1364,9 @@ class ChamberPressure(model.Actuator):
 
         # VA used for the sample holder registration
         self.registeredSampleHolder = model.BooleanVA(False)
+        holder = self.parent._device.GetSampleHolder()
+        if holder.status == "SAMPLE-PRESENT":
+            self.registeredSampleHolder.value = True
 
         self._updatePosition()
         self._updateSampleHolder()
