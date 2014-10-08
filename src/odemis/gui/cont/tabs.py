@@ -438,7 +438,9 @@ class SecomStreamsTab(Tab):
             # enable only if focuser is available, and no autofocus happening
             d, e, f = self._get_focus_hw(curr_s)
 
-        f_enable = all((updated, d, f, (not self.tab_data_model.autofocus_active.value)))
+        f_enable = all((updated, d, f))
+        if f_enable == False:
+            self.tab_data_model.autofocus_active.value = False
         wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, f_enable)
 
     def terminate(self):
