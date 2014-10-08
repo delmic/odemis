@@ -302,6 +302,7 @@ class MenuController(object):
         if hasattr(tab, "view_controller") and tab.view_controller is not None:
             tab.view_controller.fitViewToContent()
 
+    # Warning: this method is duplicated in cont.tabs
     def _get_focus_hw(self, s):
         """
         Finds the hardware required to focus a given stream

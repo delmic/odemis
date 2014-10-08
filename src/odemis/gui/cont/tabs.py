@@ -269,7 +269,7 @@ class SecomStreamsTab(Tab):
             self.main_frame.pnl_secom_streams
         )
 
-        self._autofocus_f = None
+        self._autofocus_f = InstantaneousFuture()
         self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
         self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
@@ -356,54 +356,6 @@ class SecomStreamsTab(Tab):
     def stream_controller(self):
         return self._stream_controller
 
-    def _onAutofocus(self, state):
-        main_data = self.main_data
-        # Determine which stream is active
-        if state == guimod.TOOL_AUTO_FOCUS_ON:
-            if self.tab_data_model.main.ccd and (self.tab_data_model.opticalState.value == guimod.STATE_ON):
-                self._autofocus_f = AutoFocus(main_data.ccd, main_data.ebeam, main_data.focus, 0)
-            elif self.tab_data_model.main.ebeam and (self.tab_data_model.emState.value == guimod.STATE_ON):
-                self._autofocus_f = AutoFocus(main_data.bsd, main_data.ebeam, main_data.ebeam_focus, 0)
-            else:
-                self._autofocus_f = InstantaneousFuture()
-            self._autofocus_f.add_done_callback(self._on_autofocus_done)
-        else:
-            if self._autofocus_f is not None:
-                self._autofocus_f.cancel()
-
-    @call_after
-    def _on_autofocus_done(self, future):
-        self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
-        
-    @call_after
-    def _on_current_stream(self, streams):
-        """
-        Called when some VAs affecting the current stream change
-        """
-        # Try to get the current stream
-        try:
-            curr_s = streams[0]
-        except IndexError:
-            curr_s = None
-
-        if curr_s:
-            curr_s.should_update.subscribe(self._on_stream_update, init=True)
-        else:
-            self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
-
-    def _get_current_stream(self):
-        """
-        Find the current stream of the current tab
-        return (Stream): the current stream
-        raises:
-            LookupError: if no stream present at all
-        """
-        tab_data = self.tab_data_model
-        try:
-            return tab_data.streams.value[0]
-        except IndexError:
-            raise LookupError("No stream")
-
     def _get_focus_hw(self, s):
         """
         Finds the hardware required to focus a given stream
@@ -433,22 +385,61 @@ class SecomStreamsTab(Tab):
 
         return detector, emitter, focus
 
+    def _onAutofocus(self, state):
+        # Determine which stream is active
+        if state == guimod.TOOL_AUTO_FOCUS_ON:
+            try:
+                curr_s = self.tab_data_model.streams.value[0]
+            except IndexError:
+                d, e, f = None, None, None
+            else:
+                # enable only if focuser is available, and no autofocus happening
+                d, e, f = self._get_focus_hw(curr_s)
+
+            if all((d, f)):
+                self._autofocus_f = AutoFocus(d, e, f, 0) # 0 = max accuracy
+                self._autofocus_f.add_done_callback(self._on_autofocus_done)
+            else:
+                # Should never happen as normally the menu/icon are disabled
+                logging.info("Autofocus cannot run as no hardware is available")
+                self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+        else:
+            if self._autofocus_f is not None:
+                self._autofocus_f.cancel()
+
+    @call_after
+    def _on_autofocus_done(self, future):
+        self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
+        
+    def _on_current_stream(self, streams):
+        """
+        Called when some VAs affecting the current stream change
+        """
+        # Try to get the current stream
+        try:
+            curr_s = streams[0]
+        except IndexError:
+            curr_s = None
+
+        if curr_s:
+            curr_s.should_update.subscribe(self._on_stream_update, init=True)
+        else:
+            wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, False)
+
     def _on_stream_update(self, updated):
         """
         Called when the current stream changes play/pause
         """
         try:
-            curr_s = self._get_current_stream()
-        except LookupError:
-            return
+            curr_s = self.tab_data_model.streams.value[0]
+        except IndexError:
+            d, e, f = None, None, None
+        else:
+            # enable only if focuser is available, and no autofocus happening
+            d, e, f = self._get_focus_hw(curr_s)
 
-        static = isinstance(curr_s, stream.StaticStream)
-        self.main_frame.menu_item_play_stream.Check(updated and not static)
-
-        # enable only if focuser is available, and no autofocus happening
-        d, e, f = self._get_focus_hw(curr_s)
         f_enable = all((updated, d, f, (not self.tab_data_model.autofocus_active.value)))
-        self.tb.enable_button(tools.TOOL_AUTO_FOCUS, f_enable)
+        wx.CallAfter(self.tb.enable_button, tools.TOOL_AUTO_FOCUS, f_enable)
 
     def terminate(self):
         super(SecomStreamsTab, self).terminate()
