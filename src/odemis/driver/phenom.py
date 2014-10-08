@@ -1362,8 +1362,8 @@ class ChamberPressure(model.Actuator):
         # Tuple containing sample holder ID and type, or None, None if absent
         self.sampleHolder = model.TupleVA((None, None), readonly=True)
 
-        # TODO, VA used for the sample holder registration
-        # self.registeredSampleHolder = model.BooleanVA(False)
+        # VA used for the sample holder registration
+        self.registeredSampleHolder = model.BooleanVA(False)
 
         self._updatePosition()
         self._updateSampleHolder()
@@ -1494,6 +1494,23 @@ class ChamberPressure(model.Actuator):
     def _updateTime(self, future, target):
         remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
         future.set_end_time(time.time() + self.wakeUpTime + remainingTime + 5)
+
+    def registerSampleHolder(self, code):
+        """
+        Register sample holder
+        code (string): registration code
+        Raise an exception if the sample holder is absent or the code is wrong
+        """
+        holder = self.parent._device.GetSampleHolder()
+        if holder.status == "SAMPLE-ABSENT":
+            self.registeredSampleHolder.value = False
+            raise ValueError("Sample holder is absent")
+        try:
+            self.parent._device.RegisterSampleHolder(holder.holderID, code)
+        except Exception:
+            self.registeredSampleHolder.value = False
+            raise ValueError("Wrong sample holder registration code")
+        self.registeredSampleHolder.value = True
 
     def _wakeUp(self):
         # Make sure system is waking up
