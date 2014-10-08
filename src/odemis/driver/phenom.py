@@ -1363,10 +1363,7 @@ class ChamberPressure(model.Actuator):
         self.sampleHolder = model.TupleVA((None, None), readonly=True)
 
         # VA used for the sample holder registration
-        self.registeredSampleHolder = model.BooleanVA(False)
-        holder = self.parent._device.GetSampleHolder()
-        if holder.status == "SAMPLE-PRESENT":
-            self.registeredSampleHolder.value = True
+        self.registeredSampleHolder = model.BooleanVA(False, readonly=True)
 
         self._updatePosition()
         self._updateSampleHolder()
@@ -1396,7 +1393,7 @@ class ChamberPressure(model.Actuator):
 
     def _updateSampleHolder(self):
         """
-        update the sampleHolder VA
+        update the sampleHolder VAs
         """
         holder = self.parent._device.GetSampleHolder()
         if holder.status == "SAMPLE-ABSENT":
@@ -1407,8 +1404,15 @@ class ChamberPressure(model.Actuator):
             holderID = reduce(lambda a, n: (a << 8) + n, (ord(v) for v in s), 0)
             val = (holderID, holder.holderType)
 
+        # Status can be of 4 kinds, only when it's "present" that it means the
+        # sample holder is registered
+        registered = (holder.status == "SAMPLE-PRESENT")
+
         self.sampleHolder._value = val
+        self.registeredSampleHolder._value = registered
         self.sampleHolder.notify(val)
+        self.registeredSampleHolder.notify(registered)
+        
 
     @isasync
     def moveRel(self, shift):
@@ -1506,19 +1510,20 @@ class ChamberPressure(model.Actuator):
         """
         holder = self.parent._device.GetSampleHolder()
         if holder.status == "SAMPLE-ABSENT" or holder.status == "SAMPLE-UNSUPPORTED":
-            self.registeredSampleHolder.value = False
             raise ValueError("Sample holder is absent or unsupported")
-        elif holder.status == "SAMPLE-PRESENT":
-            self.registeredSampleHolder.value = True
-        else:
+        if holder.status == "SAMPLE-PRESENT":
+            logging.info("Trying to register a sample holder already registered")
+        try:
+            self.parent._device.RegisterSampleHolder(holder.holderID, code)
+        except Exception:
             # TODO check if RegisterSampleHolder raises an exception in case
             # of wrong code
-            try:
-                self.parent._device.RegisterSampleHolder(holder.holderID, code)
-            except Exception:
-                self.registeredSampleHolder.value = False
-                raise ValueError("Wrong sample holder registration code")
-            self.registeredSampleHolder.value = True
+            raise ValueError("Wrong sample holder registration code")
+
+        self._updateSampleHolder()
+        # If it worked, it should be now registered
+        if not self.registeredSampleHolder.value:
+            raise ValueError("Wrong sample holder registration code")
 
     def _wakeUp(self):
         # Make sure system is waking up
@@ -1526,7 +1531,6 @@ class ChamberPressure(model.Actuator):
         eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
 
         # Event for remaining time update
-        eventID = self.parent._objects.create('ns0:EventIdentifier')
         eventID = "SEM-PROGRESS-DEVICE-MODE-CHANGED-ID"
         eventSpec = self.parent._objects.create('ns0:EventSpec')
         eventSpec.eventID = eventID
@@ -1548,14 +1552,12 @@ class ChamberPressure(model.Actuator):
         eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
 
         # Event for performed calibration
-        eventID1 = self.parent._objects.create('ns0:EventIdentifier')
         eventID1 = "SEM-IMAGE-UPDATED-CHANGED-ID"
         eventSpec1 = self.parent._objects.create('ns0:EventSpec')
         eventSpec1.eventID = eventID1
         eventSpec1.compressed = False
 
         # Event for NavCam viewing mode
-        eventID2 = self.parent._objects.create('ns0:EventIdentifier')
         eventID2 = "NAV-CAM-IMAGE-UPDATED-CHANGED-ID"
         eventSpec2 = self.parent._objects.create('ns0:EventSpec')
         eventSpec2.eventID = eventID2
