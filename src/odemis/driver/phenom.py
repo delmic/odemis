@@ -1356,6 +1356,12 @@ class ChamberPressure(model.Actuator):
                                     unit="Pa", readonly=True)
         logging.debug("Chamber in position: %s", self.position)
 
+        # Start dedicated connection for event reception
+        event_client = Client(self.parent._host + "?om", location=self.parent._host,
+                        username=self.parent._username, password=self.parent._password,
+                        timeout=SOCKET_TIMEOUT)
+        self._event_device = event_client.service
+
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1474,6 +1480,7 @@ class ChamberPressure(model.Actuator):
         TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
         TimeUpdater.start()
         with self.parent._acq_progress_lock:
+            logging.debug("Moving to another chamber state...")
             try:
                 if p["pressure"] == PRESSURE_SEM:
                     if (self.parent._device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
@@ -1493,14 +1500,17 @@ class ChamberPressure(model.Actuator):
                 else:
                     self.parent._device.UnloadSample()
             except suds.WebFault:
-                logging.warning("Acquisition in progress, cannot move to another state.")
+                logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
 
         self._updatePosition()
         TimeUpdater.cancel()
 
     def _updateTime(self, future, target):
-        remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
-        future.set_end_time(time.time() + self.wakeUpTime + remainingTime + 5)
+        try:
+            remainingTime = self.parent._device.GetProgressAreaSelection().progress.timeRemaining
+            future.set_end_time(time.time() + self.wakeUpTime + remainingTime + 5)
+        except suds.WebFault:
+            logging.warning("Time updater failed, cannot move to another state.", exc_info=True)
 
     def registerSampleHolder(self, code):
         """
@@ -1537,14 +1547,14 @@ class ChamberPressure(model.Actuator):
         eventSpec.compressed = False
 
         eventSpecArray.item = [eventSpec]
-        ch_id = self.parent._device.OpenEventChannel(eventSpecArray)
+        ch_id = self._event_device.OpenEventChannel(eventSpecArray)
 
         while(True):
-            self.wakeUpTime = self.parent._device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
+            self.wakeUpTime = self._event_device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
             logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
             if self.wakeUpTime == 0:
                 break
-        self.parent._device.CloseEventChannel(ch_id)
+        self._event_device.CloseEventChannel(ch_id)
         # Wait before move
         time.sleep(1)
 
@@ -1564,11 +1574,11 @@ class ChamberPressure(model.Actuator):
         eventSpec2.compressed = False
 
         eventSpecArray.item = [eventSpec1, eventSpec2]
-        ch_id = self.parent._device.OpenEventChannel(eventSpecArray)
+        ch_id = self._event_device.OpenEventChannel(eventSpecArray)
 
         api_frames = 0
         while(True):
-            newEvent = self.parent._device.ReadEventChannel(ch_id)[0][0].eventID
+            newEvent = self._event_device.ReadEventChannel(ch_id)[0][0].eventID
             logging.debug("Try to read event: %s", newEvent)
             if (newEvent == eventID1):
                 # Allow few phenom api acquisitions before you start acquiring
@@ -1581,6 +1591,6 @@ class ChamberPressure(model.Actuator):
                 break
             else:
                 logging.debug("Unexpected event received")
-        self.parent._device.CloseEventChannel(ch_id)
+        self._event_device.CloseEventChannel(ch_id)
         # Wait before allow acquisition
         time.sleep(1)
