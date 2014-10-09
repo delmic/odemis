@@ -21,13 +21,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
 
-from _curses import baudrate
 import collections
 from concurrent import futures
 import glob
 import logging
 from odemis import model
-import odemis
 from odemis.model import isasync
 from odemis.util import driver
 import os
@@ -1949,9 +1947,9 @@ class Bus(model.Actuator):
                 except (IndexError, AttributeError):
                     # Unknown? Give room
                     rng = (-1, 1) # m
-                # Just to make sure it doesn't go too fast
-                speed[axis] = 0.001 # m/s
                 speed_rng = (controller.min_speed, controller.max_speed)
+                # Just to make sure it doesn't go too fast
+                speed[axis] = max(speed_rng[0], min(0.001, speed_rng[1])) # m/s
                 ad = model.Axis(unit="m", range=rng, speed=speed_rng,
                                 canAbs=isCL)
                 axes_def[axis] = ad
