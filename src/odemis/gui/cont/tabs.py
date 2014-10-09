@@ -1628,8 +1628,9 @@ class LensAlignTab(Tab):
         scale_win = ScaleWindow(pnl_sem_toolbar)
         self._on_mpp = guiutil.call_after_wrapper(scale_win.SetMPP)  # need to keep ref
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
-        fa_sizer.Add(scale_win, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
+        fa_sizer.Add(scale_win, proportion=3, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
         fa_sizer.Layout()
+
         self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
                                                           main_frame,
                                                           self._settings_controller)
