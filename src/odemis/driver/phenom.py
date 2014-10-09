@@ -1356,11 +1356,12 @@ class ChamberPressure(model.Actuator):
                                     unit="Pa", readonly=True)
         logging.debug("Chamber in position: %s", self.position)
 
-        # Start dedicated connection for event reception
-        event_client = Client(self.parent._host + "?om", location=self.parent._host,
+        # Start dedicated connection for api calls during the change of pressure state
+        # The main purpose is to avoid collisions with the calls from the Time updater
+        pressure_client = Client(self.parent._host + "?om", location=self.parent._host,
                         username=self.parent._username, password=self.parent._password,
                         timeout=SOCKET_TIMEOUT)
-        self._event_device = event_client.service
+        self._pressure_device = pressure_client.service
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -1401,7 +1402,7 @@ class ChamberPressure(model.Actuator):
         """
         update the sampleHolder VAs
         """
-        holder = self.parent._device.GetSampleHolder()
+        holder = self._pressure_device.GetSampleHolder()
         if holder.status == "SAMPLE-ABSENT":
             val = (None, None)
         else:
@@ -1483,22 +1484,22 @@ class ChamberPressure(model.Actuator):
             logging.debug("Moving to another chamber state...")
             try:
                 if p["pressure"] == PRESSURE_SEM:
-                    if (self.parent._device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
-                        self.parent._device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
+                    if (self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
+                        self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
                         # If in standby or currently waking up, open event channel
                         self._wakeUp()
-                    self.parent._device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                    self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
                     # Take care of the calibration that takes place when we move to SEM
                     self._waitForDevice()
                 elif p["pressure"] == PRESSURE_NAVCAM:
-                    if self.parent._device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
-                        self.parent._device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
+                    if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+                        self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
                     self._updateSampleHolder()  # in case new sample holder was loaded
-                    self.parent._device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
+                    self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     # Wait for NavCam
                     self._waitForDevice()
                 else:
-                    self.parent._device.UnloadSample()
+                    self._pressure_device.UnloadSample()
             except suds.WebFault:
                 logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
 
@@ -1547,14 +1548,14 @@ class ChamberPressure(model.Actuator):
         eventSpec.compressed = False
 
         eventSpecArray.item = [eventSpec]
-        ch_id = self._event_device.OpenEventChannel(eventSpecArray)
+        ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
         while(True):
-            self.wakeUpTime = self._event_device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
+            self.wakeUpTime = self._pressure_device.ReadEventChannel(ch_id)[0][0].SEMProgressDeviceModeChanged.timeRemaining
             logging.debug("Time to wake up: %f seconds", self.wakeUpTime)
             if self.wakeUpTime == 0:
                 break
-        self._event_device.CloseEventChannel(ch_id)
+        self._pressure_device.CloseEventChannel(ch_id)
         # Wait before move
         time.sleep(1)
 
@@ -1574,11 +1575,11 @@ class ChamberPressure(model.Actuator):
         eventSpec2.compressed = False
 
         eventSpecArray.item = [eventSpec1, eventSpec2]
-        ch_id = self._event_device.OpenEventChannel(eventSpecArray)
+        ch_id = self._pressure_device.OpenEventChannel(eventSpecArray)
 
         api_frames = 0
         while(True):
-            newEvent = self._event_device.ReadEventChannel(ch_id)[0][0].eventID
+            newEvent = self._pressure_device.ReadEventChannel(ch_id)[0][0].eventID
             logging.debug("Try to read event: %s", newEvent)
             if (newEvent == eventID1):
                 # Allow few phenom api acquisitions before you start acquiring
@@ -1591,6 +1592,6 @@ class ChamberPressure(model.Actuator):
                 break
             else:
                 logging.debug("Unexpected event received")
-        self._event_device.CloseEventChannel(ch_id)
+        self._pressure_device.CloseEventChannel(ch_id)
         # Wait before allow acquisition
         time.sleep(1)
