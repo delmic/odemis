@@ -147,7 +147,8 @@ class MenuController(object):
                     self._on_about)
 
         tab = self._main_data.tab.value
-        tab.tab_data_model.autofocus_active.subscribe(self._on_auto_focus_state)
+        if hasattr(tab.tab_data_model, 'autofocus_active'):
+            tab.tab_data_model.autofocus_active.subscribe(self._on_auto_focus_state)
 
     def on_stop_axes(self, evt):
         if self._main_data:
