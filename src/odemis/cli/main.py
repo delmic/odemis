@@ -747,6 +747,7 @@ def main(args):
             if status == BACKEND_RUNNING:
                 raise ValueError("Back-end running while trying to scan for devices")
             scan()
+            return
 
         # check if there is already a backend running
         if status == BACKEND_STOPPED:
@@ -754,12 +755,11 @@ def main(args):
         elif status == BACKEND_DEAD:
             raise IOError("Back-end appears to be non-responsive.")
 
-        if options.kill:
-            kill_backend()
-
         logging.debug("Executing the actions")
 
-        if options.list:
+        if options.kill:
+            kill_backend()
+        elif options.list:
             list_components(pretty=not options.machine)
         elif options.listprop is not None:
             list_properties(options.listprop, pretty=not options.machine)
