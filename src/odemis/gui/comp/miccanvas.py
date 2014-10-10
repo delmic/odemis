@@ -1298,7 +1298,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
-    """ Angular resolved canvas
+    """ Angle-resolved canvas
     """
     # TODO: it actually could be just a BitmapCanvas, but it needs
     # a (simple) fit_to_content()
@@ -1342,6 +1342,8 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+
+        self.polar_overlay.activate()
 
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as
