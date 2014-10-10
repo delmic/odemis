@@ -282,7 +282,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
             stream_tree = self.microscope_view.stream_tree
-            # Enable the Angular Resolve point select overlay when there's a
+            # Enable the Angle-resolved point select overlay when there's a
             # AR stream known anywhere in the data model (and the view has
             # streams).
             tab_streams = self._tab_data_model.streams.value
@@ -1298,7 +1298,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
-    """ Angular resolved canvas
+    """ Angle-resolved canvas
     """
     # TODO: it actually could be just a BitmapCanvas, but it needs
     # a (simple) fit_to_content()
@@ -1342,6 +1342,8 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # any image changes
         self.microscope_view.lastUpdate.subscribe(self._onViewImageUpdate, init=True)
+
+        self.polar_overlay.activate()
 
     def _convert_streams_to_images(self):
         """ Temporary function to convert the StreamTree to a list of images as

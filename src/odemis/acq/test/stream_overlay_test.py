@@ -116,12 +116,12 @@ class TestOverlayStream(unittest.TestCase):
 
         fs1 = stream.FluoStream("test orange", self.ccd, self.ccd.data,
                                 self.light, self.light_filter)
-        fs1.excitation.value = fs1.excitation.range[0] + 5e-9
-        fs1.emission.value = fs1.emission.range[0] + 5e-9
+        fs1.excitation.value = sorted(fs1.excitation.choices)[0]
+        fs1.emission.value = sorted(fs1.emission.choices)[-1]
         fs2 = stream.FluoStream("test blue", self.ccd, self.ccd.data,
                                 self.light, self.light_filter)
-        fs2.excitation.value = fs2.excitation.range[1] - 5e-9
-        fs2.emission.value = fs2.emission.range[1] - 5e-9
+        fs2.excitation.value = sorted(fs2.excitation.choices)[-1]
+        fs2.emission.value = sorted(fs2.emission.choices)[-1]
         self.ccd.exposureTime.value = 0.1 # s
 
         ovrl = stream.OverlayStream("overlay", self.ccd, self.ebeam, self.sed)
