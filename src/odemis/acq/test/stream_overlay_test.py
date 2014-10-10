@@ -104,7 +104,7 @@ class TestOverlayStream(unittest.TestCase):
         time.sleep(1)
         f.cancel()
         self.assertTrue(f.cancelled())
-
+#     @unittest.skip("skip")
     def test_acq_fine_align(self):
         """
         try acquisition with SEM + Optical + overlay streams

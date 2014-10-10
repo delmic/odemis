@@ -89,7 +89,7 @@ Spectra: {
     properties: {
         scale: [16, 16], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
-        magnification: 10000, # (ratio)
+        magnification: 20000, # (ratio)
     },
     affects: ["SED ExtXY", "Andor SimCam"] # affects the CCD in case of cathodoluminescence
 }
