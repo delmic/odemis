@@ -582,11 +582,24 @@ class DelphiStateController(SecomStateController):
             self._check_holder_calib()
 
     def _start_chamber_pumping(self):
+        # Warning: we cannot call the super function because it sets a different
+        # callback.
+        # TODO: find a way to be able to call super, such as adding _prepare_stage()
+        # to the parent class?
+
         # Delphi always has _overview_pressure
         f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
         # We first set the stage to a good position and load the calibration
         # before getting the overview
         f.add_done_callback(self._prepare_stage)
+
+        # reset the streams to avoid having data from the previous sample
+        self._reset_streams()
+
+        # Empty the stage history, as the interesting locations on the previous
+        # sample have probably nothing in common with this new sample
+        self._tab_data.stage_history.value = []
+
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
