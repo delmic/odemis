@@ -26,6 +26,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.acq import align, stream
+from odemis.dataio import hdf5
 from odemis.util import driver
 import os
 import subprocess
@@ -33,6 +34,7 @@ import threading
 import time
 import unittest
 from unittest.case import skip
+import weakref
 
 
 logging.basicConfig(format=" - %(levelname)s \t%(message)s")
@@ -92,6 +94,12 @@ class TestAlignment(unittest.TestCase):
         time.sleep(1)  # time to stop
 
     def setUp(self):
+        # image for FakeCCD
+        self.data = hdf5.read_data("../align/test/one_spot.h5")
+        C, T, Z, Y, X = self.data[0].shape
+        self.data[0].shape = Y, X
+        self.fake_img = self.data[0]
+
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
@@ -140,13 +148,12 @@ class TestAlignment(unittest.TestCase):
         """
         Test the AlignedSEMStream
         """
-        # FIXME: the test currently fails because the simulated CCD image doesn't
-        # allow to find just one spot. => use a different simulated image, or
-        # change the find spot algo to pick the brightest spot
+        # Use fake ccd in order to have just one spot
+        ccd = self.FakeCCD(self, self.align)
 
         # first try using the metadata correction
         st = stream.AlignedSEMStream("sem-md", self.sed, self.sed.data, self.ebeam,
-                                     self.ccd, self.stage, shiftebeam=False)
+                                     ccd, self.stage, shiftebeam=False)
 
         # we don't really care about the SEM image, so the faster the better
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
@@ -197,7 +204,6 @@ class TestAlignment(unittest.TestCase):
                             "metadata has been updated while it shouldn't have")
 
         # Check calibration happens again after a stage move
-
         f = self.stage.moveRel({"x": 100e-6})
         f.result() # make sure the move is over
 
@@ -220,6 +226,104 @@ class TestAlignment(unittest.TestCase):
     def on_image(self, im):
         self.image = im
         self.image_received.set()
+
+    class FakeCCD():
+        """
+        Fake CCD component that returns a spot image
+        """
+        def __init__(self, testCase, align):
+            self.testCase = testCase
+            self.align = align
+            self.role = "ccd"
+            self.exposureTime = model.FloatContinuous(1, (1e-6, 1000), unit="s")
+            self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
+                                           cls=(int, long, float), unit="")
+            self.resolution = model.ResolutionVA((2160, 2560), [(1, 1), (2160, 2560)])
+
+            self.data = self.testCase.CCDDataFlow(self)
+            self._acquisition_thread = None
+            self._acquisition_lock = threading.Lock()
+            self._acquisition_init_lock = threading.Lock()
+            self._acquisition_must_stop = threading.Event()
+
+            self.fake_img = self.testCase.fake_img
+
+        def start_acquire(self, callback):
+            with self._acquisition_lock:
+                self._wait_acquisition_stopped()
+                target = self._acquire_thread
+                self._acquisition_thread = threading.Thread(target=target,
+                        name="FakeCCD acquire flow thread",
+                        args=(callback,))
+                self._acquisition_thread.start()
+
+        def stop_acquire(self):
+            with self._acquisition_lock:
+                with self._acquisition_init_lock:
+                    self._acquisition_must_stop.set()
+
+        def _wait_acquisition_stopped(self):
+            """
+            Waits until the acquisition thread is fully finished _iff_ it was requested
+            to stop.
+            """
+            # "if" is to not wait if it's already finished
+            if self._acquisition_must_stop.is_set():
+                logging.debug("Waiting for thread to stop.")
+                self._acquisition_thread.join(10)  # 10s timeout for safety
+                if self._acquisition_thread.isAlive():
+                    logging.exception("Failed to stop the acquisition thread")
+                    # Now let's hope everything is back to normal...
+                # ensure it's not set, even if the thread died prematurely
+                self._acquisition_must_stop.clear()
+
+        def _simulate_image(self):
+            """
+            Generates the fake output.
+            """
+            with self._acquisition_lock:
+                self.fake_img.metadata[model.MD_ACQ_DATE] = time.time()
+                output = model.DataArray(self.fake_img, self.fake_img.metadata)
+                return self.fake_img
+
+        def _acquire_thread(self, callback):
+            """
+            Thread that simulates the CCD acquisition.
+            """
+            try:
+                while not self._acquisition_must_stop.is_set():
+                    # dummy
+                    duration = 1
+                    if self._acquisition_must_stop.wait(duration):
+                        break
+                    callback(self._simulate_image())
+            except:
+                logging.exception("Unexpected failure during image acquisition")
+            finally:
+                logging.debug("Acquisition thread closed")
+                self._acquisition_must_stop.clear()
+
+    class CCDDataFlow(model.DataFlow):
+        """
+        This is an extension of model.DataFlow. It receives notifications from the
+        FakeCCD component once the fake output is generated. This is the dataflow to
+        which the CCD acquisition streams subscribe.
+        """
+        def __init__(self, ccd):
+            model.DataFlow.__init__(self)
+            self.component = weakref.ref(ccd)
+
+        def start_generate(self):
+            try:
+                self.component().start_acquire(self.notify)
+            except ReferenceError:
+                pass
+
+        def stop_generate(self):
+            try:
+                self.component().stop_acquire()
+            except ReferenceError:
+                pass
 
 if __name__ == '__main__':
     suite = unittest.TestLoader().loadTestsFromTestCase(TestAlignment)

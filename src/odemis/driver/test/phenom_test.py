@@ -98,6 +98,7 @@ class TestSEMStatic(unittest.TestCase):
         self.assertEqual(len(sem_unpickled.children), 7)
         sem.terminate()
 
+@skip("skip")
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device

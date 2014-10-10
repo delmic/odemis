@@ -52,6 +52,8 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
               "host": "192.168.92.91"
               }
 
+
+@skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
     Tests which don't need a SEM component ready
@@ -103,6 +105,7 @@ class TestSEMStatic(unittest.TestCase):
         self.assertEqual(len(sem_unpickled.children), 6)
         sem.terminate()
     
+@skip("skip")
 class TestSEM(unittest.TestCase):
     """
     Tests which can share one SEM device
