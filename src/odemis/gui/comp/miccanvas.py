@@ -282,7 +282,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             # Enable the Spectrum point select overlay when a spectrum stream
             # is attached to the view
             stream_tree = self.microscope_view.stream_tree
-            # Enable the Angular Resolve point select overlay when there's a
+            # Enable the Angle-resolved point select overlay when there's a
             # AR stream known anywhere in the data model (and the view has
             # streams).
             tab_streams = self._tab_data_model.streams.value

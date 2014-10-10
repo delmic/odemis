@@ -1372,7 +1372,7 @@ class AnalysisTab(Tab):
 
         except Exception, err:  #pylint: disable=W0703
             logging.info("Failed using file %s as AR background", fn, exc_info=True)
-            msg = "File '%s' not suitable as angular resolved background:\n\n%s"
+            msg = "File '%s' not suitable as angle-resolved background:\n\n%s"
             dlg = wx.MessageDialog(self.main_frame,
                                    msg % (fn, err),
                                    "Unusable AR background file",
@@ -1898,7 +1898,7 @@ class MirrorAlignTab(Tab):
             # Not ARStream as this is for multiple repetitions, and we just care
             # about what's on the CCD
             ccd_stream = streammod.CameraStream(
-                "Angular resolved sensor",
+                "Angle-resolved sensor",
                 main_data.ccd,
                 main_data.ccd.data,
                 main_data.ebeam)

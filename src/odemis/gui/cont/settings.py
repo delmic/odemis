@@ -1238,7 +1238,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_arfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
             "AR background",
-            "Angular resolved background acquisition file",
+            "Angle-resolved background acquisition file",
             "None").ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(
                                         odemis.dataio.get_available_formats(),
@@ -1382,7 +1382,7 @@ class SparcAlignSettingsController(SettingsBarController):
 
         self._ar_panel = AngularSettingsController(
                                 parent_frame.fp_ma_settings_ar,
-                                "No angular resolved camera found")
+                                "No angle-resolved camera found")
         self._spectrum_panel = SpectrumSettingsController(
                                     parent_frame.fp_ma_settings_spectrum,
                                     "No spectrometer found")
