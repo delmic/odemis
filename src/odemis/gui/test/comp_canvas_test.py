@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import logging
 import numpy
 from odemis import model
 from odemis.gui import test
@@ -36,24 +35,22 @@ import odemis.gui.comp.miccanvas as miccanvas
 
 # logging.getLogger().setLevel(logging.DEBUG)
 
-#pylint: disable=E1103
-def GetRGB(im, x, y):
+def get_rgb(im, x, y):
     # TODO: use DC.GetPixel()
-    return (im.GetRed(x, y), im.GetGreen(x, y), im.GetBlue(x, y))
+    return im.GetRed(x, y), im.GetGreen(x, y), im.GetBlue(x, y)
 
-def GetImageFromBuffer(canvas):
+
+def get_image_from_buffer(canvas):
     """
     Copy the current buffer into a wx.Image
     """
-    resultBmp = wx.EmptyBitmap(*canvas._bmp_buffer_size)
-    resultDC = wx.MemoryDC()
-    resultDC.SelectObject(resultBmp)
-    resultDC.BlitPointSize((0, 0),
-                           canvas._bmp_buffer_size,
-                           canvas._dc_buffer,
-                           (0, 0))
-    resultDC.SelectObject(wx.NullBitmap)
-    return wx.ImageFromBitmap(resultBmp)
+    result_bmp = wx.EmptyBitmap(*canvas._bmp_buffer_size)
+    result_dc = wx.MemoryDC()
+    result_dc.SelectObject(result_bmp)
+    result_dc.BlitPointSize((0, 0), canvas._bmp_buffer_size, canvas._dc_buffer, (0, 0))
+    result_dc.SelectObject(wx.NullBitmap)
+    return wx.ImageFromBitmap(result_bmp)
+
 
 class TestDblMicroscopeCanvas(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
@@ -63,20 +60,19 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.mmodel = self.create_simple_tab_model()
         self.view = self.mmodel.focussedView.value
         self.canvas = miccanvas.DblMicroscopeCanvas(self.panel)
-        self.canvas.background_brush = wx.SOLID # no special background
+        self.canvas.background_brush = wx.SOLID  # no special background
         self.add_control(self.canvas, flags=wx.EXPAND, proportion=1)
         test.gui_loop()
 
         self.canvas.setView(self.view, self.mmodel)
 
-
     def tearDown(self):
+        test.gui_loop()
         self.remove_all()
 
     # @unittest.skip("simple")
-    def test_CrossHair(self):
-        # crosshair
-        show_crosshair = self.view.show_crosshair #pylint: disable=E1103
+    def test_crosshair(self):
+        show_crosshair = self.view.show_crosshair
         show_crosshair.value = True
         self.assertGreaterEqual(len(self.canvas.view_overlays), 1)
         lvo = len(self.canvas.view_overlays)
@@ -86,14 +82,15 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.assertEqual(len(self.canvas.view_overlays), lvo - 1)
 
     # @unittest.skip("simple")
-    def test_BasicDisplay(self):
+    def test_basic_display(self):
         """
         Draws a view with two streams, one with a red pixel with a low density
          and one with a blue pixel at a high density.
         """
-        mpp = 0.0001
+        mpp = 0.00001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
+        self.view.show_crosshair.value = False
 
         # add images
         im1 = model.DataArray(numpy.zeros((11, 11, 3), dtype="uint8"))
@@ -117,8 +114,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
-        # reset the mpp of the view, as it's automatically set to the first
-        # image
+        # reset the mpp of the view, as it's automatically set to the first  image
         self.view.mpp.value = mpp
 
         shift = (63, 63)
@@ -129,43 +125,41 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
 
-        test.gui_loop()
+        test.gui_loop(500)
         # it's supposed to update in less than 0.5s
-        wx.MilliSleep(500)
-        test.gui_loop()
+        test.gui_loop(500)
 
         # copy the buffer into a nice image here
-        resultIm = GetImageFromBuffer(self.canvas)
-        # for i in range(resultIm.GetWidth()):
-        #     for j in range(resultIm.GetHeight()):
-        #         px = GetRGB(resultIm, i, j)
+        result_im = get_image_from_buffer(self.canvas)
+
+        # for i in range(result_im.GetWidth()):
+        #     for j in range(result_im.GetHeight()):
+        #         px = get_rgb(result_im, i, j)
         #         if px != (0, 0, 0):
         #             print px, i, j
 
-        px1 = GetRGB(resultIm,
-                     resultIm.Width // 2 + shift[0],
-                     resultIm.Height // 2 + shift[1])
-        self.assertEqual(px1, (128, 0, 0))
+        px1 = get_rgb(result_im, result_im.Width // 2 + shift[0], result_im.Height // 2 + shift[1])
+        self.assertEqual(px1, (255, 0, 0))
 
-        px2 = GetRGB(resultIm,
-                     resultIm.Width // 2 + 200 + shift[0],
-                     resultIm.Height // 2 - 200 + shift[1])
+        px2 = get_rgb(result_im,
+                      result_im.Width // 2 + 200 + shift[0],
+                      result_im.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
         # remove first picture
         self.view.removeStream(stream1)
         test.gui_loop()
-        wx.MilliSleep(500)
-        test.gui_loop()
+        test.gui_loop(500)
 
-        resultIm = GetImageFromBuffer(self.canvas)
-        px2 = GetRGB(resultIm, resultIm.Width // 2 + 200 + shift[0],
-         resultIm.Height // 2 - 200 + shift[1])
+        result_im = get_image_from_buffer(self.canvas)
+        px2 = get_rgb(result_im,
+                      result_im.Width // 2 + 200 + shift[0],
+                      result_im.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
     # @unittest.skip("simple")
-    def test_BasicMove(self):
-        mpp = 0.0001
+    def test_basic_move(self):
+        mpp = 0.00001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
 
@@ -208,18 +202,20 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         test.gui_loop()
 
         # copy the buffer into a nice image here
-        resultIm = GetImageFromBuffer(self.canvas)
+        result_im = get_image_from_buffer(self.canvas)
 
-        px1 = GetRGB(resultIm, resultIm.Width / 2 + shift[0],
-                     resultIm.Height / 2 + shift[1])
-        self.assertEqual(px1, (128, 0, 0))
-        px2 = GetRGB(resultIm, resultIm.Width / 2 + 200 + shift[0],
-                     resultIm.Height / 2 - 200 + shift[1])
+        px1 = get_rgb(result_im,
+                      result_im.Width / 2 + shift[0],
+                      result_im.Height / 2 + shift[1])
+        self.assertEqual(px1, (255, 0, 0))
+        px2 = get_rgb(result_im,
+                      result_im.Width / 2 + 200 + shift[0],
+                      result_im.Height / 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
     # @unittest.skip("simple")
-    def test_ZoomMove(self):
-        mpp = 0.0001
+    def test_zoom_move(self):
+        mpp = 0.00001
         self.view.mpp.value = mpp
         self.assertEqual(mpp, self.view.mpp.value)
 
@@ -239,27 +235,25 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         shift = (10, 10)
         self.canvas.shift_view(shift)
 
-        test.gui_loop()
-        wx.MilliSleep(500)
-        test.gui_loop()
-        resultIm = GetImageFromBuffer(self.canvas)
+        test.gui_loop(500)
+        test.gui_loop(500)
+        result_im = get_image_from_buffer(self.canvas)
 
-        px1 = GetRGB(resultIm,
-                     self.canvas._bmp_buffer_size[0] / 2 + 10,
-                     self.canvas._bmp_buffer_size[1] / 2 + 10)
+        px1 = get_rgb(result_im,
+                      self.canvas._bmp_buffer_size[0] / 2 + 10,
+                      self.canvas._bmp_buffer_size[1] / 2 + 10)
         self.assertEqual(px1, (255, 0, 0))
 
         # zoom in
         self.canvas.Zoom(2)
         self.assertEqual(mpp / (2 ** 2), self.view.mpp.value)
-        test.gui_loop()
-        wx.MilliSleep(500)
-        test.gui_loop()
-        resultIm = GetImageFromBuffer(self.canvas)
+        test.gui_loop(500)
+        test.gui_loop(500)
+        result_im = get_image_from_buffer(self.canvas)
 
-        px1 = GetRGB(resultIm,
-             self.canvas._bmp_buffer_size[0] / 2 + 40,
-             self.canvas._bmp_buffer_size[1] / 2 + 40)
+        px1 = get_rgb(result_im,
+                      self.canvas._bmp_buffer_size[0] / 2 + 40,
+                      self.canvas._bmp_buffer_size[1] / 2 + 40)
         self.assertEqual(px1, (255, 0, 0))
 
         # fit to content without recentering should always zoom less or as much
@@ -276,7 +270,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         view_size = (200, 200)
         buffer_world_center = (0, 0)
         buffer_margin = (100, 100)
-        buffer_size = (400, 400) # buffer - margin = 200x200 viewport
+        buffer_size = (400, 400)  # buffer - margin = 200x200 viewport
         offset = (200, 200)
         scale = 1.0
 
@@ -284,7 +278,7 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         total_size = (buffer_size[0] - total_margin[0],
                       buffer_size[1] - total_margin[1])
         self.assertEqual(view_size, total_size,
-                    "Illegal test values! %s != %s" % (view_size, total_size))
+                         "Illegal test values! %s != %s" % (view_size, total_size))
 
         # Matching values at scale 1
         view_buffer_world_values = [
@@ -310,43 +304,39 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # Buffer to world
         for _, buffer_point, world_point in view_buffer_world_values:
-            wp = BufferedCanvas.buffer_to_world_pos(
-                            buffer_point,
-                            buffer_world_center,
-                            scale,
-                            offset)
+            wp = BufferedCanvas.buffer_to_world_pos(buffer_point,
+                                                    buffer_world_center,
+                                                    scale,
+                                                    offset)
             self.assertTrue(all([isinstance(v, float) for v in wp]))
             self.assertEqual(world_point, wp)
 
         # World to buffer
         for _, buffer_point, world_point in view_buffer_world_values:
-            bp = BufferedCanvas.world_to_buffer_pos(
-                            world_point,
-                            buffer_world_center,
-                            scale,
-                            offset)
+            bp = BufferedCanvas.world_to_buffer_pos(world_point,
+                                                    buffer_world_center,
+                                                    scale,
+                                                    offset)
             self.assertTrue(all([isinstance(v, float) for v in bp]))
             self.assertEqual(buffer_point, bp)
 
         # View to world
         for view_point, _, world_point in view_buffer_world_values:
-            wp = BufferedCanvas.view_to_world_pos(
-                            view_point,
-                            buffer_world_center,
-                            buffer_margin,
-                            scale,
-                            offset)
+            wp = BufferedCanvas.view_to_world_pos(view_point,
+                                                  buffer_world_center,
+                                                  buffer_margin,
+                                                  scale,
+                                                  offset)
             self.assertTrue(all([isinstance(v, float) for v in wp]))
             self.assertEqual(world_point, wp)
 
         # World to View
         for view_point, _, world_point in view_buffer_world_values:
-            vp = BufferedCanvas.world_to_view_pos(
-                            world_point,
-                            buffer_world_center,
-                            buffer_margin,
-                            scale,
-                            offset)
+            vp = BufferedCanvas.world_to_view_pos(world_point,
+                                                  buffer_world_center,
+                                                  buffer_margin,
+                                                  scale,
+                                                  offset)
             self.assertTrue(all([isinstance(v, float) for v in vp]))
             self.assertEqual(view_point, vp)
 
@@ -354,30 +344,26 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # Buffer <-> world, with scale != 1
         for _, buffer_point, world_point in view_buffer_world_values:
-            wp = BufferedCanvas.buffer_to_world_pos(
-                            buffer_point,
-                            buffer_world_center,
-                            scale,
-                            offset)
-            bp = BufferedCanvas.world_to_buffer_pos(
-                            wp,
-                            buffer_world_center,
-                            scale,
-                            offset)
+            wp = BufferedCanvas.buffer_to_world_pos(buffer_point,
+                                                    buffer_world_center,
+                                                    scale,
+                                                    offset)
+            bp = BufferedCanvas.world_to_buffer_pos(wp,
+                                                    buffer_world_center,
+                                                    scale,
+                                                    offset)
             self.assertTrue(all([isinstance(v, float) for v in wp]))
             self.assertTrue(all([isinstance(v, float) for v in bp]))
             self.assertEqual(buffer_point, bp)
 
-            bp = BufferedCanvas.world_to_buffer_pos(
-                            world_point,
-                            buffer_world_center,
-                            scale,
-                            offset)
-            wp = BufferedCanvas.buffer_to_world_pos(
-                            bp,
-                            buffer_world_center,
-                            scale,
-                            offset)
+            bp = BufferedCanvas.world_to_buffer_pos(world_point,
+                                                    buffer_world_center,
+                                                    scale,
+                                                    offset)
+            wp = BufferedCanvas.buffer_to_world_pos(bp,
+                                                    buffer_world_center,
+                                                    scale,
+                                                    offset)
 
             self.assertTrue(all([isinstance(v, float) for v in wp]))
             self.assertTrue(all([isinstance(v, float) for v in bp]))
@@ -436,20 +422,16 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         # World to physical
         for _, _, world_point, physical_point in view_buffer_world_values:
-            pp = self.canvas.world_to_physical_pos(
-                            world_point)
+            pp = self.canvas.world_to_physical_pos(world_point)
             self.assertTrue(all([isinstance(v, float) for v in pp]))
             self.assertEqual(physical_point, pp)
 
         # Physical to world
         for _, _, world_point, physical_point in view_buffer_world_values:
-            pp = self.canvas.world_to_physical_pos(
-                            world_point)
+            pp = self.canvas.world_to_physical_pos(world_point)
             self.assertTrue(all([isinstance(v, float) for v in pp]))
             self.assertEqual(physical_point, pp)
 
 
 if __name__ == "__main__":
     unittest.main()
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
