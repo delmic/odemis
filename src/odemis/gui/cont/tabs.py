@@ -412,7 +412,7 @@ class SecomStreamsTab(Tab):
     @call_after
     def _on_autofocus_done(self, future):
         self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
-        
+
     def _on_current_stream(self, streams):
         """
         Called when some VAs affecting the current stream change
@@ -698,24 +698,24 @@ class SparcAcquisitionTab(Tab):
         self.spec_rep = self._settings_controller.spectro_rep_ent
         if self.spec_rep:
             self.spec_rep.va.subscribe(self.on_rep_change)
-            self.spec_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-            self.spec_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-            self.spec_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
         self.spec_pxs = self._settings_controller.spec_pxs_ent
         if self.spec_pxs:
             self.spec_pxs.va.subscribe(self.on_rep_change)
-            self.spec_pxs.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-            self.spec_pxs.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-            self.spec_pxs.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-            self.spec_pxs.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
         self.angu_rep = self._settings_controller.angular_rep_ent
         if self.angu_rep:
             self.angu_rep.va.subscribe(self.on_rep_change)
-            self.angu_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-            self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-            self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
-            self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
         # AR settings don't have pixel size
 
         # Connect the spectrograph count stream to the graph
@@ -804,9 +804,9 @@ class SparcAcquisitionTab(Tab):
         if self._hover_stream:
             stream = self._hover_stream
         elif (self.spec_rep and
-                  (self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus())):
+                  (self.spec_rep.value_ctrl.HasFocus() or self.spec_pxs.value_ctrl.HasFocus())):
             stream = self._spec_stream
-        elif self.angu_rep and self.angu_rep.ctrl.HasFocus():
+        elif self.angu_rep and self.angu_rep.value_ctrl.HasFocus():
             stream = self._ar_stream
         else:
             stream = None

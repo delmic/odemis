@@ -23,10 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 This module contains classes to control the settings controls in the right
 setting column of the user interface.
 
-
-.. note::
-    This module is a prime candidate for a refactoring session!!!
-
 """
 
 from __future__ import division
@@ -38,7 +34,7 @@ import numbers
 from odemis import model, util
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.file import EVT_FILE_SELECT
+from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG, CONFIG_PER_ROLE
 import odemis.gui.util
@@ -85,7 +81,7 @@ def bind_menu(se):
 
     def reset_value(evt):
         se.va.value = orig_val
-        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=se.ctrl)
+        wx.CallAfter(pub.sendMessage, 'setting.changed', setting_ctrl=se.value_ctrl)
 
     def show_reset_menu(evt):
         # No menu needed if value hasn't changed
@@ -1237,7 +1233,7 @@ class AnalysisSettingsController(SettingsBarController):
         self._pnl_arfile = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._arfile_ctrl = self._pnl_arfile.add_browse_button(
             "AR background",
-            "Angular resolved background acquisition file",
+            "Angle-resolved background acquisition file",
             "None").value_ctrl
         wildcards, _ = odemis.gui.util.formats_to_wildcards(
                                         odemis.dataio.get_available_formats(),
