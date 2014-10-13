@@ -489,10 +489,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
-    """ This overlay allows for the selection of a pixel in a data set that is associated with
-    spectral data.
-
-    """
+    """ Selection overlay that allows the selection of a pixel in a data set """
 
     def __init__(self, cnvs):
         super(PixelSelectOverlay, self).__init__(cnvs)
@@ -528,6 +525,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
         if self.active:
             if self.values_are_set():
+                self.cnvs.set_dynamic_cursor(wx.CROSS_CURSOR)
                 self._mouse_vpos = evt.GetPositionTuple()
                 old_pixel_pos = self._pixel_pos
                 self.view_to_pixel()
@@ -536,7 +534,10 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
                         self._selected_pixel.value = self._pixel_pos
                         logging.debug("Pixel %s selected", self._selected_pixel.value)
                     self.cnvs.update_drawing()
+            else:
+                self.cnvs.reset_dynamic_cursor()
         else:
+            self.cnvs.reset_dynamic_cursor()
             super(PixelSelectOverlay, self).on_motion(evt)
 
     def on_left_down(self, evt):
