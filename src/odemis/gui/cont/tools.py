@@ -153,18 +153,14 @@ class ToolBar(wx.Panel):
         if kwargs['style'] & wx.VERTICAL:
             self.orientation = wx.VERTICAL
             main_sizer = wx.BoxSizer(wx.VERTICAL)
-            first_bmp = wx.StaticBitmap(self, -1,
-                                        img.data.getside_menu_topBitmap())
-            second_bmp = wx.StaticBitmap(self, -1,
-                                         img.data.getside_menu_bottomBitmap())
+            first_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_topBitmap())
+            second_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_bottomBitmap())
             self.btn_sizer = wx.BoxSizer(wx.VERTICAL)
         else:
             self.orientation = wx.HORIZONTAL
             main_sizer = wx.BoxSizer(wx.HORIZONTAL)
-            first_bmp = wx.StaticBitmap(self, -1,
-                                        img.data.getside_menu_leftBitmap())
-            second_bmp = wx.StaticBitmap(self, -1,
-                                         img.data.getside_menu_rightBitmap())
+            first_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_leftBitmap())
+            second_bmp = wx.StaticBitmap(self, -1, img.data.getside_menu_rightBitmap())
             self.btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
 
         # Set the main sizer that will contain the elements that will form
@@ -190,10 +186,9 @@ class ToolBar(wx.Panel):
             main_sizer.SetItemMinSize(self.btn_panel, -1, 36)
 
         self._buttons = {}
-        # References of va callbacks are stored in this list, to prevent
-        # unsubscription
-        self._mode_callbacks = []
 
+        # References of va callbacks are stored in this list, to prevent un-subscription
+        self._mode_callbacks = []
 
     def add_tool(self, tool_id, handler):
         """ Add a tool and it's event handler to the toolbar
@@ -216,11 +211,7 @@ class ToolBar(wx.Panel):
         self._buttons[tool_id] = btn
 
     def _add_mode_tool(self, tooltype, tool_id, va):
-        btn = self._add_button(
-                        ImageToggleButton,
-                        tooltype.icon,
-                        tooltype.tooltip
-            )
+        btn = self._add_button(ImageToggleButton, tooltype.icon, tooltype.tooltip)
         self._buttons[tool_id] = btn
 
         value_on = tooltype.value_on
@@ -259,8 +250,8 @@ class ToolBar(wx.Panel):
             f = wx.LEFT | wx.RIGHT | wx.TOP
             b = 5
         else:
-            f = wx.BOTTOM | wx.LEFT
-            b = 10
+            f = wx.TOP | wx.BOTTOM | wx.ALIGN_CENTRE_HORIZONTAL
+            b = 5
 
         self.btn_sizer.Add(btn, border=b, flag=f)
         self.btn_panel.Layout()
