@@ -219,11 +219,6 @@ class SecomStreamsTab(Tab):
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
         self.main_data = main_data
-        # Toolbar
-        self.tb = self.main_frame.secom_toolbar
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
 
         # Order matters!
         # First we create the views, then the streams
@@ -236,8 +231,7 @@ class SecomStreamsTab(Tab):
                 self.main_frame.vp_secom_bl,
                 self.main_frame.vp_secom_br,
                 self.main_frame.vp_overview_sem
-            ],
-            self.tb
+            ]
         )
 
         self.overview_controller = viewcont.OverviewController(
@@ -269,6 +263,14 @@ class SecomStreamsTab(Tab):
             self.main_frame.pnl_secom_streams
         )
 
+        # Toolbar
+        self.tb = self.main_frame.secom_toolbar
+        # TODO: Add the buttons when the functionality is there
+        # tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
+        # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        # Add fit view to content to toolbar
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+        # autofocus
         self._autofocus_f = InstantaneousFuture()
         self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
         self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
@@ -633,9 +635,10 @@ class SparcAcquisitionTab(Tab):
         self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
-            [self.main_frame.vp_sparc_acq_view],
-            self.tb
+            [self.main_frame.vp_sparc_acq_view]
         )
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+
         # Add the SEM stream to the focussed (only) view
         self.tab_data_model.streams.value.append(sem_stream)
         mic_view = self.tab_data_model.focussedView.value
@@ -1021,13 +1024,6 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
-        # Toolbar
-        self.tb = self.main_frame.ana_toolbar
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        self.tb.enable_button(tools.TOOL_POINT, False)
-
         viewports = [
             self.main_frame.vp_inspection_tl,
             self.main_frame.vp_inspection_tr,
@@ -1042,9 +1038,16 @@ class AnalysisTab(Tab):
         self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
-            viewports,
-            self.tb
+            viewports
         )
+
+        # Toolbar
+        self.tb = self.main_frame.ana_toolbar
+        # TODO: Add the buttons when the functionality is there
+        # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        self.tb.enable_button(tools.TOOL_POINT, False)
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # FIXME: Way too hacky approach to get the right viewport shown,
         # so we need to rethink and re-do it. Might involve letting the

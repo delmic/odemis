@@ -70,11 +70,6 @@ class ViewController(object):
             self._viewports = viewports
             self._create_views_auto()
 
-        # Add fit view to content to toolbar
-        if toolbar:
-            toolbar.add_tool(tools.TOOL_ZOOM_FIT, self.fitViewToContent)
-
-
         # First view is focused
         tab_data.focussedView.value = tab_data.visible_views.value[0]
 
