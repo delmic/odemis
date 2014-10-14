@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
-    StaticStream, Stream, OPTICAL_STREAMS, EM_STREAMS, AlignedSEMStream
+    StaticStream, Stream, OpticalStream, EMStream, AlignedSEMStream
 from odemis.gui import comp
 from odemis.gui.model import STATE_OFF, STATE_ON, CHAMBER_VACUUM, \
     CHAMBER_UNKNOWN
@@ -492,14 +492,14 @@ class StreamController(object):
 
         # optical state = at least one stream playing is optical
         if hasattr(self._tab_data_model, 'opticalState'):
-            if any(isinstance(s, OPTICAL_STREAMS) for s in streams):
+            if any(isinstance(s, OpticalStream) for s in streams):
                 self._tab_data_model.opticalState.value = STATE_ON
             else:
                 self._tab_data_model.opticalState.value = STATE_OFF
 
         # sem state = at least one stream playing is sem
         if hasattr(self._tab_data_model, 'emState'):
-            if any(isinstance(s, EM_STREAMS) for s in streams):
+            if any(isinstance(s, EMStream) for s in streams):
                 self._tab_data_model.emState.value = STATE_ON
             else:
                 self._tab_data_model.emState.value = STATE_OFF

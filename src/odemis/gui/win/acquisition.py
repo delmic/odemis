@@ -40,7 +40,7 @@ import wx
 from wx.lib.pubsub import pub
 
 import odemis.gui.model as guimodel
-from odemis.acq.stream import EM_STREAMS, OPTICAL_STREAMS
+from odemis.acq.stream import EMStream, OpticalStream
 
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
@@ -102,10 +102,10 @@ class AcquisitionDialog(xrcfr_acq):
             self.chkbox_fine_align.Value = True
 
             for s in self._tab_data_model.streams.value:
-                if isinstance(s, EM_STREAMS):
+                if isinstance(s, EMStream):
                     em_det = s.detector
                     em_emt = s.emitter
-                elif isinstance(s, OPTICAL_STREAMS):
+                elif isinstance(s, OpticalStream):
                     opt_det = s.detector
             self._ovrl_stream = stream.OverlayStream("Fine alignment",
                                                      opt_det, em_emt, em_det)
@@ -223,14 +223,14 @@ class AcquisitionDialog(xrcfr_acq):
 
         # check for a SEM stream
         for s in streams:
-            if isinstance(s, EM_STREAMS):
+            if isinstance(s, EMStream):
                 break
         else:
             return False
 
         # check for an optical stream
         for s in streams:
-            if isinstance(s, OPTICAL_STREAMS):
+            if isinstance(s, OpticalStream):
                 break
         else:
             return False

@@ -35,8 +35,8 @@ import math
 import numpy
 from odemis import model
 from odemis.acq import _futures
-from odemis.acq.stream import FluoStream, OPTICAL_STREAMS, EM_STREAMS, SEMCCDMDStream, \
-    OverlayStream
+from odemis.acq.stream import FluoStream, SEMCCDMDStream, \
+    OverlayStream, OpticalStream, EMStream
 from odemis.util import img, fluo
 import sys
 import threading
@@ -157,9 +157,9 @@ def _weight_stream(stream):
         else:
             ewl_bonus = ewl_center # normally, between 0 and 1
         return 100 + ewl_bonus
-    elif isinstance(stream, OPTICAL_STREAMS):
+    elif isinstance(stream, OpticalStream):
         return 90 # any other kind of optical after fluorescence
-    elif isinstance(stream, EM_STREAMS):
+    elif isinstance(stream, EMStream):
         return 50 # can be done after any light
     elif isinstance(stream, SEMCCDMDStream):
         return 40 # after standard (=survey) SEM
@@ -272,7 +272,7 @@ class AcquisitionTask(object):
         # Even if no overlay stream was present, it's worthy to update the
         # metadata as it might contain correction metadata from basic alignment.
         for s, data in raw_data.items():
-            if isinstance(s, OPTICAL_STREAMS):
+            if isinstance(s, OpticalStream):
                 for d in data:
                     img.mergeMetadata(d.metadata, cor_md)
 

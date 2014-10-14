@@ -30,7 +30,7 @@ import wx
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
 from odemis.gui.cont import tools
-from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS, SPECTRUM_STREAMS, AR_STREAMS
+from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.gui.util import call_after
 import odemis.gui.util.widgets as util
 from odemis.model import VigilantAttributeBase
@@ -133,11 +133,11 @@ class ViewController(object):
                 vpv = collections.OrderedDict([
                     (self._viewports[0],  # focused view
                      {"name": "SEM",
-                      "stream_classes": EM_STREAMS,
+                      "stream_classes": EMStream,
                       }),
                     (self._viewports[1],
                      {"name": "Spectrum",
-                      "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      "stream_classes": (OpticalStream, SpectrumStream),
                       }),
                     (self._viewports[2],
                      {"name": "Dummy", # will be immediately swapped for AR
@@ -146,17 +146,17 @@ class ViewController(object):
                     (self._viewports[3],
                      {"name": "SEM CL",
                       "stream_classes":
-                            EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                            (EMStream, OpticalStream, SpectrumStream),
                       }),
                     # Spectrum viewport is *also* needed for Analysis tab in the
                     # Sparc configuration
                     (self._viewports[4],
                      {"name": "Spectrum plot",
-                      "stream_classes": SPECTRUM_STREAMS,
+                      "stream_classes": SpectrumStream,
                      }),
                     (self._viewports[5],
                      {"name": "Angle resolved",
-                      "stream_classes": AR_STREAMS,
+                      "stream_classes": ARStream,
                      }),
                 ])
             else:
@@ -164,30 +164,30 @@ class ViewController(object):
                 vpv = collections.OrderedDict([
                     (self._viewports[0],  # focused view
                      {"name": "SEM",
-                      "stream_classes": EM_STREAMS,
+                      "stream_classes": EMStream,
                      }),
                     (self._viewports[1],
                      {"name": "Optical",
-                      "stream_classes": OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                      "stream_classes": (OpticalStream, SpectrumStream),
                      }),
                     (self._viewports[2],
                      {"name": "Combined 1",
                       "stream_classes":
-                          EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                          (EMStream, OpticalStream, SpectrumStream),
                      }),
                     (self._viewports[3],
                      {"name": "Combined 2",
                       "stream_classes":
-                          EM_STREAMS + OPTICAL_STREAMS + SPECTRUM_STREAMS,
+                          (EMStream, OpticalStream, SpectrumStream),
                      }),
                     (self._viewports[4],
                      {"name": "Spectrum plot",
-                      "stream_classes": SPECTRUM_STREAMS
+                      "stream_classes": SpectrumStream
                      }),
                     # TODO: this one doesn't make sense
 #                     (self._viewports[5],
 #                      {"name": "Overview",
-#                       "stream_classes": SPECTRUM_STREAMS
+#                       "stream_classes": SpectrumStream
 #                      }),
                 ])
             self._create_views_fixed(vpv)
@@ -207,25 +207,25 @@ class ViewController(object):
                  {"name": "SEM",
                   "stage": self._main_data_model.stage,
                   "focus":  self._main_data_model.ebeam_focus,
-                  "stream_classes": EM_STREAMS,
+                  "stream_classes": EMStream,
                   }),
                 (self._viewports[1],
                  {"name": "Optical",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": OPTICAL_STREAMS,
+                  "stream_classes": OpticalStream,
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+                  "stream_classes": (EMStream, OpticalStream),
                   }),
                 (self._viewports[3],
                  {"name": "Combined 2",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
-                  "stream_classes": EM_STREAMS + OPTICAL_STREAMS,
+                  "stream_classes": (EMStream, OpticalStream),
                   }),
             ])
 
@@ -239,7 +239,7 @@ class ViewController(object):
                 vpv[viewport] = {"name": "SEM %d" % (i + 1),
                                  "stage": self._main_data_model.stage,
                                  "focus": self._main_data_model.ebeam_focus,
-                                 "stream_classes": EM_STREAMS,
+                                 "stream_classes": EMStream,
                                  }
 
         # If Optical only: all optical
@@ -250,7 +250,7 @@ class ViewController(object):
                 vpv[viewport] = {"name": "Optical %d" % (i + 1),
                                  "stage": self._main_data_model.stage,
                                  "focus": self._main_data_model.focus,
-                                 "stream_classes": OPTICAL_STREAMS,
+                                 "stream_classes": OpticalStream,
                                  }
         else:
             logging.warning("No known microscope configuration, creating %d "
@@ -633,7 +633,7 @@ class OverviewController(object):
 
         # Calculate the stream size if the the ebeam is active
         for strm in self._data_model.streams.value:
-            if strm.is_active and isinstance(strm, EM_STREAMS):
+            if strm.is_active and isinstance(strm, EMStream):
                 image = strm.image.value
                 if image is not None:
                     pixel_size = image.metadata.get(MD_PIXEL_SIZE, None)

@@ -28,7 +28,7 @@ from __future__ import division
 import logging
 from odemis import gui, model
 from odemis.acq import stream
-from odemis.acq.stream import OPTICAL_STREAMS, EM_STREAMS
+from odemis.acq.stream import OpticalStream, EMStream
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
 from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
@@ -322,7 +322,7 @@ class MicroscopeViewport(ViewPort):
             len(self._microscope_view.stream_tree) >= 2):
 
             streams = self._microscope_view.getStreams()
-            all_opt = all(isinstance(s, OPTICAL_STREAMS) for s in streams)
+            all_opt = all(isinstance(s, OpticalStream) for s in streams)
 
             # If all images are optical, assume they are merged using screen blending and no
             # merge ratio is required
@@ -333,8 +333,8 @@ class MicroscopeViewport(ViewPort):
                 # => it should be done in the MicroscopeView when adding a stream
                 # For now, special hack for the SecomCanvas which always sets
                 # the EM image as "right"
-                if (any(isinstance(s, EM_STREAMS) for s in streams)
-                    and any(isinstance(s, OPTICAL_STREAMS) for s in streams)):
+                if (any(isinstance(s, EMStream) for s in streams)
+                    and any(isinstance(s, OpticalStream) for s in streams)):
                     self.bottom_legend.set_stream_type(wx.LEFT, stream.CameraStream)
                     self.bottom_legend.set_stream_type(wx.RIGHT, stream.SEMStream)
                 else:
@@ -532,8 +532,8 @@ class SecomViewport(MicroscopeViewport):
         # Overridden to avoid displaying merge slide if only SEM or only Optical
         # display iif both EM and OPT streams
         streams = self._microscope_view.getStreams()
-        has_opt = any(isinstance(s, OPTICAL_STREAMS) for s in streams)
-        has_em = any(isinstance(s, EM_STREAMS) for s in streams)
+        has_opt = any(isinstance(s, OpticalStream) for s in streams)
+        has_em = any(isinstance(s, EMStream) for s in streams)
 
         if has_opt and has_em:
             self.ShowMergeSlider(True)

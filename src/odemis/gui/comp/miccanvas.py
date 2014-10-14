@@ -288,7 +288,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tab_streams = self._tab_data_model.streams.value
 
             if (len(self.microscope_view.stream_tree) and
-                    any([isinstance(s, stream.AR_STREAMS) for s in tab_streams])):
+                    any([isinstance(s, stream.ARStream) for s in tab_streams])):
                 self.add_world_overlay(self.points_overlay)
                 self.points_overlay.activate()
             # TODO: Filtering by the name SEM CL is not desired. There should be
@@ -315,7 +315,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         # Non-SEM stream images will always be blended using the screen blend operator
         for s in streams:
-            if isinstance(s, stream.EM_STREAMS):
+            if isinstance(s, stream.EMStream):
                 images.append((s.image.value, BLEND_DEFAULT, s.name.value))
             else:
                 images.append((s.image.value, BLEND_SCREEN, s.name.value))
@@ -861,7 +861,7 @@ class SecomCanvas(DblMicroscopeCanvas):
             if rgbim is None:
                 continue
 
-            if isinstance(s, stream.EM_STREAMS):
+            if isinstance(s, stream.EMStream):
                 # Add as last image, always use default blend operator with SEM images
                 images.append((rgbim, BLEND_DEFAULT, s.name.value))
 

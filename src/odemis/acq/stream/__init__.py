@@ -28,25 +28,36 @@ from ._live import *
 from ._static import *
 from ._sync import *
 
+from abc import ABCMeta
+
 # Generic cross-cut types
-# TODO: instead of using tuples, use AbstractClass (cf collections.Iterable)
+class OpticalStream:
+    __metaclass__ = ABCMeta
 
-# All the stream types related to optical
-OPTICAL_STREAMS = (CameraStream,
-                   StaticFluoStream,
-                   StaticBrightfieldStream)
+OpticalStream.register(CameraStream)
+OpticalStream.register(StaticFluoStream)
+OpticalStream.register(StaticBrightfieldStream)
 
-# All the stream types related to electron microscope
-EM_STREAMS = (SEMStream,
-              StaticSEMStream)
+class EMStream:
+    """All the stream types related to electron microscope"""
+    __metaclass__ = ABCMeta
 
-SPECTRUM_STREAMS = (SpectrumStream,
-                    StaticSpectrumStream,
-                    SEMSpectrumMDStream)
+EMStream.register(SEMStream)
+EMStream.register(StaticSEMStream)
 
-AR_STREAMS = (ARStream,
-              StaticARStream,
-              SEMARMDStream)
+class SpectrumStream:
+    __metaclass__ = ABCMeta
+
+SpectrumStream.register(SpectrumSettingsStream)
+SpectrumStream.register(StaticSpectrumStream)
+SpectrumStream.register(SEMSpectrumMDStream)
+
+class ARStream:
+    __metaclass__ = ABCMeta
+
+ARStream.register(ARSettingsStream)
+ARStream.register(StaticARStream)
+ARStream.register(SEMARMDStream)
 
 
 # TODO: make it like a VA, so that it's possible to know when it changes
@@ -210,12 +221,12 @@ class StreamTree(object):
     @property
     def spectrum_streams(self):
         """ Return a flat list of spectrum streams """
-        return self.get_streams_by_type(SPECTRUM_STREAMS)
+        return self.get_streams_by_type(SpectrumStream)
 
     @property
     def em_streams(self):
         """ Return a flat list of electron microscope streams """
-        return self.get_streams_by_type(EM_STREAMS)
+        return self.get_streams_by_type(EMStream)
 
     def get_streams_by_name(self, name):
         """ Return a list of streams with have names that match `name` """

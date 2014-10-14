@@ -456,7 +456,7 @@ class SecomStreamsTab(Tab):
         Make sure there is at least one optical and one SEM stream present
         """
         if hasattr(self.tab_data_model, 'opticalState'):
-            has_opt = any(isinstance(s, streammod.OPTICAL_STREAMS)
+            has_opt = any(isinstance(s, streammod.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
                 self._stream_controller.addFluo(add_to_all_views=True, play=False)
@@ -464,7 +464,7 @@ class SecomStreamsTab(Tab):
                 # remove than change all the values
 
         if hasattr(self.tab_data_model, 'emState'):
-            has_sem = any(isinstance(s, streammod.EM_STREAMS)
+            has_sem = any(isinstance(s, streammod.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
                 sp = self._add_em_stream(add_to_all_views=True, play=False)
@@ -484,7 +484,7 @@ class SecomStreamsTab(Tab):
             # TODO: Use the last stream paused, and fallback here only if empty?
             # TODO: just first opt stream?
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, streammod.OPTICAL_STREAMS):
+                if isinstance(s, streammod.OpticalStream):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
@@ -495,13 +495,13 @@ class SecomStreamsTab(Tab):
             # focus the view
             self.view_controller.focusViewWithStream(opts)
         else:
-            self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
+            self._stream_controller.pauseStreams(streammod.OpticalStream)
 
     def onEMState(self, state):
         if state == guimod.STATE_ON:
             # TODO: Use the last stream paused
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, streammod.EM_STREAMS):
+                if isinstance(s, streammod.EMStream):
                     sems = s
                     break
             else: # Could happen if the user has deleted all the optical streams
@@ -513,7 +513,7 @@ class SecomStreamsTab(Tab):
             # focus the view
             self.view_controller.focusViewWithStream(sems)
         else:
-            self._stream_controller.pauseStreams(streammod.EM_STREAMS)
+            self._stream_controller.pauseStreams(streammod.EMStream)
 
     def Show(self, show=True):
         assert (show != self.IsShown()) # we assume it's only called when changed
@@ -583,7 +583,7 @@ class SparcAcquisitionTab(Tab):
         vas_settings = []  # VAs that can affect the acquisition time
 
         if main_data.spectrometer:
-            spec_stream = streammod.SpectrumStream(
+            spec_stream = streammod.SpectrumSettingsStream(
                 "Spectrum",
                 main_data.spectrometer,
                 main_data.spectrometer.data,
@@ -604,7 +604,7 @@ class SparcAcquisitionTab(Tab):
             self._scount_stream.windowPeriod.value = 30  # s
 
         if main_data.ccd:
-            ar_stream = streammod.ARStream(
+            ar_stream = streammod.ARSettingsStream(
                 "Angular",
                 main_data.ccd,
                 main_data.ccd.data,
@@ -817,7 +817,7 @@ class SparcAcquisitionTab(Tab):
             cvs.show_repetition(None)
         else:
             rep = stream.repetition.value
-            if isinstance(stream, streammod.AR_STREAMS):
+            if isinstance(stream, streammod.ARStream):
                 style = overlay.world.RepetitionSelectOverlay.FILL_POINT
             else:
                 style = overlay.world.RepetitionSelectOverlay.FILL_GRID
@@ -1281,7 +1281,7 @@ class AnalysisTab(Tab):
         # TODO: a better place for this code?
         for strm in self.tab_data_model.streams.value:
             # If a spectrum stream is found...
-            if isinstance(strm, streammod.SPECTRUM_STREAMS):
+            if isinstance(strm, streammod.SpectrumStream):
                 spec_found = True
                 iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
@@ -1306,7 +1306,7 @@ class AnalysisTab(Tab):
                 self.main_frame.vp_inspection_plot.clear()
                 break
             # If an angle resolve stream is found...
-            elif isinstance(strm, streammod.AR_STREAMS):
+            elif isinstance(strm, streammod.ARStream):
                 ar_found = True
                 # ... set the PointOverlay values for each viewport
                 for viewport in self.view_controller.viewports:
@@ -1366,7 +1366,7 @@ class AnalysisTab(Tab):
 
             # Apply data to the relevant streams
             ar_strms = [s for s in self.tab_data_model.streams.value
-                        if isinstance(s, streammod.AR_STREAMS)]
+                        if isinstance(s, streammod.ARStream)]
 
             # This might raise more exceptions if calibration is not compatible
             # with the data.
@@ -1404,7 +1404,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_spectrum_data(data) # FIXME
 
             spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, streammod.SPECTRUM_STREAMS)]
+                          if isinstance(s, streammod.SpectrumStream)]
 
             for strm in spec_strms:
                 strm.background.value = cdata
@@ -1440,7 +1440,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_spectrum_efficiency(data)
 
             spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, streammod.SPECTRUM_STREAMS)]
+                          if isinstance(s, streammod.SpectrumStream)]
 
             for strm in spec_strms:
                 strm.efficiencyCompensation.value = cdata
@@ -1563,7 +1563,7 @@ class LensAlignTab(Tab):
             (main_frame.vp_align_sem,
              {"name": "SEM",
               "stage": main_data.stage,
-              "stream_classes": streammod.EM_STREAMS,
+              "stream_classes": streammod.EMStream,
              },
             )
         ])
@@ -1898,7 +1898,7 @@ class MirrorAlignTab(Tab):
 
         # create the stream to the AR image + goal image
         if main_data.ccd:
-            # Not ARStream as this is for multiple repetitions, and we just care
+            # Not ARSettingsStream as this is for multiple repetitions, and we just care
             # about what's on the CCD
             ccd_stream = streammod.CameraStream(
                 "Angle-resolved sensor",
