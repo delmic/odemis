@@ -405,6 +405,11 @@ class Scanner(model.Emitter):
         return self.spotSize.value
 
     def _onScale(self, s):
+        # Abort current scanning when scale is changed
+        try:
+            self.parent._device.SEMAbortImageAcquisition()
+        except suds.WebFault:
+            logging.debug("No acquisition in progress to be aborted.")
         self._updatePixelSize()
 
     def _updatePixelSize(self):
@@ -1375,6 +1380,21 @@ class ChamberPressure(model.Actuator):
         self._updatePosition()
         self._updateSampleHolder()
 
+        # Start thread that continuously listens to chamber state changes
+        chamber_client = Client(self.parent._host + "?om", location=self.parent._host,
+                        username=self.parent._username, password=self.parent._password,
+                        timeout=SOCKET_TIMEOUT)
+        self._chamber_device = chamber_client.service
+        # Event to indicate that any move requested by the user has been
+        # completed and thus position can be updated
+        self._chamber_event = threading.Event()
+        self._chamber_event.set()
+        self._chamber_must_stop = threading.Event()
+        target = self._chamber_move_thread
+        self._chamber_thread = threading.Thread(target=target,
+                name="Phenom chamber pressure state change")
+        self._chamber_thread.start()
+
     def _updatePosition(self):
         """
         update the position VA and .pressure VA
@@ -1453,6 +1473,7 @@ class ChamberPressure(model.Actuator):
 
     def terminate(self):
         if self._executor:
+            self._chamber_must_stop.set()
             self.stop()
             self._executor.shutdown()
             self._executor = None
@@ -1480,10 +1501,13 @@ class ChamberPressure(model.Actuator):
         updater = functools.partial(self._updateTime, future, p)
         TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
         TimeUpdater.start()
+        self._chamber_event.clear()
         with self.parent._acq_progress_lock:
             logging.debug("Moving to another chamber state...")
             try:
                 if p["pressure"] == PRESSURE_SEM:
+                    if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
+                        self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
                     if (self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-BLANK" and
                         self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
                         # If in standby or currently waking up, open event channel
@@ -1502,8 +1526,8 @@ class ChamberPressure(model.Actuator):
                     self._pressure_device.UnloadSample()
             except suds.WebFault:
                 logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
+        self._chamber_event.set()
 
-        self._updatePosition()
         TimeUpdater.cancel()
 
     def _updateTime(self, future, target):
@@ -1586,7 +1610,7 @@ class ChamberPressure(model.Actuator):
                 # via odemis. An alternative would be to wait for the second
                 # ACB performed by phenom API each time we load to SEM.
                 api_frames += 1
-                if api_frames >= 20:
+                if api_frames >= 25:
                     break
             elif (newEvent == eventID2):
                 break
@@ -1595,3 +1619,36 @@ class ChamberPressure(model.Actuator):
         self._pressure_device.CloseEventChannel(ch_id)
         # Wait before allow acquisition
         time.sleep(1)
+
+    def _chamber_move_thread(self):
+        """
+        Thread that listens to changes in Phenom chamber pressure.
+        """
+        eventSpecArray = self.parent._objects.create('ns0:EventSpecArray')
+
+        # Event for performed sample holder move
+        eventID1 = "PROGRESS-AREA-SELECTION-CHANGED-ID"
+        eventSpec1 = self.parent._objects.create('ns0:EventSpec')
+        eventSpec1.eventID = eventID1
+        eventSpec1.compressed = False
+
+        eventSpecArray.item = [eventSpec1]
+        ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
+        try:
+            while not self._chamber_must_stop.is_set():
+                try:
+                    time_remaining = self._pressure_device.ReadEventChannel(ch_id)[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
+                    logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
+                    if (time_remaining == 0):
+                        # Wait until any move performed by the user is completed
+                        self._chamber_event.wait()
+                        self._updatePosition()
+                except Exception:
+                    logging.warning("Unexpected event received")
+
+        except Exception:
+            logging.exception("Unexpected failure during chamber pressure event listening")
+        finally:
+            self._chamber_device.CloseEventChannel(ch_id)
+            logging.debug("Chamber pressure thread closed")
+            self._chamber_must_stop.clear()
