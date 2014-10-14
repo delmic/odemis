@@ -30,7 +30,7 @@ This module contains classes that allow to create ToolBars for the MicroscopeGUI
 """
 
 from odemis.gui import model, img
-from odemis.gui.comp.buttons import ImageButton, ImageToggleButton
+from odemis.gui.comp.buttons import ImageButton, ImageToggleButton, darken_image
 import wx
 
 # List of tools available
@@ -236,7 +236,10 @@ class ToolBar(wx.Panel):
         bmp = img.data.catalog[img_prefix].GetBitmap()
         bmpa = img.data.catalog[img_prefix + "_a"].GetBitmap()
         bmph = img.data.catalog[img_prefix + "_h"].GetBitmap()
-        bmpd = img.data.catalog[img_prefix + "_h"].GetBitmap()
+
+        dimg = img.data.catalog[img_prefix].GetImage()
+        darken_image(dimg, 0.3)
+        bmpd = dimg.ConvertToBitmap()
 
         btn = cls(self.btn_panel, bitmap=bmp, size=(24, 24))
         btn.SetBitmapSelected(bmpa)
