@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import logging
 from odemis.acq.stream import FluoStream, BrightfieldStream, SEMStream, \
-    StaticStream, Stream, OPTICAL_STREAMS, EM_STREAMS, AlignedSEMStream
+    StaticStream, Stream, OpticalStream, EMStream, AlignedSEMStream
 from odemis.gui import comp
 from odemis.gui.model import STATE_OFF, STATE_ON, CHAMBER_VACUUM, \
     CHAMBER_UNKNOWN
@@ -69,11 +69,12 @@ class StreamController(object):
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
         pub.subscribe(self.removeStream, 'stream.remove')
 
-        if hasattr(tab_data, 'opticalState'):
-            tab_data.opticalState.subscribe(self.onOpticalState, init=True)
-
-        if hasattr(tab_data, 'emState'):
-            tab_data.emState.subscribe(self.onEMState, init=True)
+        # TODO: uncomment if needed
+#         if hasattr(tab_data, 'opticalState'):
+#             tab_data.opticalState.subscribe(self.onOpticalState, init=True)
+#
+#         if hasattr(tab_data, 'emState'):
+#             tab_data.emState.subscribe(self.onEMState, init=True)
 
         # This attribute indicates whether live data is processed by the streams
         # in the controller, or that they just display static data.
@@ -364,7 +365,7 @@ class StreamController(object):
 
         # update the "visible" icon of each stream panel to match the list
         # of streams in the view
-        visible_streams = view.stream_tree.getStreams()
+        visible_streams = view.getStreams()
 
         for e in self._stream_bar.stream_panels:
             e.set_visible(e.stream in visible_streams)
@@ -380,16 +381,31 @@ class StreamController(object):
         """
         Called when a stream "updated" state changes
         """
+        # Ensure it's visible in the current view (if feasible)
+        if updated:
+            fv = self._tab_data_model.focussedView.value
+            if (isinstance(stream, fv.stream_classes) and # view is compatible
+                not stream in fv.getStreams()):
+                # Add to the view
+                fv.addStream(stream)
+                # Update the graphical display
+                for e in self._stream_bar.stream_panels:
+                    if e.stream is stream:
+                        e.set_visible(True)
+
         # This is a stream scheduler:
         # * "should_update" streams are the streams to be scheduled
         # * a stream becomes "active" when it's currently acquiring
         # * when a stream is just set to be "should_update" (by the user) it
         #   should be scheduled as soon as possible
 
-        # TODO: reorganise .tab_data.streams so that the new playing stream is the
-        # first one in the list. This would mean that .streams is LRU sorted,
-        # and so when changing the state of the microscope, we play that one.
-        # It could also be used as the current stream information.
+        # Note we ensure that .streams is sorted with the new playing stream as
+        # the first one in the list. This means that .streams is LRU sorted,
+        # which can be used for various stream information.
+        # TODO: that works nicely for live tabs, but in analysis tab, this
+        # never happens so the latest stream is always the same one.
+        # => need more ways to change current stream (at least pick one from the
+        # current view?)
 
         if self._sched_policy == SCHED_LAST_ONE:
             # Only last stream with should_update is active
@@ -412,10 +428,6 @@ class StreamController(object):
         else:
             raise NotImplementedError("Unknown scheduling policy %s" % self._sched_policy)
 
-        # TODO: that works nicely for live tabs, but in analysis tab, this
-        # never happens so the current stream never changes.
-        # => need more ways to change current stream (at least pick one from the
-        # current view?)
         if updated:
             # put it back to the beginning of the list to indicate it's the
             # latest stream used
@@ -480,14 +492,14 @@ class StreamController(object):
 
         # optical state = at least one stream playing is optical
         if hasattr(self._tab_data_model, 'opticalState'):
-            if any(isinstance(s, OPTICAL_STREAMS) for s in streams):
+            if any(isinstance(s, OpticalStream) for s in streams):
                 self._tab_data_model.opticalState.value = STATE_ON
             else:
                 self._tab_data_model.opticalState.value = STATE_OFF
 
         # sem state = at least one stream playing is sem
         if hasattr(self._tab_data_model, 'emState'):
-            if any(isinstance(s, EM_STREAMS) for s in streams):
+            if any(isinstance(s, EMStream) for s in streams):
                 self._tab_data_model.emState.value = STATE_ON
             else:
                 self._tab_data_model.emState.value = STATE_OFF

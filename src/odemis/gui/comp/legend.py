@@ -190,10 +190,10 @@ class InfoLegend(wx.Panel):
         """
 
         stream_to_icon = [
-            (stream.AR_STREAMS, imgdata.getico_blending_angBitmap()),
-            (stream.SPECTRUM_STREAMS, imgdata.getico_blending_specBitmap()),
-            (stream.OPTICAL_STREAMS, imgdata.getico_blending_optBitmap()),
-            (stream.EM_STREAMS, imgdata.getico_blending_semBitmap()),
+            (stream.ARStream, imgdata.getico_blending_angBitmap()),
+            (stream.SpectrumStream, imgdata.getico_blending_specBitmap()),
+            (stream.OpticalStream, imgdata.getico_blending_optBitmap()),
+            (stream.EMStream, imgdata.getico_blending_semBitmap()),
             (stream.RGBStream, imgdata.getico_blending_goalBitmap()),
         ]
 

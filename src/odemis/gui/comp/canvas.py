@@ -281,6 +281,7 @@ class BufferedCanvas(wx.Panel):
 
         if isinstance(cursor, int):
             cursor = wx.StockCursor(cursor)
+
         self.default_cursor = cursor
         self.SetCursor(self.default_cursor)
         logging.debug("Default cursor set to %s", cursor)
@@ -299,12 +300,11 @@ class BufferedCanvas(wx.Panel):
 
         """
 
-        if not isinstance(cursor, int):
-            raise ValueError("Only integer cursor identifiers allowed")
+        if isinstance(cursor, int):
+            cursor = wx.StockCursor(cursor)
 
         if self.dynamic_cursor != cursor:
             self.dynamic_cursor = cursor
-            cursor = wx.StockCursor(cursor)
             self.SetCursor(cursor)
             logging.debug("Dynamic cursor set to %s", self.dynamic_cursor)
 

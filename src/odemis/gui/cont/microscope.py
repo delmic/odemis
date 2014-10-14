@@ -251,7 +251,7 @@ class SecomStateController(MicroscopeStateController):
     }
     # The classes of streams that are affected by the chamber
     # only SEM, as optical might be used even vented
-    cls_streams_involved = stream.EM_STREAMS
+    cls_streams_involved = stream.EMStream
 
     def __init__(self, tab_data, main_frame, btn_prefix, st_ctrl):
         super(SecomStateController, self).__init__(tab_data, main_frame, btn_prefix)

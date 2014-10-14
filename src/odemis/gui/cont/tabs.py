@@ -219,11 +219,6 @@ class SecomStreamsTab(Tab):
         super(SecomStreamsTab, self).__init__(name, button, panel,
                                               main_frame, tab_data)
         self.main_data = main_data
-        # Toolbar
-        self.tb = self.main_frame.secom_toolbar
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
 
         # Order matters!
         # First we create the views, then the streams
@@ -236,8 +231,7 @@ class SecomStreamsTab(Tab):
                 self.main_frame.vp_secom_bl,
                 self.main_frame.vp_secom_br,
                 self.main_frame.vp_overview_sem
-            ],
-            self.tb
+            ]
         )
 
         self.overview_controller = viewcont.OverviewController(
@@ -269,6 +263,14 @@ class SecomStreamsTab(Tab):
             self.main_frame.pnl_secom_streams
         )
 
+        # Toolbar
+        self.tb = self.main_frame.secom_toolbar
+        # TODO: Add the buttons when the functionality is there
+        # tb.add_tool(tools.TOOL_ROI, self.tab_data_model.tool)
+        # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        # Add fit view to content to toolbar
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+        # autofocus
         self._autofocus_f = InstantaneousFuture()
         self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
         self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)
@@ -410,7 +412,7 @@ class SecomStreamsTab(Tab):
     @call_after
     def _on_autofocus_done(self, future):
         self.tab_data_model.autofocus_active.value = guimod.TOOL_AUTO_FOCUS_OFF
-        
+
     def _on_current_stream(self, streams):
         """
         Called when some VAs affecting the current stream change
@@ -454,7 +456,7 @@ class SecomStreamsTab(Tab):
         Make sure there is at least one optical and one SEM stream present
         """
         if hasattr(self.tab_data_model, 'opticalState'):
-            has_opt = any(isinstance(s, streammod.OPTICAL_STREAMS)
+            has_opt = any(isinstance(s, streammod.OpticalStream)
                           for s in self.tab_data_model.streams.value)
             if not has_opt:
                 self._stream_controller.addFluo(add_to_all_views=True, play=False)
@@ -462,7 +464,7 @@ class SecomStreamsTab(Tab):
                 # remove than change all the values
 
         if hasattr(self.tab_data_model, 'emState'):
-            has_sem = any(isinstance(s, streammod.EM_STREAMS)
+            has_sem = any(isinstance(s, streammod.EMStream)
                           for s in self.tab_data_model.streams.value)
             if not has_sem:
                 sp = self._add_em_stream(add_to_all_views=True, play=False)
@@ -482,7 +484,7 @@ class SecomStreamsTab(Tab):
             # TODO: Use the last stream paused, and fallback here only if empty?
             # TODO: just first opt stream?
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, streammod.OPTICAL_STREAMS):
+                if isinstance(s, streammod.OpticalStream):
                     opts = s
                     break
             else: # Could happen if the user has deleted all the optical streams
@@ -493,13 +495,13 @@ class SecomStreamsTab(Tab):
             # focus the view
             self.view_controller.focusViewWithStream(opts)
         else:
-            self._stream_controller.pauseStreams(streammod.OPTICAL_STREAMS)
+            self._stream_controller.pauseStreams(streammod.OpticalStream)
 
     def onEMState(self, state):
         if state == guimod.STATE_ON:
             # TODO: Use the last stream paused
             for s in self.tab_data_model.streams.value:
-                if isinstance(s, streammod.EM_STREAMS):
+                if isinstance(s, streammod.EMStream):
                     sems = s
                     break
             else: # Could happen if the user has deleted all the optical streams
@@ -511,7 +513,7 @@ class SecomStreamsTab(Tab):
             # focus the view
             self.view_controller.focusViewWithStream(sems)
         else:
-            self._stream_controller.pauseStreams(streammod.EM_STREAMS)
+            self._stream_controller.pauseStreams(streammod.EMStream)
 
     def Show(self, show=True):
         assert (show != self.IsShown()) # we assume it's only called when changed
@@ -581,7 +583,7 @@ class SparcAcquisitionTab(Tab):
         vas_settings = []  # VAs that can affect the acquisition time
 
         if main_data.spectrometer:
-            spec_stream = streammod.SpectrumStream(
+            spec_stream = streammod.SpectrumSettingsStream(
                 "Spectrum",
                 main_data.spectrometer,
                 main_data.spectrometer.data,
@@ -602,7 +604,7 @@ class SparcAcquisitionTab(Tab):
             self._scount_stream.windowPeriod.value = 30  # s
 
         if main_data.ccd:
-            ar_stream = streammod.ARStream(
+            ar_stream = streammod.ARSettingsStream(
                 "Angular",
                 main_data.ccd,
                 main_data.ccd.data,
@@ -633,9 +635,10 @@ class SparcAcquisitionTab(Tab):
         self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
-            [self.main_frame.vp_sparc_acq_view],
-            self.tb
+            [self.main_frame.vp_sparc_acq_view]
         )
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
+
         # Add the SEM stream to the focussed (only) view
         self.tab_data_model.streams.value.append(sem_stream)
         mic_view = self.tab_data_model.focussedView.value
@@ -695,24 +698,24 @@ class SparcAcquisitionTab(Tab):
         self.spec_rep = self._settings_controller.spectro_rep_ent
         if self.spec_rep:
             self.spec_rep.va.subscribe(self.on_rep_change)
-            self.spec_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-            self.spec_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-            self.spec_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-            self.spec_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+            self.spec_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
         self.spec_pxs = self._settings_controller.spec_pxs_ent
         if self.spec_pxs:
             self.spec_pxs.va.subscribe(self.on_rep_change)
-            self.spec_pxs.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-            self.spec_pxs.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-            self.spec_pxs.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
-            self.spec_pxs.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_spec_rep_enter)
+            self.spec_pxs.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_spec_rep_leave)
         self.angu_rep = self._settings_controller.angular_rep_ent
         if self.angu_rep:
             self.angu_rep.va.subscribe(self.on_rep_change)
-            self.angu_rep.ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
-            self.angu_rep.ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
-            self.angu_rep.ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
-            self.angu_rep.ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_SET_FOCUS, self.on_rep_focus)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_KILL_FOCUS, self.on_rep_focus)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_ENTER_WINDOW, self.on_ar_rep_enter)
+            self.angu_rep.value_ctrl.Bind(wx.EVT_LEAVE_WINDOW, self.on_ar_rep_leave)
         # AR settings don't have pixel size
 
         # Connect the spectrograph count stream to the graph
@@ -801,9 +804,9 @@ class SparcAcquisitionTab(Tab):
         if self._hover_stream:
             stream = self._hover_stream
         elif (self.spec_rep and
-                  (self.spec_rep.ctrl.HasFocus() or self.spec_pxs.ctrl.HasFocus())):
+                  (self.spec_rep.value_ctrl.HasFocus() or self.spec_pxs.value_ctrl.HasFocus())):
             stream = self._spec_stream
-        elif self.angu_rep and self.angu_rep.ctrl.HasFocus():
+        elif self.angu_rep and self.angu_rep.value_ctrl.HasFocus():
             stream = self._ar_stream
         else:
             stream = None
@@ -814,7 +817,7 @@ class SparcAcquisitionTab(Tab):
             cvs.show_repetition(None)
         else:
             rep = stream.repetition.value
-            if isinstance(stream, streammod.AR_STREAMS):
+            if isinstance(stream, streammod.ARStream):
                 style = overlay.world.RepetitionSelectOverlay.FILL_POINT
             else:
                 style = overlay.world.RepetitionSelectOverlay.FILL_GRID
@@ -1021,13 +1024,6 @@ class AnalysisTab(Tab):
         super(AnalysisTab, self).__init__(name, button, panel,
                                           main_frame, tab_data)
 
-        # Toolbar
-        self.tb = self.main_frame.ana_toolbar
-        # TODO: Add the buttons when the functionality is there
-        #tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
-        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
-        self.tb.enable_button(tools.TOOL_POINT, False)
-
         viewports = [
             self.main_frame.vp_inspection_tl,
             self.main_frame.vp_inspection_tr,
@@ -1042,9 +1038,16 @@ class AnalysisTab(Tab):
         self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
-            viewports,
-            self.tb
+            viewports
         )
+
+        # Toolbar
+        self.tb = self.main_frame.ana_toolbar
+        # TODO: Add the buttons when the functionality is there
+        # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
+        self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
+        self.tb.enable_button(tools.TOOL_POINT, False)
+        self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # FIXME: Way too hacky approach to get the right viewport shown,
         # so we need to rethink and re-do it. Might involve letting the
@@ -1278,7 +1281,7 @@ class AnalysisTab(Tab):
         # TODO: a better place for this code?
         for strm in self.tab_data_model.streams.value:
             # If a spectrum stream is found...
-            if isinstance(strm, streammod.SPECTRUM_STREAMS):
+            if isinstance(strm, streammod.SpectrumStream):
                 spec_found = True
                 iimg = strm.image.value
                 # ... set the PointOverlay values for each viewport
@@ -1303,7 +1306,7 @@ class AnalysisTab(Tab):
                 self.main_frame.vp_inspection_plot.clear()
                 break
             # If an angle resolve stream is found...
-            elif isinstance(strm, streammod.AR_STREAMS):
+            elif isinstance(strm, streammod.ARStream):
                 ar_found = True
                 # ... set the PointOverlay values for each viewport
                 for viewport in self.view_controller.viewports:
@@ -1363,7 +1366,7 @@ class AnalysisTab(Tab):
 
             # Apply data to the relevant streams
             ar_strms = [s for s in self.tab_data_model.streams.value
-                        if isinstance(s, streammod.AR_STREAMS)]
+                        if isinstance(s, streammod.ARStream)]
 
             # This might raise more exceptions if calibration is not compatible
             # with the data.
@@ -1401,7 +1404,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_spectrum_data(data) # FIXME
 
             spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, streammod.SPECTRUM_STREAMS)]
+                          if isinstance(s, streammod.SpectrumStream)]
 
             for strm in spec_strms:
                 strm.background.value = cdata
@@ -1437,7 +1440,7 @@ class AnalysisTab(Tab):
                 cdata = calibration.get_spectrum_efficiency(data)
 
             spec_strms = [s for s in self.tab_data_model.streams.value
-                          if isinstance(s, streammod.SPECTRUM_STREAMS)]
+                          if isinstance(s, streammod.SpectrumStream)]
 
             for strm in spec_strms:
                 strm.efficiencyCompensation.value = cdata
@@ -1560,7 +1563,7 @@ class LensAlignTab(Tab):
             (main_frame.vp_align_sem,
              {"name": "SEM",
               "stage": main_data.stage,
-              "stream_classes": streammod.EM_STREAMS,
+              "stream_classes": streammod.EMStream,
              },
             )
         ])
@@ -1895,7 +1898,7 @@ class MirrorAlignTab(Tab):
 
         # create the stream to the AR image + goal image
         if main_data.ccd:
-            # Not ARStream as this is for multiple repetitions, and we just care
+            # Not ARSettingsStream as this is for multiple repetitions, and we just care
             # about what's on the CCD
             ccd_stream = streammod.CameraStream(
                 "Angle-resolved sensor",

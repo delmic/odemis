@@ -319,7 +319,7 @@ class RepetitionStream(Stream):
             logging.exception(msg, self.name.value)
             return Stream.estimateAcquisitionTime(self)
 
-class SpectrumStream(RepetitionStream):
+class SpectrumSettingsStream(RepetitionStream):
     """ A Spectrum stream.
 
     Be aware that acquisition can be very long so should not be used for live
@@ -331,7 +331,7 @@ class SpectrumStream(RepetitionStream):
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
 
-class ARStream(RepetitionStream):
+class ARSettingsStream(RepetitionStream):
     """
     An angular-resolved stream, for a set of points (on the SEM).
     Be aware that acquisition can be very long so

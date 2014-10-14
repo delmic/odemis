@@ -26,6 +26,7 @@ import wx
 
 import odemis.gui as gui
 from odemis.gui.comp.combo import ComboBox
+from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider
@@ -286,14 +287,14 @@ class SettingsPanel(wx.Panel):
 
         # TODO: move this to ComboBox?
         def _eat_event(evt):
-            """ Quick and dirty empty function used to 'eat'
-            mouse wheel events
-            """
+            """ Quick and dirty empty function used to 'eat' mouse wheel events """
+
             # TODO: This solution only makes sure that the control's value
             # doesn't accidentally get altered when it gets hit by a mouse
             # wheel event. However, it also stop the event from propagating
             # so the containing scrolled window will not scroll either.
             # (If the event is skipped, the control will change value again)
+            # No easy fix found in wxPython 3.0.
             pass
 
         value_ctrl.Bind(wx.EVT_MOUSEWHEEL, _eat_event)
@@ -304,34 +305,24 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_file_button(self, label_text, label_tl=None, clearlabel=None):
+    def add_file_button(self, label_text, value=None, clearlabel=None):
 
         # Create label
         lbl_ctrl = self._add_side_label(label_text)
 
-        # if label_tl:
-        #     lbl_ctrl.SetToolTipString(label_tl)
-
-        config = guiconf.get_acqui_conf()
-
-        value_ctrl = FileBrowser(self.panel,
+        value_ctrl = FileBrowser(self,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
                                  clear_label=clearlabel,
-                                 clear_btn=(clearlabel != None),
-                                 default_dir=config.last_path)
-        value_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
-        value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
+                                 clear_btn=clearlabel is not None,
+                                 default_dir=value)
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
-        self.panel._gb_sizer.Add(value_ctrl,
-                           (self.panel.num_rows, 1),
+        self._gb_sizer.Add(value_ctrl,
+                           (self.num_rows, 1),
                            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                            border=5)
 
-        # Add the corresponding setting entry
-        ne = SettingEntry(name=label_text, label=lbl_ctrl, ctrl=value_ctrl)
-        self.entries.append(ne)
-        self.panel.num_rows += 1
-
-        return ne
+        return lbl_ctrl, value_ctrl
 
 # END Control methods

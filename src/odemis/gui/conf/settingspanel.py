@@ -386,5 +386,25 @@ CONFIG_PER_ROLE = {
             "choices": _resolution_from_range_plus_point,
         },
     },
+},
+"delphi": {
+    # Some settings are continuous values, but it's more convenient to the user
+    # to just pick from a small set (as in the Phenom GUI)
+    "e-beam":
+    {
+        "accelVoltage":
+        {
+            "control_type": odemis.gui.CONTROL_RADIO,
+            "choices": {4700, 5000, 7500, 10000}, # V
+        },
+        "spotSize":
+        {
+            "control_type": odemis.gui.CONTROL_RADIO,
+            "choices": {1, 2, 3, 4, 5}, # some weird unit
+        },
+    },
+
+},
 }
-}
+
+

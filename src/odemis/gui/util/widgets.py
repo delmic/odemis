@@ -77,7 +77,7 @@ class VigilantAttributeConnector(object):
 
     """
 
-    def __init__(self, va, ctrl, va_2_ctrl=None, ctrl_2_va=None, events=None):
+    def __init__(self, va, value_ctrl, va_2_ctrl=None, ctrl_2_va=None, events=None):
         """
         va (VigilantAttribute): the VA to connect with
         ctrl (wx.Window): a wx widget to connect to
@@ -92,13 +92,12 @@ class VigilantAttributeConnector(object):
             the value of the VA
         """
         self.vigilattr = va
-        self.ctrl = ctrl
+        self.value_ctrl = value_ctrl
 
         # Dead_object_wrapper might need/benefit from recognizing bound methods.
         # Or it can be tough to recognize wxPyDeadObjects being passed as 'self'
-        self.va_2_ctrl = call_after_wrapper(
-                            dead_object_wrapper(va_2_ctrl or ctrl.SetValue))
-        self.ctrl_2_va = ctrl_2_va or ctrl.GetValue
+        self.va_2_ctrl = call_after_wrapper(dead_object_wrapper(va_2_ctrl or value_ctrl.SetValue))
+        self.ctrl_2_va = ctrl_2_va or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
         elif not isinstance(events, collections.Iterable):
@@ -134,14 +133,13 @@ class VigilantAttributeConnector(object):
         logging.debug("Connecting VigilantAttributeConnector")
         self.vigilattr.subscribe(self.va_2_ctrl, init)
         for event in self.change_events:
-            self.ctrl.Bind(event, self._on_value_change)
+            self.value_ctrl.Bind(event, self._on_value_change)
 
     def disconnect(self):
         logging.debug("Disconnecting VigilantAttributeConnector")
         for event in self.change_events:
-            self.ctrl.Unbind(event, handler=self._on_value_change)
+            self.value_ctrl.Unbind(event, handler=self._on_value_change)
         self.vigilattr.unsubscribe(self.va_2_ctrl)
-
 
 
 class AxisConnector(object):
@@ -149,7 +147,7 @@ class AxisConnector(object):
     making sure that the changes in one are automatically reflected in the
     other.
     """
-    def __init__(self, axis, comp, ctrl, pos_2_ctrl=None, ctrl_2_pos=None, events=None):
+    def __init__(self, axis, comp, value_ctrl, pos_2_ctrl=None, ctrl_2_pos=None, events=None):
         """
         axis (string): the name of the axis to connect with
         comp (Actuator): the component that contains the axis
@@ -166,9 +164,9 @@ class AxisConnector(object):
         """
         self.axis = axis
         self.comp = comp
-        self.ctrl = ctrl
-        self.pos_2_ctrl = pos_2_ctrl or ctrl.SetValue
-        self.ctrl_2_pos = ctrl_2_pos or ctrl.GetValue
+        self.value_ctrl = value_ctrl
+        self.pos_2_ctrl = pos_2_ctrl or value_ctrl.SetValue
+        self.ctrl_2_pos = ctrl_2_pos or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
         elif not isinstance(events, collections.Iterable):
@@ -199,7 +197,7 @@ class AxisConnector(object):
         if not future.done():
             # disable the control until the move is finished => gives user
             # feedback and avoids accumulating moves
-            self.ctrl.Disable()
+            self.value_ctrl.Disable()
             future.add_done_callback(self._on_move_done)
 
     @call_after
@@ -209,7 +207,7 @@ class AxisConnector(object):
         """
         # _on_pos_change() is almost always called as well, but not if the move
         # was so small that the position didn't change. So need to be separate.
-        self.ctrl.Enable()
+        self.value_ctrl.Enable()
         logging.debug("Axis %s finished moving", self.axis)
 
     @call_after
@@ -233,12 +231,12 @@ class AxisConnector(object):
         logging.debug("Connecting AxisConnector")
         self.comp.position.subscribe(self._on_pos_change, init)
         for event in self.change_events:
-            self.ctrl.Bind(event, self._on_value_change)
+            self.value_ctrl.Bind(event, self._on_value_change)
 
     def disconnect(self):
         logging.debug("Disconnecting AxisConnector")
         for event in self.change_events:
-            self.ctrl.Unbind(event, self._on_value_change)
+            self.value_ctrl.Unbind(event, self._on_value_change)
         self.comp.position.unsubscribe(self._on_pos_change)
 
 

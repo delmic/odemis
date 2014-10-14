@@ -58,7 +58,7 @@ def resize_bmp(btn_size, bmp):
     return bmp
 
 
-def darken_image(image):
+def darken_image(image, mltp=0.5):
     """  Darken the given image
 
     The image is darkened (in place) to a grayed-out version, appropriate for a 'disabled'
@@ -75,7 +75,7 @@ def darken_image(image):
 
     for i in range(0, len(data), 3):
         pixel = (data[i], data[i + 1], data[i + 2])
-        pixel = tuple([int(p * 0.5) for p in pixel])
+        pixel = tuple([int(p * mltp) for p in pixel])
         for x in range(3):
             data[i + x] = pixel[x]
 

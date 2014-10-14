@@ -1283,7 +1283,7 @@ class StreamPanel(wx.Panel):
             self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
                                         self._dye_ewl, value)
 
-    # ===== Wavelength bandwidth for SpectrumStream
+    # ===== Wavelength bandwidth for SpectrumSettingsStream
 
     def _has_wl(self, stream):
         """
@@ -1499,8 +1499,8 @@ class StreamBar(wx.Panel):
         acq.stream.CameraNoLightStream,
         acq.stream.StaticStream,
         acq.stream.FluoStream,
-        acq.stream.SpectrumStream,
-        acq.stream.ARStream,
+        acq.stream.SpectrumSettingsStream,
+        acq.stream.ARSettingsStream,
     ]
 
     def __init__(self, *args, **kwargs):
