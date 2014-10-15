@@ -1518,6 +1518,8 @@ class ChamberPressure(model.Actuator):
                 elif p["pressure"] == PRESSURE_NAVCAM:
                     if self._pressure_device.GetInstrumentMode() != "INSTRUMENT-MODE-OPERATIONAL":
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
+                        # If in standby or currently waking up, open event channel
+                        self._wakeUp()
                     self._updateSampleHolder()  # in case new sample holder was loaded
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     # Wait for NavCam
