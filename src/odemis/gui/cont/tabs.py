@@ -1047,6 +1047,8 @@ class AnalysisTab(Tab):
         # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         self.tb.enable_button(tools.TOOL_POINT, False)
+        self.tb.add_tool(tools.TOOL_LINE, self.tab_data_model.tool)
+        self.tb.enable_button(tools.TOOL_LINE, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # FIXME: Way too hacky approach to get the right viewport shown,
@@ -1123,7 +1125,7 @@ class AnalysisTab(Tab):
         formats_to_ext = dataio.get_available_formats(os.O_RDONLY)
 
         fi = self.tab_data_model.acq_fileinfo.value
-        #pylint: disable=E1103
+
         if fi and fi.file_name:
             path, _ = os.path.split(fi.file_name)
         else:

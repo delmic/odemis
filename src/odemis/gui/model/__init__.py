@@ -343,6 +343,7 @@ class LiveViewGUIData(MicroscopyGUIData):
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
 
+
 class ScannedAcquisitionGUIData(MicroscopyGUIData):
     """ Represent an interface used to select a precise area to scan and
     acquire signal. It allows fine control of the shape and density of the scan.
@@ -353,13 +354,16 @@ class ScannedAcquisitionGUIData(MicroscopyGUIData):
         MicroscopyGUIData.__init__(self, main)
 
         # more tools: for selecting the sub-region of acquisition
-        tools = set([TOOL_NONE,
-                     TOOL_ZOOM,
-                     TOOL_ROI,
-                     TOOL_ROA,
-                     TOOL_RO_ANCHOR,
-                     TOOL_POINT,
-                     TOOL_LINE])
+
+        tools = {
+            TOOL_NONE,
+            TOOL_ZOOM,
+            TOOL_ROI,
+            TOOL_ROA,
+            TOOL_RO_ANCHOR,
+            TOOL_POINT,
+            TOOL_LINE
+        }
 
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
@@ -473,11 +477,11 @@ class ActuatorGUIData(MicroscopyGUIData):
         self.axes = frozenset(self._axis_to_act_ss.keys())
 
         # Tools are for lens alignment (mirror alignment actually needs none)
-        tools = set([TOOL_NONE, TOOL_DICHO, TOOL_SPOT])
+        tools = {TOOL_NONE, TOOL_DICHO, TOOL_SPOT}
         self.tool = IntEnumerated(TOOL_NONE, choices=tools)
 
         # For dichotomic mode
-        self.dicho_seq = model.ListVA() # list of 4 enumerated for each corner
+        self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
 
     def step(self, actuator, axis, factor, sync=False):
         """
