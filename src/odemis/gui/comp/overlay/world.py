@@ -531,6 +531,40 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.line_to(*b_end)
             ctx.stroke()
 
+            # draws start marker
+            ctx.set_dash([])
+
+            ctx.set_source_rgba(0, 0, 0, 1.0)
+            ctx.arc(b_start[0], b_start[1], 5, 0, 2*math.pi)
+            ctx.fill()
+
+            ctx.set_line_width(1.5)
+            ctx.set_source_rgba(*self.colour)
+            ctx.arc(b_start[0], b_start[1], 3, 0, 2*math.pi)
+            ctx.stroke()
+
+            # Draw arrow head
+            ctx.move_to(*b_end)
+
+            dx, dy = b_start[0] - b_end[0], b_start[1] - b_end[1]
+            norm = math.sqrt(dx*dx + dy*dy) or 0.000001
+            udx, udy = dx / norm, dy / norm
+
+            # Rotate over 60 degrees
+            ax = udx * math.sqrt(3)/2 - udy * 1/2
+            ay = udx * 1/2 + udy * math.sqrt(3)/2
+            bx = udx * math.sqrt(3)/2 + udy * 1/2
+            by = -udx * 1/2 + udy * math.sqrt(3)/2
+
+            arrow_size = 10
+
+            v1 = (b_end[0] + arrow_size * ax, b_end[1] + arrow_size * ay)
+            v2 = (b_end[0] + arrow_size * bx, b_end[1] + arrow_size * by)
+
+            ctx.line_to(*v1)
+            ctx.line_to(*v2)
+            ctx.fill()
+
             ctx.restore()
 
 

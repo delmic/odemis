@@ -23926,10 +23926,10 @@ getbtn_view_dichoBitmap = btn_view_dicho.GetBitmap
 
 #----------------------------------------------------------------------
 btn_view_1dpick_a = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAjElEQVRIx81Wyw6AIAzbmTsf"
-    "pTf9fuBXcCOSEKJGtE0gabi13QM2ET0xxl0RFBmEZJxykm9A4h6LgJ33CEIkL/gtoFnOzrly"
-    "G+ACBrpAJacItKS0CChFvnJL6SK4wFvn80Uw6nyeCL46fxS4e5UQgUruvYeIyOjfAqsBLUWM"
-    "LqKPTObQX6VZWxJjbTkAF7G6KpJMAwQAAAAASUVORK5CYII=")
+    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAjElEQVRIx9WWTQqAIBCFZ+3W"
+    "U9Wujub51KvYzGAgEmE1D0z4mN37KWEk4pNS2pnIFCOyaFIV3wyFexYyTt4TCSiufDbgr1yc"
+    "czoFcwMBbnCKQwxaUVgDyE++Sgu5ReYGo8nna/A0+TwN3ia/NQghFO+9TkgDEW/n/xpMtQ9G"
+    "DOArE7n0V2qeLRnxbDkAlwLG1Q9xBrUAAAAASUVORK5CYII=")
 index.append('btn_view_1dpick_a')
 catalog['btn_view_1dpick_a'] = btn_view_1dpick_a
 getbtn_view_1dpick_aData = btn_view_1dpick_a.GetData
@@ -24109,10 +24109,10 @@ getbtn_view_zoomBitmap = btn_view_zoom.GetBitmap
 
 #----------------------------------------------------------------------
 btn_view_1dpick = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAfElEQVRIx2NggIAgIL4DxP+p"
+    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAgUlEQVRIx2NggIAgIL4DxP+p"
     "hO9BzQSDQCoajI49GajscnQMMptmhsMwZQagA6pbgG4J1S1gYWGhrQXIhtIsiGgSyThcOwR8"
-    "QILLB5kPyHD5IPEBBS7HbQGeXEm5BUQUXtTzAc0soFLY0y8V0bzKpGWl78WA1Gy5R4tmCwA/"
-    "NoEU6r9kdwAAAABJRU5ErkJggg==")
+    "QILLB5kPyHD5IPEBBS7HbUFYWNj/Fy9egGma+ABkODI99HwwqOoDYiygeZVJy0rfiwGp2XKP"
+    "Fs0WAEsychpdh1GoAAAAAElFTkSuQmCC")
 index.append('btn_view_1dpick')
 catalog['btn_view_1dpick'] = btn_view_1dpick
 getbtn_view_1dpickData = btn_view_1dpick.GetData
@@ -24244,10 +24244,10 @@ getside_menu_rightBitmap = side_menu_right.GetBitmap
 
 #----------------------------------------------------------------------
 btn_view_1dpick_h = PyEmbeddedImage(
-    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAgklEQVRIx82Wyw2AMAxDvVOk"
-    "7gA3mL/qKhAQhyrij40ayVc/p00/gJeZja7smkgqiyc284FoHNWBnDwqQ2i+6jMgFh0QIXRA"
-    "SkkLqE1lSyTZ5L20kimiA+4mb6+Dp8nb6eBt8lPA0amkAK4uL2oHMgBj7X+dIvmTqXz0e1Tf"
-    "lqL4tsygk8dyr/AnCgAAAABJRU5ErkJggg==")
+    "iVBORw0KGgoAAAANSUhEUgAAABgAAAAYCAYAAADgdz34AAAAiElEQVRIx2NgAAJjY+MgIL4D"
+    "xP+phO+BzGSAGh5IRYPRsScDlV2Oju8w0NBwMKbYAnRAdQvQLaG6BWZmZrS1ANlQmgURTSIZ"
+    "m2tpkoqobgGxLh98PiDV5YPHB+S6HK8F5eXl/9+8eQOmaeIDkOHI9NDzwaCqD4ixgOZVJi0r"
+    "fS8GpGbLPVo0WwB/T7tm+hhvHAAAAABJRU5ErkJggg==")
 index.append('btn_view_1dpick_h')
 catalog['btn_view_1dpick_h'] = btn_view_1dpick_h
 getbtn_view_1dpick_hData = btn_view_1dpick_h.GetData
