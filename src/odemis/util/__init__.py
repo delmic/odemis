@@ -134,21 +134,23 @@ def intersect(ra, rb):
 
     return ix, iy, iw, ih
 
+
 def normalize_rect(rect):
-    """
-    Ensure that a rectangle has a the left less than right, and top less than
-    bottom.
-    rect (iterable of 4 floats): left, top, right, bottom
+    """ Ensure that the given rectangle actually is defined by top, left, bottom, right
+
+    rect (iterable of 4 floats): x1, y1, x2, y2
     return (iterable of 4 floats): left, top, right, bottom
+
     """
+
     l, t, r, b = rect
     if l > r:
         l, r = r, l
     if t > b:
         t, b = b, t
 
-    nrect = type(rect)((l, t, r, b))
-    return nrect
+    # Re-create the result using the same type as the `rect` parameter
+    return type(rect)((l, t, r, b))
 
 
 class TimeoutError(Exception):

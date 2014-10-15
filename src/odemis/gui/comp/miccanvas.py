@@ -117,6 +117,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.pixel_overlay = None
         self.points_overlay = None
+        self.line_overlay = None
         self.dicho_overlay = None
 
         # play/pause icon
@@ -182,6 +183,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if guimodel.TOOL_POINT in tab_data.tool.choices:
                 self.points_overlay = world_overlay.PointsOverlay(self)
                 self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
+            if guimodel.TOOL_LINE in tab_data.tool.choices:
+                self.line_overlay = world_overlay.LineSelectOverlay(self)
             tab_data.tool.subscribe(self._on_tool, init=True)
 
     def _on_tool(self, tool_mode):

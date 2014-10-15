@@ -110,7 +110,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
             offset = [v // 2 for v in self.cnvs.buffer_size]
             w_pos = (self.cnvs.view_to_world(self.v_start_pos, offset) +
                      self.cnvs.view_to_world(self.v_end_pos, offset))
-            w_pos = list(util.normalize_rect(w_pos))
+            w_pos = list(self._normalize(w_pos))
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
 
@@ -122,7 +122,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         offset = [v // 2 for v in self.cnvs.buffer_size]
         v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
                  self.cnvs.world_to_view(self.w_end_pos, offset))
-        v_pos = list(util.normalize_rect(v_pos))
+        v_pos = list(self._normalize(v_pos))
         self.v_start_pos = v_pos[:2]
         self.v_end_pos = v_pos[2:4]
         self._calc_edges()
@@ -137,7 +137,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         if self.w_start_pos and self.w_end_pos:
             p_pos = (self.cnvs.world_to_physical_pos(self.w_start_pos) +
                      self.cnvs.world_to_physical_pos(self.w_end_pos))
-            return util.normalize_rect(p_pos)
+            return self._normalize(p_pos)
         else:
             return None
 
@@ -153,7 +153,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         else:
             w_pos = (self.cnvs.physical_to_world_pos(rect[:2]) +
                      self.cnvs.physical_to_world_pos(rect[2:4]))
-            w_pos = util.normalize_rect(w_pos)
+            w_pos = self._normalize(w_pos)
             self.w_start_pos = w_pos[:2]
             self.w_end_pos = w_pos[2:4]
             self._calc_view_pos()
@@ -162,10 +162,9 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.w_start_pos and self.w_end_pos:
             ctx.save()
-            offset = [v // 2 for v in self.cnvs.buffer_size]
-            b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
-                     self.cnvs.world_to_buffer(self.w_end_pos, offset))
-            b_pos = util.normalize_rect(b_pos)
+            b_pos = (self.cnvs.view_to_buffer(self.v_start_pos) +
+                     self.cnvs.view_to_buffer(self.v_end_pos))
+            b_pos = self._normalize(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
             #logging.warn("%s %s", shift, world_to_buffer_pos(shift))
@@ -320,7 +319,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # values may extend beyond the actual buffer when zoomed in.
         b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                  self.cnvs.world_to_buffer(self.w_end_pos, offset))
-        b_pos = util.normalize_rect(b_pos)
+        b_pos = self._normalize(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
@@ -415,7 +414,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
         # values may extend beyond the actual buffer when zoomed in.
         b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
                  self.cnvs.world_to_buffer(self.w_end_pos, offset))
-        b_pos = util.normalize_rect(b_pos)
+        b_pos = self._normalize(b_pos)
         # logging.debug("start and end buffer pos: %s", b_pos)
 
         # Calculate the width and height in buffer pixels. Again, this may
@@ -486,6 +485,53 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
         super(RepetitionSelectOverlay, self).Draw(ctx, shift, scale)
         self.selection_mode = mode_cache
+
+
+class LineSelectOverlay(WorldSelectOverlay):
+    """ Selection overlay that allows for the selection of a line """
+
+    def __init__(self, cnvs):
+        super(LineSelectOverlay, self).__init__(cnvs)
+
+    def _calc_world_pos(self):
+        """ Update the world position to reflect the view position """
+        if self.v_start_pos and self.v_end_pos:
+            offset = self.cnvs.get_half_buffer_size()
+            self.w_start_pos = self.cnvs.view_to_world(self.v_start_pos, offset)
+            self.w_end_pos = self.cnvs.view_to_world(self.v_end_pos, offset)
+
+    @staticmethod
+    def _normalize(rect):
+        """ Lines don't need to be """
+        return rect
+
+    def Draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        if self.w_start_pos and self.w_end_pos:
+            ctx.save()
+
+            b_pos = self.cnvs.view_to_buffer(self.v_start_pos)
+            b_start = (b_pos[0] + 0.5, b_pos[1] + 0.5)
+            b_pos = self.cnvs.view_to_buffer(self.v_end_pos)
+            b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
+
+            # draws a light black background for the rectangle
+            ctx.set_line_width(4)
+            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.move_to(*b_start)
+            ctx.line_to(*b_end)
+            ctx.stroke()
+
+            # draws the dotted line
+            ctx.set_line_width(2)
+            ctx.set_dash([3])
+            ctx.set_line_join(cairo.LINE_JOIN_MITER)
+            ctx.set_source_rgba(*self.colour)
+            ctx.move_to(*b_start)
+            ctx.line_to(*b_end)
+            ctx.stroke()
+
+            ctx.restore()
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
@@ -716,9 +762,7 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
 
 
 class PointsOverlay(WorldOverlay):
-    """ Overlay showing the available points and allowing the selection of one
-    of them.
-    """
+    """ Overlay showing the available points and allowing the selection of one of them """
 
     MAX_DOT_RADIUS = 25.5
     MIN_DOT_RADIUS = 3.5

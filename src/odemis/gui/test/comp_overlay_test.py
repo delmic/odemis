@@ -23,6 +23,7 @@
 """
 
 import math
+from odemis.gui.cont.tools import TOOL_LINE
 from odemis.gui.model import TOOL_POINT
 
 from odemis.util.conversion import hex_to_frgb
@@ -402,9 +403,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         test.gui_loop()
 
-
-
-# END View overlay test cases
+    # END View overlay test cases
 
     # World overlay test cases
 
@@ -483,7 +482,7 @@ class OverlayTestCase(test.GuiTestCase):
         view = tab_mod.focussedView.value
 
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        # FIXME: when setView is called *before* the add_control, the picture goes blakc and no
+        # FIXME: when setView is called *before* the add_control, the picture goes black and no
         # pixels are visible
         cnvs.setView(view, tab_mod)
         cnvs.current_mode = TOOL_POINT
@@ -510,6 +509,37 @@ class OverlayTestCase(test.GuiTestCase):
                 psol.deactivate()
             else:
                 psol.activate()
+            evt.Skip()
+
+        cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
+
+    def test_line_select_overlay(self):
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
+
+        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.setView(view, tab_mod)
+        cnvs.current_mode = TOOL_LINE
+
+        lsol = wol.LineSelectOverlay(cnvs)
+        lsol.activate()
+        lsol.enabled = True
+
+        cnvs.add_world_overlay(lsol)
+
+        # Tool toggle for debugging
+
+        tol = vol.TextViewOverlay(cnvs)
+        tol.add_label("Right click to toggle tool activation", (10, 10))
+        cnvs.add_view_overlay(tol)
+
+        def toggle(evt):
+            if lsol.active:
+                lsol.deactivate()
+            else:
+                lsol.activate()
             evt.Skip()
 
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
