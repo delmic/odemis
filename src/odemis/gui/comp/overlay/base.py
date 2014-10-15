@@ -434,6 +434,16 @@ class SelectionMixin(object):
         self.colour = conversion.hex_to_frgba(colour)
         self.center = center
 
+    @staticmethod
+    def _normalize(rect):
+        """ Normalize the given recatangle by making sure top/left etc. is actually top left
+
+        This method might be overridden.
+
+        """
+
+        return util.normalize_rect(rect)
+
     ##### selection methods  #####
 
     def start_selection(self, start_pos):
@@ -465,7 +475,7 @@ class SelectionMixin(object):
         else:
             # Make sure that the start and end positions are the top left and
             # bottom right respectively.
-            v_pos = util.normalize_rect(self.v_start_pos + self.v_end_pos)
+            v_pos = self._normalize(self.v_start_pos + self.v_end_pos)
             self.v_start_pos = v_pos[:2]
             self.v_end_pos = v_pos[2:4]
 
@@ -496,9 +506,7 @@ class SelectionMixin(object):
         self.selection_mode = SEL_MODE_EDIT
 
     def update_edit(self, current_pos):
-        """ Adjust the selection according to the given position and the current
-        edit action
-        """
+        """ Adjust the selection according to the given position and the current edit action """
         current_pos = self.cnvs.clip_to_viewport(current_pos)
 
         if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
@@ -562,7 +570,7 @@ class SelectionMixin(object):
         """ Calculate the inner and outer edges of the selection according to
         the hover margin
         """
-        rect = util.normalize_rect(self.v_start_pos + self.v_end_pos)
+        rect = self._normalize(self.v_start_pos + self.v_end_pos)
         i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
         o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
 

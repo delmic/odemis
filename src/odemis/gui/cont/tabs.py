@@ -1048,7 +1048,7 @@ class AnalysisTab(Tab):
         self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         self.tb.enable_button(tools.TOOL_POINT, False)
         self.tb.add_tool(tools.TOOL_LINE, self.tab_data_model.tool)
-        self.tb.enable_button(tools.TOOL_LINE, False)
+        # self.tb.enable_button(tools.TOOL_LINE, True)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # FIXME: Way too hacky approach to get the right viewport shown,
