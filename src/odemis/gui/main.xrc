@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -614,9 +614,9 @@
                             <size>110,48</size>
                             <label>CHAMBER</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_press.png</bitmap>
-                            <hover>img/btn_press_h.png</hover>
-                            <selected>img/btn_press_orange_a.png</selected>
+                            <bitmap>img/button/btn_press.png</bitmap>
+                            <hover>img/button/btn_press_h.png</hover>
+                            <selected>img/button/btn_press_orange_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -642,9 +642,9 @@
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
-                            <bitmap>img/btn_sem.png</bitmap>
-                            <hover>img/btn_sem_h.png</hover>
-                            <selected>img/btn_sem_green_a.png</selected>
+                            <bitmap>img/button/btn_sem.png</bitmap>
+                            <hover>img/button/btn_sem_h.png</hover>
+                            <selected>img/button/btn_sem_green_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -667,9 +667,9 @@
                             <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_opt.png</bitmap>
-                            <hover>img/btn_opt_h.png</hover>
-                            <selected>img/btn_opt_green_a.png</selected>
+                            <bitmap>img/button/btn_opt.png</bitmap>
+                            <hover>img/button/btn_opt_h.png</hover>
+                            <selected>img/button/btn_opt_green_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -767,10 +767,10 @@
                             <size>382,-1</size>
                             <label>ACQUIRE IMAGE</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_acquire_image.png</bitmap>
-                            <hover>img/btn_acquire_image_h.png</hover>
-                            <selected>img/btn_acquire_image_a.png</selected>
-                            <disabled>img/btn_acquire_image_d.png</disabled>
+                            <bitmap>img/button/btn_acquire_image.png</bitmap>
+                            <hover>img/button/btn_acquire_image_h.png</hover>
+                            <selected>img/button/btn_acquire_image_a.png</selected>
+                            <disabled>img/button/btn_acquire_image_d.png</disabled>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>14</size>
@@ -911,9 +911,9 @@
                         <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
                           <label>↖</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -935,9 +935,9 @@
                         <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
                           <label>↗</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -959,9 +959,9 @@
                         <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
                           <label>↙</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -983,9 +983,9 @@
                         <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
                           <label>↘</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1026,9 +1026,9 @@
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="lens_align_btn_to_center">
                                 <label>Move to center</label>
-                                <bitmap>img/btn_128x24.png</bitmap>
-                                <hover>img/btn_128x24_h.png</hover>
-                                <selected>img/btn_128x24_a.png</selected>
+                                <bitmap>img/button/btn_128x24.png</bitmap>
+                                <hover>img/button/btn_128x24_h.png</hover>
+                                <selected>img/button/btn_128x24_a.png</selected>
                                 <tooltip>Move the axes based on the dichotomy search result.</tooltip>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
@@ -1057,9 +1057,9 @@
                                   <object class="ImageTextButton" name="btn_auto_center">
                                     <label>Auto centering...</label>
                                     <delta>1</delta>
-                                    <bitmap>img/btn_128x24.png</bitmap>
-                                    <hover>img/btn_128x24_h.png</hover>
-                                    <selected>img/btn_128x24_a.png</selected>
+                                    <bitmap>img/button/btn_128x24.png</bitmap>
+                                    <hover>img/button/btn_128x24_h.png</hover>
+                                    <selected>img/button/btn_128x24_a.png</selected>
                                     <tooltip>Automatically adjust image setting and mechanically center the optical lens on the spot.</tooltip>
                                     <style>wxALIGN_CENTRE</style>
                                     <XRCED>
@@ -1107,9 +1107,9 @@
                                   <object class="ImageTextButton" name="btn_fine_align">
                                     <label>Fine alignment...</label>
                                     <delta>1</delta>
-                                    <bitmap>img/btn_128x24.png</bitmap>
-                                    <hover>img/btn_128x24_h.png</hover>
-                                    <selected>img/btn_128x24_a.png</selected>
+                                    <bitmap>img/button/btn_128x24.png</bitmap>
+                                    <hover>img/button/btn_128x24_h.png</hover>
+                                    <selected>img/button/btn_128x24_a.png</selected>
                                     <tooltip>Measure and apply software adjustment for the alignment using a spot grid.</tooltip>
                                     <style>wxALIGN_CENTRE</style>
                                     <XRCED>
@@ -1214,9 +1214,9 @@
                             <size>92,48</size>
                             <label>SEM      </label>
                             <delta>1</delta>
-                            <bitmap>img/btn_sem.png</bitmap>
-                            <hover>img/btn_sem_h.png</hover>
-                            <selected>img/btn_sem_orange_a.png</selected>
+                            <bitmap>img/button/btn_sem.png</bitmap>
+                            <hover>img/button/btn_sem_h.png</hover>
+                            <selected>img/button/btn_sem_orange_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -1239,9 +1239,9 @@
                             <size>92,48</size>
                             <label>OPTICAL</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_opt.png</bitmap>
-                            <hover>img/btn_opt_h.png</hover>
-                            <selected>img/btn_opt_orange_a.png</selected>
+                            <bitmap>img/button/btn_opt.png</bitmap>
+                            <hover>img/button/btn_opt_h.png</hover>
+                            <selected>img/button/btn_opt_orange_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -1552,9 +1552,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
                           <label>↑</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1576,9 +1576,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
                           <label>↓</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1600,9 +1600,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
                           <label>←</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1622,9 +1622,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
                           <label>→</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1759,9 +1759,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
                           <label>↑</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1783,9 +1783,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
                           <label>↓</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1807,9 +1807,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
                           <label>←</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -1829,9 +1829,9 @@
                         <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
                           <label>→</label>
                           <delta>1</delta>
-                          <bitmap>img/btn_64x48.png</bitmap>
-                          <hover>img/btn_64x48_h.png</hover>
-                          <selected>img/btn_64x48_a.png</selected>
+                          <bitmap>img/button/btn_64x48.png</bitmap>
+                          <hover>img/button/btn_64x48_h.png</hover>
+                          <selected>img/button/btn_64x48_a.png</selected>
                           <font>
                             <size>24</size>
                             <style>normal</style>
@@ -2009,9 +2009,9 @@
                           <object class="ImageTextToggleButton" name="acq_btn_spectrometer">
                             <label>SPECTROMETER</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_spec.png</bitmap>
-                            <hover>img/btn_spec_h.png</hover>
-                            <selected>img/btn_spec_green_a.png</selected>
+                            <bitmap>img/button/btn_spec.png</bitmap>
+                            <hover>img/button/btn_spec_h.png</hover>
+                            <selected>img/button/btn_spec_green_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -2033,9 +2033,9 @@
                           <object class="ImageTextToggleButton" name="acq_btn_angular">
                             <label>      ANGULAR</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_ang.png</bitmap>
-                            <hover>img/btn_ang_h.png</hover>
-                            <selected>img/btn_ang_green_a.png</selected>
+                            <bitmap>img/button/btn_ang.png</bitmap>
+                            <hover>img/button/btn_ang_h.png</hover>
+                            <selected>img/button/btn_ang_green_a.png</selected>
                             <fg>#1A1A1A</fg>
                             <font>
                               <size>11</size>
@@ -2166,9 +2166,9 @@
                                           <size>64,18</size>
                                           <label>change…</label>
                                           <delta>1</delta>
-                                          <bitmap>img/btn_64x16.png</bitmap>
-                                          <hover>img/btn_64x16_h.png</hover>
-                                          <selected>img/btn_64x16_a.png</selected>
+                                          <bitmap>img/button/btn_64x16.png</bitmap>
+                                          <hover>img/button/btn_64x16_h.png</hover>
+                                          <selected>img/button/btn_64x16_a.png</selected>
                                           <fg>#111111</fg>
                                           <font>
                                             <size>9</size>
@@ -2258,9 +2258,9 @@
                                     <object class="ImageTextButton" name="btn_sparc_cancel">
                                       <label>Cancel</label>
                                       <delta>1</delta>
-                                      <bitmap>img/btn_128x24.png</bitmap>
-                                      <hover>img/btn_128x24_h.png</hover>
-                                      <selected>img/btn_128x24_a.png</selected>
+                                      <bitmap>img/button/btn_128x24.png</bitmap>
+                                      <hover>img/button/btn_128x24_h.png</hover>
+                                      <selected>img/button/btn_128x24_a.png</selected>
                                       <fg>#1A1A1A</fg>
                                       <font>
                                         <size>14</size>
@@ -2293,10 +2293,10 @@
                           <object class="ImageTextButton" name="btn_sparc_acquire">
                             <label>START</label>
                             <delta>1</delta>
-                            <bitmap>img/btn_acquire_image.png</bitmap>
-                            <hover>img/btn_acquire_image_h.png</hover>
-                            <selected>img/btn_acquire_image_a.png</selected>
-                            <disabled>img/btn_acquire_image_d.png</disabled>
+                            <bitmap>img/button/btn_acquire_image.png</bitmap>
+                            <hover>img/button/btn_acquire_image_h.png</hover>
+                            <selected>img/button/btn_acquire_image_a.png</selected>
+                            <disabled>img/button/btn_acquire_image_d.png</disabled>
                             <fg>#E5E5E5</fg>
                             <font>
                               <size>15</size>
@@ -2346,9 +2346,9 @@
                       <size>180,24</size>
                       <label>Select image...</label>
                       <delta>1</delta>
-                      <bitmap>img/btn_256x24.png</bitmap>
-                      <hover>img/btn_256x24_h.png</hover>
-                      <selected>img/btn_256x24_a.png</selected>
+                      <bitmap>img/button/btn_256x24.png</bitmap>
+                      <hover>img/button/btn_256x24_h.png</hover>
+                      <selected>img/button/btn_256x24_a.png</selected>
                       <fg>#000000</fg>
                       <font>
                         <size>11</size>
@@ -2366,23 +2366,7 @@
                     <flag>wxALL|wxEXPAND</flag>
                     <border>10</border>
                   </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel">
-                      <object class="wxBoxSizer">
-                        <orient>wxVERTICAL</orient>
-                        <object class="sizeritem">
-                          <object class="wxStaticBitmap">
-                            <size>200,150</size>
-                            <bitmap>img/test_pattern_s.png</bitmap>
-                          </object>
-                          <flag>wxALL</flag>
-                          <border>10</border>
-                        </object>
-                      </object>
-                      <bg>#1A1A1A</bg>
-                      <hidden>1</hidden>
-                    </object>
-                  </object>
+                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -2859,9 +2843,9 @@
                             <object class="ImageTextButton" name="btn_change_file">
                               <label>change…</label>
                               <delta>1</delta>
-                              <bitmap>img/btn_64x16.png</bitmap>
-                              <hover>img/btn_64x16_h.png</hover>
-                              <selected>img/btn_64x16_a.png</selected>
+                              <bitmap>img/button/btn_64x16.png</bitmap>
+                              <hover>img/button/btn_64x16_h.png</hover>
+                              <selected>img/button/btn_64x16_a.png</selected>
                               <fg>#111111</fg>
                               <tooltip>Change the filename and destination of the next scan</tooltip>
                               <XRCED>
@@ -3034,9 +3018,9 @@
               <object class="ImageTextButton" name="btn_cancel">
                 <label>Cancel</label>
                 <delta>1</delta>
-                <bitmap>img/btn_128x48.png</bitmap>
-                <hover>img/btn_128x48_h.png</hover>
-                <selected>img/btn_128x48_a.png</selected>
+                <bitmap>img/button/btn_128x48.png</bitmap>
+                <hover>img/button/btn_128x48_h.png</hover>
+                <selected>img/button/btn_128x48_a.png</selected>
                 <fg>#1A1A1A</fg>
                 <font>
                   <size>14</size>
@@ -3060,10 +3044,10 @@
                 <size>242,48</size>
                 <label>START</label>
                 <delta>1</delta>
-                <bitmap>img/btn_acq_img_sml.png</bitmap>
-                <hover>img/btn_acq_img_sml_h.png</hover>
-                <selected>img/btn_acq_img_sml_a.png</selected>
-                <disabled>img/btn_acq_img_sml_d.png</disabled>
+                <bitmap>img/button/btn_acq_img_sml.png</bitmap>
+                <hover>img/button/btn_acq_img_sml_h.png</hover>
+                <selected>img/button/btn_acq_img_sml_a.png</selected>
+                <disabled>img/button/btn_acq_img_sml_d.png</disabled>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>15</size>
