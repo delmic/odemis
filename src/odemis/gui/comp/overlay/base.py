@@ -426,13 +426,16 @@ class SelectionMixin(object):
         # Selection modes
         self.selection_mode = SEL_MODE_NONE
 
-        # This attribute can be used to see if the cnvs has shifted or scaled
+        # This attribute can be used to see if the canvas has shifted or scaled
         self._last_shiftscale = None
 
         self.edges = {}
 
         self.colour = conversion.hex_to_frgba(colour)
+        self.hl_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.center = center
+
+        self.hover = gui.HOVER_NONE
 
     @staticmethod
     def _normalize(rect):
@@ -567,9 +570,7 @@ class SelectionMixin(object):
             self._calc_edges()
 
     def _calc_edges(self):
-        """ Calculate the inner and outer edges of the selection according to
-        the hover margin
-        """
+        """ Calculate the inner and outer edges of the selection according to the hover margin """
         rect = self._normalize(self.v_start_pos + self.v_end_pos)
         i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
         o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
@@ -648,7 +649,7 @@ class SelectionMixin(object):
             self.start_selection(v_pos)  # Start dragging
         elif hover != gui.HOVER_SELECTION:  # Clicked on edge
             self.start_edit(v_pos, hover)   # Start edit
-        else:  # Clicked inside selection
+        elif hover == gui.HOVER_SELECTION:  # Clicked inside selection
             self.start_drag(v_pos)  # Start edit
 
     def _on_left_up(self, _):
@@ -675,6 +676,7 @@ class SelectionMixin(object):
             self.cnvs.Refresh()
         else:
             hover = self.is_hovering(v_pos)
+            self.hover = hover
             if hover == gui.HOVER_SELECTION:
                 self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENESW)  # = closed hand
             elif hover in (gui.HOVER_LEFT_EDGE, gui.HOVER_RIGHT_EDGE):

@@ -221,7 +221,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     def on_motion(self, evt):
         """ Process drag motion if enabled, otherwise call super method so event will propagate """
         if self.active:
-            super(WorldSelectOverlay, self)._on_motion(evt)
+            self._on_motion(evt)
             # Fixme: Find a way to render the selection at the full frame rate. Right now it's not
             # possible, because we are drawing directly into the buffer, which might render slowly
             # anyway. What we would want, is that a world overlay that can visually change when the
@@ -538,13 +538,21 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.arc(b_start[0], b_start[1], 5, 0, 2*math.pi)
             ctx.fill()
 
+            if self.hover == gui.HOVER_START:
+                ctx.set_source_rgba(*self.hl_colour)
+            else:
+                ctx.set_source_rgba(*self.colour)
             ctx.set_line_width(1.5)
-            ctx.set_source_rgba(*self.colour)
             ctx.arc(b_start[0], b_start[1], 3, 0, 2*math.pi)
             ctx.stroke()
 
             # Draw arrow head
             ctx.move_to(*b_end)
+
+            if self.hover == gui.HOVER_END:
+                ctx.set_source_rgba(*self.hl_colour)
+            else:
+                ctx.set_source_rgba(*self.colour)
 
             dx, dy = b_start[0] - b_end[0], b_start[1] - b_end[1]
             norm = math.sqrt(dx*dx + dy*dy) or 0.000001
@@ -566,6 +574,59 @@ class LineSelectOverlay(WorldSelectOverlay):
             ctx.fill()
 
             ctx.restore()
+
+    def _calc_edges(self):
+        """ Calculate the hit boxes for the start and end point """
+
+        rect = self.v_start_pos + self.v_end_pos
+        s_l, s_t, e_l, e_t = [v - self.hover_margin for v in rect]
+        s_r, s_b, e_r, e_b = [v + self.hover_margin for v in rect]
+
+        self.edges = {
+            "s_l": s_l,
+            "s_t": s_t,
+            "s_r": s_r,
+            "s_b": s_b,
+            "e_l": e_l,
+            "e_t": e_t,
+            "e_r": e_r,
+            "e_b": e_b
+        }
+
+    def is_hovering(self, vpos):
+        """ Check if the given position is on/near the start or end of the line
+
+        :return: (bool) Return False if not hovering, or the type of hover
+
+        """
+
+        if self.edges:
+            if self.edges["s_l"] < vpos[0] < self.edges["s_r"]:
+                if self.edges["s_t"] < vpos[1] < self.edges["s_b"]:
+                    return gui.HOVER_START
+            elif self.edges["e_l"] < vpos[0] < self.edges["e_r"]:
+                if self.edges["e_t"] < vpos[1] < self.edges["e_b"]:
+                    return gui.HOVER_END
+
+        return False
+
+    def _on_motion(self, evt):
+        super(LineSelectOverlay, self)._on_motion(evt)
+
+        v_pos = evt.GetPositionTuple()
+        hover = self.is_hovering(v_pos)
+
+        if hover in (gui.HOVER_START, gui.HOVER_END):
+            self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+
+    def update_edit(self, current_pos):
+        """ Adjust the selection according to the given position and the current edit action """
+        current_pos = self.cnvs.clip_to_viewport(current_pos)
+
+        if self.edit_edge == gui.HOVER_START:
+            self.v_start_pos = current_pos
+        elif self.edit_edge == gui.HOVER_END:
+            self.v_end_pos = current_pos
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
