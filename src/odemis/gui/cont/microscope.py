@@ -427,10 +427,9 @@ class SecomStateController(MicroscopeStateController):
 
     def _start_chamber_pumping(self):
         if self._overview_pressure is not None:
-            # TODO: check if we already are in overview state ?
-            # _start_overview_acquisition() will take care of going further
+            # _on_overview_position() will take care of going further
             f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-            f.add_done_callback(self._start_overview_acquisition)
+            f.add_done_callback(self._on_overview_position)
         else:
             f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
 
@@ -490,7 +489,11 @@ class SecomStateController(MicroscopeStateController):
             logging.info("Pressure position unknown: %s", currentp)
             #self._main_data.chamberState.value = CHAMBER_UNKNOWN
 
-    def _start_overview_acquisition(self, unused=None):
+    def _on_overview_position(self, unused):
+        logging.debug("Overview position reached")
+        self._start_overview_acquisition()
+
+    def _start_overview_acquisition(self):
         logging.debug("Starting overview acquisition")
 
         # Start autofocus, and the rest will be done asynchronously
@@ -524,11 +527,14 @@ class SecomStateController(MicroscopeStateController):
         Called when the overview image is focused
         """
         # We cannot do much if the focus failed, so always go on...
-        try:
-            future.result()
-            logging.debug("Overview focused")
-        except Exception:
-            logging.info("Auto-focus on overview failed")
+        if future:
+            try:
+                future.result()
+                logging.debug("Overview focused")
+            except Exception:
+                logging.info("Auto-focus on overview failed")
+        else:
+            logging.debug("Acquiring overview image after skipping auto-focus")
 
         # now acquire one image
         try:
@@ -575,31 +581,25 @@ class DelphiStateController(SecomStateController):
 
     def __init__(self, *args, **kwargs):
         super(DelphiStateController, self).__init__(*args, **kwargs)
+        self._calibconf = get_calib_conf()
 
         # If starts with the sample fully loaded, check for the calibration now
         ch_pos = self._main_data.chamber.position
         if ch_pos.value["pressure"] == self._vacuum_pressure:
-            self._check_holder_calib()
+            # If it's loaded, the sample holdre is registered for sure, and the
+            # calibration should have already been done.
+            self._load_holder_calib()
 
     def _start_chamber_pumping(self):
-        # Warning: we cannot call the super function because it sets a different
-        # callback.
-        # TODO: find a way to be able to call super, such as adding _prepare_stage()
-        # to the parent class?
+        # Warning: if the sample holder is not yet registered, the Phenom will
+        # not accept to even load it to the overview. That's why checking for
+        # calibration/registration must be done immediately. Annoyingly, the
+        # type ID of the sample holder is not reported until it's registered.
 
-        # Delphi always has _overview_pressure
-        f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-        # We first set the stage to a good position and load the calibration
-        # before getting the overview
-        f.add_done_callback(self._prepare_stage)
+        if not self._check_holder_calib():
+            return
 
-        # reset the streams to avoid having data from the previous sample
-        self._reset_streams()
-
-        # Empty the stage history, as the interesting locations on the previous
-        # sample have probably nothing in common with this new sample
-        self._tab_data.stage_history.value = []
-
+        super(DelphiStateController, self)._start_chamber_pumping()
 
     def _start_chamber_venting(self):
         # On the DELPHI, we also move the optical stage to 0,0 (= reference
@@ -608,41 +608,90 @@ class DelphiStateController(SecomStateController):
 
         super(DelphiStateController, self)._start_chamber_venting()
 
-    def _prepare_stage(self, unused):
+    def _on_overview_position(self, unused):
         """
-        Check the sample holder and moves the stage to the default position if
-        it's a delphi sample holder (= with a lens and a stage)
-        Should be called in overview position
+        Move the stage to good position for the overview acquisition, and load
+        the calibration if it's an optical sample holder.
         """
         # Move to stage to center to be at a good position in overview
         f = self._main_data.stage.moveAbs(DELPHI_OVERVIEW_POS)
         f.result() # to be sure referencing doesn't cancel the move
-        if self._check_holder_calib():
-            # continue business as usual
-            f.add_done_callback(self._start_overview_acquisition)
 
-    def _start_overview_acquisition(self, unused=None):
+        self._load_holder_calib()
+
+        # Reference the (optical) stage
+        f = self._main_data.stage.reference({"x", "y"})
+        f.result()
+
+        # continue business as usual
+        self._start_overview_acquisition()
+
+    def _start_overview_acquisition(self):
         logging.debug("Starting overview acquisition")
         # FIXME: need to check if autofocus is needed sometimes (and improves
-        # over the "good position")
+        # over the default good position set by the driver)
         self._on_overview_focused(None)
+
+    def _load_holder_calib(self):
+        """
+        Load the sample holder calibration. This assumes that it is sure that
+        the calibration data is present.
+        """
+        shid, sht = self._main_data.chamber.sampleHolder.value
+        # TODO: only try to load if PHENOM_SH_TYPE_OPTICAL, otherwise just return
+
+        calib = self._calibconf.get_sh_calib(shid)
+        if calib is None:
+            raise ValueError("Calibration data for sample holder is not present")
+
+        # TODO: to be more precise on the stage rotation, we'll need to
+        # locate the top and bottom holes of the sample holder, using
+        # the SEM. So once the sample is fully loaded, new and more
+        # precise calibration will be set.
+        htop, hbot, strans, sscale, srot, iscale, irot = calib
+
+        # update metadata to stage
+        self._main_data.stage.updateMetadata({
+                  model.MD_POS_COR: strans,
+                  model.MD_PIXEL_SIZE_COR: sscale,
+                  model.MD_ROTATION_COR: srot
+                  })
+
+        # use image scaling as scaling correction metadata to ccd
+        self._main_data.ccd.updateMetadata({
+                  model.MD_PIXEL_SIZE_COR: iscale,
+                  })
+
+        # use image rotation as rotation of the SEM (note that this works fine
+        # wrt to the stage referential because the rotation is very small)
+        if self._main_data.ebeam.rotation.readonly:
+            # normally only happens with the simulator
+            self._main_data.ccd.updateMetadata({
+                  model.MD_ROTATION_COR: (-irot) % (2 * math.pi),
+                  })
+        else:
+            self._main_data.ebeam.rotation.value = irot
+            # need to also set the rotation correction to indicate that the
+            # acquired image should be seen straight (not rotated)
+            self._main_data.ebeam.updateMetadata({model.MD_ROTATION_COR: irot})
+
 
     def _check_holder_calib(self):
         """
-        Check whether the calibration data for the current sample holder is
-        available and do the Right Thing accordingly (either load it, or run
-        the calibration procedure)
+        Check whether the current sample holder has already been calibrated or
+         still needs to go through the "first insertion calibration procedure".
+         In that later case, the procedure will be started.
         return (bool): Whether the loading should continue
         """
         try:
-            # TODO: just subscribe to the change? So we could detect a new sample
-            # holder even before it's in overview position?
-            try:
-                shid, sht = self._main_data.chamber.sampleHolder.value
-                logging.debug("Detected sample holder type %d, id %d", sht, shid)
-            except Exception:
-                logging.exception("Failed to find sample holder ID")
-                shid, sht = 1, PHENOM_SH_TYPE_STANDARD # assume it's a standard holder
+            # TODO: just subscribe to the change of sample holder?
+            if (isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase)
+                and not self._main_data.chamber.registeredSampleHolder.value):
+                self._request_holder_calib()
+                return False
+
+            shid, sht = self._main_data.chamber.sampleHolder.value
+            logging.debug("Detected sample holder type %d, id %d", sht, shid)
 
             if sht != PHENOM_SH_TYPE_OPTICAL:
                 logging.info("Sample holder doesn't seem to be an optical one "
@@ -651,24 +700,14 @@ class DelphiStateController(SecomStateController):
                 # not been correctly set and report PHENOM_SH_TYPE_STANDARD
                 # Once they are fixed, just skip the calibration, and disable
                 # the optical microscope.
+
             # Look in the config file if the sample holder is known, or needs
             # first-time calibration, and otherwise update the metadata
-            calibconf = get_calib_conf()
-            calib = calibconf.get_sh_calib(shid)
-            if calib is None:
-                self._request_holder_calib(shid) # async
+            if self._calibconf.get_sh_calib(shid) is None:
+                self._request_holder_calib() # async
                 return False # don't go further, as everything will be taken care
 
-            # TODO: to be more precise on the stage rotation, we'll need to
-            # locate the top and bottom holes of the sample holder, using
-            # the SEM. So once the sample is fully loaded, new and more
-            # precise calibration will be set.
-            self._apply_holder_calib(*calib)
-
-            # Reference the (optical) stage
-            f = self._main_data.stage.reference({"x", "y"})
-            f.result()
-            # TODO: shall we also reference the optical focus? It'd be handy only
+                        # TODO: shall we also reference the optical focus? It'd be handy only
             # if the absolute position is used.
         except Exception:
             logging.exception("Failed to set calibration")
@@ -676,7 +715,7 @@ class DelphiStateController(SecomStateController):
         return True
 
     @call_after
-    def _request_holder_calib(self, shid):
+    def _request_holder_calib(self):
         """
         Handle all the actions needed when no calibration data is available
         for a sample holder (eg, it's the first time it is inserted)
@@ -684,6 +723,7 @@ class DelphiStateController(SecomStateController):
         independently of whether the calibration has worked or not.
         This method is asynchronous (running in the main GUI thread)
         """
+        shid, sht = self._main_data.chamber.sampleHolder.value
         logging.info("New sample holder %x inserted", shid)
         # Tell the user we need to do calibration, and it needs to have
         # the special sample => Eject (=Cancel) or Calibrate (=OK)
@@ -717,7 +757,7 @@ class DelphiStateController(SecomStateController):
                     dlg.Destroy()
                     # looks like recursive, but as it's call_after, it will
                     # return immediately and be actually called later
-                    self._request_holder_calib(shid)
+                    self._request_holder_calib()
                     return
 
             # Now run the full calibration
@@ -749,6 +789,10 @@ class DelphiStateController(SecomStateController):
     #             wx.MilliSleep(250)
     #             wx.Yield()
     #             (cont, skip) = dlg.Update(count)
+
+            # Move to the overview position first
+            f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
+            f.result()
 
             # Clear all the previous calibration
             self._main_data.stage.updateMetadata({
@@ -831,46 +875,10 @@ class DelphiStateController(SecomStateController):
 
         # TODO: once the hole focus is not fixed, save it in the config too
         # Update the calibration file
-        calibconf = get_calib_conf()
-        calibconf.set_sh_calib(shid, htop, hbot, strans, sscale, srot, iscale, irot)
+        self._calibconf.set_sh_calib(shid, htop, hbot, strans, sscale, srot, iscale, irot)
 
         dlg.Destroy()
 
-    def _apply_holder_calib(self, htop, hbot, strans, sscale, srot, iscale, irot):
-        """
-        Configure/update the components according to the calibration
-        htop (2 floats): position of the top hole (unused)
-        hbot (2 floats): position of the bottom hole (unused)
-        strans (2 floats): stage translation
-        sscale (2 floats > 0): stage scaling
-        srot (float): stage rotation (rad)
-        iscale (2 floats > 0): image scaling
-        irot (float): image rotation (rad)
-        """
-        # update metadata to stage
-        self._main_data.stage.updateMetadata({
-                  model.MD_POS_COR: strans,
-                  model.MD_PIXEL_SIZE_COR: sscale,
-                  model.MD_ROTATION_COR: srot
-                  })
-
-        # use image scaling as scaling correction metadata to ccd
-        self._main_data.ccd.updateMetadata({
-                  model.MD_PIXEL_SIZE_COR: iscale,
-                  })
-
-        # use image rotation as rotation of the SEM (note that this works fine
-        # wrt to the stage referential because the rotation is very small)
-        if self._main_data.ebeam.rotation.readonly:
-            # normally only happens with the simulator
-            self._main_data.ccd.updateMetadata({
-                  model.MD_ROTATION_COR: (-irot) % (2 * math.pi),
-                  })
-        else:
-            self._main_data.ebeam.rotation.value = irot
-            # need to also set the rotation correction to indicate that the
-            # acquired image should be seen straight (not rotated)
-            self._main_data.ebeam.updateMetadata({model.MD_ROTATION_COR: irot})
 
 
 # TODO SparcStateController?
