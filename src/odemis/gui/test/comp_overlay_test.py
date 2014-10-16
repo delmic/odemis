@@ -41,7 +41,7 @@ import wx
 
 
 test.goto_manual()
-logging.getLogger().setLevel(logging.DEBUG)
+# logging.getLogger().setLevel(logging.DEBUG)
 # test.set_sleep_time(1000)
 
 

@@ -513,14 +513,14 @@ class SelectionMixin(object):
 
         if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
             if self.edit_edge == gui.HOVER_TOP_EDGE:
-                self.v_start_pos[1] = current_pos[1]
+                self.v_start_pos = (self.v_start_pos[0], current_pos[1])
             else:
-                self.v_end_pos[1] = current_pos[1]
+                self.v_end_pos = (self.v_end_pos[0], current_pos[1])
         else:
             if self.edit_edge == gui.HOVER_LEFT_EDGE:
-                self.v_start_pos[0] = current_pos[0]
+                self.v_start_pos = (current_pos[0], self.v_start_pos[1])
             else:
-                self.v_end_pos[0] = current_pos[0]
+                self.v_end_pos = (current_pos[0], self.v_end_pos[1])
 
     def stop_edit(self):
         """ End the selection edit """
