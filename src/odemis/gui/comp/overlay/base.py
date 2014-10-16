@@ -570,20 +570,23 @@ class SelectionMixin(object):
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
-        rect = self._normalize(self.v_start_pos + self.v_end_pos)
-        i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
-        o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
+        if self.v_start_pos and self.v_end_pos:
+            rect = self._normalize(self.v_start_pos + self.v_end_pos)
+            i_l, i_t, o_r, o_b = [v + self.hover_margin for v in rect]
+            o_l, o_t, i_r, i_b = [v - self.hover_margin for v in rect]
 
-        self.edges = {
-            "i_l": i_l,
-            "o_r": o_r,
-            "i_t": i_t,
-            "o_b": o_b,
-            "o_l": o_l,
-            "i_r": i_r,
-            "o_t": o_t,
-            "i_b": i_b
-        }
+            self.edges = {
+                "i_l": i_l,
+                "o_r": o_r,
+                "i_t": i_t,
+                "o_b": o_b,
+                "o_l": o_l,
+                "i_r": i_r,
+                "o_t": o_t,
+                "i_b": i_b
+            }
+        else:
+            self.edges = {}
 
     def is_hovering(self, vpos):
         """ Check if the given position is on/near a selection edge or inside
