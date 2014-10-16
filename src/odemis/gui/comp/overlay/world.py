@@ -162,8 +162,12 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.w_start_pos and self.w_end_pos:
             ctx.save()
-            b_pos = (self.cnvs.view_to_buffer(self.v_start_pos) +
-                     self.cnvs.view_to_buffer(self.v_end_pos))
+
+            # Important: We need to use the world positions, in order to draw everything at the
+            # right scale.
+            offset = self.cnvs.get_half_buffer_size()
+            b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
+                     self.cnvs.world_to_buffer(self.w_end_pos, offset))
             b_pos = self._normalize(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
@@ -515,14 +519,18 @@ class LineSelectOverlay(WorldSelectOverlay):
             start_radius = 3
             arrow_size = 12
 
+            # Important: We need to use the world positions, in order to draw everything at the
+            # right scale.
+            offset = self.cnvs.get_half_buffer_size()
             # Calculate buffer start and end positions
-            b_pos = self.cnvs.view_to_buffer(self.v_start_pos)
+            b_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
             b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
-            b_pos = self.cnvs.view_to_buffer(self.v_end_pos)
+            b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
 
             # Calculate unit vector
-            dx, dy = b_start[0] - b_end[0], b_start[1] - b_end[1]
+            dx, dy = (self.w_start_pos[0] - self.w_end_pos[0],
+                      self.w_start_pos[1] - self.w_end_pos[1])
             length = math.sqrt(dx*dx + dy*dy) or 0.000001
             udx, udy = dx / length, dy / length  # Normalized vector
 

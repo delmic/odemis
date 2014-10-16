@@ -408,8 +408,13 @@ class OverlayTestCase(test.GuiTestCase):
     # World overlay test cases
 
     def test_world_select_overlay(self):
-        cnvs = miccanvas.SecomCanvas(self.panel)
+        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
+        tab_mod = self.create_simple_tab_model()
+        view = tab_mod.focussedView.value
+
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        cnvs.setView(view, tab_mod)
 
         wsol = wol.WorldSelectOverlay(cnvs)
         wsol.activate()
@@ -547,10 +552,12 @@ class OverlayTestCase(test.GuiTestCase):
     def test_points_select_overlay(self):
         # Create stuff
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
+
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         tab_mod = self.create_simple_tab_model()
         view = tab_mod.focussedView.value
+        view.mpp.value = 1e-5
         cnvs.setView(view, tab_mod)
 
         # Manually add the overlay
