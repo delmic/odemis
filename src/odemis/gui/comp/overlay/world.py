@@ -34,7 +34,6 @@ from odemis.acq.stream import UNDEFINED_ROI
 import odemis.gui as gui
 import odemis.gui.comp.overlay.base as base
 import odemis.gui.img.data as img
-import odemis.util as util
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 
@@ -49,6 +48,14 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         self.w_end_pos = None
 
         self.position_label = self.add_label("", colour=(0.8, 0.8, 0.8))
+
+    def set_world_start(self, w_start_pos):
+        self.w_start_pos = w_start_pos
+        self._calc_view_pos()
+
+    def set_world_end(self, w_end_pos):
+        self.w_end_pos = w_end_pos
+        self._calc_view_pos()
 
     # Selection creation
 
@@ -602,21 +609,23 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def _calc_edges(self):
         """ Calculate the hit boxes for the start and end point """
+        if self.v_start_pos and self.v_end_pos:
+            rect = self.v_start_pos + self.v_end_pos
+            s_l, s_t, e_l, e_t = [v - self.hover_margin for v in rect]
+            s_r, s_b, e_r, e_b = [v + self.hover_margin for v in rect]
 
-        rect = self.v_start_pos + self.v_end_pos
-        s_l, s_t, e_l, e_t = [v - self.hover_margin for v in rect]
-        s_r, s_b, e_r, e_b = [v + self.hover_margin for v in rect]
-
-        self.edges = {
-            "s_l": s_l,
-            "s_t": s_t,
-            "s_r": s_r,
-            "s_b": s_b,
-            "e_l": e_l,
-            "e_t": e_t,
-            "e_r": e_r,
-            "e_b": e_b
-        }
+            self.edges = {
+                "s_l": s_l,
+                "s_t": s_t,
+                "s_r": s_r,
+                "s_b": s_b,
+                "e_l": e_l,
+                "e_t": e_t,
+                "e_r": e_r,
+                "e_b": e_b
+            }
+        else:
+            self.edges = {}
 
     def is_hovering(self, vpos):
         """ Check if the given position is on/near the start or end of the line
@@ -650,8 +659,10 @@ class LineSelectOverlay(WorldSelectOverlay):
 
         if self.edit_edge == gui.HOVER_START:
             self.v_start_pos = current_pos
+            self._calc_world_pos()
         elif self.edit_edge == gui.HOVER_END:
             self.v_end_pos = current_pos
+            self._calc_world_pos()
 
         self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENWSE)
 
