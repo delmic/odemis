@@ -432,7 +432,6 @@ class SelectionMixin(object):
         self.edges = {}
 
         self.colour = conversion.hex_to_frgba(colour)
-        self.hl_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.center = center
 
         self.hover = gui.HOVER_NONE
