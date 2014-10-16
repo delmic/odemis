@@ -123,8 +123,8 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         v_pos = (self.cnvs.world_to_view(self.w_start_pos, offset) +
                  self.cnvs.world_to_view(self.w_end_pos, offset))
         v_pos = list(self._normalize(v_pos))
-        self.v_start_pos = v_pos[:2]
-        self.v_end_pos = v_pos[2:4]
+        self.v_start_pos = tuple(v_pos[:2])
+        self.v_end_pos = tuple(v_pos[2:4])
         self._calc_edges()
 
     def get_physical_sel(self):
@@ -627,6 +627,12 @@ class LineSelectOverlay(WorldSelectOverlay):
             self.v_start_pos = current_pos
         elif self.edit_edge == gui.HOVER_END:
             self.v_end_pos = current_pos
+
+        self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZENWSE)
+
+    def stop_edit(self):
+        super(LineSelectOverlay, self).stop_edit()
+        self.cnvs.reset_dynamic_cursor()
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):

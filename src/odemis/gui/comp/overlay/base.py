@@ -478,7 +478,7 @@ class SelectionMixin(object):
         else:
             # Make sure that the start and end positions are the top left and
             # bottom right respectively.
-            v_pos = self._normalize(self.v_start_pos + self.v_end_pos)
+            v_pos = self._normalize(tuple(self.v_start_pos) + tuple(self.v_end_pos))
             self.v_start_pos = v_pos[:2]
             self.v_end_pos = v_pos[2:4]
 
