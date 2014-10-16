@@ -395,11 +395,11 @@ class SettingsController(object):
                   all([isinstance(c, numbers.Real) for c in choices])):
 
                 # Skip formatting of choices if the range is too big
-                if isinstance(min_val, numbers.Real) and isinstance(max_val, numbers.Real):
-                    if (
-                        min_val and (max_val or 0) / min_val > 1000 or
-                        max_val and (min_val or 0) / max_val > 1000
-                    ):
+                if (isinstance(min_val, numbers.Real)
+                    and isinstance(max_val, numbers.Real)
+                    and ((min_val and (max_val or 0) / min_val > 1000)
+                         or (max_val and (min_val or 0) / max_val > 1000)
+                    )):
                         choices_fmt = [(c, choice_to_str(c)) for c in choices]
                 else:
                     fmt, prefix = utun.si_scale_list(choices)
