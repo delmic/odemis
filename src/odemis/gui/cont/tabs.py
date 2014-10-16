@@ -1048,7 +1048,7 @@ class AnalysisTab(Tab):
         self.tb.add_tool(tools.TOOL_POINT, self.tab_data_model.tool)
         self.tb.enable_button(tools.TOOL_POINT, False)
         self.tb.add_tool(tools.TOOL_LINE, self.tab_data_model.tool)
-        # self.tb.enable_button(tools.TOOL_LINE, True)
+        self.tb.enable_button(tools.TOOL_LINE, False)
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
 
         # FIXME: Way too hacky approach to get the right viewport shown,
@@ -1305,6 +1305,7 @@ class AnalysisTab(Tab):
                         )
                 strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
                 self.tb.enable_button(tools.TOOL_POINT, True)
+                self.tb.enable_button(tools.TOOL_LINE, True)
                 self.main_frame.vp_inspection_plot.clear()
                 break
             # If an angle resolve stream is found...
@@ -1318,9 +1319,11 @@ class AnalysisTab(Tab):
                         strm.point.subscribe(self._on_point_select, init=True)
 
                 self.tb.enable_button(tools.TOOL_POINT, True)
+                self.tb.enable_button(tools.TOOL_LINE, True)
                 break
         else:
             self.tb.enable_button(tools.TOOL_POINT, False)
+            self.tb.enable_button(tools.TOOL_LINE, False)
 
         # Reload current calibration on the new streams
         if ar_found:
