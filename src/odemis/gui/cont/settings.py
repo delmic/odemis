@@ -34,7 +34,7 @@ import numbers
 from odemis import model, util
 import odemis.dataio
 from odemis.gui.comp.combo import ComboBox
-from odemis.gui.comp.file import FileBrowser, EVT_FILE_SELECT
+from odemis.gui.comp.file import EVT_FILE_SELECT
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.conf.settingspanel import CONFIG, CONFIG_PER_ROLE
 import odemis.gui.util
@@ -393,14 +393,16 @@ class SettingsController(object):
                 choices_fmt = choices.items()
             elif (ctrl_format and len(choices) > 1 and
                   all([isinstance(c, numbers.Real) for c in choices])):
-
-                # Skip formatting of choices if the range is too big
-                if (isinstance(min_val, numbers.Real)
-                    and isinstance(max_val, numbers.Real)
-                    and ((min_val and (max_val or 0) / min_val > 1000)
-                         or (max_val and (min_val or 0) / max_val > 1000)
-                    )):
-                        choices_fmt = [(c, choice_to_str(c)) for c in choices]
+                # Try to share the same unit prefix, if the range is not too big
+                choices_abs = set(abs(c) for c in choices)
+                # 0 doesn't affect the unit prefix but is annoying for divisions
+                choices_abs.discard(0)
+                mn, mx = min(choices_abs), max(choices_abs)
+                if mx / mn > 1000:
+                    # TODO: use readable_str(c, unit, sig=3)? is it more readable?
+                    # => need to not add prefix+units from the combo box
+                    # (but still handle differently for radio)
+                    choices_fmt = [(c, choice_to_str(c)) for c in choices]
                 else:
                     fmt, prefix = utun.si_scale_list(choices)
                     choices_fmt = zip(choices, [u"%g" % c for c in fmt])
@@ -445,13 +447,8 @@ class SettingsController(object):
         label_text = conf.get('label', label_to_human(name))
         tooltip = conf.get('tooltip', "")
 
-        # the Vigilant Attribute Connector connects the wx control to the
-        # vigilant attribute.
-        vac = None
-
         logging.debug("Adding VA %s", label_text)
         # Create the needed wxPython controls
-
         if control_type == odemis.gui.CONTROL_READONLY:
             val = vigil_attr.value  # only format if it's a number
             lbl_ctrl, value_ctrl = self.panel.add_readonly_field(label_text, val)
@@ -727,6 +724,7 @@ class SettingsController(object):
                 choices_fmt = choices.items()
             elif (unit and len(choices) > 1 and
                   all([isinstance(c, numbers.Real) for c in choices])):
+                # TODO: need same update as add_value
                 fmt, prefix = utun.si_scale_list(choices)
                 choices_fmt = zip(choices, [u"%g" % c for c in fmt])
                 unit = prefix + unit
