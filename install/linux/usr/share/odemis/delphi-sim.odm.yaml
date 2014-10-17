@@ -4,7 +4,7 @@ DELPHI: {
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "BSED Phenom", "NavCam"],
     actuators: ["Stage", "Optical stage", "Optical focus",
-                "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage"", "AntiBacklash Focus"],
+                "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage", "AntiBacklash Focus"],
 }
 
 Spectra: {
