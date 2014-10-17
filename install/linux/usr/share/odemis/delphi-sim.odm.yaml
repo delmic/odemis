@@ -4,7 +4,7 @@ DELPHI: {
     emitters: ["Spectra", "Nikon Lens", "MultiBand Filter", "EBeam Phenom"],
     detectors: ["Zyla", "BSED Phenom", "NavCam"],
     actuators: ["Stage", "Optical stage", "Optical focus",
-                "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage"],
+                "SEM Chamber", "EBeam focus", "NavCam focus", "TwinStage", "AntiBacklash Stage"", "AntiBacklash Focus"],
 }
 
 Spectra: {
@@ -153,11 +153,21 @@ Spectra: {
     },
 }
 
+# Ensures the focus is always at the position requested.
+# The drawback is that it causes "shaking" of the image when lowering the focus.
+"AntiBacklash Focus": {
+    class: actuator.AntiBacklashActuator,
+    role: focus,
+    init: {
+        backlash: {"z": 200.e-6}, # 100µm should be enough for the focus, but 200µm should also compensate for the cross-talk with the Y backlash
+    },
+    children: {"slave": "Optical focus"},
+}
 # Axis Z: (Physical) bottom->top when looking at the door
 #         (On screen) bottom->top (so distance to sample is smaller when going up)    
 "Optical focus": {
     class: actuator.MultiplexActuator,
-    role: focus,
+    role: None,
     affects: ["Zyla"],
     children: {"z": TMCM},
     init: {
@@ -172,7 +182,7 @@ TMCM: {
     init: {
         port: "/dev/fake",
         axes: ["x", "y", "z"],
-        ustepsize: [5.9e-9, 5.8e-9, 5.e-9], # m/µstep
+        ustepsize: [5.9e-9, 5.9e-9, 5.e-9], # m/µstep
         refproc: "FakeReferencing", # referencing procedure for simulator
         temp: True,
         # inverted: ["y"],
