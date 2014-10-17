@@ -295,7 +295,7 @@ def getContainer(name, validate=True):
 
     # the container is the default pyro daemon at the address named by the container
     container = Pyro4.Proxy("PYRO:Pyro.Daemon@./u:"+BASE_DIRECTORY+"/"+urllib.quote(name)+".ipc")
-    container._pyroTimeout = 60  # s
+    container._pyroTimeout = 120  # s
     container._pyroOneway.add("terminate")
 
     # A proxy doesn't connect until the first remote call, check the connection
