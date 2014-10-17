@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 
-import collections
 import glob
 import logging
 from odemis.driver import tlaptmf
@@ -88,10 +87,9 @@ class TestStatic(unittest.TestCase):
         """
         dev = CLASS(**KWARGS_SIM)
 
-        self.assertGreater(len(dev.axes["rz"].choices), 0)
-        for p, b in dev.axes["rz"].choices.items():
-            self.assertIsInstance(b, collections.Iterable)
-            dev.moveAbs({"rz": p})
+        self.assertGreater(len(dev.axes["r"].choices), 0)
+        for p in dev.axes["r"].choices:
+            dev.moveAbs({"r": p})
 
         self.assertTrue(dev.selfTest(), "self test failed.")
         dev.terminate()
