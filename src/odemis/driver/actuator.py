@@ -655,6 +655,9 @@ class AntiBacklashActuator(model.Actuator):
         model.Actuator.__init__(self, name, role, axes=axes_def,
                                 children=children, **kwargs)
 
+        # will take care of executing axis moves asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         # Duplicate VAs which are just identical
         # TODO: shall we "hide" the antibacklash move by not updating position
         # while doing this move?
@@ -667,37 +670,71 @@ class AntiBacklashActuator(model.Actuator):
             isinstance(self._child.speed, model.VigilantAttributeBase)):
             self.speed = self._child.speed
 
-    @isasync
-    def moveRel(self, shift):
+
+    def terminate(self):
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+    def _doMoveRel(self, shift):
         # move with the backlash subtracted
         sub_shift = {}
         sub_backlash = {} # same as backlash but only contains the axes moved
         for a, v in shift.items():
-            sub_shift[a] = v - self._backlash.get(a, 0)
-            if a in self._backlash:
-                sub_backlash[a] = self._backlash[a]
-        # TODO: merge the two moves into one future (and immediately finish the call)
+            if a not in self._backlash:
+                sub_shift[a] = v
+            else:
+                # optimisation: if move goes in the same direction as backlash
+                # correction, then no need to do the correction
+                # TODO: only do this if backlash correction has already been applied once?
+                if v * self._backlash[a] >= 0:
+                    sub_shift[a] = v
+                else:
+                    sub_shift[a] = v - self._backlash[a]
+                    sub_backlash[a] = self._backlash[a]
         f = self._child.moveRel(sub_shift)
         f.result()
 
         # backlash move
         f = self._child.moveRel(sub_backlash)
-        return f
+        f.result()
 
-    @isasync
-    def moveAbs(self, pos):
+    def _doMoveAbs(self, pos):
         sub_pos = {}
         fpos = {} # same as pos but only contains the axes moved due to backlash
         for a, v in pos.items():
-            sub_pos[a] = v - self._backlash.get(a, 0)
-            if a in self._backlash:
-                fpos[a] = pos[a]
+            if a not in self._backlash:
+                sub_pos[a] = v
+            else:
+                shift = v - self.position.value[a]
+                if shift * self._backlash[a] >= 0:
+                    sub_pos[a] = v
+                else:
+                    sub_pos[a] = v - self._backlash[a]
+                    fpos[a] = pos[a]
         f = self._child.moveAbs(sub_pos)
         f.result()
 
         # backlash move
         f = self._child.moveAbs(fpos)
         return f
+
+    @isasync
+    def moveRel(self, shift):
+        if not shift:
+            return model.InstantaneousFuture()
+        self._checkMoveRel(shift)
+
+        return self._executor.submit(self._doMoveRel, shift)
+
+    @isasync
+    def moveAbs(self, pos):
+        if not pos:
+            return model.InstantaneousFuture()
+        self._checkMoveAbs(pos)
+
+        return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
         self._child.stop()

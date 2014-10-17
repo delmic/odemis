@@ -537,6 +537,11 @@ class TestAntiBacklashActuator(unittest.TestCase):
         f.result()
         self.assertPosAlmostEqual(stage.position.value, {"a":-23e-06, "b":-15e-06})
         self.assertPosAlmostEqual(child.position.value, {"a":-23e-06, "b":-15e-06})
+        f = stage.moveAbs({"a":-20e-06}) # negative position but positive move
+        f.result()
+        self.assertPosAlmostEqual(stage.position.value, {"a":-20e-06, "b":-15e-06})
+        self.assertPosAlmostEqual(child.position.value, {"a":-20e-06, "b":-15e-06})
+
 
         # rel
         f = stage.moveAbs({"a":0})
