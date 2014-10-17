@@ -281,7 +281,7 @@ class TMCM3110(model.Actuator):
             # On Ubuntu, when plugging the device, udev automatically checks
             # whether this is a real modem, which messes up everything immediately.
             # As there is no command 0, either we will receive a "wrong command" or
-            # a "wrong checksum", but it will never do anything more.
+            # a "wrong checksum", but it's unlikely to ever do anything more.
             for i in range(9): # a message is 9 bytes
                 self._serial.write(b"\x00")
                 self._serial.flush()
@@ -294,6 +294,28 @@ class TMCM3110(model.Actuator):
                     logging.error("Device not answering with a 9 bytes reply: %s", res)
             else:
                 logging.error("Device not answering to a 9 bytes message")
+
+    # TODO: finish this method and use where possible
+    def SendInstructionRecoverable(self, n, typ=0, mot=0, val=0):
+
+        try:
+            self.SendInstruction(n, typ, mot, val)
+
+        except IOError:
+            # TODO: could serial.outWaiting() give a clue on what is going on?
+
+
+            # One possible reason is that the device disappeared because the
+            # cable was pulled out, or the power got cut (unlikely, as it's
+            # powered via 2 sources).
+
+            # TODO: detect that the connection was lost if the port we have
+            # leads to nowhere. => It seems os.path.exists should fail ?
+            # or /proc/pid/fd/n link to a *(deleted)
+            # How to handle the fact it will then probably get a different name
+            # on replug? Use a pattern for the file name?
+            
+            self._resynchonise()
 
     def SendInstruction(self, n, typ=0, mot=0, val=0):
         """
