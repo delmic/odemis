@@ -205,6 +205,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self._set_spot_mode(tool_mode)
         self._set_dichotomy_mode(tool_mode)
         self._set_point_select_mode(tool_mode)
+        self._set_line_select_mode(tool_mode)
 
         self.update_drawing()
 
@@ -307,6 +308,26 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self.points_overlay:
                 self.points_overlay.deactivate()
                 self.remove_world_overlay(self.points_overlay)
+
+    def _set_line_select_mode(self, tool_mode):
+        """ Activate the required line selection overlay """
+
+        if tool_mode == guimodel.TOOL_LINE:
+            # Enable the Spectrum point select overlay when a spectrum stream
+            # is attached to the view
+            stream_tree = self.microscope_view.stream_tree
+            # Enable the Angle-resolved point select overlay when there's a
+            # AR stream known anywhere in the data model (and the view has
+            # streams).
+            tab_streams = self._tab_data_model.streams.value
+
+            if stream_tree.spectrum_streams or stream_tree.get_streams_by_name("SEM CL"):
+                self.line_overlay.activate()
+                self.add_world_overlay(self.line_overlay)
+        else:
+            if self.line_overlay:
+                self.line_overlay.deactivate()
+                self.remove_world_overlay(self.line_overlay)
 
     # END Overlay creation and activation
 

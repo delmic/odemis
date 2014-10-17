@@ -162,8 +162,12 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
         if self.w_start_pos and self.w_end_pos:
             ctx.save()
-            b_pos = (self.cnvs.view_to_buffer(self.v_start_pos) +
-                     self.cnvs.view_to_buffer(self.v_end_pos))
+
+            # Important: We need to use the world positions, in order to draw everything at the
+            # right scale.
+            offset = self.cnvs.get_half_buffer_size()
+            b_pos = (self.cnvs.world_to_buffer(self.w_start_pos, offset) +
+                     self.cnvs.world_to_buffer(self.w_end_pos, offset))
             b_pos = self._normalize(b_pos)
             self.update_from_buffer(b_pos[:2], b_pos[2:4], shift + (scale,))
 
@@ -508,69 +512,90 @@ class LineSelectOverlay(WorldSelectOverlay):
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
         if self.w_start_pos and self.w_end_pos:
+
             ctx.save()
 
-            b_pos = self.cnvs.view_to_buffer(self.v_start_pos)
-            b_start = (b_pos[0] + 0.5, b_pos[1] + 0.5)
-            b_pos = self.cnvs.view_to_buffer(self.v_end_pos)
+            # Pixel radius of the start marker
+            start_radius = 3
+            arrow_size = 12
+
+            # Important: We need to use the world positions, in order to draw everything at the
+            # right scale.
+            offset = self.cnvs.get_half_buffer_size()
+            # Calculate buffer start and end positions
+            b_pos = self.cnvs.world_to_buffer(self.w_start_pos, offset)
+            b_start = (b_pos[0] - 0.5, b_pos[1] - 0.5)
+            b_pos = self.cnvs.world_to_buffer(self.w_end_pos, offset)
             b_end = (b_pos[0] + 0.5, b_pos[1] + 0.5)
 
-            # draws a light black background for the rectangle
+            # Calculate unit vector
+            dx, dy = (self.w_start_pos[0] - self.w_end_pos[0],
+                      self.w_start_pos[1] - self.w_end_pos[1])
+            length = math.sqrt(dx*dx + dy*dy) or 0.000001
+            udx, udy = dx / length, dy / length  # Normalized vector
+
+            # Rotate over 60 and -60 degrees
+            ax = udx * math.sqrt(3) / 2 - udy / 2
+            ay = udx / 2 + udy * math.sqrt(3)/2
+            bx = udx * math.sqrt(3)/2 + udy / 2
+            by = -udx / 2 + udy * math.sqrt(3)/2
+
+            # The two lower corners of the arrow head
+            b_arrow_1 = (b_end[0] + arrow_size * ax, b_end[1] + arrow_size * ay)
+            b_arrow_2 = (b_end[0] + arrow_size * bx, b_end[1] + arrow_size * by)
+
+            # Connection point for the line at the base of the arrow
+            b_arrow_con = ((b_arrow_1[0] + b_arrow_2[0]) / 2.0,
+                           (b_arrow_1[1] + b_arrow_2[1]) / 2.0)
+
+            # Calculate the connection to the start circle
+            rad = math.atan2(b_start[1] - b_end[1],  b_start[0] - b_end[0])
+            y_offset = start_radius * math.sin(rad)
+            x_offset = start_radius * math.cos(rad)
+            b_circle_con = (b_start[0] - x_offset, b_start[1] - y_offset)
+
+            # Draws a black background for the line
             ctx.set_line_width(4)
             ctx.set_source_rgba(0, 0, 0, 0.5)
-            ctx.move_to(*b_start)
-            ctx.line_to(*b_end)
+            ctx.move_to(*b_circle_con)
+            ctx.line_to(*b_arrow_con)
             ctx.stroke()
 
-            # draws the dotted line
+            # Draw the dotted line
             ctx.set_line_width(2)
             ctx.set_dash([3])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
-            ctx.move_to(*b_start)
-            ctx.line_to(*b_end)
+            ctx.move_to(*b_circle_con)
+            ctx.line_to(*b_arrow_con)
             ctx.stroke()
 
-            # draws start marker
+            # Draw start circle
             ctx.set_dash([])
+            ctx.set_line_width(3.5)
+            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.arc(b_start[0], b_start[1], start_radius, 0, 2 * math.pi)
+            ctx.stroke_preserve()
 
-            ctx.set_source_rgba(0, 0, 0, 1.0)
-            ctx.arc(b_start[0], b_start[1], 5, 0, 2*math.pi)
-            ctx.fill()
-
-            if self.hover == gui.HOVER_START:
-                ctx.set_source_rgba(*self.hl_colour)
-            else:
-                ctx.set_source_rgba(*self.colour)
+            ctx.set_source_rgba(*self.colour)
             ctx.set_line_width(1.5)
-            ctx.arc(b_start[0], b_start[1], 3, 0, 2*math.pi)
+            ctx.arc(b_start[0], b_start[1], start_radius, 0, 2*math.pi)
             ctx.stroke()
 
             # Draw arrow head
+            ctx.set_dash([])
+            ctx.set_line_width(2)
             ctx.move_to(*b_end)
+            ctx.line_to(*b_arrow_1)
+            ctx.line_to(*b_arrow_2)
+            ctx.close_path()
 
-            if self.hover == gui.HOVER_END:
-                ctx.set_source_rgba(*self.hl_colour)
-            else:
-                ctx.set_source_rgba(*self.colour)
+            # Dark border
+            ctx.set_source_rgba(0, 0, 0, 0.5)
+            ctx.stroke_preserve()
 
-            dx, dy = b_start[0] - b_end[0], b_start[1] - b_end[1]
-            norm = math.sqrt(dx*dx + dy*dy) or 0.000001
-            udx, udy = dx / norm, dy / norm
-
-            # Rotate over 60 degrees
-            ax = udx * math.sqrt(3)/2 - udy * 1/2
-            ay = udx * 1/2 + udy * math.sqrt(3)/2
-            bx = udx * math.sqrt(3)/2 + udy * 1/2
-            by = -udx * 1/2 + udy * math.sqrt(3)/2
-
-            arrow_size = 10
-
-            v1 = (b_end[0] + arrow_size * ax, b_end[1] + arrow_size * ay)
-            v2 = (b_end[0] + arrow_size * bx, b_end[1] + arrow_size * by)
-
-            ctx.line_to(*v1)
-            ctx.line_to(*v2)
+            # Colour fill
+            ctx.set_source_rgba(*self.colour)
             ctx.fill()
 
             ctx.restore()

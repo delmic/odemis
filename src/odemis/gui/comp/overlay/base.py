@@ -432,7 +432,6 @@ class SelectionMixin(object):
         self.edges = {}
 
         self.colour = conversion.hex_to_frgba(colour)
-        self.hl_colour = conversion.hex_to_frgb(gui.FG_COLOUR_HIGHLIGHT)
         self.center = center
 
         self.hover = gui.HOVER_NONE
@@ -514,14 +513,14 @@ class SelectionMixin(object):
 
         if self.edit_edge in (gui.HOVER_TOP_EDGE, gui.HOVER_BOTTOM_EDGE):
             if self.edit_edge == gui.HOVER_TOP_EDGE:
-                self.v_start_pos[1] = current_pos[1]
+                self.v_start_pos = (self.v_start_pos[0], current_pos[1])
             else:
-                self.v_end_pos[1] = current_pos[1]
+                self.v_end_pos = (self.v_end_pos[0], current_pos[1])
         else:
             if self.edit_edge == gui.HOVER_LEFT_EDGE:
-                self.v_start_pos[0] = current_pos[0]
+                self.v_start_pos = (current_pos[0], self.v_start_pos[1])
             else:
-                self.v_end_pos[0] = current_pos[0]
+                self.v_end_pos = (current_pos[0], self.v_end_pos[1])
 
     def stop_edit(self):
         """ End the selection edit """
