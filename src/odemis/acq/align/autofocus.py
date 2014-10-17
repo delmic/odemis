@@ -198,7 +198,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
                 steps += 1
 
             # Binary search between the last 2 positions
-            new_pos = _ClippedMove(rng, focus, -sign * (step / (2 / (trial + 1))))
+            new_pos = _ClippedMove(rng, focus, sign * (step / (2 / (trial + 1))))
             max_step = max_step / 8
 
         if future._autofocus_state == CANCELLED:
