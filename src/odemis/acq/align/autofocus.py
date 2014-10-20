@@ -31,7 +31,7 @@ from odemis.acq._futures import executeTask
 from scipy import ndimage
 import threading
 import time
-
+from odemis.util.img import Subtract
 
 FINE_SPOTMODE_ACCURACY = 5e-6  # fine focus accuracy in spot mode #m
 ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
@@ -60,8 +60,34 @@ def MeasureFocus(image):
         gray = image
     return ndimage.standard_deviation(image)
 
+def SubstractBackground(ccd, det_dataflow=None):
+    """
+    Performs optical acquisition with background substraction. Particularly
+    used in order to eliminate the source background in Delphi.
+    ccd (model.DigitalCamera)
+    det_dataflow (model.DataFlow): dataflow of se- or bs- detector
+    enabled (boolean): if True, apply background substraction
+    returns (model.DataArray):
+        Image with substracted background
+    """
+    if det_dataflow is not None:
+        bg_image = ccd.data.get(asap=False)
+        det_dataflow.subscribe(_discard_data)
+        image = ccd.data.get(asap=False)
+        ret_data = Subtract(image, bg_image)
+        det_dataflow.unsubscribe(_discard_data)
+        return ret_data
+    else:
+        image = ccd.data.get(asap=False)
+        return image
 
-def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
+def _discard_data(df, data):
+    """
+    Does nothing, just discard the SEM data received (for spot mode)
+    """
+    pass
+
+def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background, dataflow):
     """
     Iteratively acquires an optical image, measures its focus level and adjusts 
     the optical focus with respect to the focus level.
@@ -72,6 +98,8 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
     et: exposure time if detector is a ccd, 
         dwellTime*prod(resolution) if detector is an SEM
     focus (model.Actuator): The optical focus
+    background (boolean): If True apply background substraction
+    dataflow (model.DataFlow): dataflow of se- or bs- detector
     returns (float):    Focus position #m
                         Focus level
     raises:    
@@ -89,13 +117,13 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
             best_pos = init_pos
             step = max_step / 2
             cur_pos = focus.position.value.get('z')
-            image = detector.data.get(asap=False)
+            image = SubstractBackground(detector, dataflow)
             fm_cur = MeasureFocus(image)
             init_fm = fm_cur
             best_fm = init_fm
             #Clip within range
             new_pos = _ClippedMove(rng, focus, step)
-            image = detector.data.get(asap=False)
+            image = SubstractBackground(detector, dataflow)
             fm_test = MeasureFocus(image)
             if fm_test > best_fm:
                 best_pos = new_pos
@@ -129,7 +157,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
                     pos = focus.position.value.get('z')
                     shift = cur_pos - pos
                     new_pos = _ClippedMove(rng, focus, shift)
-                    image = detector.data.get(asap=False)
+                    image = SubstractBackground(detector, dataflow)
                     fm_new = MeasureFocus(image)
                     if fm_new > best_fm:
                         best_pos = new_pos
@@ -147,13 +175,13 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
                         raise CancelledError()
                     steps += 1
 
-                image = detector.data.get(asap=False)
+                image = SubstractBackground(detector, dataflow)
                 fm_cur = MeasureFocus(image)
                 if fm_cur > best_fm:
                     best_pos = new_pos
                     best_fm = fm_cur
                 new_pos = _ClippedMove(rng, focus, step)
-                image = detector.data.get(asap=False)
+                image = SubstractBackground(detector, dataflow)
                 fm_test = MeasureFocus(image)
                 if fm_test > best_fm:
                     best_pos = new_pos
@@ -188,7 +216,7 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
                 # Do not stuck to the border
                 if before_move == after_move:
                     sign = -sign
-                image = detector.data.get(asap=False)
+                image = SubstractBackground(detector, dataflow)
                 fm_new = MeasureFocus(image)
                 if fm_new > best_fm:
                     best_pos = new_pos
@@ -208,18 +236,12 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus):
             logging.info("Already well focused.")
             return focus.position.value.get('z'), fm_final
 
-        if init_fm - fm_final < -thres_factor * fm_final:
-            return focus.position.value.get('z'), fm_final
-        else:
-            # Return to initial position
-            pos = focus.position.value.get('z')
-            shift = init_pos - pos
-            new_pos = _ClippedMove(rng, focus, shift)
-            raise IOError("Autofocus failure")
-
-        return focus.position.value.get('z'), fm_final
+        # Return to best measured focus position anyway
+        pos = focus.position.value.get('z')
+        shift = best_pos - pos
+        new_pos = _ClippedMove(rng, focus, shift)
+        return focus.position.value.get('z'), best_fm
     except CancelledError:
-        # Return to best measured focus position
         pos = focus.position.value.get('z')
         shift = best_pos - pos
         new_pos = _ClippedMove(rng, focus, shift)
@@ -268,8 +290,7 @@ def estimateAutoFocusTime(exposure_time, steps=MAX_STEPS_NUMBER):
     """
     return steps * exposure_time
 
-
-def AutoFocus(detector, scanner, focus, accuracy):
+def AutoFocus(detector, scanner, focus, accuracy, background=False, dataflow=None):
     """
     Wrapper for DoAutoFocus. It provides the ability to check the progress of autofocus 
     procedure or even cancel it.
@@ -277,6 +298,8 @@ def AutoFocus(detector, scanner, focus, accuracy):
     scanner (None or model.Scanner): In case of a SED this is the scanner used
     focus (model.Actuator): The optical focus
     accuracy (float): Focus precision #m
+    background (boolean): If True apply background substraction
+    dataflow (model.DataFlow): dataflow of se- or bs- detector
     returns (model.ProgressiveFuture):    Progress of DoAutoFocus, whose result() will return:
             Focus position #m
             Focus level
@@ -318,7 +341,7 @@ def AutoFocus(detector, scanner, focus, accuracy):
     # Run in separate thread
     autofocus_thread = threading.Thread(target=executeTask,
                   name="Autofocus",
-                  args=(f, doAutoFocus, f, detector, max_step, thres_factor, et, focus))
+                  args=(f, doAutoFocus, f, detector, max_step, thres_factor, et, focus, background, dataflow))
 
     autofocus_thread.start()
     return f

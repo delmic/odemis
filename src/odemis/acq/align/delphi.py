@@ -35,6 +35,7 @@ from odemis.acq.align import spot
 import threading
 import time
 from . import autofocus
+from autofocus import SubstractBackground
 
 EXPECTED_HOLES = ({"x":0, "y":11.5e-03}, {"x":0, "y":-11.5e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius
@@ -267,12 +268,6 @@ def estimateConversionTime(first_insertion):
     else:
         return 60
 
-def _discard_data(df, data):
-    """
-    Does nothing, just discard the SEM data received (for spot mode)
-    """
-    pass
-
 def AlignAndOffset(ccd, detector, escan, sem_stage, opt_stage, focus):
     """
     Wrapper for DoAlignAndOffset. It provides the ability to check the progress 
@@ -341,7 +336,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             raise CancelledError()
 
         sem_pos = sem_stage.position.value
-        detector.data.subscribe(_discard_data)
+        # detector.data.subscribe(_discard_data)
 
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
@@ -349,7 +344,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
         try:
             image = ccd.data.get(asap=False)
             # Move the sem_stage instead of objective lens
-            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE)
+            future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
             dist, vector = future_spot.result()
             # Almost done
             future.set_end_time(time.time() + 1)
@@ -366,7 +361,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
 
     finally:
         escan.resolution.value = (512, 512)
-        detector.data.unsubscribe(_discard_data)
+        # detector.data.unsubscribe(_discard_data)
         with future._offset_lock:
             if future._align_offset_state == CANCELLED:
                 raise CancelledError()
@@ -461,7 +456,8 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
     escan.dwellTime.value = 5e-06
-    detector.data.subscribe(_discard_data)
+    # detector.data.subscribe(_discard_data)
+    det_dataflow = detector.data
 
     try:
         if future._rotation_scaling_state == CANCELLED:
@@ -496,7 +492,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                     raise CancelledError()
                 if steps >= MAX_STEPS:
                     break
-                image = ccd.data.get(asap=False)
+                image = SubstractBackground(ccd, det_dataflow)
                 try:
                     spot_coordinates = spot.FindSpot(image)
                 except ValueError:
@@ -530,7 +526,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
 
     finally:
         escan.resolution.value = (512, 512)
-        detector.data.unsubscribe(_discard_data)
+        # detector.data.unsubscribe(_discard_data)
         with future._rotation_lock:
             if future._rotation_scaling_state == CANCELLED:
                 raise CancelledError()

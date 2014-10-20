@@ -34,6 +34,7 @@ import time
 import numpy
 import coordinates
 from . import autofocus
+from autofocus import SubstractBackground
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move
@@ -56,7 +57,7 @@ def MeasureSNR(image):
     
     return snr
 
-def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE):
+def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE, background=False, dataflow=None):
     """
     Wrapper for DoAlignSpot. It provides the ability to check the progress of
     spot mode procedure or even cancel it.
@@ -65,6 +66,8 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE):
     escan (model.Emitter): The e-beam scanner
     focus (model.Actuator): The optical focus
     type (string): Type of move in order to align
+    background (boolean): If True apply background substraction
+    dataflow (model.DataFlow): dataflow of se- or bs- detector
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns (float):    Final distance to the center #m 
@@ -87,12 +90,12 @@ def AlignSpot(ccd, stage, escan, focus, type=OBJECTIVE_MOVE):
     # Run in separate thread
     alignment_thread = threading.Thread(target=executeTask,
                   name="Spot alignment",
-                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type))
+                  args=(f, _DoAlignSpot, f, ccd, stage, escan, focus, type, background, dataflow))
 
     alignment_thread.start()
     return f
 
-def _DoAlignSpot(future, ccd, stage, escan, focus, type):
+def _DoAlignSpot(future, ccd, stage, escan, focus, type, background, dataflow):
     """
     Adjusts settings until we have a clear and well focused optical spot image, 
     detects the spot and manipulates the stage so as to move the spot center to 
@@ -104,6 +107,8 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
     escan (model.Emitter): The e-beam scanner
     focus (model.Actuator): The optical focus
     type (string): Type of move in order to align
+    background (boolean): If True apply background substraction
+    dataflow (model.DataFlow): dataflow of se- or bs- detector
     returns (float):    Final distance to the center #m 
     raises:    
             CancelledError() if cancelled
@@ -132,11 +137,11 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
         logging.debug("Adjust exposure time...")
-        image = ccd.data.get(asap=False)
+        image = SubstractBackground(ccd, dataflow)
         snr = MeasureSNR(image)
-        while (snr < 5 and ccd.exposureTime.value < 800e-03):
+        while (snr < 5 and ccd.exposureTime.value < 900e-03):
             ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
-            image = ccd.data.get(asap=False)
+            image = SubstractBackground(ccd, dataflow)
             snr = MeasureSNR(image)
         et = ccd.exposureTime.value
 
@@ -144,9 +149,9 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
 
-        image = ccd.data.get(asap=False)
+        image = SubstractBackground(ccd, dataflow)
         logging.debug("Trying to find spot...")
-        future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type)
+        future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, background, dataflow)
         dist, vector = future._centerspotf.result()
 
         # If spot not found, autofocus and then retry
@@ -157,7 +162,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
             try:
                 # When Autofocus set binning 8 if possible
                 ccd.binning.value = min((8, 8), ccd.binning.range[1])
-                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                future._autofocusf = autofocus.AutoFocus(ccd, None, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background, dataflow)
                 lens_pos, fm_level = future._autofocusf.result()
                 # Update progress of the future
                 future.set_end_time(time.time() +
@@ -168,7 +173,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
             if future._spot_alignment_state == CANCELLED:
                 raise CancelledError()
             logging.debug("Trying again to find spot...")
-            future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type)
+            future._centerspotf = CenterSpot(ccd, stage, escan, ROUGH_MOVE, type, background, dataflow)
             dist, vector = future._centerspotf.result()
             if dist is None:
                 raise IOError('Spot alignment failure. Spot not found')
@@ -177,11 +182,11 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
         future.set_end_time(time.time() +
                             estimateAlignmentTime(et, dist, 1))
 
-        image = ccd.data.get(asap=False)
+        image = SubstractBackground(ccd, dataflow)
         # Limitate FoV to save time
         logging.debug("Crop FoV...")
-        CropFoV(ccd)
-        image = ccd.data.get(asap=False)
+        CropFoV(ccd, background, dataflow)
+        image = SubstractBackground(ccd, dataflow)
         # Autofocus
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
@@ -195,7 +200,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type):
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
         logging.debug("Aligning spot...")
-        future._centerspotf = CenterSpot(ccd, stage, escan, FINE_MOVE, type)
+        future._centerspotf = CenterSpot(ccd, stage, escan, FINE_MOVE, type, background, dataflow)
         dist, vector = future._centerspotf.result()
         if dist is None:
             raise IOError('Spot alignment failure. Cannot reach the center.')
@@ -273,13 +278,13 @@ def FindSpot(image):
     return max_pos
 
 
-def CropFoV(ccd):
+def CropFoV(ccd, background=False, dataflow=None):
     """
     Limitate the ccd FoV to just contain the spot, in order to save some time
     on AutoFocus process.
     ccd (model.DigitalCamera): The CCD
     """
-    image = ccd.data.get(asap=False)
+    image = SubstractBackground(ccd, dataflow)
     center_pxs = ((image.shape[1] / 2),
                  (image.shape[0] / 2))
 
@@ -293,7 +298,7 @@ def CropFoV(ccd):
     ccd.binning.value = (1, 1)
 
 
-def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE):
+def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE, background=False, dataflow=None):
     """
     Wrapper for _DoCenterSpot.
     ccd (model.DigitalCamera): The CCD
@@ -318,12 +323,13 @@ def CenterSpot(ccd, stage, escan, mx_steps, type=OBJECTIVE_MOVE):
     # Run in separate thread
     center_thread = threading.Thread(target=executeTask,
                   name="Spot center",
-                  args=(f, _DoCenterSpot, f, ccd, stage, escan, mx_steps, type))
+                  args=(f, _DoCenterSpot, f, ccd, stage, escan, mx_steps, type, background, dataflow))
 
     center_thread.start()
     return f
 
-def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
+
+def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type, background, dataflow):
     """
     Iteratively acquires an optical image, finds the coordinates of the spot 
     (center) and moves the stage to this position. Repeats until the found 
@@ -365,7 +371,7 @@ def _DoCenterSpot(future, ccd, stage, escan, mx_steps, type):
                 break
     
             # Wait to make sure no previous spot is detected
-            image = ccd.data.get(asap=False)
+            image = SubstractBackground(ccd, dataflow)
             try:
                 spot_pxs = FindSpot(image)
             except ValueError:
