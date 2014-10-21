@@ -57,7 +57,7 @@ def main(args):
         for c in model.getComponents():
             if c.role == "e-beam":
                 escan = c
-            elif c.role == "se-detector":
+            elif c.role == "bs-detector":
                 detector = c
             elif c.role == "ccd":
                 ccd = c
