@@ -282,6 +282,14 @@ class Container(Pyro4.core.Daemon):
         comp = klass(**kwargs)
         return comp
 
+    def setRoot(self, component):
+        """
+        sets the root object. It has to be one of the component handled by the
+         container.
+        component (Component)
+        """
+        self.rootId = component._pyroId
+
 # helper functions
 def getContainer(name, validate=True):
     """
@@ -342,10 +350,13 @@ def createInNewContainer(container_name, klass, kwargs):
     container_name (string)
     klass (class): component class
     kwargs (dict (str -> value)): arguments for the __init__() of the component
-    returns the (proxy to the) new component
+    returns:
+        (Container) the new container
+        (Component) the (proxy to the) new component
     """
     container = createNewContainer(container_name, validate=False)
-    return container.instantiate(klass, kwargs)
+    comp = container.instantiate(klass, kwargs)
+    return container, comp
 
 def _manageContainer(name, isready=None):
     """

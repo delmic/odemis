@@ -224,7 +224,7 @@ class Instantiator(object):
         attr = self.ast[name]
         class_name = attr["class"]
         class_comp = get_class(class_name)
-        
+
         # create the arguments:
         # name (str)
         # role (str)
@@ -236,29 +236,31 @@ class Instantiator(object):
 
         logging.debug("Going to instantiate %s (%s) with args %s",
                       name, class_name, args)
-    
+
         if self.dry_run and not class_name == "Microscope":
             # mock class for everything but Microscope (because it is safe)
             args["_realcls"] = class_comp
             class_comp = mock.MockComponent
-            
+
         try:
+            # If it's not a leaf, it's probably a wrapper (eg, MultiplexActuator),
+            # which is simple Python code and so doesn't need to run in a
+            # separate container.
             if self.create_sub_containers and self.is_leaf(name):
                 # new container has the same name as the component
-                comp = model.createInNewContainer(name, class_comp, args)
-                self.sub_containers.add(model.getContainer(name))
-            elif self.root_container:
-                comp = self.root_container.instantiate(class_comp, args)
+                cont, comp = model.createInNewContainer(name, class_comp, args)
+                self.sub_containers.add(cont)
             else:
-                comp = class_comp(**args)
+                logging.debug("Creating %s in root container", name)
+                comp = self.root_container.instantiate(class_comp, args)
         except Exception:
             logging.error("Error while instantiating component %s.", name)
             raise
-        
+
         # Add all the children to our list of components. Useful only if child 
         # created by delegation, but can't hurt to add them all.
         self.components |= getattr(comp, "children", set())
-        
+
         return comp
 
     def get_component_by_name(self, name):
@@ -498,7 +500,7 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
             except:
                 pass
         raise exp
-    
+
     return instantiator.microscope, instantiator.components, instantiator.sub_containers 
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:

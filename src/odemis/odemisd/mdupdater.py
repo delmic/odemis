@@ -126,7 +126,8 @@ class MetadataUpdater(model.Component):
         updatePixelDensity(None) # update it right now
 
         # update pole position, if available
-        if isinstance(lens.polePosition.value, collections.Iterable):
+        if (hasattr(lens, "polePosition")
+            and isinstance(lens.polePosition.value, collections.Iterable)):
             def updatePolePos(unused, lens=lens, comp=comp):
                 # the formula is: Pole = Pole_no_binning / binning
                 try:

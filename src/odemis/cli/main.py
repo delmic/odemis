@@ -73,10 +73,10 @@ def scan():
                 container_name = "scanner%d" % num
                 num += 1
                 try:
-                    scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
+                    cont, scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
                     devices = scanner.scan()
                     scanner.terminate()
-                    model.getContainer(container_name).terminate()
+                    cont.terminate()
                 except Exception:
                     logging.exception("Failed to scan %s.%s components", module_name, cls_name)
                 else:

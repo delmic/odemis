@@ -53,18 +53,17 @@ class ContainerTest(unittest.TestCase):
         container.terminate()
     
     def test_instantiate_simple_component(self):
-        comp = model.createInNewContainer("testscont", FamilyValueComponent, {"name":"MyComp"})
+        container, comp = model.createInNewContainer("testscont", FamilyValueComponent, {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
         
         comp_prime = model.getObject("testscont", "MyComp")
         self.assertEqual(comp_prime.name, "MyComp")
         
-        container = model.getContainer("testscont")
         comp.terminate()
         container.terminate()
 
     def test_instantiate_component(self):
-        comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
+        container, comp = model.createInNewContainer("testcont", MyComponent, {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
         val = comp.my_value
         self.assertEqual(val, "ro", "Reading attribute failed")
@@ -72,13 +71,18 @@ class ContainerTest(unittest.TestCase):
         comp_prime = model.getObject("testcont", "MyComp")
         self.assertEqual(comp_prime.name, "MyComp")
         
-        container = model.getContainer("testcont")
         container.ping()
+
+        # check getContainer works
+        container2 = model.getContainer("testcont")
+        container2.ping()
+        self.assertEqual(container, container2)
+
         comp.terminate()
         container.terminate()
     
     def test_multi_components(self):
-        comp = model.createInNewContainer("testmulti", FatherComponent, {"name":"Father", "children_num":3})
+        container, comp = model.createInNewContainer("testmulti", FatherComponent, {"name":"Father", "children_num":3})
         self.assertEqual(comp.name, "Father")
         self.assertEqual(len(comp.children), 3, "Component should have 3 children")
         
@@ -90,7 +94,7 @@ class ContainerTest(unittest.TestCase):
         
         comp.terminate()
         # we are not terminating the children, but this should be caught by the container
-        model.getContainer("testmulti").terminate()
+        container.terminate()
 
     def test_timeout(self):
         if Pyro4.config.COMMTIMEOUT == 0 or Pyro4.config.COMMTIMEOUT > 20:
@@ -154,11 +158,11 @@ class ProxyOfProxyTest(unittest.TestCase):
 #  change .affects of HwComponent to the first object
 #  
     def test_component(self):
-        comp = model.createInNewContainer("testscont", model.HwComponent, 
+        cont, comp = model.createInNewContainer("testscont", model.HwComponent,
                                           {"name":"MyHwComp", "role":"affected"})
         self.assertEqual(comp.name, "MyHwComp")
             
-        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+        cont2, comp2 = model.createInNewContainer("testscont2", model.HwComponent,
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
@@ -175,16 +179,16 @@ class ProxyOfProxyTest(unittest.TestCase):
             
         comp.terminate()
         comp2.terminate()
-        model.getContainer("testscont").terminate()
-        model.getContainer("testscont2").terminate()
+        cont.terminate()
+        cont2.terminate()
         time.sleep(0.1) # give it some time to terminate
     
     def test_va(self):
-        comp = model.createInNewContainer("testscont", SimpleHwComponent, 
+        cont, comp = model.createInNewContainer("testscont", SimpleHwComponent,
                                           {"name":"MyHwComp", "role":"affected"})
         self.assertEqual(comp.name, "MyHwComp")
         
-        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+        cont2, comp2 = model.createInNewContainer("testscont2", model.HwComponent,
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
@@ -214,15 +218,15 @@ class ProxyOfProxyTest(unittest.TestCase):
         
         comp.terminate()
         comp2.terminate()
-        model.getContainer("testscont").terminate()
-        model.getContainer("testscont2").terminate()
+        cont.terminate()
+        cont2.terminate()
     
     def test_roattributes(self):
-        comp = model.createInNewContainer("testscont", MyComponent, 
+        cont, comp = model.createInNewContainer("testscont", MyComponent,
                                           {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
         
-        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+        cont2, comp2 = model.createInNewContainer("testscont2", model.HwComponent,
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
@@ -236,16 +240,16 @@ class ProxyOfProxyTest(unittest.TestCase):
         
         comp.terminate()
         comp2.terminate()
-        model.getContainer("testscont").terminate()
-        model.getContainer("testscont2").terminate()
+        cont.terminate()
+        cont2.terminate()
 
     @timeout(20)
     def test_dataflow(self):
-        comp = model.createInNewContainer("testscont", MyComponent, 
+        cont, comp = model.createInNewContainer("testscont", MyComponent,
                                           {"name":"MyComp"})
         self.assertEqual(comp.name, "MyComp")
         
-        comp2 = model.createInNewContainer("testscont2", model.HwComponent, 
+        cont2, comp2 = model.createInNewContainer("testscont2", model.HwComponent,
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
@@ -268,8 +272,8 @@ class ProxyOfProxyTest(unittest.TestCase):
 
         comp.terminate()
         comp2.terminate()
-        model.getContainer("testscont").terminate()
-        model.getContainer("testscont2").terminate()
+        cont.terminate()
+        cont2.terminate()
         time.sleep(0.1) # give it some time to terminate
     
     @timeout(20)
@@ -278,9 +282,9 @@ class ProxyOfProxyTest(unittest.TestCase):
         Check the dataflow is automatically unsubscribed when the subscriber
         disappears.
         """
-        comp = model.createInNewContainer("testscont", MyComponent, 
+        cont, comp = model.createInNewContainer("testscont", MyComponent,
                                           {"name":"MyComp"})
-        comp2 = model.createInNewContainer("testscont2", MyComponent, 
+        cont2, comp2 = model.createInNewContainer("testscont2", MyComponent,
                                            {"name":"MyComp2"})
         
         self.count = 0
@@ -298,7 +302,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         nlisteners = comp.data._count_listeners()
         logging.info("orig has %d listeners", nlisteners)
         comp2.terminate()
-        model.getContainer("testscont2").terminate()
+        cont2.terminate()
         logging.info("comp2 should now be disappeared")
         
         time.sleep(0.4)
@@ -306,7 +310,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.assertEqual(nlisteners, 0)
 
         comp.terminate()
-        model.getContainer("testscont").terminate()
+        cont.terminate()
         time.sleep(0.1) # give it some time to terminate
         
     def receive_data(self, dataflow, data):
@@ -581,8 +585,9 @@ class RemoteTest(unittest.TestCase):
     def receive_data(self, dataflow, data):
         self.count += 1
         self.assertEqual(data.shape, self.expected_shape)
-        self.data_arrays_sent = data[0][0]
-        self.assertGreaterEqual(self.data_arrays_sent, self.count)
+        if data.ndim >= 2:
+            self.data_arrays_sent = data[0][0]
+            self.assertGreaterEqual(self.data_arrays_sent, self.count)
         
     def receive_data_auto_unsub(self, dataflow, data):
         """

@@ -59,8 +59,9 @@ if [ $status -ne 0 ]; then
     echo "."
     
     if [ $LOGLEVEL -gt 1 ]; then
-        # Display the log while starting (and automatically quit when this script ends)
-        $TERMINAL -x /usr/bin/tail -n 0 -f "$LOGFILE" & #--pid=$$
+        # Display the log while starting 
+        # PID_BACKEND=$(/usr/bin/pgrep -f -o $BACKEND)
+        $TERMINAL -x /usr/bin/tail -n 0 -f "$LOGFILE" & #--pid $PID_BACKEND
     fi
 
     # For some drivers, initialisation can be pretty long
