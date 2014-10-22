@@ -1389,6 +1389,10 @@ class ChamberPressure(model.Actuator):
         # completed and thus position can be updated
         self._chamber_event = threading.Event()
         self._chamber_event.set()
+        # Event to prevent move applied from the user while another move is
+        # in progress
+        self._move_event = threading.Event()
+        self._move_event.set()
         self._chamber_must_stop = threading.Event()
         target = self._chamber_move_thread
         self._chamber_thread = threading.Thread(target=target,
@@ -1399,7 +1403,9 @@ class ChamberPressure(model.Actuator):
         """
         update the position VA and .pressure VA
         """
+        logging.debug("About to update chamber position...")
         area = self.parent._device.GetProgressAreaSelection().target  # last official position
+        logging.debug("Targeted area: %s", area)
         if area == "LOADING-WORK-AREA-SEM":
             # Once moved in SEM, get current tilt and use as beam unblank value
             # Then blank the beam and unblank it once SEM stream is started
@@ -1502,6 +1508,7 @@ class ChamberPressure(model.Actuator):
         TimeUpdater = util.RepeatingTimer(1, updater, "Pressure time updater")
         TimeUpdater.start()
         self._chamber_event.clear()
+        self._move_event.wait()
         with self.parent._acq_progress_lock:
             logging.debug("Moving to another chamber state...")
             try:
@@ -1605,19 +1612,23 @@ class ChamberPressure(model.Actuator):
 
         api_frames = 0
         while(True):
-            newEvent = self._pressure_device.ReadEventChannel(ch_id)[0][0].eventID
-            logging.debug("Try to read event: %s", newEvent)
-            if (newEvent == eventID1):
-                # Allow few phenom api acquisitions before you start acquiring
-                # via odemis. An alternative would be to wait for the second
-                # ACB performed by phenom API each time we load to SEM.
-                api_frames += 1
-                if api_frames >= 25:
-                    break
-            elif (newEvent == eventID2):
-                break
+            expected_event = self._pressure_device.ReadEventChannel(ch_id)
+            if expected_event == "":
+                logging.debug("Event listener timeout")
             else:
-                logging.debug("Unexpected event received")
+                newEvent = expected_event[0][0].eventID
+                logging.debug("Try to read event: %s", newEvent)
+                if (newEvent == eventID1):
+                    # Allow few phenom api acquisitions before you start acquiring
+                    # via odemis. An alternative would be to wait for the second
+                    # ACB performed by phenom API each time we load to SEM.
+                    api_frames += 1
+                    if api_frames >= 25:
+                        break
+                elif (newEvent == eventID2):
+                    break
+                else:
+                    logging.debug("Unexpected event received")
         self._pressure_device.CloseEventChannel(ch_id)
         # Wait before allow acquisition
         time.sleep(1)
@@ -1638,20 +1649,23 @@ class ChamberPressure(model.Actuator):
         ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
-		expected_event = self._pressure_device.ReadEventChannel(ch_id)
-		if expected_event == "":
-		    logging.debug("Event listener timeout")
-		else:
-		    try:	
-            	    	time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
-                    	logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
-                    	if (time_remaining == 0):
-		            # Wait until any move performed by the user is completed
+                expected_event = self._pressure_device.ReadEventChannel(ch_id)
+                if expected_event == "":
+                    logging.debug("Event listener timeout")
+                else:
+                    try:    
+                        time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
+                        logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
+                        if (time_remaining == 0):
+                            # Move in progress is completed
+                            self._move_event.set()
+                            # Wait until any move performed by the user is completed
                             self._chamber_event.wait()
                             self._updatePosition()
-	            except Exception:
-			logging.warning("Received event does not have the expected attribute or format")
-
+                        else:
+                            self._move_event.clear()
+                    except Exception:
+                        logging.warning("Received event does not have the expected attribute or format")
         except Exception:
             logging.exception("Unexpected failure during chamber pressure event listening")
         finally:

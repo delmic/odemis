@@ -400,7 +400,7 @@ CONFIG_PER_ROLE = {
         "spotSize":
         {
             "control_type": odemis.gui.CONTROL_RADIO,
-            "choices": {1, 2, 3, 4, 5}, # some weird unit
+            "choices": {2.1, 2.4, 2.7, 3, 3.3},  # some weird unit
         },
     },
 
