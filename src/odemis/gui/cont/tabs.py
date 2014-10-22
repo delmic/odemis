@@ -1506,6 +1506,28 @@ class AnalysisTab(Tab):
             if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
                 self.tab_data_model.focussedView.value = plot_view
 
+    def _on_line_select(self, start_end):
+        """ Event handler for when a line is selected """
+        # If the right tool is active...
+        if self.tab_data_model.tool.value == guimod.TOOL_LINE:
+            pass
+            # plot_view = self.main_frame.vp_inspection_plot.microscope_view
+            #
+            # # ...and the plot view is not visible yet
+            # if not plot_view in self.tab_data_model.visible_views.value:
+            #     # Try and display the plot in the 2nd (= top right) spot...
+            #     pos = 1
+            #     # .., but go for the bottom right one when the spec pixel was
+            #     # selected in the top right viewport
+            #     if (self.tab_data_model.focussedView.value ==
+            #             self.main_frame.vp_inspection_tr.microscope_view):
+            #         pos = 3
+            #
+            #     self.tab_data_model.visible_views.value[pos] = plot_view
+            #
+            # # If we're in 1x1 view, we're bringing the plot to the front
+            # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
+            #     self.tab_data_model.focussedView.value = plot_view
 
     def _split_channels(self, data):
         """
@@ -1559,23 +1581,30 @@ class LensAlignTab(Tab):
                                       rotation=math.radians(-135))
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
-            (main_frame.vp_align_ccd,  # focused view
-             {"name": "Optical CL",
-              "stage": self._stage_ab,
-              "focus": main_data.focus,
-              "stream_classes": (streammod.CameraNoLightStream,),
-             }),
-            (main_frame.vp_align_sem,
-             {"name": "SEM",
-              "stage": main_data.stage,
-              "stream_classes": streammod.EMStream,
-             },
+            (
+                main_frame.vp_align_ccd,  # focused view
+                {
+                    "name": "Optical CL",
+                    "stage": self._stage_ab,
+                    "focus": main_data.focus,
+                    "stream_classes": (streammod.CameraNoLightStream,),
+                }
+            ),
+            (
+                main_frame.vp_align_sem,
+                {
+                    "name": "SEM",
+                    "stage": main_data.stage,
+                    "stream_classes": streammod.EMStream,
+                },
             )
         ])
+
         self.view_controller = viewcont.ViewController(
             self.tab_data_model,
             self.main_frame,
-            vpv)
+            vpv
+        )
 
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
