@@ -395,7 +395,7 @@ CONFIG_PER_ROLE = {
         "accelVoltage":
         {
             "control_type": odemis.gui.CONTROL_RADIO,
-            "choices": {4700, 5000, 7500, 10000}, # V
+            "choices": {4800, 5000, 7500, 10000},  # V
         },
         "spotSize":
         {

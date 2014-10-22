@@ -1638,15 +1638,19 @@ class ChamberPressure(model.Actuator):
         ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
-                try:
-                    time_remaining = self._pressure_device.ReadEventChannel(ch_id)[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
-                    logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
-                    if (time_remaining == 0):
-                        # Wait until any move performed by the user is completed
-                        self._chamber_event.wait()
-                        self._updatePosition()
-                except Exception:
-                    logging.warning("Unexpected event received")
+		expected_event = self._pressure_device.ReadEventChannel(ch_id)
+		if expected_event == "":
+		    logging.debug("Event listener timeout")
+		else:
+		    try:	
+            	    	time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
+                    	logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
+                    	if (time_remaining == 0):
+		            # Wait until any move performed by the user is completed
+                            self._chamber_event.wait()
+                            self._updatePosition()
+	            except Exception:
+			logging.warning("Received event does not have the expected attribute or format")
 
         except Exception:
             logging.exception("Unexpected failure during chamber pressure event listening")

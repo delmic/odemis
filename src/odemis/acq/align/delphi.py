@@ -616,6 +616,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
         holes_found = []
         et = escan.dwellTime.value * numpy.prod(escan.resolution.value)
         hole_focus = known_focus
+        escan.accelVoltage.value = 5.5e03  # 5.5 kV, to ensure that holes are visible
         for pos in EXPECTED_HOLES:
             if future._hole_detection_state == CANCELLED:
                 raise CancelledError()
