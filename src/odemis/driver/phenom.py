@@ -1612,6 +1612,7 @@ class ChamberPressure(model.Actuator):
 
         api_frames = 0
         while(True):
+            logging.debug("Device wait function about to read event...")
             expected_event = self._pressure_device.ReadEventChannel(ch_id)
             if expected_event == "":
                 logging.debug("Event listener timeout")
@@ -1649,6 +1650,7 @@ class ChamberPressure(model.Actuator):
         ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
+                logging.debug("Chamber move thread about to read event...")
                 expected_event = self._pressure_device.ReadEventChannel(ch_id)
                 if expected_event == "":
                     logging.debug("Event listener timeout")
