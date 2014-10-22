@@ -146,6 +146,34 @@ class xrcfpb_frame(wx.Frame):
 
 
 
+class xrcgrid_frame(wx.Frame):
+#!XRCED:begin-block:xrcgrid_frame.PreCreate
+    def PreCreate(self, pre):
+        """ This function is called during the class's initialization.
+        
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+        
+#!XRCED:end-block:xrcgrid_frame.PreCreate
+
+    def __init__(self, parent):
+        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+        pre = wx.PreFrame()
+        self.PreCreate(pre)
+        get_resources().LoadOnFrame(pre, parent, "grid_frame")
+        self.PostCreate(pre)
+
+        # Define variables for the controls, bind event handlers
+        self.grid_panel = xrc.XRCCTRL(self, "grid_panel")
+        self.red = xrc.XRCCTRL(self, "red")
+        self.blue = xrc.XRCCTRL(self, "blue")
+        self.purple = xrc.XRCCTRL(self, "purple")
+        self.brown = xrc.XRCCTRL(self, "brown")
+
+
+
 class xrcmenu_bar(wx.MenuBar):
     def __init__(self):
         pre = get_resources().LoadMenuBar("menu_bar")
@@ -472,6 +500,68 @@ def __init_resources():
     </object>
     <title>Fold Panel Bar Test Frame</title>
     <bg>#666666</bg>
+  </object>
+  <object class="wxFrame" name="grid_frame">
+    <object_ref ref="menu_bar"/>
+    <object class="wxPanel" name="grid_panel">
+      <object class="wxGridBagSizer">
+        <object class="sizeritem">
+          <object class="wxPanel" name="red">
+            <bg>#E65F5F</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <option>1</option>
+          <flag>wxEXPAND</flag>
+          <cellpos>0,0</cellpos>
+        </object>
+        <object class="sizeritem">
+          <object class="wxPanel" name="blue">
+            <bg>#57B4BA</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <option>1</option>
+          <flag>wxEXPAND</flag>
+          <cellpos>0,1</cellpos>
+        </object>
+        <object class="sizeritem">
+          <object class="wxPanel" name="purple">
+            <bg>#E48BD3</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <option>1</option>
+          <flag>wxEXPAND</flag>
+          <cellpos>1,0</cellpos>
+        </object>
+        <object class="sizeritem">
+          <object class="wxPanel" name="brown">
+            <bg>#FFC292</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <option>1</option>
+          <flag>wxEXPAND</flag>
+          <cellpos>1,1</cellpos>
+        </object>
+        <growablecols>0,1</growablecols>
+        <growablerows>0,1</growablerows>
+      </object>
+      <size>500,500</size>
+      <bg>#4D4D4D</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
+    </object>
+    <size>500,500</size>
+    <title>Cairo Test</title>
+    <centered>1</centered>
+    <bg>#4D4D4D</bg>
   </object>
   <object class="wxMenuBar" name="menu_bar">
     <object class="wxMenu">

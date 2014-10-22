@@ -203,7 +203,7 @@ class MicroscopeViewport(ViewPort):
         has been called.
         """
         # Call parent constructor at the end, because it needs the legend panel
-        ViewPort.__init__(self, *args, **kwargs)
+        super(MicroscopeViewport, self).__init__(*args, **kwargs)
 
         # Bind on EVT_SLIDER to update even while the user is moving
         self.bottom_legend.Bind(wx.EVT_LEFT_UP, self.OnSlider)

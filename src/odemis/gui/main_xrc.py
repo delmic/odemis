@@ -227,7 +227,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -812,8 +812,6 @@ def __init_resources():
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  <growablecols>0,1</growablecols>
-                  <growablerows>0,1</growablerows>
                   <object class="sizeritem">
                     <object class="OverviewViewport" name="vp_overview_sem">
                       <XRCED>
@@ -824,6 +822,8 @@ def __init_resources():
                     <flag>wxEXPAND</flag>
                     <cellpos>2,2</cellpos>
                   </object>
+                  <growablecols>0,1</growablecols>
+                  <growablerows>0,1</growablerows>
                 </object>
                 <bg>#000000</bg>
               </object>
@@ -2594,7 +2594,6 @@ def __init_resources():
                     <flag>wxALL|wxEXPAND</flag>
                     <border>10</border>
                   </object>
-                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -2777,91 +2776,88 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_tl">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
+              <object class="wxPanel">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="MicroscopeViewport" name="vp_inspection_tl">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_tr">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>0,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="MicroscopeViewport" name="vp_inspection_tr">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <orient>wxHORIZONTAL</orient>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>0,1</cellpos>
                   </object>
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                  <ratio>1</ratio>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_bl">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
+                  <object class="sizeritem">
+                    <object class="MicroscopeViewport" name="vp_inspection_bl">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_br">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>1,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="MicroscopeViewport" name="vp_inspection_br">
+                      <fg>#BFBFBF</fg>
+                      <bg>#000000</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <orient>wxHORIZONTAL</orient>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <minsize>400,400</minsize>
+                    <ratio>1</ratio>
+                    <cellpos>1,1</cellpos>
                   </object>
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                  <ratio>1</ratio>
-                </object>
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="PlotViewport" name="vp_inspection_plot">
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="sizeritem">
+                    <object class="PlotViewport" name="vp_inspection_plot">
+                      <hidden>1</hidden>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <cellpos>2,2</cellpos>
                   </object>
-                </object>
-                <object class="sizeritem">
-                  <object class="AngularResolvedViewport" name="vp_angular">
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
+                  <object class="sizeritem">
+                    <object class="AngularResolvedViewport" name="vp_angular">
+                      <hidden>1</hidden>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                    <cellpos>3,3</cellpos>
                   </object>
+                  <growablecols>0,1</growablecols>
+                  <growablerows>0,1</growablerows>
                 </object>
               </object>
               <option>1</option>
