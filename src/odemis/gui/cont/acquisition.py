@@ -92,21 +92,14 @@ class SnapshotController(object):
 
     def on_tab_change(self, tab):
         """ Subscribe to the foccusedView VA of the current tab """
-        tab.tab_data_model.focussedView.subscribe(self.on_focussed_view_change,
-                                                  init=True)
+        tab.tab_data_model.streams.subscribe(self.on_streams_change, init=True)
 
-    def on_focussed_view_change(self, focussed_view):
-        """ Enable Snapshot menu items if a view is focussed and has streams """
+    def on_streams_change(self, streams):
+        """ Enable Snapshot menu items iff the tab has at least one stream """
 
-        if focussed_view:
-            if (hasattr(focussed_view, 'stream_tree') and
-                    len(focussed_view.stream_tree) > 0):
-                self._main_frame.menu_item_snapshot.Enable(True)
-                self._main_frame.menu_item_snapshot_as.Enable(True)
-                return
-
-        self._main_frame.menu_item_snapshot.Enable(False)
-        self._main_frame.menu_item_snapshot_as.Enable(False)
+        enabled = (len(streams) > 0)
+        self._main_frame.menu_item_snapshot.Enable(enabled)
+        self._main_frame.menu_item_snapshot_as.Enable(enabled)
 
     def start_snapshot_viewport(self, event):
         """ Wrapper to run snapshot_viewport in a separate thread."""
@@ -114,7 +107,7 @@ class SnapshotController(object):
         tab, filepath, exporter = self._get_snapshot_info(dialog=False)
         if None not in (tab, filepath, exporter):
             thread = threading.Thread(target=self.snapshot_viewport,
-                                      args=(tab, filepath, exporter))
+                                      args=(tab, filepath, exporter, True))
             thread.start()
 
     def start_snapshot_as_viewport(self, event):
@@ -123,7 +116,7 @@ class SnapshotController(object):
         tab, filepath, exporter = self._get_snapshot_info(dialog=True)
         if None not in (tab, filepath, exporter):
             thread = threading.Thread(target=self.snapshot_viewport,
-                                      args=(tab, filepath, exporter))
+                                      args=(tab, filepath, exporter, False))
             thread.start()
 
     def _get_snapshot_info(self, dialog=False):
@@ -150,13 +143,14 @@ class SnapshotController(object):
 
         return tab, filepath, exporter
 
-    def snapshot_viewport(self, tab, filepath, exporter):
+    def snapshot_viewport(self, tab, filepath, exporter, anim):
         """ Save a snapshot of the raw image from the focused view to the
         filesystem.
 
         :param tab: (Tab) the current tab to save the snapshot from
-        :param filepath: (str) full path to the destinatino file
+        :param filepath: (str) full path to the destination file
         :param exporter: (func) exporter to use for writing the file
+        :param anim: (bool) if True will show an animation
 
         When no dialog is shown, the name of the file will follow the scheme
         `date`-`time`.tiff (e.g., 20120808-154812.tiff) and it will be saved
@@ -167,26 +161,26 @@ class SnapshotController(object):
         try:
             tab_data_model = tab.tab_data_model
 
+            # Take all the streams available
+            streams = tab_data_model.streams.value
+            if not streams:
+                logging.info("Failed to take snapshot, no stream in tab %s",
+                                tab.name)
+                return
+
+            if anim:
+                self.start_snapshot_animation()
+
             # get currently focused view
             view = tab_data_model.focussedView.value
             if not view:
                 try:
                     view = tab_data_model.views.value[0]
                 except IndexError:
-                    logging.warning("Failed to take snapshot, no view available")
-                    return
-
-            # Take all the streams available
-            streams = tab_data_model.streams.value
-            if not streams:
-                logging.warning("Failed to take snapshot, no stream in tab %s",
-                                tab.name)
-                return
-
-            self.start_snapshot_animation()
+                    view = None
 
             # let's try to get a thumbnail
-            if view.thumbnail.value is None:
+            if not view or view.thumbnail.value is None:
                 thumbnail = None
             else:
                 # need to convert from wx.Image to ndimage
