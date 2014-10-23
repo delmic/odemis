@@ -802,15 +802,15 @@ class DelphiStateController(SecomStateController):
                       })
 
             # We need access to the separate sem and optical stages, which form
-            # the "stage". They are not found in the model (and don't even have
-            # official roles), but we can find them as master and slave of the
-            # stage (on the DELPHI)
+            # the "stage". They are not found in the model, but we can find them
+            # as children of stage (on the DELPHI), and distinguish them by
+            # their role.
             sem_stage = None
             opt_stage = None
-            for role, c in self._main_data.stage.children.items():
-                if role == "master":
+            for c in self._main_data.stage.children:
+                if c.role == "sem-stage":
                     sem_stage = c
-                elif role == "slave":
+                elif c.role == "align":
                     opt_stage = c
 
             if not sem_stage or not opt_stage:
