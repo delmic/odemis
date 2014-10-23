@@ -496,7 +496,14 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
                 try:
                     spot_coordinates = spot.FindSpot(image)
                 except ValueError:
-                    raise IOError("CL spot not found.")
+                    # If failed to find spot, try first to focus
+                    f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+                    f.result()
+                    image = SubstractBackground(ccd, det_dataflow)
+                    try:
+                        spot_coordinates = spot.FindSpot(image)
+                    except ValueError:
+                        raise IOError("CL spot not found.")
                 pixelSize = image.metadata[model.MD_PIXEL_SIZE]
                 center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
                 vector_pxs = [a - b for a, b in zip(spot_coordinates, center_pxs)]
