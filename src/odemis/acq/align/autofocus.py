@@ -37,7 +37,7 @@ FINE_SPOTMODE_ACCURACY = 5e-6  # fine focus accuracy in spot mode #m
 ROUGH_SPOTMODE_ACCURACY = 10e-6  # rough focus accuracy in spot mode #m
 INIT_THRES_FACTOR = 4e-3  # initial autofocus threshold factor
 
-MAX_STEPS_NUMBER = 20  # Max steps to perform autofocus
+MAX_STEPS_NUMBER = 30  # Max steps to perform autofocus
 MAX_BS_NUMBER = 1  # Maximum number of applying binary search with a smaller max_step
 
 
@@ -144,7 +144,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
                 cur_pos = focus.position.value.get('z')
 
                 steps = 0
-                count_fails = 0
                 while fm_new - fm_test < ((thres_factor / (trial + 1)) * 2) * fm_test:
                     if steps >= MAX_STEPS_NUMBER:
                         break
@@ -162,15 +161,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
                     if fm_new > best_fm:
                         best_pos = new_pos
                         best_fm = fm_new
-                    if fm_test - fm_new > ((thres_factor / (trial + 1)) / 2) * fm_new:
-                        count_fails += 1
-                        if (steps == 1) and (count_fails == 2):
-                            # Return to initial position
-                            logging.info("Binary search does not improve focus.")
-                            pos = focus.position.value.get('z')
-                            shift = init_pos - pos
-                            new_pos = _ClippedMove(rng, focus, shift)
-                            break
                     if future._autofocus_state == CANCELLED:
                         raise CancelledError()
                     steps += 1
@@ -231,10 +221,6 @@ def _DoAutoFocus(future, detector, max_step, thres_factor, et, focus, background
 
         if future._autofocus_state == CANCELLED:
             raise CancelledError()
-        fm_final = fm_old
-        if steps == 1:
-            logging.info("Already well focused.")
-            return focus.position.value.get('z'), fm_final
 
         # Return to best measured focus position anyway
         pos = focus.position.value.get('z')
