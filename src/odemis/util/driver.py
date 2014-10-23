@@ -147,13 +147,7 @@ def speedUpPyroConnect(comp):
 
     _speedUpPyroVAConnect(comp)
 
-    # cannot check for Microscope explicitly because it's a proxy
-    if isinstance(comp.detectors, collections.Set):
-        children = (comp.detectors | comp.emitters | comp.actuators)
-    else:
-        children = getattr(comp, "children", [])
-
-    for child in children:
+    for child in comp.children.value:
         t = threading.Thread(name="Connection to %s" % child.name, target=bind_obj, args=(child,))
         t.start()
 

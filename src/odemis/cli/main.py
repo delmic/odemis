@@ -129,13 +129,8 @@ def print_component_tree(root, pretty=True, level=0):
         # first print the root component
         print_component(root, pretty, level)
 
-        children = set(root.children)
-        # For microscope, it doesn't have anything in children
-        if isinstance(root.detectors, collections.Set):
-            children = root.detectors | root.emitters | root.actuators
-
         # display all the children
-        for comp in children:
+        for comp in root.children.value:
             print_component_tree(comp, pretty, level + 1)
     else:
         for c in model.getComponents():
@@ -170,8 +165,7 @@ def print_roattribute(name, value, pretty):
     else:
         print u"%s\ttype:roattr\tvalue:%s" % (name, value)
 
-non_roattributes_names = ("name", "role", "parent", "children", "affects",
-                          "actuators", "detectors", "emitters")
+non_roattributes_names = ("name", "role", "parent", "affects")
 def print_roattributes(component, pretty):
     for name, value in model.getROAttributes(component).items():
         # some are handled specifically
@@ -248,8 +242,11 @@ def print_vattribute(name, va, pretty):
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
+special_va_names = ("children",)
 def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
+        if name in special_va_names:
+            continue
         print_vattribute(name, value, pretty)
 
 def print_metadata(component, pretty):
@@ -301,7 +298,7 @@ def get_component(comp_name):
 
 def get_detector(comp_name):
     """
-    return the actuator component with the given name
+    return the detector component with the given name
     comp_name (string): name of the component to find
     raises
         ValueError if the component doesn't exist or is not a detector
@@ -497,19 +494,20 @@ def stop_move():
     """
     stop the move of every axis of every actuators
     """
-    # We actually just browse as a tree the microscope
+    # Take all the components and skip the ones that don't look like an actuator
     try:
-        microscope = model.getMicroscope()
-        actuators = microscope.actuators
+        comps = model.getComponents()
     except Exception:
         raise IOError("Failed to contact the back-end")
 
     error = False
-    for actuator in actuators:
+    for c in comps:
+        if not isinstance(c.axes, collections.Mapping):
+            continue
         try:
-            actuator.stop()
+            c.stop()
         except Exception:
-            logging.exception("Failed to stop actuator %s", actuator.name)
+            logging.exception("Failed to stop actuator %s", c.name)
             error = True
 
     if error:

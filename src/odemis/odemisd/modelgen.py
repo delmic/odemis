@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # {} around the whole file and "" around each string). In addition, the standard
 # parser doesn't report where the error is situated in the file.
 
+import collections
 import itertools
 import logging
 from odemis import model
@@ -140,6 +141,8 @@ class Instantiator(object):
         self.sub_containers = set() # all the sub-containers created for the components
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
         self.dry_run = dry_run # flag for instantiating mock version of the components
+
+        self.upgrade_microscope_children()
 
         # update/fill up the model with implicit information
         self.fill_creator()
@@ -259,7 +262,7 @@ class Instantiator(object):
 
         # Add all the children to our list of components. Useful only if child 
         # created by delegation, but can't hurt to add them all.
-        self.components |= getattr(comp, "children", set())
+        self.components |= comp.children.value
 
         return comp
 
@@ -313,12 +316,9 @@ class Instantiator(object):
         returns (set of HwComponents)
         """
         ret = set([root])
-        for child in getattr(root, "children", set()):
+        for child in root.children.value:
             ret |= Instantiator.get_children(child)
-        if isinstance(root, model.Microscope):
-            for child in (root.detectors | root.emitters | root.actuators):
-                ret |= Instantiator.get_children(child)
-        
+
         return ret
 
     def fill_creator(self):
@@ -367,25 +367,37 @@ class Instantiator(object):
                     logging.debug("Identified %s as creator of %s",
                                   parents[0], name)
 
-    def update_microscope(self):
-        assert(not isinstance(self.microscope, model.ComponentProxy))
-        # Connect all the sub-components of microscope: detectors, emitters, actuators
-        detector_names = self.ast[self.microscope.name].get("detectors", []) # none is weird but ok
-        detectors = [self.get_component_by_name(name) for name in detector_names]
-        self.microscope._detectors = set(detectors)
-        if not detectors:
-            logging.warning("Microscope contains no detectors.")
+    def upgrade_microscope_children(self):
+        """
+        Microscope used to be special with 3 types of child. In case the
+        definition has not been updated, we do it here.
+        """
+        # look for the microscope def
+        for attr in self.ast.values():
+            if attr.get("class", "") == "Microscope":
+                microscope = attr
+                break
+        else:
+            raise SemanticError("Error in microscope "
+                    "file: no Microscope component found.")
 
-        emitter_names = self.ast[self.microscope.name].get("emitters", []) # none is weird but ok
-        emitters = [self.get_component_by_name(name) for name in emitter_names]
-        self.microscope._emitters = set(emitters)
-        if not emitters:
-            logging.warning("Microscope contains no emitters.")
+        if not "children" in microscope:
+            microscope["children"] = {}
+        elif not isinstance(microscope["children"], collections.Mapping):
+            # upgrade from list -> dict
+            logging.debug("Upgrading the microscope children list to a dict")
+            d = dict(("c%d" % i, c) for i, c in enumerate(microscope["children"]))
+            microscope["children"] = d
 
-        actuator_names = self.ast[self.microscope.name].get("actuators", [])
-        actuators = [self.get_component_by_name(name) for name in actuator_names]
-        self.microscope._actuators = set(actuators)
-
+        for a in ("actuators", "detectors", "emitters"):
+            if a in microscope:
+                logging.info("Microscope component contains field '%s', which is "
+                             "deprecated and can be merged in field 'children'.",
+                             a)
+                for i, name in enumerate(microscope[a]):
+                    role = "%s%d" % (a[:-1], i)
+                    microscope["children"][role] = name
+                del microscope[a]
 
     def instantiate_model(self):
         """
@@ -413,8 +425,6 @@ class Instantiator(object):
         else:
             raise SemanticError("Error in microscope "
                     "file: no Microscope component found.")
-        
-        self.update_microscope()
         
         # Some validation:
         # The only components which are not either Microscope or referenced by it 

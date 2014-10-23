@@ -110,19 +110,13 @@ def getComponents():
 def _getChildren(root):
     """
     Return the set of components which are referenced from the given component
-     (children, emitters, detectors, actuators...)
+     (via children)
     root (HwComponent): the component to start from
     returns (set of HwComponents)
     """
     ret = set([root])
-    for child in getattr(root, "children", set()):
+    for child in root.children.value:
         ret |= _getChildren(child)
-
-    # cannot check for Microscope because it's a proxy
-    # isinstance(root, Microscope):
-    if isinstance(root.detectors, collections.Set):
-        for child in (root.detectors | root.emitters | root.actuators):
-            ret |= _getChildren(child)
 
     return ret
 
