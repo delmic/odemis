@@ -84,9 +84,9 @@ class ContainerTest(unittest.TestCase):
     def test_multi_components(self):
         container, comp = model.createInNewContainer("testmulti", FatherComponent, {"name":"Father", "children_num":3})
         self.assertEqual(comp.name, "Father")
-        self.assertEqual(len(comp.children), 3, "Component should have 3 children")
+        self.assertEqual(len(comp.children.value), 3, "Component should have 3 children")
         
-        for child in comp.children:
+        for child in comp.children.value:
             self.assertLess(child.value, 3)
             comp_direct = model.getObject("testmulti", child.name)
             self.assertEqual(comp_direct.name, child.name)
@@ -145,7 +145,7 @@ class SerializerTest(unittest.TestCase):
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children), 2)
+        self.assertEqual(len(sem_unpickled.children.value), 2)
         sem.terminate()
 
     
@@ -475,12 +475,12 @@ class RemoteTest(unittest.TestCase):
         # need to test cycles
         
         p = self.rdaemon.getObject("parent")
-        self.assertEqual(len(p.children), 1, "parent doesn't have one child")
+        self.assertEqual(len(p.children.value), 1, "parent doesn't have one child")
         c = list(p.children)[0]
 #        self.assertEqual(c.parent, p, "Component and parent of child is different")
         self.assertEqual(p.value, 42)
         self.assertEqual(c.value, 43)
-        self.assertEqual(len(c.children), 0, "child shouldn't have children")
+        self.assertEqual(len(c.children.value), 0, "child shouldn't have children")
                 
 #    @unittest.skip("simple")
     def test_dataflow_subscribe(self):
@@ -906,7 +906,7 @@ class FatherComponent(model.Component):
         daemon=kwargs.get("daemon", None)
         for i in range(children_num):
             child = FamilyValueComponent("child%d" % i, i, parent=self, daemon=daemon)
-            self.children.add(child)
+            self.children.value.add(child)
     
     @roattribute
     def value(self):

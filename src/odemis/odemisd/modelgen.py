@@ -311,7 +311,7 @@ class Instantiator(object):
     def get_children(root):
         """
         Return the set of components which are referenced from the given component 
-         (children, emitters, detectors, actuators...)
+         (via children)
         root (HwComponent): the component to start from
         returns (set of HwComponents)
         """
@@ -339,7 +339,7 @@ class Instantiator(object):
                 if not "parents" in self.ast[child_name].keys():
                     self.ast[child_name]["parents"] = []
                 self.ast[child_name]["parents"].append(name)
-        
+
         # For each component which is created by delegation (= no class):
         # * if no creator specified, use its parent (and error if multiple parents)
         # * if creator specified, check it's one of the parents
@@ -354,6 +354,8 @@ class Instantiator(object):
                             "is creator of component %s but doesn't have it as a child."
                             % (creator_name, name))
             else:
+                # TODO: if Microscope is one of the parents, it's for sure not
+                # the creator
                 if len(parents) == 0:
                     raise SemanticError("Error in microscope file: component %s "
                             "has no class specified and is not created by any "

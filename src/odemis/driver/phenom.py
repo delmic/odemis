@@ -169,7 +169,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'scanner' child")
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._scanner)
+        self.children.value.add(self._scanner)
 
         # create the detector child
         try:
@@ -177,7 +177,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'detector' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._detector)
+        self.children.value.add(self._detector)
 
         # create the stage child
         try:
@@ -185,7 +185,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'stage' child")
         self._stage = Stage(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._stage)
+        self.children.value.add(self._stage)
 
         # create the focus child
         try:
@@ -193,7 +193,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'focus' child")
         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._focus)
+        self.children.value.add(self._focus)
 
         # create the navcam child
         try:
@@ -201,7 +201,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'navcam' child")
         self._navcam = NavCam(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._navcam)
+        self.children.value.add(self._navcam)
 
         # create the NavCam focus child
         try:
@@ -209,7 +209,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'navcam-focus' child")
         self._navcam_focus = NavCamFocus(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._navcam_focus)
+        self.children.value.add(self._navcam_focus)
 
         # create the pressure child
         try:
@@ -217,7 +217,7 @@ class SEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("PhenomSEM was not given a 'pressure' child")
         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._pressure)
+        self.children.value.add(self._pressure)
 
     def terminate(self):
         """
