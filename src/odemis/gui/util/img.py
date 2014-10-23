@@ -31,6 +31,7 @@ import wx
 
 
 # @profile
+# TODO: rename to *_bgra_*
 def format_rgba_darray(im_darray, alpha=None):
     """ Reshape the given numpy.ndarray from RGB to BGRA format
 

@@ -362,7 +362,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Temporary function to convert the StreamTree to a list of images as
         the canvas currently expects.
         """
-
         images = self._get_ordered_images()
 
         # add the images in order
@@ -370,8 +369,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         for rgbim, blend_mode, name in images:
             # TODO: convert to RGBA later, in canvas and/or cache the conversion
-            # Canvas needs to accept the NDArray (+ specific attributes
-            # recorded separately).
+            # On large images it costs 100 ms (per image and per canvas)
 
             rgba_im = img.format_rgba_darray(rgbim)
             keepalpha = False
@@ -381,6 +379,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             ims.append([rgba_im, pos, scale, keepalpha, rot, blend_mode, name])
 
+        # TODO: Canvas needs to accept the NDArray (+ specific attributes
+        # recorded separately).
         self.set_images(ims)
 
         # For debug only:
@@ -407,7 +407,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if self.fit_view_to_next_image and any([i is not None for i in self.images]):
             self.fit_view_to_content()
             self.fit_view_to_next_image = False
-        #logging.debug("Will update drawing for new image")
+        # logging.debug("Will update drawing for new image")
         wx.CallAfter(self.request_drawing_update)
 
     def update_drawing(self):
@@ -1152,7 +1152,7 @@ class SparcAlignCanvas(DblMicroscopeCanvas):
                 continue
 
             # convert to wxImage
-            # Special trick to avoid regenerating the wxImage for Goal all the time
+            # Special trick to avoid regenerating the BGRA image for Goal all the time
             # TODO: make it generic
             if s.name.value == "Goal":
                 prev_im = None if self._goal_im_ref is None else self._goal_im_ref()
