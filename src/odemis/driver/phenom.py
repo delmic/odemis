@@ -1527,7 +1527,6 @@ class ChamberPressure(model.Actuator):
                         self._pressure_device.SetInstrumentMode("INSTRUMENT-MODE-OPERATIONAL")
                         # If in standby or currently waking up, open event channel
                         self._wakeUp()
-                    self._updateSampleHolder()  # in case new sample holder was loaded
                     self._pressure_device.SelectImagingDevice(self._imagingDevice.NAVCAMIMDEV)
                     # Wait for NavCam
                     self._waitForDevice()
@@ -1629,7 +1628,7 @@ class ChamberPressure(model.Actuator):
                 elif (newEvent == eventID2):
                     break
                 else:
-                    logging.debug("Unexpected event received")
+                    logging.warning("Unexpected event received")
         self._pressure_device.CloseEventChannel(ch_id)
         # Wait before allow acquisition
         time.sleep(1)
@@ -1646,7 +1645,13 @@ class ChamberPressure(model.Actuator):
         eventSpec1.eventID = eventID1
         eventSpec1.compressed = False
 
-        eventSpecArray.item = [eventSpec1]
+        # Event for sample holder insertion
+        eventID2 = "SAMPLEHOLDER-STATUS-CHANGED-ID"
+        eventSpec2 = self.parent._objects.create('ns0:EventSpec')
+        eventSpec2.eventID = eventID2
+        eventSpec2.compressed = False
+
+        eventSpecArray.item = [eventSpec1, eventSpec2]
         ch_id = self._chamber_device.OpenEventChannel(eventSpecArray)
         try:
             while not self._chamber_must_stop.is_set():
@@ -1655,19 +1660,29 @@ class ChamberPressure(model.Actuator):
                 if expected_event == "":
                     logging.debug("Event listener timeout")
                 else:
-                    try:    
-                        time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
-                        logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
-                        if (time_remaining == 0):
-                            # Move in progress is completed
-                            self._move_event.set()
-                            # Wait until any move performed by the user is completed
-                            self._chamber_event.wait()
-                            self._updatePosition()
-                        else:
-                            self._move_event.clear()
-                    except Exception:
-                        logging.warning("Received event does not have the expected attribute or format")
+                    newEvent = expected_event[0][0].eventID
+                    logging.debug("Try to read event: %s", newEvent)
+                    if (newEvent == eventID1):
+                        try:
+                            time_remaining = expected_event[0][0].ProgressAreaSelectionChanged.progress.timeRemaining
+                            logging.debug("Time remaining to reach new chamber position: %f seconds", time_remaining)
+                            if (time_remaining == 0):
+                                # Move in progress is completed
+                                self._move_event.set()
+                                # Wait until any move performed by the user is completed
+                                self._chamber_event.wait()
+                                self._updatePosition()
+                            else:
+                                self._move_event.clear()
+                        except Exception:
+                            logging.warning("Received event does not have the expected attribute or format")
+                    elif (newEvent == eventID2):
+                        status = expected_event[0][0].SampleHolderStatusChanged.status
+                        if (status == "3"):  # Sample holder insertion status
+                            logging.debug("Sample holder insertion, about to update sample holder id if needed")
+                            self._updateSampleHolder()  # in case new sample holder was loaded
+                    else:
+                        logging.warning("Unexpected event received")
         except Exception:
             logging.exception("Unexpected failure during chamber pressure event listening")
         finally:
