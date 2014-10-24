@@ -217,6 +217,10 @@ def write_param(port, addr):
 
     logging.debug("Parsed parameters as:\n%s", params)
     
+    # TODO: write unit parameters first, as they affect the rest of the values?
+    # self.SetParameter(a, 0xE, 10000) # numerator
+    # self.SetParameter(a, 0xF, 1) # denumerator
+
     # write each parameters (in order, to be clearer in case of error)
     for p in sorted(params.keys()):
         v = params[p]
