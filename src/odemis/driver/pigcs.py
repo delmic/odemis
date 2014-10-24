@@ -801,7 +801,7 @@ class Controller(object):
         assert(axis in self._channels)
 
         if activated:
-            assert(self._hasRefSwitch[axis])
+            #assert(self._hasRefSwitch[axis])
             state = 1
         else:
             state = 0
@@ -1198,6 +1198,13 @@ class Controller(object):
                 raise IOError("Timeout while waiting for end of motion")
             time.sleep(0.005)
 
+    def isReferenced(self, axis):
+        """
+        return (bool or None): None if the axis cannot be referenced, or a boolean
+          indicating the status of the referencing.
+        """
+        return None
+
     def selfTest(self):
         """
         check as much as possible that it works without actually moving the motor
@@ -1299,8 +1306,8 @@ class CLController(Controller):
             if not cl: # want open-loop?
                 raise ValueError("Initialising CLController with request for open-loop")
             if not self._hasRefSwitch[a]:
-                raise ValueError("Closed-loop control requested but controller "
-                                 "%d reports no sensor for axis %d" % (address, a))
+                logging.warning("Closed-loop control requested but controller "
+                                 "%d reports no sensor for axis %d", address, a)
 
 
             # TODO:
@@ -1451,19 +1458,27 @@ class CLController(Controller):
         """
         if self._hasRefSwitch[axis]:
             self.ReferenceToSwitch(axis)
-        else:
+        elif self._hasLimitSwitches[axis]:
             raise NotImplementedError("Don't know how to reference to limit yet")
             self.ReferenceToLimit(axis)
             # TODO: need to do that after the move is complete
             self.waitEndMotion(set(axis))
             # Go to 0 (="home")
             self.MoveAbs(axis, 0)
+        else:
+            # TODO: we _could_ think of hacky way, such as moving a lot to
+            # one direction to be sure to hit the physical limit, and then
+            # marking it as the lower limit, using the range.
+            raise ValueError("Axis has no reference or limit switch so cannot be referenced")
 
     def isReferenced(self, axis):
         """
         returns (bool): True if the axis is referenced
         """
-        return self.IsReferenced(axis)
+        if not self._hasRefSwitch[axis] and not self._hasLimitSwitches[axis]:
+            return None
+        else:
+            return self.IsReferenced(axis)
 
 
 class OLController(Controller):
@@ -1953,8 +1968,10 @@ class Bus(model.Actuator):
                 ad = model.Axis(unit="m", range=rng, speed=speed_rng,
                                 canAbs=isCL)
                 axes_def[axis] = ad
-                if ad.canAbs:
-                    referenced[axis] = controller.isReferenced(c)
+
+                refed = controller.isReferenced(c)
+                if refed is not None:
+                    referenced[axis] = refed
 
         # this set ._axes
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
