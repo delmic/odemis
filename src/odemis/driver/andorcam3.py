@@ -35,7 +35,6 @@ import gc
 import logging
 import numpy
 from odemis import model, util
-import odemis
 import os
 import re
 import threading
@@ -806,6 +805,8 @@ class AndorCam3(model.DigitalCamera):
             # Typically for the Neo
             binnings = self.GetEnumStringAvailable(u"AOIBinning")
             for b in binnings:
+                if b is None:
+                    continue
                 m = re.match("([0-9]+)x([0-9]+)", b)
                 binning[0] = max(binning[0], int(m.group(1)))
                 binning[1] = max(binning[1], int(m.group(2)))
@@ -907,6 +908,8 @@ class AndorCam3(model.DigitalCamera):
         if self.isImplemented(u"AOIBinning"):
             binnings = self.GetEnumStringAvailable(u"AOIBinning")
             for bs in binnings:
+                if bs is None:
+                    continue
                 m = re.match("([0-9]+)x([0-9]+)", bs)
                 b = int(m.group(1)), int(m.group(2))
                 self.SetEnumString(u"AOIBinning", bs)
