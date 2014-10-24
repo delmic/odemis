@@ -223,7 +223,13 @@ class SEM(model.HwComponent):
         """
         # Don't need to close the connection, it's already closed by the time
         # suds returns the data
-        pass
+        self._scanner.terminate()
+        self._detector.terminate()
+        self._stage.terminate()
+        self._focus.terminate()
+        self._navcam.terminate()
+        self._navcam_focus.terminate()
+        self._pressure.terminate()
 
 class Scanner(model.Emitter):
     """
