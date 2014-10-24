@@ -67,7 +67,7 @@ class TestCalibration(unittest.TestCase):
 
         # find components by their role
         cls.ebeam = model.getComponent(role="e-beam")
-        cls.sed = model.getComponent(role="se-detector")
+        cls.sed = model.getComponent(role="bs-detector")
         cls.ccd = model.getComponent(role="ccd")
         cls.sem_stage = model.getComponent(role="sem-stage")
         cls.opt_stage = model.getComponent(role="align")
