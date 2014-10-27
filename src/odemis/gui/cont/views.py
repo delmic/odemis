@@ -315,15 +315,13 @@ class ViewController(object):
 
         """
 
+        return
         msg = "Resetting views to %s"
         msgdata = [str(v) for v in visible_views] if not visible_views is None else "default"
         logging.debug(msg, msgdata)
 
         containing_window = self._viewports[0].Parent
         gb = containing_window.GetSizer()
-
-        if not isinstance(gb, wx.GridBagSizer):
-            raise ValueError("AAAAAARRRRRGH")
 
         containing_window.Freeze()
 
@@ -497,59 +495,41 @@ class ViewController(object):
 
         if isinstance(sizer, wx.GridBagSizer):
 
+            positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
             sizer.SetEmptyCellSize((0, 0))
 
-            grid_viewports = self._viewports[:4]
+            pos = sizer.GetItemPosition(visible_viewport) if visible_viewport else None
 
-            # Hide all viewports and unset focus if needed
-            for viewport in grid_viewports:
-                viewport.Hide()
-                if visible_viewport:
-                    viewport.SetFocus(False)
+            for apos in positions:
+                row, col = apos
+                item = sizer.FindItemAtPosition(apos)
 
-            # If a visible viewport is given...
-            if visible_viewport in grid_viewports:
+                if pos is not None and apos != pos:
+                    if item:
+                        win = item.GetWindow()
+                        win.Hide()
 
-                # Display the viewport and give it the focus
-                visible_viewport.Show()
-                visible_viewport.SetFocus(True)
+                    if sizer.IsRowGrowable(row) and pos[0] != row:
+                        logging.debug("rem grow row %s", row)
+                        sizer.RemoveGrowableRow(row)
+                    if sizer.IsColGrowable(col) and pos[1] != col:
+                        logging.debug("rem grow col %s", col)
+                        sizer.RemoveGrowableCol(col)
 
-                # Remove the row and column that the visible viewport is not in. This needs to be
-                # done in order to allow that column and row to collapse to a size of 0.
-                row, col = sizer.GetItemPosition(visible_viewport)
+                else:
+                    if item:
+                        win = item.GetWindow()
+                        win.Show()
 
-                row = 1 - row
-                if sizer.IsRowGrowable(row):
-                    sizer.RemoveGrowableRow(row)
-                col = 1 - col
-                if sizer.IsColGrowable(col):
-                    sizer.RemoveGrowableCol(col)
+                    # Needed to update the number of rows and columns that the sizer sees
+                    sizer.Layout()
 
-
-
-            # If the 2x2 grid is to be shown...
-            else:
-
-                # Show the first 4 (2x2) viewports
-                for viewport in grid_viewports:
-                    viewport.Show()
-
-                # If the viewport that currently has the focus is not one in the 2x2 grid, we
-                # move the focus to the top left viewport by default
-                focussed_view = self._data_model.focussedView.value
-                if not focussed_view in [v.microscope_view for v in grid_viewports]:
-                    self._viewports[0].SetFocus(True)
-
-                sizer.Layout()
-
-                # Set all rows and columns as growable again. (Because setting columns and rows to
-                # growable when they already are causes exception to be raised, we must skip those)
-                for col in [c for c in (0, 1) if not sizer.IsColGrowable(c)]:
-                    sizer.AddGrowableCol(col, 1)
-                for row in [r for r in (0, 1) if not sizer.IsColGrowable(r)]:
-                    sizer.AddGrowableRow(row, 1)
-
-                sizer.Layout()
+                    if not sizer.IsRowGrowable(row):
+                        logging.debug("add grow row %s", row)
+                        sizer.AddGrowableRow(row)
+                    if not sizer.IsColGrowable(col):
+                        logging.debug("add grow col %s", col)
+                        sizer.AddGrowableCol(col)
 
         else:
             # Assume legacy sizer construction
