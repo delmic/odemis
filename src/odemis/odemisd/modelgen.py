@@ -196,7 +196,7 @@ class Instantiator(object):
                     init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
         
         return init
-    
+
     def is_leaf(self, name):
         """
         says whether a component is a leaf or not. A "leaf" is a component which
@@ -204,18 +204,16 @@ class Instantiator(object):
         name (str): name of the component instance
         """
         attr = self.ast[name]
-        if attr.get("class", "") == "Microscope":
-            return False
-        
+
         children_names = attr.get("children", {})
         for child_name in children_names.values():
             child_attr = self.ast[child_name]
             if "class" in child_attr:
                 # the child has a class => it will be instantiated separately
                 return False
-        
+
         return True
-        
+
     def instantiate_comp(self, name):
         """
         Instantiate a component
@@ -306,7 +304,7 @@ class Instantiator(object):
                 self.components.add(creator_comp)
                 # now the child ought to be created
                 return self.get_component_by_name(name)
-    
+
     @staticmethod
     def get_children(root):
         """
