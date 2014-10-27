@@ -42,12 +42,32 @@ class GridPanelTestCase(test.GuiTestCase):
         self.frame.blue.Hide()
         self.frame.purple.Hide()
         self.frame.red.Hide()
-        self.frame.brown.SetSize(sizer.GetSize())
-        self.frame.brown.SetPosition((0, 0))
+
+        # No resize needed
+        # self.frame.brown.SetSize(sizer.GetSize())
+
+        sizer.RemoveGrowableCol(0)
+        sizer.RemoveGrowableRow(0)
+
+        sizer.Layout()
+        gui_loop()
+        
+        gui_loop(2000)
+
+        self.frame.blue.Show()
+        self.frame.purple.Show()
+        self.frame.red.Show()
+
+        sizer.AddGrowableCol(0)
+        sizer.AddGrowableRow(0)
+
+        # sizer.SetItemPosition(self.frame.red, (3, 3))
+        # sizer.SetItemPosition(self.frame.brown, (0, 0))
 
         # sizer.RemoveGrowableRow(0)
         # sizer.RemoveGrowableCol(0)
         sizer.Layout()
+
 
         gui_loop()
 
