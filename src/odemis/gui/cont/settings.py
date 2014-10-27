@@ -931,6 +931,7 @@ class SettingsBarController(object):
             # We no longer display the component name
             # panel.add_label(label, comp.name, selectable=False)
             vigil_attrs = getVAs(comp)
+            vigil_attrs.pop("children", None) # children VA never to be displayed
             for name, value in vigil_attrs.items():
                 if comp.role in self._va_config and name in self._va_config[comp.role]:
                     conf = self._va_config[comp.role][name]
