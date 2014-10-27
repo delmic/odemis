@@ -322,11 +322,13 @@ class SettingsController(object):
                 choices = choices(comp, va, conf)
             elif choices is None:
                 choices = va.choices
-            else:
+            elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):
                 # Intersect the two choice sets
-                # TODO: if va.range but no va.choices, ensure that
-                # choices is within va.range
                 choices &= va.choices
+            elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
+                # Ensure that each choice is within the range
+                rng = va.range
+                choices = set(c for c in choices if rng[0] <= c <= rng[1])
         except (AttributeError, NotApplicableError):
             pass
 
