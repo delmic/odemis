@@ -24,7 +24,6 @@ from __future__ import division
 
 import collections
 import logging
-
 import wx
 
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
@@ -32,7 +31,6 @@ from odemis.gui import model
 from odemis.gui.cont import tools
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.gui.util import call_after
-import odemis.gui.util.widgets as util
 from odemis.model import VigilantAttributeBase
 from odemis.model import MD_PIXEL_SIZE
 
@@ -88,9 +86,9 @@ class ViewController(object):
 
         To be executed only once, at initialisation.
         """
-#         FIXME: Since we have 2 different Views at the moments and probably more
-#         on the way, it's probably going to be beneficial to explicitly define
-#         them in the viewport data
+        # FIXME: Since we have 2 different Views at the moments and probably more
+        # on the way, it's probably going to be beneficial to explicitly define
+        # them in the viewport data
 
         views = []
         visible_views = []
@@ -185,10 +183,10 @@ class ViewController(object):
                       "stream_classes": SpectrumStream
                      }),
                     # TODO: this one doesn't make sense
-#                     (self._viewports[5],
-#                      {"name": "Overview",
-#                       "stream_classes": SpectrumStream
-#                      }),
+                    # (self._viewports[5],
+                    #  {"name": "Overview",
+                    #   "stream_classes": SpectrumStream
+                    #  }),
                 ])
             self._create_views_fixed(vpv)
             return
@@ -299,101 +297,142 @@ class ViewController(object):
                 return vp
         raise IndexError("No ViewPort found for view %s" % view)
 
-    def _viewport_index_by_view(self, view):
-        """ Return the index number of the ViewPort associated with the given view """
-        return self._viewports.index(self._viewport_by_view(view))
+    def views_to_viewports(self, views):
+        """ Return a list of viewports corresponding to the given views, in the same order """
+        viewports = []
+        for view in views:
+            for viewport in self._viewports:
+                if viewport.microscope_view == view:
+                    viewports.append(viewport)
+                    break
+        return viewports
 
-    def _set_visible_views(self, views):
-        """ Set the view order to the one provided in the parameter views (list of View) """
+    def _set_visible_views(self, visible_views):
+        """ Set the order of the viewports so it will match the list of visible views
+
+        This method should normally ben called when the visible_views VA in the MicroscopeGUIData
+        object gets changed.
+
+        """
+
         msg = "Resetting views to %s"
-        msgdata = [str(v) for v in views] if not views is None else "default"
+        msgdata = [str(v) for v in visible_views] if not visible_views is None else "default"
         logging.debug(msg, msgdata)
 
         containing_window = self._viewports[0].Parent
+        gb = containing_window.GetSizer()
+
+        if not isinstance(gb, wx.GridBagSizer):
+            raise ValueError("AAAAAARRRRRGH")
+
         containing_window.Freeze()
+
         try:
-            # TODO: don't use swap_viewports (which depends on the previous
-            # viewport properties), and only use the sizer and the *view info.
-            # Reset the order of the viewports
-            for i, v in enumerate(views):
-                # If a viewport has moved compared to the original order...
-                if self._viewports[i].microscope_view != v:
-                    # ...put it back in its original place
-                    j = self._viewport_index_by_view(v)
-                    self.swap_viewports(i, j)
+            # Hide and detach all viewports
+            for vp in self._viewports:
+                gb.Detach(vp)
+
+            # Collect the viewports associated with the visible views
+            visible_viewports = self.views_to_viewports(visible_views)
+
+            for pos, vp in zip([(0, 0), (0, 1), (1, 0), (1, 1)], visible_viewports):
+                # if gb.CheckForIntersectionPos(pos, (1, 1)):
+                #
+                #     i = 2
+                #     while gb.CheckForIntersectionPos((i, i), (1, 1)):
+                #         i += 1
+                #
+                #     move_item = gb.FindItemAtPosition(pos)
+                #     move_item = move_item.GetWindow()
+                #     move_item.size_pos = (i, i)
+                #     gb.SetItemPosition(move_item, move_item.size_pos)
+                #
+                # vp.sizer_pos = pos
+                gb.Add(vp, pos, flag=wx.EXPAND)
+                vp.Show()
+
+            i = 2
+            invisible_viewports = [vp for vp in self._viewports if vp not in visible_viewports]
+            for viewport in invisible_viewports:
+                gb.Add(viewport, (i, i))
+                viewport.Hide()
+                i += 1
+
+            self._viewports = visible_viewports + invisible_viewports
+
         finally:
             containing_window.Thaw()
 
-    def swap_viewports(self, visible_idx, hidden_idx):
-        """ Swap the positions of viewports denoted by indices visible_idx and
-        hidden_idx.
-
-        It is assumed that visible_idx points to one of the viewports visible in
-        a 2x2 display, and that hidden_idx is outside this 2x2 layout and
-        invisible.
-        """
-
-        # Small shorthand local variable
-        vp = self._viewports
-
-        visible_vp = vp[visible_idx]
-        hidden_vp = vp[hidden_idx]
-
-        logging.debug("swapping visible %s and hidden %s",
-                      visible_vp,
-                      hidden_vp)
-
-        # Get the sizer of the visible viewport
-        visible_sizer = visible_vp.GetContainingSizer()
-        # And the one of the invisible one, which should be the containing sizer
-        # of visible_sizer
-        hidden_sizer = parent_sizer = hidden_vp.GetContainingSizer()
-
-        # Get the sizer position of the visible viewport, so we can use that
-        # to insert the other viewport
-        visible_pos = util.get_sizer_position(visible_vp)
-        hidden_pos = util.get_sizer_position(hidden_vp)
-
-        # Get the sizer item for the visible viewport, so we can access its
-        # sizer properties like proportion and flags
-        visible_item = parent_sizer.GetItem(visible_vp, recursive=True)
-        hidden_item = parent_sizer.GetItem(hidden_vp, recursive=True)
-
-        # Move hidden viewport to visible sizer
-        hidden_sizer.Detach(hidden_vp)
-        visible_sizer.Insert(
-            visible_pos,
-            hidden_vp,
-            proportion=visible_item.GetProportion(),
-            flag=visible_item.GetFlag(),
-            border=visible_item.GetBorder())
-
-        # Move viewport 1 to the end of the containing sizer
-        visible_sizer.Detach(visible_vp)
-        hidden_sizer.Insert(
-            hidden_pos,
-            visible_vp,
-            proportion=hidden_item.GetProportion(),
-            flag=hidden_item.GetFlag(),
-            border=hidden_item.GetBorder())
-
-        # Only make the 'hidden_vp' visible when we're in 2x2 view or if it's
-        # the focussed view in a 1x1 view.
-        if (
-            self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
-            self._data_model.focussedView.value == visible_vp.microscope_view
-        ):
-            # Flip the visibility
-            visible_vp.Hide()
-            logging.debug("Hiding %s", visible_vp)
-            hidden_vp.Show()
-            logging.debug("Showing %s", hidden_vp)
-
-        # Swap the viewports in the viewport list
-        vp[visible_idx], vp[hidden_idx] = vp[hidden_idx], vp[visible_idx]
-
-        # vp[visible_idx].Parent.Layout()
-        parent_sizer.Layout()
+    # def swap_viewports(self, visible_idx, hidden_idx):
+    #     """ Swap the positions of viewports denoted by indices visible_idx and
+    #     hidden_idx.
+    #
+    #     It is assumed that visible_idx points to one of the viewports visible in
+    #     a 2x2 display, and that hidden_idx is outside this 2x2 layout and
+    #     invisible.
+    #     """
+    #
+    #     # Small shorthand local variable
+    #     vp = self._viewports
+    #
+    #     visible_vp = vp[visible_idx]
+    #     hidden_vp = vp[hidden_idx]
+    #
+    #     logging.debug("swapping visible %s and hidden %s",
+    #                   visible_vp,
+    #                   hidden_vp)
+    #
+    #     # Get the sizer of the visible viewport
+    #     visible_sizer = visible_vp.GetContainingSizer()
+    #     # And the one of the invisible one, which should be the containing sizer
+    #     # of visible_sizer
+    #     hidden_sizer = parent_sizer = hidden_vp.GetContainingSizer()
+    #
+    #     # Get the sizer position of the visible viewport, so we can use that
+    #     # to insert the other viewport
+    #     visible_pos = util.get_sizer_position(visible_vp)
+    #     hidden_pos = util.get_sizer_position(hidden_vp)
+    #
+    #     # Get the sizer item for the visible viewport, so we can access its
+    #     # sizer properties like proportion and flags
+    #     visible_item = parent_sizer.GetItem(visible_vp, recursive=True)
+    #     hidden_item = parent_sizer.GetItem(hidden_vp, recursive=True)
+    #
+    #     # Move hidden viewport to visible sizer
+    #     hidden_sizer.Detach(hidden_vp)
+    #     visible_sizer.Insert(
+    #         visible_pos,
+    #         hidden_vp,
+    #         proportion=visible_item.GetProportion(),
+    #         flag=visible_item.GetFlag(),
+    #         border=visible_item.GetBorder())
+    #
+    #     # Move viewport 1 to the end of the containing sizer
+    #     visible_sizer.Detach(visible_vp)
+    #     hidden_sizer.Insert(
+    #         hidden_pos,
+    #         visible_vp,
+    #         proportion=hidden_item.GetProportion(),
+    #         flag=hidden_item.GetFlag(),
+    #         border=hidden_item.GetBorder())
+    #
+    #     # Only make the 'hidden_vp' visible when we're in 2x2 view or if it's
+    #     # the focussed view in a 1x1 view.
+    #     if (
+    #         self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
+    #         self._data_model.focussedView.value == visible_vp.microscope_view
+    #     ):
+    #         # Flip the visibility
+    #         visible_vp.Hide()
+    #         logging.debug("Hiding %s", visible_vp)
+    #         hidden_vp.Show()
+    #         logging.debug("Showing %s", hidden_vp)
+    #
+    #     # Swap the viewports in the viewport list
+    #     vp[visible_idx], vp[hidden_idx] = vp[hidden_idx], vp[visible_idx]
+    #
+    #     # vp[visible_idx].Parent.Layout()
+    #     parent_sizer.Layout()
 
     def _on_visible_views(self, visible_views):
         """ This method is called when the visible views in the data model change """
@@ -443,7 +482,7 @@ class ViewController(object):
         finally:
             containing_window.Thaw()
 
-    def _show_viewport(self, gb, visible_viewport=None):
+    def _show_viewport(self, sizer, visible_viewport=None):
         """ Show the given viewport or show the first four in the 2x2 grid if none is given
 
         :param sizer: wx.GridBagSizer
@@ -456,43 +495,61 @@ class ViewController(object):
 
         """
 
-        if isinstance(gb, wx.GridBagSizer):
+        if isinstance(sizer, wx.GridBagSizer):
 
-            # Detach and hide all viewports
+            sizer.SetEmptyCellSize((0, 0))
 
-            for viewport_sizer_item in gb.GetChildren():
-                viewport = viewport_sizer_item.GetWindow()
-                if viewport:
-                    # If the initial position has not been cached yet...
-                    if not viewport.sizer_pos:
-                        gb.SetEmptyCellSize((0, 0))
-                        viewport.sizer_pos = viewport_sizer_item.GetPos()
-                    viewport.Hide()
-                    # Only clear the focus on the other viewports if a visible one is given
-                    if visible_viewport:
-                        viewport.SetFocus(False)
-                    gb.Detach(viewport)
+            grid_viewports = self._viewports[:4]
+
+            # Hide all viewports and unset focus if needed
+            for viewport in grid_viewports:
+                viewport.Hide()
+                if visible_viewport:
+                    viewport.SetFocus(False)
 
             # If a visible viewport is given...
-            if visible_viewport in self._viewports:
-                gb.Add(visible_viewport, (0, 0), flag=wx.EXPAND)
+            if visible_viewport in grid_viewports:
+
+                # Display the viewport and give it the focus
                 visible_viewport.Show()
                 visible_viewport.SetFocus(True)
-            else:  # If the 2x2 grid is to be shown...
 
-                # Assign all viewports their initial position
-                for viewport in self._viewports:
-                    gb.Add(viewport, viewport.sizer_pos, flag=wx.EXPAND)
+                # Remove the row and column that the visible viewport is not in. This needs to be
+                # done in order to allow that column and row to collapse to a size of 0.
+                row, col = sizer.GetItemPosition(visible_viewport)
+
+                row = 1 - row
+                if sizer.IsRowGrowable(row):
+                    sizer.RemoveGrowableRow(row)
+                col = 1 - col
+                if sizer.IsColGrowable(col):
+                    sizer.RemoveGrowableCol(col)
+
+
+
+            # If the 2x2 grid is to be shown...
+            else:
 
                 # Show the first 4 (2x2) viewports
-                for viewport in self._viewports[:4]:
+                for viewport in grid_viewports:
                     viewport.Show()
 
                 # If the viewport that currently has the focus is not one in the 2x2 grid, we
                 # move the focus to the top left viewport by default
                 focussed_view = self._data_model.focussedView.value
-                if not focussed_view in [v.microscope_view for v in self._viewports[:4]]:
+                if not focussed_view in [v.microscope_view for v in grid_viewports]:
                     self._viewports[0].SetFocus(True)
+
+                sizer.Layout()
+
+                # Set all rows and columns as growable again. (Because setting columns and rows to
+                # growable when they already are causes exception to be raised, we must skip those)
+                for col in [c for c in (0, 1) if not sizer.IsColGrowable(c)]:
+                    sizer.AddGrowableCol(col, 1)
+                for row in [r for r in (0, 1) if not sizer.IsColGrowable(r)]:
+                    sizer.AddGrowableRow(row, 1)
+
+                sizer.Layout()
 
         else:
             # Assume legacy sizer construction
@@ -511,7 +568,7 @@ class ViewController(object):
                 for viewport in self._viewports[4:]:
                     viewport.Hide()
 
-        gb.Layout()
+        sizer.Layout()
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -595,8 +652,7 @@ class ViewController(object):
 
 
 class OverviewController(object):
-    """ Small class to connect stage history and overview canvas together
-    """
+    """ Small class to connect stage history and overview canvas together """
 
     def __init__(self, tab_data, overview_canvas):
 
@@ -837,9 +893,7 @@ class ViewSelector(object):
             logging.warn("Could not handle view change, viewports unknown!")
 
     def _on_layout_change(self, unused):
-        """
-        Called when another view is focused, or viewlayout is changed
-        """
+        """ Called when another view is focused, or viewlayout is changed """
         logging.debug("Updating view selector")
 
         # TODO when changing from 2x2 to a view non focused, it will be called

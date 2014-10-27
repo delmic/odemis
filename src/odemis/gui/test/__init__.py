@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Common configuration and code for the GUI test cases
+import logging
 import random
 import os.path
 import unittest
@@ -76,6 +77,10 @@ def sleep(ms=None):
 def set_sleep_time(slp_tm):
     global SLEEP_TIME
     SLEEP_TIME = slp_tm
+
+
+def set_log_level(level):
+    logging.getLogger().setLevel(logging.DEBUG)
 
 
 # Default wxPython App that can be used as a basis for testing
