@@ -117,7 +117,7 @@ def get_class(name):
         raise SemanticError("Error in microscope "
             "file: module '%s' has no class '%s'." % (module_name, class_name))
     
-    return the_class 
+    return the_class
 
 class Instantiator(object):
     """
@@ -147,6 +147,12 @@ class Instantiator(object):
         # update/fill up the model with implicit information
         self.fill_creator()
 
+        # TODO: if the microscope has a known role, check it has the minimum
+        # required sub-components (with the right roles) and otherwise raise
+        # SemanticError
+
+        # TODO: check here that each class is loadable.
+
     def make_args(self, name):
         """
         Create init arguments for a component instance and its children
@@ -155,8 +161,8 @@ class Instantiator(object):
         """
         attr = self.ast[name]
         # it's not an error if there is not init attribute, just not specific arguments
-        init = dict(attr.get("init", {})) # copy
-        
+        init = attr.get("init", {}).copy()
+
         # it's an error to specify "name" and "role" in the init
         if "name" in init:
             raise SemanticError("Error in microscope "
@@ -169,32 +175,33 @@ class Instantiator(object):
             raise SemanticError("Error in microscope "
                 "file: component '%s' has no role specified." % name)
         init["role"] = attr["role"]
-        
+
         class_name = attr.get("class", None)
         if self.dry_run and not class_name == "Microscope":
-            # mock class
+            # mock class needs some hints to create the fake VAs
             init["_vas"] = attr.get("properties", {}).keys()
-        
+
         # create recursively the children
         if "children" in init:
             raise SemanticError("Error in microscope "
                 "file: component '%s' should not have a 'children' entry in the init." % name)
-        if "children" in attr:
+        if "children" in attr and not class_name == "Microscope":
             init["children"] = {}
             children_names = attr["children"]
-            for internal_name, child_name in children_names.items():
+            for internal_role, child_name in children_names.items():
                 child_attr = self.ast[child_name]
                 # Two types of children creation:
                 if "creator" in child_attr and child_attr["creator"] == name:
                     # the child creation is delegated... to this component
                     # => it'll be created by the component, so
                     # we just pass the init arguments
-                    init["children"][internal_name] = self.make_args(child_name)
+                    init["children"][internal_role] = self.make_args(child_name)
                 else:
                     # the child has a class or is created by another component
-                    # => we explicitly create/reuse it
-                    init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
-        
+                    # => we explicitly reuse it
+                    # init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
+                    init["children"][internal_role] = self.get_component_by_name(child_name)
+
         return init
 
     def is_leaf(self, name):
@@ -214,7 +221,7 @@ class Instantiator(object):
 
         return True
 
-    def instantiate_comp(self, name):
+    def _instantiate_comp(self, name):
         """
         Instantiate a component
         name (str): name that will be given to the component instance
@@ -258,6 +265,7 @@ class Instantiator(object):
             logging.error("Error while instantiating component %s.", name)
             raise
 
+        self.components.add(comp)
         # Add all the children to our list of components. Useful only if child 
         # created by delegation, but can't hurt to add them all.
         self.components |= comp.children.value
@@ -289,8 +297,7 @@ class Instantiator(object):
             # we need to instantiate it
             attr = self.ast[name]
             if "class" in attr:
-                comp = self.instantiate_comp(name)
-                self.components.add(comp)
+                comp = self._instantiate_comp(name)
                 return comp
             else:
                 # created by delegation => we instantiate the parent 
@@ -300,8 +307,7 @@ class Instantiator(object):
                     raise SemanticError("Error in microscope file: "
                                         "component %s has no class specified and "
                                         "is not created by any component." % name)
-                creator_comp = self.instantiate_comp(creator)
-                self.components.add(creator_comp)
+                creator_comp = self._instantiate_comp(creator)
                 # now the child ought to be created
                 return self.get_component_by_name(name)
 
@@ -466,7 +472,76 @@ class Instantiator(object):
                     except Exception:
                         raise ValueError("Error in microscope "
                                 "file: %s.%s = '%s' failed." % (name, prop_name, value))
-    
+
+    # New methods, for online instantiation
+    def instantiate_microscope(self):
+        """
+        Generates the just the microscope component
+
+        Raises:
+            SemanticError: an error in the model is detected. Note that
+            (obviously) not every error can be detected.
+            LookupError
+            ParseError
+            Exception (dependent on the driver): in case initialisation of a driver fails
+        """
+        microscopes = [c[0] for c in self.ast.items() if c[1].get("class") == "Microscope"]
+        if len(microscopes) == 1:
+            self.microscope = self._instantiate_comp(microscopes[0])
+        elif len(microscopes) > 1:
+            raise SemanticError("Error in microscope file: "
+                    "there are several Microscopes (%s)." %
+                    ", ".join(microscopes))
+        else:
+            raise SemanticError("Error in microscope "
+                    "file: no Microscope component found.")
+
+        return self.microscope
+
+    def instantiate_component(self, name):
+        """
+        Generate the component (and its children, if they are created by delegation)
+        All the children that are created by separate instantiation must already
+        have been created.
+
+        Raises:
+            LookupError: if the component doesn't exists in the AST or
+                  if the children should have been created and are not.
+            ValueError: if the component has already been instantiated
+            KeyError: if component should be created by delegation
+        """
+        for c in self.components:
+            if c.name == name:
+                raise ValueError("Trying to instantiate again component %s" % name)
+
+        return self._instantiate_comp(name)
+
+    def get_instantiables(self):
+        """
+        Find the components that are currently not yet instantiated, but 
+        could be directly (ie, all their children created explicitly are already
+        instantiated)
+        return (set of str): names of all the components that are instantiable
+        """
+        comps = set()
+        instantiated = set(c.name for c in self.components)
+        for n, attrs in self.ast.items():
+            if n in instantiated: # should not be already instantiated
+                continue
+            if "class" not in attrs: # created by delegation
+                continue
+            for cname in attrs.get("children", {}).values():
+                child = self.ast[cname]
+                # the child must be either instantiated or instantiated via delegation
+                if not cname in instantiated and not child.get("creator") == n:
+                    logging.debug("Component %s is not instantiable yet", n)
+                    break
+            else:
+                comps.add(n)
+
+        return comps
+
+
 def instantiate_model(inst_model, container=None, create_sub_containers=False,
                       dry_run=False):
     """
@@ -491,7 +566,31 @@ def instantiate_model(inst_model, container=None, create_sub_containers=False,
     """
     instantiator = Instantiator(inst_model, container, create_sub_containers, dry_run)
     try:
-        instantiator.instantiate_model()
+        # instantiator.instantiate_model()
+        m = instantiator.instantiate_microscope()
+        mchildren = instantiator.ast[m.name]["children"].values()
+        nexts = instantiator.get_instantiables()
+        instantiated = {m.name}
+        while nexts:
+            for n in nexts:
+                comp = instantiator.instantiate_component(n)
+                newcmps = instantiator.get_children(comp) # "potentially" new
+                # TODO: update .active instead of .children and update .ghosts on failure
+                # m.children.value = m.children.value | newcmps
+
+                # Add to the microscope all the new components that should be child
+                newchildren = set(c for c in newcmps if c.name in mchildren)
+                m.children.value = m.children.value | newchildren
+
+            nexts = instantiator.get_instantiables()
+        # in theory, it's done, but if there is a dependency loop some components
+        # will never be instantiable
+        instantiated = set(c.name for c in instantiator.components)
+        left = set(instantiator.ast.keys()) - instantiated
+        if left:
+            raise SemanticError("Some components could not be instantiated due "
+                                "to cyclic dependency: %s" %
+                                (", ".join(left)))
     except Exception as exp:
         logging.error("Failed to instantiate the model")
         logging.info("Full traceback of the error follows", exc_info=1)

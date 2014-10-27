@@ -333,13 +333,10 @@ class Microscope(HwComponent):
     It does nothing by itself, just contains other components.
     """
     def __init__(self, name, role, children=None, daemon=None, **kwargs):
-        HwComponent.__init__(self, name, role, daemon=daemon)
+        HwComponent.__init__(self, name, role, children=children, daemon=daemon)
 
         if kwargs:
             raise ValueError("Microscope component cannot have initialisation arguments.")
-
-        # This might be updated later by the backend
-        self.children.value = self.children.value | set(children.values())
 
 class Detector(HwComponent):
     """
