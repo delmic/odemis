@@ -136,7 +136,7 @@ class Instantiator(object):
         self.ast = model_ast.copy() # AST of the model to instantiate
         self.root_container = container # the container for non-leaf components
         
-        self.microscope = None # the root of the model (Microscope)
+        self.microscope = None # the root of the model (Microscope component)
         self.components = set() # all the components created
         self.sub_containers = set() # all the sub-containers created for the components
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
@@ -354,8 +354,11 @@ class Instantiator(object):
                             "is creator of component %s but doesn't have it as a child."
                             % (creator_name, name))
             else:
-                # TODO: if Microscope is one of the parents, it's for sure not
-                # the creator
+                # If one parent is Microscope, it's dropped for the "creator"
+                # guess because Microscope is known to create no component.
+                if len(parents) > 1:
+                    parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
+
                 if len(parents) == 0:
                     raise SemanticError("Error in microscope file: component %s "
                             "has no class specified and is not created by any "
