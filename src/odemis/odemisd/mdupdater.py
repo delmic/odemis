@@ -45,11 +45,11 @@ class MetadataUpdater(model.Component):
         # Warning: for efficiency, we want to run in the same container as the back-end
         # but this means the back-end is not running yet when we are created
         # so we cannot access the back-end.
-        
+
         # list of 2-tuples (function, *arg): to be called on terminate
         self._onTerminate = []
         self._components = components
-        
+
         model.Component.__init__(self, name, **kwargs)
 
         # For each component
@@ -86,7 +86,7 @@ class MetadataUpdater(model.Component):
             logging.debug("Updating position for component %s, to %f, %f",
                           comp.name, x , y)
             comp.updateMetadata(md)
-        
+
         stage.position.subscribe(updateStagePos)
         updateStagePos(stage.position.value)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
@@ -95,14 +95,14 @@ class MetadataUpdater(model.Component):
         if comp.role != "ccd":
             logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
             return
-        
+
         # Depends on the actual size of the ccd's density (should be constant)
         captor_mpp = comp.pixelSize.value # m, m
-        
+
         # update static information
         md = {model.MD_LENS_NAME: lens.hwVersion}
         comp.updateMetadata(md)
-        
+
         # we need to keep the information on the detector to update
         def updatePixelDensity(unused, lens=lens, comp=comp):
             # the formula is very simple: actual MpP = CCD MpP * binning / Mag
@@ -115,7 +115,7 @@ class MetadataUpdater(model.Component):
             md = {model.MD_PIXEL_SIZE: mpp,
                   model.MD_LENS_MAG: mag}
             comp.updateMetadata(md)
-        
+
         lens.magnification.subscribe(updatePixelDensity)
         self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
         try:
@@ -149,7 +149,6 @@ class MetadataUpdater(model.Component):
             updatePolePos(None) # update it right now
 
 
-    
     def observeLight(self, light, comp):
 
         def updateInputWL(emissions, light=light, comp=comp):
@@ -163,10 +162,10 @@ class MetadataUpdater(model.Component):
                     maxiwl = max(maxiwl, light.spectra.value[i][4])
             if miniwl == 1:
                 miniwl = 0
-            
+
             md = {model.MD_IN_WL: (miniwl, maxiwl)}
             comp.updateMetadata(md)
-        
+
         def updateLightPower(power, light=light, comp=comp):
             p = power * numpy.sum(light.emissions.value)
             md = {model.MD_LIGHT_POWER: p}

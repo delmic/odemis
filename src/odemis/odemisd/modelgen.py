@@ -153,6 +153,8 @@ class Instantiator(object):
 
         # TODO: check here that each class is loadable.
 
+        # TODO: check there is no cyclic dependencies on the parents/children
+
     def make_args(self, name):
         """
         Create init arguments for a component instance and its children
@@ -434,7 +436,7 @@ class Instantiator(object):
         else:
             raise SemanticError("Error in microscope "
                     "file: no Microscope component found.")
-        
+
         # Some validation:
         # The only components which are not either Microscope or referenced by it 
         # should be parents
