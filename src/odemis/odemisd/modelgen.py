@@ -200,7 +200,7 @@ class Instantiator(object):
                     # the child has a class or is created by another component
                     # => we explicitly reuse it
                     # init["children"][internal_name] = self.get_or_instantiate_comp(child_name)
-                    init["children"][internal_role] = self.get_component_by_name(child_name)
+                    init["children"][internal_role] = self._get_component_by_name(child_name)
 
         return init
 
@@ -272,7 +272,7 @@ class Instantiator(object):
 
         return comp
 
-    def get_component_by_name(self, name):
+    def _get_component_by_name(self, name):
         """
         Find a component by its name in the set of instantiated components
         name (str): name of the component
@@ -292,7 +292,7 @@ class Instantiator(object):
           is also updated. 
         """
         try:
-            return self.get_component_by_name(name)
+            return self._get_component_by_name(name)
         except LookupError:
             # we need to instantiate it
             attr = self.ast[name]
@@ -309,7 +309,7 @@ class Instantiator(object):
                                         "is not created by any component." % name)
                 creator_comp = self._instantiate_comp(creator)
                 # now the child ought to be created
-                return self.get_component_by_name(name)
+                return self._get_component_by_name(name)
 
     @staticmethod
     def get_children(root):
@@ -446,8 +446,8 @@ class Instantiator(object):
         # for each component, set the affect
         for name, attr in self.ast.items():
             affected_names = attr.get("affects", [])
-            comp = self.get_component_by_name(name)
-            affected = [self.get_component_by_name(n) for n in affected_names]
+            comp = self._get_component_by_name(name)
+            affected = [self._get_component_by_name(n) for n in affected_names]
             try:
                 comp._set_affects(affected)
             except AttributeError:
@@ -457,7 +457,7 @@ class Instantiator(object):
         # for each component set the properties
         for name, attr in self.ast.items():
             if "properties" in attr:
-                comp = self.get_component_by_name(name)
+                comp = self._get_component_by_name(name)
                 for prop_name, value in attr["properties"].items():
                     try:
                         va = getattr(comp, prop_name)
@@ -498,6 +498,66 @@ class Instantiator(object):
 
         return self.microscope
 
+    def _update_properties(self, name):
+        """
+        Set the VA values as defined in the "properties" section of the component
+
+        name (str): name of the component for which to set the VAs
+        """
+        attrs = self.ast[name]
+        if "properties" in attrs:
+            comp = self._get_component_by_name(name)
+            for prop_name, value in attrs["properties"].items():
+                try:
+                    va = getattr(comp, prop_name)
+                except AttributeError:
+                    raise SemanticError("Error in microscope "
+                            "file: Component '%s' has no property '%s'." % (name, prop_name))
+                if not isinstance(va, model.VigilantAttributeBase):
+                    raise SemanticError("Error in microscope "
+                            "file: Component '%s' has no property (VA) '%s'." % (name, prop_name))
+                try:
+                    va.value = value
+                except Exception:
+                    raise ValueError("Error in microscope "
+                            "file: %s.%s = '%s' failed." % (name, prop_name, value))
+
+    def _update_affects(self, name):
+        """
+        Update .affects of the given component, and of all the components which
+         affects the given component
+
+        name (str): the (new) component
+        """
+        comp = self._get_component_by_name(name)
+        attrs = self.ast[name]
+        # TODO: just simplify and set all the components (name), even if they
+        # are not yet active?
+
+        # Set the affects of the given component with all the components which
+        # already exists
+        affected_names = attrs.get("affects", [])
+        affected = set()
+        for n in affected_names:
+            try:
+                afcomp = self._get_component_by_name(n)
+            except LookupError:
+                logging.debug("Not setting affect %s->%s yet", name, n)
+                pass
+            else:
+                affected.add(afcomp)
+        logging.debug("Setting affect %s -> %s", name,
+                      ", ".join(c.name for c in affected))
+        comp._set_affects(comp.affects | affected)
+
+        # Set the affects of all the components which already exists and affects
+        # this new component
+        for c in self.components:
+            attrs = self.ast[c.name]
+            if name in attrs.get("affects", []):
+                logging.debug("Setting affect %s -> %s", c.name, comp.name)
+                c._set_affects(c.affects | {comp})
+
     def instantiate_component(self, name):
         """
         Generate the component (and its children, if they are created by delegation)
@@ -514,7 +574,11 @@ class Instantiator(object):
             if c.name == name:
                 raise ValueError("Trying to instantiate again component %s" % name)
 
-        return self._instantiate_comp(name)
+        comp = self._instantiate_comp(name)
+        self._update_properties(name)
+        self._update_affects(name)
+
+        return comp
 
     def get_instantiables(self):
         """
