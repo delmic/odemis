@@ -4,7 +4,7 @@ Created on 20 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -155,7 +155,7 @@ class MetadataUpdater(model.Component):
             # TODO compute the min/max from the emissions which are not 0
             miniwl = 1 # 1m is huge
             maxiwl = 0
-            
+
             for i, e in enumerate(emissions):
                 if e > 0:
                     miniwl = min(miniwl, light.spectra.value[i][2])
@@ -170,14 +170,14 @@ class MetadataUpdater(model.Component):
             p = power * numpy.sum(light.emissions.value)
             md = {model.MD_LIGHT_POWER: p}
             comp.updateMetadata(md)     
-        
+
         light.power.subscribe(updateLightPower, init=True)
         self._onTerminate.append((light.power.unsubscribe, (updateLightPower,)))
-        
+
         light.emissions.subscribe(updateInputWL, init=True)
         self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
-    
-            
+
+
     def terminate(self):
         # call all the unsubscribes
         for fun, args in self._onTerminate:

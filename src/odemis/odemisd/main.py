@@ -48,21 +48,83 @@ class BackendContainer(model.Container):
     A normal container which also terminates all the other containers when it
     terminates.
     """
-    def __init__(self, name=model.BACKEND_NAME):
+    def __init__(self, model_file, create_sub_containers=False,
+                dry_run=False, name=model.BACKEND_NAME):
+        """
+        inst_file (file): opened file that contains the yaml
+        container (Container): container in which to instantiate the components
+        create_sub_containers (bool): whether the leave components (components which
+           have no children created separately) are running in isolated containers
+        dry_run (bool): if True, it will check the semantic and try to instantiate the
+          model without actually any driver contacting the hardware.
+        """
         model.Container.__init__(self, name)
-        self.components = set() # to be updated later on
-        self.sub_containers = set() # to be updated later on
+
+        self._model = model_file
+        self._mdupdater = None
+
+        # parse the instantiation file
+        logging.debug("model instantiation file is: %s", self._model.name)
+        try:
+            self._instantiator = modelgen.Instantiator(model_file, self, create_sub_containers, dry_run)
+            # save the model
+            logging.info("model has been successfully parsed")
+        except modelgen.ParseError as exp:
+            raise ValueError("Error while parsing file %s:\n%s" % (self._model.name, exp))
+        except modelgen.SemanticError as exp:
+            raise ValueError("When instantiating file %s:\n%s" % (self._model.name, exp))
+        except Exception:
+            logging.exception("When instantiating file %s", self._model.name)
+            raise IOError("Unexpected error at instantiation")
+
+    def run(self):
+        # Create the root
+        mic = self._instantiator.instantiate_microscope()
+        self.setRoot(mic)
+        logging.debug("Root component %s created", mic.name)
+
+        # Keep instantiating the other components in a separate thread
+        self._instantiate_components()
+
+        # Start the metadata update
+        # TODO: upgrade metadata updater to support online changes
+        self._mdupdater = self.instantiate(MetadataUpdater,
+             {"name": "Metadata Updater", "microscope": mic, "components": self._instantiator.components})
+
+        # From now on, we'll really listen to external calls
+        model.Container.run(self)
+
+    def _instantiate_components(self):
+        nexts = self._instantiator.get_instantiables()
+        while nexts:
+            for n in nexts:
+                comp = self._instantiator.instantiate_component(n)
+                newcmps = self._instantiator.get_children(comp) # "potentially" new
+                # TODO: update .active instead of .children and update .ghosts on failure
+                # m.active.value = m.active.value | newcmps
+
+            nexts = self._instantiator.get_instantiables()
+        # in theory, it's done, but if there is a dependency loop some components
+        # will never be instantiable
+        instantiated = set(c.name for c in self._instantiator.components)
+        left = set(self._instantiator.ast.keys()) - instantiated
+        if left:
+            raise modelgen.SemanticError("Some components could not be instantiated due "
+                                "to cyclic dependency: %s" %
+                                (", ".join(left)))
 
     def terminate(self):
         # Stop all the components
-        for comp in self.components:
+        if self._mdupdater:
+            self._mdupdater.terminate()
+        for comp in self._instantiator.components:
             try:
                 comp.terminate()
             except Exception:
                 logging.warning("Failed to terminate component '%s'", comp.name)
 
         # end all the (sub-)containers
-        for container in self.sub_containers:
+        for container in self._instantiator.sub_containers:
             try:
                 container.terminate()
             except Exception:
@@ -171,14 +233,6 @@ class BackendRunner(object):
         self._container.close()
 
     def run(self):
-        # parse the instantiation file
-        try:
-            logging.debug("model instantiation file is: %s", self.model.name)
-            inst_model = modelgen.get_instantiation_model(self.model)
-            logging.info("model has been read successfully")
-        except modelgen.ParseError as exp:
-            raise ValueError("Error while parsing file %s:\n%s" % (self.model.name, exp))
-
         # change to odemis group and create the base directory
         try:
             self.set_base_group()
@@ -200,46 +254,29 @@ class BackendRunner(object):
                     logging.debug("Daemon started with pid %d", pid)
                     # TODO: we could try to contact the backend and see if it managed to start
                     return 0
-            if self.containement == BackendRunner.CONTAINER_DISABLE:
-                self._container = NonRemoteBackendContainer()
-            else:
-                self._container = BackendContainer()
         except Exception:
-            logging.error("Failed to create back-end container")
+            logging.error("Failed to start daemon")
             raise
+        
+        if self.containement == BackendRunner.CONTAINER_DISABLE:
+            container_cls = NonRemoteBackendContainer
+        else:
+            container_cls = BackendContainer
+
+        if self.containement == BackendRunner.CONTAINER_SEPARATED:
+            create_sub_containers = True
+        else:
+            create_sub_containers = False
+
+        self._container = container_cls(self.model, create_sub_containers,
+                                        dry_run=self.dry_run)
+
+        if self.dry_run:
+            logging.info("model has been successfully validated, exiting")
+            return    # everything went fine
+        logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
 
         try:
-            try:
-                if self.containement == BackendRunner.CONTAINER_SEPARATED:
-                    create_sub_containers = True
-                else:
-                    create_sub_containers = False
-                mic, comps, sub_containers = modelgen.instantiate_model(
-                                                inst_model, self._container,
-                                                create_sub_containers,
-                                                dry_run=self.dry_run)
-                # save the model
-                self._container.setRoot(mic)
-                self._container.components |= comps
-                self._container.sub_containers |= sub_containers
-                logging.info("model has been successfully instantiated for %s", mic.name)
-                logging.debug("model components are %s", ", ".join([c.name for c in comps]))
-            except modelgen.SemanticError as exp:
-                raise ValueError("When instantiating file %s:\n%s" % (self.model.name, exp))
-            except Exception:
-                logging.exception("When instantiating file %s", self.model.name)
-                raise IOError("Unexpected error at instantiation")
-
-            if self.dry_run:
-                logging.info("model has been successfully validated, exiting")
-                return    # everything went fine
-
-            # special "meta" component
-            mdUpdater = self._container.instantiate(MetadataUpdater,
-             {"name": "Metadata Updater", "microscope": mic, "components": comps})
-            self._container.components.add(mdUpdater)
-
-            logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
             self._container.run()
         finally:
             self.stop()
