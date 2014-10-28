@@ -317,7 +317,7 @@ class AndorCam3(model.DigitalCamera):
                                                        readonly=True)
         range_exp = list(self.GetFloatRanges(u"ExposureTime"))
         range_exp[0] = max(range_exp[0], 1e-6) # s, to make sure != 0
-        self._exp_time = max(range_exp[0], min(1.0, range_exp[1]))
+        self._exp_time = max(range_exp[0], min(0.1, range_exp[1]))
         self.exposureTime = model.FloatContinuous(self._exp_time, range_exp,
                                           unit="s", setter=self.setExposureTime)
         

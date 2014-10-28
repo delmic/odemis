@@ -356,7 +356,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
         # Add the dist to compensate the stage imprecision
-        offset = (-(sem_pos["x"] - vector[0]), sem_pos["y"] - vector[1])
+        offset = (-(sem_pos["x"] + vector[0]), sem_pos["y"] + vector[1])
         return offset
 
     finally:
