@@ -133,16 +133,20 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, background, dataflow):
         escan.scale.value = (1, 1)
         escan.resolution.value = (1, 1)
 
-        # Estimate noise and adjust exposure time based on "Rose criterion"
         if future._spot_alignment_state == CANCELLED:
             raise CancelledError()
         logging.debug("Adjust exposure time...")
-        image = SubstractBackground(ccd, dataflow)
-        snr = MeasureSNR(image)
-        while (snr < 5 and ccd.exposureTime.value < 900e-03):
-            ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
+        if background == True:
+            # Strong exposure time for background substraction
+            ccd.exposureTime.value = 1100e-03
+        else:
+            # Estimate noise and adjust exposure time based on "Rose criterion"
             image = SubstractBackground(ccd, dataflow)
             snr = MeasureSNR(image)
+            while (snr < 5 and ccd.exposureTime.value < 900e-03):
+                ccd.exposureTime.value = ccd.exposureTime.value + 100e-03
+                image = SubstractBackground(ccd, dataflow)
+                snr = MeasureSNR(image)
         et = ccd.exposureTime.value
 
         # Try to find spot
