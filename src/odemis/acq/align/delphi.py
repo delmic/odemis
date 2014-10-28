@@ -356,7 +356,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
         # Add the dist to compensate the stage imprecision
-        offset = (sem_pos["x"] - vector[0], sem_pos["y"] - vector[1])
+        offset = (-(sem_pos["x"] - vector[0]), sem_pos["y"] - vector[1])
         return offset
 
     finally:
@@ -476,7 +476,7 @@ def _DoRotationAndScaling(future, ccd, detector, escan, sem_stage, opt_stage, fo
 #             P = numpy.transpose([vpos[0], vpos[1]])
 #             O = numpy.transpose([offset[0], offset[1]])
 #             q = numpy.add(P, O).tolist()
-            q = [vpos[0] - offset[0], vpos[1] - offset[1]]
+            q = [vpos[0] + offset[0], vpos[1] - offset[1]]
             # Move objective lens correcting for offset
             cor_pos = {"x": q[0], "y": q[1]}
             f = opt_stage.moveAbs(cor_pos)
