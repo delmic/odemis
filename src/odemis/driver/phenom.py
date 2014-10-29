@@ -274,8 +274,8 @@ class Scanner(model.Emitter):
         # TODO: allow translation to shift the ebeam (so the range is much larger)
         # (float, float) in px => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = ((-self._shape[0] / 2, -self._shape[1] / 2),
-                    (self._shape[0] / 2, self._shape[1] / 2))
+        tran_rng = ((-self._shape[0], -self._shape[1]),
+                    (self._shape[0], self._shape[1]))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
@@ -629,21 +629,19 @@ class Detector(model.Detector):
             self._acquisition_thread.start()
 
     def beam_blank(self, blank):
-        if blank == True:
-            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-        else:
-            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+        with self.parent._acq_progress_lock:
+            if blank == True:
+                self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+            else:
+                self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
 
     def stop_acquire(self):
         try:
-            # "Blank" the beam
-            try:
-                self._acq_device.SEMAbortImageAcquisition()
-            except suds.WebFault:
-                logging.debug("No acquisition in progress to be aborted.")
-            self.beam_blank(True)
+            self._acq_device.SEMAbortImageAcquisition()
         except suds.WebFault:
             logging.debug("No acquisition in progress to be aborted.")
+        # "Blank" the beam
+        self.beam_blank(True)
         self._acquisition_must_stop.set()
 
     def _wait_acquisition_stopped(self):
@@ -800,7 +798,6 @@ class Detector(model.Detector):
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-            self.parent._scanner.translation.value = (0, 0)
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
