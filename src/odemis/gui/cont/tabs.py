@@ -222,7 +222,7 @@ class SecomStreamsTab(Tab):
 
         # Order matters!
         # First we create the views, then the streams
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             [
@@ -303,7 +303,7 @@ class SecomStreamsTab(Tab):
             ),
         ])
 
-        self._view_selector = viewcont.ViewSelector(
+        self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,
             buttons
@@ -632,7 +632,7 @@ class SparcAcquisitionTab(Tab):
         main_data.ebeam.dwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
         # create a view on the tab model
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             [self.main_frame.vp_sparc_acq_view]
@@ -1035,7 +1035,7 @@ class AnalysisTab(Tab):
 
         # The view controller also has special code for the sparc to create the
         # right type of view.
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             viewports
@@ -1080,24 +1080,31 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
+        # TODO: rename buttons
         buttons = collections.OrderedDict([
-            (self.main_frame.btn_sparc_view_all,
-             (None, self.main_frame.lbl_sparc_view_all)),
-            (self.main_frame.btn_sparc_view_tl,
-             (self.main_frame.vp_inspection_tl,
-              self.main_frame.lbl_sparc_view_tl)),
-            (self.main_frame.btn_sparc_view_tr,
-             (self.main_frame.vp_inspection_tr,
-              self.main_frame.lbl_sparc_view_tr)),
-            (self.main_frame.btn_sparc_view_bl,
-             (vp_bottom_left,
-              self.main_frame.lbl_sparc_view_bl)),
-            (self.main_frame.btn_sparc_view_br,
-             (self.main_frame.vp_inspection_br,
-              self.main_frame.lbl_sparc_view_br))
+            (
+                self.main_frame.btn_sparc_view_all,
+                (None, self.main_frame.lbl_sparc_view_all)
+            ),
+            (
+                self.main_frame.btn_sparc_view_tl,
+                (self.main_frame.vp_inspection_tl, self.main_frame.lbl_sparc_view_tl)
+            ),
+            (
+                self.main_frame.btn_sparc_view_tr,
+                (self.main_frame.vp_inspection_tr, self.main_frame.lbl_sparc_view_tr)
+            ),
+            (
+                self.main_frame.btn_sparc_view_bl,
+                (vp_bottom_left, self.main_frame.lbl_sparc_view_bl)
+            ),
+            (
+                self.main_frame.btn_sparc_view_br,
+                (self.main_frame.vp_inspection_br, self.main_frame.lbl_sparc_view_br)
+            )
         ])
 
-        self._view_selector = viewcont.ViewSelector(
+        self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,
             buttons,
@@ -1600,7 +1607,7 @@ class LensAlignTab(Tab):
             )
         ])
 
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             vpv
@@ -1956,7 +1963,7 @@ class MirrorAlignTab(Tab):
                   # no focus, or could control yaw/pitch?
                  }),
             ])
-            self.view_controller = viewcont.ViewController(
+            self.view_controller = viewcont.ViewPortController(
                 self.tab_data_model,
                 self.main_frame,
                 vpv

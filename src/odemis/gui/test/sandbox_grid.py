@@ -25,6 +25,7 @@ import logging
 import unittest
 
 import wx
+from odemis.gui.cont.views import ViewPortController
 
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
@@ -36,182 +37,94 @@ test.goto_manual()
 class GridPanelTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrcgrid_frame
-    # test.set_log_level(logging.DEBUG)
+    test.set_log_level(logging.DEBUG)
 
-    def test_view_change(self):
+    def test_show_grid(self):
 
-        # test.set_sleep_time(100)
+        # test.set_sleep_time(300)
+
+        sizer = self.frame.grid_panel.GetSizer()
+
+        def show(viewport):
+            ViewPortController._show_grid(sizer, viewport)
+
+        logging.debug("brown")
+        show(self.frame.brown)
+        gui_loop()
+
+        logging.debug("2x2")
+        show(None)
+        gui_loop()
+
+        logging.debug("blue")
+        show(self.frame.blue)
+        gui_loop()
+
+        logging.debug("2x2")
+        show(None)
+        gui_loop()
+
+        logging.debug("purple")
+        show(self.frame.purple)
+        gui_loop()
+
+        logging.debug("red")
+        show(self.frame.red)
+        gui_loop()
+
+        logging.debug("brown")
+        show(self.frame.brown)
+        gui_loop()
+
+        logging.debug("green")
+        show(self.frame.green)
+        gui_loop()
+
+        logging.debug("purple")
+        show(self.frame.purple)
+        gui_loop()
+
+        logging.debug("2x2")
+        show(None)
+        gui_loop()
+
+        logging.debug("yellow")
+        show(self.frame.yellow)
+        gui_loop()
+
+    def test_position_viewport(self):
 
         sizer = self.frame.grid_panel.GetSizer()
         sizer.SetEmptyCellSize((0, 0))
 
-        def show(pos=None):
-
-            positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
-
-            for apos in positions:
-                row, col = apos
-                item = sizer.FindItemAtPosition(apos)
-
-                if pos and apos != pos:
-                    if item:
-                        win = item.GetWindow()
-                        win.Hide()
-
-                    if sizer.IsRowGrowable(row) and pos[0] != row:
-                        logging.debug("rem grow row %s", row)
-                        sizer.RemoveGrowableRow(row)
-                    if sizer.IsColGrowable(col) and pos[1] != col:
-                        logging.debug("rem grow col %s", col)
-                        sizer.RemoveGrowableCol(col)
-
-                else:
-                    if item:
-                        win = item.GetWindow()
-                        win.Show()
-
-                    # Needed to update the number of rows and columns that the sizer sees
-                    sizer.Layout()
-
-                    if not sizer.IsRowGrowable(row):
-                        logging.debug("add grow row %s", row)
-                        sizer.AddGrowableRow(row)
-                    if not sizer.IsColGrowable(col):
-                        logging.debug("add grow col %s", col)
-                        sizer.AddGrowableCol(col)
-
-            sizer.Layout()
-
-            full_size = self.frame.GetSize()[0]
-
-            sizes = [([400], [400]), ([400], [0, 400]), ([0, 400], [400]), ([0, 400], [0, 400])]
-            # self.assertEquals()
-
-            if pos:
-                pos_sizes = dict(zip(positions, sizes))
-                rows, cols = pos_sizes[pos]
-                self.assertEquals(sizer.RowHeights, rows)
-                self.assertEquals(sizer.ColWidths, cols)
-
-            else:
-                half_size = full_size // 2
-                self.assertEquals(sizer.RowHeights, [half_size, half_size])
-                self.assertEquals(sizer.ColWidths, [half_size, half_size])
-
-        logging.debug((1, 1))
-        show((1, 1))
         gui_loop()
 
-        logging.debug(None)
-        show(None)
+        # test.set_log_level(logging.DEBUG)
+        # test.set_sleep_time(500)
+
         gui_loop()
 
-        logging.debug((0, 1))
-        show((0, 1))
+        def position_viewport(win, pos=None):
+            ViewPortController._position_viewport_on_grid(win, sizer, pos)
+
+        logging.debug("red to top right")
+        position_viewport(self.frame.red, (0, 1))
         gui_loop()
 
-        logging.debug(None)
-        show(None)
+        logging.debug("red to bottom right")
+        position_viewport(self.frame.red, (1, 1))
         gui_loop()
 
-        logging.debug((1, 0))
-        show((1, 0))
+        logging.debug("blue to bottom right")
+        position_viewport(self.frame.blue, (1, 1))
         gui_loop()
 
-        logging.debug((0, 0))
-        show((0, 0))
+        logging.debug("green to bottom left")
+        position_viewport(self.frame.green, (1, 0))
         gui_loop()
 
-        logging.debug((1, 1))
-        show((1, 1))
-        gui_loop()
-
-        logging.debug((1, 1))
-        show(None)
-        gui_loop()
-
-    def test_view_switch(self):
-
-        sizer = self.frame.grid_panel.GetSizer()
-        sizer.SetEmptyCellSize((0, 0))
-
-        test.set_log_level(logging.DEBUG)
-        test.set_sleep_time(1000)
-
-        def position_at(win, pos=None):
-            if pos:
-                if sizer.CheckForIntersectionPos(pos, (1, 1)):
-                    current_item = sizer.FindItemAtPosition(pos)
-                    current_win = current_item.GetWindow()
-                    sizer.Detach(current_win)
-
-                    item = sizer.FindItem(win)
-
-                    if item:
-                        old_pos = item.GetPos()
-                        logging.debug("moving %s to %s", win.__class__.__name__, pos)
-                        sizer.SetItemPosition(win, pos)
-                        sizer.Add(current_win, old_pos, flag=wx.EXPAND)
-                    else:
-                        logging.debug("adding %s at %s", win.__class__.__name__, pos)
-                        sizer.Add(win, pos, flag=wx.EXPAND)
-
-                else:
-                    item = sizer.FindItem(win)
-
-                    if item:
-                        logging.debug("moving %s to %s", win.__class__.__name__, pos)
-                        sizer.SetItemPosition(win, pos)
-                    else:
-                        logging.debug("adding %s at %s", win.__class__.__name__, pos)
-                        sizer.Add(win, pos, flag=wx.EXPAND)
-
-                win.Show()
-            else:
-                win.Hide()
-                sizer.Detach(win)
-
-            # Hide empty rows and columns
-
-            # A list of position/span pairs: top and bottom row, left and right column
-            spans = [((0, 0), (1, 2)), ((1, 0), (1, 2)), ((0, 0), (2, 1)), ((0, 1), (2, 1))]
-
-            for pos, span in spans:
-                is_row = span[0] == 1
-                row, col = pos
-
-                if not sizer.CheckForIntersectionPos(pos, span):
-                    if is_row:
-                        if sizer.IsRowGrowable(row):
-                            logging.debug("rem grow row %s", row)
-                            sizer.RemoveGrowableRow(row)
-                    else:
-
-                        if sizer.IsColGrowable(col):
-                            logging.debug("rem grow col %s", col)
-                            sizer.RemoveGrowableCol(col)
-                else:
-                    if is_row:
-                        if not sizer.IsRowGrowable(row):
-                            logging.debug("add grow row %s", row)
-                            sizer.AddGrowableRow(row)
-                    else:
-                        if not sizer.IsColGrowable(col):
-                            logging.debug("add grow col %s", col)
-                            sizer.AddGrowableCol(col)
-
-            sizer.Layout()
-
-        position_at(self.frame.red, (0, 1))
-        gui_loop()
-
-        position_at(self.frame.red, (1, 1))
-        gui_loop()
-
-        position_at(self.frame.blue)
-        gui_loop()
-
-        position_at(self.frame.purple)
+        logging.debug("yellow to top left")
+        position_viewport(self.frame.yellow, (0, 0))
         gui_loop()
 
 

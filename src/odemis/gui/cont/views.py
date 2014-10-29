@@ -35,7 +35,7 @@ from odemis.model import VigilantAttributeBase
 from odemis.model import MD_PIXEL_SIZE
 
 
-class ViewController(object):
+class ViewPortController(object):
     """ Manage the display of various viewports in a tab """
 
     def __init__(self, tab_data, main_frame, viewports, toolbar=None):
@@ -307,6 +307,91 @@ class ViewController(object):
                     break
         return viewports
 
+    @staticmethod
+    def _position_viewport_on_grid(viewport, sizer, pos=None):
+        """ Position the given viewport at a position in the sizer
+
+        If a Viewport is already there, their position will be swapped.
+
+        If no position is given, the Viewport will be removed from the sizer and hidden
+
+        """
+
+        if pos:
+
+            viewport_item = sizer.FindItem(viewport)
+
+            # If a viewport is already present at the given position...
+
+            if sizer.CheckForIntersectionPos(pos, (1, 1)):
+                # ...get the current window and remove it from the sizer
+                current_item = sizer.FindItemAtPosition(pos)
+                current_win = current_item.GetWindow()
+
+                if current_win == viewport:
+                    return
+
+                sizer.Detach(current_win)
+
+                # If the given viewport is already position in the sizer...
+                if viewport_item:
+                    # Swap the viewport and the current one at 'pos'
+                    old_pos = viewport_item.GetPos()
+                    logging.debug("moving %s to %s", viewport.__class__.__name__, pos)
+                    sizer.SetItemPosition(viewport, pos)
+                    sizer.Add(current_win, old_pos, flag=wx.EXPAND)
+                # The viewport is not positioned inside the sizer yet
+                else:
+                    # Insert the viewport into the sizer at the given position
+                    logging.debug("adding %s at %s", viewport.__class__.__name__, pos)
+                    sizer.Add(viewport, pos, flag=wx.EXPAND)
+            # If the target position is empty...
+            else:
+                if viewport_item:
+                    # ...move the viewport there
+                    logging.debug("moving %s to %s", viewport.__class__.__name__, pos)
+                    sizer.SetItemPosition(viewport, pos)
+                else:
+                    logging.debug("adding %s at %s", viewport.__class__.__name__, pos)
+                    # ...insert the viewport there
+                    sizer.Add(viewport, pos, flag=wx.EXPAND)
+
+            viewport.Show()
+        else:
+            viewport.Hide()
+            sizer.Detach(viewport)
+
+        # Hide empty rows and columns
+
+        # A list of position/span pairs: top and bottom row, left and right column
+        spans = [((0, 0), (1, 2)), ((1, 0), (1, 2)), ((0, 0), (2, 1)), ((0, 1), (2, 1))]
+
+        for pos, span in spans:
+            is_row = span[0] == 1
+            row, col = pos
+
+            if not sizer.CheckForIntersectionPos(pos, span):
+                if is_row:
+                    if sizer.IsRowGrowable(row):
+                        logging.debug("rem grow row %s", row)
+                        sizer.RemoveGrowableRow(row)
+                else:
+
+                    if sizer.IsColGrowable(col):
+                        logging.debug("rem grow col %s", col)
+                        sizer.RemoveGrowableCol(col)
+            else:
+                if is_row:
+                    if not sizer.IsRowGrowable(row):
+                        logging.debug("add grow row %s", row)
+                        sizer.AddGrowableRow(row)
+                else:
+                    if not sizer.IsColGrowable(col):
+                        logging.debug("add grow col %s", col)
+                        sizer.AddGrowableCol(col)
+
+        sizer.Layout()
+
     def _set_visible_views(self, visible_views):
         """ Set the order of the viewports so it will match the list of visible views
 
@@ -315,122 +400,28 @@ class ViewController(object):
 
         """
 
-        return
         msg = "Resetting views to %s"
         msgdata = [str(v) for v in visible_views] if not visible_views is None else "default"
         logging.debug(msg, msgdata)
 
-        containing_window = self._viewports[0].Parent
-        gb = containing_window.GetSizer()
+        parent = self._viewports[0].Parent
+        sizer = parent.GetSizer()
 
-        containing_window.Freeze()
+        parent.Freeze()
 
         try:
-            # Hide and detach all viewports
-            for vp in self._viewports:
-                gb.Detach(vp)
-
             # Collect the viewports associated with the visible views
             visible_viewports = self.views_to_viewports(visible_views)
+            invisible_viewports = [vp for vp in self.viewports if vp not in visible_viewports]
 
-            for pos, vp in zip([(0, 0), (0, 1), (1, 0), (1, 1)], visible_viewports):
-                # if gb.CheckForIntersectionPos(pos, (1, 1)):
-                #
-                #     i = 2
-                #     while gb.CheckForIntersectionPos((i, i), (1, 1)):
-                #         i += 1
-                #
-                #     move_item = gb.FindItemAtPosition(pos)
-                #     move_item = move_item.GetWindow()
-                #     move_item.size_pos = (i, i)
-                #     gb.SetItemPosition(move_item, move_item.size_pos)
-                #
-                # vp.sizer_pos = pos
-                gb.Add(vp, pos, flag=wx.EXPAND)
-                vp.Show()
+            for viewport, pos in zip(visible_viewports, [(0, 0), (0, 1), (1, 0), (1, 1)]):
+                self._position_viewport_on_grid(viewport, sizer, pos)
 
-            i = 2
-            invisible_viewports = [vp for vp in self._viewports if vp not in visible_viewports]
             for viewport in invisible_viewports:
-                gb.Add(viewport, (i, i))
-                viewport.Hide()
-                i += 1
-
-            self._viewports = visible_viewports + invisible_viewports
+                self._position_viewport_on_grid(viewport, sizer)
 
         finally:
-            containing_window.Thaw()
-
-    # def swap_viewports(self, visible_idx, hidden_idx):
-    #     """ Swap the positions of viewports denoted by indices visible_idx and
-    #     hidden_idx.
-    #
-    #     It is assumed that visible_idx points to one of the viewports visible in
-    #     a 2x2 display, and that hidden_idx is outside this 2x2 layout and
-    #     invisible.
-    #     """
-    #
-    #     # Small shorthand local variable
-    #     vp = self._viewports
-    #
-    #     visible_vp = vp[visible_idx]
-    #     hidden_vp = vp[hidden_idx]
-    #
-    #     logging.debug("swapping visible %s and hidden %s",
-    #                   visible_vp,
-    #                   hidden_vp)
-    #
-    #     # Get the sizer of the visible viewport
-    #     visible_sizer = visible_vp.GetContainingSizer()
-    #     # And the one of the invisible one, which should be the containing sizer
-    #     # of visible_sizer
-    #     hidden_sizer = parent_sizer = hidden_vp.GetContainingSizer()
-    #
-    #     # Get the sizer position of the visible viewport, so we can use that
-    #     # to insert the other viewport
-    #     visible_pos = util.get_sizer_position(visible_vp)
-    #     hidden_pos = util.get_sizer_position(hidden_vp)
-    #
-    #     # Get the sizer item for the visible viewport, so we can access its
-    #     # sizer properties like proportion and flags
-    #     visible_item = parent_sizer.GetItem(visible_vp, recursive=True)
-    #     hidden_item = parent_sizer.GetItem(hidden_vp, recursive=True)
-    #
-    #     # Move hidden viewport to visible sizer
-    #     hidden_sizer.Detach(hidden_vp)
-    #     visible_sizer.Insert(
-    #         visible_pos,
-    #         hidden_vp,
-    #         proportion=visible_item.GetProportion(),
-    #         flag=visible_item.GetFlag(),
-    #         border=visible_item.GetBorder())
-    #
-    #     # Move viewport 1 to the end of the containing sizer
-    #     visible_sizer.Detach(visible_vp)
-    #     hidden_sizer.Insert(
-    #         hidden_pos,
-    #         visible_vp,
-    #         proportion=hidden_item.GetProportion(),
-    #         flag=hidden_item.GetFlag(),
-    #         border=hidden_item.GetBorder())
-    #
-    #     # Only make the 'hidden_vp' visible when we're in 2x2 view or if it's
-    #     # the focussed view in a 1x1 view.
-    #     if (
-    #         self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
-    #         self._data_model.focussedView.value == visible_vp.microscope_view
-    #     ):
-    #         # Flip the visibility
-    #         visible_vp.Hide()
-    #         logging.debug("Hiding %s", visible_vp)
-    #         hidden_vp.Show()
-    #         logging.debug("Showing %s", hidden_vp)
-    #
-    #     # Swap the viewports in the viewport list
-    #     vp[visible_idx], vp[hidden_idx] = vp[hidden_idx], vp[visible_idx]
-    #
-    #     # vp[visible_idx].Parent.Layout()
-    #     parent_sizer.Layout()
+            wx.CallAfter(parent.Thaw)
 
     def _on_visible_views(self, visible_views):
         """ This method is called when the visible views in the data model change """
@@ -480,11 +471,77 @@ class ViewController(object):
         finally:
             containing_window.Thaw()
 
+    @staticmethod
+    def _show_grid(sizer, viewport=None):
+        """ Switch the viewport grid to a 1x1 view if `viewport` is defined or 2x2 otherwise """
+
+        # The positions that we can actually show
+        positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        # Make sure that empty cells full collapse
+        sizer.SetEmptyCellSize((0, 0))
+
+        try:
+            # Get the current position of the visible viewport
+            current_pos = sizer.GetItemPosition(viewport) if viewport else None
+        except AssertionError:
+
+            # If the given viewport is not in the sizer an exception will be raised by the
+            # `GetItemPosition` method and it's not part of the 2x2 grid.
+            # We assume that all the grid viewports need to be hidden and the given viewport shown
+            # 'full screen'.
+
+            for grid_pos in positions:
+                sizer.FindItemAtPosition(grid_pos).Window.Hide()
+            viewport.SetSize(viewport.Parent.GetSize())
+            viewport.Show()
+            sizer.Layout()
+            return
+
+        for grid_pos in positions:
+            grid_row, grid_col = grid_pos
+            grid_item = sizer.FindItemAtPosition(grid_pos)
+
+            # If the visible view is provided and we're looking a different cell
+            if current_pos is not None and grid_pos != current_pos:
+                # If there's a viewport at the grid position, hide it
+                if grid_item:
+                    viewport = grid_item.GetWindow()
+                    viewport.Hide()
+
+                # Collapse the row and/or column of the grid position if the visible viewport
+                # is not in that row and/or column
+                if sizer.IsRowGrowable(grid_row) and current_pos[0] != grid_row:
+                    logging.debug("rem grow row %s", grid_row)
+                    sizer.RemoveGrowableRow(grid_row)
+                if sizer.IsColGrowable(grid_col) and current_pos[1] != grid_col:
+                    logging.debug("rem grow col %s", grid_col)
+                    sizer.RemoveGrowableCol(grid_col)
+            # If no visible view is given (i.e. 2x2 view) or we're looking at the visible views
+            # grid position
+            else:
+                # If there's a viewport at the grid position, show it
+                if grid_item:
+                    viewport = grid_item.GetWindow()
+                    viewport.Show()
+
+                # Needed to update the number of rows and columns that the sizer sees
+                sizer.Layout()
+
+                # Make the grid row and/or column expandable that the grid item is in
+                if not sizer.IsRowGrowable(grid_row):
+                    logging.debug("add grow row %s", grid_row)
+                    sizer.AddGrowableRow(grid_row)
+                if not sizer.IsColGrowable(grid_col):
+                    logging.debug("add grow col %s", grid_col)
+                    sizer.AddGrowableCol(grid_col)
+
+            sizer.Layout()
+
     def _show_viewport(self, sizer, visible_viewport=None):
         """ Show the given viewport or show the first four in the 2x2 grid if none is given
 
         :param sizer: wx.GridBagSizer
-        :param viewport: ViewPort
+        :param visible_viewport: ViewPort
 
 
         ..note:
@@ -493,62 +550,41 @@ class ViewController(object):
 
         """
 
-        if isinstance(sizer, wx.GridBagSizer):
+        parent = sizer.GetContainingWindow()
+        parent.Freeze()
 
-            positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
-            sizer.SetEmptyCellSize((0, 0))
+        try:
+            if isinstance(sizer, wx.GridBagSizer):
 
-            pos = sizer.GetItemPosition(visible_viewport) if visible_viewport else None
+                self._show_grid(sizer, visible_viewport)
 
-            for apos in positions:
-                row, col = apos
-                item = sizer.FindItemAtPosition(apos)
+                if visible_viewport:
+                    for viewport in self._viewports:
+                        viewport.SetFocus(visible_viewport == viewport)
 
-                if pos is not None and apos != pos:
-                    if item:
-                        win = item.GetWindow()
-                        win.Hide()
-
-                    if sizer.IsRowGrowable(row) and pos[0] != row:
-                        logging.debug("rem grow row %s", row)
-                        sizer.RemoveGrowableRow(row)
-                    if sizer.IsColGrowable(col) and pos[1] != col:
-                        logging.debug("rem grow col %s", col)
-                        sizer.RemoveGrowableCol(col)
-
-                else:
-                    if item:
-                        win = item.GetWindow()
-                        win.Show()
-
-                    # Needed to update the number of rows and columns that the sizer sees
-                    sizer.Layout()
-
-                    if not sizer.IsRowGrowable(row):
-                        logging.debug("add grow row %s", row)
-                        sizer.AddGrowableRow(row)
-                    if not sizer.IsColGrowable(col):
-                        logging.debug("add grow col %s", col)
-                        sizer.AddGrowableCol(col)
-
-        else:
-            # Assume legacy sizer construction
-
-            if visible_viewport in self._viewports:
-                for viewport in self._viewports:
-                    if visible_viewport == viewport:
-                        viewport.Show()
-                        viewport.SetFocus(True)
-                    else:
-                        viewport.Hide()
-                        viewport.SetFocus(False)
             else:
-                for viewport in self._viewports[:4]:
-                    viewport.Show()
-                for viewport in self._viewports[4:]:
-                    viewport.Hide()
+                # Assume legacy sizer construction
 
-        sizer.Layout()
+                if visible_viewport in self._viewports:
+                    for viewport in self._viewports:
+                        if visible_viewport == viewport:
+                            viewport.Show()
+                            viewport.SetFocus(True)
+                        else:
+                            viewport.Hide()
+                            viewport.SetFocus(False)
+                else:
+                    for viewport in self._viewports[:4]:
+                        viewport.Show()
+                    for viewport in self._viewports[4:]:
+                        viewport.Hide()
+
+            sizer.Layout()
+        finally:
+            # Thaw is called using `CallAfter` because otherwise the layout process would still be
+            # visible
+            parent.Refresh()
+            wx.CallAfter(parent.Thaw)
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -690,9 +726,8 @@ class OverviewController(object):
         return p_size
 
 
-class ViewSelector(object):
-    """ This class controls the view selector buttons and labels associated with them.
-    """
+class ViewButtonController(object):
+    """ This class controls the view selector buttons and labels associated with them. """
 
     def __init__(self, tab_data, main_frame, buttons, viewports=None):
         """
@@ -710,7 +745,7 @@ class ViewSelector(object):
         self.viewports = viewports
 
         for btn in self.buttons:
-            btn.Bind(wx.EVT_BUTTON, self.OnClick)
+            btn.Bind(wx.EVT_BUTTON, self.on_btn_click)
 
         self._subscriptions = {}
         self._subscribe()
@@ -737,10 +772,10 @@ class ViewSelector(object):
                 continue
 
             @call_after
-            def on_thumbnail(im, btn=btn):  # save btn in scope
+            def on_thumbnail(im, b=btn):  # save btn in scope
                 # import traceback
                 # traceback.print_stack()
-                btn.set_overlay_image(im)
+                b.set_overlay_image(im)
 
             vp.microscope_view.thumbnail.subscribe(on_thumbnail, init=True)
             # keep ref of the functions so that they are not dropped
@@ -888,7 +923,7 @@ class ViewSelector(object):
 
     _on_focus_change = _on_layout_change
 
-    def OnClick(self, evt):
+    def on_btn_click(self, evt):
         """
         Navigation button click event handler
 

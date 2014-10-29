@@ -584,21 +584,17 @@
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  <object class="sizeritem">
-                    <object class="OverviewViewport" name="vp_overview_sem">
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>2,2</cellpos>
-                  </object>
+                  
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
                 </object>
                 <bg>#000000</bg>
+                <object class="OverviewViewport" name="vp_overview_sem">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -2607,30 +2603,22 @@
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  <object class="sizeritem">
-                    <object class="PlotViewport" name="vp_inspection_plot">
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>2,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="AngularResolvedViewport" name="vp_angular">
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>3,3</cellpos>
-                  </object>
+                  
+                  
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
+                </object>
+                <object class="AngularResolvedViewport" name="vp_angular">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="PlotViewport" name="vp_inspection_plot">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
               </object>
               <option>1</option>

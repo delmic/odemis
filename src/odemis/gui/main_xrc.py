@@ -168,8 +168,8 @@ class xrcfr_main(wx.Frame):
         self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
         self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
         self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
-        self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
         self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
+        self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
@@ -812,21 +812,17 @@ def __init_resources():
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  <object class="sizeritem">
-                    <object class="OverviewViewport" name="vp_overview_sem">
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>2,2</cellpos>
-                  </object>
+                  
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
                 </object>
                 <bg>#000000</bg>
+                <object class="OverviewViewport" name="vp_overview_sem">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -2835,30 +2831,22 @@ def __init_resources():
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  <object class="sizeritem">
-                    <object class="PlotViewport" name="vp_inspection_plot">
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>2,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="AngularResolvedViewport" name="vp_angular">
-                      <hidden>1</hidden>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>3,3</cellpos>
-                  </object>
+                  
+                  
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
+                </object>
+                <object class="AngularResolvedViewport" name="vp_angular">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="PlotViewport" name="vp_inspection_plot">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
               </object>
               <option>1</option>
