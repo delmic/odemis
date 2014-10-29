@@ -534,32 +534,34 @@ class Instantiator(object):
         """
         comp = self._get_component_by_name(name)
         attrs = self.ast[name]
-        # TODO: just simplify and set all the components (name), even if they
+        comp.affects.value = attrs.get("affects", [])
+        logging.debug("Updating affect %s -> %s", name,
+                       ", ".join(comp.affects.value))
+        # TODO: does it work to just set all the components (name), even if they
         # are not yet active?
 
-        # Set the affects of the given component with all the components which
-        # already exists
-        affected_names = attrs.get("affects", [])
-        affected = set()
-        for n in affected_names:
-            try:
-                afcomp = self._get_component_by_name(n)
-            except LookupError:
-                logging.debug("Not setting affect %s->%s yet", name, n)
-                pass
-            else:
-                affected.add(afcomp)
-        logging.debug("Setting affect %s -> %s", name,
-                      ", ".join(c.name for c in affected))
-        comp._set_affects(comp.affects | affected)
-
-        # Set the affects of all the components which already exists and affects
-        # this new component
-        for c in self.components:
-            attrs = self.ast[c.name]
-            if name in attrs.get("affects", []):
-                logging.debug("Setting affect %s -> %s", c.name, comp.name)
-                c._set_affects(c.affects | {comp})
+#         # Set the affects of the given component with all the components which
+#         # already exists
+#         affected_names = comp.affects.value
+#         for n in attrs.get("affects", []):
+#             try:
+#                 self._get_component_by_name(n)
+#             except LookupError:
+#                 logging.debug("Not setting affect %s->%s yet", name, n)
+#                 pass
+#             else:
+#                 affected_names.add(n)
+#         logging.debug("Updating affect %s -> %s", name,
+#                       ", ".join(affected_names))
+#         comp.affects.value = affected_names
+#
+#         # Set the affects of all the components which already exists and affects
+#         # this new component
+#         for c in self.components:
+#             attrs = self.ast[c.name]
+#             if name in attrs.get("affects", []):
+#                 logging.debug("Setting affect %s -> %s", c.name, comp.name)
+#                 c._set_affects(c.affects | {comp})
 
     def instantiate_component(self, name):
         """
@@ -595,6 +597,7 @@ class Instantiator(object):
                 logging.info("Remote exception %s", "".join(remote_tb))
             except AttributeError:
                 pass
+            raise exp
 
         # Add to the microscope all the new components that should be child
         mchildren = self._microscope_ast["children"].values()

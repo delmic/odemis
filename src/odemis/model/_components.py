@@ -224,10 +224,13 @@ class HwComponent(Component):
     def __init__(self, name, role, *args, **kwargs):
         Component.__init__(self, name, *args, **kwargs)
         self._role = role
-        self._affects = frozenset()
         self._swVersion = "Unknown (Odemis %s)" % odemis.__version__
         self._hwVersion = "Unknown"
         self._metadata = {}  # internal metadata
+
+        # This one is not RO, but should only be modified by the backend
+        # TODO: if it's just static names => make it a roattribute?
+        self.affects = _vattributes.ListVA() # list of names (str) of component
 
     @roattribute
     def role(self):
@@ -235,28 +238,6 @@ class HwComponent(Component):
         string: The role of this component in the microscope
         """
         return self._role
-
-    def _get_affects(self):
-        """
-        for remote access
-        """
-        return self._affects
-
-    # FIXME: a cyclic dependency (e.g. affects a component that affects this component,
-    # or affect the parent) leads to nice deadlock over Pyro
-    # => just use strings = names of the components?
-    def _set_affects(self, comps):
-        """
-        comps (set of HwComponents): list of the affected components
-        Note: this is to be used only internally for initialisation!
-        """
-        self._affects = frozenset(comps)
-
-    # no setter, to force to use the hidden _set_affects() with parsimony
-    affects = property(_get_affects,
-                doc="""set of HwComponents which are affected by this component
-                         (i.e. if this component changes of state, it will be
-                         detected by the affected components).""")
 
     @roattribute
     def swVersion(self):
@@ -297,46 +278,32 @@ class HwComponent(Component):
 #    def scan(self):
 #        pass
 
-class HwComponentProxy(ComponentProxy):
-    """
-    Representation of the HwComponent in remote containers
-    """
-    # Almost the same as a ComponentProxy, excepted it has a .affects
-    def __init__(self, uri):
-        """
-        Note: should not be called directly only created via pickling
-        """
-        ComponentProxy.__init__(self, uri)
-
-    @property
-    def affects(self):
-        # it needs to be remote because we have to update it after it has been
-        # shared.
-        return self._get_affects()
-
-def HwComponentSerializer(self):
-    """reduce function that automatically replaces Component objects by a Proxy"""
-
-    daemon = getattr(self, "_pyroDaemon", None)
-
-    if daemon: # TODO might not be even necessary: They should be registering themselves in the init
-        # only return a proxy if the object is a registered pyro object
-        return (HwComponentProxy, (daemon.uriFor(self),), self._getproxystate())
-    else:
-        return self.__reduce__()
-
-Pyro4.Daemon.serializers[HwComponent] = HwComponentSerializer
-
 class Microscope(HwComponent):
     """
     A component which represent the whole microscope.
     It does nothing by itself, just contains other components.
     """
-    def __init__(self, name, role, children=None, daemon=None, **kwargs):
+    def __init__(self, name, role, children=None, model=None, daemon=None, **kwargs):
+        """
+        model (dict str-> dict): the python representation of the model AST
+        """
         HwComponent.__init__(self, name, role, children=children, daemon=daemon)
+
+        if model is None:
+            model = {}
+        self._model = model
 
         if kwargs:
             raise ValueError("Microscope component cannot have initialisation arguments.")
+
+        # These 2 VAs should not modified, but by the backend
+        self.alive = _vattributes.VigilantAttribute(set()) # set of components
+        # dict str -> int or Exception: name of component -> State
+        self.ghosts = _vattributes.VigilantAttribute({})
+
+    @roattribute
+    def model(self):
+        return self._model
 
 class Detector(HwComponent):
     """

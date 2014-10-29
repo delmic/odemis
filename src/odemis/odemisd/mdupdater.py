@@ -56,7 +56,8 @@ class MetadataUpdater(model.Component):
         # For each component it affects 
         # Subscribe to the changes of the attributes that matter
         for a in self._components:
-            for d in a.affects:
+            for dn in a.affects.value:
+                d = model.getComponent(name=dn)
                 if a.role == "stage":
                     # update the image position
                     self.observeStage(a, d)

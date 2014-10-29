@@ -242,7 +242,7 @@ def print_vattribute(name, va, pretty):
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
-special_va_names = ("children",)
+special_va_names = ("children", "affects", "alive", "ghosts")
 def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
         if name in special_va_names:
@@ -266,11 +266,11 @@ def print_attributes(component, pretty):
     if pretty:
         print u"Component '%s':" % component.name
         print u"\trole: %s" % component.role
-        print u"\taffects: " + ", ".join([u"'" + c.name + u"'" for c in component.affects])
+        print u"\taffects: " + ", ".join([u"'%s'" % n for n in component.affects.value])
     else:
         print u"name\tvalue:%s" % component.name
         print u"role\tvalue:%s" % component.role
-        print u"affects\tvalue:" + u"\t".join([c.name for c in component.affects])
+        print u"affects\tvalue:" + u"\t".join(component.affects.value)
     print_roattributes(component, pretty)
     print_vattributes(component, pretty)
     print_data_flows(component, pretty)

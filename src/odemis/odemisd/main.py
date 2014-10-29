@@ -66,6 +66,7 @@ class BackendContainer(model.Container):
         self._inst_thread = None # thread running the component instantiation
         self._must_stop = threading.Event()
         self._dry_run = dry_run
+        # TODO: have an argument to ask for disabling parallel start? same as create_sub_containers?
 
         # parse the instantiation file
         logging.debug("model instantiation file is: %s", self._model.name)
