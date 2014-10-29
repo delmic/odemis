@@ -566,7 +566,12 @@ class Instantiator(object):
         Generate the component (and its children, if they are created by delegation)
         All the children that are created by separate instantiation must already
         have been created.
+        It will take care of updating the .children VA of the microscope if
+         needed.
 
+        return (Component): the new component created. Note that more component
+         might have been created (by delegation). You can find them by looking
+         at the .children VA of the new component.
         Raises:
             LookupError: if the component doesn't exists in the AST or
                   if the children should have been created and are not.

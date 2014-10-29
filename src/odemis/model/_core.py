@@ -214,6 +214,7 @@ class Container(Pyro4.core.Daemon):
         name: name of the container (must be unique)
         """
         assert not "/" in name
+        self._name = name
         # all the sockets are in the same directory so it's independent from the PWD
         self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
 

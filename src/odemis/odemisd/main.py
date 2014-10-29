@@ -35,6 +35,7 @@ import os
 import signal
 import stat
 import sys
+import threading
 import time
 
 
@@ -62,6 +63,8 @@ class BackendContainer(model.Container):
 
         self._model = model_file
         self._mdupdater = None
+        self._inst_thread = None # thread running the component instantiation
+        self._must_stop = threading.Event()
 
         # parse the instantiation file
         logging.debug("model instantiation file is: %s", self._model.name)
@@ -84,36 +87,59 @@ class BackendContainer(model.Container):
         logging.debug("Root component %s created", mic.name)
 
         # Keep instantiating the other components in a separate thread
-        self._instantiate_components()
+        self._inst_thread = threading.Thread(target=self._instantiate_components,
+                                             name="Component instantiator")
+        self._inst_thread.start()
+        # self._instantiate_components()
 
         # Start the metadata update
         # TODO: upgrade metadata updater to support online changes
         self._mdupdater = self.instantiate(MetadataUpdater,
              {"name": "Metadata Updater", "microscope": mic, "components": self._instantiator.components})
 
+        logging.info("Microscope is now available in container '%s'", self._name)
+
         # From now on, we'll really listen to external calls
         model.Container.run(self)
 
     def _instantiate_components(self):
-        nexts = self._instantiator.get_instantiables()
-        while nexts:
-            for n in nexts:
-                comp = self._instantiator.instantiate_component(n)
-                newcmps = self._instantiator.get_children(comp) # "potentially" new
-                # TODO: update .active instead of .children and update .ghosts on failure
-                # m.active.value = m.active.value | newcmps
-
+        try:
             nexts = self._instantiator.get_instantiables()
-        # in theory, it's done, but if there is a dependency loop some components
-        # will never be instantiable
-        instantiated = set(c.name for c in self._instantiator.components)
-        left = set(self._instantiator.ast.keys()) - instantiated
-        if left:
-            raise modelgen.SemanticError("Some components could not be instantiated due "
-                                "to cyclic dependency: %s" %
-                                (", ".join(left)))
+            while nexts:
+                for n in nexts:
+                    # TODO: run each of them in a future, so that they start
+                    # in parallel
+                    comp = self._instantiator.instantiate_component(n)
+                    newcmps = self._instantiator.get_children(comp) # "potentially" new
+                    # TODO: update .active instead of .children and update .ghosts on failure
+                    # m.active.value = m.active.value | newcmps
+
+                nexts = self._instantiator.get_instantiables()
+            # in theory, it's done, but if there is a dependency loop some components
+            # will never be instantiable
+            instantiated = set(c.name for c in self._instantiator.components)
+            left = set(self._instantiator.ast.keys()) - instantiated
+            if left:
+                raise modelgen.SemanticError("Some components could not be instantiated due "
+                                    "to cyclic dependency: %s" %
+                                    (", ".join(left)))
+            while not self._must_stop.wait(10):
+                logging.debug("Here we should check if some components are down and retrying starting them")
+        except Exception:
+            logging.exception("Instantiator thread failed")
+        finally:
+            logging.debug("Instantiator thread finished")
 
     def terminate(self):
+        # Stop the component instantiator, to be sure it'll not restart the components
+        self._must_stop.set()
+        if self._inst_thread:
+            self._inst_thread.join(10)
+            if self._inst_thread.is_alive():
+                logging.warning("Failed to stop the instantiator")
+            else:
+                self._inst_thread = None
+
         # Stop all the components
         if self._mdupdater:
             self._mdupdater.terminate()
@@ -257,7 +283,7 @@ class BackendRunner(object):
         except Exception:
             logging.error("Failed to start daemon")
             raise
-        
+
         if self.containement == BackendRunner.CONTAINER_DISABLE:
             container_cls = NonRemoteBackendContainer
         else:
@@ -274,7 +300,6 @@ class BackendRunner(object):
         if self.dry_run:
             logging.info("model has been successfully validated, exiting")
             return    # everything went fine
-        logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
 
         try:
             self._container.run()
