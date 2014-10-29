@@ -65,6 +65,7 @@ class BackendContainer(model.Container):
         self._mdupdater = None
         self._inst_thread = None # thread running the component instantiation
         self._must_stop = threading.Event()
+        self._dry_run = dry_run
 
         # parse the instantiation file
         logging.debug("model instantiation file is: %s", self._model.name)
@@ -96,6 +97,10 @@ class BackendContainer(model.Container):
         # TODO: upgrade metadata updater to support online changes
         self._mdupdater = self.instantiate(MetadataUpdater,
              {"name": "Metadata Updater", "microscope": mic, "components": self._instantiator.components})
+
+        if self._dry_run:
+            logging.info("model has been successfully validated, exiting")
+            return    # everything went fine
 
         logging.info("Microscope is now available in container '%s'", self._name)
 
@@ -143,6 +148,7 @@ class BackendContainer(model.Container):
         # Stop all the components
         if self._mdupdater:
             self._mdupdater.terminate()
+
         for comp in self._instantiator.components:
             try:
                 comp.terminate()
@@ -159,40 +165,7 @@ class BackendContainer(model.Container):
         # end ourself
         model.Container.terminate(self)
 
-class NonRemoteBackendContainer(object):
-    """
-    A kind of "fake" BackendContainer that will allow to manage the components
-    but actually not in a separate process.
-    """
-
-    def __init__(self, name=model.BACKEND_NAME):
-        self.components = set() # to be updated later on
-        self.sub_containers = set() # should always be empty
-
-    def run(self):
-        # in case it was not clear it's only for debug!
-        logging.warning("Going to wait for an hour and die")
-        time.sleep(3600)
-
-    def instantiate(self, klass, kwargs):
-        return klass(**kwargs)
-
-    def terminate(self):
-        # Stop all the components
-        for comp in self.components:
-            try:
-                comp.terminate()
-            except Exception:
-                logging.warning("Failed to terminate component '%s'", comp.name)
-
-    def close(self):
-        pass
-
-    def setRoot(self, comp):
-        pass
-
 class BackendRunner(object):
-    CONTAINER_DISABLE = "0" # only for debugging: everything is created in the process: no backend accessible
     CONTAINER_ALL_IN_ONE = "1" # one backend container for everything
     CONTAINER_SEPARATED = "+" # each component is started in a separate container
 
@@ -284,22 +257,13 @@ class BackendRunner(object):
             logging.error("Failed to start daemon")
             raise
 
-        if self.containement == BackendRunner.CONTAINER_DISABLE:
-            container_cls = NonRemoteBackendContainer
-        else:
-            container_cls = BackendContainer
-
         if self.containement == BackendRunner.CONTAINER_SEPARATED:
             create_sub_containers = True
         else:
             create_sub_containers = False
 
-        self._container = container_cls(self.model, create_sub_containers,
+        self._container = BackendContainer(self.model, create_sub_containers,
                                         dry_run=self.dry_run)
-
-        if self.dry_run:
-            logging.info("model has been successfully validated, exiting")
-            return    # everything went fine
 
         try:
             self._container.run()
@@ -442,7 +406,6 @@ def main(args):
             raise ValueError("No microscope model instantiation file provided")
 
         if options.debug:
-            # cont_pol = BackendRunner.CONTAINER_DISABLE
             cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
         else:
             cont_pol = BackendRunner.CONTAINER_SEPARATED
