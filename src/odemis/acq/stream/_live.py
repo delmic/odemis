@@ -345,7 +345,7 @@ class AlignedSEMStream(SEMStream):
         if (self._shiftebeam == "Ebeam shift") and self._calibrated:
             # convert shift into SEM pixels
             pxs = self._emitter.pixelSize.value
-            trans_cor = tuple(s / p for s, p in zip(self._shift, pxs))
+            trans_cor = tuple(s / p for s, p in zip(self._beamshift, pxs))
             trans = tuple(t + c for t, c in zip(trans, trans_cor))
 
         # always in this order
@@ -356,13 +356,8 @@ class AlignedSEMStream(SEMStream):
         """
         Compensate the SEM shift, using either beam shift or metadata update
         """
-        if self._shiftebeam == "Ebeam shift":
-            pass
-            # not needed here, as it will be call in onActive anyway
-            # self._applyROI() # will take care of updating the translation
-        else: # "Metadata update" or "Stage move"
-            # update the correction metadata
-            self._detector.updateMetadata({MD_POS_COR: self._shift})
+        # update the correction metadata
+        self._detector.updateMetadata({MD_POS_COR: self._shift})
 
     def onActive(self, active):
         if active and not self._calibrated and not self.spot.value:
@@ -371,6 +366,7 @@ class AlignedSEMStream(SEMStream):
             try:
                 logging.info("Determining the Ebeam center position")
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                self._beamshift = shift
                 if self._shiftebeam == "Stage move":
                     for child in self._stage.children:
                         if child.role == "sem-stage":
@@ -378,6 +374,12 @@ class AlignedSEMStream(SEMStream):
                             f.result()
 
                     shift = (0, 0) # just in case of failure
+                    shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
+                elif self._shiftebeam == "Ebeam shift":
+                    # First align using translation
+                    self._applyROI()
+                    # Then by updating the metadata
+                    shift = (0, 0)  # just in case of failure
                     shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
             except LookupError:
                 logging.error("Failed to locate the ebeam center, SEM image will not be aligned")
