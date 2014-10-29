@@ -46,7 +46,7 @@ class GridPanelTestCase(test.GuiTestCase):
         sizer = self.frame.grid_panel.GetSizer()
 
         def show(viewport):
-            ViewPortController._show_grid(sizer, viewport)
+            ViewPortController._show_viewport_grid(sizer, viewport)
 
         logging.debug("brown")
         show(self.frame.brown)

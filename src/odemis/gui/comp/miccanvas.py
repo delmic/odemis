@@ -1289,7 +1289,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    @wxlimit_invocation(2) # max 1/2 Hz
+    @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _updateThumbnail(self):
         csize = self.ClientSize
@@ -1335,7 +1335,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
         self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        self.background_brush = wx.SOLID # background is always black
+        self.background_brush = wx.SOLID  # background is always black
 
         ## Overlays
 
@@ -1402,7 +1402,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
     def _updateThumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
-            return # nothing to update
+            return  # nothing to update
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)

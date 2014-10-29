@@ -472,7 +472,7 @@ class ViewPortController(object):
             containing_window.Thaw()
 
     @staticmethod
-    def _show_grid(sizer, viewport=None):
+    def _show_viewport_grid(sizer, viewport=None):
         """ Switch the viewport grid to a 1x1 view if `viewport` is defined or 2x2 otherwise """
 
         # The positions that we can actually show
@@ -550,41 +550,32 @@ class ViewPortController(object):
 
         """
 
-        parent = sizer.GetContainingWindow()
-        parent.Freeze()
+        if isinstance(sizer, wx.GridBagSizer):
 
-        try:
-            if isinstance(sizer, wx.GridBagSizer):
+            self._show_viewport_grid(sizer, visible_viewport)
 
-                self._show_grid(sizer, visible_viewport)
+            if visible_viewport:
+                for viewport in self._viewports:
+                    viewport.SetFocus(visible_viewport == viewport)
 
-                if visible_viewport:
-                    for viewport in self._viewports:
-                        viewport.SetFocus(visible_viewport == viewport)
+        else:
+            # Assume legacy sizer construction
 
-            else:
-                # Assume legacy sizer construction
-
-                if visible_viewport in self._viewports:
-                    for viewport in self._viewports:
-                        if visible_viewport == viewport:
-                            viewport.Show()
-                            viewport.SetFocus(True)
-                        else:
-                            viewport.Hide()
-                            viewport.SetFocus(False)
-                else:
-                    for viewport in self._viewports[:4]:
+            if visible_viewport in self._viewports:
+                for viewport in self._viewports:
+                    if visible_viewport == viewport:
                         viewport.Show()
-                    for viewport in self._viewports[4:]:
+                        viewport.SetFocus(True)
+                    else:
                         viewport.Hide()
+                        viewport.SetFocus(False)
+            else:
+                for viewport in self._viewports[:4]:
+                    viewport.Show()
+                for viewport in self._viewports[4:]:
+                    viewport.Hide()
 
-            sizer.Layout()
-        finally:
-            # Thaw is called using `CallAfter` because otherwise the layout process would still be
-            # visible
-            parent.Refresh()
-            wx.CallAfter(parent.Thaw)
+        sizer.Layout()
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
