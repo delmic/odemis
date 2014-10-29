@@ -211,7 +211,7 @@ class StreamController(object):
             s = AlignedSEMStream("Secondary electrons",
                       self._main_data_model.sed, self._main_data_model.sed.data,
                       self._main_data_model.ebeam, self._main_data_model.ccd,
-                      self._main_data_model.stage, shiftebeam="Metadata update")
+                      self._main_data_model.stage, shiftebeam="Ebeam shift")
                 # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it
         else:
@@ -232,7 +232,7 @@ class StreamController(object):
             s = AlignedSEMStream("Backscattered electrons",
                       self._main_data_model.bsd, self._main_data_model.bsd.data,
                       self._main_data_model.ebeam, self._main_data_model.ccd,
-                      self._main_data_model.stage, shiftebeam="Metadata update")
+                      self._main_data_model.stage, shiftebeam="Ebeam shift")
                 # Select between "Metadata update" and "Stage move"
             # TODO: use shiftebeam once the phenom driver supports it
         else:

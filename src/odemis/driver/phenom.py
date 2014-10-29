@@ -279,6 +279,8 @@ class Scanner(model.Emitter):
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
+        self.translation.subscribe(self._onTranslation)
+        self.last_translation = (0, 0)  # m, m
 
         # .resolution is the number of pixels actually scanned. If it's less than
         # the whole possible area, it's centered.
@@ -487,6 +489,18 @@ class Scanner(model.Emitter):
 
         return size
 
+    def _onTranslation(self, translation):
+        beamShift = self.parent._objects.create('ns0:position')
+        navAlgorithm = 'NAVIGATION-AUTO'
+        with self.parent._acq_progress_lock:
+            pixelSize = self.pixelSize.value
+            new_trans = (translation[0] * pixelSize[0],
+                         translation[1] * pixelSize[1])
+            diff_trans = (new_trans[0] - self.last_translation[0], new_trans[1] - self.last_translation[1])
+            beamShift.x, beamShift.y = diff_trans[0], diff_trans[1]
+            self.parent._device.MoveBy(beamShift, navAlgorithm)
+            self.last_translation = new_trans
+
     def _setTranslation(self, value):
         """
         value (float, float): shift from the center. It will always ensure that
@@ -665,7 +679,7 @@ class Detector(model.Detector):
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
             # TODO beam shift/translation
-            self._scanParams.center.x = 0.03
+            self._scanParams.center.x = 0.0355
             self._scanParams.center.y = 0
 
             # update changed metadata
@@ -781,23 +795,12 @@ class Detector(model.Detector):
         generated output to the Dataflow.
         """
         try:
-            trans = 0, 0
             while not self._acquisition_must_stop.is_set():
-                new_trans = self.parent._scanner.translation.value
-                diff_trans = (new_trans[0] - trans[0], new_trans[1] - trans[1])
-                if diff_trans != (0, 0):
-                    f = self.parent._stage.moveRel({"x":diff_trans[0] * self.parent._scanner.pixelSize.value[0],
-                                                    "y":diff_trans[1] * self.parent._scanner.pixelSize.value[1]})
-                    f.result()
-                trans = new_trans
-
                 callback(self._acquire_image())
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
-            f = self.parent._stage.moveRel({"x":-trans[0] * self.parent._scanner.pixelSize.value[0],
-                                            "y":-trans[1] * self.parent._scanner.pixelSize.value[1]})
-            f.result()
+            self.parent._scanner.translation.value = (0, 0)
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
@@ -860,7 +863,7 @@ class Stage(model.Actuator):
         self._stagePos = parent._objects.create('ns0:position')
         self._stageRel = parent._objects.create('ns0:position')
         self._navAlgorithm = parent._objects.create('ns0:navigationAlgorithm')
-        self._navAlgorithm = 'NAVIGATION-AUTO'
+        self._navAlgorithm = 'NAVIGATION-BACKLASH-ONLY'
 
         axes_def = {}
         stroke = parent._device.GetStageStroke()
