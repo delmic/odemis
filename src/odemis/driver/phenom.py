@@ -106,6 +106,8 @@ TILT_BLANK = (-1, -1)  # tilt to imitate beam blanking
 # unloaded state
 HFW_RANGE = [2.5e-06, 0.0031]
 TENSION_RANGE = [4797.56, 20006.84]
+REFERENCE_TENSION = 10e03 #Volt
+BEAM_SHIFT_AT_REFERENCE = 21e-06  # Maximum beam shit at the reference tension #m
 SPOT_RANGE = [0.0, 5.73018379531] # TODO: what means a spot of 0? => small value like 1e-3?
 NAVCAM_PIXELSIZE = (1.3267543859649122e-05, 1.3267543859649122e-05)
 DELPHI_OVERVIEW_FOCUS = 0.0052  # Good focus position for navcam focus initialization
@@ -511,8 +513,9 @@ class Scanner(model.Emitter):
         # Phenom limitation
         pixelSize = self.pixelSize.value
         tran = (value[0] * pixelSize[0], value[1] * pixelSize[1])  # m
-        # TODO change to the actual maximum beam shift
-        max_tran = (50e-06, 50e-06)
+        # Change to the actual maximum beam shift
+        limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
+        max_tran = (limit, limit)
         # between -margin and +margin
         clipped_tran = (max(min(tran[0], max_tran[0]), -max_tran[0]),
                         max(min(tran[1], max_tran[1]), -max_tran[1]))
