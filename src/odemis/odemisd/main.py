@@ -27,6 +27,7 @@ from logging import FileHandler
 import logging
 from odemis import model
 import odemis
+from odemis.model import ST_UNLOADED, ST_STARTING
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
 from odemis.util.driver import BACKEND_RUNNING, BACKEND_DEAD, BACKEND_STOPPED, \
@@ -36,6 +37,7 @@ import signal
 import stat
 import sys
 import threading
+
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
@@ -88,8 +90,7 @@ class BackendContainer(model.Container):
 
         # Start by filling up the ghosts VA with all the components
         ghosts_names = set(self._instantiator.ast.keys()) - {mic.name}
-        # TODO change None state to UNLOADED
-        mic.ghosts.value = dict((n, None) for n in ghosts_names)
+        mic.ghosts.value = dict((n, ST_UNLOADED) for n in ghosts_names)
 
         # Keep instantiating the other components in a separate thread
         self._inst_thread = threading.Thread(target=self._instantiate_forever,
@@ -134,14 +135,18 @@ class BackendContainer(model.Container):
 
                 logging.debug("Trying to instantiate comp: %s", ", ".join(nexts))
 
-                ghosts = mic.ghosts.value.copy()
                 for n in nexts:
+                    ghosts = mic.ghosts.value.copy()
                     if not n in ghosts:
                         logging.warning("going to instantiate %s but not a ghost", n)
                     # TODO: run each of them in a future, so that they start
-                    # in parallel
+                    # in parallel, and (bonus) when the future is done, check
+                    # immediately which component can be started. The only
+                    # difficulty is to ensure non-concurrent access to .ghosts
+                    # and .alive .
                     try:
-                        # TODO: update the state of the ghost to STARTING
+                        ghosts[n] = ST_STARTING
+                        mic.ghosts.value = ghosts
                         newcmps = self._instantiate_component(n)
                     except ValueError:
                         # We now need to stop, but cannot call terminate()

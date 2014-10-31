@@ -39,6 +39,12 @@ class HwError(IOError):
     """
     pass
 
+# State values are the following and HwError, for the .state VA and .ghosts
+ST_UNLOADED = "unloaded"
+ST_STARTING = "starting"
+ST_RUNNING = "running"
+ST_STOPPED = "stopped"
+
 # Helper functions to list selectively the special attributes of a component
 def getVAs(component):
     """
@@ -239,6 +245,13 @@ class HwComponent(Component):
         # TODO: if it's just static names => make it a roattribute? Or wait
         # until Pyro supports modifying normal attributes?
         self.affects = _vattributes.ListVA() # list of names (str) of component
+
+        # The component can update it to an HwError when the hardware is not
+        # behaving correctly anymore. It could also set it to ST_STARTING during
+        # init, but must be set to ST_RUNNING at the end of the init, so it
+        # will be visible only by the children.
+        # It could almost be an enumerated, but needs to accept any HwError
+        self.state = _vattributes.VigilantAttribute(ST_RUNNING, readonly=True)
 
     @roattribute
     def role(self):
