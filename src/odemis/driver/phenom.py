@@ -274,8 +274,8 @@ class Scanner(model.Emitter):
         # TODO: allow translation to shift the ebeam (so the range is much larger)
         # (float, float) in px => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = ((-self._shape[0], -self._shape[1]),
-                    (self._shape[0], self._shape[1]))
+        tran_rng = ((-10000, -10000),
+                    (10000, 10000))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
