@@ -100,9 +100,12 @@ class BackendContainer(model.Container):
         # Start the metadata update
         # TODO: upgrade metadata updater to support online changes
         self._mdupdater = self.instantiate(MetadataUpdater,
-             {"name": "Metadata Updater", "microscope": mic, "components": self._instantiator.components})
+                               {"name": "Metadata Updater", "microscope": mic})
 
         if self._dry_run:
+            # TODO: wait until all the components have been instantiated or one
+            # error happened
+
             logging.info("model has been successfully validated, exiting")
             return    # everything went fine
 
@@ -252,6 +255,7 @@ class BackendRunner(object):
 
         self._container = None
 
+        self._main_thread = threading.current_thread()
         signal.signal(signal.SIGINT, self.handle_signal)
 
     def set_base_group(self):
@@ -296,8 +300,12 @@ class BackendRunner(object):
             logging.warning(model.BASE_DIRECTORY + " is not a directory, trying anyway...")
 
     def handle_signal(self, signum, frame):
-        logging.warning("Received signal %d: quitting", signum)
-        self.stop()
+        # TODO: ensure this is only processed by the main thread
+        if threading.current_thread() == self._main_thread:
+            logging.warning("Received signal %d: quitting", signum)
+            self.stop()
+        else:
+            logging.info("Skipping signal %d in sub-thread", signum)
 
     def stop(self):
         self._container.terminate()
@@ -325,6 +333,8 @@ class BackendRunner(object):
                     logging.debug("Daemon started with pid %d", pid)
                     # TODO: we could try to contact the backend and see if it managed to start
                     return 0
+                else:
+                    self._main_thread = threading.current_thread()
         except Exception:
             logging.error("Failed to start daemon")
             raise

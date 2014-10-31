@@ -37,10 +37,9 @@ class MetadataUpdater(model.Component):
     # This is kept in a separate module from the main backend because it has to 
     # know the business semantic. 
 
-    def __init__(self, name, microscope, components, **kwargs):
+    def __init__(self, name, microscope, **kwargs):
         '''
         microscope (model.Microscope): the microscope to observe and update
-        components (set of model.Components): all the components of the system
         '''
         # Warning: for efficiency, we want to run in the same container as the back-end
         # but this means the back-end is not running yet when we are created
@@ -48,15 +47,17 @@ class MetadataUpdater(model.Component):
 
         # list of 2-tuples (function, *arg): to be called on terminate
         self._onTerminate = []
-        self._components = components
+        # TODO: subscribe to it, and update whenever it changes
+        components = microscope.alive.value
 
         model.Component.__init__(self, name, **kwargs)
 
         # For each component
         # For each component it affects 
         # Subscribe to the changes of the attributes that matter
-        for a in self._components:
+        for a in components:
             for dn in a.affects.value:
+                # TODO: if component not alive yet, wait for it
                 d = model.getComponent(name=dn)
                 if a.role == "stage":
                     # update the image position
