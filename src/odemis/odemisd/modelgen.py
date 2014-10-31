@@ -125,6 +125,107 @@ class Instantiator(object):
         # TODO: check that all the components are reachable from the microscope
         # (= no component created alone)
 
+    def _preparate_microscope(self):
+        """
+        Find the microscope definition and do some updates on the definition if
+        needed. In particular, Microscope used to be special with 3 types of
+        child. In case the definition has not been updated, we do it here.
+        """
+        # look for the microscope def
+        microscopes = [a for a in self.ast.values() if a.get("class") == "Microscope"]
+        if len(microscopes) == 1:
+            microscope = microscopes[0]
+        elif len(microscopes) > 1:
+            raise SemanticError("Error in microscope file: "
+                    "there are several Microscopes (%s)." %
+                    ", ".join(microscopes))
+        else:
+            raise SemanticError("Error in microscope "
+                    "file: no Microscope component found.")
+
+        self._microscope_ast = microscope
+
+        if not "children" in microscope:
+            microscope["children"] = {}
+        elif not isinstance(microscope["children"], collections.Mapping):
+            # upgrade from list -> dict
+            logging.debug("Upgrading the microscope children list to a dict")
+            d = dict(("c%d" % i, c) for i, c in enumerate(microscope["children"]))
+            microscope["children"] = d
+
+        for a in ("actuators", "detectors", "emitters"):
+            if a in microscope:
+                logging.info("Microscope component contains field '%s', which is "
+                             "deprecated and can be merged in field 'children'.",
+                             a)
+                for i, name in enumerate(microscope[a]):
+                    role = "%s%d" % (a[:-1], i)
+                    microscope["children"][role] = name
+                del microscope[a]
+
+    def _fill_creator(self):
+        """
+        Add the "parents" field (= reverse of children) and update the creator
+         field for the components that don't have it explicitly set.
+        """
+        # update the children by adding a "parents" attribute
+        for name, comp in self.ast.items():
+            children_names = comp.get("children", {}) # dict internal name -> name
+            for child_name in children_names.values():
+                # detect direct loop
+                if child_name == name:
+                    raise SemanticError("Error in "
+                            "microscope file: component %s "
+                            "is child of itself." % name)
+
+                if not "parents" in self.ast[child_name].keys():
+                    self.ast[child_name]["parents"] = []
+                self.ast[child_name]["parents"].append(name)
+
+        # For each component which is created by delegation (= no class):
+        # * if no creator specified, use its parent (and error if multiple parents)
+        # * if creator specified, check it's one of the parents
+        for name, comp in self.ast.items():
+            if "class" in comp:
+                continue
+            parents = comp["parents"]
+            if "creator" in comp:
+                creator_name = comp["creator"]
+                if creator_name not in parents:
+                    raise SemanticError("Error in microscope file: component %s "
+                            "is creator of component %s but doesn't have it as a child."
+                            % (creator_name, name))
+            else:
+                # If one parent is Microscope, it's dropped for the "creator"
+                # guess because Microscope is known to create no component.
+                if len(parents) > 1:
+                    parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
+
+                if len(parents) == 0:
+                    raise SemanticError("Error in microscope file: component %s "
+                            "has no class specified and is not created by any "
+                            "component." % name)
+                elif len(parents) > 1:
+                    raise SemanticError("Error in microscope file: component %s "
+                            "has to be created by one of its parents %s, but no "
+                            "creator is designated." % (name, tuple(parents)))
+                else:
+                    comp["creator"] = parents[0]
+                    logging.debug("Identified %s as creator of %s",
+                                  parents[0], name)
+
+    def _check_cyclic(self):
+
+        # TODO
+        # in theory, it's done, but if there is a dependency loop some components
+        # will never be instantiable
+        instantiated = set(c.name for c in self._instantiator.components)
+        left = set(self._instantiator.ast.keys()) - instantiated
+        if left:
+            raise SemanticError("Some components could not be instantiated due "
+                                "to cyclic dependency: %s" %
+                                (", ".join(left)))
+
     def _parse_instantiation_model(self, inst_file):
         """
         Converts the instantiation model odm.yaml file into a python representation
@@ -186,6 +287,10 @@ class Instantiator(object):
         if self.dry_run and not class_name == "Microscope":
             # mock class needs some hints to create the fake VAs
             init["_vas"] = attr.get("properties", {}).keys()
+
+        # microscope take a special "model" argument which is AST itself
+        if class_name == "Microscope":
+            init["model"] = self.ast
 
         # create recursively the children
         if "children" in init:
@@ -317,6 +422,21 @@ class Instantiator(object):
 #                 # now the child ought to be created
 #                 return self._get_component_by_name(name)
 
+    def get_delegated_children(self, name):
+        """
+        Return all the components created by delegation when creating the given
+         component (including the given component)
+        name (str): name of the component
+        return (set of str): all the components that will be created when
+          instantiating the given component
+        """
+        ret = {name}
+        for n, attrs in self.ast.items():
+            if attrs.get("creator") == name:
+                ret |= self.get_delegated_children(n)
+
+        return ret
+
     @staticmethod
     def get_children(root):
         """
@@ -325,100 +445,11 @@ class Instantiator(object):
         root (HwComponent): the component to start from
         returns (set of HwComponents)
         """
-        ret = set([root])
+        ret = {root}
         for child in root.children.value:
             ret |= Instantiator.get_children(child)
 
         return ret
-
-    def _fill_creator(self):
-        """
-        Add the "parents" field (= reverse of children) and update the creator
-         field for the components that don't have it explicitly set.
-        """
-        # update the children by adding a "parents" attribute
-        for name, comp in self.ast.items():
-            children_names = comp.get("children", {}) # dict internal name -> name
-            for child_name in children_names.values():
-                # detect direct loop
-                if child_name == name:
-                    raise SemanticError("Error in "
-                            "microscope file: component %s "
-                            "is child of itself." % name)
-
-                if not "parents" in self.ast[child_name].keys():
-                    self.ast[child_name]["parents"] = []
-                self.ast[child_name]["parents"].append(name)
-
-        # For each component which is created by delegation (= no class):
-        # * if no creator specified, use its parent (and error if multiple parents)
-        # * if creator specified, check it's one of the parents
-        for name, comp in self.ast.items():
-            if "class" in comp:
-                continue
-            parents = comp["parents"]
-            if "creator" in comp:
-                creator_name = comp["creator"]
-                if creator_name not in parents:
-                    raise SemanticError("Error in microscope file: component %s "
-                            "is creator of component %s but doesn't have it as a child."
-                            % (creator_name, name))
-            else:
-                # If one parent is Microscope, it's dropped for the "creator"
-                # guess because Microscope is known to create no component.
-                if len(parents) > 1:
-                    parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
-
-                if len(parents) == 0:
-                    raise SemanticError("Error in microscope file: component %s "
-                            "has no class specified and is not created by any "
-                            "component." % name)
-                elif len(parents) > 1:
-                    raise SemanticError("Error in microscope file: component %s "
-                            "has to be created by one of its parents %s, but no "
-                            "creator is designated." % (name, tuple(parents)))
-                else:
-                    comp["creator"] = parents[0]
-                    logging.debug("Identified %s as creator of %s",
-                                  parents[0], name)
-
-    def _preparate_microscope(self):
-        """
-        Find the microscope definition and do some updates on the definition if
-        needed. In particular, Microscope used to be special with 3 types of 
-        child. In case the definition has not been updated, we do it here.
-        """
-        # look for the microscope def
-        microscopes = [a for a in self.ast.values() if a.get("class") == "Microscope"]
-        if len(microscopes) == 1:
-            microscope = microscopes[0]
-        elif len(microscopes) > 1:
-            raise SemanticError("Error in microscope file: "
-                    "there are several Microscopes (%s)." %
-                    ", ".join(microscopes))
-        else:
-            raise SemanticError("Error in microscope "
-                    "file: no Microscope component found.")
-
-        self._microscope_ast = microscope
-
-        if not "children" in microscope:
-            microscope["children"] = {}
-        elif not isinstance(microscope["children"], collections.Mapping):
-            # upgrade from list -> dict
-            logging.debug("Upgrading the microscope children list to a dict")
-            d = dict(("c%d" % i, c) for i, c in enumerate(microscope["children"]))
-            microscope["children"] = d
-
-        for a in ("actuators", "detectors", "emitters"):
-            if a in microscope:
-                logging.info("Microscope component contains field '%s', which is "
-                             "deprecated and can be merged in field 'children'.",
-                             a)
-                for i, name in enumerate(microscope[a]):
-                    role = "%s%d" % (a[:-1], i)
-                    microscope["children"][role] = name
-                del microscope[a]
 
 #     def instantiate_model(self):
 #         """
@@ -584,20 +615,9 @@ class Instantiator(object):
             if c.name == name:
                 raise ValueError("Trying to instantiate again component %s" % name)
 
-        try:
-            comp = self._instantiate_comp(name)
-            self._update_properties(name)
-            self._update_affects(name)
-        except Exception as exp:
-            # Exception might have happened remotely, so log it nicely
-            logging.error("Failed to instantiate the model")
-            logging.info("Full traceback of the error follows", exc_info=1)
-            try:
-                remote_tb = exp._pyroTraceback
-                logging.info("Remote exception %s", "".join(remote_tb))
-            except AttributeError:
-                pass
-            raise exp
+        comp = self._instantiate_comp(name)
+        self._update_properties(name)
+        self._update_affects(name)
 
         # Add to the microscope all the new components that should be child
         mchildren = self._microscope_ast["children"].values()
@@ -608,24 +628,28 @@ class Instantiator(object):
 
         return comp
 
-    def get_instantiables(self):
+    def get_instantiables(self, instantiated=None):
         """
         Find the components that are currently not yet instantiated, but 
         could be directly (ie, all their children created explicitly are already
         instantiated)
+        instantiated (None or set of str): the names of the components already
+          instantiated. If it's None, it will use the list of all the components
+          ever instantiated.
         return (set of str): names of all the components that are instantiable
         """
         comps = set()
-        instantiated = set(c.name for c in self.components)
+        if instantiated is None:
+            instantiated = set(c.name for c in self.components)
         for n, attrs in self.ast.items():
             if n in instantiated: # should not be already instantiated
                 continue
             if "class" not in attrs: # created by delegation
                 continue
             for cname in attrs.get("children", {}).values():
-                child = self.ast[cname]
+                childat = self.ast[cname]
                 # the child must be either instantiated or instantiated via delegation
-                if not cname in instantiated and not child.get("creator") == n:
+                if not cname in instantiated and not childat.get("creator") == n:
                     logging.debug("Component %s is not instantiable yet", n)
                     break
             else:

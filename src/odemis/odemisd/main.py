@@ -36,8 +36,6 @@ import signal
 import stat
 import sys
 import threading
-import time
-
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
@@ -88,11 +86,15 @@ class BackendContainer(model.Container):
         self.setRoot(mic)
         logging.debug("Root component %s created", mic.name)
 
+        # Start by filling up the ghosts VA with all the components
+        ghosts_names = set(self._instantiator.ast.keys()) - {mic.name}
+        # TODO change None state to UNLOADED
+        mic.ghosts.value = dict((n, None) for n in ghosts_names)
+
         # Keep instantiating the other components in a separate thread
-        self._inst_thread = threading.Thread(target=self._instantiate_components,
+        self._inst_thread = threading.Thread(target=self._instantiate_forever,
                                              name="Component instantiator")
         self._inst_thread.start()
-        # self._instantiate_components()
 
         # Start the metadata update
         # TODO: upgrade metadata updater to support online changes
@@ -108,33 +110,93 @@ class BackendContainer(model.Container):
         # From now on, we'll really listen to external calls
         model.Container.run(self)
 
-    def _instantiate_components(self):
+    def _instantiate_forever(self):
+        """
+        Thread continuously monitoring the components that need to be instantiated
+        """
         try:
-            nexts = self._instantiator.get_instantiables()
-            while nexts:
+            mic = self._instantiator.microscope
+            failed = set() # set of str: name of components that failed recently
+            while not self._must_stop.is_set():
+                # Try to start simultaneously all the components that are
+                # independent from each other
+                nexts = set()
+                while not nexts:
+                    instantiated = set(c.name for c in mic.alive.value) | {mic.name}
+                    nexts = self._instantiator.get_instantiables(instantiated)
+                    # If still some non-failed component, immediately try again,
+                    # otherwise give some time for things to get fixed or broken
+                    nexts -= failed
+                    if not nexts:
+                        if self._must_stop.wait(10):
+                            return
+                        failed = set() # not recent anymore
+
+                logging.debug("Trying to instantiate comp: %s", ", ".join(nexts))
+
+                ghosts = mic.ghosts.value.copy()
                 for n in nexts:
+                    if not n in ghosts:
+                        logging.warning("going to instantiate %s but not a ghost", n)
                     # TODO: run each of them in a future, so that they start
                     # in parallel
-                    comp = self._instantiator.instantiate_component(n)
-                    newcmps = self._instantiator.get_children(comp) # "potentially" new
-                    # TODO: update .active instead of .children and update .ghosts on failure
-                    # m.active.value = m.active.value | newcmps
+                    try:
+                        # TODO: update the state of the ghost to STARTING
+                        newcmps = self._instantiate_component(n)
+                    except ValueError:
+                        # We now need to stop, but cannot call terminate()
+                        # directly, as it would deadlock, waiting for us
+                        threading.Thread(target=self.terminate).start()
+                        return
+                    if not newcmps:
+                        failed.add(n)
 
-                nexts = self._instantiator.get_instantiables()
-            # in theory, it's done, but if there is a dependency loop some components
-            # will never be instantiable
-            instantiated = set(c.name for c in self._instantiator.components)
-            left = set(self._instantiator.ast.keys()) - instantiated
-            if left:
-                raise modelgen.SemanticError("Some components could not be instantiated due "
-                                    "to cyclic dependency: %s" %
-                                    (", ".join(left)))
-            while not self._must_stop.wait(10):
-                logging.debug("Here we should check if some components are down and retrying starting them")
         except Exception:
             logging.exception("Instantiator thread failed")
         finally:
             logging.debug("Instantiator thread finished")
+
+    def _instantiate_component(self, name):
+        """
+        Instantiate a component and handle the outcome
+        return (set of str): name of all the component instantiated, so it is an
+          empty set if the component failed to instantiate (due to HwError)
+        raise ValueError: if the component failed so badly to instantiate that
+                          it's unlikely it'll ever instantiate
+        """
+        mic = self._instantiator.microscope
+        ghosts = mic.ghosts.value.copy()
+        try:
+            comp = self._instantiator.instantiate_component(name)
+        except model.HwError as exp:
+            # HwError means: hardware problem, try again later
+            logging.warning("Failed to start component %s due to device error: %s",
+                            name, exp)
+            ghosts[name] = exp
+            mic.ghosts.value = ghosts
+            return set()
+        except Exception as exp:
+            # Anything else means: driver is borked, give up
+            # Exception might have happened remotely, so log it nicely
+            logging.error("Failed to instantiate the model due to component %s", name)
+            logging.info("Full traceback of the error follows", exc_info=1)
+            try:
+                remote_tb = exp._pyroTraceback
+                logging.info("Remote exception %s", "".join(remote_tb))
+            except AttributeError:
+                pass
+            raise ValueError("Failed to instantiate component %s" % name)
+        else:
+            children = self._instantiator.get_children(comp)
+            dchildren = self._instantiator.get_delegated_children(name)
+            newcmps = set(c for c in children if c.name in dchildren)
+            mic.alive.value = mic.alive.value | newcmps
+            # update ghosts by removing all the new components
+            for n in dchildren:
+                del ghosts[n]
+
+            mic.ghosts.value = ghosts
+            return dchildren
 
     def terminate(self):
         # Stop the component instantiator, to be sure it'll not restart the components
@@ -150,7 +212,11 @@ class BackendContainer(model.Container):
         if self._mdupdater:
             self._mdupdater.terminate()
 
-        for comp in self._instantiator.components:
+        mic = self._instantiator.microscope
+        alive = list(mic.alive.value) + [mic]
+        for comp in alive:
+            # TODO: update the .alive VA every time a component is stopped?
+            # maybe not necessary as we are finishing _everything_
             try:
                 comp.terminate()
             except Exception:

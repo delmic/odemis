@@ -28,7 +28,8 @@ from __future__ import division
 
 import logging
 from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+import os
 import random
 import time
 
@@ -86,6 +87,10 @@ class Stage(model.Actuator):
             init_speed[a] = 10.0  # we are super fast!
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
+
+        # Special file "stage.fail" => will cause simulation of hardware error
+        if os.path.exists("stage.fail"):
+            raise HwError("stage.fail file present, simulating error")
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(

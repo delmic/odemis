@@ -31,6 +31,13 @@ import weakref
 from . import _core, _dataflow, _vattributes
 from ._core import roattribute
 
+class HwError(IOError):
+    """
+    Exception used to indicate a problem coming from the hardware.
+    If a component raise this exception at __init__(), it will automatically
+    retry later.
+    """
+    pass
 
 # Helper functions to list selectively the special attributes of a component
 def getVAs(component):
@@ -229,7 +236,8 @@ class HwComponent(Component):
         self._metadata = {}  # internal metadata
 
         # This one is not RO, but should only be modified by the backend
-        # TODO: if it's just static names => make it a roattribute?
+        # TODO: if it's just static names => make it a roattribute? Or wait
+        # until Pyro supports modifying normal attributes?
         self.affects = _vattributes.ListVA() # list of names (str) of component
 
     @roattribute
@@ -299,7 +307,7 @@ class Microscope(HwComponent):
         # These 2 VAs should not modified, but by the backend
         self.alive = _vattributes.VigilantAttribute(set()) # set of components
         # dict str -> int or Exception: name of component -> State
-        self.ghosts = _vattributes.VigilantAttribute({})
+        self.ghosts = _vattributes.VigilantAttribute(dict())
 
     @roattribute
     def model(self):

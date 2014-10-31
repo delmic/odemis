@@ -332,7 +332,7 @@ def createNewContainer(name, validate=True, in_own_process=True):
         p = threading.Thread(name="Container " + name, target=_manageContainer,
                              args=(name, isready))
     p.start()
-    if not isready.wait(3): # wait maximum 3s
+    if not isready.wait(5): # wait maximum 5s
         logging.error("Container %s is taking too long to get ready", name)
         raise IOError("Container creation timeout")
 

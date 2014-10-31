@@ -242,7 +242,8 @@ def print_vattribute(name, va, pretty):
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
-special_va_names = ("children", "affects", "alive", "ghosts")
+special_va_names = ("children", "affects") # , "alive", "ghosts")
+# TODO: handle .ghosts and .alive correctly in print_va and don't consider them special
 def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
         if name in special_va_names:

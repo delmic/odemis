@@ -32,7 +32,7 @@ import threading
 import time
 
 
-class HwError(Exception):
+class TLFWError(Exception):
     """
     Represents an error reported by the hardware
     """
@@ -227,7 +227,7 @@ class FW102c(model.Actuator):
         return (string): the answer without newline and suffix ("> ")
         raises
             IOError: if there is a timeout
-            HwError: if the hardware reports an error 
+            TLFWError: if the hardware reports an error
         """
         # TODO: handle IOError and automatically try to reconnect (cf LLE)
 
@@ -261,7 +261,7 @@ class FW102c(model.Actuator):
         m = re.match(self.re_err, line)
         if m:
             err = m.group(1)
-            raise HwError("Device rejected command '%s': %s" % (com, err))
+            raise TLFWError("Device rejected command '%s': %s" % (com, err))
         
         return line
 
@@ -272,7 +272,7 @@ class FW102c(model.Actuator):
         return when the command is finished processed
         raises
             IOError: if there is a timeout
-            HwError: if the hardware reports an error
+            TLFWError: if the hardware reports an error
         """
         self._sendQuery(com)
         # don't return anything
