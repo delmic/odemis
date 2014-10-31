@@ -507,12 +507,18 @@ class Scanner(model.Emitter):
           the whole ROI fits the screen.
         returns actual shift accepted
         """
+        # Clip translation (i.e. beam shift) within 50 microns due to
+        # Phenom limitation
+        pixelSize = self.pixelSize.value
+        tran = (value[0] * pixelSize[0], value[1] * pixelSize[1])  # m
         # TODO change to the actual maximum beam shift
-        max_tran = (10000, 10000)
+        max_tran = (50e-06, 50e-06)
         # between -margin and +margin
-        tran = (max(min(value[0], max_tran[0]), -max_tran[0]),
-                max(min(value[1], max_tran[1]), -max_tran[1]))
-        return tran
+        clipped_tran = (max(min(tran[0], max_tran[0]), -max_tran[0]),
+                        max(min(tran[1], max_tran[1]), -max_tran[1]))
+        tran_pxs = (clipped_tran[0] / pixelSize[0],
+                    clipped_tran[1] / pixelSize[1])
+        return tran_pxs
 
 class Detector(model.Detector):
     """
