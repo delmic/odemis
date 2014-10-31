@@ -44,21 +44,39 @@ class MetadataUpdater(model.Component):
         # Warning: for efficiency, we want to run in the same container as the back-end
         # but this means the back-end is not running yet when we are created
         # so we cannot access the back-end.
+        self._mic = microscope
 
         # list of 2-tuples (function, *arg): to be called on terminate
         self._onTerminate = []
-        # TODO: subscribe to it, and update whenever it changes
-        components = microscope.alive.value
+        # All the components already observed
+        # str -> set of str: name of affecting component -> names of affected
+        self._observed = collections.defaultdict(set)
 
         model.Component.__init__(self, name, **kwargs)
 
+        microscope.alive.subscribe(self._onAlive, init=True)
+
+    def _onAlive(self, components):
+        """
+        Called when alive is changed => some component started or died
+        """
         # For each component
         # For each component it affects 
         # Subscribe to the changes of the attributes that matter
         for a in components:
             for dn in a.affects.value:
                 # TODO: if component not alive yet, wait for it
-                d = model.getComponent(name=dn)
+                try:
+                    d = model.getComponent(name=dn)
+                except LookupError:
+                    # TODO: stop subscriptions if the component was there (=> just died)
+                    self._observed[a.name].discard(dn)
+                    continue
+                else:
+                    if dn in self._observed[a.name]:
+                        # already subscribed
+                        continue
+
                 if a.role == "stage":
                     # update the image position
                     self.observeStage(a, d)
@@ -74,6 +92,12 @@ class MetadataUpdater(model.Component):
                     self.observeLight(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
+                    continue
+
+                logging.info("Observing affect %s -> %s", a.name, dn)
+                self._observed[a.name].add(dn)
+
+        # TODO: drop subscriptions to dead components
 
     def observeStage(self, stage, comp):
         # we need to keep the information on the detector to update

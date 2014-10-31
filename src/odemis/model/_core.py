@@ -102,10 +102,11 @@ def getComponent(name=None, role=None):
 
 def getComponents():
     """
-    return all the HwComponents managed by the backend
+    return (set of Component): all the HwComponents (alive) managed by the backend
     """
     microscope = getMicroscope()
-    return _getChildren(microscope)
+    return microscope.alive.value | {microscope}
+    # return _getChildren(microscope)
 
 def _getChildren(root):
     """
