@@ -634,21 +634,24 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
             # Just to force autocontrast
             escan.accelVoltage.value += 100
-            # Try autofocus or apply the given value
-            if hole_focus is None:
-                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
-                hole_focus, fm_level = f.result() 
-            else:
+            # Apply the given sem focus value for a good initial focus level
+            if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
                 f.result()
                 
-            # From SEM image determine marker position relative to the center of
+            # From SEM image determine hole position relative to the center of
             # the SEM
             image = detector.data.get(asap=False)
             try:
                 hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
-                raise IOError("Holes not found.")
+                # If hole was not found, apply autofocus and retry detection
+                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                hole_focus, fm_level = f.result()
+                try:
+                    hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
+                except IOError:
+                    raise IOError("Holes not found.")
             pixelSize = image.metadata[model.MD_PIXEL_SIZE]
             center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
             vector_pxs = [a - b for a, b in zip(hole_coordinates, center_pxs)]
