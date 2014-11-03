@@ -2143,7 +2143,7 @@ class Bus(model.Actuator):
             if port == "autoip": # Search for IP (and hope there is only one result)
                 ipmasters = self._scanIPMasters()
                 if not ipmasters:
-                    raise IOError("Failed to find any PI network master controller")
+                    raise model.HwError("Failed to find any PI network master controller")
                 host, ipport = ipmasters[0]
                 logging.info("Will connect to %s:%d", host, ipport)
             else:
@@ -2287,14 +2287,18 @@ class Bus(model.Actuator):
         _addresses (unused): only for testing (cf FakeBus)
         return (serial): the opened serial port
         """
-        ser = serial.Serial(
-            port=port,
-            baudrate=baudrate,
-            bytesize=serial.EIGHTBITS,
-            parity=serial.PARITY_NONE,
-            stopbits=serial.STOPBITS_ONE,
-            timeout=0.5 # s
-        )
+        try:
+            ser = serial.Serial(
+                port=port,
+                baudrate=baudrate,
+                bytesize=serial.EIGHTBITS,
+                parity=serial.PARITY_NONE,
+                stopbits=serial.STOPBITS_ONE,
+                timeout=0.5 # s
+            )
+        except serial.SerialException:
+            raise model.HwError("Failed to open '%s', check the device is "
+                                "plugged in and turned on." % port)
 
         return ser
 
@@ -2306,7 +2310,12 @@ class Bus(model.Actuator):
         port (int): the (IP) port number
         return (socket): the opened socket connection
         """
-        sock = socket.create_connection((host, port), timeout=5)
+        try:
+            sock = socket.create_connection((host, port), timeout=5)
+        except socket.timeout:
+            raise model.HwError("Failed to connect to '%s:%d', check the master "
+                                "controller is connected to the network, turned "
+                                " on, and correctly configured." % (host, port))
         sock.settimeout(0.5) # s
         return sock
 
@@ -2351,6 +2360,11 @@ class SerialBusAccesser(object):
            If answer is multiline: returns a list of each line
         Note: multiline answers seem to always begin with a \x00 character, but
          it's left as is.
+        raise:
+           HwError: if error communicating with the hardware, probably due to
+              the hardware not being in a good state (or connected)
+           IOError: if error during the communication (such as the protocol is
+              not respected)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
         assert(1 <= addr <= 16 or addr == 254)
@@ -2384,7 +2398,7 @@ class SerialBusAccesser(object):
                 char = self.serial.read()
 
         if not char:
-            raise IOError("Controller %d timeout." % addr)
+            raise model.HwError("Controller %d timeout." % addr)
 
         assert len(lines) > 0
 
@@ -2458,6 +2472,11 @@ class IPBusAccesser(object):
         return (string or list of strings): the report without prefix 
            (e.g.,"0 1") nor newline. 
            If answer is multiline: returns a list of each line
+        raise:
+           HwError: if error communicating with the hardware, probably due to
+              the hardware not being in a good state (or connected)
+           IOError: if error during the communication (such as the protocol is
+              not respected)
         """
         assert(len(com) <= 100) # commands can be quite long (with floats)
         assert(1 <= addr <= 16 or addr == 254)
@@ -2477,12 +2496,13 @@ class IPBusAccesser(object):
                 try:
                     data = self.socket.recv(4096)
                 except socket.timeout:
-                    raise IOError("Controller %d timeout." % addr)
+                    raise model.HwError("Controller %d timeout." % addr)
                 # If the master is already accessed from somewhere else it will just
                 # immediately answer an empty message
                 if not data:
                     if time.time() > end_time:
-                        raise IOError("Master controller not answering. It might be already connected with another client.")
+                        raise model.HwError("Master controller not answering. "
+                                            "It might be already connected with another client.")
                     time.sleep(0.01)
                     continue
 
