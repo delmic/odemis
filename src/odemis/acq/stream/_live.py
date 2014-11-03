@@ -342,7 +342,7 @@ class AlignedSEMStream(SEMStream):
         """
         res, trans = self._computeROISettings(self.roi.value)
 
-        if (self._shiftebeam == "Ebeam shift") and self._calibrated:
+        if (self._shiftebeam == "Ebeam shift"):
             # convert shift into SEM pixels
             pxs = self._emitter.pixelSize.value
             trans_cor = tuple(s / p for s, p in zip(self._beamshift, pxs))
@@ -366,6 +366,7 @@ class AlignedSEMStream(SEMStream):
             shift = (0, 0)
             try:
                 logging.info("Determining the Ebeam center position")
+                self._emitter.translation.value = (0, 0)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 self._beamshift = shift
                 if self._shiftebeam == "Stage move":

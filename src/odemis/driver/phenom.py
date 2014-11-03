@@ -35,6 +35,7 @@ from suds.client import Client
 import threading
 import time
 import weakref
+from numpy.linalg import norm
 
 # The Phenom API relies on the SOAP protocol. One good thing is that the standard
 # Phenom GUI uses it. So anything the GUI can do can be performed via the
@@ -276,8 +277,8 @@ class Scanner(model.Emitter):
         # TODO: allow translation to shift the ebeam (so the range is much larger)
         # (float, float) in px => moves center of acquisition by this amount
         # independent of scale and rotation.
-        tran_rng = ((-10000, -10000),
-                    (10000, 10000))
+        tran_rng = ((-100000, -100000),
+                    (100000, 100000))
         self.translation = model.TupleContinuous((0, 0), tran_rng,
                                               cls=(int, long, float), unit="",
                                               setter=self._setTranslation)
@@ -396,7 +397,12 @@ class Scanner(model.Emitter):
             self.parent._device.SetSEMRotation(-rot)
 
     def _onVoltage(self, volt):
+        # When we change voltage while SEM stream is off
+        # beam is unblanked. Thus we keep and reset the
+        # last known source tilt
+        current_tilt = self.parent._device.GetSEMSourceTilt()
         self.parent._device.SEMSetHighTension(-volt)
+        self.parent._device.SetSEMSourceTilt(current_tilt[0], current_tilt[1], False)
         # Brightness and contrast have to be adjusted just once
         # we set up the detector (see SEMACB())
 
@@ -514,12 +520,16 @@ class Scanner(model.Emitter):
         # Phenom limitation
         pixelSize = self.pixelSize.value
         tran = (value[0] * pixelSize[0], value[1] * pixelSize[1])  # m
+        # Calculate shift distance
+        tran_d = norm(numpy.asarray(tran[0]) - numpy.asarray(tran[1]))
         # Change to the actual maximum beam shift
         limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
-        max_tran = (limit, limit)
-        # between -margin and +margin
-        clipped_tran = (max(min(tran[0], max_tran[0]), -max_tran[0]),
-                        max(min(tran[1], max_tran[1]), -max_tran[1]))
+        # The ratio between the shift distance and the limit
+        ratio = 1
+        if tran_d > limit:
+            ratio = tran_d / limit
+        # Clip within limit
+        clipped_tran = (tran[0] / ratio, tran[1] / ratio)
         tran_pxs = (clipped_tran[0] / pixelSize[0],
                     clipped_tran[1] / pixelSize[1])
         return tran_pxs
