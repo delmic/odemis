@@ -38,7 +38,6 @@ import stat
 import sys
 import threading
 
-
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
                     BACKEND_STOPPED: 2
@@ -218,24 +217,34 @@ class BackendContainer(model.Container):
 
         # Stop all the components
         if self._mdupdater:
-            self._mdupdater.terminate()
+            try:
+                self._mdupdater.terminate()
+            except Exception:
+                logging.warning("Failed to terminate Metadata updater", exc_info=True)
 
         mic = self._instantiator.microscope
-        alive = list(mic.alive.value) + [mic]
+        alive = list(mic.alive.value)
         for comp in alive:
+            logging.debug("Stopping comp %s", comp.name)
             # TODO: update the .alive VA every time a component is stopped?
             # maybe not necessary as we are finishing _everything_
             try:
                 comp.terminate()
             except Exception:
-                logging.warning("Failed to terminate component '%s'", comp.name)
+                logging.warning("Failed to terminate component '%s'", comp.name, exc_info=True)
+
+        try:
+            mic.terminate()
+        except Exception:
+            logging.warning("Failed to terminate root", exc_info=True)
 
         # end all the (sub-)containers
         for container in self._instantiator.sub_containers:
+            logging.debug("Stopping container %s", container)
             try:
                 container.terminate()
             except Exception:
-                logging.warning("Failed to terminate container %r", container)
+                logging.warning("Failed to terminate container %r", container, exc_info=True)
 
         # end ourself
         model.Container.terminate(self)
@@ -349,8 +358,9 @@ class BackendRunner(object):
 
         try:
             self._container.run()
-        finally:
+        except Exception:
             self.stop()
+            raise
 
 def rotateLog(filename, maxBytes, backupCount=0):
     """

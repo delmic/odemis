@@ -146,8 +146,10 @@ class Component(ComponentBase):
         Stop the Component from executing.
         The component shouldn't be used afterwards.
         """
-        for c in self.children.value:
-            c.terminate()
+        # TODO: only terminate components created by delegation
+        # => it's up to the sub-class to do it
+#         for c in self.children.value:
+#             c.terminate()
 
         # in case we are registered
         daemon = getattr(self, "_pyroDaemon", None)
