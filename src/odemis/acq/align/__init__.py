@@ -46,6 +46,7 @@ def FindEbeamCenter(ccd, detector, escan):
     raise:
         LookupError: if the spot cannot be found
     """
+    logging.debug("Starting ebeam spot detection...")
     # save the hw settings
     prev_exp = ccd.exposureTime.value
     prev_bin = ccd.binning.value

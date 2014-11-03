@@ -357,6 +357,7 @@ class AlignedSEMStream(SEMStream):
         Compensate the SEM shift, using either beam shift or metadata update
         """
         # update the correction metadata
+        logging.debug("Update metadata for SEM image shift")
         self._detector.updateMetadata({MD_POS_COR: self._shift})
 
     def onActive(self, active):

@@ -500,6 +500,7 @@ class Scanner(model.Emitter):
                          translation[1] * pixelSize[1])
             diff_trans = (new_trans[0] - self.last_translation[0], new_trans[1] - self.last_translation[1])
             beamShift.x, beamShift.y = diff_trans[0], diff_trans[1]
+            logging.debug("EBeam shifted by %s m,m", diff_trans)
             self.parent._device.MoveBy(beamShift, navAlgorithm)
             self.last_translation = new_trans
 
