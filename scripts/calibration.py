@@ -20,19 +20,9 @@ odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
 from __future__ import division
 
 import logging
-import numpy
 from odemis import model
 from odemis.acq.align import delphi
 import sys
-import threading
-import time
-import operator
-import argparse
-import math
-import Image
-from scipy import ndimage
-from scipy import misc
-from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -44,11 +34,6 @@ def main(args):
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
-
-    # arguments handling
-    parser = argparse.ArgumentParser(description=
-                     "Automated Delphi Calibration")
-
     try:
         escan = None
         detector = None
@@ -113,8 +98,8 @@ def main(args):
         f.result()
 
         # Lens to a good focus position
-        f = focus.moveAbs(LENS_KNOWN_FOCUS)
-        f.result()
+        # f = focus.moveAbs(LENS_KNOWN_FOCUS)
+        # f.result()
 
         # Compute calibration values
         f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
