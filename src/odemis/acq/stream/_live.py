@@ -366,6 +366,8 @@ class AlignedSEMStream(SEMStream):
             shift = (0, 0)
             try:
                 logging.info("Determining the Ebeam center position")
+                # TODO Handle cases where current beam shift is larger than
+                # current limit. Happens when accel. voltage is changed
                 self._emitter.translation.value = (0, 0)
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 self._beamshift = shift
