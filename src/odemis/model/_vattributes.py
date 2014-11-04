@@ -292,19 +292,15 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._commands = None
         self._thread = None
 
-        # cache them for small speed up
-        self._remote_getter = self.__getattr__("_get_value")
-        self._remote_setter = self.__getattr__("_set_value")
-
     @property
     def value(self):
-        return self._remote_getter()
+        return self.__getattr__("_get_value")()
 
     @value.setter
     def value(self, v):
         if self.readonly:
             raise NotSettableError("Value is read-only")
-        return self._remote_setter(v)
+        return self.__getattr__("_set_value")(v)
     # no delete remotely
 
     # for enumerated VA
@@ -354,10 +350,6 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
         self._ctx = None
         self._commands = None
         self._thread = None
-
-        # cache them for small speed up
-        self._remote_getter = self.__getattr__("_get_value")
-        self._remote_setter = self.__getattr__("_set_value")
 
     def _create_thread(self):
         logging.debug("Creating thread")
@@ -679,7 +671,7 @@ class ListVAProxy(VigilantAttributeProxy):
     @property
     def value(self):
         # Transform a normal list into a notifying one
-        raw_list = self._remote_getter()
+        raw_list = self.__getattr__("_get_value")()
         # When value change, same as setting the value
         val = _NotifyingList(raw_list, notifier=self.__value_setter)
         return val
@@ -692,7 +684,7 @@ class ListVAProxy(VigilantAttributeProxy):
     def __value_setter(self, v):
         if self.readonly:
             raise NotSettableError("Value is read-only")
-        self._remote_setter(v)
+        self.__getattr__("_set_value")(v)
 
 class BooleanVA(VigilantAttribute):
     """
