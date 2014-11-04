@@ -202,7 +202,7 @@ class PIGCSError(Exception):
         62: "Autozero requires at least one linear axis",
         63: "Initialization still in progress",
         64: "Parameter is read-only",
-        65: "Parameter not found in non- volatile memory",
+        65: "Parameter not found in non-volatile memory",
         66: "Voltage out of limits",
         67: "Not enough memory available for requested wave curve",
         68: "Not enough memory available for DDL table; DDL cannot be started",
