@@ -203,7 +203,18 @@ class Starter(object):
 
     def display_backend_log(self):
         f = open(self.config["LOGFILE"], "r")
-        msg = f.read()
+        lines = f.readlines()
+
+        # Start at the beginning of the latest log
+        for i, l in enumerate(reversed(lines)):
+            if "Starting Odemis back-end" in l:
+                startl = -(i + 1)
+                break
+        else:
+            startl = 0
+
+        msg = "\n".join(lines[startl:])
+
 
         # TODO: display directly the end of the log
         # At least, skip everything not related to this last run
