@@ -160,7 +160,7 @@ def get_backend_status():
     try:
         model._core._microscope = None # force reset of the microscope
         microscope = model.getMicroscope()
-        if not microscope.ghost.value:
+        if not microscope.ghosts.value:
             return BACKEND_RUNNING
         else:
             # Not all components are working => we are "starting" (or borked)
