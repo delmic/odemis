@@ -20,9 +20,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-# Purpose:      XRCED Component plugin for custom Delmic wxPython classes
+
+# XRCED Component plugin for custom Delmic wxPython classes
 # Important: Create a symbolic link to this and the xh_delmic module within
-# XRCED's plugins folder.
+#            XRCED's plugins folder.
 
 from wx.tools.XRCed import component, params, images, attribute
 from wx.tools.XRCed.globals import TRACE
@@ -33,14 +34,18 @@ TRACE('*** creating xh_delmic components')
 
 ##### FoldPanelBar #####
 
-c = component.Container('FoldPanelBar',
+c = component.Container(
+    'FoldPanelBar',
     ['window', 'top_level', 'control'],
-    ['pos', 'size', 'spacing', 'leftspacing', 'rightspacing'])
-c.addStyles('FPB_SINGLE_FOLD',
+    ['pos', 'size', 'spacing', 'leftspacing', 'rightspacing']
+)
+c.addStyles(
+    'FPB_SINGLE_FOLD',
     'FPB_COLLAPSE_TO_BOTTOM',
     'FPB_EXCLUSIVE_FOLD',
     'FPB_HORIZONTAL',
-    'FPB_VERTICAL')
+    'FPB_VERTICAL'
+)
 c.setParamClass('spacing', params.ParamIntNN)
 c.setParamClass('leftspacing', params.ParamIntNN)
 c.setParamClass('rightspacing', params.ParamIntNN)
@@ -62,27 +67,33 @@ component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.FoldPanelItemXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Fold Panel Item', 'FoldPanelItem', 2)
 
-c = component.Container('CaptionBar',
+c = component.Container(
+    'CaptionBar',
     ['window', 'top_level', 'control'],
     ['pos', 'size', 'label', 'collapsed'],
-    params={'label': params.ParamText, 'collapsed': params.ParamBool})
+    params={'label': params.ParamText, 'collapsed': params.ParamBool}
+)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.CaptionBarXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Caption Bar', 'CaptionBar', 2)
 
 ### StreamBar
 
-c = component.Container('StreamBar',
+c = component.Container(
+    'StreamBar',
     ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'add_button'])
+    ['pos', 'size', 'label', 'add_button']
+)
 c.setParamClass('add_button', params.ParamBool)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.StreamBarXmlHandler)
 component.Manager.setMenu(c, 'Delmic', 'Stream Bar', 'StreamBar', 3)
 
-c = component.Container('StreamPanel',
+c = component.Container(
+    'StreamPanel',
     ['window', 'top_level', 'control'],
-    ['pos', 'size', 'label', 'collapsed'])
+    ['pos', 'size', 'label', 'collapsed']
+)
 c.setParamClass('collapsed', params.ParamBool)
 c.addEvents('EVT_COMMAND_COLLPANE_CHANGED')
 component.Manager.register(c)
@@ -92,7 +103,7 @@ component.Manager.setMenu(c, 'Delmic', 'Generic Stream Entry', 'StreamPanel', 4)
 
 ### gui.comp.viewport.MicroscopeViewport and subclasses
 
-msvps  = [
+msvps = [
     ('OverviewViewport', xh_delmic.OverviewViewportXmlHandler),
     ('MicroscopeViewport', xh_delmic.MicroscopeViewportXmlHandler),
     ('SecomViewport', xh_delmic.SecomViewportXmlHandler),
@@ -104,10 +115,10 @@ msvps  = [
 
 for i, (name, handler) in enumerate(msvps):
     c = component.Container(
-            name,
-            ['window', 'top_level', 'control'],
-            ['pos', 'size'],
-            image=images.TreePanel.GetImage()
+        name,
+        ['window', 'top_level', 'control'],
+        ['pos', 'size'],
+        image=images.TreePanel.GetImage()
     )
     c.addStyles('wxTAB_TRAVERSAL')
     component.Manager.register(c)
@@ -117,10 +128,12 @@ for i, (name, handler) in enumerate(msvps):
 
 ### wx.lib.buttons.GenBitmapButton
 
-c = component.Component('wx.lib.buttons.GenBitmapButton', ['control', 'tool'],
-              ['pos', 'size', 'default',
-               'bitmap', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'wx.lib.buttons.GenBitmapButton',
+    ['control', 'tool'],
+    ['pos', 'size', 'default', 'bitmap', 'selected', 'focus', 'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 #c.addStyles()
 c.setParamClass('default', params.ParamBool)
 c.setSpecial('bitmap',  attribute.BitmapAttribute)
@@ -150,10 +163,11 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageButton
 
-c = component.Component('ImageButton', ['control', 'tool'],
-              ['pos', 'size', 'default', 'delta',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'ImageButton', ['control', 'tool'],
+    ['pos', 'size', 'default', 'delta', 'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 #c.addStyles()
 c.setParamClass('delta', params.ParamInt)
 
@@ -181,10 +195,12 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageToggleButton
 
-c = component.Component('ImageToggleButton', ['control', 'tool'],
-              ['pos', 'size', 'default', 'delta',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'ImageToggleButton',
+    ['control', 'tool'],
+    ['pos', 'size', 'default', 'delta', 'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 #c.addStyles()
 c.setParamClass('delta', params.ParamInt)
 
@@ -219,10 +235,12 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageTextButton
 
-c = component.Component('ImageTextButton', ['control', 'tool'],
-              ['pos', 'size', 'default', 'label', 'delta',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'ImageTextButton', ['control', 'tool'],
+    ['pos', 'size', 'default', 'label', 'delta', 'bitmap', 'hover', 'selected', 'focus',
+     'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
 
 c.setParamClass('delta', params.ParamInt)
@@ -257,10 +275,12 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ImageTextToggleButton
 
-c = component.Component('ImageTextToggleButton', ['control', 'tool'],
-              ['pos', 'size', 'default', 'label', 'delta',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'ImageTextToggleButton', ['control', 'tool'],
+    ['pos', 'size', 'default', 'label', 'delta', 'bitmap', 'hover', 'selected', 'focus',
+     'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
 
 c.setParamClass('delta', params.ParamInt)
@@ -295,10 +315,13 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### TabButton
 
-c = component.Component('TabButton', ['control', 'tool'],
-              ['pos', 'size', 'default', 'label', 'delta',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'TabButton',
+    ['control', 'tool'],
+    ['pos', 'size', 'default', 'label', 'delta', 'bitmap', 'hover', 'selected', 'focus',
+     'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
 
 c.setParamClass('delta', params.ParamInt)
@@ -327,10 +350,13 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### ViewButton
 
-c = component.Component('ViewButton', ['control', 'tool'],
-              ['pos', 'size', 'default', 'label', 'delta',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'ViewButton',
+    ['control', 'tool'],
+    ['pos', 'size', 'default', 'label', 'delta', 'bitmap', 'hover', 'selected', 'focus',
+     'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 c.addStyles('wxALIGN_LEFT', 'wxALIGN_RIGHT', 'wxALIGN_CENTRE')
 
 c.setParamClass('delta', params.ParamInt)
@@ -359,10 +385,12 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### PopupImageButton
 
-c = component.Component('PopupImageButton', ['control', 'tool'],
-              ['pos', 'size', 'default',
-               'bitmap', 'hover', 'selected', 'focus', 'disabled'],
-              image=images.TreeBitmapButton.GetImage())
+c = component.Component(
+    'PopupImageButton',
+    ['control', 'tool'],
+    ['pos', 'size', 'default', 'bitmap', 'hover', 'selected', 'focus', 'disabled'],
+    image=images.TreeBitmapButton.GetImage()
+)
 #c.addStyles()
 c.setParamClass('default', params.ParamBool)
 c.setSpecial('bitmap',  attribute.BitmapAttribute)
@@ -395,28 +423,33 @@ component.Manager.setTool(c, 'Controls', pos=(1, 1))
 
 ### SuggestTextCtrl
 
-c = component.Component('SuggestTextCtrl', ['control','tool'],
-              ['pos', 'size', 'value', 'maxlength'],
-              image=images.TreeTextCtrl.GetImage())
-c.addStyles('wxTE_NO_VSCROLL',
-            'wxTE_AUTO_SCROLL',
-            'wxTE_PROCESS_ENTER',
-            'wxTE_PROCESS_TAB',
-            'wxTE_MULTILINE',
-            'wxTE_PASSWORD',
-            'wxTE_READONLY',
-            'wxHSCROLL',
-            'wxTE_RICH',
-            'wxTE_RICH2',
-            'wxTE_AUTO_URL',
-            'wxTE_NOHIDESEL',
-            'wxTE_LEFT',
-            'wxTE_CENTRE',
-            'wxTE_RIGHT',
-            'wxTE_DONTWRAP',
-            'wxTE_LINEWRAP',
-            'wxTE_CHARWRAP',
-            'wxTE_WORDWRAP')
+c = component.Component(
+    'SuggestTextCtrl',
+    ['control', 'tool'],
+    ['pos', 'size', 'value', 'maxlength'],
+    image=images.TreeTextCtrl.GetImage()
+)
+c.addStyles(
+    'wxTE_NO_VSCROLL',
+    'wxTE_AUTO_SCROLL',
+    'wxTE_PROCESS_ENTER',
+    'wxTE_PROCESS_TAB',
+    'wxTE_MULTILINE',
+    'wxTE_PASSWORD',
+    'wxTE_READONLY',
+    'wxHSCROLL',
+    'wxTE_RICH',
+    'wxTE_RICH2',
+    'wxTE_AUTO_URL',
+    'wxTE_NOHIDESEL',
+    'wxTE_LEFT',
+    'wxTE_CENTRE',
+    'wxTE_RIGHT',
+    'wxTE_DONTWRAP',
+    'wxTE_LINEWRAP',
+    'wxTE_CHARWRAP',
+    'wxTE_WORDWRAP'
+)
 c.setParamClass('value', params.ParamMultilineText)
 c.addEvents('EVT_TEXT', 'EVT_TEXT_ENTER', 'EVT_TEXT_URL', 'EVT_TEXT_MAXLEN')
 component.Manager.register(c)
@@ -433,28 +466,33 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### UnitIntegerCtrl
 
-c = component.Component('UnitIntegerCtrl', ['control','tool'],
-              ['pos', 'size', 'value', 'min', 'max', 'unit'],
-              image=images.TreeTextCtrl.GetImage())
-c.addStyles('wxTE_NO_VSCROLL',
-            'wxTE_AUTO_SCROLL',
-            'wxTE_PROCESS_ENTER',
-            'wxTE_PROCESS_TAB',
-            'wxTE_MULTILINE',
-            'wxTE_PASSWORD',
-            'wxTE_READONLY',
-            'wxHSCROLL',
-            'wxTE_RICH',
-            'wxTE_RICH2',
-            'wxTE_AUTO_URL',
-            'wxTE_NOHIDESEL',
-            'wxTE_LEFT',
-            'wxTE_CENTRE',
-            'wxTE_RIGHT',
-            'wxTE_DONTWRAP',
-            'wxTE_LINEWRAP',
-            'wxTE_CHARWRAP',
-            'wxTE_WORDWRAP')
+c = component.Component(
+    'UnitIntegerCtrl',
+    ['control', 'tool'],
+    ['pos', 'size', 'value', 'min', 'max', 'unit'],
+    image=images.TreeTextCtrl.GetImage()
+)
+c.addStyles(
+    'wxTE_NO_VSCROLL',
+    'wxTE_AUTO_SCROLL',
+    'wxTE_PROCESS_ENTER',
+    'wxTE_PROCESS_TAB',
+    'wxTE_MULTILINE',
+    'wxTE_PASSWORD',
+    'wxTE_READONLY',
+    'wxHSCROLL',
+    'wxTE_RICH',
+    'wxTE_RICH2',
+    'wxTE_AUTO_URL',
+    'wxTE_NOHIDESEL',
+    'wxTE_LEFT',
+    'wxTE_CENTRE',
+    'wxTE_RIGHT',
+    'wxTE_DONTWRAP',
+    'wxTE_LINEWRAP',
+    'wxTE_CHARWRAP',
+    'wxTE_WORDWRAP'
+)
 c.setParamClass('value', params.ParamMultilineText)
 c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
@@ -473,29 +511,34 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### UnitFloatCtrl
 
-c = component.Component('UnitFloatCtrl', ['control','tool'],
-              ['pos', 'size', 'value', 'min', 'max', 'unit'],
-              image=images.TreeTextCtrl.GetImage())
-c.addStyles('wxTE_NO_VSCROLL',
-            'wxTE_AUTO_SCROLL',
-            'wxTE_PROCESS_ENTER',
-            'wxTE_PROCESS_TAB',
-            'wxTE_MULTILINE',
-            'wxTE_PASSWORD',
-            'wxTE_READONLY',
-            'wxHSCROLL',
-            'wxTE_RICH',
-            'wxTE_RICH2',
-            'wxTE_AUTO_URL',
-            'wxTE_NOHIDESEL',
-            'wxTE_LEFT',
-            'wxTE_CENTRE',
-            'wxTE_RIGHT',
-            'wxTE_DONTWRAP',
-            'wxTE_LINEWRAP',
-            'wxTE_CHARWRAP',
-            'wxTE_WORDWRAP')
-# Note: there is no ParamtFloat class
+c = component.Component(
+    'UnitFloatCtrl',
+    ['control', 'tool'],
+    ['pos', 'size', 'value', 'min', 'max', 'unit'],
+    image=images.TreeTextCtrl.GetImage()
+)
+c.addStyles(
+    'wxTE_NO_VSCROLL',
+    'wxTE_AUTO_SCROLL',
+    'wxTE_PROCESS_ENTER',
+    'wxTE_PROCESS_TAB',
+    'wxTE_MULTILINE',
+    'wxTE_PASSWORD',
+    'wxTE_READONLY',
+    'wxHSCROLL',
+    'wxTE_RICH',
+    'wxTE_RICH2',
+    'wxTE_AUTO_URL',
+    'wxTE_NOHIDESEL',
+    'wxTE_LEFT',
+    'wxTE_CENTRE',
+    'wxTE_RIGHT',
+    'wxTE_DONTWRAP',
+    'wxTE_LINEWRAP',
+    'wxTE_CHARWRAP',
+    'wxTE_WORDWRAP'
+)
+# Note: there is no ParamFloat class
 c.setParamClass('value', params.ParamMultilineText)
 c.setParamClass('min', params.ParamInt)
 c.setParamClass('max', params.ParamInt)
@@ -507,8 +550,6 @@ component.Manager.setMenu(c, 'Delmic control', 'Float Text', 'UnitFloatCtrl', 1)
 component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 
-
-
 ### UnitFloatSlider
 
 class ParamScale(params.RadioBox):
@@ -516,20 +557,10 @@ class ParamScale(params.RadioBox):
     default = 'linear'
 
 c = component.Component(
-        'UnitFloatSlider',
-        ['control','tool'],
-        [
-            'pos',
-            'size',
-            'value',
-            'min',
-            'max',
-            'unit',
-            'scale',
-            'text_size',
-            'accuracy'
-        ],
-        image=images.TreeTextCtrl.GetImage()
+    'UnitFloatSlider',
+    ['control', 'tool'],
+    ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size', 'accuracy'],
+    image=images.TreeTextCtrl.GetImage()
 )
 c.setParamClass('value', params.ParamText)
 c.setParamClass('min', params.ParamInt)
@@ -554,10 +585,10 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 ### UnitIntegerSlider
 
 c = component.Component(
-        'UnitIntegerSlider',
-        ['control','tool'],
-        ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
-        image=images.TreeTextCtrl.GetImage()
+    'UnitIntegerSlider',
+    ['control', 'tool'],
+    ['pos', 'size', 'value', 'min', 'max', 'unit', 'scale', 'text_size'],
+    image=images.TreeTextCtrl.GetImage()
 )
 c.setParamClass('value', params.ParamText)
 c.setParamClass('min', params.ParamInt)
@@ -580,10 +611,12 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### VisualRangeSlider
 
-c = component.Component('VisualRangeSlider', ['control','tool'],
-              ['pos', 'size'],
-              image=images.TreeTextCtrl.GetImage())
-
+c = component.Component(
+    'VisualRangeSlider',
+    ['control', 'tool'],
+    ['pos', 'size'],
+    image=images.TreeTextCtrl.GetImage()
+)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.VisualRangeSliderHandler)
 component.Manager.setMenu(
@@ -597,10 +630,12 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 
 ### BandwidthSlider
 
-c = component.Component('BandwidthSlider', ['control','tool'],
-              ['pos', 'size'],
-              image=images.TreeTextCtrl.GetImage())
-
+c = component.Component(
+    'BandwidthSlider',
+    ['control', 'tool'],
+    ['pos', 'size'],
+    image=images.TreeTextCtrl.GetImage()
+)
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.BandwidthSliderHandler)
 component.Manager.setMenu(
@@ -617,9 +652,12 @@ component.Manager.setTool(c, 'Controls', pos=(0, 2))
 # because the original did not allow for the setting of the down button
 # image. (Which we implemented in the xh_delmic module in this package)
 
-c = component.Component('OwnerDrawnComboBox', ['control','tool'],
-              ['pos', 'size'],
-              image=images.TreeComboBox.GetImage())
+c = component.Component(
+    'OwnerDrawnComboBox',
+    ['control', 'tool'],
+    ['pos', 'size'],
+    image=images.TreeComboBox.GetImage()
+)
 c.addStyles(
     'wxCB_SIMPLE',
     'wxCB_DROPDOWN',
@@ -629,7 +667,7 @@ c.addStyles(
     'wxODCB_DCLICK_CYCLES',
     'wxTE_PROCESS_ENTER'
 )
-c.setSpecial('content',  attribute.ContentAttribute)
+c.setSpecial('content', attribute.ContentAttribute)
 c.addEvents('EVT_COMBOBOX', 'EVT_TEXT', 'EVT_TEXT_ENTER')
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.OwnerDrawnComboBoxHandler)
@@ -643,9 +681,12 @@ component.Manager.setMenu(
 
 ### ToolBar
 
-c = component.Component('ToolBar', ['window', 'top_level', 'control'],
-              ['pos', 'size'],
-              image=images.TreeMenuBar.GetImage())
+c = component.Component(
+    'ToolBar',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size'],
+    image=images.TreeMenuBar.GetImage()
+)
 c.addStyles(
     'wxHORIZONTAL',
     'wxVERTICAL'
