@@ -50,8 +50,14 @@ class Starter(object):
         self.wxapp = wx.App()
         self.wxframe = wx.Frame(None)
 
+        # Warning: wx will crash if pynotify has been loaded before creating the
+        # wx.App (probably due to bad interaction with GTK).
+        # That's why we only import it here.
+        import pynotify
+        pynotify.init("Odemis")
+        self._notif = pynotify.Notification("")
+
         # For listening to component states
-        print "Baaa"
         self._mic = None
         self._comp_state = {} # str -> state
         self._backend_done = threading.Event()
@@ -99,14 +105,8 @@ class Starter(object):
         Start the backend, and returns when it's fully instantiated or failed
         It will display a simple window indicating the progress
         """
-        # Warning: wx will crash if pynotify has been loaded before creating the
-        # wx.App (probably due to bad interaction with GTK).
-        # That's why we only import it here.
-        import pynotify
-        pynotify.init("Odemis")
-        # TODO: send "Starting Odemis back-end"
-        n = pynotify.Notification("Starting Odemis back-end", "", "dialog-info")
-        n.show()
+        self._notif.update("Starting Odemis back-end", "", "dialog-info")
+        self._notif.show()
 
         # install cgroup, for memory protection
         if (os.path.isdir("/sys/fs/cgroup/memory/odemisd")
@@ -126,22 +126,12 @@ class Starter(object):
 
         # If it immediately fails, it's easy
         if error != 0:
-            n.update("Odemis back-end failed to start",
-                     "For more information type odemis-start in a terminal.",
-                     "dialog-warning")
-            n.show()
+            self._notif.update("Odemis back-end failed to start",
+                               "For more information type odemis-start in a terminal.",
+                               "dialog-warning")
+            self._notif.show()
             raise ValueError("Starting back-end failed")
     
-        try:
-            self.wait_backend_is_ready()
-        except IOError:
-            self.display_backend_log()
-            raise
-        else:
-            n.update("Odemis back-end successfully started",
-                     "Graphical interface will now start.",
-                     "dialog-info")
-            n.show()
 
     def wait_backend_is_ready(self):
         """
@@ -149,8 +139,8 @@ class Starter(object):
         raise:
             IOError: if the back-end eventually fails to start
         """
+        # Get a connection to the back-end
         end_time = time.time() + 5 # 5s max to start the backend
-        
         while self._mic is None:
             try:
                 backend = model.getContainer(model.BACKEND_NAME, validate=False)
@@ -165,6 +155,7 @@ class Starter(object):
         # TODO: create a window with the list of the components
         self._mic.ghosts.subscribe(self._on_ghosts, init=True)
 
+        # Wait until there is no more ghosts
         try:
             while True:
                 # Sleep a bit
@@ -175,6 +166,10 @@ class Starter(object):
                     raise IOError("Back-end failed to fully instantiate")
                 if self._backend_done.is_set():
                     logging.debug("Back-end appears ready")
+                    self._notif.update("Odemis back-end successfully started",
+                                       "Graphical interface will now start.",
+                                       "dialog-info")
+                    self._notif.show()
                     return
         finally:
             # TODO: close the window
@@ -184,18 +179,23 @@ class Starter(object):
         """
         Called when the .ghosts changes
         """
+        # The components running fine
         for c in self._mic.alive.value:
-            # TODO: also display that message if the state changes
             state = c.state.value
             if self._comp_state.get(c.name) != state:
                 self._comp_state[c.name] = state
                 print "Component %s: %s" % (c.name, state)
-        
+
         # Now the defective ones
         for cname, state in ghosts.items():
-            if self._comp_state.get(cname) != state:
-                self._comp_state[cname] = state
-                print "Component %s: %s" % (cname, state)
+            if isinstance(state, Exception):
+                # Exceptions are different even if just a copy
+                statecmp = str(state)
+            else:
+                statecmp = state
+            if self._comp_state.get(cname) != statecmp:
+                self._comp_state[cname] = statecmp
+                print "Component %s: %s" % (cname, statecmp)
 
         # No more ghosts, means all hardware is ready
         if not ghosts:
@@ -236,6 +236,9 @@ def main(args):
         starter.config["LOGLEVEL"] = "%d" % loglevel
     logging.getLogger().setLevel(loglevel)
 
+#     pyrolog = logging.getLogger("Pyro4")
+#     pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
+
     # Updates the python path if requested
     if "PYTHONPATH" in starter.config:
         logging.debug("PYTHONPATH set to '%s'", starter.config["PYTHONPATH"])
@@ -262,11 +265,18 @@ def main(args):
         if status == driver.BACKEND_DEAD:
             logging.warning("Back-end is not responding, will restart it...")
             subprocess.call(["/usr/bin/pkill", "-f", starter.config["BACKEND"]])
+            time.sleep(1)
 
-        if status != driver.BACKEND_RUNNING:
-            starter.start_backend(modelfile)
-        else:
-            logging.debug("Back-end already started, so not starting again")
+        try:
+            if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+                starter.start_backend(modelfile)
+            if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED, driver.BACKEND_STARTING):
+                starter.wait_backend_is_ready()
+            else:
+                logging.debug("Back-end already started, so not starting again")
+        except IOError:
+            starter.display_backend_log()
+            raise
 
         starter.start_gui()
 
