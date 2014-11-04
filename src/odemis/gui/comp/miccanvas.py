@@ -1335,7 +1335,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         self._tab_data_model = None
         self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        self.background_brush = wx.SOLID  # background is always black
+        # self.background_brush = wx.SOLID  # background is always black
 
         ## Overlays
 
@@ -1417,3 +1417,14 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         del dc
 
         self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+
+        # import os
+        #
+        # i = 1
+        # path = '/home/rinze/imgdump/saved%03d.png' % i
+        #
+        # while os.path.exists(path):
+        #     i += 1
+        #     path = '/home/rinze/imgdump/saved%03d.png' % i
+        #
+        # self.microscope_view.thumbnail.value.SaveFile(path, wx.BITMAP_TYPE_PNG)

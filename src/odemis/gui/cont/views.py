@@ -322,7 +322,6 @@ class ViewPortController(object):
             viewport_item = sizer.FindItem(viewport)
 
             # If a viewport is already present at the given position...
-
             if sizer.CheckForIntersectionPos(pos, (1, 1)):
                 # ...get the current window and remove it from the sizer
                 current_item = sizer.FindItemAtPosition(pos)
@@ -339,12 +338,21 @@ class ViewPortController(object):
                     old_pos = viewport_item.GetPos()
                     logging.debug("moving %s to %s", viewport.__class__.__name__, pos)
                     sizer.SetItemPosition(viewport, pos)
-                    sizer.Add(current_win, old_pos, flag=wx.EXPAND)
+                    new_item = sizer.Add(current_win, old_pos, flag=wx.EXPAND)
+                    # TODO: The following 3 lines were added to try and pinpoint a thumbnail
+                    # rendering bug. When the bug is fixed, check if they are still necessary and if
+                    # so, make the code a bit cleaner
+                    new_item.SetProportion(1)
+                    new_item.SetMinSize((400, 400))
+                    new_item.SetRatio(1)
                 # The viewport is not positioned inside the sizer yet
                 else:
                     # Insert the viewport into the sizer at the given position
                     logging.debug("adding %s at %s", viewport.__class__.__name__, pos)
-                    sizer.Add(viewport, pos, flag=wx.EXPAND)
+                    new_item = sizer.Add(viewport, pos, flag=wx.EXPAND)
+                    new_item.SetProportion(1)
+                    new_item.SetMinSize((400, 400))
+                    new_item.SetRatio(1)
             # If the target position is empty...
             else:
                 if viewport_item:
@@ -354,7 +362,10 @@ class ViewPortController(object):
                 else:
                     logging.debug("adding %s at %s", viewport.__class__.__name__, pos)
                     # ...insert the viewport there
-                    sizer.Add(viewport, pos, flag=wx.EXPAND)
+                    new_item = sizer.Add(viewport, pos, flag=wx.EXPAND)
+                    new_item.SetProportion(1)
+                    new_item.SetMinSize((400, 400))
+                    new_item.SetRatio(1)
 
             viewport.Show()
         else:

@@ -51,6 +51,7 @@ def call_after(f, self, *args, **kwargs):
     #                     *args,
     #                     **kwargs)
 
+
 # TODO: also do a call_after ?
 def wxlimit_invocation(delay_s):
     """ This decorator limits how often a method will be executed.
@@ -90,17 +91,18 @@ def wxlimit_invocation(delay_s):
         timer_name = '%s_lim_inv_timer' % f.__name__
 
         # If the function was called later than 'delay_s' seconds ago...
-        if (hasattr(self, last_call_name) and
-            now - getattr(self, last_call_name) < delay_s):
-            #logging.debug('Delaying method call')
+        if hasattr(self, last_call_name) and now - getattr(self, last_call_name) < delay_s:
+            # logging.warn('Delaying method call')
             if now < getattr(self, last_call_name):
                 # this means a timer is already set, nothing else to do
                 return
 
-            timer = threading.Timer(delay_s,
-                          dead_object_wrapper(f, self, *args, **kwargs),
-                          args=[self] + list(args),
-                          kwargs=kwargs)
+            timer = threading.Timer(
+                delay_s,
+                dead_object_wrapper(f, self, *args, **kwargs),
+                args=[self] + list(args),
+                kwargs=kwargs
+            )
             setattr(self, timer_name, timer)
             setattr(self, last_call_name, now + delay_s)
             timer.start()
