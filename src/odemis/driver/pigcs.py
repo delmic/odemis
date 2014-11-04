@@ -2398,7 +2398,8 @@ class SerialBusAccesser(object):
                 char = self.serial.read()
 
         if not char:
-            raise model.HwError("Controller %d timeout." % addr)
+            raise model.HwError("Controller %d timed out, check the device is "
+                                "plugged in and turned on." % addr)
 
         assert len(lines) > 0
 
@@ -2496,7 +2497,8 @@ class IPBusAccesser(object):
                 try:
                     data = self.socket.recv(4096)
                 except socket.timeout:
-                    raise model.HwError("Controller %d timeout." % addr)
+                    raise model.HwError("Controller %d timed out, check the device is "
+                                        "plugged in and turned on." % addr)
                 # If the master is already accessed from somewhere else it will just
                 # immediately answer an empty message
                 if not data:
