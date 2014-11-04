@@ -351,7 +351,15 @@ def createInNewContainer(container_name, klass, kwargs):
         (Component) the (proxy to the) new component
     """
     container = createNewContainer(container_name, validate=False)
-    comp = container.instantiate(klass, kwargs)
+    try:
+        comp = container.instantiate(klass, kwargs)
+    except Exception as exp:
+        try:
+            container.terminate()
+        except Exception:
+            logging.exception("Failed to stop the container %s after component failure",
+                              container_name)
+        raise exp
     return container, comp
 
 def _manageContainer(name, isready=None):
