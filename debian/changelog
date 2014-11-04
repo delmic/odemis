@@ -1,7 +1,11 @@
 odemis (1.8.1-1ubuntu1) precise; urgency=low
 
   * Version 1.8.1:
-    - PIGCS driver don't need to require a reference switch to accept closed-loop
+    - driver pigcs: don't require a reference switch to accept closed-loop
+    - driver andorcam3: don't fail if some binnings are not implemented
+    - gui acquisition: allow snapshot as soon as the tab has some streams
+    - backend: extend container creating timeout to 120s
+    - autofocus: wrong binary search starting point bug fixed
 
  -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 04 Nov 2014 15:01:10 +0100
 
