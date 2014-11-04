@@ -47,7 +47,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
                   {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
-SEM_KNOWN_FOCUS = 0.0071625  # Fallback sem focus position for the first insertion
+SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
 def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
