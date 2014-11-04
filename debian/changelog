@@ -1,3 +1,10 @@
+odemis (1.8.1-1ubuntu1) precise; urgency=low
+
+  * Version 1.8.1:
+    - PIGCS driver don't need to require a reference switch to accept closed-loop
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 04 Nov 2014 15:01:10 +0100
+
 odemis (1.8-1ubuntu1) precise; urgency=low
 
   * New version: 1.8
