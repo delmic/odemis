@@ -493,8 +493,11 @@ class ViewPortController(object):
 
         try:
             # Get the current position of the visible viewport
-            current_pos = sizer.GetItemPosition(viewport) if viewport else None
+            viewport_pos = sizer.GetItemPosition(viewport) if viewport else None
         except AssertionError:
+
+            # The following code is used for viewports not part of the 2x2 grid, but which can be
+            # shown in the 1x1 view none the less. (i.e. Overview viewport)
 
             # If the given viewport is not in the sizer an exception will be raised by the
             # `GetItemPosition` method and it's not part of the 2x2 grid.
@@ -512,8 +515,8 @@ class ViewPortController(object):
             grid_row, grid_col = grid_pos
             grid_item = sizer.FindItemAtPosition(grid_pos)
 
-            # If the visible view is provided and we're looking a different cell
-            if current_pos is not None and grid_pos != current_pos:
+            # If the visible view is provided and we're looking at different cell
+            if viewport_pos is not None and grid_pos != viewport_pos:
                 # If there's a viewport at the grid position, hide it
                 if grid_item:
                     viewport = grid_item.GetWindow()
@@ -521,13 +524,13 @@ class ViewPortController(object):
 
                 # Collapse the row and/or column of the grid position if the visible viewport
                 # is not in that row and/or column
-                if sizer.IsRowGrowable(grid_row) and current_pos[0] != grid_row:
+                if sizer.IsRowGrowable(grid_row) and viewport_pos[0] != grid_row:
                     logging.debug("rem grow row %s", grid_row)
                     sizer.RemoveGrowableRow(grid_row)
-                if sizer.IsColGrowable(grid_col) and current_pos[1] != grid_col:
+                if sizer.IsColGrowable(grid_col) and viewport_pos[1] != grid_col:
                     logging.debug("rem grow col %s", grid_col)
                     sizer.RemoveGrowableCol(grid_col)
-            # If no visible view is given (i.e. 2x2 view) or we're looking at the visible views
+            # If no visible view is given (i.e. 2x2 view) or we're looking at the viewport's
             # grid position
             else:
                 # If there's a viewport at the grid position, show it
