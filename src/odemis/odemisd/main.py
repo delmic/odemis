@@ -31,16 +31,18 @@ from odemis.model import ST_UNLOADED, ST_STARTING
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
 from odemis.util.driver import BACKEND_RUNNING, BACKEND_DEAD, BACKEND_STOPPED, \
-    get_backend_status
+    get_backend_status, BACKEND_STARTING
 import os
 import signal
 import stat
 import sys
 import threading
 
+
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
-                    BACKEND_STOPPED: 2
+                    BACKEND_STOPPED: 2,
+                    BACKEND_STARTING: 3,
                     }
 
 class BackendContainer(model.Container):

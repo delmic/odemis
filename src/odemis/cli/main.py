@@ -29,19 +29,21 @@ import gc
 import importlib
 import inspect
 import logging
-import odemis
 from odemis import model, dataio, util
+import odemis
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.util import units
 from odemis.util.conversion import convertToObject
 from odemis.util.driver import BACKEND_RUNNING, \
-    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
+    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status, BACKEND_STARTING
 import sys
 import threading
 
+
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
-                    BACKEND_STOPPED: 2
+                    BACKEND_STOPPED: 2,
+                    BACKEND_STARTING: 3,
                     }
 
 # small object that can be remotely executed for scanning

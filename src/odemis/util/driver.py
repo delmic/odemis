@@ -153,14 +153,18 @@ def speedUpPyroConnect(comp):
 
 
 BACKEND_RUNNING = "RUNNING"
+BACKEND_STARTING = "STARTING"
 BACKEND_DEAD = "DEAD"
 BACKEND_STOPPED = "STOPPED"
 def get_backend_status():
     try:
         model._core._microscope = None # force reset of the microscope
         microscope = model.getMicroscope()
-        if len(microscope.name) > 0:
+        if not microscope.ghost.value:
             return BACKEND_RUNNING
+        else:
+            # Not all components are working => we are "starting" (or borked)
+            return BACKEND_STARTING
     except (IOError, CommunicationError):
         logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):
