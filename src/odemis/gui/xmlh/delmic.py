@@ -695,3 +695,18 @@ c.addStyles(
 component.Manager.register(c)
 component.Manager.addXmlHandler(xh_delmic.ToolBarHandler)
 component.Manager.setMenu(c, 'Delmic', 'Tool Bar', 'ToolBar', 32)
+
+### ViewportGrid
+
+c = component.Container(
+    'ViewportGrid',
+    ['window', 'top_level', 'control'],
+    ['pos', 'size'],
+    image=images.TreePanel.GetImage()
+)
+
+c.addStyles('wxTAB_TRAVERSAL')
+component.Manager.register(c)
+component.Manager.setMenu(c, 'Delmic', 'Grid Container', 'GridContainer', 30)
+component.Manager.addXmlHandler(xh_delmic.ViewportGridHandler)
+component.Manager.setTool(c, 'Controls', pos=(0, 2))

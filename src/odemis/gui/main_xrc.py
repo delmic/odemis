@@ -812,7 +812,6 @@ def __init_resources():
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
                 </object>
@@ -2773,7 +2772,7 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel">
+              <object class="ViewportGrid" name="">
                 <object class="wxGridBagSizer">
                   <object class="sizeritem">
                     <object class="MicroscopeViewport" name="vp_inspection_tl">
@@ -2831,8 +2830,6 @@ def __init_resources():
                     <ratio>1</ratio>
                     <cellpos>1,1</cellpos>
                   </object>
-                  
-                  
                   <growablecols>0,1</growablecols>
                   <growablerows>0,1</growablerows>
                 </object>

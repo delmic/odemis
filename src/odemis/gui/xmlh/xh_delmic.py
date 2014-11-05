@@ -32,6 +32,7 @@ import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.viewport as vport
 import odemis.gui.comp.slider as slide
 import odemis.gui.comp.stream as strm
+import odemis.gui.comp.grid as grid
 import odemis.gui.comp.text as txt
 import odemis.gui.cont.tools as tools
 import odemis.gui.img.data as img
@@ -46,6 +47,7 @@ HANDLER_CLASS_LIST = []
 ##################################
 # Fold Panel Bar related Handlers
 ##################################
+
 
 class StreamPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
@@ -69,16 +71,16 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
         parent_window = self.GetParentAsWindow()
         # Now create the object
         panel = strm.StreamPanel(
-                            parent_window,
-                            self.GetID(),
-                            self.GetText('label'),
-                            self.GetPosition(),
-                            self.GetSize(),
-                            self.GetStyle("style", wx.TAB_TRAVERSAL),
-                            #self.GetStyle('exstyle'),
-                            name=self.GetName(),
-                            collapsed=self.GetBool('collapsed')
-                )
+            parent_window,
+            self.GetID(),
+            self.GetText('label'),
+            self.GetPosition(),
+            self.GetSize(),
+            self.GetStyle("style", wx.TAB_TRAVERSAL),
+            #self.GetStyle('exstyle'),
+            name=self.GetName(),
+            collapsed=self.GetBool('collapsed')
+        )
 
         # These two things should be done in either case:
         # Set standard window attributes
@@ -112,12 +114,13 @@ class FoldPanelBarXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'FoldPanelBar':
             #print "Creating FoldpanelBar"
-            w = fpb.FoldPanelBar(self.GetParentAsWindow(),
-                                 self.GetID(),
-                                 self.GetPosition(),
-                                 self.GetSize(),
-                                 self.GetStyle())
-
+            w = fpb.FoldPanelBar(
+                self.GetParentAsWindow(),
+                self.GetID(),
+                self.GetPosition(),
+                self.GetSize(),
+                self.GetStyle()
+            )
             self.SetupWindow(w)
 
             parent = w.GetParent()
@@ -978,3 +981,41 @@ class ToolBarHandler(xrc.XmlResourceHandler):
         self.CreateChildren(toolbar)
         return toolbar
 HANDLER_CLASS_LIST.append(ToolBarHandler)
+
+####################################################################
+# ViewportGrid
+#
+# Container for the 2x2 viewport grid
+####################################################################
+
+
+class ViewportGridHandler(xrc.XmlResourceHandler):
+
+    def __init__(self):
+        xrc.XmlResourceHandler.__init__(self)
+
+        # Standard styles
+        self.AddWindowStyles()
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, 'ViewportGrid')
+
+    def DoCreateResource(self):
+        assert self.GetInstance() is None
+
+        parent_window = self.GetParentAsWindow()
+        # Now create the object
+        vpgrid = grid.ViewportGrid(
+            parent_window,
+            self.GetID(),
+            self.GetPosition(),
+            self.GetSize(),
+            style=self.GetStyle(),
+            name=self.GetName(),
+        )
+
+        # Set standard window attributes
+        self.SetupWindow(vpgrid)
+        self.CreateChildren(vpgrid)
+        return vpgrid
+HANDLER_CLASS_LIST.append(ViewportGridHandler)

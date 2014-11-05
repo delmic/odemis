@@ -500,7 +500,7 @@ class ViewPortController(object):
             # shown in the 1x1 view none the less. (i.e. Overview viewport)
 
             # If the given viewport is not in the sizer an exception will be raised by the
-            # `GetItemPosition` method and it's not part of the 2x2 grid.
+            # `GetItemPosition` method indicating it's not part of the 2x2 grid.
             # We assume that all the grid viewports need to be hidden and the given viewport shown
             # 'full screen'.
 

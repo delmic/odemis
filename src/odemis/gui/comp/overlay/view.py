@@ -996,7 +996,6 @@ class PolarOverlay(ViewOverlay):
 
     def Draw(self, ctx):
         ### Draw angle lines ###
-
         ctx.set_line_width(2.5)
         ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
 

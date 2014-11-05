@@ -1322,8 +1322,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
-    """ Angle-resolved canvas
-    """
+    """ Angle-resolved canvas """
+
     # TODO: it actually could be just a BitmapCanvas, but it needs
     # a (simple) fit_to_content()
 
@@ -1331,11 +1331,14 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         super(AngularResolvedCanvas, self).__init__(*args, **kwargs)
 
+        self.default_margin = 0
+        self.margins = (self.default_margin, self.default_margin)
+
         self.microscope_view = None
         self._tab_data_model = None
         self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        # self.background_brush = wx.SOLID  # background is always black
+        self.background_brush = wx.SOLID  # background is always black
 
         ## Overlays
 
@@ -1406,6 +1409,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
+        print [self.Shown, self.Size]
         context = wx.ClientDC(self)
 
         dc = wx.MemoryDC()
