@@ -262,60 +262,31 @@
   </object>
   <object class="wxFrame" name="grid_frame">
     <object_ref ref="menu_bar"/>
-    <object class="wxPanel" name="grid_panel">
-      <object class="wxGridBagSizer">
-        <object class="sizeritem">
-          <object class="wxPanel" name="red">
-            <bg>#E65F5F</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>0,0</cellpos>
-        </object>
-        <object class="sizeritem">
-          <object class="wxPanel" name="blue">
-            <bg>#57B4BA</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>0,1</cellpos>
-        </object>
-        <object class="sizeritem">
-          <object class="wxPanel" name="purple">
-            <bg>#E48BD3</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>1,0</cellpos>
-        </object>
-        <object class="sizeritem">
-          <object class="wxPanel" name="brown">
-            <bg>#FFC292</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>1,1</cellpos>
-        </object>
-        <growablecols>0,1</growablecols>
-        <growablerows>0,1</growablerows>
+    <object class="ViewportGrid" name="grid_panel">
+      <object class="wxPanel" name="red">
+        <bg>#E65F5F</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
       </object>
-      <size>500,500</size>
-      <bg>#4D4D4D</bg>
-      <XRCED>
-        <assign_var>1</assign_var>
-      </XRCED>
+      <object class="wxPanel" name="blue">
+        <bg>#57B4BA</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="purple">
+        <bg>#E48BD3</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="brown">
+        <bg>#FFC292</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
       <object class="wxPanel" name="yellow">
         <bg>#FFF490</bg>
         <hidden>1</hidden>
@@ -330,6 +301,11 @@
           <assign_var>1</assign_var>
         </XRCED>
       </object>
+      <size>500,500</size>
+      <bg>#4D4D4D</bg>
+      <XRCED>
+        <assign_var>1</assign_var>
+      </XRCED>
     </object>
     <size>500,500</size>
     <title>Cairo Test</title>

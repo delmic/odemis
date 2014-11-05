@@ -41,56 +41,73 @@ class GridPanelTestCase(test.GuiTestCase):
 
     def test_show_grid(self):
 
-        # test.set_sleep_time(300)
+        test.set_sleep_time(500)
 
-        sizer = self.frame.grid_panel.GetSizer()
-
-        def show(viewport):
-            ViewPortController._show_viewport_grid(sizer, viewport)
-
-        logging.debug("brown")
-        show(self.frame.brown)
+        gp = self.frame.grid_panel
         gui_loop()
 
-        logging.debug("2x2")
-        show(None)
+        gp.show(self.frame.red)
         gui_loop()
 
-        logging.debug("blue")
-        show(self.frame.blue)
-        gui_loop()
+        # gp.show(self.frame.blue)
+        # gui_loop()
+        #
+        # gp.hide(self.frame.purple)
+        # gui_loop()
+        #
+        # gp.show(self.frame.purple)
+        # gui_loop()
 
-        logging.debug("2x2")
-        show(None)
-        gui_loop()
 
-        logging.debug("purple")
-        show(self.frame.purple)
-        gui_loop()
 
-        logging.debug("red")
-        show(self.frame.red)
-        gui_loop()
 
-        logging.debug("brown")
-        show(self.frame.brown)
-        gui_loop()
 
-        logging.debug("green")
-        show(self.frame.green)
-        gui_loop()
+        # def show(viewport):
+        #     ViewPortController._show_viewport_grid(sizer, viewport)
 
-        logging.debug("purple")
-        show(self.frame.purple)
-        gui_loop()
-
-        logging.debug("2x2")
-        show(None)
-        gui_loop()
-
-        logging.debug("yellow")
-        show(self.frame.yellow)
-        gui_loop()
+        # logging.debug("brown")
+        # show(self.frame.brown)
+        # gui_loop()
+        #
+        # logging.debug("2x2")
+        # show(None)
+        # gui_loop()
+        #
+        # logging.debug("blue")
+        # show(self.frame.blue)
+        # gui_loop()
+        #
+        # logging.debug("2x2")
+        # show(None)
+        # gui_loop()
+        #
+        # logging.debug("purple")
+        # show(self.frame.purple)
+        # gui_loop()
+        #
+        # logging.debug("red")
+        # show(self.frame.red)
+        # gui_loop()
+        #
+        # logging.debug("brown")
+        # show(self.frame.brown)
+        # gui_loop()
+        #
+        # logging.debug("green")
+        # show(self.frame.green)
+        # gui_loop()
+        #
+        # logging.debug("purple")
+        # show(self.frame.purple)
+        # gui_loop()
+        #
+        # logging.debug("2x2")
+        # show(None)
+        # gui_loop()
+        #
+        # logging.debug("yellow")
+        # show(self.frame.yellow)
+        # gui_loop()
 
     def test_position_viewport(self):
 
