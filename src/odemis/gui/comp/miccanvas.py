@@ -156,13 +156,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
 
         self.microscope_view.mpp.subscribe(self._on_view_mpp, init=True)
-
-        if hasattr(self.microscope_view, "stage_pos"):
-            # TODO: should this be moved to MicroscopeView, to update view_pos
-            # when needed?
-            # Listen to stage pos, so that all views move together when the
-            # stage moves.
-            self.microscope_view.stage_pos.subscribe(self._onStagePos)
         self.microscope_view.view_pos.subscribe(self._onViewPos)
         # Update new position immediately, so that fit_to_content() directly
         # gets the correct center
@@ -448,17 +441,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
 
-    def _onStagePos(self, value):
-        """
-        When the stage is moved: recenter the view
-        value: dict with "x" and "y" entries containing meters
-        """
-        # this can be caused by any viewport which has requested to recenter
-        # the buffer
-        pos = self.physical_to_world_pos((value["x"], value["y"]))
-        # skip ourselves, to avoid asking the stage to move to (almost) the same position
-        wx.CallAfter(super(DblMicroscopeCanvas, self).recenter_buffer, pos)
-
     def _onViewPos(self, phy_pos):
         """
         When the view position is updated: recenter the view
@@ -497,7 +479,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
         if recenter is None:
             # recenter only if there is no stage attached
-            recenter = not hasattr(self.microscope_view, "stage_pos")
+            recenter = not self.microscope_view.has_stage()
 
         super(DblMicroscopeCanvas, self).fit_to_content(recenter=recenter)
 

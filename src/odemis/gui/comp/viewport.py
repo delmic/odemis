@@ -483,28 +483,18 @@ class OverviewViewport(MicroscopeViewport):
         # If state is unknown, it's probably going to be unknown forever, so
         # we have to allow (and in the worst case the user will be able to move
         # while the chamber is opened)
-        if chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}:
+        if (chamber_state in {CHAMBER_VACUUM, CHAMBER_UNKNOWN}
+            and self._microscope_view.has_stage()):
             self.canvas.point_select_overlay.activate()
         else:
             self.canvas.point_select_overlay.deactivate()
 
     def _on_position_select(self, p_pos):
         """ Set the physical view position
-
-        TODO: We could also use the stage directly to move to the desired position, using a MoveAbs
-            call on the tab_data.main.stage attribute. But the moveStageToView has some nice, built
-            in, safety features.
-            Also: move this to OverviewCanvas?
-
         """
-
         if self._tab_data_model:
-            for view in self._tab_data_model.views.value:
-                if view.has_stage():
-                    view.view_pos.value = p_pos
-                    view.moveStageToView(relative=False)
-                    break
-
+            if self._microscope_view.has_stage():
+                self._microscope_view.moveStageTo(p_pos)
 
 class SecomViewport(MicroscopeViewport):
 
@@ -521,7 +511,7 @@ class SecomViewport(MicroscopeViewport):
 
     def hide_pause(self, is_playing):
         self.canvas.icon_overlay.hide_pause(is_playing)
-        if hasattr(self._microscope_view, "stage_pos"):
+        if self._microscope_view.has_stage():
             # disable/enable move and focus change
             if is_playing:
                 self.canvas.abilities |= self._orig_abilities

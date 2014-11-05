@@ -588,11 +588,12 @@ class View(object):
         return "{}".format(self.name.value)
 
 
-MAX_SAFE_MOVE_DISTANCE = 1000e-3  # 100 cm
+MAX_SAFE_MOVE_DISTANCE = 1e-3  # 1 mm
 
-
-class MicroscopeView(View):
-    """ Represents a view from a microscope and ways to alter it.
+class StreamView(View):
+    """
+    An abstract class that is common for every view which display layers of
+    streams and might have also actuators such as a stage and a focus.
 
     Basically, its "input" is a StreamTree and it can request stage and focus
     move. It never computes the composited image from all the streams itself.
@@ -611,7 +612,7 @@ class MicroscopeView(View):
           streams in this view is allowed to show.
         """
 
-        super(MicroscopeView, self).__init__(name)
+        super(StreamView, self).__init__(name)
 
         if stream_classes is None:
             self.stream_classes = (Stream,)
@@ -633,12 +634,9 @@ class MicroscopeView(View):
         # it's a direct access from the stage, so looks like a dict of axes
         if stage:
             self.stage_pos = stage.position
-            # stage.position.subscribe(self.onStagePos)
 
             # the current center of the view, which might be different from
             # the stage
-            # TODO: we might need to have it on the MicroscopeModel, if all the
-            # viewports must display the same location
             pos = self.stage_pos.value
             view_pos_init = (pos["x"], pos["y"])
         else:
@@ -722,58 +720,43 @@ class MicroscopeView(View):
         # FIXME: "stop all axes" should also clear the queue
         self._focus_queue.put(shift)
 
-    def moveStageToView(self, relative=True):
+    def moveStageToView(self):
         """ Move the stage to the current view_pos
 
-        :param relative: (bool) If True, make a relative move. Absolute otherwise
         :return (None or Future): a future (that allows to know when the move is finished)
 
         Note: once the move is finished stage_pos will be updated (by the
         back-end)
 
         """
-
         if not self._stage:
             return
 
         view_pos = self.view_pos.value
 
-        if relative:
-            # TODO: Use the max FoV of the streams to determine what's a big
-            # distance (because on the overview cam a  move can be much bigger than
-            # on a SEM image at high mag).
+        # TODO: Use the max FoV of the streams to determine what's a big
+        # distance (because on the overview cam a  move can be much bigger than
+        # on a SEM image at high mag).
 
-            # relative
-            prev_pos = self.stage_pos.value
-            move = {
-                "x": view_pos[0] - prev_pos["x"],
-                "y": view_pos[1] - prev_pos["y"]
-            }
-            if abs(move["x"]) < 1e-12 and abs(move["y"]) < 1e-12:
-                logging.debug("skipping move request of 0")
-                return
+        # relative
+        prev_pos = self.stage_pos.value
+        move = {
+            "x": view_pos[0] - prev_pos["x"],
+            "y": view_pos[1] - prev_pos["y"]
+        }
+        if abs(move["x"]) < 1e-12 and abs(move["y"]) < 1e-12:
+            logging.debug("skipping move request of 0")
+            return
 
-            # Check it makes sense (=> not too big)
-            distance = math.sqrt(sum([v ** 2 for v in move.values()]))
-            if distance > MAX_SAFE_MOVE_DISTANCE:
-                logging.error("Cancelling request to move by %f m (because > %f m)",
-                              distance, MAX_SAFE_MOVE_DISTANCE)
-                return
+        # Check it makes sense (=> not too big)
+        distance = math.sqrt(sum([v ** 2 for v in move.values()]))
+        if distance > MAX_SAFE_MOVE_DISTANCE:
+            logging.error("Cancelling request to move by %f m (because > %f m)",
+                          distance, MAX_SAFE_MOVE_DISTANCE)
+            return
 
-            logging.debug("Sending move request of %s", move)
-            return self._stage.moveRel(move)
-        else:
-            # Absolute move would work too, but by using relative move we can do a
-            # couple more checks, to be sure we will not do crazy things.
-            move = {"x": view_pos[0], "y": view_pos[1]}
-            self._stage.moveAbs(move)
-
-    # def onStagePos(self, pos):
-    #     # we want to recenter the viewports whenever the stage moves
-    #     # Not sure whether that's really the right way to do it though...
-    #     # TODO: avoid it to move the view when the user is dragging the view
-    #     #  => might require cleverness
-    #     # self.view_pos = model.ListVA((pos["x"], pos["y"]), unit="m")
+        logging.debug("Sending move request of %s", move)
+        return self._stage.moveRel(move)
 
     def getStreams(self):
         """
@@ -868,4 +851,39 @@ class MicroscopeView(View):
         """
         return issubclass(stream_cls, self.stream_classes)
 
+class MicroscopeView(StreamView):
+    """
+    Represents a view from a microscope and ways to alter it.
+    """
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
+        if stage:
+            self.stage_pos.subscribe(self._onStagePos)
 
+    def _onStagePos(self, pos):
+        # we want to recenter the viewports whenever the stage moves
+        # TODO: avoid it to move the view when the user is dragging the view
+        #  => might require cleverness in the canvas
+        self.view_pos.value = [pos["x"], pos["y"]]
+
+class OverviewView(StreamView):
+    """
+    A large FoV view which is used to display the previous positions reached
+    (if possible) on top of an overview image of the sample.
+    The main difference with the standard MicroscopeView is that it is not
+    centered on the current stage position.
+    """
+    def __init__(self, name, stage=None, **kwargs):
+        StreamView.__init__(self, name, stage=stage, **kwargs)
+
+        self.show_crosshair.value = False
+
+    def moveStageTo(self, pos):
+        """
+        Request an absolute move of the stage to a given position
+        pos (tuple of 2 float): X, Y absolute coordinates
+        :return (None or Future): a future (that allows to know when the move is finished)
+        """
+        move = {"x": pos[0], "y": pos[1]}
+        # TODO: clip to the range of the axes
+        return self._stage.moveAbs(move)

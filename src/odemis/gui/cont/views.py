@@ -97,7 +97,8 @@ class ViewController(object):
 
         for vp, vkwargs in viewports.items():
             # TODO: automatically set some clever values for missing arguments?
-            view = model.MicroscopeView(**vkwargs)
+            vcls = vkwargs.pop("cls", model.MicroscopeView)
+            view = vcls(**vkwargs)
 
             views.append(view)
             if vp.Shown:
@@ -269,8 +270,6 @@ class ViewController(object):
             logging.debug("Inserting Chamber viewport")
             vpv[self._viewports[2]] = {
                 "name": "Chamber",
-                "stage": None,
-                "focus": None,
                 "stream_classes": (RGBCameraStream, BrightfieldStream),
             }
 
@@ -278,7 +277,9 @@ class ViewController(object):
         if len(self._viewports) == 5:
             logging.debug("Inserting Overview viewport")
             vpv[self._viewports[4]] = {
+                "cls": model.OverviewView,
                 "name": "Overview",
+                "stage": self._main_data_model.stage,
                 "stream_classes": (RGBCameraStream, BrightfieldStream),
             }
 
