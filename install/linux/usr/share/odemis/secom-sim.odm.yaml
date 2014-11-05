@@ -119,17 +119,22 @@ Spectra: {
     }
 }
 
+# Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
+
+# Axes should be synchronized with the camera
+# Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
 "OLStage": {
-    class: simulated.Stage,
+    class: actuator.MultiplexActuator,
     role: stage,
-    init: {axes: [x, y]},
     affects: ["Andor SimCam", "EBeam ExtXY"],
-    properties: {
-        speed: {x: 0.1, y: 0.1} #m/s
-    }
+    children: {"x": PIGCS, "y": PIGCS},
+    init: {
+        axes_map: {"x": "x", "y": "y"},
+        inverted: ["x"],
+    },
 }
 
-# Use 2 MultiplexActuators to separate the axes of the PIGCS over different roles
 "SEM-Optical Alignment": {
     class: actuator.MultiplexActuator,
     role: align,
@@ -137,11 +142,8 @@ Spectra: {
     children: {"a": PIGCS, "b": PIGCS},
     init: {
         axes_map: {"a": "a", "b": "b"},
-#        inverted: ["a"]
+        inverted: ["a", "b"]
     },
-    properties: {
-        speed: {'a': 0.001, 'b': 0.001} #m/s
-    }
 }
 
 # Axis Z: (Physical) bottom->top when looking at the door
@@ -154,9 +156,6 @@ Spectra: {
     init: {
         axes_map: {"z": "z"}
     },
-    properties: {
-        speed: {'z': 0.1} #m/s
-    }
 }
 
 PIGCS: {
@@ -165,7 +164,8 @@ PIGCS: {
     init: {
         port: "/dev/ttyPIGCS",
         # axis -> controller, channel, closed-loop?
-        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False]},
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
+               "x": [4, 1, False], "y": [5, 1, False]},
     },
 }
 
