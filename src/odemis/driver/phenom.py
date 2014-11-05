@@ -521,7 +521,7 @@ class Scanner(model.Emitter):
         pixelSize = self.pixelSize.value
         tran = (value[0] * pixelSize[0], value[1] * pixelSize[1])  # m
         # Calculate shift distance
-        tran_d = norm(numpy.asarray(tran[0]) - numpy.asarray(tran[1]))
+        tran_d = norm(numpy.asarray([0, tran[0]]) - numpy.asarray([tran[1], 0]))
         # Change to the actual maximum beam shift
         limit = (REFERENCE_TENSION / self.accelVoltage.value) * BEAM_SHIFT_AT_REFERENCE
         # The ratio between the shift distance and the limit
