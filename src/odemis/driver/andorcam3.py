@@ -244,8 +244,6 @@ class AndorCam3(model.DigitalCamera):
         resolution = self.getSensorResolution()
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
-        # setup everything best (fixed)
-        self._setupBestQuality()
         self._shape = resolution + (2 ** 16,) # 16-bit is the best the cameras can generate
 
         # cache some info
@@ -360,20 +358,32 @@ class AndorCam3(model.DigitalCamera):
         self._SetStaticSettings()
 
         self.data = AndorCam3DataFlow(self)
-    
+
     def _SetStaticSettings(self):
+        """
+        Select parameters for the camera for the best quality
+        """
+        # We are not in a hurry, so we can set up to the slowest and less noise
+        # parameters:
+        # * Rolling shutter (global avoids tearing, rolling reduces noise)
+        # * SpuriousNoiseFilter On (this is actually a software based method)
+        #
+        # Another advantage of global shutter allows to simplify if we need to
+        # connect exposure to light.
+
+        if self.isImplemented(u"SpuriousNoiseFilter"):
+            self.SetBool(u"SpuriousNoiseFilter", True)
+            self._metadata['Filter'] = "Spurious noise filter" # FIXME tag?
+
         if self.isImplemented(u"Overlap"):
             # No overlap, as it can introduce additional noise, and we don't need
             # the speed.
             self.SetBool(u"Overlap", False)
 
-        # Global shutter allows to simplify if we need to connect exposure to light
-        # and it avoids tearing (though normally, it shouldn't matter for
-        # microscopy)
         try:
-            self.SetEnumString(u"ElectronicShutteringMode", u"Global")
+            self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
         except ATError:
-            logging.info("Failed to set global shutter")
+            logging.info("Failed to set shutter mode to rolling")
 
         if self.isImplemented(u"MetadataEnable"):
             # Ask for timestamp, to track precisely the acquisition time 
@@ -413,7 +423,7 @@ class AndorCam3(model.DigitalCamera):
                     raise
                 # check if bitflow module is loaded
                 fmodules = open("/proc/modules").readlines()
-                if not any(re.match("bitflow ", l) for l in fmodules):
+                if not any(re.match("bitflow", l) for l in fmodules):
                     logging.error("The bitflow module is not loaded. Check "
                                   "that libandor3 is correctly installed and "
                                   "you are using a supported kernel.")
@@ -567,6 +577,7 @@ class AndorCam3(model.DigitalCamera):
         Set a unicode string corresponding for the given property
         """
         assert(isinstance(prop, unicode))
+        assert(isinstance(value, unicode))
         self.atcore.AT_SetEnumString(self.handle, prop, value)
 
     def SetEnumIndex(self, prop, idx):
@@ -1104,27 +1115,6 @@ class AndorCam3(model.DigitalCamera):
             m = re.match("([0-9]+)", bpp_str) # looks like "16 bit"
             self._metadata[model.MD_BPP] = int(m.group(1))
 
-    def _setupBestQuality(self):
-        """
-        Select parameters for the camera for the best quality
-        """
-        # we are not in a hurry, so we can set up to the slowest and less noise
-        # parameters:
-        # rolling shutter (global avoids tearing, rolling reduces noise)
-        # SpuriousNoiseFilter On (this is actually a software based method)
-
-#        print self.GetEnumStringAvailable(self.handle, u"ElectronicShutteringMode")
-        try:
-            self.SetEnumString(u"ElectronicShutteringMode", u"Rolling")
-        except ATError:
-            logging.exception("Failed to set shuttering mode")
-
-        # TODO: readout overlap? Seems to only allow higher frame rate
-        
-        if self.isImplemented(u"SpuriousNoiseFilter"):
-            self.SetBool(u"SpuriousNoiseFilter", True)
-            self._metadata['Filter'] = "Spurious noise filter" # FIXME tag?
-        
     def _need_update_settings(self):
         """
         returns (boolean): True if _update_settings() needs to be called
@@ -1585,7 +1575,7 @@ class AndorCam3(model.DigitalCamera):
         # Stop the acquisition if it's active, as some hardware don't like to
         # be disconnected while acquiring, and stop responding afterwards.
         try:
-            if not self.acquire_must_stop.is_set():
+            if self.acquire_thread and not self.acquire_must_stop.is_set():
                 self.req_stop_flow()
                 self.wait_stopped_flow()
         except Exception:
