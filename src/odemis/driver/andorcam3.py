@@ -35,6 +35,7 @@ import gc
 import logging
 import numpy
 from odemis import model, util
+from odemis.model import HwError
 import os
 import re
 import threading
@@ -56,7 +57,9 @@ import weakref
 class ATError(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
-        
+        self.errno = errno
+        self.strerror = strerror
+
     def __str__(self):
         return self.args[1]
 
@@ -219,11 +222,15 @@ class AndorCam3(model.DigitalCamera):
             os.environ["BITFLOW_INSTALL_DIRS"] = bitflow_install_dirs
         self._bitflow_install_dirs = bitflow_install_dirs
         self.atcore = ATDLL()
-        
+
         try:
             self.Open(device)
-        except Exception:
+        except Exception as exp:
             logging.error("Failed to initialise Andor camera %d", device)
+            if isinstance(exp, ATError) and exp.errno == 6: # OUTOFRANGE
+                raise HwError("Failed to find Andor camera %d, check that it "
+                              "is turned on and connected to the computer." %
+                              device)
             raise
         if device is None:
             # nothing else to initialise
