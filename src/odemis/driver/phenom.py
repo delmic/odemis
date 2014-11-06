@@ -634,7 +634,6 @@ class Detector(model.Detector):
         area = self._acq_device.GetProgressAreaSelection().target
         if area != "LOADING-WORK-AREA-SEM":
             raise IOError("Cannot initiate stream, Phenom is not in SEM mode.")
-
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
             try:
@@ -649,20 +648,21 @@ class Detector(model.Detector):
             self._acquisition_thread.start()
 
     def beam_blank(self, blank):
-        with self.parent._acq_progress_lock:
-            if blank == True:
-                self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
-            else:
-                self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
+        if blank == True:
+            self.parent._device.SetSEMSourceTilt(TILT_BLANK[0], TILT_BLANK[1], False)
+        else:
+            self.parent._device.SetSEMSourceTilt(self._tilt_unblank[0], self._tilt_unblank[1], False)
 
     def stop_acquire(self):
-        try:
-            self._acq_device.SEMAbortImageAcquisition()
-        except suds.WebFault:
-            logging.debug("No acquisition in progress to be aborted.")
-        # "Blank" the beam
-        self.beam_blank(True)
-        self._acquisition_must_stop.set()
+        with self._acquisition_lock:
+            with self.parent._acq_progress_lock:
+                self._acquisition_must_stop.set()
+                try:
+                    self._acq_device.SEMAbortImageAcquisition()
+                except suds.WebFault:
+                    logging.debug("No acquisition in progress to be aborted.")
+                # "Blank" the beam
+                self.beam_blank(True)
 
     def _wait_acquisition_stopped(self):
         """
@@ -685,126 +685,125 @@ class Detector(model.Detector):
         Acquires the SEM image based on the translation, resolution and
         current drift.
         """
-        with self.parent._acq_progress_lock:
-            res = self.parent._scanner.resolution.value
-            # Set dataType based on current bpp value
-            bpp = self.parent._scanner.bpp.value
-            if bpp == 16:
-                dataType = numpy.uint16
-            else:
-                dataType = numpy.uint8
+        res = self.parent._scanner.resolution.value
+        # Set dataType based on current bpp value
+        bpp = self.parent._scanner.bpp.value
+        if bpp == 16:
+            dataType = numpy.uint16
+        else:
+            dataType = numpy.uint8
 
-            self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
-            self._scanParams.HDR = bpp == 16
-            # TODO beam shift/translation
-            self._scanParams.center.x = 0.0355
-            self._scanParams.center.y = 0
+        self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
+        self._scanParams.HDR = bpp == 16
+        # TODO beam shift/translation
+        self._scanParams.center.x = 0.0355
+        self._scanParams.center.y = 0
 
-            # update changed metadata
-            metadata = dict(self.parent._metadata)
-            metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_BPP] = bpp
+        # update changed metadata
+        metadata = dict(self.parent._metadata)
+        metadata[model.MD_ACQ_DATE] = time.time()
+        metadata[model.MD_BPP] = bpp
 
-            self._scan_params_view = self._acq_device.GetSEMViewingMode().parameters
-            self._scan_params_view.resolution.width = 256
-            self._scan_params_view.resolution.height = 256
-            self._scan_params_view.nrOfFrames = 1
-            logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
-                          res, bpp, self._scanParams.nrOfFrames)
-            # Check if spot mode is required
-            if res == (1, 1):
-                # Cancel possible grid scanning
-                if self._scanning_state == True:
-                    self._spot_scanner.cancel()
-                    self._scanning_state = False
-                    # Wait grid scanner to stop
-                    with self._grid_lock:
-                        # Move back to the center
-                        self._scan_params_view.center.x = 0
-                        self._scan_params_view.center.y = 0
-                        try:
-                            self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
-                        except suds.WebFault:
-                            logging.warning("Move to centre failure.")
-
-                # Avoid setting resolution to 1,1
-                # Set scale so the FoV is reduced to something really small
-                # even if the current HFW is the maximum
-                if self._scan_params_view.scale != 0:
-                    self._scan_params_view.scale = 0
-                    self._scan_params_view.center.x = 0  # just to be sure it's at the center
-                    self._scan_params_view.center.y = 0
-                    self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
-                time.sleep(0.1)
-                # MD_POS is hopefully set via updateMetadata
-                return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
-            elif (res[0] <= 128 or res[1] <= 128):
-                # Handle resolution values that may be used for fine alignment
-                # Compute the exact spot coordinates within the current fov
-                # and scan spot by spot
-                # Start scanning
-                if self._scanning_state == False:
-                    fov = (1.0 - (1.0 / res[0]), 1.0 - (1.0 / res[1]))
-                    spot_dist = (fov[0] / (res[0] - 1),
-                                 fov[1] / (res[1] - 1))
-                    self._coordinates = []
-                    bound = (fov[0] / 2.0,
-                             fov[1] / 2.0)
-
-                    pos = self.parent._device.GetStageModeAndPosition()
-                    cur_pos = pos.position.x, pos.position.y
-                    for i in range(res[0]):
-                        for j in range(res[1]):
-                            self._coordinates.append((-bound[0] + i * spot_dist[0],
-                                        - bound[1] + j * spot_dist[1]
-                                        ))
-                    # Straight use of Phenom API. In the future the Stage component
-                    # will only move the physical stage (BACKLASH-ONLY') and not the
-                    # ebeam thus we avoid using it.
-                    self._stagePos = self.parent._objects.create('ns0:position')
-                    self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
-                    self._navAlgorithm = 'NAVIGATION-AUTO'
-                    self._spot_scanner = util.RepeatingTimer(0, self._updater, "Grid scanner")
-                    self._spot_scanner.start()
-                    self._scanning_state = True
-                elif self._last_res != res:
-                    self._spot_scanner.cancel()
-                    self._scanning_state = False
-
-                self._last_res = res
-                return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
-
-            else:
-                # Cancel possible grid scanning
-                if self._scanning_state == True:
-                    self._spot_scanner.cancel()
-                    self._scanning_state = False
-
-                self._scanParams.scale = 1
-                self._scanParams.resolution.width = res[0]
-                self._scanParams.resolution.height = res[1]
-                if self._scan_params_view.scale != 1:
-                    self._scan_params_view.scale = 1
+        self._scan_params_view = self._acq_device.GetSEMViewingMode().parameters
+        self._scan_params_view.resolution.width = 256
+        self._scan_params_view.resolution.height = 256
+        self._scan_params_view.nrOfFrames = 1
+        logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
+                      res, bpp, self._scanParams.nrOfFrames)
+        # Check if spot mode is required
+        if res == (1, 1):
+            # Cancel possible grid scanning
+            if self._scanning_state == True:
+                self._spot_scanner.cancel()
+                self._scanning_state = False
+                # Wait grid scanner to stop
+                with self._grid_lock:
                     # Move back to the center
                     self._scan_params_view.center.x = 0
                     self._scan_params_view.center.y = 0
-                    self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
-                img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
-                # Use the metadata from the string to update some metadata
-                # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
-                metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
-                metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
-                metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
-                metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
-                metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
-                                                 img_str.aAcqState.pixelHeight)
-                metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
+                    try:
+                        self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+                    except suds.WebFault:
+                        logging.warning("Move to centre failure.")
 
-                # image to ndarray
-                sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
-                                           dtype=dataType)
-                sem_img.shape = res[::-1]
-                return model.DataArray(sem_img, metadata)
+            # Avoid setting resolution to 1,1
+            # Set scale so the FoV is reduced to something really small
+            # even if the current HFW is the maximum
+            if self._scan_params_view.scale != 0:
+                self._scan_params_view.scale = 0
+                self._scan_params_view.center.x = 0  # just to be sure it's at the center
+                self._scan_params_view.center.y = 0
+                self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+            time.sleep(0.1)
+            # MD_POS is hopefully set via updateMetadata
+            return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
+        elif (res[0] <= 128 or res[1] <= 128):
+            # Handle resolution values that may be used for fine alignment
+            # Compute the exact spot coordinates within the current fov
+            # and scan spot by spot
+            # Start scanning
+            if self._scanning_state == False:
+                fov = (1.0 - (1.0 / res[0]), 1.0 - (1.0 / res[1]))
+                spot_dist = (fov[0] / (res[0] - 1),
+                             fov[1] / (res[1] - 1))
+                self._coordinates = []
+                bound = (fov[0] / 2.0,
+                         fov[1] / 2.0)
+
+                pos = self.parent._device.GetStageModeAndPosition()
+                cur_pos = pos.position.x, pos.position.y
+                for i in range(res[0]):
+                    for j in range(res[1]):
+                        self._coordinates.append((-bound[0] + i * spot_dist[0],
+                                    - bound[1] + j * spot_dist[1]
+                                    ))
+                # Straight use of Phenom API. In the future the Stage component
+                # will only move the physical stage (BACKLASH-ONLY') and not the
+                # ebeam thus we avoid using it.
+                self._stagePos = self.parent._objects.create('ns0:position')
+                self._navAlgorithm = self.parent._objects.create('ns0:navigationAlgorithm')
+                self._navAlgorithm = 'NAVIGATION-AUTO'
+                self._spot_scanner = util.RepeatingTimer(0, self._updater, "Grid scanner")
+                self._spot_scanner.start()
+                self._scanning_state = True
+            elif self._last_res != res:
+                self._spot_scanner.cancel()
+                self._scanning_state = False
+
+            self._last_res = res
+            return model.DataArray(numpy.array([[0]], dtype=dataType), metadata)
+
+        else:
+            # Cancel possible grid scanning
+            if self._scanning_state == True:
+                self._spot_scanner.cancel()
+                self._scanning_state = False
+
+            self._scanParams.scale = 1
+            self._scanParams.resolution.width = res[0]
+            self._scanParams.resolution.height = res[1]
+            if self._scan_params_view.scale != 1:
+                self._scan_params_view.scale = 1
+                # Move back to the center
+                self._scan_params_view.center.x = 0
+                self._scan_params_view.center.y = 0
+                self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
+            img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
+            # Use the metadata from the string to update some metadata
+            # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+            metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
+            metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
+            metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
+            metadata[model.MD_DWELL_TIME] = img_str.aAcqState.dwellTime * img_str.aAcqState.integrations
+            metadata[model.MD_PIXEL_SIZE] = (img_str.aAcqState.pixelWidth,
+                                             img_str.aAcqState.pixelHeight)
+            metadata[model.MD_HW_NAME] = self._hwVersion + " (s/n %s)" % img_str.aAcqState.instrumentID
+
+            # image to ndarray
+            sem_img = numpy.frombuffer(base64.b64decode(img_str.image.buffer[0]),
+                                       dtype=dataType)
+            sem_img.shape = res[::-1]
+            return model.DataArray(sem_img, metadata)
 
     def _acquire_thread(self, callback):
         """
@@ -814,7 +813,10 @@ class Detector(model.Detector):
         """
         try:
             while not self._acquisition_must_stop.is_set():
-                callback(self._acquire_image())
+                with self.parent._acq_progress_lock:
+                    if self._acquisition_must_stop.is_set():
+                        break
+                    callback(self._acquire_image())
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
