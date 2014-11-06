@@ -227,9 +227,30 @@ class ViewportGrid(wx.Panel):
                 elif br.Size != self.hidden_size:
                     br.SetSize(self.hidden_size)
 
-    def swap_viewports(self, vpa, vpb):
+    def _swap_viewports(self, vpa, vpb):
+        if vpa == vpb:
+            return
         a, b = self.viewports.index(vpa), self.viewports.index(vpb)
         self.viewports[a], self.viewports[b] = self.viewports[b], self.viewports[a]
+
+    def swap_viewports(self, vpa, vpb):
+        self._swap_viewports(vpa, vpb)
+        self._layout_viewports()
+
+    def set_visible_viewports(self, viewports):
+        """ Set the viewports to be shown
+
+        This method will movie the viewports to be shown to the front of the viewport list (in
+        order) and will show them while hiding all others.
+
+        """
+
+        self.hide_all_viewports()
+        for grid_viewport, viewport in zip(viewports, self.viewports):
+            if grid_viewport not in self.viewports:
+                raise ValueError("Unknown Viewport!")
+            self._swap_viewports(grid_viewport, viewport)
+            grid_viewport.Show()
         self._layout_viewports()
 
     def get_win_grid_pos(self, win):

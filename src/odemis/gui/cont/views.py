@@ -28,6 +28,7 @@ import wx
 
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
+from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.gui.util import call_after
@@ -307,102 +308,6 @@ class ViewPortController(object):
                     break
         return viewports
 
-    @staticmethod
-    def _position_viewport_on_grid(viewport, sizer, pos=None):
-        """ Position the given viewport at a position in the sizer
-
-        If a Viewport is already there, their position will be swapped.
-
-        If no position is given, the Viewport will be removed from the sizer and hidden
-
-        """
-
-        if pos:
-
-            viewport_item = sizer.FindItem(viewport)
-
-            # If a viewport is already present at the given position...
-            if sizer.CheckForIntersectionPos(pos, (1, 1)):
-                # ...get the current window and remove it from the sizer
-                current_item = sizer.FindItemAtPosition(pos)
-                current_win = current_item.GetWindow()
-
-                if current_win == viewport:
-                    return
-
-                sizer.Detach(current_win)
-
-                # If the given viewport is already position in the sizer...
-                if viewport_item:
-                    # Swap the viewport and the current one at 'pos'
-                    old_pos = viewport_item.GetPos()
-                    logging.debug("moving %s to %s", viewport.__class__.__name__, pos)
-                    sizer.SetItemPosition(viewport, pos)
-                    new_item = sizer.Add(current_win, old_pos, flag=wx.EXPAND)
-                    # TODO: The following 3 lines were added to try and pinpoint a thumbnail
-                    # rendering bug. When the bug is fixed, check if they are still necessary and if
-                    # so, make the code a bit cleaner
-                    new_item.SetProportion(1)
-                    new_item.SetMinSize((400, 400))
-                    new_item.SetRatio(1)
-                # The viewport is not positioned inside the sizer yet
-                else:
-                    # Insert the viewport into the sizer at the given position
-                    logging.debug("adding %s at %s", viewport.__class__.__name__, pos)
-                    new_item = sizer.Add(viewport, pos, flag=wx.EXPAND)
-                    new_item.SetProportion(1)
-                    new_item.SetMinSize((400, 400))
-                    new_item.SetRatio(1)
-            # If the target position is empty...
-            else:
-                if viewport_item:
-                    # ...move the viewport there
-                    logging.debug("moving %s to %s", viewport.__class__.__name__, pos)
-                    sizer.SetItemPosition(viewport, pos)
-                else:
-                    logging.debug("adding %s at %s", viewport.__class__.__name__, pos)
-                    # ...insert the viewport there
-                    new_item = sizer.Add(viewport, pos, flag=wx.EXPAND)
-                    new_item.SetProportion(1)
-                    new_item.SetMinSize((400, 400))
-                    new_item.SetRatio(1)
-
-            viewport.Show()
-        else:
-            viewport.Hide()
-            sizer.Detach(viewport)
-
-        # Hide empty rows and columns
-
-        # A list of position/span pairs: top and bottom row, left and right column
-        spans = [((0, 0), (1, 2)), ((1, 0), (1, 2)), ((0, 0), (2, 1)), ((0, 1), (2, 1))]
-
-        for pos, span in spans:
-            is_row = span[0] == 1
-            row, col = pos
-
-            if not sizer.CheckForIntersectionPos(pos, span):
-                if is_row:
-                    if sizer.IsRowGrowable(row):
-                        logging.debug("rem grow row %s", row)
-                        sizer.RemoveGrowableRow(row)
-                else:
-
-                    if sizer.IsColGrowable(col):
-                        logging.debug("rem grow col %s", col)
-                        sizer.RemoveGrowableCol(col)
-            else:
-                if is_row:
-                    if not sizer.IsRowGrowable(row):
-                        logging.debug("add grow row %s", row)
-                        sizer.AddGrowableRow(row)
-                else:
-                    if not sizer.IsColGrowable(col):
-                        logging.debug("add grow col %s", col)
-                        sizer.AddGrowableCol(col)
-
-        sizer.Layout()
-
     def _set_visible_views(self, visible_views):
         """ Set the order of the viewports so it will match the list of visible views
 
@@ -416,20 +321,14 @@ class ViewPortController(object):
         logging.debug(msg, msgdata)
 
         parent = self._viewports[0].Parent
-        sizer = parent.GetSizer()
 
         parent.Freeze()
 
         try:
-            # Collect the viewports associated with the visible views
             visible_viewports = self.views_to_viewports(visible_views)
-            invisible_viewports = [vp for vp in self.viewports if vp not in visible_viewports]
 
-            for viewport, pos in zip(visible_viewports, [(0, 0), (0, 1), (1, 0), (1, 1)]):
-                self._position_viewport_on_grid(viewport, sizer, pos)
-
-            for viewport in invisible_viewports:
-                self._position_viewport_on_grid(viewport, sizer)
+            if isinstance(parent, ViewportGrid):
+                parent.set_visible_viewports(visible_viewports)
 
         finally:
             wx.CallAfter(parent.Thaw)
@@ -458,8 +357,8 @@ class ViewPortController(object):
 
         logging.debug("Changing focus to view %s", view.name.value)
 
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
+        grid_panel = self._viewports[0].Parent
+        grid_panel.Freeze()
 
         try:
             try:
@@ -469,7 +368,7 @@ class ViewPortController(object):
                 raise
 
             if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
-                self._show_viewport(containing_window.GetSizer(), viewport)
+                grid_panel.set_shown_viewports(viewport)
                 # Enable/disable ZOOM_FIT tool according to view ability
                 if self._toolbar:
                     can_fit = hasattr(viewport.canvas, "fit_view_to_content")
@@ -480,7 +379,7 @@ class ViewPortController(object):
                 viewport.SetFocus(True)
 
         finally:
-            containing_window.Thaw()
+            grid_panel.Thaw()
 
     @staticmethod
     def _show_viewport_grid(sizer, viewport=None):
@@ -551,45 +450,45 @@ class ViewPortController(object):
 
             sizer.Layout()
 
-    def _show_viewport(self, sizer, visible_viewport=None):
-        """ Show the given viewport or show the first four in the 2x2 grid if none is given
-
-        :param sizer: wx.GridBagSizer
-        :param visible_viewport: ViewPort
-
-
-        ..note:
-            This method still handles sizers different from the GridBagSizer for backward
-            compatibility reasons. That part of the code should be removed at a future point.
-
-        """
-
-        if isinstance(sizer, wx.GridBagSizer):
-
-            self._show_viewport_grid(sizer, visible_viewport)
-
-            if visible_viewport:
-                for viewport in self._viewports:
-                    viewport.SetFocus(visible_viewport == viewport)
-
-        else:
-            # Assume legacy sizer construction
-
-            if visible_viewport in self._viewports:
-                for viewport in self._viewports:
-                    if visible_viewport == viewport:
-                        viewport.Show()
-                        viewport.SetFocus(True)
-                    else:
-                        viewport.Hide()
-                        viewport.SetFocus(False)
-            else:
-                for viewport in self._viewports[:4]:
-                    viewport.Show()
-                for viewport in self._viewports[4:]:
-                    viewport.Hide()
-
-        sizer.Layout()
+    # def _show_viewport(self, sizer, visible_viewport=None):
+    #     """ Show the given viewport or show the first four in the 2x2 grid if none is given
+    #
+    #     :param sizer: wx.GridBagSizer
+    #     :param visible_viewport: ViewPort
+    #
+    #
+    #     ..note:
+    #         This method still handles sizers different from the GridBagSizer for backward
+    #         compatibility reasons. That part of the code should be removed at a future point.
+    #
+    #     """
+    #
+    #     if isinstance(sizer, wx.GridBagSizer):
+    #
+    #         self._show_viewport_grid(sizer, visible_viewport)
+    #
+    #         if visible_viewport:
+    #             for viewport in self._viewports:
+    #                 viewport.SetFocus(visible_viewport == viewport)
+    #
+    #     else:
+    #         # Assume legacy sizer construction
+    #
+    #         if visible_viewport in self._viewports:
+    #             for viewport in self._viewports:
+    #                 if visible_viewport == viewport:
+    #                     viewport.Show()
+    #                     viewport.SetFocus(True)
+    #                 else:
+    #                     viewport.Hide()
+    #                     viewport.SetFocus(False)
+    #         else:
+    #             for viewport in self._viewports[:4]:
+    #                 viewport.Show()
+    #             for viewport in self._viewports[4:]:
+    #                 viewport.Hide()
+    #
+    #     sizer.Layout()
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -599,22 +498,25 @@ class ViewPortController(object):
 
         """
 
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
+        grid_panel = self._viewports[0].Parent
+        grid_panel.Freeze()
 
         try:
             if layout == model.VIEW_LAYOUT_ONE:
                 logging.debug("Displaying single viewport")
                 for viewport in self._viewports:
                     if viewport.microscope_view == self._data_model.focussedView.value:
-                        self._show_viewport(containing_window.GetSizer(), viewport)
+                        grid_panel.set_shown_viewports(viewport)
                         break
                 else:
                     raise ValueError("No foccused view found!")
 
             elif layout == model.VIEW_LAYOUT_22:
                 logging.debug("Displaying 2x2 viewport grid")
-                self._show_viewport(containing_window.GetSizer(), None)
+                if isinstance(grid_panel, ViewportGrid):
+                    grid_panel.show_grid_viewports()
+                # else:
+                #     print grid_panel
 
             elif layout == model.VIEW_LAYOUT_FULLSCREEN:
                 raise NotImplementedError()
@@ -622,7 +524,7 @@ class ViewPortController(object):
                 raise NotImplementedError()
 
         finally:
-            containing_window.Thaw()
+            grid_panel.Thaw()
 
     def fitViewToContent(self, unused=None):
         """

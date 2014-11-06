@@ -1409,7 +1409,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
-        print [self.Shown, self.Size]
+        # print [self.Shown, self.Size]
         context = wx.ClientDC(self)
 
         dc = wx.MemoryDC()
