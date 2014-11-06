@@ -28,6 +28,7 @@ from odemis.util import driver
 import os
 import re
 import shlex
+import signal
 import subprocess
 import sys
 import threading
@@ -61,6 +62,9 @@ class Starter(object):
         self._mic = None
         self._comp_state = {} # str -> state
         self._backend_done = threading.Event()
+
+        # For reacting to SIGNINT (only once)
+        self._main_thread = threading.current_thread()
 
     def _add_var(self, var, content):
         """
@@ -109,7 +113,7 @@ class Starter(object):
         self._notif.show()
 
         # install cgroup, for memory protection
-        if (os.path.isdir("/sys/fs/cgroup/memory/odemisd")
+        if (not os.path.exists("/sys/fs/cgroup/memory/odemisd")
             and os.path.exists("/usr/bin/cgcreate")):
             logging.info("Creating cgroup")
             subprocess.call(["sudo", "/usr/bin/cgcreate", "-a", ":odemis", "-g", "memory:odemisd"])
@@ -131,14 +135,24 @@ class Starter(object):
                                "dialog-warning")
             self._notif.show()
             raise ValueError("Starting back-end failed")
-    
 
+    def _on_sigint(self, signum, frame):
+        # TODO: ensure this is only processed by the main thread
+        if threading.current_thread() == self._main_thread:
+            logging.warning("Received signal %d: stopping", signum)
+            raise KeyboardInterrupt("Received signal %d" % signum)
+        else:
+            logging.info("Skipping signal %d in sub-thread", signum)
+
+
+    # TODO: catch SIGINT and stop backend
     def wait_backend_is_ready(self):
         """
         Blocks until the back-end is fully ready (all the components are ready)
         raise:
             IOError: if the back-end eventually fails to start
         """
+
         # Get a connection to the back-end
         end_time = time.time() + 5 # 5s max to start the backend
         while self._mic is None:
@@ -151,6 +165,11 @@ class Starter(object):
                 else:
                     logging.debug("Waiting a bit more for the backend to appear")
                     time.sleep(1)
+
+        # In theory Python raise KeyboardInterrupt on SIGINT, which is what we
+        # need. But that doesn't happen if in a wait(), and in addition, when
+        # there are several threads, only one of them receives the exception.
+        signal.signal(signal.SIGINT, self._on_sigint)
 
         # TODO: create a window with the list of the components
         self._mic.ghosts.subscribe(self._on_ghosts, init=True)
@@ -171,6 +190,10 @@ class Starter(object):
                                        "dialog-info")
                     self._notif.show()
                     return
+        except KeyboardInterrupt:
+            logging.info("Stopping the backend")
+            backend.terminate()
+            raise
         finally:
             # TODO: close the window
             pass
