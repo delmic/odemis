@@ -238,7 +238,6 @@ class SecomStreamsTab(Tab):
                                                         self.tab_data_model,
                                                         self.main_frame.vp_overview_sem.canvas)
         ovv = self.main_frame.vp_overview_sem.microscope_view
-        ovv.show_crosshair.value = False # make it pretty
         if main_data.overview_ccd:
             # Overview camera can be RGB => in that case len(shape) == 4
             if len(main_data.overview_ccd.shape) == 4:

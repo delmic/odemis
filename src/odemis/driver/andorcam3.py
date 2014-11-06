@@ -686,7 +686,7 @@ class AndorCam3(model.DigitalCamera):
         # it's read-only, so we change it only via special _value)
         self.temperature._value = temp
         self.temperature.notify(self.temperature.value)
-        logging.debug("temp is %d", temp)
+        logging.debug(u"Temp is %f°C", temp)
 
     def setFanSpeed(self, speed):
         """
