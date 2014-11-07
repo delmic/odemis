@@ -23,7 +23,7 @@ import glob
 import logging
 from odemis import model
 import odemis
-from odemis.model import CancellableThreadPoolExecutor
+from odemis.model import CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import re
@@ -187,7 +187,9 @@ class FW102c(model.Actuator):
             except Exception:
                 logging.debug("Port %s doesn't seem to have a FW102C device connected", n)
         else:
-            raise IOError("No device seems to be an FW102C for ports '%s'" % (ports,))
+            raise HwError("Failed to find a filter wheel FW102C on ports '%s'. "
+                          "Check that the device is turned on and connected to "
+                          "the computer." % (ports,))
 
     @staticmethod
     def _openSerialPort(port):
