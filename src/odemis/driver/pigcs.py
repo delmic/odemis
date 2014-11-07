@@ -473,6 +473,8 @@ class Controller(object):
         """
         self.busacc.flushInput()
 
+        # TODO: update the .state of the component to HwError
+
         # It makes the controller more comfortable...
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
