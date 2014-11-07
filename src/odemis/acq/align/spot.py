@@ -251,17 +251,18 @@ def estimateAlignmentTime(et, dist=None, n_autofocus=2):
     return estimateCenterTime(et, dist) + n_autofocus * autofocus.estimateAutoFocusTime(et)  # s
 
 
-def FindSpot(image):
+def FindSpot(image, sensitivity_limit=100):
     """
     This function detects the spot and calculates and returns the coordinates of
     its center. The algorithms for spot detection and center calculation are 
     similar to the ones that are used in Fine alignment.
     image (model.DataArray): Optical image
+    sensitivity_limit (int): Limit of sensitivity in spot detection
     returns (tuple of floats):    The spot center coordinates
     raises: 
             ValueError() if spot was not found
     """
-    subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20)
+    subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20, sensitivity_limit)
     if subimages == []:
         raise ValueError()
 

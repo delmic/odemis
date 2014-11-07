@@ -80,7 +80,7 @@ def FindEbeamCenter(ccd, detector, escan):
                 img += prev_img  # accumulate, to increase the signal
 
             try:
-                coord = FindSpot(img)
+                coord = FindSpot(img, sensitivity_limit=10)
             except ValueError:
                 # no spot (or too many), just try again
                 pass

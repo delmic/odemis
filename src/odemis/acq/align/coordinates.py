@@ -130,7 +130,7 @@ def FindCenterCoordinates(subimages):
 
     return spot_coordinates
 
-def DivideInNeighborhoods(data, number_of_spots, scale):
+def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
     """
     Given an image that includes N spots, divides it in N subimages with each of them 
     to include one spot. Briefly, it filters the image, finds the N “brightest” spots 
@@ -139,6 +139,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale):
     data (model.DataArray): 2D array containing the intensity of each pixel
     number_of_spots (int,int): The number of CL spots
     scale (float): Distance between spots in optical grid (in pixels)
+    sensitivity_limit (int): Limit of sensitivity
     returns subimages (List of DataArrays): One subimage per spot
             subimage_coordinates (List of tuples): The coordinates of the center of each 
                                                 subimage with respect to the overall image
@@ -163,7 +164,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale):
     filter_window_size = 8
 
     # Increase sensitivity until expected number of spots is detected
-    while sensitivity <= 100:
+    while sensitivity <= sensitivity_limit:
         subimage_coordinates = []
         subimages = []
     
