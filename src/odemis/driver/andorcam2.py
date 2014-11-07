@@ -579,8 +579,8 @@ class AndorCam2(model.DigitalCamera):
             for m in [3, 2, 0]:
                 try:
                     self.atcore.SetEMGainMode(m)
-                except AndorV2Error as (errno, strerr):
-                    if errno == 20991: # DRV_NOT_SUPPORTED
+                except AndorV2Error as exp:
+                    if exp.errno == 20991: # DRV_NOT_SUPPORTED
                         logging.info("Failed to set EMCCD gain mode to %d", m)
                     else:
                         raise
@@ -593,7 +593,7 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (1, 221), in mode 0
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
-            # mode 3 not supported (but reported and should be fixed in SDK 2.97?)
+            # mode 3 is supported for iXon Ultra only since SDK 2.97
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
