@@ -91,7 +91,7 @@ class AnchoredEstimator(object):
         mns, mxs = scanner.scale.range
         scale = tuple(numpy.clip((ratio, ratio), mns, mxs))
         self._scale = scale
-        logging.warning("Anchor region scale set to %s", self._scale)
+        logging.info("Anchor region scale set to %s", self._scale)
 
         self._safety_bounds = (-0.99 * (shape[0] / 2), 0.99 * (shape[1] / 2))
         self._min_bound = self._safety_bounds[0] + (max(self._res[0],
