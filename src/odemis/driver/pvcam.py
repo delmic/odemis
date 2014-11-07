@@ -27,26 +27,28 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Note that libpvcam is only provided for x86 32-bits
 
 from __future__ import division
-from . import pvcam_h as pv
+
 from Pyro4.core import oneway
-from ctypes import *
-from odemis import model, util
 import collections
+from ctypes import *
 import gc
 import logging
 import math
 import numpy
+from odemis import model, util
 import odemis
+from odemis.model._components import HwError
 import os
 import threading
 import time
 import weakref
 
+from . import pvcam_h as pv
+
+
 # This python file is automatically generated from the pvcam.h include file by:
 # h2xml pvcam.h -c -I . -o pvcam_h.xml
 # xml2py pvcam_h.xml -o pvcam_h.py
-
-
 class PVCamError(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
@@ -213,11 +215,19 @@ class PVCam(model.DigitalCamera):
             try:
                 self._devname = self.cam_get_name(device) # for reinit
             except PVCamError:
-                raise IOError("Failed to find PI PVCam camera %d" % device)
+                raise HwError("Failed to find PI PVCam camera %s (%d)"
+                              "Check the device is turned on and connected to "
+                              "the computer. "
+                              "You might need to turn it off and on again."
+                              % (name, device))
         elif isinstance(device, str):
             # check the file exists
             if not os.path.exists("/dev/" + device):
-                raise IOError("Failed to find PI PVCam camera %s" % device)
+                raise HwError("Failed to find PI PVCam camera %s (at %s). "
+                              "Check the device is turned on and connected to "
+                              "the computer. "
+                              "You might need to turn it off and on again."
+                              % (name, device))
             self._devname = device
         else:
             raise ValueError("Unexpected type for device: %s" % device)
