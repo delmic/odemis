@@ -200,17 +200,17 @@ class ViewPortController(object):
         ):
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
-                (self._viewports[0],  # focused view
-                 {"name": "SEM",
-                  "stage": self._main_data_model.stage,
-                  "focus":  self._main_data_model.ebeam_focus,
-                  "stream_classes": EMStream,
-                  }),
-                (self._viewports[1],
+                (self._viewports[0],
                  {"name": "Optical",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
                   "stream_classes": OpticalStream,
+                  }),
+                (self._viewports[1],  # focused view
+                 {"name": "SEM",
+                  "stage": self._main_data_model.stage,
+                  "focus":  self._main_data_model.ebeam_focus,
+                  "stream_classes": EMStream,
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",
