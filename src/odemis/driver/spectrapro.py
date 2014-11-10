@@ -26,7 +26,7 @@ import logging
 import math
 from odemis import model
 import odemis
-from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import re
@@ -108,7 +108,13 @@ class SpectraPro(model.Actuator):
             raise ValueError("Axis of spectrograph cannot be inverted")
 
         # start with this opening the port: if it fails, we are done
-        self._serial = self.openSerialPort(port)
+        try:
+            self._serial = self.openSerialPort(port)
+        except serial.SerialException:
+            raise HwError("Failed to find spectrograph %s (on port '%s'). "
+                          "Check the device is turned on and connected to the "
+                          "computer. You might need to turn it off and on again."
+                          % (name, port))
         self._port = port
 
         # to acquire before sending anything on the serial port

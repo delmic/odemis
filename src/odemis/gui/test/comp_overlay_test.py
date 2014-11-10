@@ -532,6 +532,8 @@ class OverlayTestCase(test.GuiTestCase):
         lsol.activate()
         lsol.enabled = True
 
+        lsol.set_world_start((1e-4, 1e-4))
+        lsol.set_world_end((-1e-4, -1e-4))
         cnvs.add_world_overlay(lsol)
 
         # Tool toggle for debugging

@@ -20,15 +20,18 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from __future__ import division
-from odemis import model, util
-from odemis.util import driver
+
 import glob
 import logging
+from odemis import model, util
 import odemis
+from odemis.model import HwError
+from odemis.util import driver
 import os
 import serial
 import threading
 import time
+
 
 # Colour name (lower case) to source ID (as used in the device)
 COLOUR_TO_SOURCE = {"red": 0,
@@ -89,7 +92,8 @@ class LLE(model.Emitter):
          no have to be extremely precise. The most important is the centre, and
          that they are all increasing values. If the device doesn't have the 
          source it can be skipped.
-        _serial (serial): for internal use only, directly use a 
+        _serial (serial): for internal use only, directly use a opened serial 
+         connection
         """
         # start with this opening the port: if it fails, we are done
         if _serial is not None:
@@ -543,7 +547,9 @@ class LLE(model.Emitter):
                 continue
             return ser, n # found it!
         else:
-            raise IOError("No device seems to be an LLE for ports '%s'" % (ports,))
+            raise HwError("Failed to find a Lumencor Light Engine on ports '%s'. "
+                          "Check that the device is turned on and connected to "
+                          "the computer." % (ports,))
 
     @classmethod
     def scan(cls, port=None):

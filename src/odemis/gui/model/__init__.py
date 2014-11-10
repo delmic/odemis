@@ -23,6 +23,7 @@ This file is part of Odemis.
 
 import Queue
 from abc import ABCMeta
+import collections
 import logging
 import math
 from odemis import model
@@ -30,10 +31,10 @@ from odemis.acq.stream import Stream, StreamTree
 from odemis.gui.conf import get_general_conf
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated,
                           NotSettableError, StringVA, getVAs)
+from odemis.model._vattributes import BooleanVA
 import os
 import threading
 import time
-from odemis.model._vattributes import BooleanVA
 
 
 # The different states of a microscope
@@ -138,39 +139,49 @@ class MainGUIData(object):
         if microscope:
             self.role = microscope.role
 
-            for d in microscope.detectors:
-                if d.role == "ccd":
-                    self.ccd = d
-                elif d.role == "se-detector":
-                    self.sed = d
-                elif d.role == "bs-detector":
-                    self.bsd = d
-                elif d.role == "spectrometer":
-                    self.spectrometer = d
-                elif d.role == "chamber-ccd":
-                    self.chamber_ccd = d
-                elif d.role == "overview-ccd":
-                    self.overview_ccd = d
-
-            for a in microscope.actuators:
-                if a.role == "stage":
-                    self.stage = a # most views move this actuator when moving
-                elif a.role == "focus":
-                    self.focus = a
-                elif a.role == "ebeam-focus":
-                    self.ebeam_focus = a
-                elif a.role == "overview-focus":
-                    self.overview_focus = a
-                elif a.role == "mirror":
-                    self.mirror = a
-                elif a.role == "align":
-                    self.aligner = a
-                elif a.role == "lens-switch":
-                    self.lens_switch = a
-                elif a.role == "ar-spec-selector":
-                    self.ar_spec_sel = a
-                elif a.role == "chamber":
-                    self.chamber = a
+            for c in microscope.children.value:
+                if c.role == "ccd":
+                    self.ccd = c
+                elif c.role == "se-detector":
+                    self.sed = c
+                elif c.role == "bs-detector":
+                    self.bsd = c
+                elif c.role == "spectrometer":
+                    self.spectrometer = c
+                elif c.role == "chamber-ccd":
+                    self.chamber_ccd = c
+                elif c.role == "overview-ccd":
+                    self.overview_ccd = c
+                elif c.role == "stage":
+                    self.stage = c # most views move this actuator when moving
+                elif c.role == "focus":
+                    self.focus = c
+                elif c.role == "ebeam-focus":
+                    self.ebeam_focus = c
+                elif c.role == "overview-focus":
+                    self.overview_focus = c
+                elif c.role == "mirror":
+                    self.mirror = c
+                elif c.role == "align":
+                    self.aligner = c
+                elif c.role == "lens-switch":
+                    self.lens_switch = c
+                elif c.role == "ar-spec-selector":
+                    self.ar_spec_sel = c
+                elif c.role == "chamber":
+                    self.chamber = c
+                elif c.role == "light":
+                    self.light = c
+                elif c.role == "filter":
+                    self.light_filter = c
+                elif c.role == "lens":
+                    self.lens = c
+                elif c.role == "e-beam":
+                    self.ebeam = c
+                elif c.role == "chamber-light":
+                    self.chamber_light = c
+                elif c.role == "overview-light":
+                    self.overview_light = c
 
             # Spectrograph is not directly an actuator, but a sub-comp of spectrometer
             if self.spectrometer:
@@ -178,19 +189,6 @@ class MainGUIData(object):
                     if child.role == "spectrograph":
                         self.spectrograph = child
 
-            for e in microscope.emitters:
-                if e.role == "light":
-                    self.light = e
-                elif e.role == "filter":
-                    self.light_filter = e
-                elif e.role == "lens":
-                    self.lens = e
-                elif e.role == "e-beam":
-                    self.ebeam = e
-                elif e.role == "chamber-light":
-                    self.chamber_light = e
-                elif e.role == "overview-light":
-                    self.overview_light = e
 
             # Check that the components that can be expected to be present on an actual microscope
             # have been correctly detected.
@@ -233,13 +231,16 @@ class MainGUIData(object):
         if self.microscope is None:
             return
 
-        for act in self.microscope.actuators:
+        for c in self.microscope.children.value:
+            # Actuators have an .axes roattribute
+            if not isinstance(c.axes, collections.Mapping):
+                continue
             try:
                 # TODO: run each of them in a separate thread, to call the stop
                 # ASAP? (or all but the last one?)
-                act.stop()
+                c.stop()
             except Exception:
-                logging.exception("Failed to stop %s actuator", act.name)
+                logging.exception("Failed to stop %s actuator", c.name)
 
         logging.info("Stopped motion on every axes")
 
@@ -439,10 +440,6 @@ class ActuatorGUIData(MicroscopyGUIData):
     def __init__(self, main):
         assert main.microscope is not None
         MicroscopyGUIData.__init__(self, main)
-
-        # check there is something to move
-        if not main.microscope.actuators:
-            raise KeyError("No actuators found in the microscope")
 
         # Step size name -> val, range, actuator, axes (None if all)
         # str -> float, [float, float], str, (str, ...)

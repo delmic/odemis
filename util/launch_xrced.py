@@ -17,10 +17,13 @@ import os
 import sys
 
 #pylint: disable=W0105
+from wx.tools.XRCed.globals import set_debug
+
 
 if __name__ == '__main__':
     try:
         from wx.tools.XRCed.xrced import main
+        set_debug(True)
     except ImportError:
         try:
             from XRCed.xrced import main

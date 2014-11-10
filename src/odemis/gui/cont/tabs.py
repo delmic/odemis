@@ -222,7 +222,7 @@ class SecomStreamsTab(Tab):
 
         # Order matters!
         # First we create the views, then the streams
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             [
@@ -302,7 +302,7 @@ class SecomStreamsTab(Tab):
             ),
         ])
 
-        self._view_selector = viewcont.ViewSelector(
+        self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,
             buttons
@@ -631,7 +631,7 @@ class SparcAcquisitionTab(Tab):
         main_data.ebeam.dwellTime.subscribe(self._copyDwellTimeToAnchor, init=True)
 
         # create a view on the tab model
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             [self.main_frame.vp_sparc_acq_view]
@@ -1034,7 +1034,7 @@ class AnalysisTab(Tab):
 
         # The view controller also has special code for the sparc to create the
         # right type of view.
-        self.view_controller = viewcont.ViewController(
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
             viewports
@@ -1079,24 +1079,31 @@ class AnalysisTab(Tab):
         self._settings_controller.setter_spec_bck_file = self.set_spec_background
         self._settings_controller.setter_spec_file = self.set_spec_comp
 
+        # TODO: rename buttons
         buttons = collections.OrderedDict([
-            (self.main_frame.btn_sparc_view_all,
-             (None, self.main_frame.lbl_sparc_view_all)),
-            (self.main_frame.btn_sparc_view_tl,
-             (self.main_frame.vp_inspection_tl,
-              self.main_frame.lbl_sparc_view_tl)),
-            (self.main_frame.btn_sparc_view_tr,
-             (self.main_frame.vp_inspection_tr,
-              self.main_frame.lbl_sparc_view_tr)),
-            (self.main_frame.btn_sparc_view_bl,
-             (vp_bottom_left,
-              self.main_frame.lbl_sparc_view_bl)),
-            (self.main_frame.btn_sparc_view_br,
-             (self.main_frame.vp_inspection_br,
-              self.main_frame.lbl_sparc_view_br))
+            (
+                self.main_frame.btn_sparc_view_all,
+                (None, self.main_frame.lbl_sparc_view_all)
+            ),
+            (
+                self.main_frame.btn_sparc_view_tl,
+                (self.main_frame.vp_inspection_tl, self.main_frame.lbl_sparc_view_tl)
+            ),
+            (
+                self.main_frame.btn_sparc_view_tr,
+                (self.main_frame.vp_inspection_tr, self.main_frame.lbl_sparc_view_tr)
+            ),
+            (
+                self.main_frame.btn_sparc_view_bl,
+                (vp_bottom_left, self.main_frame.lbl_sparc_view_bl)
+            ),
+            (
+                self.main_frame.btn_sparc_view_br,
+                (self.main_frame.vp_inspection_br, self.main_frame.lbl_sparc_view_br)
+            )
         ])
 
-        self._view_selector = viewcont.ViewSelector(
+        self._view_selector = viewcont.ViewButtonController(
             self.tab_data_model,
             self.main_frame,
             buttons,
@@ -1505,6 +1512,28 @@ class AnalysisTab(Tab):
             if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
                 self.tab_data_model.focussedView.value = plot_view
 
+    def _on_line_select(self, start_end):
+        """ Event handler for when a line is selected """
+        # If the right tool is active...
+        if self.tab_data_model.tool.value == guimod.TOOL_LINE:
+            pass
+            # plot_view = self.main_frame.vp_inspection_plot.microscope_view
+            #
+            # # ...and the plot view is not visible yet
+            # if not plot_view in self.tab_data_model.visible_views.value:
+            #     # Try and display the plot in the 2nd (= top right) spot...
+            #     pos = 1
+            #     # .., but go for the bottom right one when the spec pixel was
+            #     # selected in the top right viewport
+            #     if (self.tab_data_model.focussedView.value ==
+            #             self.main_frame.vp_inspection_tr.microscope_view):
+            #         pos = 3
+            #
+            #     self.tab_data_model.visible_views.value[pos] = plot_view
+            #
+            # # If we're in 1x1 view, we're bringing the plot to the front
+            # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
+            #     self.tab_data_model.focussedView.value = plot_view
 
     def _split_channels(self, data):
         """
@@ -1558,23 +1587,30 @@ class LensAlignTab(Tab):
                                       rotation=math.radians(-135))
         # vp_align_sem is connected to the stage
         vpv = collections.OrderedDict([
-            (main_frame.vp_align_ccd,  # focused view
-             {"name": "Optical CL",
-              "stage": self._stage_ab,
-              "focus": main_data.focus,
-              "stream_classes": (streammod.CameraNoLightStream,),
-             }),
-            (main_frame.vp_align_sem,
-             {"name": "SEM",
-              "stage": main_data.stage,
-              "stream_classes": streammod.EMStream,
-             },
+            (
+                main_frame.vp_align_ccd,  # focused view
+                {
+                    "name": "Optical CL",
+                    "stage": self._stage_ab,
+                    "focus": main_data.focus,
+                    "stream_classes": (streammod.CameraNoLightStream,),
+                }
+            ),
+            (
+                main_frame.vp_align_sem,
+                {
+                    "name": "SEM",
+                    "stage": main_data.stage,
+                    "stream_classes": streammod.EMStream,
+                },
             )
         ])
-        self.view_controller = viewcont.ViewController(
+
+        self.view_controller = viewcont.ViewPortController(
             self.tab_data_model,
             self.main_frame,
-            vpv)
+            vpv
+        )
 
         # No stream controller, because it does far too much (including hiding
         # the only stream entry when SEM view is focused)
@@ -1926,7 +1962,7 @@ class MirrorAlignTab(Tab):
                   # no focus, or could control yaw/pitch?
                  }),
             ])
-            self.view_controller = viewcont.ViewController(
+            self.view_controller = viewcont.ViewPortController(
                 self.tab_data_model,
                 self.main_frame,
                 vpv

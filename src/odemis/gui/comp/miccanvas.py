@@ -1271,7 +1271,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
 
-    @wxlimit_invocation(2) # max 1/2 Hz
+    @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _updateThumbnail(self):
         csize = self.ClientSize
@@ -1304,8 +1304,8 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
-    """ Angle-resolved canvas
-    """
+    """ Angle-resolved canvas """
+
     # TODO: it actually could be just a BitmapCanvas, but it needs
     # a (simple) fit_to_content()
 
@@ -1313,11 +1313,14 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         super(AngularResolvedCanvas, self).__init__(*args, **kwargs)
 
+        self.default_margin = 0
+        self.margins = (self.default_margin, self.default_margin)
+
         self.microscope_view = None
         self._tab_data_model = None
         self.abilities -= set([CAN_DRAG, CAN_FOCUS])
 
-        self.background_brush = wx.SOLID # background is always black
+        self.background_brush = wx.SOLID  # background is always black
 
         ## Overlays
 
@@ -1384,10 +1387,11 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
     def _updateThumbnail(self):
         csize = self.ClientSize
         if (csize[0] * csize[1]) <= 0:
-            return # nothing to update
+            return  # nothing to update
 
         # new bitmap to copy the DC
         bitmap = wx.EmptyBitmap(*self.ClientSize)
+        # print [self.Shown, self.Size]
         context = wx.ClientDC(self)
 
         dc = wx.MemoryDC()
@@ -1399,3 +1403,14 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         del dc
 
         self.microscope_view.thumbnail.value = wx.ImageFromBitmap(bitmap)
+
+        # import os
+        #
+        # i = 1
+        # path = '/home/rinze/imgdump/saved%03d.png' % i
+        #
+        # while os.path.exists(path):
+        #     i += 1
+        #     path = '/home/rinze/imgdump/saved%03d.png' % i
+        #
+        # self.microscope_view.thumbnail.value.SaveFile(path, wx.BITMAP_TYPE_PNG)

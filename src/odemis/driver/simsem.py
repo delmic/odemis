@@ -46,8 +46,8 @@ class SimSEM(model.HwComponent):
                  daemon=None, **kwargs):
         '''
         children (dict string->kwargs): parameters setting for the children.
-            Known children are "scanner" and "detector"
-            They will be provided back in the .children roattribute
+            Known children are "scanner", "detector0", and the optional "focus"
+            They will be provided back in the .children VA
         image (str or None): path to a file to use as fake image (relative to
          the directory of this class)
         drift_period (None or 0<float): time period for drift updating in seconds
@@ -74,17 +74,16 @@ class SimSEM(model.HwComponent):
             kwargs = children["scanner"]
         except (KeyError, TypeError):
             raise KeyError("SimSEM was not given a 'scanner' child")
-
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._scanner)
+        self.children.value.add(self._scanner)
 
         # create the scanner child
         try:
             kwargs = children["detector0"]
         except (KeyError, TypeError):
-            raise KeyError("SimSEM was not given a 'detector' child")
+            raise KeyError("SimSEM was not given a 'detector0' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._detector)
+        self.children.value.add(self._detector)
 
         try:
             kwargs = children["focus"]
@@ -93,7 +92,7 @@ class SimSEM(model.HwComponent):
             self._focus = None
         else:
             self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
-            self.children.add(self._focus)
+            self.children.value.add(self._focus)
 
     def terminate(self):
         """

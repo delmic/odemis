@@ -210,7 +210,7 @@ class SEMComedi(model.HwComponent):
         # init detector with the right length for find_closest_dwell_time
         self._detectors = dict([(n, None) for n in children if n.startswith("detector")])
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._scanner)
+        self.children.value.add(self._scanner)
         # for scanner.newPosition
         self._new_position_thread = None
         self._new_position_thread_pipe = [] # list to communicate with the current thread
@@ -220,7 +220,7 @@ class SEMComedi(model.HwComponent):
         for name, kwargs in children.items():
             if name.startswith("detector"):
                 self._detectors[name] = Detector(parent=self, daemon=daemon, **kwargs)
-                self.children.add(self._detectors[name])
+                self.children.value.add(self._detectors[name])
 
         if not self._detectors:
             raise KeyError("SEMComedi device '%s' was not given any 'detectorN' child" % device)

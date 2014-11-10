@@ -102,27 +102,22 @@ def getComponent(name=None, role=None):
 
 def getComponents():
     """
-    return all the HwComponents managed by the backend
+    return (set of Component): all the HwComponents (alive) managed by the backend
     """
     microscope = getMicroscope()
-    return _getChildren(microscope)
+    return microscope.alive.value | {microscope}
+    # return _getChildren(microscope)
 
 def _getChildren(root):
     """
     Return the set of components which are referenced from the given component
-     (children, emitters, detectors, actuators...)
+     (via children)
     root (HwComponent): the component to start from
     returns (set of HwComponents)
     """
     ret = set([root])
-    for child in getattr(root, "children", set()):
+    for child in root.children.value:
         ret |= _getChildren(child)
-
-    # cannot check for Microscope because it's a proxy
-    # isinstance(root, Microscope):
-    if isinstance(root.detectors, collections.Set):
-        for child in (root.detectors | root.emitters | root.actuators):
-            ret |= _getChildren(child)
 
     return ret
 
@@ -220,6 +215,7 @@ class Container(Pyro4.core.Daemon):
         name: name of the container (must be unique)
         """
         assert not "/" in name
+        self._name = name
         # all the sockets are in the same directory so it's independent from the PWD
         self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
 
@@ -282,6 +278,14 @@ class Container(Pyro4.core.Daemon):
         comp = klass(**kwargs)
         return comp
 
+    def setRoot(self, component):
+        """
+        sets the root object. It has to be one of the component handled by the
+         container.
+        component (Component)
+        """
+        self.rootId = component._pyroId
+
 # helper functions
 def getContainer(name, validate=True):
     """
@@ -329,7 +333,7 @@ def createNewContainer(name, validate=True, in_own_process=True):
         p = threading.Thread(name="Container " + name, target=_manageContainer,
                              args=(name, isready))
     p.start()
-    if not isready.wait(3): # wait maximum 3s
+    if not isready.wait(5): # wait maximum 5s
         logging.error("Container %s is taking too long to get ready", name)
         raise IOError("Container creation timeout")
 
@@ -342,10 +346,21 @@ def createInNewContainer(container_name, klass, kwargs):
     container_name (string)
     klass (class): component class
     kwargs (dict (str -> value)): arguments for the __init__() of the component
-    returns the (proxy to the) new component
+    returns:
+        (Container) the new container
+        (Component) the (proxy to the) new component
     """
     container = createNewContainer(container_name, validate=False)
-    return container.instantiate(klass, kwargs)
+    try:
+        comp = container.instantiate(klass, kwargs)
+    except Exception as exp:
+        try:
+            container.terminate()
+        except Exception:
+            logging.exception("Failed to stop the container %s after component failure",
+                              container_name)
+        raise exp
+    return container, comp
 
 def _manageContainer(name, isready=None):
     """

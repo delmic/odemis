@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<resource class="wxPanel" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -526,78 +526,41 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxGridBagSizer">
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_tl">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>0,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_tr">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>0,1</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_bl">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>1,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_br">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>1,1</cellpos>
-                  </object>
-                  <growablecols>0,1</growablecols>
-                  <growablerows>0,1</growablerows>
-                  <object class="sizeritem">
-                    <object class="OverviewViewport" name="vp_overview_sem">
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <cellpos>2,2</cellpos>
-                  </object>
+              <object class="ViewportGrid" name="">
+                <object class="SecomViewport" name="vp_secom_tl">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <bg>#000000</bg>
+                <object class="SecomViewport" name="vp_secom_tr">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="SecomViewport" name="vp_secom_bl">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="SecomViewport" name="vp_secom_br">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="OverviewViewport" name="vp_overview_sem">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -638,31 +601,6 @@
                           <option>1</option>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextToggleButton" name="live_btn_sem">
-                            <size>92,48</size>
-                            <label>SEM      </label>
-                            <delta>1</delta>
-                            <bitmap>img/button/btn_sem.png</bitmap>
-                            <hover>img/button/btn_sem_h.png</hover>
-                            <selected>img/button/btn_sem_green_a.png</selected>
-                            <fg>#1A1A1A</fg>
-                            <font>
-                              <size>11</size>
-                              <style>normal</style>
-                              <weight>normal</weight>
-                              <underlined>0</underlined>
-                              <face>Ubuntu</face>
-                              <encoding>UTF-8</encoding>
-                            </font>
-                            <style>wxALIGN_RIGHT</style>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
                           <object class="ImageTextToggleButton" name="live_btn_opt">
                             <size>92,48</size>
                             <label>OPTICAL</label>
@@ -684,9 +622,35 @@
                               <assign_var>1</assign_var>
                             </XRCED>
                           </object>
+                          <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="ImageTextToggleButton" name="live_btn_sem">
+                            <size>92,48</size>
+                            <label>SEM      </label>
+                            <delta>1</delta>
+                            <bitmap>img/button/btn_sem.png</bitmap>
+                            <hover>img/button/btn_sem_h.png</hover>
+                            <selected>img/button/btn_sem_green_a.png</selected>
+                            <fg>#1A1A1A</fg>
+                            <font>
+                              <size>11</size>
+                              <style>normal</style>
+                              <weight>normal</weight>
+                              <underlined>0</underlined>
+                              <face>Ubuntu</face>
+                              <encoding>UTF-8</encoding>
+                            </font>
+                            <style>wxALIGN_RIGHT</style>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
                           <flag>wxALL</flag>
                           <border>10</border>
                         </object>
+                      
                       </object>
                       <size>400,-1</size>
                       <bg>#333333</bg>
@@ -2366,7 +2330,6 @@
                     <flag>wxALL|wxEXPAND</flag>
                     <border>10</border>
                   </object>
-                  
                   <object class="spacer">
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -2549,91 +2512,46 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_tl">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
-                    </object>
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_tr">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
-                    </object>
-                    <orient>wxHORIZONTAL</orient>
-                  </object>
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                  <ratio>1</ratio>
+              <object class="ViewportGrid" name="">
+                <object class="MicroscopeViewport" name="vp_inspection_tl">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_bl">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
-                    </object>
-                    <object class="sizeritem">
-                      <object class="MicroscopeViewport" name="vp_inspection_br">
-                        <size>400,-1</size>
-                        <fg>#BFBFBF</fg>
-                        <bg>#000000</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <option>1</option>
-                      <flag>wxEXPAND</flag>
-                      <ratio>1</ratio>
-                    </object>
-                    <orient>wxHORIZONTAL</orient>
-                  </object>
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                  <ratio>1</ratio>
+                <object class="MicroscopeViewport" name="vp_inspection_tr">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <orient>wxVERTICAL</orient>
-                <object class="sizeritem">
-                  <object class="PlotViewport" name="vp_inspection_plot">
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
+                <object class="MicroscopeViewport" name="vp_inspection_bl">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <object class="sizeritem">
-                  <object class="AngularResolvedViewport" name="vp_angular">
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
+                <object class="MicroscopeViewport" name="vp_inspection_br">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="AngularResolvedViewport" name="vp_angular">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="PlotViewport" name="vp_inspection_plot">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
               </object>
               <option>1</option>

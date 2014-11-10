@@ -354,7 +354,7 @@ class CoupledStage(model.Actuator):
 
         self.referenced = model.VigilantAttribute({}, readonly=True)
         # listen to changes from children
-        for c in self.children:
+        for c in self.children.value:
             if (hasattr(c, "referenced") and
                 isinstance(c.referenced, model.VigilantAttributeBase)):
                 c.referenced.subscribe(self._onChildReferenced)
@@ -405,7 +405,7 @@ class CoupledStage(model.Actuator):
         """
         ref = {} # str (axes name) -> boolean (is referenced)
         # consider an axis referenced iff it's referenced in every children
-        for c in self.children:
+        for c in self.children.value:
             if not (hasattr(c, "referenced") and
                     isinstance(c.referenced, model.VigilantAttributeBase)):
                 continue
@@ -476,7 +476,7 @@ class CoupledStage(model.Actuator):
 
     def _doReference(self, axes):
         fs = []
-        for c in self.children:
+        for c in self.children.value:
             # only do the referencing for the stages that support it
             if not (hasattr(c, "referenced") and
                     isinstance(c.referenced, model.VigilantAttributeBase)):

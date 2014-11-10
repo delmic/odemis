@@ -24,20 +24,19 @@ from __future__ import division
 
 import collections
 import logging
-
 import wx
 
 from odemis.acq.stream import RGBCameraStream, BrightfieldStream
 from odemis.gui import model
+from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.cont import tools
 from odemis.acq.stream import OpticalStream, EMStream, SpectrumStream, ARStream
 from odemis.gui.util import call_after
-import odemis.gui.util.widgets as util
 from odemis.model import VigilantAttributeBase
 from odemis.model import MD_PIXEL_SIZE
 
 
-class ViewController(object):
+class ViewPortController(object):
     """ Manage the display of various viewports in a tab """
 
     def __init__(self, tab_data, main_frame, viewports, toolbar=None):
@@ -88,9 +87,9 @@ class ViewController(object):
 
         To be executed only once, at initialisation.
         """
-#         FIXME: Since we have 2 different Views at the moments and probably more
-#         on the way, it's probably going to be beneficial to explicitly define
-#         them in the viewport data
+        # FIXME: Since we have 2 different Views at the moments and probably more
+        # on the way, it's probably going to be beneficial to explicitly define
+        # them in the viewport data
 
         views = []
         visible_views = []
@@ -141,24 +140,23 @@ class ViewController(object):
                       "stream_classes": (OpticalStream, SpectrumStream),
                       }),
                     (self._viewports[2],
-                     {"name": "Dummy", # will be immediately swapped for AR
-                      "stream_classes": (), # Nothing
-                     }),
+                     {"name": "Dummy",  # will be immediately swapped for AR
+                      "stream_classes": (),  # Nothing
+                      }),
                     (self._viewports[3],
                      {"name": "SEM CL",
-                      "stream_classes":
-                            (EMStream, OpticalStream, SpectrumStream),
+                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                       }),
                     # Spectrum viewport is *also* needed for Analysis tab in the
                     # Sparc configuration
                     (self._viewports[4],
                      {"name": "Spectrum plot",
                       "stream_classes": SpectrumStream,
-                     }),
+                      }),
                     (self._viewports[5],
                      {"name": "Angle resolved",
                       "stream_classes": ARStream,
-                     }),
+                      }),
                 ])
             else:
                 logging.info("Creating generic static viewport layout")
@@ -166,30 +164,28 @@ class ViewController(object):
                     (self._viewports[0],  # focused view
                      {"name": "SEM",
                       "stream_classes": EMStream,
-                     }),
+                      }),
                     (self._viewports[1],
                      {"name": "Optical",
                       "stream_classes": (OpticalStream, SpectrumStream),
-                     }),
+                      }),
                     (self._viewports[2],
                      {"name": "Combined 1",
-                      "stream_classes":
-                          (EMStream, OpticalStream, SpectrumStream),
-                     }),
+                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                      }),
                     (self._viewports[3],
                      {"name": "Combined 2",
-                      "stream_classes":
-                          (EMStream, OpticalStream, SpectrumStream),
-                     }),
+                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                      }),
                     (self._viewports[4],
                      {"name": "Spectrum plot",
                       "stream_classes": SpectrumStream
-                     }),
+                      }),
                     # TODO: this one doesn't make sense
-#                     (self._viewports[5],
-#                      {"name": "Overview",
-#                       "stream_classes": SpectrumStream
-#                      }),
+                    # (self._viewports[5],
+                    #  {"name": "Overview",
+                    #   "stream_classes": SpectrumStream
+                    #  }),
                 ])
             self._create_views_fixed(vpv)
             return
@@ -204,17 +200,17 @@ class ViewController(object):
         ):
             logging.info("Creating combined SEM/Optical viewport layout")
             vpv = collections.OrderedDict([
-                (self._viewports[0],  # focused view
-                 {"name": "SEM",
-                  "stage": self._main_data_model.stage,
-                  "focus":  self._main_data_model.ebeam_focus,
-                  "stream_classes": EMStream,
-                  }),
-                (self._viewports[1],
+                (self._viewports[0],
                  {"name": "Optical",
                   "stage": self._main_data_model.stage,
                   "focus": self._main_data_model.focus,
                   "stream_classes": OpticalStream,
+                  }),
+                (self._viewports[1],  # focused view
+                 {"name": "SEM",
+                  "stage": self._main_data_model.stage,
+                  "focus":  self._main_data_model.ebeam_focus,
+                  "stream_classes": EMStream,
                   }),
                 (self._viewports[2],
                  {"name": "Combined 1",
@@ -260,9 +256,9 @@ class ViewController(object):
             for i, viewport in enumerate(self._viewports):
                 vpv[viewport] = {
                     "name": "View %d" % (i + 1),
-                     "stage": self._main_data_model.stage,
-                     "focus": self._main_data_model.focus,
-                     "stream_classes": None, # everything
+                    "stage": self._main_data_model.stage,
+                    "focus": self._main_data_model.focus,
+                    "stream_classes": None,  # everything
                 }
 
         # Insert a Chamber viewport into the lower left position if a chamber camera is present
@@ -287,8 +283,8 @@ class ViewController(object):
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
         # Track the mpp of the SEM view in order to set the magnification
-        if (self._main_data_model.ebeam and
-            isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
+        if (self._main_data_model.ebeam and isinstance(self._main_data_model.ebeam.horizontalFoV,
+                                                       VigilantAttributeBase)):
             # => Link the SEM FoV with the mpp of the live SEM viewport
             self._viewports[0].track_view_hfw(self._main_data_model.ebeam.horizontalFoV)
 
@@ -300,101 +296,40 @@ class ViewController(object):
                 return vp
         raise IndexError("No ViewPort found for view %s" % view)
 
-    def _viewport_index_by_view(self, view):
-        """ Return the index number of the ViewPort associated with the given view """
-        return self._viewports.index(self._viewport_by_view(view))
+    def views_to_viewports(self, views):
+        """ Return a list of viewports corresponding to the given views, in the same order """
+        viewports = []
+        for view in views:
+            for viewport in self._viewports:
+                if viewport.microscope_view == view:
+                    viewports.append(viewport)
+                    break
+        return viewports
 
-    def _set_visible_views(self, views):
-        """ Set the view order to the one provided in the parameter views (list of View) """
-        msg = "Resetting views to %s"
-        msgdata = [str(v) for v in views] if not views is None else "default"
-        logging.debug(msg, msgdata)
+    def _set_visible_views(self, visible_views):
+        """ Set the order of the viewports so it will match the list of visible views
 
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
-        try:
-            # TODO: don't use swap_viewports (which depends on the previous
-            # viewport properties), and only use the sizer and the *view info.
-            # Reset the order of the viewports
-            for i, v in enumerate(views):
-                # If a viewport has moved compared to the original order...
-                if self._viewports[i].microscope_view != v:
-                    # ...put it back in its original place
-                    j = self._viewport_index_by_view(v)
-                    self.swap_viewports(i, j)
-        finally:
-            containing_window.Thaw()
+        This method should normally ben called when the visible_views VA in the MicroscopeGUIData
+        object gets changed.
 
-    def swap_viewports(self, visible_idx, hidden_idx):
-        """ Swap the positions of viewports denoted by indices visible_idx and
-        hidden_idx.
-
-        It is assumed that visible_idx points to one of the viewports visible in
-        a 2x2 display, and that hidden_idx is outside this 2x2 layout and
-        invisible.
         """
 
-        # Small shorthand local variable
-        vp = self._viewports
+        msg = "Resetting views to %s"
+        msgdata = [str(v) for v in visible_views] if not visible_views is None else "default"
+        logging.debug(msg, msgdata)
 
-        visible_vp = vp[visible_idx]
-        hidden_vp = vp[hidden_idx]
+        parent = self._viewports[0].Parent
 
-        logging.debug("swapping visible %s and hidden %s",
-                      visible_vp,
-                      hidden_vp)
+        parent.Freeze()
 
-        # Get the sizer of the visible viewport
-        visible_sizer = visible_vp.GetContainingSizer()
-        # And the one of the invisible one, which should be the containing sizer
-        # of visible_sizer
-        hidden_sizer = parent_sizer = hidden_vp.GetContainingSizer()
+        try:
+            visible_viewports = self.views_to_viewports(visible_views)
 
-        # Get the sizer position of the visible viewport, so we can use that
-        # to insert the other viewport
-        visible_pos = util.get_sizer_position(visible_vp)
-        hidden_pos = util.get_sizer_position(hidden_vp)
+            if isinstance(parent, ViewportGrid):
+                parent.set_visible_viewports(visible_viewports)
 
-        # Get the sizer item for the visible viewport, so we can access its
-        # sizer properties like proportion and flags
-        visible_item = parent_sizer.GetItem(visible_vp, recursive=True)
-        hidden_item = parent_sizer.GetItem(hidden_vp, recursive=True)
-
-        # Move hidden viewport to visible sizer
-        hidden_sizer.Detach(hidden_vp)
-        visible_sizer.Insert(
-            visible_pos,
-            hidden_vp,
-            proportion=visible_item.GetProportion(),
-            flag=visible_item.GetFlag(),
-            border=visible_item.GetBorder())
-
-        # Move viewport 1 to the end of the containing sizer
-        visible_sizer.Detach(visible_vp)
-        hidden_sizer.Insert(
-            hidden_pos,
-            visible_vp,
-            proportion=hidden_item.GetProportion(),
-            flag=hidden_item.GetFlag(),
-            border=hidden_item.GetBorder())
-
-        # Only make the 'hidden_vp' visible when we're in 2x2 view or if it's
-        # the focussed view in a 1x1 view.
-        if (
-            self._data_model.viewLayout.value == model.VIEW_LAYOUT_22 or
-            self._data_model.focussedView.value == visible_vp.microscope_view
-        ):
-            # Flip the visibility
-            visible_vp.Hide()
-            logging.debug("Hiding %s", visible_vp)
-            hidden_vp.Show()
-            logging.debug("Showing %s", hidden_vp)
-
-        # Swap the viewports in the viewport list
-        vp[visible_idx], vp[hidden_idx] = vp[hidden_idx], vp[visible_idx]
-
-        # vp[visible_idx].Parent.Layout()
-        parent_sizer.Layout()
+        finally:
+            wx.CallAfter(parent.Thaw)
 
     def _on_visible_views(self, visible_views):
         """ This method is called when the visible views in the data model change """
@@ -420,8 +355,8 @@ class ViewController(object):
 
         logging.debug("Changing focus to view %s", view.name.value)
 
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
+        grid_panel = self._viewports[0].Parent
+        grid_panel.Freeze()
 
         try:
             try:
@@ -431,7 +366,7 @@ class ViewController(object):
                 raise
 
             if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
-                self._show_viewport(containing_window.GetSizer(), viewport)
+                grid_panel.set_shown_viewports(viewport)
                 # Enable/disable ZOOM_FIT tool according to view ability
                 if self._toolbar:
                     can_fit = hasattr(viewport.canvas, "fit_view_to_content")
@@ -442,77 +377,7 @@ class ViewController(object):
                 viewport.SetFocus(True)
 
         finally:
-            containing_window.Thaw()
-
-    def _show_viewport(self, gb, visible_viewport=None):
-        """ Show the given viewport or show the first four in the 2x2 grid if none is given
-
-        :param sizer: wx.GridBagSizer
-        :param viewport: ViewPort
-
-
-        ..note:
-            This method still handles sizers different from the GridBagSizer for backward
-            compatibility reasons. That part of the code should be removed at a future point.
-
-        """
-
-        if isinstance(gb, wx.GridBagSizer):
-
-            # Detach and hide all viewports
-
-            for viewport_sizer_item in gb.GetChildren():
-                viewport = viewport_sizer_item.GetWindow()
-                if viewport:
-                    # If the initial position has not been cached yet...
-                    if not viewport.sizer_pos:
-                        gb.SetEmptyCellSize((0, 0))
-                        viewport.sizer_pos = viewport_sizer_item.GetPos()
-                    viewport.Hide()
-                    # Only clear the focus on the other viewports if a visible one is given
-                    if visible_viewport:
-                        viewport.SetFocus(False)
-                    gb.Detach(viewport)
-
-            # If a visible viewport is given...
-            if visible_viewport in self._viewports:
-                gb.Add(visible_viewport, (0, 0), flag=wx.EXPAND)
-                visible_viewport.Show()
-                visible_viewport.SetFocus(True)
-            else:  # If the 2x2 grid is to be shown...
-
-                # Assign all viewports their initial position
-                for viewport in self._viewports:
-                    gb.Add(viewport, viewport.sizer_pos, flag=wx.EXPAND)
-
-                # Show the first 4 (2x2) viewports
-                for viewport in self._viewports[:4]:
-                    viewport.Show()
-
-                # If the viewport that currently has the focus is not one in the 2x2 grid, we
-                # move the focus to the top left viewport by default
-                focussed_view = self._data_model.focussedView.value
-                if not focussed_view in [v.microscope_view for v in self._viewports[:4]]:
-                    self._viewports[0].SetFocus(True)
-
-        else:
-            # Assume legacy sizer construction
-
-            if visible_viewport in self._viewports:
-                for viewport in self._viewports:
-                    if visible_viewport == viewport:
-                        viewport.Show()
-                        viewport.SetFocus(True)
-                    else:
-                        viewport.Hide()
-                        viewport.SetFocus(False)
-            else:
-                for viewport in self._viewports[:4]:
-                    viewport.Show()
-                for viewport in self._viewports[4:]:
-                    viewport.Hide()
-
-        gb.Layout()
+            grid_panel.Thaw()
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -522,22 +387,23 @@ class ViewController(object):
 
         """
 
-        containing_window = self._viewports[0].Parent
-        containing_window.Freeze()
+        grid_panel = self._viewports[0].Parent
+        grid_panel.Freeze()
 
         try:
             if layout == model.VIEW_LAYOUT_ONE:
                 logging.debug("Displaying single viewport")
                 for viewport in self._viewports:
                     if viewport.microscope_view == self._data_model.focussedView.value:
-                        self._show_viewport(containing_window.GetSizer(), viewport)
+                        grid_panel.set_shown_viewports(viewport)
                         break
                 else:
                     raise ValueError("No foccused view found!")
 
             elif layout == model.VIEW_LAYOUT_22:
                 logging.debug("Displaying 2x2 viewport grid")
-                self._show_viewport(containing_window.GetSizer(), None)
+                if isinstance(grid_panel, ViewportGrid):
+                    grid_panel.show_grid_viewports()
 
             elif layout == model.VIEW_LAYOUT_FULLSCREEN:
                 raise NotImplementedError()
@@ -545,7 +411,7 @@ class ViewController(object):
                 raise NotImplementedError()
 
         finally:
-            containing_window.Thaw()
+            grid_panel.Thaw()
 
     def fitViewToContent(self, unused=None):
         """
@@ -588,7 +454,7 @@ class ViewController(object):
                 pviews.append(v)
 
         if fv in pviews:
-            return # nothing to do
+            return  # nothing to do
         if pviews:
             self._data_model.focussedView.value = pviews[0]
 
@@ -596,8 +462,7 @@ class ViewController(object):
 
 
 class OverviewController(object):
-    """ Small class to connect stage history and overview canvas together
-    """
+    """ Small class to connect stage history and overview canvas together """
 
     def __init__(self, tab_data, overview_canvas):
 
@@ -655,9 +520,8 @@ class OverviewController(object):
         return p_size
 
 
-class ViewSelector(object):
-    """ This class controls the view selector buttons and labels associated with them.
-    """
+class ViewButtonController(object):
+    """ This class controls the view selector buttons and labels associated with them. """
 
     def __init__(self, tab_data, main_frame, buttons, viewports=None):
         """
@@ -670,12 +534,13 @@ class ViewSelector(object):
             The first button has no viewport, for the 2x2 view.
         """
         self._data_model = tab_data
+        self.main_frame = main_frame
 
         self.buttons = buttons
         self.viewports = viewports
 
         for btn in self.buttons:
-            btn.Bind(wx.EVT_BUTTON, self.OnClick)
+            btn.Bind(wx.EVT_BUTTON, self.on_btn_click)
 
         self._subscriptions = {}
         self._subscribe()
@@ -702,10 +567,10 @@ class ViewSelector(object):
                 continue
 
             @call_after
-            def on_thumbnail(im, btn=btn):  # save btn in scope
+            def on_thumbnail(im, b=btn):  # save btn in scope
                 # import traceback
                 # traceback.print_stack()
-                btn.set_overlay_image(im)
+                b.set_overlay_image(im)
 
             vp.microscope_view.thumbnail.subscribe(on_thumbnail, init=True)
             # keep ref of the functions so that they are not dropped
@@ -714,8 +579,8 @@ class ViewSelector(object):
             # also subscribe for updating the 2x2 button
             vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
-            def on_name(name, lbl=lbl):  # save lbl in scope
-                lbl.SetLabel(name)
+            def on_name(name, label=lbl):  # save lbl in scope
+                label.SetLabel(name)
 
             btn.Freeze()
             vp.microscope_view.name.subscribe(on_name, init=True)
@@ -733,8 +598,10 @@ class ViewSelector(object):
         """
         for b, (vp, _) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if ((vp is None and microscope_view is None) or
-                (vp and vp.microscope_view == microscope_view)):
+            if (
+                    (vp is None and microscope_view is None) or
+                    (vp and vp.microscope_view == microscope_view)
+            ):
                 b.SetToggle(True)
             else:
                 if vp:
@@ -796,7 +663,7 @@ class ViewSelector(object):
             else:
                 # black image
                 # Should never happen
-                pass  #sim = wx.EmptyImage(*size_sub)
+                pass
 
             i += 1
 
@@ -826,9 +693,9 @@ class ViewSelector(object):
                     if vp == old_viewport:
                         # Remove the subscription of the old viewport
                         old_viewport.microscope_view.thumbnail.unsubscribe(
-                                                self._subscriptions[b]["thumb"])
+                            self._subscriptions[b]["thumb"])
                         old_viewport.microscope_view.name.unsubscribe(
-                                                self._subscriptions[b]["label"])
+                            self._subscriptions[b]["label"])
                         self.buttons[b] = (new_viewport, lbl)
                         self._subscribe()
                         break
@@ -837,10 +704,8 @@ class ViewSelector(object):
         else:
             logging.warn("Could not handle view change, viewports unknown!")
 
-    def _on_layout_change(self, unused):
-        """
-        Called when another view is focused, or viewlayout is changed
-        """
+    def _on_layout_change(self, _):
+        """ Called when another view is focused, or viewlayout is changed """
         logging.debug("Updating view selector")
 
         # TODO when changing from 2x2 to a view non focused, it will be called
@@ -855,7 +720,7 @@ class ViewSelector(object):
 
     _on_focus_change = _on_layout_change
 
-    def OnClick(self, evt):
+    def on_btn_click(self, evt):
         """
         Navigation button click event handler
 
@@ -871,7 +736,7 @@ class ViewSelector(object):
 
         if viewport is None:
             # 2x2 button
-            # When selecting the overview, the focussed viewport should not
+            # When selecting the overview, the focused viewport should not
             # change
             self._data_model.viewLayout.value = model.VIEW_LAYOUT_22
         else:

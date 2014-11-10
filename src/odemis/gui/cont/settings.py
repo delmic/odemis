@@ -322,11 +322,13 @@ class SettingsController(object):
                 choices = choices(comp, va, conf)
             elif choices is None:
                 choices = va.choices
-            else:
+            elif hasattr(va, "choices") and isinstance(va.choices, collections.Mapping):
                 # Intersect the two choice sets
-                # TODO: if va.range but no va.choices, ensure that
-                # choices is within va.range
                 choices &= va.choices
+            elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
+                # Ensure that each choice is within the range
+                rng = va.range
+                choices = set(c for c in choices if rng[0] <= c <= rng[1])
         except (AttributeError, NotApplicableError):
             pass
 
@@ -920,6 +922,8 @@ class SettingsBarController(object):
         for panel in self.settings_panels:
             panel.enable(enabled)
 
+    # VAs which should never be displayed
+    HIDDEN_VAS = {"children", "affects", "state"}
     def add_component(self, label, comp, panel):
 
         self.settings_panels.append(panel)
@@ -930,6 +934,8 @@ class SettingsBarController(object):
             # panel.add_label(label, comp.name, selectable=False)
             vigil_attrs = getVAs(comp)
             for name, value in vigil_attrs.items():
+                if name in self.HIDDEN_VAS:
+                    continue
                 if comp.role in self._va_config and name in self._va_config[comp.role]:
                     conf = self._va_config[comp.role][name]
                 else:
