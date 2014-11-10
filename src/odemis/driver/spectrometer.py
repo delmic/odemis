@@ -76,7 +76,7 @@ class CompositedSpectrometer(model.Detector):
         if not hasattr(dt, "data") or not isinstance(dt.data, DataFlowBase):
             raise ValueError("Child detector is not a Detector component.")
         self._detector = dt
-        self.children.add(dt)
+        self.children.value.add(dt)
         
         sp = children["spectrograph"]
         if not isinstance(sp, ComponentBase):
@@ -87,7 +87,7 @@ class CompositedSpectrometer(model.Detector):
         except Exception:
             raise ValueError("Child spectrograph is not an Actuator.")
         self._spectrograph = sp
-        self.children.add(sp)
+        self.children.value.add(sp)
 
         # set up the detector part
         # check that the shape is "horizontal"

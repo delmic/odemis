@@ -36,7 +36,7 @@ import logging
 import math
 from odemis import model
 import odemis
-from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import serial
@@ -174,7 +174,16 @@ class MFF(model.Actuator):
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "%s (serial driver: %s)" % (odemis.__version__, driver_name)
-        snd, modl, typ, fmv, notes, hwv, state, nc = self.GetInfo()
+        try:
+            snd, modl, typ, fmv, notes, hwv, state, nc = self.GetInfo()
+        except IOError:
+            # This is the first communication with the hardware, if it fails
+            # it can be a sign the device is in a bad state. (it is known to
+            # fail when turned on and plugged in before the host computer is
+            # turned on)
+            raise HwError("No USB device with S/N %s. "
+                              "Check that the Thorlabs filter flipper was "
+                              "turned on *after* the host computer." % sn)
         self._hwVersion = "%s v%d (firmware %s)" % (modl, hwv, fmv)
 
         self.position = model.VigilantAttribute({}, readonly=True)
@@ -293,7 +302,7 @@ class MFF(model.Actuator):
             for i in range(6):
                 char = self._serial.read() # empty if timeout
                 if not char:
-                    raise IOError("Controller timeout, after receiving %s" % msg)
+                    raise IOError("Controller timed out, after receiving '%s'" % msg)
 
                 msg += char
         finally:
@@ -309,7 +318,7 @@ class MFF(model.Actuator):
         for i in range(length):
             char = self._serial.read() # empty if timeout
             if not char:
-                raise IOError("Controller timeout, after receiving %s" % msg)
+                raise IOError("Controller timed out, after receiving '%s'" % msg)
 
             msg += char
 
@@ -365,7 +374,6 @@ class MFF(model.Actuator):
         c, pos, enccount, status = struct.unpack('<HiiI', res)
 
         return pos, status
-    
 
     # high-level methods (interface)
     def _updatePosition(self):
@@ -381,6 +389,7 @@ class MFF(model.Actuator):
                     pos[axis] = p
                     break
             else:
+                # This can happen if the mount is half-way
                 logging.warning("Status %X doesn't contain position information", status)
                 return # don't change position
 
@@ -484,9 +493,9 @@ class MFF(model.Actuator):
                 # There is a known problem with the APT devices that prevent
                 # them from connecting to USB if they are connected via a hub
                 # and powered on before the host PC.
-                raise ValueError("No USB device with S/N %s.\n"
-                                 "Check that the Thorlabs filter flipper was "
-                                 "turned on *after* the host computer." % sn)
+                raise HwError("No USB device with S/N %s. "
+                              "Check that the Thorlabs filter flipper was "
+                              "turned on *after* the host computer." % sn)
 
             # Deduce the tty:
             # .../3-1.2/serial => .../3-1.2/3-1.2:1.0/ttyUSB1

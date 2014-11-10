@@ -50,6 +50,7 @@ class MockComponent(model.HwComponent):
         if not children:
             children = {}
 
+        cc = set()
         for child_name, child_args in children.items():
             # we don't care of child_name as it's only for internal use in the real component
 
@@ -60,5 +61,8 @@ class MockComponent(model.HwComponent):
             else: # explicit creation (already done)
                 child = child_args
 
-            self._children.add(child)
+            cc.add(child)
             child.parent = self
+
+        # use explicit setter to be sure the changes are notified
+        self.children.value = self.children.value | cc

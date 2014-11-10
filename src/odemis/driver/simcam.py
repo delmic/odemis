@@ -107,7 +107,7 @@ class Camera(model.DigitalCamera):
             self._focus = None
         else:
             self._focus = CamFocus(parent=self, daemon=daemon, **kwargs)
-            self.children.add(self._focus)
+            self.children.value = self.children.value | {self._focus}
 
         # Simple implementation of the flow: we keep generating images and if
         # there are subscribers, they'll receive it.
