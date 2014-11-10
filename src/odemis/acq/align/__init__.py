@@ -81,9 +81,13 @@ def FindEbeamCenter(ccd, detector, escan):
 
             try:
                 coord = FindSpot(img, sensitivity_limit=10)
-            except ValueError:
-                # no spot (or too many), just try again
-                pass
+            except ValueError as e:
+                # if no spot just try again
+                if e.args[0] == "No spot detected":
+                    pass
+                # if too many, stop trying, we probably need to focus
+                else:
+                    break
             else:
                 # found a spot! => convert position to meters from center
                 pxs = img.metadata[MD_PIXEL_SIZE]
