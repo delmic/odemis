@@ -37,6 +37,7 @@ from odemis.model import ST_RUNNING
 
 import gobject
 import gtk
+from wx import LC_SINGLE_SEL
 gobject.threads_init()
 gtk.gdk.threads_init()
 import wx
@@ -61,6 +62,7 @@ class BackendStarter(object):
         # For listening to component states
         self._mic = None
         self._comp_state = {} # str -> state
+        self._known_comps = [] # str (name of component)
         self._backend_done = threading.Event()
 
         # For reacting to SIGNINT (only once)
@@ -71,14 +73,19 @@ class BackendStarter(object):
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
         # TODO: use ListCtrl
-        self._text = wx.TextCtrl(frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
+        # self._text = wx.TextCtrl(frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
+        self._list = wx.ListCtrl(frame, style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_NO_SORT_HEADER)
+        self._list.InsertColumn(0, "Component")
+        self._list.InsertColumn(1, "Status")
+        self._list.SetColumnWidth(0, 200)
+        self._list.SetColumnWidth(1, 590)
 
         windowSizer = wx.BoxSizer()
-        windowSizer.Add(self._text, 1, flag=wx.ALL | wx.EXPAND, border=5)
+        windowSizer.Add(self._list, 1, flag=wx.ALL | wx.EXPAND, border=5)
         frame.SetSizer(windowSizer)
 
         textsizer = wx.BoxSizer()
-        textsizer.Add(self._text, 1, flag=wx.ALL | wx.EXPAND)
+        textsizer.Add(self._list, 1, flag=wx.ALL | wx.EXPAND)
 
         btnsizer = frame.CreateButtonSizer(wx.CANCEL)
 
@@ -257,7 +264,7 @@ class BackendStarter(object):
                 ret = wx.ID_EXIT
                 break
             if self._backend_done.is_set():
-                logging.debug("Back-end appears ready")
+                logging.debug("Back-end observation over")
                 ret = wx.ID_OK
                 break
 
@@ -266,15 +273,28 @@ class BackendStarter(object):
     def _show_component(self, name, state):
         print "Component %s: %s" % (name, state)
 
+        # It needs to run in the GUI thread
+        wx.CallAfter(self._show_component_in_gui, name, state)
+
+    def _show_component_in_gui(self, name, state):
+        try:
+            index = self._known_comps.index(name)
+        except ValueError:
+            index = len(self._known_comps)
+            self._known_comps.append(name)
+            self._list.InsertStringItem(index, name)
+
         if isinstance(state, Exception):
             colour = "#DD3939"  # Red
         elif state == ST_RUNNING:
-            colour = "#39FF39" # Green
+            colour = "#39DD39" # Green
         else:
             colour = "#000000" # Black
+        item = self._list.GetItem(index)
+        item.SetTextColour(colour)
+        self._list.SetItem(item)
 
-        wx.CallAfter(self._text.SetDefaultStyle, wx.TextAttr(colour, None))
-        wx.CallAfter(self._text.AppendText, "Component %s: %s\n" % (name, state))
+        self._list.SetStringItem(index, 1, u"%s" % state)
 
     def _on_ghosts(self, ghosts):
         """
