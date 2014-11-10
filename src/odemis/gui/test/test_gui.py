@@ -154,7 +154,7 @@ class xrcmenu_bar(wx.MenuBar):
     def __init__(self):
         pre = get_resources().LoadMenuBar("menu_bar")
         self.PostCreate(pre)
-
+        
         # Define variables for the menu items
 
 
