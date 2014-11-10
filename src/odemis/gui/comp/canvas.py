@@ -511,7 +511,7 @@ class BufferedCanvas(wx.Panel):
         :param size: (2-tuple int) The new size
 
         """
-        logging.debug("Resizing buffer size to %s", size)
+        logging.debug("Resizing buffer for %s to %s", id(self), size)
         # Make new off-screen bitmap
         self._bmp_buffer = wx.EmptyBitmap(*size)
         self._bmp_buffer_size = size

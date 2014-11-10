@@ -16,32 +16,6 @@ def get_resources():
 
 
 
-class xrcstream_frame(wx.Frame):
-#!XRCED:begin-block:xrcstream_frame.PreCreate
-    def PreCreate(self, pre):
-        """ This function is called during the class's initialization.
-        
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-        
-#!XRCED:end-block:xrcstream_frame.PreCreate
-
-    def __init__(self, parent):
-        # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-        pre = wx.PreFrame()
-        self.PreCreate(pre)
-        get_resources().LoadOnFrame(pre, parent, "stream_frame")
-        self.PostCreate(pre)
-
-        # Define variables for the controls, bind event handlers
-        self.scrwin = xrc.XRCCTRL(self, "scrwin")
-        self.fpb = xrc.XRCCTRL(self, "fpb")
-        self.stream_bar = xrc.XRCCTRL(self, "stream_bar")
-
-
-
 class xrctext_frame(wx.Frame):
 #!XRCED:begin-block:xrctext_frame.PreCreate
     def PreCreate(self, pre):
@@ -150,12 +124,12 @@ class xrcgrid_frame(wx.Frame):
 #!XRCED:begin-block:xrcgrid_frame.PreCreate
     def PreCreate(self, pre):
         """ This function is called during the class's initialization.
-        
+
         Override it for custom setup before the window is created usually to
         set additional window styles using SetWindowStyle() and SetExtraStyle().
         """
         pass
-        
+
 #!XRCED:end-block:xrcgrid_frame.PreCreate
 
     def __init__(self, parent):
@@ -171,6 +145,8 @@ class xrcgrid_frame(wx.Frame):
         self.blue = xrc.XRCCTRL(self, "blue")
         self.purple = xrc.XRCCTRL(self, "purple")
         self.brown = xrc.XRCCTRL(self, "brown")
+        self.yellow = xrc.XRCCTRL(self, "yellow")
+        self.green = xrc.XRCCTRL(self, "green")
 
 
 
@@ -178,7 +154,7 @@ class xrcmenu_bar(wx.MenuBar):
     def __init__(self):
         pre = get_resources().LoadMenuBar("menu_bar")
         self.PostCreate(pre)
-        
+
         # Define variables for the menu items
 
 
@@ -194,53 +170,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     test_gui_xrc = '''\
-<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
-  <object class="wxFrame" name="stream_frame">
-    <object_ref ref="menu_bar"/>
-    <object class="wxBoxSizer">
-      <orient>wxVERTICAL</orient>
-      <object class="sizeritem">
-        <object class="wxScrolledWindow" name="scrwin">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="FoldPanelBar" name="fpb">
-                <object class="FoldPanelItem">
-                  <label>STREAMS</label>
-                  <XRCED>
-                    <assign_var>1</assign_var>
-                  </XRCED>
-                  <object class="StreamBar" name="stream_bar">
-                    <add_button>1</add_button>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                </object>
-                <spacing>0</spacing>
-                <leftspacing>0</leftspacing>
-                <rightspacing>0</rightspacing>
-                <bg>#4D4D4D</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-          </object>
-          <bg>#A52A2A</bg>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <minsize>400,400</minsize>
-      </object>
-    </object>
-    <size>400,400</size>
-    <title>Stream panel test frame</title>
-  </object>
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="text_frame">
     <object class="wxPanel" name="text_panel">
       <object class="wxBoxSizer">
@@ -503,54 +433,44 @@ def __init_resources():
   </object>
   <object class="wxFrame" name="grid_frame">
     <object_ref ref="menu_bar"/>
-    <object class="wxPanel" name="grid_panel">
-      <object class="wxGridBagSizer">
-        <object class="sizeritem">
-          <object class="wxPanel" name="red">
-            <bg>#E65F5F</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>0,0</cellpos>
-        </object>
-        <object class="sizeritem">
-          <object class="wxPanel" name="blue">
-            <bg>#57B4BA</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>0,1</cellpos>
-        </object>
-        <object class="sizeritem">
-          <object class="wxPanel" name="purple">
-            <bg>#E48BD3</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>1,0</cellpos>
-        </object>
-        <object class="sizeritem">
-          <object class="wxPanel" name="brown">
-            <bg>#FFC292</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <option>1</option>
-          <flag>wxEXPAND</flag>
-          <cellpos>1,1</cellpos>
-        </object>
-        <growablecols>0,1</growablecols>
-        <growablerows>0,1</growablerows>
+    <object class="ViewportGrid" name="grid_panel">
+      <object class="wxPanel" name="red">
+        <bg>#E65F5F</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="blue">
+        <bg>#57B4BA</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="purple">
+        <bg>#E48BD3</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="brown">
+        <bg>#FFC292</bg>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="yellow">
+        <bg>#FFF490</bg>
+        <hidden>1</hidden>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
+      </object>
+      <object class="wxPanel" name="green">
+        <bg>#B2E926</bg>
+        <hidden>1</hidden>
+        <XRCED>
+          <assign_var>1</assign_var>
+        </XRCED>
       </object>
       <size>500,500</size>
       <bg>#4D4D4D</bg>

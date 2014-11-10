@@ -25,6 +25,7 @@ import logging
 import unittest
 
 import wx
+from odemis.gui.cont.views import ViewPortController
 
 import odemis.gui.test as test
 from odemis.gui.test import gui_loop
@@ -38,181 +39,143 @@ class GridPanelTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrcgrid_frame
     # test.set_log_level(logging.DEBUG)
 
-    def test_view_change(self):
+    def test_grid_view(self):
 
-        # test.set_sleep_time(100)
+        test.set_sleep_time(200)
 
-        sizer = self.frame.grid_panel.GetSizer()
-        sizer.SetEmptyCellSize((0, 0))
+        gp = self.frame.grid_panel
 
-        def show(pos=None):
+        gui_loop()
+        csize = self.frame.ClientSize
 
-            positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
+        # Hide 1 windows
 
-            for apos in positions:
-                row, col = apos
-                item = sizer.FindItemAtPosition(apos)
+        # Hide top left
+        gp.hide_viewport(self.frame.red)
+        self.assertEqual(self.frame.blue.Size, (csize.x, gp.grid_layout.tr.size.y))
+        self.assertEqual(self.frame.purple.Size, gp.grid_layout.bl.size)
+        self.assertEqual(self.frame.brown.Size, gp.grid_layout.br.size)
+        gui_loop()
+        gp.show_viewport(self.frame.red)
 
-                if pos and apos != pos:
-                    if item:
-                        win = item.GetWindow()
-                        win.Hide()
+        # Hide top right
+        gp.hide_viewport(self.frame.blue)
+        self.assertEqual(self.frame.red.Size, (csize.x, gp.grid_layout.tl.size.y))
+        self.assertEqual(self.frame.purple.Size, gp.grid_layout.bl.size)
+        self.assertEqual(self.frame.brown.Size, gp.grid_layout.br.size)
+        gui_loop()
+        gp.show_viewport(self.frame.blue)
 
-                    if sizer.IsRowGrowable(row) and pos[0] != row:
-                        logging.debug("rem grow row %s", row)
-                        sizer.RemoveGrowableRow(row)
-                    if sizer.IsColGrowable(col) and pos[1] != col:
-                        logging.debug("rem grow col %s", col)
-                        sizer.RemoveGrowableCol(col)
+        # Hide bottom left
+        gp.hide_viewport(self.frame.purple)
+        self.assertEqual(self.frame.red.Size, gp.grid_layout.tl.size)
+        self.assertEqual(self.frame.blue.Size, gp.grid_layout.tr.size)
+        self.assertEqual(self.frame.brown.Size, (csize.x, gp.grid_layout.br.size.y))
+        gui_loop()
+        gp.show_viewport(self.frame.purple)
 
-                else:
-                    if item:
-                        win = item.GetWindow()
-                        win.Show()
+        # Hide bottom right
+        gp.hide_viewport(self.frame.brown)
+        self.assertEqual(self.frame.red.Size, gp.grid_layout.tl.size)
+        self.assertEqual(self.frame.blue.Size, gp.grid_layout.tr.size)
+        self.assertEqual(self.frame.purple.Size, (csize.x, gp.grid_layout.bl.size.y))
+        gui_loop()
+        gp.show_viewport(self.frame.brown)
 
-                    # Needed to update the number of rows and columns that the sizer sees
-                    sizer.Layout()
+        # Hide 2 windows
 
-                    if not sizer.IsRowGrowable(row):
-                        logging.debug("add grow row %s", row)
-                        sizer.AddGrowableRow(row)
-                    if not sizer.IsColGrowable(col):
-                        logging.debug("add grow col %s", col)
-                        sizer.AddGrowableCol(col)
+        # Hide top
+        gp.hide_viewport(self.frame.red)
+        gp.hide_viewport(self.frame.blue)
+        self.assertEqual(self.frame.purple.Size, (gp.grid_layout.bl.size.x, csize.y))
+        self.assertEqual(self.frame.brown.Size, (gp.grid_layout.br.size.x, csize.y))
+        gui_loop()
+        gp.show_viewport(self.frame.red)
+        gp.show_viewport(self.frame.blue)
 
-            sizer.Layout()
+        # Hide right
+        gp.hide_viewport(self.frame.blue)
+        gp.hide_viewport(self.frame.brown)
+        self.assertEqual(self.frame.red.Size, (csize.x, gp.grid_layout.tl.size.y))
+        self.assertEqual(self.frame.purple.Size, (csize.x, gp.grid_layout.bl.size.y))
+        gui_loop()
+        gp.show_viewport(self.frame.brown)
+        gp.show_viewport(self.frame.blue)
 
-            full_size = self.frame.GetSize()[0]
+        # Hide bottom
+        gp.hide_viewport(self.frame.purple)
+        gp.hide_viewport(self.frame.brown)
+        self.assertEqual(self.frame.red.Size, (gp.grid_layout.tl.size.x, csize.y))
+        self.assertEqual(self.frame.blue.Size, (gp.grid_layout.tr.size.x, csize.y))
+        gui_loop()
+        gp.show_viewport(self.frame.brown)
+        gp.show_viewport(self.frame.purple)
 
-            sizes = [([400], [400]), ([400], [0, 400]), ([0, 400], [400]), ([0, 400], [0, 400])]
-            # self.assertEquals()
+        # Hide left
+        gp.hide_viewport(self.frame.red)
+        gp.hide_viewport(self.frame.purple)
+        self.assertEqual(self.frame.blue.Size, (csize.x, gp.grid_layout.tr.size.y))
+        self.assertEqual(self.frame.brown.Size, (csize.x, gp.grid_layout.br.size.y))
+        gui_loop()
+        gp.show_viewport(self.frame.purple)
+        gp.show_viewport(self.frame.red)
 
-            if pos:
-                pos_sizes = dict(zip(positions, sizes))
-                rows, cols = pos_sizes[pos]
-                self.assertEquals(sizer.RowHeights, rows)
-                self.assertEquals(sizer.ColWidths, cols)
+        # Hide 3 windows
 
-            else:
-                half_size = full_size // 2
-                self.assertEquals(sizer.RowHeights, [half_size, half_size])
-                self.assertEquals(sizer.ColWidths, [half_size, half_size])
-
-        logging.debug((1, 1))
-        show((1, 1))
+        gp.set_shown_viewports(self.frame.red)
+        self.assertEqual(self.frame.red.Size, csize)
         gui_loop()
 
-        logging.debug(None)
-        show(None)
+        gp.set_shown_viewports(self.frame.blue)
+        self.assertEqual(self.frame.blue.Size, csize)
         gui_loop()
 
-        logging.debug((0, 1))
-        show((0, 1))
+        gp.set_shown_viewports(self.frame.purple)
+        self.assertEqual(self.frame.purple.Size, csize)
         gui_loop()
 
-        logging.debug(None)
-        show(None)
+        gp.set_shown_viewports(self.frame.brown)
+        self.assertEqual(self.frame.brown.Size, csize)
         gui_loop()
 
-        logging.debug((1, 0))
-        show((1, 0))
+        gp.set_shown_viewports(self.frame.yellow)
+        self.assertEqual(self.frame.yellow.Size, csize)
         gui_loop()
 
-        logging.debug((0, 0))
-        show((0, 0))
+        gp.show_grid_viewports()
+
+    def test_grid_edit(self):
+
+        test.set_sleep_time(200)
+
+        gp = self.frame.grid_panel
         gui_loop()
 
-        logging.debug((1, 1))
-        show((1, 1))
+        self.assertRaises(ValueError, gp.swap_viewports, self.frame.red, self.frame.yellow)
+        gp.swap_viewports(self.frame.red, self.frame.yellow)
+
+        self.frame.red.Hide()
+        self.frame.yellow.Show()
+        gp.swap_viewports(self.frame.red, self.frame.yellow)
+        gui_loop()
+        self.assertEqual(self.frame.yellow.Position, (0, 0))
+
+        self.frame.red.Show()
+        self.frame.yellow.Hide()
+        gp.swap_viewports(self.frame.red, self.frame.yellow)
+        gui_loop()
+        self.assertEqual(self.frame.red.Position, (0, 0))
+
+    def test_grid_resize(self):
+
+        test.set_sleep_time(200)
+
+        gp = self.frame.grid_panel
         gui_loop()
 
-        logging.debug((1, 1))
-        show(None)
+        self.frame.SetSize((800, 800))
         gui_loop()
 
-    def test_view_switch(self):
-
-        sizer = self.frame.grid_panel.GetSizer()
-        sizer.SetEmptyCellSize((0, 0))
-
-        test.set_log_level(logging.DEBUG)
-        test.set_sleep_time(1000)
-
-        def position_at(win, pos=None):
-            if pos:
-                if sizer.CheckForIntersectionPos(pos, (1, 1)):
-                    current_item = sizer.FindItemAtPosition(pos)
-                    current_win = current_item.GetWindow()
-                    sizer.Detach(current_win)
-
-                    item = sizer.FindItem(win)
-
-                    if item:
-                        old_pos = item.GetPos()
-                        logging.debug("moving %s to %s", win.__class__.__name__, pos)
-                        sizer.SetItemPosition(win, pos)
-                        sizer.Add(current_win, old_pos, flag=wx.EXPAND)
-                    else:
-                        logging.debug("adding %s at %s", win.__class__.__name__, pos)
-                        sizer.Add(win, pos, flag=wx.EXPAND)
-
-                else:
-                    item = sizer.FindItem(win)
-
-                    if item:
-                        logging.debug("moving %s to %s", win.__class__.__name__, pos)
-                        sizer.SetItemPosition(win, pos)
-                    else:
-                        logging.debug("adding %s at %s", win.__class__.__name__, pos)
-                        sizer.Add(win, pos, flag=wx.EXPAND)
-
-                win.Show()
-            else:
-                win.Hide()
-                sizer.Detach(win)
-
-            # Hide empty rows and columns
-
-            # A list of position/span pairs: top and bottom row, left and right column
-            spans = [((0, 0), (1, 2)), ((1, 0), (1, 2)), ((0, 0), (2, 1)), ((0, 1), (2, 1))]
-
-            for pos, span in spans:
-                is_row = span[0] == 1
-                row, col = pos
-
-                if not sizer.CheckForIntersectionPos(pos, span):
-                    if is_row:
-                        if sizer.IsRowGrowable(row):
-                            logging.debug("rem grow row %s", row)
-                            sizer.RemoveGrowableRow(row)
-                    else:
-
-                        if sizer.IsColGrowable(col):
-                            logging.debug("rem grow col %s", col)
-                            sizer.RemoveGrowableCol(col)
-                else:
-                    if is_row:
-                        if not sizer.IsRowGrowable(row):
-                            logging.debug("add grow row %s", row)
-                            sizer.AddGrowableRow(row)
-                    else:
-                        if not sizer.IsColGrowable(col):
-                            logging.debug("add grow col %s", col)
-                            sizer.AddGrowableCol(col)
-
-            sizer.Layout()
-
-        position_at(self.frame.red, (0, 1))
-        gui_loop()
-
-        position_at(self.frame.red, (1, 1))
-        gui_loop()
-
-        position_at(self.frame.blue)
-        gui_loop()
-
-        position_at(self.frame.purple)
-        gui_loop()
 
 
 if __name__ == "__main__":

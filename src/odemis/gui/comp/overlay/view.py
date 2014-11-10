@@ -919,6 +919,7 @@ class PolarOverlay(ViewOverlay):
     def on_left_down(self, evt):
         if self.active:
             self.dragging = True
+            self.cnvs.SetFocus()
         else:
             super(PolarOverlay, self).on_left_down(evt)
 
@@ -996,7 +997,6 @@ class PolarOverlay(ViewOverlay):
 
     def Draw(self, ctx):
         ### Draw angle lines ###
-
         ctx.set_line_width(2.5)
         ctx.set_source_rgba(0, 0, 0, 0.2 if self.dragging else 0.5)
 

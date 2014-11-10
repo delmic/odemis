@@ -149,10 +149,13 @@ class ViewPort(wx.Panel):
     def HasFocus(self, *args, **kwargs):
         return self._has_focus is True
 
-    def SetFocus(self, focus):   #pylint: disable=W0221
+    def SetFocus(self, focus):
         """ Set the focus on the viewport according to the focus parameter.
+
         focus:  A boolean value.
+
         """
+
         logging.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
 
         self._has_focus = focus
@@ -166,9 +169,7 @@ class ViewPort(wx.Panel):
     ################################################
 
     def OnChildFocus(self, evt):
-        """ When one of it's child widgets is clicked, this viewport should be
-        considered as having the focus.
-        """
+        """ Give the focus to the view if one of the child widgets is clicked """
         if self._microscope_view and self._tab_data_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
@@ -371,7 +372,7 @@ class MicroscopeViewport(ViewPort):
         evt.Skip()
 
     def OnSize(self, evt):
-        evt.Skip() # processed also by the parent
+        evt.Skip()  # processed also by the parent
         self.UpdateHFWLabel()
 
     def OnSliderIconClick(self, evt):
@@ -442,7 +443,6 @@ class MicroscopeViewport(ViewPort):
         # get updated again in `_on_hfw_set_mpp`
         self.self_set_hfw = True
         self._fov_va.value = hfw
-
 
 
 class OverviewViewport(MicroscopeViewport):
@@ -529,6 +529,7 @@ class SecomViewport(MicroscopeViewport):
             self.ShowMergeSlider(True)
         else:
             self.ShowMergeSlider(False)
+
 
 class SparcAcquisitionViewport(MicroscopeViewport):
 
@@ -638,6 +639,7 @@ class PlotViewport(ViewPort):
         # the stream tree itself... it just there is nothing to do that.
         microscope_view.lastUpdate.subscribe(self.connect_stream)
 
+
 class AngularResolvedViewport(ViewPort):
 
     # Default class
@@ -661,4 +663,3 @@ class AngularResolvedViewport(ViewPort):
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
-
