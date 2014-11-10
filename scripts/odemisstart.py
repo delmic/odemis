@@ -40,7 +40,6 @@ import gtk
 gobject.threads_init()
 gtk.gdk.threads_init()
 import wx
-import wx.lib.dialogs
 
 class BackendStarter(object):
     def __init__(self, config):
@@ -49,9 +48,7 @@ class BackendStarter(object):
         # For displaying wx windows
         logging.debug("Creating app")
         self._app = wx.App()
-        self._frame = wx.Frame(None, title="Starting Odemis...")
-        # TODO: use ListCtrl
-        self._text = wx.TextCtrl(self._frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
+
 
         # Warning: wx will crash if pynotify has been loaded before creating the
         # wx.App (probably due to bad interaction with GTK).
@@ -68,6 +65,50 @@ class BackendStarter(object):
 
         # For reacting to SIGNINT (only once)
         self._main_thread = threading.current_thread()
+
+    def _create_component_frame(self):
+        frame = wx.Dialog(None, title="Starting Odemis...", size=(800, 800),
+                          # No close button
+                          style=wx.CAPTION | wx.RESIZE_BORDER)
+        # TODO: use ListCtrl
+        self._text = wx.TextCtrl(frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
+
+        windowSizer = wx.BoxSizer()
+        windowSizer.Add(self._text, 1, flag=wx.ALL | wx.EXPAND, border=5)
+        frame.SetSizer(windowSizer)
+
+        textsizer = wx.BoxSizer()
+        textsizer.Add(self._text, 1, flag=wx.ALL | wx.EXPAND)
+
+        btnsizer = frame.CreateButtonSizer(wx.CANCEL)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
+        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
+        frame.SetSizer(sizer)
+
+        return frame
+
+    def _create_log_frame(self, msg):
+        frame = wx.Dialog(None, title="Log message of Odemis back-end",
+                          size=(800, 800),
+                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        text = wx.TextCtrl(frame, value=msg, style=wx.TE_MULTILINE | wx.TE_READONLY)
+
+        textsizer = wx.BoxSizer()
+        textsizer.Add(text, 1, flag=wx.ALL | wx.EXPAND)
+
+        btnsizer = frame.CreateButtonSizer(wx.CLOSE)
+
+        sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
+        sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
+        frame.SetSizer(sizer)
+
+        # Show the end of the log (which is most likely showing the error)
+        text.ShowPosition(text.GetLastPosition())
+        frame.CenterOnScreen()
+        return frame
 
     def start_backend(self, modelfile):
         """
@@ -101,13 +142,13 @@ class BackendStarter(object):
             self._notif.show()
             raise ValueError("Starting back-end failed")
 
-    def _on_sigint(self, signum, frame):
-        # TODO: ensure this is only processed by the main thread?
-        if threading.current_thread() == self._main_thread:
-            logging.warning("Received signal %d: stopping", signum)
-            raise KeyboardInterrupt("Received signal %d" % signum)
-        else:
-            logging.info("Skipping signal %d in sub-thread", signum)
+#     def _on_sigint(self, signum, frame):
+#         # TODO: ensure this is only processed by the main thread?
+#         if threading.current_thread() == self._main_thread:
+#             logging.warning("Received signal %d: stopping", signum)
+#             raise KeyboardInterrupt("Received signal %d" % signum)
+#         else:
+#             logging.info("Skipping signal %d in sub-thread", signum)
 
     def wait_backend_is_ready(self):
         """
@@ -124,15 +165,23 @@ class BackendStarter(object):
                 self._mic = backend.getRoot()
             except (IOError, CommunicationError):
                 if time.time() > end_time:
+                    self._notif.update("Odemis back-end failed to start",
+                           "For more information look at the log messages in %s "
+                           "or type odemis-start in a terminal."
+                           % self._config["LOGFILE"],
+                           "dialog-warning")
+                    self._notif.show()
                     raise IOError("Back-end failed to start")
                 else:
                     logging.debug("Waiting a bit more for the backend to appear")
                     time.sleep(1)
 
-        # In theory Python raise KeyboardInterrupt on SIGINT, which is what we
-        # need. But that doesn't happen if in a wait(), and in addition, when
-        # there are several threads, only one of them receives the exception.
-        signal.signal(signal.SIGINT, self._on_sigint)
+        self._frame = self._create_component_frame()
+
+#         # In theory Python raise KeyboardInterrupt on SIGINT, which is what we
+#         # need. But that doesn't happen if in a wait(), and in addition, when
+#         # there are several threads, only one of them receives the exception.
+#         signal.signal(signal.SIGINT, self._on_sigint)
 
         # TODO: create a window with the list of the components
         self._mic.ghosts.subscribe(self._on_ghosts, init=True)
@@ -142,37 +191,56 @@ class BackendStarter(object):
                                         args=(backend,))
         check_thread.start()
 
-        # Wait until there is no more ghosts
+        # Show status window until the backend is ready (or failed to start)
+        ret = self._frame.ShowModal()
+        # Blocking until the window is closed. It return either:
+        # * ID_CANCEL => the user doesn't want to start finally
+        # * ID_EXIT => Error in the backend
+        # * ID_OK => the backend is ready
+        logging.debug("Window closed with: %d", ret)
+        # TODO: detect Ctrl+C and interpret as pressing "Cancel"
+#         except KeyboardInterrupt:
+#             # self._frame.Destroy()
+#             self._mic.ghosts.unsubscribe(self._on_ghosts)
+#             self._frame.EndModal(wx.ID_CANCEL)
+#             logging.info("Stopping the backend")
+#             backend.terminate()
+#             self._backend_done.set()
+#             raise
+
+        # make sure check_thread and ghost listener stop
+        self._backend_done.set()
         try:
-            self._frame.Show()
-            # Blocking until the backend frame is destroyed (by the user or
-            # because the back-end checker
-            self._app.MainLoop()
+            if ret != wx.ID_EXIT:
+                self._mic.ghosts.unsubscribe(self._on_ghosts)
+        except Exception:
+            # Can happen if the backend failed
+            pass
 
-        except KeyboardInterrupt:
-            self._frame.Destroy()
-            self._backend_done.set()
-            logging.info("Stopping the backend")
-            backend.terminate()
-            raise
-        # TODO: if cancelled by the user => stop the backend and display
-        # a notification "Cancelled..."
-
-        status = driver.get_backend_status()
-        if status == driver.BACKEND_RUNNING:
+#         status = driver.get_backend_status()
+#         if status == driver.BACKEND_RUNNING:
+        if ret == wx.ID_OK:
             self._notif.update("Odemis back-end successfully started",
                                "Graphical interface will now start.",
                                "dialog-info")
             self._notif.show()
-        elif status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+        #elif status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+        elif ret == wx.ID_EXIT:
             self._notif.update("Odemis back-end failed to start",
                    "For more information look at the log messages in %s "
                    "or type odemis-start in a terminal." % self._config["LOGFILE"],
                    "dialog-warning")
             self._notif.show()
             raise IOError("Back-end failed to fully instantiate")
+        elif ret == wx.ID_CANCEL:
+            logging.info("Stopping the backend")
+            backend.terminate()
+            self._notif.update("Odemis back-end start cancelled", "",
+                               "dialog-info")
+            self._notif.show()
+            raise ValueError("Back-end start cancelled by the user")
         else:
-            logging.warning("Unexpected back-end status %d", status)
+            logging.warning("Unexpected return code %d", ret)
 
     def _check_backend_status(self, backend):
         """
@@ -186,12 +254,14 @@ class BackendStarter(object):
                 backend.ping()
             except (IOError, CommunicationError):
                 logging.info("Back-end failure detected")
+                ret = wx.ID_EXIT
                 break
             if self._backend_done.is_set():
                 logging.debug("Back-end appears ready")
+                ret = wx.ID_OK
                 break
 
-        wx.CallAfter(self._frame.Destroy)
+        wx.CallAfter(self._frame.EndModal, ret)
 
     def _show_component(self, name, state):
         print "Component %s: %s" % (name, state)
@@ -235,7 +305,8 @@ class BackendStarter(object):
         f = open(self._config["LOGFILE"], "r")
         lines = f.readlines()
 
-        # Start at the beginning of the latest log
+        # Start at the beginning of the latest log (skipping the log from
+        # previous runs)
         for i, l in enumerate(reversed(lines)):
             if "Starting Odemis back-end" in l:
                 startl = -(i + 1)
@@ -243,15 +314,11 @@ class BackendStarter(object):
         else:
             startl = 0
 
-        msg = "\n".join(lines[startl:])
+        msg = "".join(lines[startl:])
 
-        # TODO: display directly the end of the log
         # At least, skip everything not related to this last run
-        dlg = wx.lib.dialogs.ScrolledMessageDialog(self._frame, msg,
-                                                   "Log message of Odemis back-end")
-        dlg.CenterOnScreen()
-        dlg.ShowModal()
-        dlg.Destroy()
+        frame = self._create_log_frame(msg)
+        frame.ShowModal()
 
 DEFAULT_CONFIG = {"LOGLEVEL": "1",
                   "TERMINAL": "/usr/bin/gnome-terminal"}
@@ -296,8 +363,6 @@ def parse_config(configfile):
             _add_var_config(config, tokens[0], tokens[1])
 
     return config
-
-
 
 def main(args):
     """
@@ -360,6 +425,7 @@ def main(args):
             logging.debug("Back-end already started, so not starting again")
 
         # Return when the GUI is done
+        logging.info("Starting the GUI...")
         subprocess.check_call(["odemis-gui", "--log-level", config["LOGLEVEL"]])
 
     except ValueError as exp:
