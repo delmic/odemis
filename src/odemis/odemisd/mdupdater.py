@@ -4,7 +4,7 @@ Created on 20 Aug 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -37,26 +37,46 @@ class MetadataUpdater(model.Component):
     # This is kept in a separate module from the main backend because it has to 
     # know the business semantic. 
 
-    def __init__(self, name, microscope, components, **kwargs):
+    def __init__(self, name, microscope, **kwargs):
         '''
         microscope (model.Microscope): the microscope to observe and update
-        components (set of model.Components): all the components of the system
         '''
         # Warning: for efficiency, we want to run in the same container as the back-end
         # but this means the back-end is not running yet when we are created
         # so we cannot access the back-end.
-        
+        self._mic = microscope
+
         # list of 2-tuples (function, *arg): to be called on terminate
         self._onTerminate = []
-        self._components = components
-        
+        # All the components already observed
+        # str -> set of str: name of affecting component -> names of affected
+        self._observed = collections.defaultdict(set)
+
         model.Component.__init__(self, name, **kwargs)
 
+        microscope.alive.subscribe(self._onAlive, init=True)
+
+    def _onAlive(self, components):
+        """
+        Called when alive is changed => some component started or died
+        """
         # For each component
         # For each component it affects 
         # Subscribe to the changes of the attributes that matter
-        for a in self._components:
-            for d in a.affects:
+        for a in components:
+            for dn in a.affects.value:
+                # TODO: if component not alive yet, wait for it
+                try:
+                    d = model.getComponent(name=dn)
+                except LookupError:
+                    # TODO: stop subscriptions if the component was there (=> just died)
+                    self._observed[a.name].discard(dn)
+                    continue
+                else:
+                    if dn in self._observed[a.name]:
+                        # already subscribed
+                        continue
+
                 if a.role == "stage":
                     # update the image position
                     self.observeStage(a, d)
@@ -72,6 +92,12 @@ class MetadataUpdater(model.Component):
                     self.observeLight(a, d)
                 else:
                     logging.debug("not observing %s which affects %s", a.name, d.name)
+                    continue
+
+                logging.info("Observing affect %s -> %s", a.name, dn)
+                self._observed[a.name].add(dn)
+
+        # TODO: drop subscriptions to dead components
 
     def observeStage(self, stage, comp):
         # we need to keep the information on the detector to update
@@ -86,7 +112,7 @@ class MetadataUpdater(model.Component):
             logging.debug("Updating position for component %s, to %f, %f",
                           comp.name, x , y)
             comp.updateMetadata(md)
-        
+
         stage.position.subscribe(updateStagePos)
         updateStagePos(stage.position.value)
         self._onTerminate.append((stage.position.unsubscribe, (updateStagePos,)))
@@ -95,14 +121,14 @@ class MetadataUpdater(model.Component):
         if comp.role != "ccd":
             logging.warning("Does not know what to do with a lens in front of a %s", comp.role)
             return
-        
+
         # Depends on the actual size of the ccd's density (should be constant)
         captor_mpp = comp.pixelSize.value # m, m
-        
+
         # update static information
         md = {model.MD_LENS_NAME: lens.hwVersion}
         comp.updateMetadata(md)
-        
+
         # we need to keep the information on the detector to update
         def updatePixelDensity(unused, lens=lens, comp=comp):
             # the formula is very simple: actual MpP = CCD MpP * binning / Mag
@@ -115,7 +141,7 @@ class MetadataUpdater(model.Component):
             md = {model.MD_PIXEL_SIZE: mpp,
                   model.MD_LENS_MAG: mag}
             comp.updateMetadata(md)
-        
+
         lens.magnification.subscribe(updatePixelDensity)
         self._onTerminate.append((lens.magnification.unsubscribe, (updatePixelDensity,)))
         try:
@@ -126,7 +152,8 @@ class MetadataUpdater(model.Component):
         updatePixelDensity(None) # update it right now
 
         # update pole position, if available
-        if isinstance(lens.polePosition.value, collections.Iterable):
+        if (hasattr(lens, "polePosition")
+            and isinstance(lens.polePosition.value, collections.Iterable)):
             def updatePolePos(unused, lens=lens, comp=comp):
                 # the formula is: Pole = Pole_no_binning / binning
                 try:
@@ -148,36 +175,35 @@ class MetadataUpdater(model.Component):
             updatePolePos(None) # update it right now
 
 
-    
     def observeLight(self, light, comp):
 
         def updateInputWL(emissions, light=light, comp=comp):
             # TODO compute the min/max from the emissions which are not 0
             miniwl = 1 # 1m is huge
             maxiwl = 0
-            
+
             for i, e in enumerate(emissions):
                 if e > 0:
                     miniwl = min(miniwl, light.spectra.value[i][2])
                     maxiwl = max(maxiwl, light.spectra.value[i][4])
             if miniwl == 1:
                 miniwl = 0
-            
+
             md = {model.MD_IN_WL: (miniwl, maxiwl)}
             comp.updateMetadata(md)
-        
+
         def updateLightPower(power, light=light, comp=comp):
             p = power * numpy.sum(light.emissions.value)
             md = {model.MD_LIGHT_POWER: p}
             comp.updateMetadata(md)     
-        
+
         light.power.subscribe(updateLightPower, init=True)
         self._onTerminate.append((light.power.unsubscribe, (updateLightPower,)))
-        
+
         light.emissions.subscribe(updateInputWL, init=True)
         self._onTerminate.append((light.emissions.unsubscribe, (updateInputWL,)))
-    
-            
+
+
     def terminate(self):
         # call all the unsubscribes
         for fun, args in self._onTerminate:

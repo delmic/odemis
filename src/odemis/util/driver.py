@@ -147,26 +147,24 @@ def speedUpPyroConnect(comp):
 
     _speedUpPyroVAConnect(comp)
 
-    # cannot check for Microscope explicitly because it's a proxy
-    if isinstance(comp.detectors, collections.Set):
-        children = (comp.detectors | comp.emitters | comp.actuators)
-    else:
-        children = getattr(comp, "children", [])
-
-    for child in children:
+    for child in comp.children.value:
         t = threading.Thread(name="Connection to %s" % child.name, target=bind_obj, args=(child,))
         t.start()
 
 
 BACKEND_RUNNING = "RUNNING"
+BACKEND_STARTING = "STARTING"
 BACKEND_DEAD = "DEAD"
 BACKEND_STOPPED = "STOPPED"
 def get_backend_status():
     try:
         model._core._microscope = None # force reset of the microscope
         microscope = model.getMicroscope()
-        if len(microscope.name) > 0:
+        if not microscope.ghosts.value:
             return BACKEND_RUNNING
+        else:
+            # Not all components are working => we are "starting" (or borked)
+            return BACKEND_STARTING
     except (IOError, CommunicationError):
         logging.info("Failed to find microscope")
         if os.path.exists(model.BACKEND_FILE):

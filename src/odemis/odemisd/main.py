@@ -5,7 +5,7 @@ Created on 26 Mar 2012
 
 @author: Éric Piel
 
-Copyright © 2012 Éric Piel, Delmic
+Copyright © 2012-2014 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -27,20 +27,22 @@ from logging import FileHandler
 import logging
 from odemis import model
 import odemis
+from odemis.model import ST_UNLOADED, ST_STARTING
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
 from odemis.util.driver import BACKEND_RUNNING, BACKEND_DEAD, BACKEND_STOPPED, \
-    get_backend_status
+    get_backend_status, BACKEND_STARTING
 import os
 import signal
 import stat
 import sys
-import time
+import threading
 
 
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
-                    BACKEND_STOPPED: 2
+                    BACKEND_STOPPED: 2,
+                    BACKEND_STARTING: 3,
                     }
 
 class BackendContainer(model.Container):
@@ -48,35 +50,210 @@ class BackendContainer(model.Container):
     A normal container which also terminates all the other containers when it
     terminates.
     """
-    def __init__(self, name=model.BACKEND_NAME):
+    def __init__(self, model_file, create_sub_containers=False,
+                dry_run=False, name=model.BACKEND_NAME):
+        """
+        inst_file (file): opened file that contains the yaml
+        container (Container): container in which to instantiate the components
+        create_sub_containers (bool): whether the leave components (components which
+           have no children created separately) are running in isolated containers
+        dry_run (bool): if True, it will check the semantic and try to instantiate the
+          model without actually any driver contacting the hardware.
+        """
         model.Container.__init__(self, name)
-        self.components = set() # to be updated later on
-        self.sub_containers = set() # to be updated later on
+
+        self._model = model_file
+        self._mdupdater = None
+        self._inst_thread = None # thread running the component instantiation
+        self._must_stop = threading.Event()
+        self._dry_run = dry_run
+        # TODO: have an argument to ask for disabling parallel start? same as create_sub_containers?
+
+        # parse the instantiation file
+        logging.debug("model instantiation file is: %s", self._model.name)
+        try:
+            self._instantiator = modelgen.Instantiator(model_file, self, create_sub_containers, dry_run)
+            # save the model
+            logging.info("model has been successfully parsed")
+        except modelgen.ParseError as exp:
+            raise ValueError("Error while parsing file %s:\n%s" % (self._model.name, exp))
+        except modelgen.SemanticError as exp:
+            raise ValueError("When instantiating file %s:\n%s" % (self._model.name, exp))
+        except Exception:
+            logging.exception("When instantiating file %s", self._model.name)
+            raise IOError("Unexpected error at instantiation")
+
+    def run(self):
+        # Create the root
+        mic = self._instantiator.instantiate_microscope()
+        self.setRoot(mic)
+        logging.debug("Root component %s created", mic.name)
+
+        # Start by filling up the ghosts VA with all the components
+        ghosts_names = set(self._instantiator.ast.keys()) - {mic.name}
+        mic.ghosts.value = dict((n, ST_UNLOADED) for n in ghosts_names)
+
+        # Keep instantiating the other components in a separate thread
+        self._inst_thread = threading.Thread(target=self._instantiate_forever,
+                                             name="Component instantiator")
+        self._inst_thread.start()
+
+        # Start the metadata update
+        # TODO: upgrade metadata updater to support online changes
+        self._mdupdater = self.instantiate(MetadataUpdater,
+                               {"name": "Metadata Updater", "microscope": mic})
+
+        if self._dry_run:
+            # TODO: wait until all the components have been instantiated or one
+            # error happened
+
+            logging.info("model has been successfully validated, exiting")
+            return    # everything went fine
+
+        logging.info("Microscope is now available in container '%s'", self._name)
+
+        # From now on, we'll really listen to external calls
+        model.Container.run(self)
+
+    def _instantiate_forever(self):
+        """
+        Thread continuously monitoring the components that need to be instantiated
+        """
+        try:
+            mic = self._instantiator.microscope
+            failed = set() # set of str: name of components that failed recently
+            while not self._must_stop.is_set():
+                # Try to start simultaneously all the components that are
+                # independent from each other
+                nexts = set()
+                while not nexts:
+                    instantiated = set(c.name for c in mic.alive.value) | {mic.name}
+                    nexts = self._instantiator.get_instantiables(instantiated)
+                    # If still some non-failed component, immediately try again,
+                    # otherwise give some time for things to get fixed or broken
+                    nexts -= failed
+                    if not nexts:
+                        if self._must_stop.wait(10):
+                            return
+                        failed = set() # not recent anymore
+
+                logging.debug("Trying to instantiate comp: %s", ", ".join(nexts))
+
+                for n in nexts:
+                    ghosts = mic.ghosts.value.copy()
+                    if not n in ghosts:
+                        logging.warning("going to instantiate %s but not a ghost", n)
+                    # TODO: run each of them in a future, so that they start
+                    # in parallel, and (bonus) when the future is done, check
+                    # immediately which component can be started. The only
+                    # difficulty is to ensure non-concurrent access to .ghosts
+                    # and .alive .
+                    try:
+                        ghosts[n] = ST_STARTING
+                        mic.ghosts.value = ghosts
+                        newcmps = self._instantiate_component(n)
+                    except ValueError:
+                        # We now need to stop, but cannot call terminate()
+                        # directly, as it would deadlock, waiting for us
+                        threading.Thread(target=self.terminate).start()
+                        return
+                    if not newcmps:
+                        failed.add(n)
+
+        except Exception:
+            logging.exception("Instantiator thread failed")
+        finally:
+            logging.debug("Instantiator thread finished")
+
+    def _instantiate_component(self, name):
+        """
+        Instantiate a component and handle the outcome
+        return (set of str): name of all the component instantiated, so it is an
+          empty set if the component failed to instantiate (due to HwError)
+        raise ValueError: if the component failed so badly to instantiate that
+                          it's unlikely it'll ever instantiate
+        """
+        # TODO: use the AST from the microscope (instead of the original one
+        # in _instantiator) to allow modifying it online?
+        mic = self._instantiator.microscope
+        ghosts = mic.ghosts.value.copy()
+        try:
+            comp = self._instantiator.instantiate_component(name)
+        except model.HwError as exp:
+            # HwError means: hardware problem, try again later
+            logging.warning("Failed to start component %s due to device error: %s",
+                            name, exp)
+            ghosts[name] = exp
+            mic.ghosts.value = ghosts
+            return set()
+        except Exception as exp:
+            # Anything else means: driver is borked, give up
+            # Exception might have happened remotely, so log it nicely
+            logging.error("Failed to instantiate the model due to component %s", name)
+            logging.info("Full traceback of the error follows", exc_info=1)
+            try:
+                remote_tb = exp._pyroTraceback
+                logging.info("Remote exception %s", "".join(remote_tb))
+            except AttributeError:
+                pass
+            raise ValueError("Failed to instantiate component %s" % name)
+        else:
+            children = self._instantiator.get_children(comp)
+            dchildren = self._instantiator.get_delegated_children(name)
+            newcmps = set(c for c in children if c.name in dchildren)
+            mic.alive.value = mic.alive.value | newcmps
+            # update ghosts by removing all the new components
+            for n in dchildren:
+                del ghosts[n]
+
+            mic.ghosts.value = ghosts
+            return dchildren
 
     def terminate(self):
+        # Stop the component instantiator, to be sure it'll not restart the components
+        self._must_stop.set()
+        if self._inst_thread:
+            self._inst_thread.join(10)
+            if self._inst_thread.is_alive():
+                logging.warning("Failed to stop the instantiator")
+            else:
+                self._inst_thread = None
+
         # Stop all the components
-        for comp in self.components:
+        if self._mdupdater:
+            try:
+                self._mdupdater.terminate()
+            except Exception:
+                logging.warning("Failed to terminate Metadata updater", exc_info=True)
+
+        mic = self._instantiator.microscope
+        alive = list(mic.alive.value)
+        for comp in alive:
+            logging.debug("Stopping comp %s", comp.name)
+            # TODO: update the .alive VA every time a component is stopped?
+            # maybe not necessary as we are finishing _everything_
             try:
                 comp.terminate()
-            except:
-                logging.warning("Failed to terminate component '%s'", comp.name)
+            except Exception:
+                logging.warning("Failed to terminate component '%s'", comp.name, exc_info=True)
+
+        try:
+            mic.terminate()
+        except Exception:
+            logging.warning("Failed to terminate root", exc_info=True)
 
         # end all the (sub-)containers
-        for container in self.sub_containers:
+        for container in self._instantiator.sub_containers:
+            logging.debug("Stopping container %s", container)
             try:
                 container.terminate()
-            except:
-                logging.warning("Failed to terminate container %r", container)
+            except Exception:
+                logging.warning("Failed to terminate container %r", container, exc_info=True)
 
         # end ourself
         model.Container.terminate(self)
 
-    def setMicroscope(self, component):
-        self.rootId = component._pyroId
-
-
 class BackendRunner(object):
-    CONTAINER_DISABLE = "0" # only for debugging: everything is created in the process: no backend accessible
     CONTAINER_ALL_IN_ONE = "1" # one backend container for everything
     CONTAINER_SEPARATED = "+" # each component is started in a separate container
 
@@ -90,8 +267,8 @@ class BackendRunner(object):
         self.containement = containement
 
         self._container = None
-        self._components = set()
 
+        self._main_thread = threading.current_thread()
         signal.signal(signal.SIGINT, self.handle_signal)
 
     def set_base_group(self):
@@ -136,50 +313,29 @@ class BackendRunner(object):
             logging.warning(model.BASE_DIRECTORY + " is not a directory, trying anyway...")
 
     def handle_signal(self, signum, frame):
-        logging.warning("Received signal %d: quitting", signum)
-        self.stop()
-
-    def terminate_all_components(self):
-        """
-        try to terminate all the components given as much as possible
-        components (set of Components): set of components to stop
-        """
-        for comp in self._components:
-            try:
-                comp.terminate()
-            except:
-                # can happen if it was already terminated
-                logging.warning("Failed to terminate component '%s'", comp.name)
+        # TODO: ensure this is only processed by the main thread
+        if threading.current_thread() == self._main_thread:
+            logging.warning("Received signal %d: quitting", signum)
+            self.stop()
+        else:
+            logging.info("Skipping signal %d in sub-thread", signum)
 
     def stop(self):
-        if self._container:
-            self._container.terminate()
-            self._container.close()
-        else:
-            self.terminate_all_components()
+        self._container.terminate()
+        self._container.close()
 
     def run(self):
-        # parse the instantiation file
-        try:
-            logging.debug("model instantiation file is: %s", self.model.name)
-            inst_model = modelgen.get_instantiation_model(self.model)
-            logging.info("model has been read successfully")
-        except modelgen.ParseError as exp:
-            logging.error("Error while parsing file %s:\n%s", self.model.name, exp)
-            return 127
-
         # change to odemis group and create the base directory
         try:
             self.set_base_group()
-        except:
-            logging.exception("Failed to get group " + model.BASE_GROUP)
-            return 127
+        except Exception:
+            logging.error("Failed to get group " + model.BASE_GROUP)
+            raise
 
         try:
             self.mk_base_dir()
-        except:
-            logging.exception("Failed to create back-end directory " + model.BASE_DIRECTORY)
-            return 127
+        except Exception:
+            logging.error("Failed to create back-end directory " + model.BASE_DIRECTORY)
 
         # create the root container
         try:
@@ -190,72 +346,25 @@ class BackendRunner(object):
                     logging.debug("Daemon started with pid %d", pid)
                     # TODO: we could try to contact the backend and see if it managed to start
                     return 0
-            if self.containement != BackendRunner.CONTAINER_DISABLE:
-                self._container = BackendContainer()
-        except:
-            logging.exception("Failed to create back-end container")
-            return 127
-
-        try:
-            if self.containement == BackendRunner.CONTAINER_SEPARATED:
-                create_sub_containers = True
-            else:
-                create_sub_containers = False
-            mic, comps, sub_containers = modelgen.instantiate_model(
-                                            inst_model, self._container,
-                                            create_sub_containers,
-                                            dry_run=self.dry_run)
-            # save the model
-            if self._container:
-                self._container.setMicroscope(mic)
-                self._container.sub_containers |= sub_containers
-            self._components = comps
-            logging.info("model has been successfully instantiated")
-            logging.debug("model microscope is %s", mic.name)
-            logging.debug("model components are %s", ", ".join([c.name for c in comps]))
-
-        except modelgen.SemanticError as exp:
-            logging.error("When instantiating file %s:\n%s", self.model.name, exp)
-            self.stop()
-            return 127
+                else:
+                    self._main_thread = threading.current_thread()
         except Exception:
-            logging.exception("When instantiating file %s", self.model.name)
-            self.stop()
-            return 127
+            logging.error("Failed to start daemon")
+            raise
 
-        if self.dry_run:
-            logging.info("model has been successfully validated, exiting")
-            self.stop()
-            return 0    # everything went fine
+        if self.containement == BackendRunner.CONTAINER_SEPARATED:
+            create_sub_containers = True
+        else:
+            create_sub_containers = False
 
-        try:
-            # special "meta" component
-            mdUpdater = self._container.instantiate(MetadataUpdater,
-             {"name": "Metadata Updater", "microscope": mic, "components": comps})
-            self._components.add(mdUpdater)
-        except:
-            logging.exception("When starting the metadata updater")
-            self.stop()
-            return 127
-
-        if self.containement == BackendRunner.CONTAINER_DISABLE:
-            # in case it was not clear it's only for debug!
-            logging.warning("Going to wait for an hour and die")
-            time.sleep(3600)
-            self.stop()
-            return 0
+        self._container = BackendContainer(self.model, create_sub_containers,
+                                        dry_run=self.dry_run)
 
         try:
-            self._container.components = self._components
-            logging.info("Microscope is now available in container '%s'", model.BACKEND_NAME)
             self._container.run()
-        except:
-            # This is coming here in case of signal received when the daemon is running
-            logging.exception("When running back-end container")
+        except Exception:
             self.stop()
-            return 127
-
-        return 0
+            raise
 
 def rotateLog(filename, maxBytes, backupCount=0):
     """
@@ -307,7 +416,7 @@ def main(args):
     dm_grpe.add_argument("--check", dest="check", action="store_true", default=False,
                         help="Check for a running back-end (only returns exit code)")
     dm_grpe.add_argument("--daemonize", "-D", action="store_true", dest="daemon",
-                         default=False, help="Daemonize the back-end after startup")
+                         default=False, help="Daemonize the back-end")
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument('--validate', dest="validate", action="store_true", default=False,
                          help="Validate the microscope description file and exit")
@@ -363,7 +472,7 @@ def main(args):
         pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.INFO))
 
     # Useful to debug cases of multiple conflicting installations
-    logging.debug("Starting Odemis back-end (from %s)", __file__)
+    logging.info("Starting Odemis back-end (from %s)", __file__)
 
     if options.validate and (options.kill or options.check or options.daemon):
         logging.error("Impossible to validate a model and manage the daemon simultaneously")
@@ -373,38 +482,45 @@ def main(args):
     # python-daemon is a fancy library but seems to do too many things for us.
     # We just need to contact the backend and see what happens
     status = get_backend_status()
-    if options.kill:
-        if status != BACKEND_RUNNING:
-            logging.error("No running back-end to kill")
-            return 127
-        try:
-            backend = model.getContainer(model.BACKEND_NAME)
-            backend.terminate()
-        except:
-            logging.error("Failed to stop the back-end")
-            return 127
-        return 0
-    elif options.check:
+    if options.check:
         logging.info("Status of back-end is %s", status)
         return status_to_xtcode[status]
 
-    # check if there is already a backend running
-    if status == BACKEND_RUNNING:
-        logging.error("Back-end already running, cannot start a new one")
+    try:
+        if options.kill:
+            if status != BACKEND_RUNNING:
+                raise IOError("No running back-end to kill")
+            backend = model.getContainer(model.BACKEND_NAME)
+            backend.terminate()
+            return 0
 
-    if options.model is None:
-        logging.error("No microscope model instantiation file provided")
+        # check if there is already a backend running
+        if status == BACKEND_RUNNING:
+            raise IOError("Back-end already running, cannot start a new one")
+
+        if options.model is None:
+            raise ValueError("No microscope model instantiation file provided")
+
+        if options.debug:
+            cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
+        else:
+            cont_pol = BackendRunner.CONTAINER_SEPARATED
+
+        # let's become the back-end for real
+        runner = BackendRunner(options.model, options.daemon,
+                               dry_run=options.validate, containement=cont_pol)
+        runner.run()
+    except ValueError as exp:
+        logging.error("%s", exp)
         return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
 
-    if options.debug:
-        #cont_pol = BackendRunner.CONTAINER_DISABLE
-        cont_pol = BackendRunner.CONTAINER_ALL_IN_ONE
-    else:
-        cont_pol = BackendRunner.CONTAINER_SEPARATED
-
-    # let's become the back-end for real
-    runner = BackendRunner(options.model, options.daemon, options.validate, cont_pol)
-    return runner.run()
+    return 0
 
 if __name__ == '__main__':
     ret = main(sys.argv)

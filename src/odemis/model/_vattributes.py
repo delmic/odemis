@@ -472,7 +472,7 @@ class SubscribeProxyThread(threading.Thread):
                     discarded += 1
                     continue
                 if discarded:
-                    logging.debug("had discarded %d values", discarded)
+                    logging.debug("VA discarded %d values", discarded)
                 discarded = 0
 
                 try:

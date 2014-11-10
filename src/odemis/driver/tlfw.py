@@ -23,7 +23,7 @@ import glob
 import logging
 from odemis import model
 import odemis
-from odemis.model import CancellableThreadPoolExecutor
+from odemis.model import CancellableThreadPoolExecutor, HwError
 from odemis.util import driver
 import os
 import re
@@ -32,7 +32,7 @@ import threading
 import time
 
 
-class HwError(Exception):
+class TLFWError(Exception):
     """
     Represents an error reported by the hardware
     """
@@ -187,7 +187,9 @@ class FW102c(model.Actuator):
             except Exception:
                 logging.debug("Port %s doesn't seem to have a FW102C device connected", n)
         else:
-            raise IOError("No device seems to be an FW102C for ports '%s'" % (ports,))
+            raise HwError("Failed to find a filter wheel FW102C on ports '%s'. "
+                          "Check that the device is turned on and connected to "
+                          "the computer." % (ports,))
 
     @staticmethod
     def _openSerialPort(port):
@@ -227,7 +229,7 @@ class FW102c(model.Actuator):
         return (string): the answer without newline and suffix ("> ")
         raises
             IOError: if there is a timeout
-            HwError: if the hardware reports an error 
+            TLFWError: if the hardware reports an error
         """
         # TODO: handle IOError and automatically try to reconnect (cf LLE)
 
@@ -261,7 +263,7 @@ class FW102c(model.Actuator):
         m = re.match(self.re_err, line)
         if m:
             err = m.group(1)
-            raise HwError("Device rejected command '%s': %s" % (com, err))
+            raise TLFWError("Device rejected command '%s': %s" % (com, err))
         
         return line
 
@@ -272,7 +274,7 @@ class FW102c(model.Actuator):
         return when the command is finished processed
         raises
             IOError: if there is a timeout
-            HwError: if the hardware reports an error
+            TLFWError: if the hardware reports an error
         """
         self._sendQuery(com)
         # don't return anything

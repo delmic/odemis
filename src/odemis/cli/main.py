@@ -29,19 +29,21 @@ import gc
 import importlib
 import inspect
 import logging
-import odemis
 from odemis import model, dataio, util
+import odemis
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.util import units
 from odemis.util.conversion import convertToObject
 from odemis.util.driver import BACKEND_RUNNING, \
-    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status
+    BACKEND_DEAD, BACKEND_STOPPED, get_backend_status, BACKEND_STARTING
 import sys
 import threading
 
+
 status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_DEAD: 1,
-                    BACKEND_STOPPED: 2
+                    BACKEND_STOPPED: 2,
+                    BACKEND_STARTING: 3,
                     }
 
 # small object that can be remotely executed for scanning
@@ -73,10 +75,10 @@ def scan():
                 container_name = "scanner%d" % num
                 num += 1
                 try:
-                    scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
+                    cont, scanner = model.createInNewContainer(container_name, Scanner, {"cls": cls})
                     devices = scanner.scan()
                     scanner.terminate()
-                    model.getContainer(container_name).terminate()
+                    cont.terminate()
                 except Exception:
                     logging.exception("Failed to scan %s.%s components", module_name, cls_name)
                 else:
@@ -129,13 +131,8 @@ def print_component_tree(root, pretty=True, level=0):
         # first print the root component
         print_component(root, pretty, level)
 
-        children = set(root.children)
-        # For microscope, it doesn't have anything in children
-        if isinstance(root.detectors, collections.Set):
-            children = root.detectors | root.emitters | root.actuators
-
         # display all the children
-        for comp in children:
+        for comp in root.children.value:
             print_component_tree(comp, pretty, level + 1)
     else:
         for c in model.getComponents():
@@ -170,8 +167,7 @@ def print_roattribute(name, value, pretty):
     else:
         print u"%s\ttype:roattr\tvalue:%s" % (name, value)
 
-non_roattributes_names = ("name", "role", "parent", "children", "affects",
-                          "actuators", "detectors", "emitters")
+non_roattributes_names = ("name", "role", "parent", "affects")
 def print_roattributes(component, pretty):
     for name, value in model.getROAttributes(component).items():
         # some are handled specifically
@@ -248,8 +244,12 @@ def print_vattribute(name, va, pretty):
         print(u"%s\ttype:%sva\tvalue:%s%s%s%s" %
               (name, readonly, str(va.value), unit, str_range, str_choices))
 
+special_va_names = ("children", "affects") # , "alive", "ghosts")
+# TODO: handle .ghosts and .alive correctly in print_va and don't consider them special
 def print_vattributes(component, pretty):
     for name, value in model.getVAs(component).items():
+        if name in special_va_names:
+            continue
         print_vattribute(name, value, pretty)
 
 def print_metadata(component, pretty):
@@ -269,11 +269,11 @@ def print_attributes(component, pretty):
     if pretty:
         print u"Component '%s':" % component.name
         print u"\trole: %s" % component.role
-        print u"\taffects: " + ", ".join([u"'" + c.name + u"'" for c in component.affects])
+        print u"\taffects: " + ", ".join([u"'%s'" % n for n in component.affects.value])
     else:
         print u"name\tvalue:%s" % component.name
         print u"role\tvalue:%s" % component.role
-        print u"affects\tvalue:" + u"\t".join([c.name for c in component.affects])
+        print u"affects\tvalue:" + u"\t".join(component.affects.value)
     print_roattributes(component, pretty)
     print_vattributes(component, pretty)
     print_data_flows(component, pretty)
@@ -301,7 +301,7 @@ def get_component(comp_name):
 
 def get_detector(comp_name):
     """
-    return the actuator component with the given name
+    return the detector component with the given name
     comp_name (string): name of the component to find
     raises
         ValueError if the component doesn't exist or is not a detector
@@ -497,19 +497,20 @@ def stop_move():
     """
     stop the move of every axis of every actuators
     """
-    # We actually just browse as a tree the microscope
+    # Take all the components and skip the ones that don't look like an actuator
     try:
-        microscope = model.getMicroscope()
-        actuators = microscope.actuators
+        comps = model.getComponents()
     except Exception:
         raise IOError("Failed to contact the back-end")
 
     error = False
-    for actuator in actuators:
+    for c in comps:
+        if not isinstance(c.axes, collections.Mapping):
+            continue
         try:
-            actuator.stop()
+            c.stop()
         except Exception:
-            logging.exception("Failed to stop actuator %s", actuator.name)
+            logging.exception("Failed to stop actuator %s", c.name)
             error = True
 
     if error:

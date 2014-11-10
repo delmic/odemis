@@ -30,6 +30,7 @@ import gc
 import logging
 import numpy
 from odemis import model, util, dataio
+from odemis.model import HwError
 from odemis.util import img
 import os
 import threading
@@ -40,6 +41,8 @@ import weakref
 class AndorV2Error(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
+        self.errno = errno
+        self.strerror = strerror
 
     def __str__(self):
         return self.args[1]
@@ -406,10 +409,13 @@ class AndorCam2(model.DigitalCamera):
         try:
             logging.debug("Looking for camera %d, can be long...", device) # ~20s
             self.handle = self.GetCameraHandle(device)
-        except AndorV2Error, err:
-            # so that it's really not possible to use this object after
-            self.handle = None
-            raise IOError("Failed to find andor camera %d" % device)
+        except AndorV2Error as exp:
+            if exp.errno == 20066: # DRV_P1INVALID
+                raise HwError("Failed to find Andor camera %s (%d), check it is "
+                              "turned on and connected to the computer." %
+                              (name, device))
+            else:
+                raise
         self.select()
         self._initpath = None
         self.Initialize()
@@ -573,8 +579,8 @@ class AndorCam2(model.DigitalCamera):
             for m in [3, 2, 0]:
                 try:
                     self.atcore.SetEMGainMode(m)
-                except AndorV2Error as (errno, strerr):
-                    if errno == 20991: # DRV_NOT_SUPPORTED
+                except AndorV2Error as exp:
+                    if exp.errno == 20991: # DRV_NOT_SUPPORTED
                         logging.info("Failed to set EMCCD gain mode to %d", m)
                     else:
                         raise
@@ -587,7 +593,7 @@ class AndorCam2(model.DigitalCamera):
             # Initial EMCCD gain is 0, between (1, 221), in mode 0
             # Initial EMCCD gain is 0, between (1, 3551), in mode 1
             # Initial EMCCD gain is 0, between (2, 300), in mode 2
-            # mode 3 not supported (but reported and should be fixed in SDK 2.97?)
+            # mode 3 is supported for iXon Ultra only since SDK 2.97
 
         # Shutter -> auto in most cases is fine (= open during acquisition)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
@@ -920,55 +926,55 @@ class AndorCam2(model.DigitalCamera):
             logging.debug("Setting EMCCD gain to %s", emgain)
             self.atcore.SetEMCCDGain(emgain)
 
-    # I²C related functions (currently unused)
-    def I2CReset(self):
-        """
-        Resets the data bus
-        """
-        self.atcore.I2CReset()
-
-    def I2CRead(self, i2caddr, addr):
-        """
-        read a single byte from the chosen device.
-        i2caddr (0<int<255): I²C address of the device
-        addr (0<=int<=255): address on the device
-        returns (0<=int<=255): byte read
-        """
-        data = c_ubyte()
-        self.atcore.I2CRead(c_ubyte(i2caddr), c_ubyte(addr), byref(data))
-        return data.value
-
-    def I2CWrite(self, i2caddr, addr, data):
-        """
-        Write a single byte to the chosen device.
-        i2caddr (0<int<255): I²C address of the device
-        addr (0<=int<=255): address on the device
-        data (0<=int<=255): byte to write
-        """
-        self.atcore.I2CWrite(c_ubyte(i2caddr), c_ubyte(addr), c_ubyte(data))
-
-    def I2CBurstRead(self, i2caddr, ldata):
-        """
-        read a series of bytes from the chosen device.
-        i2caddr (0<int<255): I²C address of the device
-        ldata (0<int): number of bytes to read
-        returns (list of 0<=int<255): bytes read
-        """
-        # TODO: use numpy array to avoid conversion to python
-        data = (c_ubyte * ldata)()
-        self.atcore.I2CBurstRead(c_ubyte(i2caddr), ldata, byref(data))
-
-        pydata = [d for d in data] # Not needed?
-        return pydata
-
-    def I2CBurstWrite(self, i2caddr, data):
-        """
-        write a series of bytes from the chosen device.
-        i2caddr (0<int<255): I²C address of the device
-        data (0<=int<=255): list of bytes to write
-        """
-        cdata = (c_ubyte * len(data))(*data) # TODO: don't do if already a c_byte array
-        self.atcore.I2CBurstWrite(c_ubyte(i2caddr), len(data), byref(cdata))
+#     # I²C related functions (currently unused)
+#     def I2CReset(self):
+#         """
+#         Resets the data bus
+#         """
+#         self.atcore.I2CReset()
+#
+#     def I2CRead(self, i2caddr, addr):
+#         """
+#         read a single byte from the chosen device.
+#         i2caddr (0<int<255): I²C address of the device
+#         addr (0<=int<=255): address on the device
+#         returns (0<=int<=255): byte read
+#         """
+#         data = c_ubyte()
+#         self.atcore.I2CRead(c_ubyte(i2caddr), c_ubyte(addr), byref(data))
+#         return data.value
+#
+#     def I2CWrite(self, i2caddr, addr, data):
+#         """
+#         Write a single byte to the chosen device.
+#         i2caddr (0<int<255): I²C address of the device
+#         addr (0<=int<=255): address on the device
+#         data (0<=int<=255): byte to write
+#         """
+#         self.atcore.I2CWrite(c_ubyte(i2caddr), c_ubyte(addr), c_ubyte(data))
+#
+#     def I2CBurstRead(self, i2caddr, ldata):
+#         """
+#         read a series of bytes from the chosen device.
+#         i2caddr (0<int<255): I²C address of the device
+#         ldata (0<int): number of bytes to read
+#         returns (list of 0<=int<255): bytes read
+#         """
+#         # TODO: use numpy array to avoid conversion to python
+#         data = (c_ubyte * ldata)()
+#         self.atcore.I2CBurstRead(c_ubyte(i2caddr), ldata, byref(data))
+#
+#         pydata = [d for d in data] # Not needed?
+#         return pydata
+#
+#     def I2CBurstWrite(self, i2caddr, data):
+#         """
+#         write a series of bytes from the chosen device.
+#         i2caddr (0<int<255): I²C address of the device
+#         data (0<=int<=255): list of bytes to write
+#         """
+#         cdata = (c_ubyte * len(data))(*data) # TODO: don't do if already a c_byte array
+#         self.atcore.I2CBurstWrite(c_ubyte(i2caddr), len(data), byref(cdata))
 
 
     # High level methods
