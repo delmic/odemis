@@ -173,6 +173,8 @@ class BackendContainer(model.Container):
         raise ValueError: if the component failed so badly to instantiate that
                           it's unlikely it'll ever instantiate
         """
+        # TODO: use the AST from the microscope (instead of the original one
+        # in _instantiator) to allow modifying it online?
         mic = self._instantiator.microscope
         ghosts = mic.ghosts.value.copy()
         try:
