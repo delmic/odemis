@@ -139,24 +139,23 @@ class ViewPortController(object):
                       "stream_classes": (OpticalStream, SpectrumStream),
                       }),
                     (self._viewports[2],
-                     {"name": "Dummy", # will be immediately swapped for AR
-                      "stream_classes": (), # Nothing
-                     }),
+                     {"name": "Dummy",  # will be immediately swapped for AR
+                      "stream_classes": (),  # Nothing
+                      }),
                     (self._viewports[3],
                      {"name": "SEM CL",
-                      "stream_classes":
-                            (EMStream, OpticalStream, SpectrumStream),
+                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                       }),
                     # Spectrum viewport is *also* needed for Analysis tab in the
                     # Sparc configuration
                     (self._viewports[4],
                      {"name": "Spectrum plot",
                       "stream_classes": SpectrumStream,
-                     }),
+                      }),
                     (self._viewports[5],
                      {"name": "Angle resolved",
                       "stream_classes": ARStream,
-                     }),
+                      }),
                 ])
             else:
                 logging.info("Creating generic static viewport layout")
@@ -164,25 +163,23 @@ class ViewPortController(object):
                     (self._viewports[0],  # focused view
                      {"name": "SEM",
                       "stream_classes": EMStream,
-                     }),
+                      }),
                     (self._viewports[1],
                      {"name": "Optical",
                       "stream_classes": (OpticalStream, SpectrumStream),
-                     }),
+                      }),
                     (self._viewports[2],
                      {"name": "Combined 1",
-                      "stream_classes":
-                          (EMStream, OpticalStream, SpectrumStream),
-                     }),
+                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                      }),
                     (self._viewports[3],
                      {"name": "Combined 2",
-                      "stream_classes":
-                          (EMStream, OpticalStream, SpectrumStream),
-                     }),
+                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                      }),
                     (self._viewports[4],
                      {"name": "Spectrum plot",
                       "stream_classes": SpectrumStream
-                     }),
+                      }),
                     # TODO: this one doesn't make sense
                     # (self._viewports[5],
                     #  {"name": "Overview",
@@ -258,9 +255,9 @@ class ViewPortController(object):
             for i, viewport in enumerate(self._viewports):
                 vpv[viewport] = {
                     "name": "View %d" % (i + 1),
-                     "stage": self._main_data_model.stage,
-                     "focus": self._main_data_model.focus,
-                     "stream_classes": None, # everything
+                    "stage": self._main_data_model.stage,
+                    "focus": self._main_data_model.focus,
+                    "stream_classes": None,  # everything
                 }
 
         # Insert a Chamber viewport into the lower left position if a chamber camera is present
@@ -285,8 +282,8 @@ class ViewPortController(object):
         # TODO: if chamber camera: br is just chamber, and it's the focussedView
 
         # Track the mpp of the SEM view in order to set the magnification
-        if (self._main_data_model.ebeam and
-            isinstance(self._main_data_model.ebeam.horizontalFoV, VigilantAttributeBase)):
+        if (self._main_data_model.ebeam and isinstance(self._main_data_model.ebeam.horizontalFoV,
+                                                       VigilantAttributeBase)):
             # => Link the SEM FoV with the mpp of the live SEM viewport
             self._viewports[0].track_view_hfw(self._main_data_model.ebeam.horizontalFoV)
 
@@ -381,115 +378,6 @@ class ViewPortController(object):
         finally:
             grid_panel.Thaw()
 
-    @staticmethod
-    def _show_viewport_grid(sizer, viewport=None):
-        """ Switch the viewport grid to a 1x1 view if `viewport` is defined or 2x2 otherwise """
-
-        # The positions that we can actually show
-        positions = [(0, 0), (0, 1), (1, 0), (1, 1)]
-        # Make sure that empty cells full collapse
-        sizer.SetEmptyCellSize((0, 0))
-
-        try:
-            # Get the current position of the visible viewport
-            viewport_pos = sizer.GetItemPosition(viewport) if viewport else None
-        except AssertionError:
-
-            # The following code is used for viewports not part of the 2x2 grid, but which can be
-            # shown in the 1x1 view none the less. (i.e. Overview viewport)
-
-            # If the given viewport is not in the sizer an exception will be raised by the
-            # `GetItemPosition` method indicating it's not part of the 2x2 grid.
-            # We assume that all the grid viewports need to be hidden and the given viewport shown
-            # 'full screen'.
-
-            for grid_pos in positions:
-                sizer.FindItemAtPosition(grid_pos).Window.Hide()
-            viewport.SetSize(viewport.Parent.GetSize())
-            viewport.Show()
-            sizer.Layout()
-            return
-
-        for grid_pos in positions:
-            grid_row, grid_col = grid_pos
-            grid_item = sizer.FindItemAtPosition(grid_pos)
-
-            # If the visible view is provided and we're looking at different cell
-            if viewport_pos is not None and grid_pos != viewport_pos:
-                # If there's a viewport at the grid position, hide it
-                if grid_item:
-                    viewport = grid_item.GetWindow()
-                    viewport.Hide()
-
-                # Collapse the row and/or column of the grid position if the visible viewport
-                # is not in that row and/or column
-                if sizer.IsRowGrowable(grid_row) and viewport_pos[0] != grid_row:
-                    logging.debug("rem grow row %s", grid_row)
-                    sizer.RemoveGrowableRow(grid_row)
-                if sizer.IsColGrowable(grid_col) and viewport_pos[1] != grid_col:
-                    logging.debug("rem grow col %s", grid_col)
-                    sizer.RemoveGrowableCol(grid_col)
-            # If no visible view is given (i.e. 2x2 view) or we're looking at the viewport's
-            # grid position
-            else:
-                # If there's a viewport at the grid position, show it
-                if grid_item:
-                    viewport = grid_item.GetWindow()
-                    viewport.Show()
-
-                # Needed to update the number of rows and columns that the sizer sees
-                sizer.Layout()
-
-                # Make the grid row and/or column expandable that the grid item is in
-                if not sizer.IsRowGrowable(grid_row):
-                    logging.debug("add grow row %s", grid_row)
-                    sizer.AddGrowableRow(grid_row)
-                if not sizer.IsColGrowable(grid_col):
-                    logging.debug("add grow col %s", grid_col)
-                    sizer.AddGrowableCol(grid_col)
-
-            sizer.Layout()
-
-    # def _show_viewport(self, sizer, visible_viewport=None):
-    #     """ Show the given viewport or show the first four in the 2x2 grid if none is given
-    #
-    #     :param sizer: wx.GridBagSizer
-    #     :param visible_viewport: ViewPort
-    #
-    #
-    #     ..note:
-    #         This method still handles sizers different from the GridBagSizer for backward
-    #         compatibility reasons. That part of the code should be removed at a future point.
-    #
-    #     """
-    #
-    #     if isinstance(sizer, wx.GridBagSizer):
-    #
-    #         self._show_viewport_grid(sizer, visible_viewport)
-    #
-    #         if visible_viewport:
-    #             for viewport in self._viewports:
-    #                 viewport.SetFocus(visible_viewport == viewport)
-    #
-    #     else:
-    #         # Assume legacy sizer construction
-    #
-    #         if visible_viewport in self._viewports:
-    #             for viewport in self._viewports:
-    #                 if visible_viewport == viewport:
-    #                     viewport.Show()
-    #                     viewport.SetFocus(True)
-    #                 else:
-    #                     viewport.Hide()
-    #                     viewport.SetFocus(False)
-    #         else:
-    #             for viewport in self._viewports[:4]:
-    #                 viewport.Show()
-    #             for viewport in self._viewports[4:]:
-    #                 viewport.Hide()
-    #
-    #     sizer.Layout()
-
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
 
@@ -565,7 +453,7 @@ class ViewPortController(object):
                 pviews.append(v)
 
         if fv in pviews:
-            return # nothing to do
+            return  # nothing to do
         if pviews:
             self._data_model.focussedView.value = pviews[0]
 
@@ -645,6 +533,7 @@ class ViewButtonController(object):
             The first button has no viewport, for the 2x2 view.
         """
         self._data_model = tab_data
+        self.main_frame = main_frame
 
         self.buttons = buttons
         self.viewports = viewports
@@ -689,8 +578,8 @@ class ViewButtonController(object):
             # also subscribe for updating the 2x2 button
             vp.microscope_view.thumbnail.subscribe(self._update_22_thumbnail)
 
-            def on_name(name, lbl=lbl):  # save lbl in scope
-                lbl.SetLabel(name)
+            def on_name(name, label=lbl):  # save lbl in scope
+                label.SetLabel(name)
 
             btn.Freeze()
             vp.microscope_view.name.subscribe(on_name, init=True)
@@ -708,8 +597,10 @@ class ViewButtonController(object):
         """
         for b, (vp, _) in self.buttons.items():
             # 2x2 => vp is None / 1 => vp exists and vp.view is the view
-            if ((vp is None and microscope_view is None) or
-                (vp and vp.microscope_view == microscope_view)):
+            if (
+                    (vp is None and microscope_view is None) or
+                    (vp and vp.microscope_view == microscope_view)
+            ):
                 b.SetToggle(True)
             else:
                 if vp:
@@ -771,7 +662,7 @@ class ViewButtonController(object):
             else:
                 # black image
                 # Should never happen
-                pass  #sim = wx.EmptyImage(*size_sub)
+                pass
 
             i += 1
 
@@ -801,9 +692,9 @@ class ViewButtonController(object):
                     if vp == old_viewport:
                         # Remove the subscription of the old viewport
                         old_viewport.microscope_view.thumbnail.unsubscribe(
-                                                self._subscriptions[b]["thumb"])
+                            self._subscriptions[b]["thumb"])
                         old_viewport.microscope_view.name.unsubscribe(
-                                                self._subscriptions[b]["label"])
+                            self._subscriptions[b]["label"])
                         self.buttons[b] = (new_viewport, lbl)
                         self._subscribe()
                         break
@@ -812,7 +703,7 @@ class ViewButtonController(object):
         else:
             logging.warn("Could not handle view change, viewports unknown!")
 
-    def _on_layout_change(self, unused):
+    def _on_layout_change(self, _):
         """ Called when another view is focused, or viewlayout is changed """
         logging.debug("Updating view selector")
 
@@ -844,7 +735,7 @@ class ViewButtonController(object):
 
         if viewport is None:
             # 2x2 button
-            # When selecting the overview, the focussed viewport should not
+            # When selecting the overview, the focused viewport should not
             # change
             self._data_model.viewLayout.value = model.VIEW_LAYOUT_22
         else:
