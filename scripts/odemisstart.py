@@ -94,6 +94,7 @@ class BackendStarter(object):
         sizer.Add(btnsizer, 0, flag=wx.ALIGN_CENTER_VERTICAL | wx.EXPAND | wx.BOTTOM, border=5)
         frame.SetSizer(sizer)
 
+        frame.CenterOnScreen()
         return frame
 
     def _create_log_frame(self, msg):
