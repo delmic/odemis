@@ -919,6 +919,7 @@ class PolarOverlay(ViewOverlay):
     def on_left_down(self, evt):
         if self.active:
             self.dragging = True
+            self.cnvs.SetFocus()
         else:
             super(PolarOverlay, self).on_left_down(evt)
 

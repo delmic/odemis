@@ -149,10 +149,13 @@ class ViewPort(wx.Panel):
     def HasFocus(self, *args, **kwargs):
         return self._has_focus is True
 
-    def SetFocus(self, focus):   #pylint: disable=W0221
+    def SetFocus(self, focus):
         """ Set the focus on the viewport according to the focus parameter.
+
         focus:  A boolean value.
+
         """
+
         logging.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
 
         self._has_focus = focus
@@ -166,9 +169,7 @@ class ViewPort(wx.Panel):
     ################################################
 
     def OnChildFocus(self, evt):
-        """ When one of it's child widgets is clicked, this viewport should be
-        considered as having the focus.
-        """
+        """ Give the focus to the view if one of the child widgets is clicked """
         if self._microscope_view and self._tab_data_model:
             # This will take care of doing everything necessary
             # Remember, the notify method of the vigilant attribute will
