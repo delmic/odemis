@@ -227,7 +227,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = '''\
-<?xml version="1.0" ?><resource class="wxGridBagSizer" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -754,68 +754,35 @@ def __init_resources():
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxGridBagSizer">
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_tl">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>0,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_tr">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>0,1</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_bl">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>1,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="SecomViewport" name="vp_secom_br">
-                      <fg>#BFBFBF</fg>
-                      <bg>#000000</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                    <minsize>400,400</minsize>
-                    <ratio>1</ratio>
-                    <cellpos>1,1</cellpos>
-                  </object>
-                  <growablecols>0,1</growablecols>
-                  <growablerows>0,1</growablerows>
+              <object class="ViewportGrid" name="">
+                <object class="SecomViewport" name="vp_secom_tl">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
                 </object>
-                <bg>#000000</bg>
+                <object class="SecomViewport" name="vp_secom_tr">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="SecomViewport" name="vp_secom_bl">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="SecomViewport" name="vp_secom_br">
+                  <fg>#BFBFBF</fg>
+                  <bg>#000000</bg>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
                 <object class="OverviewViewport" name="vp_overview_sem">
                   <hidden>1</hidden>
                   <XRCED>
@@ -2773,7 +2740,6 @@ def __init_resources():
             </object>
             <object class="sizeritem">
               <object class="ViewportGrid" name="">
-                
                 <object class="MicroscopeViewport" name="vp_inspection_tl">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>

@@ -515,8 +515,6 @@ class ViewPortController(object):
                 logging.debug("Displaying 2x2 viewport grid")
                 if isinstance(grid_panel, ViewportGrid):
                     grid_panel.show_grid_viewports()
-                # else:
-                #     print grid_panel
 
             elif layout == model.VIEW_LAYOUT_FULLSCREEN:
                 raise NotImplementedError()
