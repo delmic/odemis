@@ -33,27 +33,30 @@ import subprocess
 import sys
 import threading
 import time
+from odemis.model import ST_RUNNING
+
+import gobject
+import gtk
+gobject.threads_init()
+gtk.gdk.threads_init()
 import wx
 import wx.lib.dialogs
 
-
-class Starter(object):
-    def __init__(self, configfile):
-        self._configfile = configfile
-        self.config = {} # str -> str
-        # Set some default values (that can be overridden by the config file)
-        self.config["LOGLEVEL"] = "1"
-        self.config["TERMINAL"] = "/usr/bin/gnome-terminal"
-        self.parse_config()
+class BackendStarter(object):
+    def __init__(self, config):
+        self._config = config
 
         # For displaying wx windows
-        print "Creating app"
-        self.wxapp = wx.App()
-        self.wxframe = wx.Frame(None)
+        logging.debug("Creating app")
+        self._app = wx.App()
+        self._frame = wx.Frame(None, title="Starting Odemis...")
+        # TODO: use ListCtrl
+        self._text = wx.TextCtrl(self._frame, style=wx.TE_MULTILINE | wx.TE_READONLY)
 
         # Warning: wx will crash if pynotify has been loaded before creating the
         # wx.App (probably due to bad interaction with GTK).
         # That's why we only import it here.
+        logging.debug("Starting pynotify")
         import pynotify
         pynotify.init("Odemis")
         self._notif = pynotify.Notification("")
@@ -65,44 +68,6 @@ class Starter(object):
 
         # For reacting to SIGNINT (only once)
         self._main_thread = threading.current_thread()
-
-    def _add_var(self, var, content):
-        """
-        Add one variable to the .config, handling substitution
-        """
-        # variable substitution
-        m = re.search(r"(\$\w+)", content)
-        while m:
-            subvar = m.group(1)[1:]
-            # First try to use a already known variable, and fallback to environ
-            try:
-                subcont = self.config[subvar]
-            except KeyError:
-                try:
-                    subcont = os.environ[subvar]
-                except KeyError:
-                    logging.warning("Failed to find variable %s", subvar)
-                    subcont = ""
-            # substitute (might do several at a time, but it's fine)
-            content = content.replace(m.group(1), subcont)
-            m = re.search(r"(\$\w+)", content)
-
-        self.config[var] = content
-
-    def parse_config(self):
-        """
-        Parse /etc/odemis.conf, which was originally designed to be parsed as
-        a bash script. So each line looks like:
-        VAR=$VAR2/log
-        It updates .config
-        """
-        f = open(self._configfile)
-        for line in shlex.split(f, comments=True):
-            tokens = line.split("=")
-            if len(tokens) != 2:
-                logging.warning("Can't parse '%s', skipping the line", line)
-            else:
-                self._add_var(tokens[0], tokens[1])
 
     def start_backend(self, modelfile):
         """
@@ -124,8 +89,8 @@ class Starter(object):
         # drop its privileges to the odemis group
         # use sudo background mode to be sure it won't be killed at the end
         error = subprocess.call(["sudo", "-b", "odemisd", "--daemonize",
-                               "--log-level", self.config["LOGLEVEL"],
-                               "--log-target", self.config["LOGFILE"],
+                               "--log-level", self._config["LOGLEVEL"],
+                               "--log-target", self._config["LOGFILE"],
                                modelfile])
 
         # If it immediately fails, it's easy
@@ -137,15 +102,13 @@ class Starter(object):
             raise ValueError("Starting back-end failed")
 
     def _on_sigint(self, signum, frame):
-        # TODO: ensure this is only processed by the main thread
+        # TODO: ensure this is only processed by the main thread?
         if threading.current_thread() == self._main_thread:
             logging.warning("Received signal %d: stopping", signum)
             raise KeyboardInterrupt("Received signal %d" % signum)
         else:
             logging.info("Skipping signal %d in sub-thread", signum)
 
-
-    # TODO: catch SIGINT and stop backend
     def wait_backend_is_ready(self):
         """
         Blocks until the back-end is fully ready (all the components are ready)
@@ -174,29 +137,74 @@ class Starter(object):
         # TODO: create a window with the list of the components
         self._mic.ghosts.subscribe(self._on_ghosts, init=True)
 
+        # Check in background if the back-end is ready
+        check_thread = threading.Thread(target=self._check_backend_status,
+                                        args=(backend,))
+        check_thread.start()
+
         # Wait until there is no more ghosts
         try:
-            while True:
-                # Sleep a bit
-                self._backend_done.wait(1)
-                try:
-                    backend.ping()
-                except (IOError, CommunicationError):
-                    raise IOError("Back-end failed to fully instantiate")
-                if self._backend_done.is_set():
-                    logging.debug("Back-end appears ready")
-                    self._notif.update("Odemis back-end successfully started",
-                                       "Graphical interface will now start.",
-                                       "dialog-info")
-                    self._notif.show()
-                    return
+            self._frame.Show()
+            # Blocking until the backend frame is destroyed (by the user or
+            # because the back-end checker
+            self._app.MainLoop()
+
         except KeyboardInterrupt:
+            self._frame.Destroy()
+            self._backend_done.set()
             logging.info("Stopping the backend")
             backend.terminate()
             raise
-        finally:
-            # TODO: close the window
-            pass
+        # TODO: if cancelled by the user => stop the backend and display
+        # a notification "Cancelled..."
+
+        status = driver.get_backend_status()
+        if status == driver.BACKEND_RUNNING:
+            self._notif.update("Odemis back-end successfully started",
+                               "Graphical interface will now start.",
+                               "dialog-info")
+            self._notif.show()
+        elif status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+            self._notif.update("Odemis back-end failed to start",
+                   "For more information look at the log messages in %s "
+                   "or type odemis-start in a terminal." % self._config["LOGFILE"],
+                   "dialog-warning")
+            self._notif.show()
+            raise IOError("Back-end failed to fully instantiate")
+        else:
+            logging.warning("Unexpected back-end status %d", status)
+
+    def _check_backend_status(self, backend):
+        """
+        Takes care of closing the GUI when either the backend is fully started
+        or completely stopped (due to an error)
+        """
+        while True:
+            # Sleep a bit
+            self._backend_done.wait(1)
+            try:
+                backend.ping()
+            except (IOError, CommunicationError):
+                logging.info("Back-end failure detected")
+                break
+            if self._backend_done.is_set():
+                logging.debug("Back-end appears ready")
+                break
+
+        wx.CallAfter(self._frame.Destroy)
+
+    def _show_component(self, name, state):
+        print "Component %s: %s" % (name, state)
+
+        if isinstance(state, Exception):
+            colour = "#DD3939"  # Red
+        elif state == ST_RUNNING:
+            colour = "#39FF39" # Green
+        else:
+            colour = "#000000" # Black
+
+        wx.CallAfter(self._text.SetDefaultStyle, wx.TextAttr(colour, None))
+        wx.CallAfter(self._text.AppendText, "Component %s: %s\n" % (name, state))
 
     def _on_ghosts(self, ghosts):
         """
@@ -207,8 +215,7 @@ class Starter(object):
             state = c.state.value
             if self._comp_state.get(c.name) != state:
                 self._comp_state[c.name] = state
-                print "Component %s: %s" % (c.name, state)
-
+                self._show_component(c.name, state)
         # Now the defective ones
         for cname, state in ghosts.items():
             if isinstance(state, Exception):
@@ -218,14 +225,14 @@ class Starter(object):
                 statecmp = state
             if self._comp_state.get(cname) != statecmp:
                 self._comp_state[cname] = statecmp
-                print "Component %s: %s" % (cname, statecmp)
+                self._show_component(cname, state)
 
         # No more ghosts, means all hardware is ready
         if not ghosts:
             self._backend_done.set()
 
     def display_backend_log(self):
-        f = open(self.config["LOGFILE"], "r")
+        f = open(self._config["LOGFILE"], "r")
         lines = f.readlines()
 
         # Start at the beginning of the latest log
@@ -238,20 +245,58 @@ class Starter(object):
 
         msg = "\n".join(lines[startl:])
 
-
         # TODO: display directly the end of the log
         # At least, skip everything not related to this last run
-        dlg = wx.lib.dialogs.ScrolledMessageDialog(self.wxframe, msg,
+        dlg = wx.lib.dialogs.ScrolledMessageDialog(self._frame, msg,
                                                    "Log message of Odemis back-end")
         dlg.CenterOnScreen()
         dlg.ShowModal()
         dlg.Destroy()
 
-    def start_gui(self):
-        """
-        Starts the GUI and immediately return
-        """
-        subprocess.check_call(["odemis-gui", "--log-level", self.config["LOGLEVEL"]])
+DEFAULT_CONFIG = {"LOGLEVEL": "1",
+                  "TERMINAL": "/usr/bin/gnome-terminal"}
+
+def _add_var_config(config, var, content):
+    """
+    Add one variable to the config, handling substitution
+    """
+    # variable substitution
+    m = re.search(r"(\$\w+)", content)
+    while m:
+        subvar = m.group(1)[1:]
+        # First try to use a already known variable, and fallback to environ
+        try:
+            subcont = config[subvar]
+        except KeyError:
+            try:
+                subcont = os.environ[subvar]
+            except KeyError:
+                logging.warning("Failed to find variable %s", subvar)
+                subcont = ""
+        # substitute (might do several at a time, but it's fine)
+        content = content.replace(m.group(1), subcont)
+        m = re.search(r"(\$\w+)", content)
+
+    config[var] = content
+
+def parse_config(configfile):
+    """
+    Parse /etc/odemis.conf, which was originally designed to be parsed as
+    a bash script. So each line looks like:
+    VAR=$VAR2/log
+    return (dict str->str): 
+    """
+    config = DEFAULT_CONFIG.copy()
+    f = open(configfile)
+    for line in shlex.split(f, comments=True):
+        tokens = line.split("=")
+        if len(tokens) != 2:
+            logging.warning("Can't parse '%s', skipping the line", line)
+        else:
+            _add_var_config(config, tokens[0], tokens[1])
+
+    return config
+
 
 
 def main(args):
@@ -260,23 +305,23 @@ def main(args):
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
-    starter = Starter("/etc/odemis.conf")
+    config = parse_config("/etc/odemis.conf")
 
     # Use the loglevel for ourselves first
     try:
-        loglevel = int(starter.config["LOGLEVEL"])
+        loglevel = int(config["LOGLEVEL"])
     except ValueError:
         loglevel = 1
-        starter.config["LOGLEVEL"] = "%d" % loglevel
+        config["LOGLEVEL"] = "%d" % loglevel
     logging.getLogger().setLevel(loglevel)
 
 #     pyrolog = logging.getLogger("Pyro4")
 #     pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 
     # Updates the python path if requested
-    if "PYTHONPATH" in starter.config:
-        logging.debug("PYTHONPATH set to '%s'", starter.config["PYTHONPATH"])
-        os.environ["PYTHONPATH"] = starter.config["PYTHONPATH"]
+    if "PYTHONPATH" in config:
+        logging.debug("PYTHONPATH set to '%s'", config["PYTHONPATH"])
+        os.environ["PYTHONPATH"] = config["PYTHONPATH"]
 
     try:
         if len(args) > 2:
@@ -284,35 +329,38 @@ def main(args):
         elif len(args) == 2:
             modelfile = args[1]
         else:
-            modelfile = starter.config["MODEL"]
+            modelfile = config["MODEL"]
 
 
         # TODO: just bring the focus?
         # Kill GUI if an instance is already there
         # TODO: use psutil.process_iter() for this
-        gui_killed = subprocess.call(["/usr/bin/pkill", "-f", starter.config["GUI"]])
+        gui_killed = subprocess.call(["/usr/bin/pkill", "-f", config["GUI"]])
         if gui_killed == 0:
             logging.info("Found the GUI still running, killing it first...")
 
         status = driver.get_backend_status()
-        # TODO: if backend running but with a different model, also restart it
-        if status == driver.BACKEND_DEAD:
-            logging.warning("Back-end is not responding, will restart it...")
-            subprocess.call(["/usr/bin/pkill", "-f", starter.config["BACKEND"]])
-            time.sleep(1)
+        if status != driver.BACKEND_RUNNING:
+            starter = BackendStarter(config)
+            # TODO: if backend running but with a different model, also restart it
+            if status == driver.BACKEND_DEAD:
+                logging.warning("Back-end is not responding, will restart it...")
+                subprocess.call(["/usr/bin/pkill", "-f", config["BACKEND"]])
+                time.sleep(1)
 
-        try:
-            if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
-                starter.start_backend(modelfile)
-            if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED, driver.BACKEND_STARTING):
-                starter.wait_backend_is_ready()
-            else:
-                logging.debug("Back-end already started, so not starting again")
-        except IOError:
-            starter.display_backend_log()
-            raise
+            try:
+                if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
+                    starter.start_backend(modelfile)
+                if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED, driver.BACKEND_STARTING):
+                    starter.wait_backend_is_ready()
+            except IOError:
+                starter.display_backend_log()
+                raise
+        else:
+            logging.debug("Back-end already started, so not starting again")
 
-        starter.start_gui()
+        # Return when the GUI is done
+        subprocess.check_call(["odemis-gui", "--log-level", config["LOGLEVEL"]])
 
     except ValueError as exp:
         logging.error("%s", exp)
