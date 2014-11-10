@@ -21,25 +21,81 @@ You should have received a copy of the GNU General Public License along with Ode
 # default value.
 # For now, only works for Ubuntu
 
-from Pyro4.errors import CommunicationError
 import logging
-from odemis import model
-from odemis.util import driver
 import os
 import re
 import shlex
 import signal
-import subprocess
 import sys
-import threading
 import time
-from odemis.model import ST_RUNNING
+logging.getLogger().setLevel(logging.DEBUG)
+# The config file might contain additional paths for finding odemis, so we
+# need to parse it and override the path before loading the rest
 
-import gobject
-import gtk
-from wx import LC_SINGLE_SEL
-gobject.threads_init()
-gtk.gdk.threads_init()
+DEFAULT_CONFIG = {"LOGLEVEL": "1",
+                  "TERMINAL": "/usr/bin/gnome-terminal"}
+
+def _add_var_config(config, var, content):
+    """
+    Add one variable to the config, handling substitution
+    """
+    # variable substitution
+    m = re.search(r"(\$\w+)", content)
+    while m:
+        subvar = m.group(1)[1:]
+        # First try to use a already known variable, and fallback to environ
+        try:
+            subcont = config[subvar]
+        except KeyError:
+            try:
+                subcont = os.environ[subvar]
+            except KeyError:
+                logging.warning("Failed to find variable %s", subvar)
+                subcont = ""
+        # substitute (might do several at a time, but it's fine)
+        content = content.replace(m.group(1), subcont)
+        m = re.search(r"(\$\w+)", content)
+
+    logging.debug("setting %s to %s", var, content)
+    config[var] = content
+
+def parse_config(configfile):
+    """
+    Parse /etc/odemis.conf, which was originally designed to be parsed as
+    a bash script. So each line looks like:
+    VAR=$VAR2/log
+    return (dict str->str): config file as name of variable -> value
+    """
+    config = DEFAULT_CONFIG.copy()
+    f = open(configfile)
+    for line in shlex.split(f, comments=True):
+        tokens = line.split("=")
+        if len(tokens) != 2:
+            logging.warning("Can't parse '%s', skipping the line", line)
+        else:
+            _add_var_config(config, tokens[0], tokens[1])
+
+    return config
+
+config = parse_config("/etc/odemis.conf")
+
+# Updates the python path if requested
+if "PYTHONPATH" in config:
+    logging.debug("PYTHONPATH set to '%s'", config["PYTHONPATH"])
+    os.environ["PYTHONPATH"] = config["PYTHONPATH"]
+    # Insert at the beginning, to ensure it has higher priority
+    for p in reversed(config["PYTHONPATH"].split(":")):
+        if p and p not in sys.path:
+            sys.path.insert(1, p)
+    logging.debug("Set path to %s", sys.path)
+
+# Continue loading the other modules, with the updated path
+import threading
+import subprocess
+from Pyro4.errors import CommunicationError
+from odemis import model
+from odemis.util import driver
+from odemis.model import ST_RUNNING
 import wx
 
 class BackendStarter(object):
@@ -49,7 +105,6 @@ class BackendStarter(object):
         # For displaying wx windows
         logging.debug("Creating app")
         self._app = wx.App()
-
 
         # Warning: wx will crash if pynotify has been loaded before creating the
         # wx.App (probably due to bad interaction with GTK).
@@ -341,49 +396,6 @@ class BackendStarter(object):
         frame = self._create_log_frame(msg)
         frame.ShowModal()
 
-DEFAULT_CONFIG = {"LOGLEVEL": "1",
-                  "TERMINAL": "/usr/bin/gnome-terminal"}
-
-def _add_var_config(config, var, content):
-    """
-    Add one variable to the config, handling substitution
-    """
-    # variable substitution
-    m = re.search(r"(\$\w+)", content)
-    while m:
-        subvar = m.group(1)[1:]
-        # First try to use a already known variable, and fallback to environ
-        try:
-            subcont = config[subvar]
-        except KeyError:
-            try:
-                subcont = os.environ[subvar]
-            except KeyError:
-                logging.warning("Failed to find variable %s", subvar)
-                subcont = ""
-        # substitute (might do several at a time, but it's fine)
-        content = content.replace(m.group(1), subcont)
-        m = re.search(r"(\$\w+)", content)
-
-    config[var] = content
-
-def parse_config(configfile):
-    """
-    Parse /etc/odemis.conf, which was originally designed to be parsed as
-    a bash script. So each line looks like:
-    VAR=$VAR2/log
-    return (dict str->str): 
-    """
-    config = DEFAULT_CONFIG.copy()
-    f = open(configfile)
-    for line in shlex.split(f, comments=True):
-        tokens = line.split("=")
-        if len(tokens) != 2:
-            logging.warning("Can't parse '%s', skipping the line", line)
-        else:
-            _add_var_config(config, tokens[0], tokens[1])
-
-    return config
 
 def main(args):
     """
@@ -391,7 +403,6 @@ def main(args):
     args is the list of arguments passed
     return (int): value to return to the OS as program exit code
     """
-    config = parse_config("/etc/odemis.conf")
 
     # Use the loglevel for ourselves first
     try:
@@ -403,11 +414,6 @@ def main(args):
 
 #     pyrolog = logging.getLogger("Pyro4")
 #     pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
-
-    # Updates the python path if requested
-    if "PYTHONPATH" in config:
-        logging.debug("PYTHONPATH set to '%s'", config["PYTHONPATH"])
-        os.environ["PYTHONPATH"] = config["PYTHONPATH"]
 
     try:
         if len(args) > 2:
