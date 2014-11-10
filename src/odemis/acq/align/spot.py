@@ -264,14 +264,14 @@ def FindSpot(image, sensitivity_limit=100):
     """
     subimages, subimage_coordinates = coordinates.DivideInNeighborhoods(image, (1, 1), 20, sensitivity_limit)
     if subimages == []:
-        raise ValueError()
+        raise ValueError("No spot detected")
 
     spot_coordinates = coordinates.FindCenterCoordinates(subimages)
     optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
 
     # Too many spots detected
     if len(optical_coordinates) > 10:
-        raise ValueError()
+        raise ValueError("Too many spots detected")
 
     # Pick the brightest one
     max_intensity = 0
