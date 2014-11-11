@@ -49,9 +49,9 @@ class TestShamrockStatic(unittest.TestCase):
         Just makes sure we don't (completely) break Shamrock after an update
         """
         dev = CLASS(**KWARGS_SIM)
-        self.assertEqual(len(dev.children), 2)
+        self.assertEqual(len(dev.children.value), 2)
 
-        for c in dev.children:
+        for c in dev.children.value:
             if c.role == "spectrograph":
                 sp = c
                 break
@@ -70,7 +70,7 @@ class TestShamrock(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.spectrometer = CLASS(**KWARGS)
-        for c in cls.spectrometer.children:
+        for c in cls.spectrometer.children.value:
             if c.role == "spectrograph":
                 cls.spectrograph = c
                 break
