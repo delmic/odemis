@@ -269,7 +269,7 @@ class SecomStreamsTab(Tab):
         # tb.add_tool(tools.TOOL_RO_ZOOM, self.tab_data_model.tool)
         # Add fit view to content to toolbar
         self.tb.add_tool(tools.TOOL_ZOOM_FIT, self.view_controller.fitViewToContent)
-        # autofocus
+        # auto focus
         self._autofocus_f = InstantaneousFuture()
         self.tb.add_tool(tools.TOOL_AUTO_FOCUS, self.tab_data_model.autofocus_active)
         self.tb.enable_button(tools.TOOL_AUTO_FOCUS, False)

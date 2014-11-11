@@ -27,15 +27,16 @@ import logging
 import numpy
 import time
 import weakref
-
-from decorator import decorator
+import cairo
 import wx
 import wx.lib.wxcairo as wxcairo
+
+from decorator import decorator
 
 from odemis import util, model
 from odemis.acq import stream
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS
+from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, BitmapCanvas
 from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, call_after, ignore_dead, img
 from odemis.model import VigilantAttributeBase
@@ -382,9 +383,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             self._lastest_datetime = 0
 
-        if self._lastest_datetime > 0:
-            logging.debug("Updated canvas list %g s after acquisition",
-                          time.time() - self._lastest_datetime)
+        # if self._lastest_datetime > 0:
+        #     logging.debug("Updated canvas list %g s after acquisition",
+        #                   time.time() - self._lastest_datetime)
 
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
@@ -1301,6 +1302,33 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
     def get_y_value(self):
         """ Return the current y value """
         return self.val_y.value
+
+
+class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
+
+    def draw(self):
+        """ Map the image data to the canvas and draw it """
+
+        im_data = self.images[0]
+        if im_data is not None:
+            im_format = cairo.FORMAT_RGB24
+            height, width, _ = im_data.shape
+
+            # stride = cairo.ImageSurface.format_stride_for_width(im_format, width)
+
+            # In Cairo a surface is a target that it can render to. Here we're going
+            # to use it as the source for a pattern
+            imgsurface = cairo.ImageSurface.create_for_data(im_data, im_format, width, height)
+
+            # In Cairo a pattern is the 'paint' that it uses to draw
+            surfpat = cairo.SurfacePattern(imgsurface)
+
+            # Set the filter, so we get low quality but fast scaling
+            surfpat.set_filter(cairo.FILTER_FAST)
+
+            self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
+            self.ctx.set_source(surfpat)
+            self.ctx.paint()
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):

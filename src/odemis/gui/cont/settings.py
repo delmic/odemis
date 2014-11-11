@@ -486,6 +486,17 @@ class SettingsController(object):
                 else:
                     factory = self.panel.add_integer_slider
 
+            # The event configuration determines what event will signal that the setting entry
+            # has changed value.
+            if "event" in conf:
+                if conf["event"] == wx.EVT_SCROLL_CHANGED:
+                    update_event = conf["event"]
+                else:
+                    raise ValueError("Illegal event type for Slider setting entry!")
+            else:
+                # This event type will make the value update continuously as the slider is dragged
+                update_event = wx.EVT_SLIDER
+
             ctrl_conf = {
                 'min_val': min_val,
                 'max_val': max_val,
@@ -493,13 +504,15 @@ class SettingsController(object):
                 'unit': unit,
                 't_size': (50, -1),
                 'accuracy': conf.get('accuracy', 4),
-            }
+                }
 
             lbl_ctrl, value_ctrl = factory(label_text, vigil_attr.value, ctrl_conf)
+
             ne = SettingEntry(name=name, va=vigil_attr, comp=comp,
                               lbl_ctrl=lbl_ctrl, value_ctrl=value_ctrl,
-                              events=wx.EVT_SLIDER)
+                              events=update_event)
 
+            # TODO: deprecated?
             value_ctrl.Bind(wx.EVT_SLIDER, self.on_setting_changed)
 
         elif control_type == odemis.gui.CONTROL_INT:

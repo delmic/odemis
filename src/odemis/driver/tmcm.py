@@ -30,7 +30,8 @@ import logging
 import numpy
 from odemis import model, util
 import odemis
-from odemis.model import isasync, CancellableThreadPoolExecutor, CancellableFuture
+from odemis.model import (isasync, CancellableThreadPoolExecutor,
+                          CancellableFuture, HwError)
 from odemis.util import driver
 import os
 import serial
@@ -101,7 +102,11 @@ class TMCM3110(model.Actuator):
                 raise ValueError("ustepsize should be in meter, but got %g" % (sz,))
         self._ustepsize = ustepsize
 
-        self._serial = self._openSerialPort(port)
+        try:
+            self._serial = self._openSerialPort(port)
+        except serial.SerialException:
+            raise HwError("Failed to find device %s on port %s. Ensure it is "
+                          "connected to the computer." % (name, port))
         self._port = port
         self._ser_access = threading.Lock()
         self._target = 1 # Always one, when directly connected via USB

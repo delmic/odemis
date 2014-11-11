@@ -23,7 +23,7 @@ import math
 from odemis import model
 import odemis
 from odemis.driver import andorcam2
-from odemis.model import isasync, CancellableThreadPoolExecutor
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
 import os
 import time
 
@@ -31,6 +31,8 @@ import time
 class ShamrockError(Exception):
     def __init__(self, errno, strerror):
         self.args = (errno, strerror)
+        self.errno = errno
+        self.strerror = strerror
 
     def __str__(self):
         return self.args[1]
@@ -47,6 +49,10 @@ class ShamrockDLL(CDLL):
             #FIXME: might not fly if parent is not a WinDLL => use __new__()
             WinDLL.__init__(self, "libshamrockcif.dll") # TODO check it works
         else:
+            # libandor.so must be loaded first. If there is a camera, that has
+            # already been done, but if not, we need to do it here. It's not a
+            # problem to do it multiple times.
+            self._dllandor = CDLL("libandor.so.2", RTLD_GLOBAL)
             # Global so that its sub-libraries can access it
             CDLL.__init__(self, "libshamrockcif.so.2", RTLD_GLOBAL)
 
@@ -156,15 +162,16 @@ class Shamrock(model.Actuator):
     """
     Component representing the spectrograph part of the Andor Shamrock
     spectrometers.
-    On Linux, only the SR303i is supported, via the I²C cable connected to the
-    iDus. Support only works since SDK 2.97.
+    On Linux, only the SR303i (2.97+) and SR193i (2.98+) are supported.
+    The SR303i must be connected via the I²C cable on the iDus.
     Note: we don't handle changing turret.
     """
-    def __init__(self, name, role, device, path=None, parent=None, **kwargs):
+    def __init__(self, name, role, device, path=None, camera=None, **kwargs):
         """
         device (0<=int or "fake"): device number
         path (None or string): initialisation path of the Andorcam2 SDK or None
-          if independent of a camera. If the path is set, a parent should also
+          if independent of a camera.
+        camera (None or AndorCam2): Required if the path is set, a parent should also
           be passed, which is a DigitalCamera component.
         inverted (None): it is not allowed to invert the axes
         """
@@ -178,17 +185,22 @@ class Shamrock(model.Actuator):
             raise ValueError("Axis of spectrograph cannot be inverted")
 
         if device == "fake":
-            self._dll = FakeShamrockDLL(parent)
+            self._dll = FakeShamrockDLL(camera)
             device = 0
         else:
             self._dll = ShamrockDLL()
-        self._path = path or ""
         self._device = device
+
+        if (path is None) != (camera is None):
+            raise ValueError("Shamrock needs both path and parent (a camera) or none of them")
+
+        self._path = path or ""
+        self._camera = camera
 
         try:
             self.Initialize()
-        except ShamrockDLL, err:
-            raise IOError("Failed to find Andor Shamrock (%s) as device %d" %
+        except ShamrockError:
+            raise HwError("Failed to find Andor Shamrock (%s) as device %d" %
                           (name, device))
         try:
             nd = self.GetNumberDevices()
@@ -196,13 +208,10 @@ class Shamrock(model.Actuator):
                 raise IOError("Failed to find Andor Shamrock (%s) as device %d" %
                               (name, device))
 
-            if path is None or parent is None:
-                raise NotImplementedError("Shamrock without parent a camera is not implemented")
-
             ccd = None
-            if (parent and hasattr(parent, "_detector") and
-                isinstance(parent._detector, andorcam2.AndorCam2)):
-                ccd = parent._detector
+            if (camera and hasattr(camera, "_detector") and
+                isinstance(camera._detector, andorcam2.AndorCam2)):
+                ccd = camera._detector
             self._hw_access = HwAccessMgr(ccd)
 
             # for now, it's fixed (and it's unlikely to be useful to allow less than the max)
@@ -248,7 +257,7 @@ class Shamrock(model.Actuator):
                 self._slit = None
 
             # provides a ._axes
-            model.Actuator.__init__(self, name, role, axes=axes, parent=parent, **kwargs)
+            model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
 
             # set HW and SW version
             self._swVersion = "%s" % (odemis.__version__)
@@ -438,6 +447,14 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockWavelengthIsPresent(self._device, byref(present))
         return (present.value != 0)
 
+# TODO: for SR193i
+# ShamrockSetFocusMirror(int device, int focus)
+# ShamrockGetFocusMirror(int device, int *focus)
+# ShamrockGetFocusMirrorMaxSteps(int device, int *steps)
+# ShamrockFocusMirrorReset(int device)
+# ShamrockFocusMirrorIsPresent(int device, int *present)
+
+
     def GetCalibration(self, npixels):
         """
         npixels (0<int): number of pixels on the sensor. It's actually the 
@@ -542,17 +559,19 @@ class Shamrock(model.Actuator):
         self.position._value = pos
         self.position.notify(self.position.value)
 
-    def getPixelToWavelength(self):
+    def getPixelToWavelength(self, npixels=None):
         """
+        npixels (None or int): number of pixels on the CCD (vertically)
         return (list of floats): pixel number -> wavelength in m
         """
         # If wavelength is 0, report empty list to indicate it makes no sense
         if self.position.value["wavelength"] == 0:
             return []
 
-        ccd = self.parent
-        # TODO: allow to override these values by ones passed as arguments?
-        npixels = ccd.resolution.value[0]
+        if npixels is None:
+            ccd = self._camera
+            npixels = ccd.resolution.value[0]
+
         self.SetNumberPixels(npixels)
         self.SetPixelWidth(ccd.pixelSize.value[0] * ccd.binning.value[0])
         # TODO: can GetCalibration() return several values identical? eg, 0's if
@@ -701,8 +720,8 @@ class Shamrock(model.Actuator):
             self.Close()
             self._device = None
 
-    def __del__(self):
-        self.terminate()
+#     def __del__(self):
+#         self.terminate()
 
     def selfTest(self):
         """
@@ -881,8 +900,8 @@ class AndorSpec(model.Detector):
 
         # We could inherit from it, but difficult to not mix up .binning, .shape
         # .resolution...
-        self._detector = andorcam2.AndorCam2(daemon=daemon, **dt_kwargs)
-        self._children.add(self._detector)
+        self._detector = andorcam2.AndorCam2(parent=self, daemon=daemon, **dt_kwargs)
+        self.children.value.add(self._detector)
         dt = self._detector
 
         # Copy and adapt the VAs and roattributes from the detector
@@ -948,9 +967,10 @@ class AndorSpec(model.Detector):
         except Exception:
             raise ValueError("AndorSpec excepts one child named 'shamrock'")
 
-        self._spectrograph = Shamrock(parent=self, path=self._detector._initpath,
+        self._spectrograph = Shamrock(parent=self, camera=self._detector,
+                                      path=self._detector._initpath,
                                       daemon=daemon, **sp_kwargs)
-        self._children.add(self._spectrograph)
+        self.children.value.add(self._spectrograph)
 
         self._spectrograph.position.subscribe(self._onPositionUpdate)
         self.resolution.subscribe(self._onResBinningUpdate)
