@@ -647,20 +647,12 @@ def _BandPassFilter(image, len_noise, len_object):
     by = bx.conj().transpose()
 
     # Convolution with the matrix and kernels
-    res = image
-    g = fft.irfft2(fft.rfft2(res) * fft.rfft2(gx, res.shape))
-    tmpg = g
-    g = fft.irfft2(fft.rfft2(tmpg) * fft.rfft2(gy, tmpg.shape))
-    tmpres = res
-    res = fft.irfft2(fft.rfft2(tmpres) * fft.rfft2(bx, tmpres.shape))
-    tmpres = res
-    res = fft.irfft2(fft.rfft2(tmpres) * fft.rfft2(by, tmpres.shape))
-    tmpg = 0
-    tmpres = 0
-    arr_res = numpy.zeros((image.shape))
-    arr_g = numpy.zeros((image.shape))
-    arr_res[w:-w, w:-w] = res[2 * w:, 2 * w:]
-    arr_g[w:-w, w:-w] = g[2 * w:, 2 * w:]
+    gxy = gx * gy
+    bxy = bx * by
+    kernel = fft.rfft2(gxy - bxy, image.shape)
 
-    res = numpy.maximum(arr_g - arr_res, 0)
+    res = fft.irfft2(fft.rfft2(image) * kernel)
+    arr_out = numpy.zeros((image.shape))
+    arr_out[w:-w, w:-w] = res[2 * w:, 2 * w:]
+    res = numpy.maximum(arr_out, 0)
     return res
