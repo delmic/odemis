@@ -29,6 +29,8 @@ panel and various private support functions.
 
 import logging
 import math
+import wx
+
 from odemis import model
 import odemis.gui
 from odemis.model import NotApplicableError
@@ -37,6 +39,7 @@ from odemis.model import NotApplicableError
 # ==============================================================================
 # The following function can be used to set dynamic configuration values
 # ==============================================================================
+
 def _resolution_from_range(comp, va, conf, init=None):
     """
     Construct a list of resolutions depending on range values
@@ -45,6 +48,7 @@ def _resolution_from_range(comp, va, conf, init=None):
     """
 
     cur_val = va.value
+
     if len(cur_val) != 2:
         logging.warning("Got a resolution not of length 2: %s", cur_val)
         return [cur_val]
@@ -55,7 +59,7 @@ def _resolution_from_range(comp, va, conf, init=None):
         else:
             choices = init
         num_pixels = cur_val[0] * cur_val[1]
-        res = va.range[1] # start with max resolution
+        res = va.range[1]  # start with max resolution
 
         for _ in range(10):
             choices.add(res)
@@ -64,20 +68,22 @@ def _resolution_from_range(comp, va, conf, init=None):
             if len(choices) >= 4 and (res[0] * res[1] < num_pixels):
                 break
 
-        return sorted(choices) # return a list, to be sure it's in order
+        return sorted(choices)  # return a list, to be sure it's in order
     except NotApplicableError:
         return [cur_val]
 
+
 def _resolution_from_range_plus_point(comp, va, conf):
-    """
-    Same as _resolution_from_range() but also add a 1x1 value
-    """
+    """ Same as _resolution_from_range() but also add a 1x1 value """
     return _resolution_from_range(comp, va, conf, init={va.value, (1, 1)})
+
 
 def _binning_1d_from_2d(comp, va, conf):
     """ Find simple binnings available in one dimension (pixel always square)
     binning provided by a camera is normally a 2-tuple of int
+
     """
+
     cur_val = va.value
     if len(cur_val) != 2:
         logging.warning("Got a binning not of length 2: %s, will try anyway",
@@ -89,7 +95,7 @@ def _binning_1d_from_2d(comp, va, conf):
         maxbin = min(va.range[1])
 
         # add up to 5 binnings
-        b = int(math.ceil(minbin)) # in most cases, that's 1
+        b = int(math.ceil(minbin))  # in most cases, that's 1
         for _ in range(6):
             if minbin <= b <= maxbin:
                 choices.add(b)
@@ -106,8 +112,7 @@ def _binning_1d_from_2d(comp, va, conf):
 
 
 def _binning_firstd_only(comp, va, conf):
-    """ Find simple binnings available in the first dimension
-    (second dimension stays fixed size).
+    """ Find simple binnings available in the first dimension (second dimension stays fixed size).
     """
     cur_val = va.value[0]
 
@@ -117,7 +122,7 @@ def _binning_firstd_only(comp, va, conf):
         maxbin = va.range[1][0]
 
         # add up to 5 binnings
-        b = int(math.ceil(minbin)) # in most cases, that's 1
+        b = int(math.ceil(minbin))  # in most cases, that's 1
         for _ in range(6):
             if minbin <= b <= maxbin:
                 choices.add(b)
@@ -127,7 +132,7 @@ def _binning_firstd_only(comp, va, conf):
 
             b *= 2
 
-        return sorted(choices) # return a list, to be sure it's in order
+        return sorted(choices)  # return a list, to be sure it's in order
     except NotApplicableError:
         return [cur_val]
 
@@ -152,14 +157,15 @@ def _hfw_choices(comp, va, conf):
 
     return choices
 
+
 def _mag_if_no_hfw_ctype(comp, va, conf):
     """
     Return the control type of ebeam magnification, which is only really useful
     if horizontalFoV is available.
     return (int): the control type
     """
-    if (hasattr(comp, "horizontalFoV")
-        and isinstance(comp.horizontalFoV, model.VigilantAttributeBase)):
+    if (hasattr(comp, "horizontalFoV") and isinstance(comp.horizontalFoV,
+                                                      model.VigilantAttributeBase)):
         return odemis.gui.CONTROL_NONE
     else:
         # Just use a text field => it's for copy-paste
@@ -182,6 +188,7 @@ def _mag_if_no_hfw_ctype(comp, va, conf):
 #           scale
 #           type
 #           format
+#           event (The event type that will trigger a value update)
 #
 # Any value can be replaced with a function, to allow for dynamic values which
 # can be depending on the backend configuration.
@@ -245,6 +252,7 @@ CONFIG = {
             "scale": "log",
             "type": "float",
             "accuracy": 2,
+            "event": wx.EVT_SCROLL_CHANGED
         },
         "horizontalFoV":
         {

@@ -382,9 +382,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         else:
             self._lastest_datetime = 0
 
-        if self._lastest_datetime > 0:
-            logging.debug("Updated canvas list %g s after acquisition",
-                          time.time() - self._lastest_datetime)
+        # if self._lastest_datetime > 0:
+        #     logging.debug("Updated canvas list %g s after acquisition",
+        #                   time.time() - self._lastest_datetime)
 
         self.merge_ratio = self.microscope_view.stream_tree.kwargs.get("merge", 0.5)
 
