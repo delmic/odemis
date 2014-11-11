@@ -496,6 +496,7 @@ class OverviewViewport(MicroscopeViewport):
             if self._microscope_view.has_stage():
                 self._microscope_view.moveStageTo(p_pos)
 
+
 class SecomViewport(MicroscopeViewport):
 
     canvas_class = miccanvas.SecomCanvas
@@ -663,3 +664,21 @@ class AngularResolvedViewport(ViewPort):
 
         # canvas handles also directly some of the view properties
         self.canvas.setView(microscope_view, tab_data)
+
+
+class SpatialSpectrumViewport(ViewPort):
+    """ A panel that shows a microscope view and its legend below it.
+
+    This is a generic class, that should be inherited by more specific classes.
+    """
+
+    canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
+    bottom_legend_class = AxisLegend
+    left_legend_class = AxisLegend
+
+    def __init__(self, *args, **kwargs):
+        """Note: The MicroscopeViewport is not fully initialised until setView()
+        has been called.
+        """
+        # Call parent constructor at the end, because it needs the legend panel
+        super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)

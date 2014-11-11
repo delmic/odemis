@@ -225,13 +225,14 @@ class AxisLegend(wx.Panel):
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
 
-
         self.Bind(wx.EVT_PAINT, self.on_paint)
         self.Bind(wx.EVT_SIZE, self.on_size)
 
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
         self.ticks = None
+        self.max_tick_width = 42  #px
+
         # The guiding distance between ticks in pixels
         self.tick_pixel_gap = 120
         self.orientation = orientation
@@ -242,7 +243,7 @@ class AxisLegend(wx.Panel):
         if orientation == wx.HORIZONTAL:
             self.SetMinSize((-1, 28))
         else:
-            self.SetMinSize((42, -1)) # TODO: update to fit, when data changes
+            self.SetMinSize((42, -1))
 
         self.on_size(None)
 
@@ -257,13 +258,9 @@ class AxisLegend(wx.Panel):
 
     def on_paint(self, evt=None):
 
-        if not self.Parent.canvas.has_data():
+        if not hasattr(self.Parent.canvas, 'has_data') or not self.Parent.canvas.has_data():
             self.clear()
             return
-
-        # TODO: only put label for some of the ticks
-        if not self.ticks:
-            self.calc_ticks()
 
         ctx = wx.lib.wxcairo.ContextFromDC(wx.PaintDC(self))
 
@@ -271,33 +268,46 @@ class AxisLegend(wx.Panel):
         ctx.select_font_face(font.GetFaceName(), cairo.FONT_SLANT_NORMAL, cairo.FONT_WEIGHT_NORMAL)
         ctx.set_font_size(font.GetPointSize())
 
+        # TODO: only put label for some of the ticks
+        if not self.ticks:
+            self.calc_ticks(ctx)
+
         ctx.set_source_rgb(*self.tick_colour)
 
         ctx.set_line_width(2)
         ctx.set_line_join(cairo.LINE_JOIN_MITER)
 
+        max_width = 0
+
         for i, (pos, val) in enumerate(self.ticks):
             label = units.readable_str(val, self.unit, 3)
-            _, _, width, height, _, _ = ctx.text_extents(label)
+            _, _, lbl_width, lbl_height, _, _ = ctx.text_extents(label)
 
             if self.orientation == wx.HORIZONTAL:
-                lpos = pos - (width / 2)
-                lpos = max(min(lpos, self.ClientSize.x - width - 2), 2)
-                ctx.move_to(lpos, height + 8)
+                lpos = pos - (lbl_width / 2)
+                lpos = max(min(lpos, self.ClientSize.x - lbl_width - 2), 2)
+                ctx.move_to(lpos, lbl_height + 8)
                 ctx.show_text(label)
                 ctx.move_to(pos, 5)
                 ctx.line_to(pos, 0)
             else:
-                lpos = pos + (height / 2)
-                lpos = max(min(lpos, self.ClientSize.y - height - 2), 2)
-                ctx.move_to(self.ClientSize.x - width - 9, lpos)
+                max_width = max(max_width, lbl_width)
+
+                lpos = pos + (lbl_height / 2)
+                lpos = max(min(lpos, self.ClientSize.y - lbl_height - 2), 2)
+                ctx.move_to(self.ClientSize.x - lbl_width - 9, lpos)
                 ctx.show_text(label)
                 ctx.move_to(self.ClientSize.x - 5, pos)
                 ctx.line_to(self.ClientSize.x, pos)
 
             ctx.stroke()
 
-    def calc_ticks(self):
+        if self.orientation == wx.VERTICAL and max_width != self.max_tick_width:
+            self.max_tick_width = max_width
+            self.SetMinSize((self.max_tick_width + 14, -1))
+            self.Parent.GetSizer().Layout()
+
+    def calc_ticks(self, ctx):
         """ Determine where the ticks should be placed """
 
         self.ticks = []
