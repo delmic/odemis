@@ -162,7 +162,7 @@ class Shamrock(model.Actuator):
     """
     Component representing the spectrograph part of the Andor Shamrock
     spectrometers.
-    On Linux, only the SR303i (2.97+) and SR193i (2.98+) are supported.
+    On Linux, only the SR303i (2.97+) and SR193i (2.99+) are supported.
     The SR303i must be connected via the I²C cable on the iDus.
     Note: we don't handle changing turret.
     """
@@ -221,12 +221,20 @@ class Shamrock(model.Actuator):
                                             unit="m/s",
                                             readonly=True)
 
+            # FIXME: for now the SDK 2.99 with SR193, commands will fail if not
+            # separated by some delay (eg, 1s)
             gchoices = self._getGratingChoices()
 
-            # Find lowest and largest wavelength reachable
+            # The actual limits are per grating. We cannot provide this much
+            # info via the .axes attribute, so just lowest and largest
+            # wavelength reachable
             wl_range = (float("inf"), float("-inf"))
             for g in gchoices:
-                wmin, wmax = self.GetWavelengthLimits(g)
+                try:
+                    wmin, wmax = self.GetWavelengthLimits(1)
+                except ShamrockError:
+                    logging.exception("Failed to find wavelength limit for grating %d", g)
+                    continue
                 wl_range = min(wl_range[0], wmin), max(wl_range[1], wmax)
 
             # Slit (we only actually care about the input side slit for now)
@@ -372,7 +380,7 @@ class Shamrock(model.Actuator):
         grating (0<int<=3)
         return:
               lines (float): number of lines / m
-              blaze (float): wavelength in m
+              blaze (None or float): wavelength in m or None if a mirro
               home (int): beginning of the grating in steps
               offset (int): offset to the grating in steps
         """
@@ -381,9 +389,15 @@ class Shamrock(model.Actuator):
         Blaze = create_string_buffer(64) # decimal of wavelength in nm
         Home = c_int()
         Offset = c_int()
-        self._dll.ShamrockGetGratingInfo(self._device, grating, 
+        self._dll.ShamrockGetGratingInfo(self._device, grating,
                          byref(Lines), Blaze, byref(Home), byref(Offset))
-        return Lines.value * 1e3, float(Blaze.value) * 1e-9, Home.value, Offset.value
+        logging.debug("Grating is %f, %s, %d, %d", Lines.value, Blaze.value, Home.value, Offset.value)
+
+        if Blaze.value: # empty string if no blaze (= mirror)
+            blaze = float(Blaze.value) * 1e-9
+        else:
+            blaze = None
+        return Lines.value * 1e3, blaze, Home.value, Offset.value
 
     def SetWavelength(self, wavelength):
         """
@@ -433,6 +447,7 @@ class Shamrock(model.Actuator):
         grating (0<int<=3)
         return (0<=float< float): min, max wavelength in m
         """
+        logging.debug("grating = %d", grating)
         assert 1 <= grating <= 3
         Min, Max = c_float(), c_float() # in nm
         self._dll.ShamrockGetWavelengthLimits(self._device, grating, 
@@ -538,8 +553,15 @@ class Shamrock(model.Actuator):
         ngratings = self.GetNumberGratings()
         gchoices = {}
         for g in range(1, ngratings + 1):
-            lines, blaze, home, offset = self.GetGratingInfo(g)
-            gchoices[g] = "%.1f l/mm (blaze: %g nm)" % (lines * 1e-3, blaze * 1e9)
+            try:
+                lines, blaze, home, offset = self.GetGratingInfo(g)
+                if blaze is None:
+                    gchoices[g] = "%.1f l/mm (mirror)" % (lines * 1e-3)
+                else:
+                    gchoices[g] = "%.1f l/mm (blaze: %g nm)" % (lines * 1e-3, blaze * 1e9)
+            except ShamrockError:
+                logging.exception("Failed to get grating info for %d", g)
+                gchoices[g] = "unknown"
 
         return gchoices
 
