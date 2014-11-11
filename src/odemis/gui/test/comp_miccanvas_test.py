@@ -267,10 +267,24 @@ class PlotCanvasTestCase(test.GuiTestCase):
         cnvs.set_plot_mode(canvas.PLOT_MODE_BAR)
 
         for horz, vert in PLOTS:
-            cnvs.set_1d_data( horz, vert)
+            cnvs.set_1d_data(horz, vert)
             test.gui_loop(200)
 
         test.gui_loop()
+
+    def test_onedimensional_canvas(self):
+        cnvs = miccanvas.OneDimensionalSpatialSpectrumCanvas(self.panel)
+        cnvs.SetBackgroundColour("#00599B")
+        self.add_control(cnvs, wx.EXPAND, proportion=1)
+
+        im_data = generate_img_data(200, 10, 4)
+        img = (im_data, (0.0, 0.0), 1.0, True, None, None, "bitmap test")
+
+        cnvs.set_images([img])
+        cnvs.update_drawing()
+
+        test.gui_loop()
+        test.sleep(200)
 
     # @unittest.skip("simple")
     def test_buffer_to_world(self):
