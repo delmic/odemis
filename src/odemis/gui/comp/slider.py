@@ -207,6 +207,14 @@ class Slider(BaseSlider):
         :param scale:  'linear' (default), 'cubic' or 'log'
             *Note*: Make sure to add any new option to the Slider ParamScale in
             xmlh.delmic !
+
+        Events
+
+        This slider produces two event.
+
+        wx.EVT_SLIDER: This event continuously fires while the slider is being dragged
+        wx.EVT_SCROLL_CHANGED: This event is fired *after* the dragging has ended
+
         """
 
         super(Slider, self).__init__(parent, wid, pos, size, style)
