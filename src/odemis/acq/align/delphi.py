@@ -32,12 +32,15 @@ from odemis import model
 from odemis.acq._futures import executeTask
 from odemis.acq.align import transform
 from odemis.acq.align import spot
+from odemis.acq.drift import CalculateDrift
 import threading
 import time
 from . import autofocus
 from autofocus import SubstractBackground
+from scipy.ndimage import zoom
+from numpy import array, ones, linalg
 
-EXPECTED_HOLES = ({"x":0, "y":11.5e-03}, {"x":0, "y":-11.5e-03})  # Expected hole positions
+EXPECTED_HOLES = ({"x":0, "y":12e-03}, {"x":0, "y":-12e-03})  # Expected hole positions
 HOLE_RADIUS = 181e-06  # Expected hole radius
 LENS_RADIUS = 0.0024  # Expected lens radius
 ERR_MARGIN = 30e-06  # Error margin in hole and spot detection
@@ -839,3 +842,289 @@ def estimateLensAlignmentTime():
     returns (float):  process estimated time #s
     """
     return 1  # s
+
+def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=None):
+    """
+    Wrapper for DoHFWShiftFactor. It provides the ability to check the 
+    progress of the procedure.
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    sem_stage (model.Actuator): The SEM stage
+    ebeam_focus (model.Actuator): EBeam focus
+    known_focus (float): Focus for shift calibration, output from hole detection #m
+    returns (ProgressiveFuture): Progress DoHFWShiftFactor
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateHFWShiftFactorTime(et))
+    f._hfw_shift_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelHoleDetection
+    f._hfw_shift_lock = threading.Lock()
+
+    # Run in separate thread
+    hfw_shift_thread = threading.Thread(target=executeTask,
+                  name="HFW Shift Factor",
+                  args=(f, _DoHFWShiftFactor, f, detector, escan, sem_stage, ebeam_focus,
+                        known_focus))
+
+    hfw_shift_thread.start()
+    return f
+
+def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=None):
+    """
+    Acquires SEM images of several HFW values (from smallest to largest) and 
+    detects the shift between them using phase correlation. To this end, it has 
+    to crop the corresponding FoV of each larger image and resample it to smaller 
+    one’s resolution in order to feed it to the phase correlation. Then it 
+    calculates the cummulative sum of shift between each image and the smallest 
+    one and does linear fit for these shift values. From the linear fit we just 
+    return the slope of the line as the intercept is expected to be 0.
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    sem_stage (model.Actuator): The SEM stage
+    ebeam_focus (model.Actuator): EBeam focus
+    known_focus (float): Focus for shift calibration, output from hole detection #m
+    returns (tuple of floats): slope of linear fit 
+    raises:    
+        CancelledError() if cancelled
+        IOError if shift cannot be estimated
+    """
+    logging.debug("Starting HFW-related shift calculation...")
+    try:
+        escan.scale.value = (1, 1)
+        escan.resolution.value = escan.resolution.range[1]
+        escan.translation.value = (0, 0)
+        escan.dwellTime.value = 7.5e-07  # s
+        escan.accelVoltage.value = 5e03  # 5 kV, to ensure that features are visible
+
+        # Move Phenom sample stage to the first expected hole position
+        # to ensure there are some features for the phase correlation
+        f = sem_stage.moveAbs(EXPECTED_HOLES[0])
+        f.result()
+        # Start with smallest FoV
+        max_hfw = 1200e-06  # m
+        min_hfw = 37.5e-06  # m
+        cur_hfw = min_hfw
+        shift_values = [(0, 0)]
+        hfw_values = [min_hfw]
+        zoom_f = 2  # zoom factor
+        # Just to force autocontrast
+        escan.accelVoltage.value += 100
+        # Apply the given sem focus value for a good focus level
+        if known_focus is not None:
+            f = ebeam_focus.moveAbs({"z":known_focus})
+            f.result()
+        smaller_image = None
+        larger_image = None
+        crop_res = (escan.resolution.value[0] / zoom_f,
+                    escan.resolution.value[1] / zoom_f)
+
+        while cur_hfw <= max_hfw:
+            if future._hfw_shift_state == CANCELLED:
+                raise CancelledError()
+            # SEM image of current hfw
+            escan.horizontalFoV.value = cur_hfw
+            larger_image = detector.data.get(asap=False)
+            # If not the first iteration
+            if smaller_image is not None:
+                #Crop the part of the larger image that corresponds to the
+                #smaller image Fov
+                cropped_image = larger_image[(crop_res[0] / 2):3 * (crop_res[0] / 2),
+                                          (crop_res[1] / 2):3 * (crop_res[1] / 2)]
+                # Resample the cropped image to fit the resolution of the smaller
+                # image
+                resampled_image = zoom(cropped_image, zoom=zoom_f)
+                # Apply phase correlation
+                shift_pxs = CalculateDrift(smaller_image, resampled_image, 10)
+                pixelSize = smaller_image.metadata[model.MD_PIXEL_SIZE]
+                shift = (shift_pxs[0] * pixelSize[0], shift_pxs[1] * pixelSize[1])
+                # Cummulative sum
+                new_shift = (sum([sh[0] for sh in shift_values]) + shift[0],
+                             sum([sh[1] for sh in shift_values]) + shift[1])
+                shift_values.append(new_shift)
+                hfw_values.append(cur_hfw)
+
+            # Zoom out to the double hfw
+            cur_hfw = zoom_f * cur_hfw
+            smaller_image = larger_image
+
+        # Linear fit
+        coefficients_x = array([hfw_values, ones(len(hfw_values))])
+        c_x = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0][0]  # obtaining the slope in x axis
+        coefficients_y = array([hfw_values, ones(len(hfw_values))])
+        c_y = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0][0]  # obtaining the slope in y axis
+        return c_x, c_y
+
+    finally:
+        with future._hfw_shift_lock:
+            if future._hfw_shift_state == CANCELLED:
+                raise CancelledError()
+            future._hfw_shift_state = FINISHED
+
+def _CancelHFWShiftFactor(future):
+    """
+    Canceller of _DoHFWShiftFactor task.
+    """
+    logging.debug("Cancelling HFW-related shift calculation...")
+
+    with future._hfw_shift_lock:
+        if future._hfw_shift_state == FINISHED:
+            return False
+        future._hfw_shift_state = CANCELLED
+        logging.debug("HFW-related shift calculation cancelled.")
+
+    return True
+
+def estimateHFWShiftFactorTime(et):
+    """
+    Estimates HFW-related shift calculation procedure duration
+    returns (float):  process estimated time #s
+    """
+    # Approximately 6 acquisitions
+    dur = 6 * et + 1
+    return  dur  # s
+
+def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=None):
+    """
+    Wrapper for DoResolutionShiftFactor. It provides the ability to check the 
+    progress of the procedure.
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    sem_stage (model.Actuator): The SEM stage
+    ebeam_focus (model.Actuator): EBeam focus
+    known_focus (float): Focus for shift calibration, output from hole detection #m
+    returns (ProgressiveFuture): Progress DoResolutionShiftFactor
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateResolutionShiftFactorTime(et))
+    f._resolution_shift_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelHoleDetection
+    f._resolution_shift_lock = threading.Lock()
+
+    # Run in separate thread
+    resolution_shift_thread = threading.Thread(target=executeTask,
+                  name="Resolution Shift Factor",
+                  args=(f, _DoResolutionShiftFactor, f, detector, escan, sem_stage, ebeam_focus,
+                        known_focus))
+
+    resolution_shift_thread.start()
+    return f
+
+def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=None):
+    """
+    Acquires SEM images of several resolution values (from largest to smallest) 
+    and detects the shift between each image and the largest one using phase 
+    correlation. To this end, it has to resample the smaller resolution image to 
+    larger’s image resolution in order to feed it to the phase correlation. Then 
+    it does linear fit for these shift values. From the linear fit we just return 
+    both the slope and the intercept of the line.
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    detector (model.Detector): The se-detector
+    escan (model.Emitter): The e-beam scanner
+    sem_stage (model.Actuator): The SEM stage
+    ebeam_focus (model.Actuator): EBeam focus
+    known_focus (float): Focus for shift calibration, output from hole detection #m
+    returns (tuple of floats): slope of linear fit 
+            (tuple of floats): intercept of linear fit 
+    raises:    
+        CancelledError() if cancelled
+        IOError if shift cannot be estimated
+    """
+    logging.debug("Starting Resolution-related shift calculation...")
+    try:
+        escan.scale.value = (1, 1)
+        escan.horizontalFoV.value = 1200e-06  # m
+        escan.translation.value = (0, 0)
+        et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
+        escan.accelVoltage.value = 5e03  # 5 kV, to ensure that features are visible
+
+        # Move Phenom sample stage to the first expected hole position
+        # to ensure there are some features for the phase correlation
+        f = sem_stage.moveAbs(EXPECTED_HOLES[0])
+        f.result()
+        # Start with largest resolution
+        max_resolution = 2048  # pixels
+        min_resolution = 256  # pixels
+        cur_resolution = max_resolution
+        shift_values = [(0, 0)]
+        resolution_values = [max_resolution]
+        # Just to force autocontrast
+        escan.accelVoltage.value += 100
+        # Apply the given sem focus value for a good focus level
+        if known_focus is not None:
+            f = ebeam_focus.moveAbs({"z":known_focus})
+            f.result()
+        smaller_image = None
+        largest_image = None
+
+        while cur_resolution >= min_resolution:
+            if future._resolution_shift_state == CANCELLED:
+                raise CancelledError()
+            # SEM image of current resolution
+            escan.resolution.value = (cur_resolution, cur_resolution)
+            # Retain the same overall exposure time
+            escan.dwellTime.value = et / numpy.prod(escan.resolution.value)  # s
+            smaller_image = detector.data.get(asap=False)
+            # If not the first iteration
+            if largest_image is not None:
+                # Resample the smaller image to fit the resolution of the larger
+                # image
+                resampled_image = zoom(smaller_image,
+                                       zoom=(max_resolution / escan.resolution.value[0]))
+                # Apply phase correlation
+                shift_pxs = CalculateDrift(largest_image, resampled_image, 10)
+                pixelSize = largest_image.metadata[model.MD_PIXEL_SIZE]
+                shift = (shift_pxs[0] * pixelSize[0], shift_pxs[1] * pixelSize[1])
+                shift_values.append(shift)
+                resolution_values.append(cur_resolution)
+            else:
+                largest_image = smaller_image
+
+            # Zoom out to the double resolution
+            cur_resolution = cur_resolution - 64
+
+        # Linear fit
+        coefficients_x = array([resolution_values, ones(len(resolution_values))])
+        [a_x, b_x] = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0]  # obtaining the slope and intercept in x axis
+        coefficients_y = array([resolution_values, ones(len(resolution_values))])
+        [a_y, b_y] = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
+        return (a_x, a_y), (b_x, b_y)
+
+    finally:
+        with future._resolution_shift_lock:
+            if future._resolution_shift_state == CANCELLED:
+                raise CancelledError()
+            future._resolution_shift_state = FINISHED
+
+def _CancelResolutionShiftFactor(future):
+    """
+    Canceller of _DoResolutionShiftFactor task.
+    """
+    logging.debug("Cancelling Resolution-related shift calculation...")
+
+    with future._resolution_shift_lock:
+        if future._resolution_shift_state == FINISHED:
+            return False
+        future._resolution_shift_state = CANCELLED
+        logging.debug("Resolution-related shift calculation cancelled.")
+
+    return True
+
+def estimateResolutionShiftFactorTime(et):
+    """
+    Estimates Resolution-related shift calculation procedure duration
+    returns (float):  process estimated time #s
+    """
+    # Approximately 28 acquisitions
+    dur = 28 * et + 1
+    return  dur  # s
