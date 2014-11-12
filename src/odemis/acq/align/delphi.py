@@ -56,7 +56,9 @@ SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertio
 def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                      focus, combined_stage, first_insertion, known_first_hole=None,
                     known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
-                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET):
+                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
+                    known_resolution_slope=None, known_resolution_intercept=None,
+                    known_hfw_slope=None):
     """
     Wrapper for DoUpdateConversion. It provides the ability to check the progress 
     of conversion update procedure or even cancel it.
@@ -76,7 +78,10 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
     known_offset (tuple of floats): Offset of sample holder found in the calibration file #m,m 
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
     known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
-    sem_position (tuple of floats): SEM position for rough alignment 
+    sem_position (tuple of floats): SEM position for rough alignment
+    known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
+    known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
+    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift) 
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns first_hole (tuple of floats): Coordinates of first hole
@@ -85,6 +90,9 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                     (tuple of floats):    offset #m,m 
                     (float):    rotation #radians
                     (tuple of floats):    scaling
+                    (tuple of floats): slope of linear fit (resolution shift)
+                    (tuple of floats): intercept of linear fit (resolution shift)
+                    (tuple of floats): slope of linear fit (hfw shift)
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -101,6 +109,8 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
     f._hole_detectionf = model.InstantaneousFuture()
     f._align_offsetf = model.InstantaneousFuture()
     f._rotation_scalingf = model.InstantaneousFuture()
+    f._hfw_shiftf = model.InstantaneousFuture()
+    f._resolution_shiftf = model.InstantaneousFuture()
 
     # Run in separate thread
     conversion_thread = threading.Thread(target=executeTask,
@@ -108,7 +118,8 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                   args=(f, _DoUpdateConversion, f, ccd, detector, escan, sem_stage,
                         opt_stage, ebeam_focus, focus, combined_stage, first_insertion,
                         known_first_hole, known_second_hole, known_focus, known_offset,
-                        known_rotation, known_scaling, sem_position))
+                        known_rotation, known_scaling, sem_position, known_resolution_slope,
+                        known_resolution_intercept, known_hfw_slope))
 
     conversion_thread.start()
     return f
@@ -116,14 +127,17 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
 def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                      focus, combined_stage, first_insertion, known_first_hole=None,
                     known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
-                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET):
+                    known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
+                    known_resolution_slope=None, known_resolution_intercept=None,
+                    known_hfw_slope=None):
     """
     First calls the HoleDetection to find the hole centers. Then if the current 
     sample holder is inserted for the first time, calls AlignAndOffset, 
     RotationAndScaling and enters the data to the calibration file. Otherwise 
     given the holes coordinates of the original calibration and the current 
     holes coordinates, update the offset, rotation and scaling to be used by the
-     Combined Stage.
+     Combined Stage. It also calculates the parameters for the Phenom shift
+    calibration.
     future (model.ProgressiveFuture): Progressive future provided by the wrapper
     ccd (model.DigitalCamera): The ccd
     detector (model.Detector): The se-detector
@@ -142,6 +156,9 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
     known_rotation (float): Rotation of sample holder found in the calibration file #radians
     known_scaling (tuple of floats): Scaling of sample holder found in the calibration file 
     sem_position (tuple of floats): SEM position for rough alignment 
+    known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
+    known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
+    known_hfw_slope (tuple of floats): slope of linear fit (hfw shift) 
     returns 
             first_hole (tuple of floats): Coordinates of first hole
             second_hole (tuple of floats): Coordinates of second hole
@@ -149,6 +166,9 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             (tuple of floats): offset  
             (float): rotation #radians
             (tuple of floats): scaling
+            (tuple of floats): slope of linear fit (resolution shift)
+            (tuple of floats): intercept of linear fit (resolution shift)
+            (tuple of floats): slope of linear fit (hfw shift)
     raises:    
             CancelledError() if cancelled
             IOError
@@ -209,6 +229,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             # Offset is divided by scaling, since Convert Stage applies scaling
             # also in the given offset
             offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
+            # TODO also calculate and return Phenom shift parameters
             # Data returned needs to be filled in the calibration file
             return first_hole, second_hole, hole_focus, offset, rotation, scaling
 
@@ -231,6 +252,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             combined_stage.updateMetadata({model.MD_ROTATION_COR: updated_rotation})
             combined_stage.updateMetadata({model.MD_POS_COR: updated_offset})
             combined_stage.updateMetadata({model.MD_PIXEL_SIZE_COR: known_scaling})
+            # TODO also return Phenom shift parameters
             # Data returned should NOT be filled in the calibration file
             return first_hole, second_hole, hole_focus, updated_offset, updated_rotation, known_scaling
 
