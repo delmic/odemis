@@ -843,7 +843,7 @@ def estimateLensAlignmentTime():
     """
     return 1  # s
 
-def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=None):
+def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
     Wrapper for DoHFWShiftFactor. It provides the ability to check the 
     progress of the procedure.
@@ -874,7 +874,7 @@ def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=None):
     hfw_shift_thread.start()
     return f
 
-def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=None):
+def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
     Acquires SEM images of several HFW values (from smallest to largest) and 
     detects the shift between them using phase correlation. To this end, it has 
@@ -916,9 +916,8 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         # Just to force autocontrast
         escan.accelVoltage.value += 100
         # Apply the given sem focus value for a good focus level
-        if known_focus is not None:
-            f = ebeam_focus.moveAbs({"z":known_focus})
-            f.result()
+        f = ebeam_focus.moveAbs({"z":known_focus})
+        f.result()
         smaller_image = None
         larger_image = None
         crop_res = (escan.resolution.value[0] / zoom_f,
@@ -989,7 +988,7 @@ def estimateHFWShiftFactorTime(et):
     dur = 6 * et + 1
     return  dur  # s
 
-def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=None):
+def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
     Wrapper for DoResolutionShiftFactor. It provides the ability to check the 
     progress of the procedure.
@@ -1020,7 +1019,7 @@ def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=N
     resolution_shift_thread.start()
     return f
 
-def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=None):
+def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOWN_FOCUS):
     """
     Acquires SEM images of several resolution values (from largest to smallest) 
     and detects the shift between each image and the largest one using phase 
@@ -1061,9 +1060,8 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         # Just to force autocontrast
         escan.accelVoltage.value += 100
         # Apply the given sem focus value for a good focus level
-        if known_focus is not None:
-            f = ebeam_focus.moveAbs({"z":known_focus})
-            f.result()
+        f = ebeam_focus.moveAbs({"z":known_focus})
+        f.result()
         smaller_image = None
         largest_image = None
 
