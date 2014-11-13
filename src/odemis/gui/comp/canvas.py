@@ -284,7 +284,7 @@ class BufferedCanvas(wx.Panel):
 
         self.default_cursor = cursor
         self.SetCursor(self.default_cursor)
-        logging.debug("Default cursor set to %s", cursor)
+        logging.debug("Default cursor set")
 
     def reset_default_cursor(self):
         """ Reset the default cursor to the 'standard' default cursor """
@@ -303,17 +303,20 @@ class BufferedCanvas(wx.Panel):
         if isinstance(cursor, int):
             cursor = wx.StockCursor(cursor)
 
+        # FIXME: It does not seem possible to compare Cursor objects in a sensible way, so the
+        # next comparison will always evaluate to True. (As in, we cannot detect what cursor an
+        # object is representing and we cannot extract any ID)
         if self.dynamic_cursor != cursor:
             self.dynamic_cursor = cursor
             self.SetCursor(cursor)
-            logging.debug("Dynamic cursor set to %s", self.dynamic_cursor)
+            # logging.debug("Dynamic cursor set")
 
     def reset_dynamic_cursor(self):
         """ Reset the dynamic cursor if one is defined """
-        if self.dynamic_cursor:
+        if self.dynamic_cursor is not None:
             self.dynamic_cursor = None
             self.SetCursor(self.default_cursor)
-            logging.debug("Dynamic cursor reset")
+            # logging.debug("Dynamic cursor reset")
 
     ############ Overlay Management ###########
 

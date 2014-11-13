@@ -519,6 +519,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Bind(wx.EVT_RIGHT_UP, toggle)
 
     def test_line_select_overlay(self):
+        logging.getLogger().setLevel(logging.DEBUG)
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
 
         tab_mod = self.create_simple_tab_model()

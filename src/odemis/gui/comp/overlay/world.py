@@ -645,13 +645,13 @@ class LineSelectOverlay(WorldSelectOverlay):
         return False
 
     def _on_motion(self, evt):
-        super(LineSelectOverlay, self)._on_motion(evt)
-
         v_pos = evt.GetPositionTuple()
         hover = self.is_hovering(v_pos)
 
         if hover in (gui.HOVER_START, gui.HOVER_END):
             self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+        else:
+            super(LineSelectOverlay, self)._on_motion(evt)
 
     def update_edit(self, current_pos):
         """ Adjust the selection according to the given position and the current edit action """

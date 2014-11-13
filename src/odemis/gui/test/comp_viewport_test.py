@@ -83,11 +83,13 @@ class CanvasTestCase(test.GuiTestCase):
                                plot[3],
                                range_x=plot[0],
                                range_y=plot[1])
+        vwp.bottom_legend.unit = 'm'
+        vwp.left_legend.unit = 'm'
         test.gui_loop()
 
     def test_plot_viewport(self):
 
-        test.set_sleep_time(200)
+        test.set_sleep_time(100)
 
         vwp = viewport.PlotViewport(self.panel)
         vwp.canvas.SetBackgroundColour("#333")
@@ -121,7 +123,7 @@ class CanvasTestCase(test.GuiTestCase):
 
             vwp.Refresh()
 
-            for plot in RANGED_PLOTS:
+            for plot in RANGED_PLOTS[:-1]:
                 vwp.canvas.set_1d_data(plot[2],
                                        plot[3],
                                        range_x=plot[0],
