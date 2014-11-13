@@ -523,7 +523,8 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # controller, so that it can do the right thing even if the image is not
         # square.
         if self.microscope_view and width:
-            self.microscope_view.mpp.value = hfw / min(width, height)
+            mpp = self.microscope_view.mpp.clip(hfw / min(width, height))
+            self.microscope_view.mpp.value = mpp
 
     def on_size(self, event):
         new_size = event.Size

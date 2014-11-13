@@ -393,11 +393,12 @@ class MicroscopeViewport(ViewPort):
     ## END Event handling
 
     def track_view_hfw(self, fov_va):
+        """ Link the field of view (width) of the view with the field of view of the hardware
+
+        :param fov_va: (FloatVA)
+
         """
-        Link the field of view (width) of the view with the field of view of
-        a hardware (typically, an EM).
-        fov_va (FloatVA)
-        """
+
         logging.info("Tracking mpp on %s" % self)
         self._fov_va = fov_va
         # The view FoV changes either when the mpp changes or on resize,
@@ -420,6 +421,7 @@ class MicroscopeViewport(ViewPort):
         if not self.self_set_hfw:
             logging.info("Calculating mpp from hfw for viewport %s" % self)
             self.canvas.horizontal_field_width = hfw
+
         self.self_set_hfw = False
 
     def _on_mpp_set_hfw(self, mpp):
