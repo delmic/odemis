@@ -976,9 +976,9 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
 
         # Linear fit
         coefficients_x = array([hfw_values, ones(len(hfw_values))])
-        c_x = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0][0]  # obtaining the slope in x axis
+        c_x = 100 * linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0][0]  # obtaining the slope in x axis
         coefficients_y = array([hfw_values, ones(len(hfw_values))])
-        c_y = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0][0]  # obtaining the slope in y axis
+        c_y = 100 * linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0][0]  # obtaining the slope in y axis
         return c_x, c_y
 
     finally:
@@ -1103,9 +1103,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
                                        zoom=(max_resolution / escan.resolution.value[0]))
                 # Apply phase correlation
                 shift_pxs = CalculateDrift(largest_image, resampled_image, 10)
-                pixelSize = largest_image.metadata[model.MD_PIXEL_SIZE]
-                shift = (shift_pxs[0] * pixelSize[0], shift_pxs[1] * pixelSize[1])
-                shift_values.append(shift)
+                shift_values.append(1 / numpy.arctan(2 * math.pi * shift_pxs / cur_resolution))
                 resolution_values.append(cur_resolution)
             else:
                 largest_image = smaller_image
@@ -1115,9 +1113,13 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
 
         # Linear fit
         coefficients_x = array([resolution_values, ones(len(resolution_values))])
-        [a_x, b_x] = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0]  # obtaining the slope and intercept in x axis
+        [a_nx, b_nx] = linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0]  # obtaining the slope and intercept in x axis
         coefficients_y = array([resolution_values, ones(len(resolution_values))])
-        [a_y, b_y] = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
+        [a_ny, b_ny] = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
+        a_x = -1 / a_nx
+        b_x = b_nx / a_nx
+        a_y = -1 / a_ny
+        b_y = b_ny / a_ny
         return (a_x, a_y), (b_x, b_y)
 
     finally:
