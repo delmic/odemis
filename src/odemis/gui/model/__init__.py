@@ -185,7 +185,7 @@ class MainGUIData(object):
 
             # Spectrograph is not directly an actuator, but a sub-comp of spectrometer
             if self.spectrometer:
-                for child in self.spectrometer.children:
+                for child in self.spectrometer.children.value:
                     if child.role == "spectrograph":
                         self.spectrograph = child
 
