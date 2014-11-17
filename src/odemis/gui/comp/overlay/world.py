@@ -648,7 +648,7 @@ class LineSelectOverlay(WorldSelectOverlay):
         v_pos = evt.GetPositionTuple()
         hover = self.is_hovering(v_pos)
 
-        if hover in (gui.HOVER_START, gui.HOVER_END):
+        if not evt.Dragging() and hover in (gui.HOVER_START, gui.HOVER_END):
             self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
         else:
             super(LineSelectOverlay, self)._on_motion(evt)
