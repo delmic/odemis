@@ -1106,11 +1106,11 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
                 shift_values.append(((1 / numpy.arctan(2 * math.pi * shift_pxs[0] / cur_resolution)),
                                      (1 / numpy.arctan(2 * math.pi * shift_pxs[1] / cur_resolution))))
                 resolution_values.append(cur_resolution)
+                cur_resolution = cur_resolution - 64
             else:
                 largest_image = smaller_image
-
-            # Zoom out to the double resolution
-            cur_resolution = cur_resolution - 64
+                # Ignore value between 2048 and 1024
+                cur_resolution = cur_resolution - 1024
 
         # Linear fit
         coefficients_x = array([resolution_values, ones(len(resolution_values))])
