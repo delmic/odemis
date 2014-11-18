@@ -329,7 +329,7 @@ class Scanner(model.Emitter):
         self.accelVoltage.subscribe(self._onVoltage)
 
         # 16 or 8 bits image
-        self.bpp = model.IntEnumerated(16, set([8, 16]),
+        self.bpp = model.IntEnumerated(8, set([8, 16]),
                                           unit="", setter=self._setBpp)
 
         # Directly set spot size instead of probe current due to Phenom API
