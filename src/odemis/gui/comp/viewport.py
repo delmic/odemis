@@ -586,6 +586,7 @@ class PlotViewport(ViewPort):
         """ This method will connect this ViewPort to the Spectrum Stream so it
         it can react to spectrum pixel selection.
         """
+
         ss = self.microscope_view.stream_tree.spectrum_streams
 
         # There should be exactly one Spectrum stream. In the future there

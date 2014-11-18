@@ -1514,6 +1514,7 @@ class AnalysisTab(Tab):
 
     def _on_line_select(self, start_end):
         """ Event handler for when a line is selected """
+
         # If the right tool is active...
         if self.tab_data_model.tool.value == guimod.TOOL_LINE:
             pass

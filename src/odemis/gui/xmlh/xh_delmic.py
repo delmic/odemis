@@ -707,7 +707,6 @@ class SecomViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.SecomViewport
 
-    # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "SecomViewport")
 HANDLER_CLASS_LIST.append(SecomViewportXmlHandler)
@@ -717,7 +716,6 @@ class SparcAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.SparcAcquisitionViewport
 
-    # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "SparcAcquisitionViewport")
 HANDLER_CLASS_LIST.append(SparcAcquisitionViewportXmlHandler)
@@ -727,28 +725,37 @@ class SparcAlignViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.SparcAlignViewport
 
-    # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "SparcAlignViewport")
 HANDLER_CLASS_LIST.append(SparcAlignViewportXmlHandler)
+
 
 class PlotViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.PlotViewport
 
-    # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "PlotViewport")
 HANDLER_CLASS_LIST.append(PlotViewportXmlHandler)
+
 
 class AngularResolvedViewportXmlHandler(MicroscopeViewportXmlHandler):
 
     klass = vport.AngularResolvedViewport
 
-    # This method and the next one are required for XmlResourceHandlers
     def CanHandle(self, node):
         return self.IsOfClass(node, "AngularResolvedViewport")
 HANDLER_CLASS_LIST.append(AngularResolvedViewportXmlHandler)
+
+
+class SpatialSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
+
+    klass = vport.SpatialSpectrumViewport
+
+    def CanHandle(self, node):
+        return self.IsOfClass(node, "SpatialSpectrumViewport")
+HANDLER_CLASS_LIST.append(SpatialSpectrumViewportXmlHandler)
+
 
 ##################################
 # Sliders
@@ -851,6 +858,7 @@ class UnitFloatSliderHandler(xrc.XmlResourceHandler):
         return slider
 HANDLER_CLASS_LIST.append(UnitFloatSliderHandler)
 
+
 class VisualRangeSliderHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -875,6 +883,7 @@ class VisualRangeSliderHandler(xrc.XmlResourceHandler):
         return slider
 HANDLER_CLASS_LIST.append(VisualRangeSliderHandler)
 
+
 class BandwidthSliderHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -898,6 +907,7 @@ class BandwidthSliderHandler(xrc.XmlResourceHandler):
         slider.SetForegroundColour(slider.GetForegroundColour())
         return slider
 HANDLER_CLASS_LIST.append(BandwidthSliderHandler)
+
 
 ####################################################################
 # OwnerDrawnComboBox Handlers
@@ -938,6 +948,7 @@ class OwnerDrawnComboBoxHandler(xrc.XmlResourceHandler):
         self.SetupWindow(new_ctrl)
         return new_ctrl
 HANDLER_CLASS_LIST.append(OwnerDrawnComboBoxHandler)
+
 
 ####################################################################
 # ToolBar Handler
@@ -982,12 +993,12 @@ class ToolBarHandler(xrc.XmlResourceHandler):
         return toolbar
 HANDLER_CLASS_LIST.append(ToolBarHandler)
 
+
 ####################################################################
 # ViewportGrid
 #
 # Container for the 2x2 viewport grid
 ####################################################################
-
 
 class ViewportGridHandler(xrc.XmlResourceHandler):
 

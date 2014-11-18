@@ -562,7 +562,7 @@ class LineSelectOverlay(WorldSelectOverlay):
             b_circle_con = (b_start[0] - x_offset, b_start[1] - y_offset)
 
             # Draws a black background for the line
-            ctx.set_line_width(4)
+            ctx.set_line_width(3)
             ctx.set_source_rgba(0, 0, 0, 0.5)
             ctx.move_to(*b_circle_con)
             ctx.line_to(*b_arrow_con)
