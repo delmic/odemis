@@ -26,7 +26,7 @@ import sys
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-LENS_KNOWN_FOCUS = {"z":0.0377}
+LENS_KNOWN_FOCUS = {"z":0.03826}
 
 def main(args):
     """
@@ -98,8 +98,8 @@ def main(args):
         f.result()
 
         # Lens to a good focus position
-        # f = focus.moveAbs(LENS_KNOWN_FOCUS)
-        # f.result()
+        f = focus.moveAbs(LENS_KNOWN_FOCUS)
+        f.result()
 
         # Compute calibration values
         f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,

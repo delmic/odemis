@@ -1103,8 +1103,8 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
                                        zoom=(max_resolution / escan.resolution.value[0]))
                 # Apply phase correlation
                 shift_pxs = CalculateDrift(largest_image, resampled_image, 10)
-                shift_values.append(((1 / numpy.arctan(2 * math.pi * shift_pxs[0] / cur_resolution)),
-                                     (1 / numpy.arctan(2 * math.pi * shift_pxs[1] / cur_resolution))))
+                shift_values.append(((1 / numpy.tan(2 * math.pi * shift_pxs[0] / max_resolution)),
+                                     (1 / numpy.tan(2 * math.pi * shift_pxs[1] / max_resolution))))
                 resolution_values.append(cur_resolution)
                 cur_resolution = cur_resolution - 64
             else:
