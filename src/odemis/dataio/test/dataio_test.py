@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from __future__ import division
 from odemis import dataio
-from odemis.dataio import get_available_formats, get_exporter, \
+from odemis.dataio import get_available_formats, get_converter, \
     find_fittest_exporter
 from unittest.case import skip
 import os
@@ -28,7 +28,7 @@ class TestDataIO(unittest.TestCase):
         for mode in [os.O_RDONLY, os.O_WRONLY, os.O_RDWR]:
             fmts = get_available_formats(mode)
             self.assertGreaterEqual(len(dataio.__all__), len(fmts))
-            
+
             for fmt, exts in fmts.items():
                 for ext in exts:
                     self.assertTrue(ext.startswith("."),
@@ -38,10 +38,10 @@ class TestDataIO(unittest.TestCase):
         all_fmts = get_available_formats(os.O_RDWR, allowlossy=True)
         self.assertEqual(len(dataio.__all__), len(all_fmts))
 
-    def test_get_exporter(self):
+    def test_get_converter(self):
         fmts = get_available_formats()
         for fmt in fmts:
-            fmt_mng = get_exporter(fmt)
+            fmt_mng = get_converter(fmt)
             self.assertGreaterEqual(fmt_mng.EXTENSIONS, 1)
 
     def test_find_fittest_exporter(self):

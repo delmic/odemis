@@ -587,6 +587,7 @@ class View(object):
 
 MAX_SAFE_MOVE_DISTANCE = 1e-3  # 1 mm
 
+
 class StreamView(View):
     """
     An abstract class that is common for every view which display layers of
@@ -848,6 +849,7 @@ class StreamView(View):
         """
         return issubclass(stream_cls, self.stream_classes)
 
+
 class MicroscopeView(StreamView):
     """
     Represents a view from a microscope and ways to alter it.
@@ -855,13 +857,14 @@ class MicroscopeView(StreamView):
     def __init__(self, name, stage=None, **kwargs):
         StreamView.__init__(self, name, stage=stage, **kwargs)
         if stage:
-            self.stage_pos.subscribe(self._onStagePos)
+            self.stage_pos.subscribe(self._on_stage_pos)
 
-    def _onStagePos(self, pos):
+    def _on_stage_pos(self, pos):
         # we want to recenter the viewports whenever the stage moves
         # TODO: avoid it to move the view when the user is dragging the view
         #  => might require cleverness in the canvas
         self.view_pos.value = [pos["x"], pos["y"]]
+
 
 class OverviewView(StreamView):
     """

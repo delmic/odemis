@@ -241,8 +241,7 @@ class StreamController(object):
                       self._main_data_model.ebeam)
         return self._addStream(s, **kwargs)
 
-    def addStatic(self, name, image,
-                  cls=StaticStream, **kwargs):
+    def addStatic(self, name, image, cls=StaticStream, **kwargs):
         """
         Creates a new static stream and panel in the stream bar
 
@@ -250,7 +249,9 @@ class StreamController(object):
         :param image: (DataArray)
         :param cls: (class of Stream)
         :param returns: (StreamPanel): the panel created
+
         """
+
         s = cls(name, image)
         return self.addStream(s, **kwargs)
 

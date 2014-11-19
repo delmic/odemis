@@ -5,7 +5,7 @@ Created on 26 Jun 2013
 
 @author: Éric Piel
 
-This is a script to acquire a set of images from the AR CCD from various e-beam 
+This is a script to acquire a set of images from the AR CCD from various e-beam
 spots on the sample along a grid.
 
 run as:
@@ -13,7 +13,7 @@ run as:
 
 -z only defines a value to put in the filename.
 --prefix indicates the beginning of the filename.
-The files are saved in HDF5, with the z, y, x positions (in nm) in the name. 
+The files are saved in HDF5, with the z, y, x positions (in nm) in the name.
 
 You first need to run the odemis backend with the SPARC config:
 odemisd --log-level 2 install/linux/usr/share/odemis/sparc-amolf.odm.yaml
@@ -97,7 +97,7 @@ def calc_xy_pos(escan):
     Compute the X and Y positions of the ebeam
     Uses N_X, N_Y
     escan (model.Emitter): the e-beam scanner
-    returns: xps (list of float): X positions in the ebeam coordinates 
+    returns: xps (list of float): X positions in the ebeam coordinates
              yps (list of float): Y positions in the ebeam coordinates
     """
     # position is expressed in pixels, within the .translation ranges
@@ -252,7 +252,7 @@ def save_data(data, **kwargs):
     data (model.DataArray or list of model.DataArray): the data to save
     kwargs (dict (str->value)): values to substitute in the file name
     """
-    exporter = dataio.get_exporter(FMT)
+    exporter = dataio.get_converter(FMT)
     fn = FN_FMT % kwargs
 
     if os.path.exists(fn):

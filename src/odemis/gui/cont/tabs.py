@@ -1020,8 +1020,7 @@ class AnalysisTab(Tab):
         # TODO: automatically change the display type based on the acquisition
         # displayed
         tab_data = guimod.AnalysisGUIData(main_data)
-        super(AnalysisTab, self).__init__(name, button, panel,
-                                          main_frame, tab_data)
+        super(AnalysisTab, self).__init__(name, button, panel, main_frame, tab_data)
 
         viewports = [
             self.main_frame.vp_inspection_tl,
@@ -1029,7 +1028,8 @@ class AnalysisTab(Tab):
             self.main_frame.vp_inspection_bl,
             self.main_frame.vp_inspection_br,
             self.main_frame.vp_inspection_plot,
-            self.main_frame.vp_angular
+            self.main_frame.vp_angular,
+            self.main_frame.vp_spatialspec,
         ]
 
         # The view controller also has special code for the sparc to create the
@@ -1150,7 +1150,6 @@ class AnalysisTab(Tab):
         if dialog.ShowModal() != wx.ID_OK:
             return False
 
-
         # Detect the format to use
         fn = dialog.GetPath()
         logging.debug("Current file set to %s", fn)
@@ -1179,10 +1178,10 @@ class AnalysisTab(Tab):
         self.select_acq_file()
 
     def load_data(self, fmt, fn):
-        converter = dataio.get_exporter(fmt)
+        converter = dataio.get_converter(fmt)
         try:
             data = converter.read_data(fn)
-        except Exception:  #pylint: disable=W0703
+        except Exception:
             logging.exception("Failed to open file '%s' with format %s", fn, fmt)
 
         self.display_new_data(fn, data)
@@ -1218,6 +1217,7 @@ class AnalysisTab(Tab):
         ar_data = []
 
         acq_date = fi.metadata.get(model.MD_ACQ_DATE, None)
+
         # Add each data as a stream of the correct type
         for d in data:
             try:
@@ -1227,15 +1227,17 @@ class AnalysisTab(Tab):
                 pass  # => don't update the acq_date
 
             # Streams only support 2D data (e.g., no multiple channels like RGB)
-            # excepted for spectrums which have a 3rd dimensions on dim 5.
+            # excepted for spectra which have a 3rd dimensions on dim 5.
             # So if it's the case => separate into one stream per channel
             cdata = self._split_channels(d)
 
             for cd in cdata:
                 # TODO: be more clever to detect the type of stream
-                if (model.MD_WL_LIST in cd.metadata or
-                            model.MD_WL_POLYNOMIAL in cd.metadata or
-                        (len(cd.shape) >= 5 and cd.shape[-5] > 1)):
+                if (
+                        model.MD_WL_LIST in cd.metadata
+                        or model.MD_WL_POLYNOMIAL in cd.metadata
+                        or (len(cd.shape) >= 5 and cd.shape[-5] > 1)
+                ):
                     desc = cd.metadata.get(model.MD_DESCRIPTION, "Spectrum")
                     cls = streammod.StaticSpectrumStream
                 elif model.MD_AR_POLE in cd.metadata:
@@ -2188,7 +2190,7 @@ class TabBarController(object):
         self.main_data = main_data
 
         # create all the tabs that fit the microscope role
-        tab_list = self._filter_tabs(tab_rules, main_frame, main_data)
+        tab_list = self._create_needed_tabs(tab_rules, main_frame, main_data)
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
             raise LookupError(msg)
@@ -2222,10 +2224,8 @@ class TabBarController(object):
         for tab in self._tab.choices:
             tab.button.Enable(not is_acquiring)
 
-    def _filter_tabs(self, tab_defs, main_frame, main_data):
-        """
-        Filter the tabs according to the role of the microscope, and creates
-        the ones needed.
+    def _create_needed_tabs(self, tab_defs, main_frame, main_data):
+        """ Create the tabs needed by the current microscope
 
         Tabs that are not wanted or needed will be removed from the list and
         the associated buttons will be hidden in the user interface.

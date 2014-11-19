@@ -128,65 +128,64 @@ class ViewPortController(object):
             assert len(self._viewports) >= 4
             # TODO: should be dependent on the type of acquisition, and so updated every time the
             # .file changes
-            if self._main_data_model.role == "sparc":
-                logging.info("Creating (static) SPARC viewport layout")
-                vpv = collections.OrderedDict([
-                    (self._viewports[0],  # focused view
-                     {"name": "SEM",
-                      "stream_classes": EMStream,
-                      }),
-                    (self._viewports[1],
-                     {"name": "Spectrum",
-                      "stream_classes": (OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[2],
-                     {"name": "Dummy",  # will be immediately swapped for AR
-                      "stream_classes": (),  # Nothing
-                      }),
-                    (self._viewports[3],
-                     {"name": "SEM CL",
-                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
-                      }),
-                    # Spectrum viewport is *also* needed for Analysis tab in the
-                    # Sparc configuration
-                    (self._viewports[4],
-                     {"name": "Spectrum plot",
-                      "stream_classes": SpectrumStream,
-                      }),
-                    (self._viewports[5],
-                     {"name": "Angle resolved",
-                      "stream_classes": ARStream,
-                      }),
-                ])
-            else:
-                logging.info("Creating generic static viewport layout")
-                vpv = collections.OrderedDict([
-                    (self._viewports[0],  # focused view
-                     {"name": "SEM",
-                      "stream_classes": EMStream,
-                      }),
-                    (self._viewports[1],
-                     {"name": "Optical",
-                      "stream_classes": (OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[2],
-                     {"name": "Combined 1",
-                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[3],
-                     {"name": "Combined 2",
-                      "stream_classes": (EMStream, OpticalStream, SpectrumStream),
-                      }),
-                    (self._viewports[4],
-                     {"name": "Spectrum plot",
-                      "stream_classes": SpectrumStream
-                      }),
-                    # TODO: this one doesn't make sense
-                    # (self._viewports[5],
-                    #  {"name": "Overview",
-                    #   "stream_classes": SpectrumStream
-                    #  }),
-                ])
+            logging.info("Creating (static) SPARC viewport layout")
+            vpv = collections.OrderedDict([
+                (self._viewports[0],  # focused view
+                 {"name": "SEM",
+                  "stream_classes": EMStream,
+                  }),
+                (self._viewports[1],
+                 {"name": "Spectrum",
+                  "stream_classes": (OpticalStream, SpectrumStream),
+                  }),
+                (self._viewports[2],
+                 {"name": "Dummy",  # will be immediately swapped for AR
+                  "stream_classes": (),  # Nothing
+                  }),
+                (self._viewports[3],
+                 {"name": "SEM CL",
+                  "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+                  }),
+                # Spectrum viewport is *also* needed for Analysis tab in the
+                # Sparc configuration
+                (self._viewports[4],
+                 {"name": "Spectrum plot",
+                  "stream_classes": SpectrumStream,
+                  }),
+                (self._viewports[5],
+                 {"name": "Angle resolved",
+                  "stream_classes": ARStream,
+                  }),
+            ])
+            # else:
+            #     logging.info("Creating generic static viewport layout")
+            #     vpv = collections.OrderedDict([
+            #         (self._viewports[0],  # focused view
+            #          {"name": "SEM",
+            #           "stream_classes": EMStream,
+            #           }),
+            #         (self._viewports[1],
+            #          {"name": "Optical",
+            #           "stream_classes": (OpticalStream, SpectrumStream),
+            #           }),
+            #         (self._viewports[2],
+            #          {"name": "Combined 1",
+            #           "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+            #           }),
+            #         (self._viewports[3],
+            #          {"name": "Combined 2",
+            #           "stream_classes": (EMStream, OpticalStream, SpectrumStream),
+            #           }),
+            #         (self._viewports[4],
+            #          {"name": "Spectrum plot",
+            #           "stream_classes": SpectrumStream
+            #           }),
+            #         # TODO: this one doesn't make sense
+            #         # (self._viewports[5],
+            #         #  {"name": "Overview",
+            #         #   "stream_classes": SpectrumStream
+            #         #  }),
+            #     ])
             self._create_views_fixed(vpv)
             return
 

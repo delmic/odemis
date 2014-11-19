@@ -685,3 +685,34 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
+
+    def setView(self, microscope_view, tab_data):
+        """
+        Set the microscope view that this viewport is displaying/representing
+        *Important*: Should be called only once, at initialisation.
+
+        :param microscope_view:(model.View)
+        :param tab_data: (model.MicroscopyGUIData)
+
+        TODO: rename `microscope_view`, since this parameter is a regular view
+        """
+
+        # This is a kind of a kludge, as it'd be best to have the viewport
+        # created after the microscope view, but they are created independently
+        # via XRC.
+        assert(self._microscope_view is None)
+
+        # import traceback
+        # traceback.print_stack()
+
+        self._microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(microscope_view, tab_data)
+
+        # Keep an eye on the stream tree, so we can (re)connect when it changes
+        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
+        # FIXME: it shouldn't listen to should_update, but to modifications of
+        # the stream tree itself... it just there is nothing to do that.
+        microscope_view.lastUpdate.subscribe(self.connect_stream)

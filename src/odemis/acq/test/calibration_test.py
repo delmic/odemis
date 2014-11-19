@@ -66,7 +66,7 @@ class TestAR(unittest.TestCase):
 
     def test_load_full(self):
         """
-        Check the whole sequence: saving calibration data to file, loading it 
+        Check the whole sequence: saving calibration data to file, loading it
         back from file, finding it.
         """
         # AR background data
@@ -101,7 +101,7 @@ class TestAR(unittest.TestCase):
         full_data = [data1, calib, data2]
 
         for fmt in dataio.get_available_formats():
-            exporter = dataio.get_exporter(fmt)
+            exporter = dataio.get_converter(fmt)
             logging.info("Trying to export/import with %s", fmt)
             fn = u"test_ar" + exporter.EXTENSIONS[0]
             exporter.export(fn, full_data, thumb)
@@ -119,8 +119,8 @@ class TestSpectrum(unittest.TestCase):
     """
     Test the Spectrum related functions
     """
-    
-    
+
+
     def test_load_background(self):
         # Background data
         dcalib = numpy.array([1, 2, 2, 3, 4, 5, 4, 6, 9], dtype=numpy.uint16)
@@ -177,7 +177,7 @@ class TestSpectrum(unittest.TestCase):
 
     def test_load_full(self):
         """
-        Check the whole sequence: saving calibration data to file, loading it 
+        Check the whole sequence: saving calibration data to file, loading it
         back from file, finding it.
         """
         # Background data
@@ -200,12 +200,12 @@ class TestSpectrum(unittest.TestCase):
 
         # RGB image
         thumb = model.DataArray(numpy.ones((520, 230, 3), dtype=numpy.uint8))
-        
+
         full_coef = [data1, calib, data2]
         full_bckg = [data1, bckg, data2]
 
         for fmt in dataio.get_available_formats():
-            exporter = dataio.get_exporter(fmt)
+            exporter = dataio.get_converter(fmt)
             logging.info("Trying to export/import with %s", fmt)
             fn_coef = u"test_spec" + exporter.EXTENSIONS[0]
             exporter.export(fn_coef, full_coef, thumb)
@@ -225,14 +225,14 @@ class TestSpectrum(unittest.TestCase):
             os.remove(fn_coef)
             os.remove(fn_bckg)
 
-    
+
     def test_compensate(self):
         """Test applying efficiency compensation"""
         # Spectrum
         data = numpy.ones((251, 1, 1, 200, 300), dtype="uint16") + 1
         wld = 433e-9 + numpy.array(range(data.shape[0])) * 0.1e-9
         spec = model.DataArray(data, metadata={model.MD_WL_LIST: wld})
-        
+
         # Background data
         dbckg = numpy.ones(data.shape, dtype=numpy.uint16)
         wl_bckg = 400e-9 + numpy.array(range(dbckg.shape[0])) * 10e-9
@@ -277,7 +277,7 @@ class TestSpectrum(unittest.TestCase):
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
 
         compensated = calibration.compensate_spectrum_efficiency(spec, coef=calib)
-        
+
         self.assertEqual(spec.shape, compensated.shape)
         numpy.testing.assert_equal(spec.metadata[model.MD_WL_LIST],
                                    compensated.metadata[model.MD_WL_LIST])

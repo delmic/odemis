@@ -138,7 +138,7 @@ class SnapshotController(object):
                 logging.warning(msg, filepath)
                 tab, filepath = None, None
 
-        exporter = dataio.get_exporter(config.last_format)
+        exporter = dataio.get_converter(config.last_format)
 
         return tab, filepath, exporter
 
@@ -623,7 +623,7 @@ class SparcAcquiController(object):
                           len(data), exp)
 
         filename = self.filename.value
-        exporter = dataio.get_exporter(self.conf.last_format)
+        exporter = dataio.get_converter(self.conf.last_format)
         exporter.export(filename, data, thumb)
         logging.info(u"Acquisition saved as file '%s'.", filename)
         return data, exp, filename
