@@ -932,8 +932,8 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         max_hfw = 1200e-06  # m
         min_hfw = 37.5e-06  # m
         cur_hfw = min_hfw
-        shift_values = [(0, 0)]
-        hfw_values = [min_hfw]
+        shift_values = []
+        hfw_values = []
         zoom_f = 2  # zoom factor
         # Just to force autocontrast
         escan.accelVoltage.value += 100
@@ -1077,8 +1077,8 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         max_resolution = 2048  # pixels
         min_resolution = 256  # pixels
         cur_resolution = max_resolution
-        shift_values = [(0, 0)]
-        resolution_values = [max_resolution]
+        shift_values = []
+        resolution_values = []
         # Just to force autocontrast
         escan.accelVoltage.value += 100
         # Apply the given sem focus value for a good focus level
