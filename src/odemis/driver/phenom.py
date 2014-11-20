@@ -701,6 +701,9 @@ class Detector(model.Detector):
             # TODO beam shift/translation
             self._scanParams.center.x = 0.0355
             self._scanParams.center.y = 0
+            # resolution = self.parent._scanner.resolution.value
+            # self._scanParams.center.x = -(1/(2*math.pi)*numpy.arctan(-AX/(resolution[0]+BX)) + CX/100)
+            # self._scanParams.center.y = -(1/(2*math.pi)*numpy.arctan(-AY/(resolution[1]+BY)) + CY/100)
 
             # update changed metadata
             metadata = dict(self.parent._metadata)
