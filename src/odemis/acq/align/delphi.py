@@ -884,7 +884,7 @@ def HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=SEM_KNOW
     f._hfw_shift_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelHoleDetection
+    f.task_canceller = _CancelHFWShiftFactor
     f._hfw_shift_lock = threading.Lock()
 
     # Run in separate thread
@@ -1029,7 +1029,7 @@ def ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, known_focus=S
     f._resolution_shift_state = RUNNING
 
     # Task to run
-    f.task_canceller = _CancelHoleDetection
+    f.task_canceller = _CancelResolutionShiftFactor
     f._resolution_shift_lock = threading.Lock()
 
     # Run in separate thread
@@ -1151,3 +1151,132 @@ def estimateResolutionShiftFactorTime(et):
     # Approximately 28 acquisitions
     dur = 28 * et + 1
     return  dur  # s
+
+def SpotShiftFactor(ccd, detector, escan, focus):
+    """
+    Wrapper for DoSpotShiftFactor. It provides the ability to check the 
+    progress of the procedure.
+    ccd (model.DigitalCamera): The ccd
+    escan (model.Emitter): The e-beam scanner
+    focus (model.Actuator): Focus of objective lens
+    returns (ProgressiveFuture): Progress DoSpotShiftFactor
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateSpotShiftFactor(ccd.exposureTime.value))
+    f._spot_shift_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelSpotShiftFactor
+    f._spot_shift_lock = threading.Lock()
+
+    # Run in separate thread
+    spot_shift_thread = threading.Thread(target=executeTask,
+                  name="Spot Shift Factor",
+                  args=(f, _DoSpotShiftFactor, f, ccd, detector, escan, focus))
+
+    spot_shift_thread.start()
+    return f
+
+def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
+    """
+    We assume that the stages are already aligned and the CL spot is within the 
+    CCD FoV. It first acquires an optical image with the current rotation applied 
+    and detects the spot position. Then, it rotates by 180 degrees, acquires an 
+    image and detects the new spot position. The distance between the two positions 
+    is calculated and the average is returned as the offset from the center of 
+    the SEM image (it is also divided by the current HFW in order to get a 
+    percentage). 
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    ccd (model.DigitalCamera): The ccd
+    escan (model.Emitter): The e-beam scanner
+    focus (model.Actuator): Focus of objective lens
+    returns (tuple of floats): shift percentage
+    raises:    
+        CancelledError() if cancelled
+        IOError if CL spot not found
+    """
+    logging.debug("Spot shift percentage calculation...")
+
+    # Configure CCD and e-beam to write CL spots
+    ccd.binning.value = (1, 1)
+    ccd.resolution.value = ccd.resolution.range[1]
+    ccd.exposureTime.value = 900e-03
+    escan.scale.value = (1, 1)
+    escan.resolution.value = (1, 1)
+    escan.translation.value = (0, 0)
+    escan.dwellTime.value = 5e-06
+    det_dataflow = detector.data
+
+    try:
+        if future._spot_shift_state == CANCELLED:
+            raise CancelledError()
+
+        # Keep current rotation
+        cur_rot = escan.rotation.value
+        # Location of spot with current rotation and after rotating by pi
+        spot = None
+        spot_rot_pi = None
+
+        image = SubstractBackground(ccd, det_dataflow)
+        try:
+            spot = spot.FindSpot(image)
+        except ValueError:
+            # If failed to find spot, try first to focus
+            f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+            f.result()
+            image = SubstractBackground(ccd, det_dataflow)
+            try:
+                spot = spot.FindSpot(image)
+            except ValueError:
+                raise IOError("CL spot not found.")
+        
+        #Now rotate and reacquire
+        escan.rotation.value = cur_rot - math.pi
+        image = SubstractBackground(ccd, det_dataflow)
+        try:
+            spot_rot_pi = spot.FindSpot(image)
+        except ValueError:
+            # If failed to find spot, try first to focus
+            f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
+            f.result()
+            image = SubstractBackground(ccd, det_dataflow)
+            try:
+                spot_rot_pi = spot.FindSpot(image)
+            except ValueError:
+                raise IOError("CL spot not found.")
+        pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+        vector_pxs = [a - b for a, b in zip(spot, spot_rot_pi)]
+        vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
+        percentage = ((vector[0] / 2) / escan.horizontalFoV.value, (vector[1] / 2) / escan.horizontalFoV.value)
+        return percentage
+    finally:
+        escan.rotation.value = cur_rot
+        escan.resolution.value = (512, 512)
+        with future._spot_shift_lock:
+            if future._spot_shift_state == CANCELLED:
+                raise CancelledError()
+            future._spot_shift_state = FINISHED
+
+def _CancelSpotShiftFactor(future):
+    """
+    Canceller of _DoSpotShiftFactor task.
+    """
+    logging.debug("Cancelling spot shift calculation...")
+
+    with future._spot_shift_lock:
+        if future._spot_shift_state == FINISHED:
+            return False
+        future._spot_shift_state = CANCELLED
+        logging.debug("Spot shift calculation cancelled.")
+
+    return True
+
+def estimateSpotShiftFactor(et):
+    """
+    Estimates spot shift calculation procedure duration
+    returns (float):  process estimated time #s
+    """
+    # 2 ccd acquisitions plus some time to detect the spots
+    return 2 * et + 4  # s

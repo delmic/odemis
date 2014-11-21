@@ -1553,7 +1553,11 @@ class ChamberPressure(model.Actuator):
                         self._pressure_device.GetSEMDeviceMode() != "SEM-MODE-IMAGING"):
                         # If in standby or currently waking up, open event channel
                         self._wakeUp()
-                    self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                    try:
+                        self._pressure_device.SelectImagingDevice(self._imagingDevice.SEMIMDEV)
+                    except suds.WebFault:
+                        # TODO, check why this exception appears only in CRUK
+                        logging.debug("Move appears not to be completed.")
                     # Take care of the calibration that takes place when we move to SEM
                     self._waitForDevice()
                 elif p["pressure"] == PRESSURE_NAVCAM:
