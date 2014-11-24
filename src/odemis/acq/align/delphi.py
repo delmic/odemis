@@ -1216,19 +1216,19 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
         # Keep current rotation
         cur_rot = escan.rotation.value
         # Location of spot with current rotation and after rotating by pi
-        spot = None
+        spot_no_rot = None
         spot_rot_pi = None
 
         image = SubstractBackground(ccd, det_dataflow)
         try:
-            spot = spot.FindSpot(image)
+            spot_no_rot = spot.FindSpot(image)
         except ValueError:
             # If failed to find spot, try first to focus
             f = autofocus.AutoFocus(ccd, escan, focus, autofocus.ROUGH_SPOTMODE_ACCURACY, background=True, dataflow=det_dataflow)
             f.result()
             image = SubstractBackground(ccd, det_dataflow)
             try:
-                spot = spot.FindSpot(image)
+                spot_no_rot = spot.FindSpot(image)
             except ValueError:
                 raise IOError("CL spot not found.")
         
@@ -1247,7 +1247,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
             except ValueError:
                 raise IOError("CL spot not found.")
         pixelSize = image.metadata[model.MD_PIXEL_SIZE]
-        vector_pxs = [a - b for a, b in zip(spot, spot_rot_pi)]
+        vector_pxs = [a - b for a, b in zip(spot_no_rot, spot_rot_pi)]
         vector = (vector_pxs[0] * pixelSize[0], vector_pxs[1] * pixelSize[1])
         percentage = ((vector[0] / 2) / escan.horizontalFoV.value, (vector[1] / 2) / escan.horizontalFoV.value)
         return percentage

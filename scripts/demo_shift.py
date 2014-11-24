@@ -41,6 +41,8 @@ def main(args):
                 escan = c
             elif c.role == "bs-detector":
                 detector = c
+            elif c.role == "focus":
+                focus = c
             elif c.role == "ccd":
                 ccd = c
             elif c.role == "sem-stage":
@@ -53,6 +55,10 @@ def main(args):
 
         logging.debug("Starting Phenom shift parameters calculation...")
         
+        # Compute spot shift percentage
+        f = delphi.SpotShiftFactor(ccd, detector, escan, focus)
+        percentage = f.result()
+
         # Compute resolution-related values
         f = delphi.ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus)
         (a_x, a_y), (b_x, b_y) = f.result()
@@ -65,7 +71,7 @@ def main(args):
         logging.exception("Unexpected error while performing action.")
         return 127
 
-    logging.info("\n**Computed shift parameters**\n a_x: %f \n a_y: %f \n b_x: %f \n b_y: %f \n c_x: %f \n c_y: %f \n", a_x, a_y, b_x, b_y, c_x, c_y)
+    logging.info("\n**Computed shift parameters**\n a_x: %f \n a_y: %f \n b_x: %f \n b_y: %f \n c_x: %f \n c_y: %f \n percentage: %s \n", a_x, a_y, b_x, b_y, c_x, c_y, percentage)
     return 0
 
 if __name__ == '__main__':
