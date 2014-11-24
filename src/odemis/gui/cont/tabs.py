@@ -1306,6 +1306,8 @@ class AnalysisTab(Tab):
                 cls=streammod.StaticARStream,
                 add_to_all_views=True)
 
+            self.tab_data_model.visible_views.value[2] = self.main_frame.vp_angular.microscope_view
+
         if acq_date:
             fi.metadata[model.MD_ACQ_DATE] = acq_date
         self.tab_data_model.acq_fileinfo.value = fi

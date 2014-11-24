@@ -1307,6 +1307,12 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
 class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
+    def __init__(self, *args, **kwargs):
+
+        super(OneDimensionalSpatialSpectrumCanvas, self).__init__(*args, **kwargs)
+        self.microscope_view = None
+        self._tab_data_model = None
+
     def draw(self):
         """ Map the image data to the canvas and draw it """
 
@@ -1330,6 +1336,20 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
             self.ctx.set_source(surfpat)
             self.ctx.paint()
+
+    def setView(self, microscope_view, tab_data):
+        """ Set the microscope_view that this canvas is displaying/representing
+        Can be called only once, at initialisation.
+
+        :param microscope_view:(model.MicroscopeView)
+        :param tab_data: (model.MicroscopyGUIData)
+        """
+        # This is a kind of kludge, see mscviewport.MicroscopeViewport for
+        # details
+        assert(self.microscope_view is None)
+
+        self.microscope_view = microscope_view
+        self._tab_data_model = tab_data
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):

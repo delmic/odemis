@@ -681,6 +681,8 @@ class SpatialSpectrumViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 
     This is a generic class, that should be inherited by more specific classes.
+
+    FIXME: This class shares a lot with PlotViewport, see what can be merged
     """
 
     canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
@@ -693,6 +695,8 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
+
+        self.spectrum_stream = None
 
     def setView(self, microscope_view, tab_data):
         """
@@ -724,3 +728,24 @@ class SpatialSpectrumViewport(ViewPort):
         # FIXME: it shouldn't listen to should_update, but to modifications of
         # the stream tree itself... it just there is nothing to do that.
         microscope_view.lastUpdate.subscribe(self.connect_stream)
+
+    def connect_stream(self, _=None):
+        """ This method will connect this ViewPort to the Spectrum Stream so it
+        it can react to spectrum pixel selection.
+        """
+
+        ss = self.microscope_view.stream_tree.spectrum_streams
+
+        # There should be exactly one Spectrum stream. In the future there
+        # might be scenarios where there are more than one.
+        if not ss:
+            # if self.spectrum_stream is not None:
+                # self.spectrum_stream.selected_pixel.unsubscribe(self._on_pixel_select)
+            self.spectrum_stream = None
+            logging.warn("No spectrum streams found")
+            return
+        elif len(ss) > 1:
+            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
+
+        self.spectrum_stream = ss[0]
+        # self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
