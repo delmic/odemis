@@ -125,6 +125,10 @@ class ViewPortController(object):
 
         # If AnalysisTab for Sparc: SEM/Spec/AR/SEM
         if isinstance(self._data_model, model.AnalysisGUIData):
+
+            # FIXME: Since displaying viewports should be completely dynamic, the button labels
+            # should also be made to be dynamic in some way
+
             logging.info("Creating static viewport layout")
             vpv = collections.OrderedDict([
                 (self._viewports[0],  # focused view
@@ -136,11 +140,11 @@ class ViewPortController(object):
                   "stream_classes": EMStream,
                   }),
                 (self._viewports[2],
-                 {"name": "Dummy",
+                 {"name": "Combined 1",
                   "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                   }),
                 (self._viewports[3],
-                 {"name": "SEM CL",
+                 {"name": "Combined 2",  # Was SEM CL for Sparc
                   "stream_classes": (EMStream, OpticalStream, SpectrumStream),
                   }),
                 (self._viewports[4],
