@@ -576,7 +576,7 @@ class PlotViewport(ViewPort):
         self.Refresh()
 
     def OnSize(self, evt):
-        evt.Skip() # processed also by the parent
+        evt.Skip()  # processed also by the parent
 
     @property
     def microscope_view(self):
@@ -592,7 +592,11 @@ class PlotViewport(ViewPort):
         # There should be exactly one Spectrum stream. In the future there
         # might be scenarios where there are more than one.
         if not ss:
-            raise ValueError("No spectrum streams found")
+            if self.spectrum_stream is not None:
+                self.spectrum_stream.selected_pixel.unsubscribe(self._on_pixel_select)
+            self.spectrum_stream = None
+            logging.warn("No spectrum streams found")
+            return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
@@ -605,6 +609,10 @@ class PlotViewport(ViewPort):
             # TODO: handle more graciously when pixel is unselected?
             logging.warning("Don't know what to do when no pixel is selected")
             return
+        elif self.spectrum_stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit

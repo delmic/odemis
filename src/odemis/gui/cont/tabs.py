@@ -1013,6 +1013,33 @@ class SparcAcquisitionTab(Tab):
 
 
 class AnalysisTab(Tab):
+    """ Handle the loading and displaying of acquisistion files
+
+    Creation
+    ~~~~~~~~
+
+    During creation, the following controllers are created:
+
+    ViewPortController
+      Processes the given viewports by creating views for them, determining which stream classes
+      those views can handle and finally assigning them to their viewport.
+
+    StreamController
+      Keeps track of the available streams, which are all static
+
+    ViewButtonController
+        blah blah
+
+    Loading Data
+    ~~~~~~~~~~~~
+
+    In the `load_data` method the file data is loaded using the appropriate converter. It's then
+    passed on to the `display_new_data` method, which analyzes which static streams need to be
+    created. The StreamController is then asked to create the actual stream object and it also adds
+    them to every view which supports that (sub)type of stream.
+
+    """
+
     def __init__(self, name, button, panel, main_frame, main_data):
         """
         microscope will be used only to select the type of views
@@ -1055,12 +1082,12 @@ class AnalysisTab(Tab):
         # view controller be more clever and able to create viewports and
         # position them in the sizer.
         # Also see the button definition below.
-        if main_data.role == "sparc":
-            vp_bottom_left = self.main_frame.vp_angular
-            ar_view = vp_bottom_left.microscope_view
-            tab_data.visible_views.value[2] = ar_view  # switch views
-        else:
-            vp_bottom_left = self.main_frame.vp_inspection_bl
+        # if main_data.role == "sparc":
+        #     vp_bottom_left = self.main_frame.vp_angular
+        #     ar_view = vp_bottom_left.microscope_view
+        #     tab_data.visible_views.value[2] = ar_view  # switch views
+        # else:
+        #     vp_bottom_left = self.main_frame.vp_inspection_bl
 
         # save the views to be able to reset them later
         self._def_views = list(tab_data.visible_views.value)
@@ -1095,7 +1122,7 @@ class AnalysisTab(Tab):
             ),
             (
                 self.main_frame.btn_sparc_view_bl,
-                (vp_bottom_left, self.main_frame.lbl_sparc_view_bl)
+                (self.main_frame.vp_inspection_bl, self.main_frame.lbl_sparc_view_bl)
             ),
             (
                 self.main_frame.btn_sparc_view_br,
