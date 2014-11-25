@@ -719,9 +719,8 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
                     self.cnvs.update_drawing()
             else:
                 self.cnvs.reset_dynamic_cursor()
-        else:
-            self.cnvs.reset_dynamic_cursor()
-            super(PixelSelectOverlay, self).on_motion(evt)
+
+        super(PixelSelectOverlay, self).on_motion(evt)
 
     def on_left_down(self, evt):
 
