@@ -104,13 +104,14 @@ def main(args):
         # Compute calibration values
         f = delphi.UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                                     focus, comb_stage, True, sem_position=position)
-        first_hole, second_hole, hole_focus, offset, rotation, scaling = f.result()
+        first_hole, second_hole, hole_focus, offset, rotation, scaling, resa, resb, hfwa, spotshift = f.result()
 
     except:
         logging.exception("Unexpected error while performing action.")
         return 127
 
     logging.info("\n**Computed calibration values**\n first hole: %s (unit: m,m)\n second hole: %s (unit: m,m)\n hole focus: %f (unit: m)\n offset: %s (unit: m,m)\n rotation: %f (unit: radians)\n scaling: %s \n", first_hole, second_hole, hole_focus, offset, rotation, scaling)
+    logging.info("\n**Computed SEM shift parameters**\n resa: %s \n resb: %s \n hfwa: %s \n spotshift: %s \n", resa, resb, hfwa, spotshift)
     return 0
 
 if __name__ == '__main__':
