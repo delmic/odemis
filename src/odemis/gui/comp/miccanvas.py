@@ -1317,6 +1317,7 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         """ Map the image data to the canvas and draw it """
 
         im_data = self.images[0]
+
         if im_data is not None:
             im_format = cairo.FORMAT_RGB24
             height, width, _ = im_data.shape
@@ -1333,6 +1334,8 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             # Set the filter, so we get low quality but fast scaling
             surfpat.set_filter(cairo.FILTER_FAST)
 
+            # Scale the width and height separately in such a way that the image data fill the
+            # entire canvas
             self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
             self.ctx.set_source(surfpat)
             self.ctx.paint()
@@ -1350,6 +1353,16 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
 
         self.microscope_view = microscope_view
         self._tab_data_model = tab_data
+
+    def set_2d_data(self, domain, im_data, unit_x, unit_y=None):
+        """ Set the data to be displayed
+
+        TODO: Process the units for both the horizontal and vertical legends/axis
+        TODO: Allow for both a horizontal and vertical domain
+
+        """
+
+        self.set_images([(im_data, (0.0, 0.0), 1.0, True, None, None, "Spatial Spectrum")])
 
 
 class AngularResolvedCanvas(canvas.DraggableCanvas):
@@ -1371,7 +1384,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         self.background_brush = wx.SOLID  # background is always black
 
-        ## Overlays
+        # Overlays
 
         self.polar_overlay = view_overlay.PolarOverlay(self)
         self.polar_overlay.canvas_padding = 10
@@ -1431,7 +1444,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
         if self.microscope_view:
             self._updateThumbnail()
 
-    @wxlimit_invocation(2) # max 1/2 Hz
+    @wxlimit_invocation(2)  # max 1/2 Hz
     @call_after  # needed as it accesses the DC
     def _updateThumbnail(self):
         csize = self.ClientSize

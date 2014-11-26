@@ -1340,9 +1340,17 @@ class AnalysisTab(Tab):
                             (width, height),
                             strm.selected_pixel
                         )
+
+                    if hasattr(viewport.canvas, "line_overlay"):
+                        ol = viewport.canvas.line_overlay
+                        ol.set_line_va(strm.selected_line)
+
                 strm.selected_pixel.subscribe(self._on_pixel_select, init=True)
+                strm.selected_line.subscribe(self._on_line_select, init=True)
+
                 self.tb.enable_button(tools.TOOL_POINT, True)
                 self.tb.enable_button(tools.TOOL_LINE, True)
+
                 self.main_frame.vp_inspection_plot.clear()
                 break
             # If an angle resolve stream is found...
@@ -1528,13 +1536,16 @@ class AnalysisTab(Tab):
             plot_view = self.main_frame.vp_inspection_plot.microscope_view
 
             # ...and the plot view is not visible yet
-            if not plot_view in self.tab_data_model.visible_views.value:
-                # Try and display the plot in the 2nd (= top right) spot...
-                pos = 1
-                # .., but go for the bottom right one when the spec pixel was
-                # selected in the top right viewport
-                if (self.tab_data_model.focussedView.value ==
-                        self.main_frame.vp_inspection_tr.microscope_view):
+            if plot_view not in self.tab_data_model.visible_views.value:
+                # Display the plot in one of the bottom positions
+
+                pos = 2
+                bottom_left_vp = self.tab_data_model.visible_views.value[pos]
+
+                # Go for the bottom right one when the spec pixel was selected using the
+                # bottom left viewport
+
+                if self.tab_data_model.focussedView.value == bottom_left_vp:
                     pos = 3
 
                 self.tab_data_model.visible_views.value[pos] = plot_view
@@ -1543,29 +1554,31 @@ class AnalysisTab(Tab):
             if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
                 self.tab_data_model.focussedView.value = plot_view
 
-    def _on_line_select(self, start_end):
-        """ Event handler for when a line is selected """
+    def _on_line_select(self, _):
+        """ Event handler for when a spectrum line is selected """
 
         # If the right tool is active...
         if self.tab_data_model.tool.value == guimod.TOOL_LINE:
-            pass
-            # plot_view = self.main_frame.vp_inspection_plot.microscope_view
-            #
-            # # ...and the plot view is not visible yet
-            # if not plot_view in self.tab_data_model.visible_views.value:
-            #     # Try and display the plot in the 2nd (= top right) spot...
-            #     pos = 1
-            #     # .., but go for the bottom right one when the spec pixel was
-            #     # selected in the top right viewport
-            #     if (self.tab_data_model.focussedView.value ==
-            #             self.main_frame.vp_inspection_tr.microscope_view):
-            #         pos = 3
-            #
-            #     self.tab_data_model.visible_views.value[pos] = plot_view
-            #
-            # # If we're in 1x1 view, we're bringing the plot to the front
-            # if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
-            #     self.tab_data_model.focussedView.value = plot_view
+            spatial_view = self.main_frame.vp_spatialspec.microscope_view
+
+            # ...and the plot view is not visible yet
+            if spatial_view not in self.tab_data_model.visible_views.value:
+                # Display the plot in one of the bottom positions
+
+                pos = 2
+                bottom_left_vp = self.tab_data_model.visible_views.value[pos]
+
+                # Go for the bottom right one when the spec pixel was selected using the
+                # bottom left viewport
+
+                if self.tab_data_model.focussedView.value == bottom_left_vp:
+                    pos = 3
+
+                self.tab_data_model.visible_views.value[pos] = spatial_view
+
+            # If we're in 1x1 view, we're bringing the plot to the front
+            if self.tab_data_model.viewLayout.value == guimod.VIEW_LAYOUT_ONE:
+                self.tab_data_model.focussedView.value = spatial_view
 
     def _split_channels(self, data):
         """

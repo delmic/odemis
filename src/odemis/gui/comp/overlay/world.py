@@ -503,6 +503,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def __init__(self, cnvs):
         super(LineSelectOverlay, self).__init__(cnvs)
+        self._selected_line = None
 
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position """
@@ -511,9 +512,12 @@ class LineSelectOverlay(WorldSelectOverlay):
             self.w_start_pos = self.cnvs.view_to_world(self.v_start_pos, offset)
             self.w_end_pos = self.cnvs.view_to_world(self.v_end_pos, offset)
 
+            # FIXME: Translate to integer values
+            self._selected_line.value = (self.w_start_pos, self.w_end_pos)
+
     @staticmethod
     def _normalize(rect):
-        """ Lines don't need to be """
+        """ Lines don't need to be normalized """
         return rect
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
@@ -669,6 +673,17 @@ class LineSelectOverlay(WorldSelectOverlay):
     def stop_edit(self):
         super(LineSelectOverlay, self).stop_edit()
         self.cnvs.reset_dynamic_cursor()
+
+    def set_line_va(self, selected_line_va):
+        """ Set the line VA """
+        self._selected_line = selected_line_va
+        self._selected_line.subscribe(self._selection_made, init=True)
+
+    def _selection_made(self, selected_line):
+        """ Event handler that requests a redraw when the selected pixel changes """
+        if selected_line is not None:
+            self.w_start_pos, self.w_end_pos = selected_line
+            self.cnvs.update_drawing()
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):

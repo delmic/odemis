@@ -748,4 +748,25 @@ class SpatialSpectrumViewport(ViewPort):
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
         self.spectrum_stream = ss[0]
-        # self.spectrum_stream.selected_pixel.subscribe(self._on_pixel_select)
+        self.spectrum_stream.selected_line.subscribe(self._on_line_select)
+
+    def _on_line_select(self, line):
+        """ Line selection event handler """
+        if line == (None, None):
+            # TODO: handle more graciously when line is unselected?
+            logging.warning("Don't know what to do when no line is selected")
+            return
+        elif self.spectrum_stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
+        data = self.spectrum_stream.get_line_spectrum()
+        if data:
+            domain = self.spectrum_stream.get_spectrum_range()
+            unit_x = self.spectrum_stream.spectrumBandwidth.unit
+            self.bottom_legend.unit = unit_x
+            self.canvas.set_2d_data(domain, data, unit_x)
+        else:
+            logging.warn("No data to display for the selected line!")
+
+        self.Refresh()
