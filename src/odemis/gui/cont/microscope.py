@@ -648,7 +648,7 @@ class DelphiStateController(SecomStateController):
         # locate the top and bottom holes of the sample holder, using
         # the SEM. So once the sample is fully loaded, new and more
         # precise calibration will be set.
-        htop, hbot, strans, sscale, srot, iscale, irot = calib
+        htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = calib
 
         # update metadata to stage
         self._main_data.stage.updateMetadata({
@@ -674,6 +674,15 @@ class DelphiStateController(SecomStateController):
             # need to also set the rotation correction to indicate that the
             # acquired image should be seen straight (not rotated)
             self._main_data.ebeam.updateMetadata({model.MD_ROTATION_COR: irot})
+
+        # update detector metadata with the SEM image and spot shift correction
+        # values
+        self._main_data.bsd.updateMetadata({
+                  model.MD_RESOLUTION_SLOPE: resa,
+                  model.MD_RESOLUTION_INTERCEPT: resb,
+                  model.MD_HFW_SLOPE: hfwa,
+                  model.MD_SPOT_SHIFT: spotshift
+                  })
 
 
     def _check_holder_calib(self):
@@ -857,7 +866,7 @@ class DelphiStateController(SecomStateController):
                                              self._main_data.stage,
                                              first_insertion=True,
                                              sem_position=position)
-            htop, hbot, hole_focus, strans, srot, sscale = f.result()
+            htop, hbot, hole_focus, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
 
             # Run the optical fine alignment
             # TODO: reuse the exposure time
@@ -875,7 +884,8 @@ class DelphiStateController(SecomStateController):
 
         # TODO: once the hole focus is not fixed, save it in the config too
         # Update the calibration file
-        self._calibconf.set_sh_calib(shid, htop, hbot, strans, sscale, srot, iscale, irot)
+        self._calibconf.set_sh_calib(shid, htop, hbot, strans, sscale, srot, iscale, irot,
+                                     resa, resb, hfwa, spotshift)
 
         dlg.Destroy()
 

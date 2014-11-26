@@ -51,6 +51,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
+LENS_KNOWN_FOCUS = {"z":0.03826}  # Fallback optical focus position for the first insertion
 
 
 def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
@@ -58,7 +59,7 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                     known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
                     known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
                     known_resolution_slope=None, known_resolution_intercept=None,
-                    known_hfw_slope=None):
+                    known_hfw_slope=None, known_spot_shift=None):
     """
     Wrapper for DoUpdateConversion. It provides the ability to check the progress 
     of conversion update procedure or even cancel it.
@@ -82,6 +83,7 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
     known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
     known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
     known_hfw_slope (tuple of floats): slope of linear fit (hfw shift) 
+    known_spot_shift (tuple of floats): spot shift percentage 
     returns (model.ProgressiveFuture):    Progress of DoAlignSpot,
                                          whose result() will return:
             returns first_hole (tuple of floats): Coordinates of first hole
@@ -93,6 +95,7 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                     (tuple of floats): slope of linear fit (resolution shift)
                     (tuple of floats): intercept of linear fit (resolution shift)
                     (tuple of floats): slope of linear fit (hfw shift)
+                    (tuple of floats): spot shift percentage 
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
@@ -111,6 +114,7 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
     f._rotation_scalingf = model.InstantaneousFuture()
     f._hfw_shiftf = model.InstantaneousFuture()
     f._resolution_shiftf = model.InstantaneousFuture()
+    f._spot_shiftf = model.InstantaneousFuture()
 
     # Run in separate thread
     conversion_thread = threading.Thread(target=executeTask,
@@ -119,7 +123,7 @@ def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
                         opt_stage, ebeam_focus, focus, combined_stage, first_insertion,
                         known_first_hole, known_second_hole, known_focus, known_offset,
                         known_rotation, known_scaling, sem_position, known_resolution_slope,
-                        known_resolution_intercept, known_hfw_slope))
+                        known_resolution_intercept, known_hfw_slope, known_spot_shift))
 
     conversion_thread.start()
     return f
@@ -129,7 +133,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                     known_second_hole=None, known_focus=SEM_KNOWN_FOCUS, known_offset=None,
                     known_rotation=None, known_scaling=None, sem_position=EXPECTED_OFFSET,
                     known_resolution_slope=None, known_resolution_intercept=None,
-                    known_hfw_slope=None):
+                    known_hfw_slope=None, known_spot_shift=None):
     """
     First calls the HoleDetection to find the hole centers. Then if the current 
     sample holder is inserted for the first time, calls AlignAndOffset, 
@@ -159,6 +163,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
     known_resolution_slope (tuple of floats): slope of linear fit (resolution shift)
     known_resolution_intercept (tuple of floats): intercept of linear fit (resolution shift)
     known_hfw_slope (tuple of floats): slope of linear fit (hfw shift) 
+    known_spot_shift (tuple of floats): spot shift percentage 
     returns 
             first_hole (tuple of floats): Coordinates of first hole
             second_hole (tuple of floats): Coordinates of second hole
@@ -169,6 +174,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             (tuple of floats): slope of linear fit (resolution shift)
             (tuple of floats): intercept of linear fit (resolution shift)
             (tuple of floats): slope of linear fit (hfw shift)
+            (tuple of floats): spot shift percentage 
     raises:    
             CancelledError() if cancelled
             IOError
@@ -190,9 +196,12 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
         if first_insertion == True:
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
+            # Lens to a good focus position
+            f = focus.moveAbs(LENS_KNOWN_FOCUS)
+            f.result()
             # Update progress of the future
             future.set_end_time(time.time() +
-                estimateConversionTime(first_insertion) * (2 / 3))
+                estimateConversionTime(first_insertion) * (3 / 4))
             logging.debug("Move SEM stage to expected offset...")
             f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
             f.result()
@@ -215,7 +224,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 raise CancelledError()
             # Update progress of the future
             future.set_end_time(time.time() +
-                estimateConversionTime(first_insertion) * (1 / 3))
+                estimateConversionTime(first_insertion) * (2 / 4))
             logging.debug("Calculate rotation and scaling...")
             try:
                 future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
@@ -224,6 +233,25 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             except IOError:
                 raise IOError("Conversion update failed to calculate rotation and scaling.")
 
+            # Update progress of the future
+            future.set_end_time(time.time() +
+                estimateConversionTime(first_insertion) * (1 / 4))
+            logging.debug("Calculate shift parameters...")
+            try:
+                # Compute spot shift percentage
+                future._spot_shiftf = SpotShiftFactor(ccd, detector, escan, focus)
+                spotshift = future._spot_shiftf.result()
+
+                # Compute resolution-related values
+                future._resolution_shiftf = ResolutionShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
+                resa, resb = future._resolution_shiftf.result()
+
+                # Compute HFW-related values
+                future._hfw_shiftf = HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
+                hfwa = future._hfw_shiftf.result()
+            except IOError:
+                raise IOError("Conversion update failed to calculate shift parameters.")
+
             # Now we can return. There is no need to update the convert stage
             # metadata as the current sample holder will be unloaded
             # Offset is divided by scaling, since Convert Stage applies scaling
@@ -231,7 +259,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             offset = ((offset[0] / scaling[0]), (offset[1] / scaling[1]))
             # TODO also calculate and return Phenom shift parameters
             # Data returned needs to be filled in the calibration file
-            return first_hole, second_hole, hole_focus, offset, rotation, scaling
+            return first_hole, second_hole, hole_focus, offset, rotation, scaling, resa, resb, hfwa, spotshift
 
         else:
             if future._conversion_update_state == CANCELLED:
@@ -254,7 +282,8 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             combined_stage.updateMetadata({model.MD_PIXEL_SIZE_COR: known_scaling})
             # TODO also return Phenom shift parameters
             # Data returned should NOT be filled in the calibration file
-            return first_hole, second_hole, hole_focus, updated_offset, updated_rotation, known_scaling
+            return first_hole, second_hole, hole_focus, updated_offset, updated_rotation,
+            known_scaling, known_resolution_slope, known_resolution_intercept, known_hfw_slope, known_spot_shift
 
     finally:
         with future._conversion_lock:
@@ -276,6 +305,9 @@ def _CancelUpdateConversion(future):
         future._hole_detectionf.cancel()
         future._align_offsetf.cancel()
         future._rotation_scalingf.cancel()
+        future._hfw_shiftf.cancel()
+        future._resolution_shiftf.cancel()
+        future._spot_shiftf.cancel()
         logging.debug("Conversion update cancelled.")
 
     # Do not return until we are really done (modulo 10 seconds timeout)
@@ -289,7 +321,7 @@ def estimateConversionTime(first_insertion):
     """
     # Rough approximation
     if first_insertion == True:
-        return 3 * 60
+        return 4 * 60
     else:
         return 60
 

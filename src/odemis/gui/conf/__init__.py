@@ -268,7 +268,8 @@ class CalibrationConfig(Config):
     def _get_section_name(self, shid):
         return "delphi-%x" % shid
 
-    def set_sh_calib(self, shid, htop, hbot, strans, sscale, srot, iscale, irot):
+    def set_sh_calib(self, shid, htop, hbot, strans, sscale, srot, iscale, irot,
+                     resa, resb, hfwa, spotshift):
         """
         Store the calibration data for a given sample holder
         shid (int): the sample holder ID
@@ -279,6 +280,10 @@ class CalibrationConfig(Config):
         srot (float): stage rotation (rad)
         iscale (2 floats > 0): image scaling
         irot (float): image rotation (rad)
+        resa (2 floats): resolution related SEM image shift, slope of linear fit
+        resb (2 floats): resolution related SEM image shift, intercept of linear fit
+        hfwa (2 floats): hfw related SEM image shift, slope of linear fit
+        spotshift (2 floats): SEM spot shift in percentage of HFW
         """
         sec = self._get_section_name(shid)
         if self.config.has_section(sec):
@@ -299,6 +304,14 @@ class CalibrationConfig(Config):
         self.config.set(sec, "image_scaling_x", "%.15f" % iscale[0])
         self.config.set(sec, "image_scaling_y", "%.15f" % iscale[1])
         self.config.set(sec, "image_rotation", "%.15f" % irot)
+        self.config.set(sec, "resolution_a_x", "%.15f" % resa[0])
+        self.config.set(sec, "resolution_a_y", "%.15f" % resa[1])
+        self.config.set(sec, "resolution_b_x", "%.15f" % resb[0])
+        self.config.set(sec, "resolution_b_y", "%.15f" % resb[1])
+        self.config.set(sec, "hfw_a_x", "%.15f" % hfwa[0])
+        self.config.set(sec, "hfw_a_y", "%.15f" % hfwa[1])
+        self.config.set(sec, "spot_shift_x", "%.15f" % spotshift[0])
+        self.config.set(sec, "spot_shift_y", "%.15f" % spotshift[1])
         self.write()
 
     def _get_tuple(self, section, option):
@@ -325,6 +338,10 @@ class CalibrationConfig(Config):
             srot (float): stage rotation
             iscale (2 floats > 0): image scaling
             irot (float): image rotation
+            resa (2 floats): resolution related SEM image shift, slope of linear fit
+            resb (2 floats): resolution related SEM image shift, intercept of linear fit
+            hfwa (2 floats): hfw related SEM image shift, slope of linear fit
+            spotshift (2 floats): SEM spot shift in percentage of HFW
         """
         sec = self._get_section_name(shid)
         if self.config.has_section(sec):
@@ -349,7 +366,11 @@ class CalibrationConfig(Config):
                 if not 0 <= irot <= (2 * math.pi):
                     raise ValueError("image_rotation %f out of range", irot)
 
-                return htop, hbot, strans, sscale, srot, iscale, irot
+                resa = self._get_tuple(sec, "resolution_a")
+                resb = self._get_tuple(sec, "resolution_b")
+                hfwa = self._get_tuple(sec, "hfw_a")
+                spotshift = self._get_tuple(sec, "spot_shift")
+                return htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
             except (ValueError, NoOptionError):
                 logging.info("Not all calibration data readable, new calibration is required",
                              exc_info=True)

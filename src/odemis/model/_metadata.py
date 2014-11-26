@@ -74,3 +74,10 @@ MD_USER_TINT = "Display tint" # RGB (3-tuple of 0<int<255): colour to display th
 MD_ROTATION_COR = "Rotation cor" # radians, to be subtracted from MD_ROTATION
 MD_PIXEL_SIZE_COR = "Pixel size cor" # (m, m), to be multiplied with MD_PIXEL_SIZE
 MD_POS_COR = "Centre position cor"  # (m, m), to be subtracted from MD_POS
+
+# The following metadata is the correction metadata for the Phenom image and
+# spot shift as calculated by delphi.UpdateConversion.
+MD_RESOLUTION_SLOPE = "Resolution slope"  # (float, float) resolution related SEM image shift, slope of linear fit
+MD_RESOLUTION_INTERCEPT = "Resolution intercept"  # (float, float) resolution related SEM image shift, intercept of linear fit
+MD_HFW_SLOPE = "HFW slope"  # (float, float) HFW related SEM image shift, slope of linear fit
+MD_SPOT_SHIFT = "Spot shift"  # (float, float), SEM spot shift in percentage of HFW

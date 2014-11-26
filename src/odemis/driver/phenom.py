@@ -598,6 +598,8 @@ class Detector(model.Detector):
                 for shift_pos in self._coordinates:
                     if self._scan_params_view.scale != 0:
                         self._scan_params_view.scale = 0
+                    # TODO, also add spot_shift? Maybe not really useful since
+                    # translation measured in FineOverlay is not used in Delphi
                     self._scan_params_view.center.x = shift_pos[0]
                     self._scan_params_view.center.y = shift_pos[1]
                     try:
@@ -698,12 +700,16 @@ class Detector(model.Detector):
 
             self._scanParams.nrOfFrames = self.parent._scanner._nr_frames
             self._scanParams.HDR = bpp == 16
-            # TODO beam shift/translation
-            self._scanParams.center.x = 0.0355
-            self._scanParams.center.y = 0
-            # resolution = self.parent._scanner.resolution.value
-            # self._scanParams.center.x = -(1/(2*math.pi)*numpy.arctan(-AX/(resolution[0]+BX)) + CX/100)
-            # self._scanParams.center.y = -(1/(2*math.pi)*numpy.arctan(-AY/(resolution[1]+BY)) + CY/100)
+
+            # SEM image shift correction parameters
+            AX, AY = self._metadata.get(model.MD_RESOLUTION_SLOPE, (0, 0))
+            BX, BY = self._metadata.get(model.MD_RESOLUTION_INTERCEPT, (0, 0))
+            CX, CY = self._metadata.get(model.MD_HFW_SLOPE, (0, 0))
+            # SEM spot shift correction parameters
+            spot_shift = self._metadata.get(model.MD_RESOLUTION_SLOPE, (0, 0))
+            resolution = self.parent._scanner.resolution.value
+            self._scanParams.center.x = -(1 / (2 * math.pi) * numpy.arctan(-AX / (resolution[0] + BX)) + CX / 100)
+            self._scanParams.center.y = -(1 / (2 * math.pi) * numpy.arctan(-AY / (resolution[1] + BY)) + CY / 100)
 
             # update changed metadata
             metadata = dict(self.parent._metadata)
@@ -725,8 +731,8 @@ class Detector(model.Detector):
                     # Wait grid scanner to stop
                     with self._grid_lock:
                         # Move back to the center
-                        self._scan_params_view.center.x = 0
-                        self._scan_params_view.center.y = 0
+                        self._scan_params_view.center.x = spot_shift[0]
+                        self._scan_params_view.center.y = spot_shift[1]
                         try:
                             self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                         except suds.WebFault:
@@ -737,8 +743,8 @@ class Detector(model.Detector):
                 # even if the current HFW is the maximum
                 if self._scan_params_view.scale != 0:
                     self._scan_params_view.scale = 0
-                    self._scan_params_view.center.x = 0  # just to be sure it's at the center
-                    self._scan_params_view.center.y = 0
+                    self._scan_params_view.center.x = spot_shift[0]
+                    self._scan_params_view.center.y = spot_shift[1]
                     self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 time.sleep(0.1)
                 # MD_POS is hopefully set via updateMetadata

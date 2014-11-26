@@ -155,8 +155,12 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         srot = 0.1
         iscale = (13.1, 13.1)
         irot = 5.9606
+        resa = (8.09, 2.16)
+        resb = (-157.5, -202.9)
+        hfwa = (-0.953, -0.009)
+        spotshift = (0.029, -2.90e-05)
 
-        orig_calib = htop, hbot, strans, sscale, srot, iscale, irot
+        orig_calib = htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
         conf.set_sh_calib(shid, *orig_calib)
 
         # read back from memory
