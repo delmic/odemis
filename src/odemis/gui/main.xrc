@@ -650,7 +650,6 @@
                           <flag>wxALL</flag>
                           <border>10</border>
                         </object>
-                      
                       </object>
                       <size>400,-1</size>
                       <bg>#333333</bg>
@@ -2548,6 +2547,12 @@
                   </XRCED>
                 </object>
                 <object class="PlotViewport" name="vp_inspection_plot">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="SpatialSpectrumViewport" name="vp_spatialspec">
                   <hidden>1</hidden>
                   <XRCED>
                     <assign_var>1</assign_var>

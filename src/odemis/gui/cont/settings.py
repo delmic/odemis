@@ -1242,8 +1242,7 @@ class AnalysisSettingsController(SettingsBarController):
         """
 
         ### Panel containing information about the acquisition file
-        self._pnl_acqfile = FileInfoSettingsController(self.parent.fp_fileinfo,
-                                                  "No file loaded")
+        self._pnl_acqfile = FileInfoSettingsController(self.parent.fp_fileinfo, "No file loaded")
 
         ### Panel with AR background file information
         # It's displayed only if there are AR streams (handled by the tab cont)
@@ -1252,9 +1251,8 @@ class AnalysisSettingsController(SettingsBarController):
             "AR background",
             "Angle-resolved background acquisition file",
             "None").value_ctrl
-        wildcards, _ = odemis.gui.util.formats_to_wildcards(
-                                        odemis.dataio.get_available_formats(),
-                                        include_all=True)
+        wildcards, _ = odemis.gui.util.formats_to_wildcards(odemis.dataio.get_available_formats(),
+                                                            include_all=True)
         self._arfile_ctrl.SetWildcard(wildcards)
         self._pnl_arfile.hide_panel()
         self._arfile_ctrl.Bind(EVT_FILE_SELECT, self._on_ar_file_select)
@@ -1264,23 +1262,23 @@ class AnalysisSettingsController(SettingsBarController):
         # They are displayed only if there are Spectrum streams
         self._specfile_controller = FileInfoSettingsController(self.parent.fp_fileinfo, "")
         self._spec_bckfile_ctrl = self._specfile_controller.add_browse_button(
-                                            "Spec. background",
-                                            "Spectrum background correction file",
-                                            "None").value_ctrl
+            "Spec. background",
+            "Spectrum background correction file",
+            "None").value_ctrl
         self._spec_bckfile_ctrl.SetWildcard(wildcards)
         self._spec_bckfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_bck_file_select)
         self.tab_data.spec_bck_cal.subscribe(self._on_spec_bck_cal, init=True)
 
         self._specfile_ctrl = self._specfile_controller.add_browse_button(
-                                            "Spec. correction",
-                                            "Spectrum efficiency correction file",
-                                            "None").value_ctrl
+            "Spec. correction",
+            "Spectrum efficiency correction file",
+            "None").value_ctrl
         self._specfile_ctrl.SetWildcard(wildcards)
         self._specfile_controller.hide_panel()
         self._specfile_ctrl.Bind(EVT_FILE_SELECT, self._on_spec_file_select)
         self.tab_data.spec_cal.subscribe(self._on_spec_cal, init=True)
 
-        self.parent.Layout()
+        self.parent.fp_fileinfo.expand()
 
     def on_acqfile_change(self, file_info):
         """ Display the name and location of the file described by file_info

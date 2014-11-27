@@ -170,6 +170,7 @@ class xrcfr_main(wx.Frame):
         self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
         self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
         self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
+        self.vp_spatialspec = xrc.XRCCTRL(self, "vp_spatialspec")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
@@ -878,7 +879,6 @@ def __init_resources():
                           <flag>wxALL</flag>
                           <border>10</border>
                         </object>
-                      
                       </object>
                       <size>400,-1</size>
                       <bg>#333333</bg>
@@ -2776,6 +2776,12 @@ def __init_resources():
                   </XRCED>
                 </object>
                 <object class="PlotViewport" name="vp_inspection_plot">
+                  <hidden>1</hidden>
+                  <XRCED>
+                    <assign_var>1</assign_var>
+                  </XRCED>
+                </object>
+                <object class="SpatialSpectrumViewport" name="vp_spatialspec">
                   <hidden>1</hidden>
                   <XRCED>
                     <assign_var>1</assign_var>

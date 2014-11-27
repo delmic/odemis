@@ -42,6 +42,7 @@ from wx.lib.pubsub import pub
 import odemis.gui.model as guimodel
 from odemis.acq.stream import EMStream, OpticalStream
 
+
 class AcquisitionDialog(xrcfr_acq):
     """ Wrapper class responsible for additional initialization of the
     Acquisition Dialog created in XRCed
@@ -69,9 +70,12 @@ class AcquisitionDialog(xrcfr_acq):
         self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
 
         # Create a new settings controller for the acquisition dialog
-        self._settings_controller = SecomSettingsController(self,
-                                                       self._tab_data_model,
-                                                       highlight_change=True)
+        self._settings_controller = SecomSettingsController(
+            self,
+            self._tab_data_model,
+            highlight_change=True
+        )
+
         # FIXME: pass the fold_panels
 
         # Compute the preset values for each preset
@@ -151,7 +155,7 @@ class AcquisitionDialog(xrcfr_acq):
         orig (MicroscopyGUIData)
         return (MicroscopyGUIData)
         """
-        new = copy.copy(orig) # shallow copy
+        new = copy.copy(orig)  # shallow copy
 
         # create view (which cannot move or focus)
         view = guimodel.MicroscopeView(orig.focussedView.value.name.value)
@@ -253,7 +257,6 @@ class AcquisitionDialog(xrcfr_acq):
         # Uncheck if disabled, otherwise put same as previous value
         self.chkbox_fine_align.Value = (can_fa and self._prev_fine_align)
 
-
         self.update_acquisition_time()
 
         # update highlight
@@ -300,10 +303,10 @@ class AcquisitionDialog(xrcfr_acq):
         """
         # TODO: check the file doesn't yet exist (if the computer clock is
         # correct it's unlikely)
-        return os.path.join(self.conf.last_path,
-                            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"),
-                                             self.conf.last_extension)
-                            )
+        return os.path.join(
+            self.conf.last_path,
+            u"%s%s" % (time.strftime("%Y%m%d-%H%M%S"), self.conf.last_extension)
+        )
 
     def _onFilename(self, name):
         """ updates the GUI when the filename is updated """
@@ -335,7 +338,7 @@ class AcquisitionDialog(xrcfr_acq):
         # currently selected. So update the values the first time.
         # TODO: this should not be necessary once the settings only change the
         # stream settings, and not directly the hardware.
-        if not preset_name in self._presets_confirmed:
+        if preset_name not in self._presets_confirmed:
             for se in new_preset.keys():
                 new_preset[se] = se.va.value
             self._presets_confirmed.add(preset_name)
@@ -393,21 +396,22 @@ class AcquisitionDialog(xrcfr_acq):
         enable (boolean): True to turn on/restore the fan, and False to turn if off
         """
         main_data = self._tab_data_model.main
-        if not "fanSpeed" in model.getVAs(main_data.ccd):
+        if "fanSpeed" not in model.getVAs(main_data.ccd):
             return
 
         fs = main_data.ccd.fanSpeed
         if enable:
-            if not self._orig_fan_speed is None:
+            if self._orig_fan_speed is not None:
                 fs.value = max(fs.value, self._orig_fan_speed)
         else:
             self._orig_fan_speed = fs.value
             fs.value = 0
 
     def on_acquire(self, evt):
-        """
-        Start the acquisition (really)
-        """
+        """ Start the actual acquisition """
+
+        logging.info("Acquire button clicked, starting acquisition")
+
         self.btn_secom_acquire.Disable()
 
         # disable estimation time updates during acquisition
@@ -418,7 +422,7 @@ class AcquisitionDialog(xrcfr_acq):
         self._pause_settings()
 
         self.gauge_acq.Show()
-        self.Layout() # to put the gauge at the right place
+        self.Layout()  # to put the gauge at the right place
 
         # start acquisition + connect events to callback
         streams = self._tab_data_model.focussedView.value.getStreams()
@@ -440,30 +444,25 @@ class AcquisitionDialog(xrcfr_acq):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_cancel)
 
     def on_cancel(self, evt):
-        """
-        Called during acquisition when pressing the cancel button
-        """
+        """ Handle acquisition cancel button click """
         if not self.acq_future:
-            msg = "Tried to cancel acquisition while it was not started"
-            logging.warning(msg)
+            logging.warning("Tried to cancel acquisition while it was not started")
             return
 
+        logging.info("Cancel button clicked, stopping acquisition")
         self.acq_future.cancel()
         # all the rest will be handled by on_acquisition_done()
 
     @call_after
     def on_acquisition_done(self, future):
-        """
-        Callback called when the acquisition is finished (either successfully or
-        cancelled)
-        """
+        """ Callback called when the acquisition is finished (either successfully or cancelled) """
         self._set_fan(True)  # Turn the fan back on
 
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self._resume_settings()
 
-        # reenable estimation time updates
+        # re-enable estimation time updates
         view = self._tab_data_model.focussedView.value
         view.lastUpdate.subscribe(self.on_streams_changed)
 
@@ -518,6 +517,7 @@ class AcquisitionDialog(xrcfr_acq):
         # Make sure the file is not overridden
         self.filename.value = self._get_default_filename()
         self.btn_secom_acquire.Enable()
+
 
 def ShowAcquisitionFileDialog(parent, filename):
     """

@@ -111,6 +111,7 @@ msvps = [
     ('SparcAlignViewport', xh_delmic.SparcAlignViewportXmlHandler),
     ('PlotViewport', xh_delmic.PlotViewportXmlHandler),
     ('AngularResolvedViewport', xh_delmic.AngularResolvedViewportXmlHandler),
+    ('SpatialSpectrumViewport', xh_delmic.SpatialSpectrumViewportXmlHandler),
 ]
 
 for i, (name, handler) in enumerate(msvps):
