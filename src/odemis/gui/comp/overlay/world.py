@@ -505,15 +505,26 @@ class LineSelectOverlay(WorldSelectOverlay):
         super(LineSelectOverlay, self).__init__(cnvs)
         self._selected_line = None
 
+    @property
+    def length(self):
+        if None in (self.w_start_pos, self.w_end_pos):
+            return 0
+        else:
+            x1, y1 = self.w_start_pos
+            x2, y2 = self.w_end_pos
+            return math.hypot(x2-x1, y2-y1)
+
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position """
-        if self.v_start_pos and self.v_end_pos:
+        if None not in (self.v_start_pos, self.v_end_pos):
             offset = self.cnvs.get_half_buffer_size()
             self.w_start_pos = self.cnvs.view_to_world(self.v_start_pos, offset)
             self.w_end_pos = self.cnvs.view_to_world(self.v_end_pos, offset)
 
             # FIXME: Translate to integer values
             self._selected_line.value = (self.w_start_pos, self.w_end_pos)
+        else:
+            self._selected_line.value = None
 
     @staticmethod
     def _normalize(rect):
@@ -522,7 +533,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.w_start_pos and self.w_end_pos:
+        if None not in (self.w_start_pos, self.w_end_pos) and self.w_start_pos != self.w_end_pos:
 
             ctx.save()
 
@@ -613,7 +624,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def _calc_edges(self):
         """ Calculate the hit boxes for the start and end point """
-        if self.v_start_pos and self.v_end_pos:
+        if None not in (self.v_start_pos, self.v_end_pos):
             rect = self.v_start_pos + self.v_end_pos
             s_l, s_t, e_l, e_t = [v - self.hover_margin for v in rect]
             s_r, s_b, e_r, e_b = [v + self.hover_margin for v in rect]

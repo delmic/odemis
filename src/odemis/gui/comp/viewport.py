@@ -752,14 +752,18 @@ class SpatialSpectrumViewport(ViewPort):
 
     def _on_line_select(self, line):
         """ Line selection event handler """
+
         if line == (None, None):
             # TODO: handle more graciously when line is unselected?
             logging.warning("Don't know what to do when no line is selected")
+            self.canvas.Refresh(eraseBackground=True)
             return
         elif self.spectrum_stream is None:
             logging.warning("No Spectrum Stream present!")
+            self.canvas.Refresh(eraseBackground=True)
             return
 
+        # length = self.canvas._line
         data = self.spectrum_stream.get_line_spectrum()
         if data:
             domain = self.spectrum_stream.get_spectrum_range()

@@ -1339,6 +1339,8 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
             self.ctx.scale(self.ClientSize.x / width, self.ClientSize.y / height)
             self.ctx.set_source(surfpat)
             self.ctx.paint()
+        else:
+            self._draw_background(self.ctx)
 
     def setView(self, microscope_view, tab_data):
         """ Set the microscope_view that this canvas is displaying/representing
