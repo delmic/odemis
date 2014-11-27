@@ -231,7 +231,7 @@ class AxisLegend(wx.Panel):
         self.tick_colour = wxcol_to_frgb(self.ForegroundColour)
 
         self.ticks = None
-        self.max_tick_width = 42  #px
+        self.max_tick_width = 42  # px
 
         # The guiding distance between ticks in pixels
         self.tick_pixel_gap = 120
@@ -311,18 +311,19 @@ class AxisLegend(wx.Panel):
         """ Determine where the ticks should be placed """
 
         self.ticks = []
+        pcanv = self.Parent.canvas
 
         # Get orientation dependant values
         if self.orientation == wx.HORIZONTAL:
             size = self.ClientSize.x
-            min_val = self.Parent.canvas.min_x
-            val_size = self.Parent.canvas.data_width
-            val_to_pos = self.Parent.canvas._val_x_to_pos_x
+            min_val = pcanv.min_x if pcanv.range_x is None else pcanv.range_x[0]
+            val_size = pcanv.data_width
+            val_to_pos = pcanv._val_x_to_pos_x
         else:
             size = self.ClientSize.y
-            min_val = self.Parent.canvas.min_y
-            val_size = self.Parent.canvas.data_height
-            val_to_pos = self.Parent.canvas._val_y_to_pos_y
+            min_val = pcanv.min_y if pcanv.range_y is None else pcanv.range_y[0]
+            val_size = pcanv.data_height
+            val_to_pos = pcanv._val_y_to_pos_y
 
         num_ticks = size / self.tick_pixel_gap
         logging.debug("Aiming for %s ticks with a client of width %s",

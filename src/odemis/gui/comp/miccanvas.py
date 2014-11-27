@@ -1214,8 +1214,7 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
         self.add_view_overlay(self.markline_overlay)
         self.markline_overlay.activate()
 
-    def set_data(self, data,
-                 unit_x=None, unit_y=None, range_x=None, range_y=None):
+    def set_data(self, data, unit_x=None, unit_y=None, range_x=None, range_y=None):
         """ Subscribe to the x position of the overlay when data is loaded """
         super(ZeroDimensionalPlotCanvas, self).set_data(data, unit_x, unit_y, range_x, range_y)
 
