@@ -202,6 +202,20 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             logging.debug("Move SEM stage to expected offset...")
             f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
             f.result()
+            # Due to stage lack of precision we have to double check that we
+            # reached the desired position
+            reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
+            vector = [a - b for a, b in zip(reached_pos, sem_position)]
+            dist = math.hypot(*vector)
+            logging.debug("Distance from required position after lens alignment: %f", dist)
+            if dist >= 20e-06:
+                logging.debug("Retry to reach position..")
+                f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+                f.result()
+                reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
+                vector = [a - b for a, b in zip(reached_pos, sem_position)]
+                dist = math.hypot(*vector)
+                logging.debug("New distance from required position: %f", dist)
             logging.debug("Move objective stage to (0,0)...")
             f = opt_stage.moveAbs({"x":0, "y":0})
             f.result()
