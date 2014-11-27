@@ -51,7 +51,6 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
-LENS_KNOWN_FOCUS = {"z":0.03826}  # Fallback optical focus position for the first insertion
 
 
 def UpdateConversion(ccd, detector, escan, sem_stage, opt_stage, ebeam_focus,
@@ -196,9 +195,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
         if first_insertion == True:
             if future._conversion_update_state == CANCELLED:
                 raise CancelledError()
-            # Lens to a good focus position
-            f = focus.moveAbs(LENS_KNOWN_FOCUS)
-            f.result()
+
             # Update progress of the future
             future.set_end_time(time.time() +
                 estimateConversionTime(first_insertion) * (3 / 4))

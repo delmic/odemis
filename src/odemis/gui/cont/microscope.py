@@ -45,7 +45,7 @@ PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
-DELPHI_OPT_GOOD_FOCUS = 0.0377 # somehow possibly not too bad focus position
+DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
 
 
 class MicroscopeStateController(object):
