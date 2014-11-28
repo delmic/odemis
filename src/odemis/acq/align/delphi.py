@@ -1268,6 +1268,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     ccd.resolution.value = ccd.resolution.range[1]
     ccd.exposureTime.value = 900e-03
     escan.scale.value = (1, 1)
+    escan.horizontalFoV.value = 150e-06  # m
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
     escan.dwellTime.value = 5e-06
