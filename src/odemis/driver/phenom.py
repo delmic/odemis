@@ -36,6 +36,7 @@ import threading
 import time
 import weakref
 from numpy.linalg import norm
+from odemis.model import HwError
 
 # The Phenom API relies on the SOAP protocol. One good thing is that the standard
 # Phenom GUI uses it. So anything the GUI can do can be performed via the
@@ -135,12 +136,21 @@ class SEM(model.HwComponent):
         self._host = host
         self._username = username
         self._password = password
-        client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
+        try:
+            client = Client(host + "?om", location=host, username=username, password=password, timeout=SOCKET_TIMEOUT)
+        except Exception:
+            raise HwError("Failed to connect to Phenom host '%s'. "
+                          "Check that the url is correct and Phenom connected to "
+                          "the network." % (host,))
         self._device = client.service
+
         # Access to service objects
         self._objects = client.factory
+        try:
+            info = self._device.VersionInfo().versionInfo
+        except AttributeError:
+            raise KeyError("Failed to connect to Phenom. The username or password is incorrect.")
 
-        info = self._device.VersionInfo().versionInfo
         try:
             start = info.index("'Product Name'>") + len("'Product Name'>")
             end = info.index("</Property", start)

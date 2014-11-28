@@ -50,6 +50,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
                   {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
+SHIFT_DETECTION = {"x":0, "y":12e-03}  # Use holder hole images to measure the shift
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
@@ -189,6 +190,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             future._hole_detectionf = HoleDetection(detector, escan, sem_stage,
                                                     ebeam_focus, known_focus)
             first_hole, second_hole, hole_focus = future._hole_detectionf.result()
+            logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
         except IOError:
             raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
@@ -208,12 +210,14 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             vector = [a - b for a, b in zip(reached_pos, sem_position)]
             dist = math.hypot(*vector)
             logging.debug("Distance from required position after lens alignment: %f", dist)
-            f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
-            f.result()
-            reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
-            vector = [a - b for a, b in zip(reached_pos, sem_position)]
-            dist = math.hypot(*vector)
-            logging.debug("Final distance from required position: %f", dist)
+            if dist >= 10e-06:
+                logging.debug("Retry to reach position..")
+                f = sem_stage.moveAbs({"x":sem_position[0], "y":sem_position[1]})
+                f.result()
+                reached_pos = (sem_stage.position.value["x"], sem_stage.position.value["y"])
+                vector = [a - b for a, b in zip(reached_pos, sem_position)]
+                dist = math.hypot(*vector)
+                logging.debug("New distance from required position: %f", dist)
             logging.debug("Move objective stage to (0,0)...")
             f = opt_stage.moveAbs({"x":0, "y":0})
             f.result()
@@ -417,7 +421,18 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             image = ccd.data.get(asap=False)
             sem_pos = sem_stage.position.value
         except IOError:
-            raise IOError("Failed to align stages and calculate offset.")
+            # In case of failure try with another initial focus value
+            f = focus.moveRel({"z": 0.0007})
+            f.result()
+            try:
+                future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+                dist, vector = future_spot.result()
+                # Almost done
+                future.set_end_time(time.time() + 1)
+                image = ccd.data.get(asap=False)
+                sem_pos = sem_stage.position.value
+            except IOError:
+                raise IOError("Failed to align stages and calculate offset.")
 
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
@@ -704,7 +719,15 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
                 f.result()
-                
+            # For the first hole apply autofocus anyway
+            if (pos == EXPECTED_HOLES[0]):
+                escan.horizontalFoV.value = 300e-06  # m
+                escan.scale.value = (2, 2)
+                f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
+                hole_focus, fm_level = f.result()
+                escan.horizontalFoV.value = escan.horizontalFoV.range[1]
+                escan.scale.value = (1, 1)
+
             # From SEM image determine hole position relative to the center of
             # the SEM
             image = detector.data.get(asap=False)
@@ -963,11 +986,11 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         escan.resolution.value = escan.resolution.range[1]
         escan.translation.value = (0, 0)
         escan.dwellTime.value = 7.5e-07  # s
-        escan.accelVoltage.value = 5e03  # 5 kV, to ensure that features are visible
+        escan.accelVoltage.value = 5.5e03  # 5 kV, to ensure that features are visible
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
-        f = sem_stage.moveAbs(EXPECTED_HOLES[0])
+        f = sem_stage.moveAbs(SHIFT_DETECTION)
         f.result()
         # Start with smallest FoV
         max_hfw = 1200e-06  # m
@@ -1108,11 +1131,11 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         escan.horizontalFoV.value = 1200e-06  # m
         escan.translation.value = (0, 0)
         et = 7.5e-07 * numpy.prod(escan.resolution.range[1])
-        escan.accelVoltage.value = 5e03  # 5 kV, to ensure that features are visible
+        escan.accelVoltage.value = 5.5e03  # 5 kV, to ensure that features are visible
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
-        f = sem_stage.moveAbs(EXPECTED_HOLES[0])
+        f = sem_stage.moveAbs(SHIFT_DETECTION)
         f.result()
         # Start with largest resolution
         max_resolution = 2048  # pixels
@@ -1245,6 +1268,7 @@ def _DoSpotShiftFactor(future, ccd, detector, escan, focus):
     ccd.resolution.value = ccd.resolution.range[1]
     ccd.exposureTime.value = 900e-03
     escan.scale.value = (1, 1)
+    escan.horizontalFoV.value = 150e-06  # m
     escan.resolution.value = (1, 1)
     escan.translation.value = (0, 0)
     escan.dwellTime.value = 5e-06
