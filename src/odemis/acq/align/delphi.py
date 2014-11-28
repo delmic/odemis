@@ -50,6 +50,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
                   {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
+SHIFT_DETECTION = {"x":0, "y":11.2e-03}  # Expected hole positions
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
@@ -420,7 +421,18 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
             image = ccd.data.get(asap=False)
             sem_pos = sem_stage.position.value
         except IOError:
-            raise IOError("Failed to align stages and calculate offset.")
+            # In case of failure try with another initial focus value
+            f = focus.moveRel({"z": 0.0007})
+            f.result()
+            try:
+                future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+                dist, vector = future_spot.result()
+                # Almost done
+                future.set_end_time(time.time() + 1)
+                image = ccd.data.get(asap=False)
+                sem_pos = sem_stage.position.value
+            except IOError:
+                raise IOError("Failed to align stages and calculate offset.")
 
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
@@ -976,7 +988,7 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
-        f = sem_stage.moveAbs(EXPECTED_HOLES[0])
+        f = sem_stage.moveAbs(SHIFT_DETECTION)
         f.result()
         # Start with smallest FoV
         max_hfw = 1200e-06  # m
@@ -1121,7 +1133,7 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
 
         # Move Phenom sample stage to the first expected hole position
         # to ensure there are some features for the phase correlation
-        f = sem_stage.moveAbs(EXPECTED_HOLES[0])
+        f = sem_stage.moveAbs(SHIFT_DETECTION)
         f.result()
         # Start with largest resolution
         max_resolution = 2048  # pixels
