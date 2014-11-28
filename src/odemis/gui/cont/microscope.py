@@ -696,7 +696,7 @@ class DelphiStateController(SecomStateController):
             # TODO: just subscribe to the change of sample holder?
             if (isinstance(self._main_data.chamber.registeredSampleHolder, VigilantAttributeBase)
                 and not self._main_data.chamber.registeredSampleHolder.value):
-                self._request_holder_calib()
+                self._request_holder_calib() # async
                 return False
 
             shid, sht = self._main_data.chamber.sampleHolder.value
@@ -716,8 +716,8 @@ class DelphiStateController(SecomStateController):
                 self._request_holder_calib() # async
                 return False # don't go further, as everything will be taken care
 
-                        # TODO: shall we also reference the optical focus? It'd be handy only
-            # if the absolute position is used.
+                # TODO: shall we also reference the optical focus? It'd be handy only
+                # if the absolute position is used.
         except Exception:
             logging.exception("Failed to set calibration")
 
@@ -816,7 +816,7 @@ class DelphiStateController(SecomStateController):
             # their role.
             sem_stage = None
             opt_stage = None
-            for c in self._main_data.stage.children:
+            for c in self._main_data.stage.children.value:
                 if c.role == "sem-stage":
                     sem_stage = c
                 elif c.role == "align":

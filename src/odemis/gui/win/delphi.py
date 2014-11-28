@@ -44,13 +44,12 @@ class FirstCalibrationDialog(wx.Dialog):
         )
         sizer.Add(sz_label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
 
-        # always put .text, for .registrationCode to always work
-        self.text = wx.TextCtrl(self, -1, "", size=(80, -1))
         if register:
             box = wx.BoxSizer(wx.HORIZONTAL)
 
             label = wx.StaticText(self, -1, "Registration code:")
             box.Add(label, 0, wx.ALIGN_CENTRE | wx.ALL, 5)
+            self.text = wx.TextCtrl(self, -1, "", size=(80, -1))
             self.text.SetToolTipString("Enter the registration code for the sample holder "
                                        "provided by Phenom World for your DELPHI.")
             box.Add(self.text, 1, wx.ALIGN_CENTRE | wx.ALL, 5)
@@ -78,4 +77,7 @@ class FirstCalibrationDialog(wx.Dialog):
 
     @property
     def registrationCode(self):
-        return self.text.Value
+        if hasattr(self, "text"):
+            return self.text.Value
+        else:
+            return None
