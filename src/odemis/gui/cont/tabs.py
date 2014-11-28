@@ -1684,9 +1684,9 @@ class LensAlignTab(Tab):
                                                            self._settings_controller)
 
         # Documentation text on the left panel
-        path = os.path.join(guiutil.get_installation_folder(), "doc/alignment.html")
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/alignment.html")
         main_frame.html_alignment_doc.SetBorders(0)  # sizer already give us borders
-        main_frame.html_alignment_doc.LoadPage(path)
+        main_frame.html_alignment_doc.LoadPage(doc_path)
 
         # Trick to allow easy html editing: double click to reload
         # def reload_page(evt):
