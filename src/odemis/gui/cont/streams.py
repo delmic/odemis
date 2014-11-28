@@ -169,7 +169,7 @@ class StreamController(object):
         """
         # Find a name not already taken
         names = [s.name.value for s in self._tab_data_model.streams.value]
-        for i in range(1000):
+        for i in range(1, 1000):
             name = "Filtered colour %d" % i
             if not name in names:
                 break
