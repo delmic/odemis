@@ -189,6 +189,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
             future._hole_detectionf = HoleDetection(detector, escan, sem_stage,
                                                     ebeam_focus, known_focus)
             first_hole, second_hole, hole_focus = future._hole_detectionf.result()
+            logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
         except IOError:
             raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
