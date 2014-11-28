@@ -28,7 +28,7 @@ from odemis.acq import drift
 from odemis.acq.align import FindEbeamCenter
 from odemis.model import MD_POS, MD_POS_COR, MD_PIXEL_SIZE_COR, \
     MD_ROTATION_COR
-from odemis.util import img, limit_invocation, conversion
+from odemis.util import img, limit_invocation, conversion, fluo
 import time
 
 from ._base import Stream, UNDEFINED_ROI
@@ -632,7 +632,7 @@ class FluoStream(CameraStream):
             em_band = current_em[0]
         else:
             em_band = current_em
-        center_em = (em_band[0] + em_band[1]) / 2
+        center_em = fluo.get_center(em_band)
 
         exc_choices = set(emitter.spectra.value)
         current_exc = self._get_current_excitation()
@@ -640,6 +640,7 @@ class FluoStream(CameraStream):
             # pick the closest below the current emission
             current_exc = min(exc_choices, key=lambda b: b[2]) # default to the smallest
             for b in exc_choices:
+                # Works because exc_choices only contains 5-float tuples
                 if (b[2] < center_em and
                     center_em - b[2] < center_em - current_exc[2]):
                     current_exc = b

@@ -1015,22 +1015,29 @@ class StreamPanel(wx.Panel):
 
         # Excitation and emission are:
         # Label + wavelength combo box + peak label + a colour display
+        ex_center = fluo.get_one_center_ex(self.stream.excitation.value,
+                                            self.stream.emission.value)
         r = self._add_filter_line(u"Excitation", self.stream.excitation,
+                                  ex_center,
                                   self._excitation_2_ctrl,
                                   self._excitation_2_va)
         (_, self._txt_excitation, self._lbl_exc_peak, self._btn_excitation) = r
 
+        em_center = fluo.get_one_center_em(self.stream.emission.value,
+                                           self.stream.excitation.value)
         r = self._add_filter_line(u"Emission", self.stream.emission,
+                                  em_center,
                                   self._emission_2_ctrl,
                                   self._emission_2_va)
         (_, self._txt_emission, self._lbl_em_peak, self._btn_emission) = r
 
-    def _add_filter_line(self, name, va, va_2_ctrl, ctrl_2_va):
+    def _add_filter_line(self, name, va, center_wl, va_2_ctrl, ctrl_2_va):
         """
         Create the label, hw setting, peak info, and colour button for an
         emission/excitation colour filter settings.
         name (unicode): the label name
         va (VigilantAttribute): the VA for the emission/excitation (contains a band)
+        center_wl (float): center wavelength of the current band of the VA
         return (4 wx.Controls): the respective controls created
         """
         # Note: va.value is in m, but we present everything in nm
@@ -1042,7 +1049,6 @@ class StreamPanel(wx.Panel):
         self.control_gbsizer.Add(exc_sizer, (self.row_count, 1), flag=wx.EXPAND)
 
         band = va.value
-        ex_center = self._get_one_center(band)
 
         if va.readonly or len(va.choices) <= 1:
             hw_set = wx.TextCtrl(self._panel,
@@ -1090,7 +1096,7 @@ class StreamPanel(wx.Panel):
         # use the hardware setting
         btn_col = buttons.ColourButton(self._panel, -1,
                             bitmap=img.getemptyBitmap(),
-                            colour=wave2rgb(ex_center),
+                            colour=wave2rgb(center_wl),
                             background_parent=self._panel)
         self.control_gbsizer.Add(btn_col,
                                  (self.row_count, 2),
@@ -1129,7 +1135,8 @@ class StreamPanel(wx.Panel):
                 centers.append(u"%d" % center_nm)
             return u", ".join(centers) + " nm"
 
-    def _get_one_center(self, band):
+    @staticmethod
+    def _get_one_center(band):
         """
         Return the center of a band, and if it's a multi-band, return just one
         of the centers.
@@ -1212,14 +1219,6 @@ class StreamPanel(wx.Panel):
         returns a value to set for the VA
         """
         return self._txt_excitation.GetClientData(self._txt_excitation.GetSelection())
-        # Note: with wxpython < 3.0, use:
-        # val = self._txt_excitation.GetValue()
-        # logging.debug("Excitation changed to %s", val)
-        # for i in range(self._txt_excitation.Count):
-        #     if self._txt_excitation.Items[i] == val:
-        #         return self._txt_excitation.GetClientData(i)
-        # else:
-        #     logging.error("No existing label found for value %s", val)
 
     def _excitation_2_ctrl(self, value):
         """
@@ -1231,8 +1230,6 @@ class StreamPanel(wx.Panel):
         for i in range(self._txt_excitation.Count):
             if self._txt_excitation.GetClientData(i) == value:
                 self._txt_excitation.SetSelection(i)
-                # Note: with wxpython < 3.0, use:
-                # self._txt_excitation.SetValue(self._txt_excitation.Items[i])
                 break
         else:
             logging.error("No existing label found for value %s", value)
@@ -1243,6 +1240,11 @@ class StreamPanel(wx.Panel):
         else:
             self._update_peak_label_fit(self._lbl_exc_peak, self._btn_excitation,
                                         self._dye_xwl, value)
+        # also update emission colour as it's dependent on excitation when multiband
+        if self._dye_ewl is None:
+            colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
+            self._btn_emission.set_colour(colour)
+            self.stream.tint.value = colour
 
     def _emission_2_va(self):
         """
@@ -1251,14 +1253,6 @@ class StreamPanel(wx.Panel):
         returns a value to set for the VA
         """
         return self._txt_emission.GetClientData(self._txt_emission.GetSelection())
-        # Note: with wxpython < 3.0, use:
-        # val = self._txt_emission.GetValue()
-        # logging.debug("Excitation changed to %s", val)
-        # for i in range(self._txt_emission.Count):
-        #     if self._txt_emission.Items[i] == val:
-        #         return self._txt_emission.GetClientData(i)
-        # else:
-        #     logging.error("No existing label found for value %s", val)
 
     def _emission_2_ctrl(self, value):
         """
@@ -1268,20 +1262,21 @@ class StreamPanel(wx.Panel):
         for i in range(self._txt_emission.Count):
             if self._txt_emission.GetClientData(i) == value:
                 self._txt_emission.SetSelection(i)
-                # Note: with wxpython < 3.0, use:
-                # self._txt_emission.SetValue(self._txt_emission.Items[i])
                 break
         else:
             logging.error("No existing label found for value %s", value)
 
         if self._dye_ewl is None: # no dye info => use hardware settings
-            colour = wave2rgb(self._get_one_center(value))
+            colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
             self._btn_emission.set_colour(colour)
             # if dye is used, keep the peak wavelength
             self.stream.tint.value = colour
         else:
             self._update_peak_label_fit(self._lbl_em_peak, self._btn_emission,
                                         self._dye_ewl, value)
+        # also update excitation colour as it's dependent on emission when multiband
+        if self._dye_ewl is None:
+            colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
 
     # ===== Wavelength bandwidth for SpectrumSettingsStream
 

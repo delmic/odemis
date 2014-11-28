@@ -29,7 +29,7 @@ FIT_IMPOSSIBLE = 0 # Unlikely to work
 
 def get_center(band):
     """
-    Return the center wavelength of a emission/excitation band
+    Return the center wavelength(es) of a emission/excitation band
     band ((list of) tuple of 2 or 5 floats): either the min/max
       of the band or the -99%, -25%, middle, +25%, +99% of the band in m.
     return ((tuple of) float): wavelength in m or list of wavelength for each band
@@ -42,6 +42,65 @@ def get_center(band):
     else:
         center = band[len(band) // 2]
     return center
+
+def get_one_center_em(band, ex_band):
+    """
+    Return the center of an emission band, and if it's a multi-band, return just
+    one of the centers based on the current excitation band
+    band ((list of) tuple of 2 or 5 floats): emission band
+    ex_band ((list of) tuple of 2 or 5 floats): excitation band
+    return (float): wavelength in m
+    """
+    if isinstance(band[0], collections.Iterable):
+        # Need to guess: the closest above the excitation wavelength
+        if isinstance(ex_band[0], collections.Iterable):
+            # It's getting tricky, but at least above the smallest one
+            ex_center = min(get_center(ex_band))
+        else:
+            ex_center = get_center(ex_band)
+
+        em_centers = get_center(band)
+        em_centers_above = [c for c in em_centers if c > ex_center]
+        if em_centers_above:
+            em_center = min(em_centers_above)
+        else:
+            # excitation and emission don't seem to match, so fallback to the
+            # less crazy value
+            em_center = max(em_centers)
+
+        return em_center
+    else:
+        return get_center(band)
+
+def get_one_center_ex(band, em_band):
+    """
+    Return the center of an excitation band, and if it's a multi-band, return
+    just one of the centers based on the current emission band
+    band ((list of) tuple of 2 or 5 floats): excitation band
+    em_band ((list of) tuple of 2 or 5 floats): emission band
+    return (float): wavelength in m
+    """
+    if isinstance(band[0], collections.Iterable):
+        # Need to guess: the closest below the emission wavelength
+        if isinstance(em_band[0], collections.Iterable):
+            # It's getting tricky, but at least below the biggest one
+            em_center = max(get_center(em_band))
+        else:
+            em_center = get_center(em_band)
+
+        ex_centers = get_center(band)
+        ex_centers_below = [c for c in ex_centers if c < em_center]
+        if ex_centers_below:
+            ex_center = max(ex_centers_below)
+        else:
+            # excitation and emission don't seem to match, so fallback to the
+            # less crazy value
+            ex_center = max(ex_centers)
+
+        return ex_center
+    else:
+        return get_center(band)
+
 
 def estimate_fit_to_dye(wl, band):
     """
