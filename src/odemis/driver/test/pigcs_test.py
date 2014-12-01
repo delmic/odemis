@@ -549,6 +549,7 @@ if __name__ == "__main__":
 #
 # CONFIG_BUS_TWO = {"x":(1, 1, False), "y":(2, 1, False)}
 # KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "192.168.92.67", "axes": CONFIG_BUS_TWO}
+# KWARGS_TWO_IP = {"name": "test", "role": "stage2d", "port": "autoip", "axes": CONFIG_BUS_TWO}
 # stage = pigcs.Bus(**KWARGS_TWO_IP)
 # move = {'x':0.01e-6}
 # stage.moveRel(move)
