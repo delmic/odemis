@@ -1043,9 +1043,9 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         c_x = 100 * linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0][0]  # obtaining the slope in x axis
         coefficients_y = array([hfw_values, ones(len(hfw_values))])
         c_y = 100 * linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0][0]  # obtaining the slope in y axis
-        if c_x == numpy.nan:
+        if math.isnan(c_x):
             c_x = 0
-        if c_y == numpy.nan:
+        if math.isnan(c_y):
             c_y = 0
         return c_x, c_y
 
@@ -1186,16 +1186,16 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         coefficients_y = array([resolution_values, ones(len(resolution_values))])
         [a_ny, b_ny] = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
         a_x = -1 / a_nx
-        if a_x == numpy.nan:
+        if math.isnan(a_x):
             a_x = 0
         b_x = b_nx / a_nx
-        if b_x == numpy.nan:
+        if math.isnan(b_x):
             b_x = 0
         a_y = -1 / a_ny
-        if a_y == numpy.nan:
+        if math.isnan(a_y):
             a_y = 0
         b_y = b_ny / a_ny
-        if b_y == numpy.nan:
+        if math.isnan(b_y):
             b_y = 0
         return (a_x, a_y), (b_x, b_y)
 
