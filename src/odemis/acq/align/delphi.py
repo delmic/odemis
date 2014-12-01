@@ -50,7 +50,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
                   {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
-SHIFT_DETECTION = {"x":0, "y":12e-03}  # Use holder hole images to measure the shift
+SHIFT_DETECTION = {"x":0, "y":11.3e-03}  # Use holder hole images to measure the shift
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
@@ -410,6 +410,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
 
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
+        start_pos = focus.position.value.get('z')
         # Apply spot alignment
         try:
             image = ccd.data.get(asap=False)
@@ -432,7 +433,28 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                 image = ccd.data.get(asap=False)
                 sem_pos = sem_stage.position.value
             except IOError:
-                raise IOError("Failed to align stages and calculate offset.")
+                try:
+                    # Maybe the spot is on the edge or just outside the FoV.
+                    # Try to move to the source background.
+                    logging.debug("Try to reach the source...")
+                    f = focus.moveAbs({"z": start_pos})
+                    f.result()
+                    image = ccd.data.get(asap=False)
+                    brightest = numpy.unravel_index(image.argmax(), image.shape)
+                    pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+                    center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+                    tab_pxs = [a - b for a, b in zip(brightest, center_pxs)]
+                    tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
+                    f = sem_stage.moveRel({"x":-tab[0], "y":tab[1]})
+                    f.result()
+                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+                    dist, vector = future_spot.result()
+                    # Almost done
+                    future.set_end_time(time.time() + 1)
+                    image = ccd.data.get(asap=False)
+                    sem_pos = sem_stage.position.value
+                except IOError:
+                    raise IOError("Failed to align stages and calculate offset.")
 
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
@@ -1043,9 +1065,9 @@ def _DoHFWShiftFactor(future, detector, escan, sem_stage, ebeam_focus, known_foc
         c_x = 100 * linalg.lstsq(coefficients_x.T, [sh[0] for sh in shift_values])[0][0]  # obtaining the slope in x axis
         coefficients_y = array([hfw_values, ones(len(hfw_values))])
         c_y = 100 * linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0][0]  # obtaining the slope in y axis
-        if c_x == numpy.nan:
+        if math.isnan(c_x):
             c_x = 0
-        if c_y == numpy.nan:
+        if math.isnan(c_y):
             c_y = 0
         return c_x, c_y
 
@@ -1186,16 +1208,16 @@ def _DoResolutionShiftFactor(future, detector, escan, sem_stage, ebeam_focus, kn
         coefficients_y = array([resolution_values, ones(len(resolution_values))])
         [a_ny, b_ny] = linalg.lstsq(coefficients_y.T, [sh[1] for sh in shift_values])[0]  # obtaining the slope in y axis
         a_x = -1 / a_nx
-        if a_x == numpy.nan:
+        if math.isnan(a_x):
             a_x = 0
         b_x = b_nx / a_nx
-        if b_x == numpy.nan:
+        if math.isnan(b_x):
             b_x = 0
         a_y = -1 / a_ny
-        if a_y == numpy.nan:
+        if math.isnan(a_y):
             a_y = 0
         b_y = b_ny / a_ny
-        if b_y == numpy.nan:
+        if math.isnan(b_y):
             b_y = 0
         return (a_x, a_y), (b_x, b_y)
 
