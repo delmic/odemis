@@ -1201,7 +1201,6 @@ class ZeroDimensionalPlotCanvas(canvas.PlotCanvas):
 
         self.drag_init_pos = None
 
-        ## Overlays
         self.SetBackgroundColour(self.Parent.BackgroundColour)
         self.SetForegroundColour(self.Parent.ForegroundColour)
 
@@ -1311,6 +1310,12 @@ class OneDimensionalSpatialSpectrumCanvas(BitmapCanvas):
         super(OneDimensionalSpatialSpectrumCanvas, self).__init__(*args, **kwargs)
         self.microscope_view = None
         self._tab_data_model = None
+
+        self.markline_overlay = view_overlay.MarkingLineOverlay(
+            self,
+            orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
+        self.add_view_overlay(self.markline_overlay)
+        self.markline_overlay.activate()
 
     def draw(self):
         """ Map the image data to the canvas and draw it """
