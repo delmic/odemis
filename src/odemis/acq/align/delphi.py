@@ -410,6 +410,7 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
 
         if future._align_offset_state == CANCELLED:
             raise CancelledError()
+        start_pos = focus.position.value.get('z')
         # Apply spot alignment
         try:
             image = ccd.data.get(asap=False)
@@ -432,7 +433,28 @@ def _DoAlignAndOffset(future, ccd, detector, escan, sem_stage, opt_stage, focus)
                 image = ccd.data.get(asap=False)
                 sem_pos = sem_stage.position.value
             except IOError:
-                raise IOError("Failed to align stages and calculate offset.")
+                try:
+                    # Maybe the spot is on the edge or just outside the FoV.
+                    # Try to move to the source background.
+                    logging.debug("Try to reach the source...")
+                    f = focus.moveAbs({"z": start_pos})
+                    f.result()
+                    image = ccd.data.get(asap=False)
+                    brightest = numpy.unravel_index(image.argmax(), image.shape)
+                    pixelSize = image.metadata[model.MD_PIXEL_SIZE]
+                    center_pxs = (image.shape[1] / 2, image.shape[0] / 2)
+                    tab_pxs = [a - b for a, b in zip(brightest, center_pxs)]
+                    tab = (tab_pxs[0] * pixelSize[0], tab_pxs[1] * pixelSize[1])
+                    f = sem_stage.moveRel({"x":-tab[0], "y":tab[1]})
+                    f.result()
+                    future_spot = spot.AlignSpot(ccd, sem_stage, escan, focus, type=spot.STAGE_MOVE, background=True, dataflow=detector.data)
+                    dist, vector = future_spot.result()
+                    # Almost done
+                    future.set_end_time(time.time() + 1)
+                    image = ccd.data.get(asap=False)
+                    sem_pos = sem_stage.position.value
+                except IOError:
+                    raise IOError("Failed to align stages and calculate offset.")
 
         # Since the optical stage was referenced the final position after
         # the alignment gives the offset from the SEM stage
