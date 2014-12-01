@@ -345,8 +345,8 @@ class Scanner(model.Emitter):
         # Directly set spot size instead of probe current due to Phenom API
         spot_rng = SPOT_RANGE
         self._spotSize = numpy.mean(SPOT_RANGE)
-        self.spotSize = model.FloatContinuous(self._spotSize, spot_rng, unit=u"A/√V",
-                                                  setter=self._setSpotSize)
+        self.spotSize = model.FloatContinuous(self._spotSize, spot_rng,
+                                              setter=self._setSpotSize)
 
     def updateMetadata(self, md):
         # we share metadata with our parent
