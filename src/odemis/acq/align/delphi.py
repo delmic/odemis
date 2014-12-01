@@ -50,7 +50,7 @@ ROTATION_SPOTS = ({"x":4e-03, "y":0}, {"x":-4e-03, "y":0},
                   {"x":0, "y":4e-03}, {"x":0, "y":-4e-03})
 EXPECTED_OFFSET = (0.00047, 0.00014)    #Fallback sem position in case of
                                         #lens alignment failure 
-SHIFT_DETECTION = {"x":0, "y":12e-03}  # Use holder hole images to measure the shift
+SHIFT_DETECTION = {"x":0, "y":11.3e-03}  # Use holder hole images to measure the shift
 SEM_KNOWN_FOCUS = 0.006386  # Fallback sem focus position for the first insertion
 
 
