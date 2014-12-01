@@ -2198,7 +2198,7 @@ class Bus(model.Actuator):
                         # it implies the baud rate was correct, and as it's impossible
                         # to have devices on different baud rate, so we are done
                         break
-            except serial.SerialException:
+            except (serial.SerialException, model.HwError):
                 # not possible to use this port? next one!
                 pass
 
@@ -2386,7 +2386,7 @@ class SerialBusAccesser(object):
             lines = []
             while char:
                 if char == "\n":
-                    if (len(line) > 0 and line[-1] == " " and  # multiline: "... \n"
+                    if (line[-1:] == " " and  # multiline: "... \n"
                         not re.match(r"0 \d+ $", line)):  # excepted empty line "0 1 \n"
                         lines.append(line[:-1]) # don't include the space
                         line = ""
@@ -2536,7 +2536,7 @@ class IPBusAccesser(object):
         # Interpret the answer
         lines = []
         for i, l in enumerate(ans.split("\n")):
-            if l[-1] == " ": # remove the spaces indicating multi-line
+            if l[-1:] == " ": # remove the spaces indicating multi-line
                 l = l[:-1]
             elif i != len(lines):
                 logging.warning("Skipping previous answer from hardware %s",
