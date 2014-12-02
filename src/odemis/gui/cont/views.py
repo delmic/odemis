@@ -291,7 +291,7 @@ class ViewPortController(object):
         """
 
         msg = "Resetting views to %s"
-        msgdata = [str(v) for v in visible_views] if not visible_views is None else "default"
+        msgdata = [str(v) for v in visible_views] if visible_views is not None else "default"
         logging.debug(msg, msgdata)
 
         parent = self._viewports[0].Parent

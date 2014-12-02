@@ -51,7 +51,7 @@ class ViewportGrid(wx.Panel):
         """ Return all the viewports that are invisible """
         return [c for c in self.viewports if not c.Shown]
 
-    ##### Viewport showing and hiding #####
+    # #### Viewport showing and hiding #### #
 
     def set_shown_viewports(self, *show_viewports):
         """ Show the given viewports and hide the rest """
@@ -93,9 +93,9 @@ class ViewportGrid(wx.Panel):
         viewport.Hide()
         self._layout_viewports()
 
-    ##### END Viewport showing and hiding #####
+    # #### END Viewport showing and hiding #### #
 
-    def on_size(self, evt):
+    def on_size(self, _):
         """ Grab the child windows and perform layout when the size changes """
         if self.viewports is None:
             self.viewports = list(self.Children)
@@ -237,7 +237,7 @@ class ViewportGrid(wx.Panel):
         self._swap_viewports(vpa, vpb)
         self._layout_viewports()
 
-    def set_visible_viewports(self, viewports):
+    def set_visible_viewports(self, vis_viewports):
         """ Set the viewports to be shown
 
         This method will movie the viewports to be shown to the front of the viewport list (in
@@ -246,11 +246,14 @@ class ViewportGrid(wx.Panel):
         """
 
         self.hide_all_viewports()
-        for grid_viewport, viewport in zip(viewports, self.viewports):
-            if grid_viewport not in self.viewports:
+
+        for vis_viewport, viewport in zip(vis_viewports, self.viewports):
+            if vis_viewport not in self.viewports:
                 raise ValueError("Unknown Viewport!")
-            self._swap_viewports(grid_viewport, viewport)
-            grid_viewport.Show()
+            # Swap won't happen if the viewports are the same
+            self._swap_viewports(vis_viewport, viewport)
+            vis_viewport.Show()
+
         self._layout_viewports()
 
     def get_win_grid_pos(self, win):

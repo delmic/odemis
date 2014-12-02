@@ -168,14 +168,15 @@ class GridPanelTestCase(test.GuiTestCase):
 
     def test_grid_resize(self):
 
-        test.set_sleep_time(200)
+        test.set_sleep_time(300)
 
         gp = self.frame.grid_panel
         gui_loop()
 
         self.frame.SetSize((600, 600))
         self.frame.Center()
-        gui_loop()
+
+        # gui_loop()
 
 
 
