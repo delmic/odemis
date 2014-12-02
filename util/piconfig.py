@@ -462,7 +462,7 @@ def SetParameter(acc, addr, axis, param, val):
                          (err, param, val), err)
 
 # The functions available to the user
-def read_param(acc, addr):
+def read_param(acc, addr, f):
     # params = GetAvailableParameters(ser, addr)
     params = GetParameters(acc, addr, 1)
     for p in sorted(params.keys()):
@@ -470,11 +470,13 @@ def read_param(acc, addr):
         try:
             # Note: it seems it's possible to use just "SPA?" to get all the parameters
             # v = GetParameters(ser, addr, 1, p)
-            print "0x%x\t%s" % (p, v)
+            f.write("0x%x\t%s" % (p, v))
         except Exception:
             logging.exception("Failed to read param 0x%x", p)
     
-def write_param(acc, addr):
+    f.close()
+
+def write_param(acc, addr, f):
     params = {} # int -> str = param num -> value
 
     # We could use SPE to directly write to flash memory but:
@@ -484,7 +486,7 @@ def write_param(acc, addr):
     # * In case of error, we could end up with half the parameters written
 
     # read the parameters "database" from stdin
-    for l in sys.stdin:
+    for l in f:
         m = re.match(r"0x(?P<param>[0-9A-Fa-f]+)\t(?P<value>(\S+))", l)
         if not m:
             logging.debug("Line skipped: '%s'", l)
@@ -542,10 +544,10 @@ def main(args):
                              description="Read/write parameters in a PI controller")
 
     # TODO: read and write should take a file as argument
-    parser.add_argument('--read', dest="read", action='store_true',
-                        help="Will read all the parameters and display them")
-    parser.add_argument('--write', dest="write", action='store_true',
-                        help="Will write all the parameters as read from stdin")
+    parser.add_argument('--read', dest="read", type=argparse.FileType('w'),
+                        help="Will read all the parameters and save them in a file (use - for stdout)")
+    parser.add_argument('--write', dest="write", type=argparse.FileType('r'),
+                        help="Will write all the parameters as read from the file (use - for stdin)")
     parser.add_argument('--reboot', dest="reboot", action='store_true',
                         help="Reboot the controller")
 
@@ -558,11 +560,11 @@ def main(args):
 
     try:
         acc = openPort(options.port)
-        
+
         if options.read:
-            read_param(acc, options.cont)
+            read_param(acc, options.cont, options.read)
         elif options.write:
-            write_param(acc, options.cont)
+            write_param(acc, options.cont, options.write)
         elif options.reboot:
             reboot(acc, options.cont)
         else:
