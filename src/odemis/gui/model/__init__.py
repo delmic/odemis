@@ -282,6 +282,48 @@ class MicroscopyGUIData(object):
     .tool:
         the current "mode" in which the user is (the choices give all the
         available tools for this GUI).
+
+    focussedView
+    ~~~~~~~~~~~~
+
+    Usage (02-12-2014):
+
+    The focused view is set in the following places:
+
+    * Tab: As a result of user generated events (i.e. mouse clicks) in overlays
+    * ViewPort: When a child object of ViewPort gains focus
+    * ViewPortController: - Default focus in the constructor
+                          - When visible views change (i.e. make sure that the focus remains
+                            with a ViewPort that is visible)
+                          - Focus the ViewPort that displays a given stream
+    * ViewButtonController: Focus is set on view button click
+
+    Focused view listeners:
+
+    * StreamController: Show the streams associated with the focused view in the stream panel
+    * Tab: To track the canvas cross hair
+    * ViewPortController: To set the focus to the right ViewPort
+    * ViewButtonController: Set which view button is selected (This method is also called by the
+                            viewLayout VA)
+
+    viewLayout
+    ~~~~~~~~~~
+
+    Usage (02-12-2014):
+
+    The layout of the grid is set in the following places:
+
+    * ViewButtonController: Change the layout if needed (depending on which button was clicked)
+    * Tab:  - Connection to the 2x2 vs 1x1 menu item
+            - Reset to 2x2 when a new file is loaded
+
+    View layout Listeners:
+
+    * Tab: Connection to 2x2 menu item checkmark
+    * ViewPortController: Adjust the grid layout
+    * ViewButtonController: Set which view button is selected (Same method is called by the
+                            focussedView VA)
+
     """
     __metaclass__ = ABCMeta
 
@@ -301,8 +343,8 @@ class MicroscopyGUIData(object):
         # Current tool selected (from the toolbar, cf cont.tools)
         self.tool = None  # Needs to be overridden by a IntEnumerated
 
-        # The MicroscopeView currently focused, it is one of the `views`
-        # or `None`.
+        # The MicroscopeView currently focused, it is one of the `views` or `None`.
+        # See class docstring for more info.
         self.focussedView = VigilantAttribute(None)
 
         layouts = set([VIEW_LAYOUT_ONE, VIEW_LAYOUT_22, VIEW_LAYOUT_FULLSCREEN])
@@ -315,10 +357,12 @@ class MicroscopyGUIData(object):
 
 
 class LiveViewGUIData(MicroscopyGUIData):
-    """ Represent an interface used to only show the current data from the
-    microscope. It should be able to handle SEM-only, optical-only, SECOM and
-    DELPHI systems.
+    """ Represent an interface used to only show the current data from the microscope.
+
+    It should be able to handle SEM-only, optical-only, SECOM and DELPHI systems.
+
     """
+
     def __init__(self, main):
         assert main.microscope is not None
         MicroscopyGUIData.__init__(self, main)
