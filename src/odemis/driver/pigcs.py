@@ -1286,12 +1286,15 @@ class Controller(object):
 
 class CLController(Controller):
     """
-    Controller managed via closed-loop commands (ex: C-867 with reference)
-    TODO: For now, only relative moves are supported.
-          For supporting absolute moves, we need to add querying and requesting
-          "homing" procedure. Then the position would reset to 0 (and that's it
-          from the user's point of view).
+    Controller managed via closed-loop commands (ex: C-867 with encoder).
+    Note that it knows if there is a reference or a limit switch only based on
+    what is written in the controller parameters. If none are available,
+    referencing will not be available.
     """
+#     TODO: For now, only relative moves are supported.
+#           For supporting absolute moves, we need to add querying and requesting
+#           "homing" procedure. Then the position would reset to 0 (and that's it
+#           from the user's point of view).
     def __init__(self, busacc, address=None, axes=None):
         super(CLController, self).__init__(busacc, address, axes)
 
@@ -1310,6 +1313,12 @@ class CLController(Controller):
                                  "%d reports no sensor for axis %d", address, a)
 
 
+            # Check the unit is mm
+            unit = self.GetParameter(a, 0x7000601)
+            if unit != "MM":
+                raise IOError("Controller %d configured with unit %s, but only "
+                              "millimeters (MM) is supported.", address, unit)
+
             # TODO:
             # * if not referenced => disable reference mode to be able to
             # move relatively (until referencing happens). Use the position as
@@ -1321,25 +1330,20 @@ class CLController(Controller):
             # correct, and set units to meters
             self.SetServo(a, True)
             self.SetReferenceMode(a, False)
-            # It seems the internal device unit is in 100 nm, but "user" unit
-            # is usually set to report in mm (but can be changed).
-            # => change to be always in meters
-            self.SetParameter(a, 0xE, 10000000) # numerator
-            self.SetParameter(a, 0xF, 1) # denumerator
 
-            # Movement range before refenrencing is max range in both directions
-            pos = self.GetPosition(a)
-            width = self.GetMaxPosition(a) - self.GetMinPosition(a)
+            # Movement range before referencing is max range in both directions
+            pos = self.getPosition(a)
+            width = self.GetMaxPosition(a) * 1e-3 - self.GetMinPosition(a) * 1e-3
             self.pos_rng[a] = (pos - width, pos + width)
 
             # Read speed/accel ranges
-            self._speed[a] = self._readAxisValue("VEL?", a) # m/s
-            self._accel[a] = self._readAxisValue("ACC?", a) # m/s²
+            self._speed[a] = self._readAxisValue("VEL?", a) * 1e-3 # m/s
+            self._accel[a] = self._readAxisValue("ACC?", a) * 1e-3 # m/s²
 
             # TODO: also use per-axis info
             try:
-                self.max_speed = float(self.GetParameter(1, 0xA)) # m/s
-                self.max_accel = float(self.GetParameter(1, 0x4A)) # m/s²
+                self.max_speed = float(self.GetParameter(1, 0xA)) * 1e-3 # m/s
+                self.max_accel = float(self.GetParameter(1, 0x4A)) * 1e-3 # m/s²
             except (IOError, ValueError):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
@@ -1380,15 +1384,15 @@ class CLController(Controller):
         new_speed = self._speed[axis]
         if prev_speed != new_speed:
             # TODO: check it's within range
-            self.SetCLVelocity(axis, new_speed)
+            self.SetCLVelocity(axis, new_speed * 1e3)
             self._prev_speed_accel[0][axis] = new_speed
 
         prev_accel = self._prev_speed_accel[1].get(axis, None)
         new_accel = self._accel[axis]
         if prev_accel != new_accel:
             # TODO: check it's within range
-            self.SetCLAcceleration(axis, new_accel)
-            self.SetCLDeceleration(axis, new_accel)
+            self.SetCLAcceleration(axis, new_accel * 1e3)
+            self.SetCLDeceleration(axis, new_accel * 1e3)
             self._prev_speed_accel[1][axis] = new_accel
 
     def moveRel(self, axis, distance):
@@ -1399,7 +1403,7 @@ class CLController(Controller):
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        self.MoveRel(axis, distance)
+        self.MoveRel(axis, distance * 1e3)
 
         return distance
 
@@ -1416,9 +1420,9 @@ class CLController(Controller):
 
         # Absolute move is only legal if already referenced.
         if not self.IsReferenced(axis): # TODO: cache, or just always do relative?
-            self.MoveRel(axis, distance)
+            self.MoveRel(axis, distance * 1e3)
         else:
-            self.MoveAbs(axis, position)
+            self.MoveAbs(axis, position * 1e3)
 
         return distance
 
@@ -1427,7 +1431,7 @@ class CLController(Controller):
         Find current position as reported by the sensor
         return (float): the current position of the given axis
         """
-        return self.GetPosition(axis)
+        return self.GetPosition(axis) * 1e-3
 
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
@@ -1964,7 +1968,7 @@ class Bus(model.Actuator):
                     rng = (-1, 1) # m
                 speed_rng = (controller.min_speed, controller.max_speed)
                 # Just to make sure it doesn't go too fast
-                speed[axis] = max(speed_rng[0], min(0.001, speed_rng[1])) # m/s
+                speed[axis] = controller.getSpeed(c) # m/s
                 ad = model.Axis(unit="m", range=rng, speed=speed_rng,
                                 canAbs=isCL)
                 axes_def[axis] = ad
@@ -1988,7 +1992,6 @@ class Bus(model.Actuator):
         # min speed = don't be crazy slow. max speed from hardware spec
         self.speed = model.MultiSpeedVA(speed, range=[0, 10.],
                                         unit="m/s", setter=self._setSpeed)
-        self._setSpeed(speed)
 
         # set HW and SW version
         self._swVersion = self.accesser.driverInfo
@@ -2804,8 +2807,8 @@ class ActionFuture(object):
             while self._state == RUNNING:
                 now = time.time()
                 if now > self._timeout:
-                    logging.debug("Giving up waiting for move %g s late",
-                                  now - self._expected_end)
+                    logging.warning("Giving up waiting for move %g s late",
+                                    now - self._expected_end)
                     break # move took too much time
                 if now > end_wait:
                     return False # could wait more but the caller is not interested
