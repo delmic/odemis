@@ -1,0 +1,58 @@
+<?xml version="1.0" ?>
+<resource class="">
+  <object class="wxDialog" name="progress_dialog">
+    <object class="wxPanel">
+      <object class="wxBoxSizer">
+        <orient>wxVERTICAL</orient>
+        <object class="sizeritem">
+          <object class="wxStaticText" name="info_txt">
+            <label>Amazing text about what's happening</label>
+            <fg>#FFFFFF</fg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxALL|wxEXPAND</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="wxGauge" name="gauge">
+            <size>-1,10</size>
+            <range>100</range>
+            <value>50</value>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="wxStaticText" name="time_txt">
+            <label>Time remaining: 2 hours, 16 minutes and 34 seconds</label>
+            <fg>#FFFFFF</fg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxALL|wxEXPAND</flag>
+          <border>10</border>
+        </object>
+        <object class="sizeritem">
+          <object class="wxButton" name="cancel_btn">
+            <label>Cancel </label>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <flag>wxALL|wxALIGN_CENTRE</flag>
+          <border>10</border>
+        </object>
+      </object>
+      <bg>#4D4D4D</bg>
+    </object>
+    <centered>1</centered>
+    <icon>../img/odemis.ico</icon>
+    <bg>#4D4D4D</bg>
+  </object>
+</resource>
