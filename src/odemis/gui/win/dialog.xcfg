@@ -1,0 +1,5 @@
+autogenerate=1
+embedResource=1
+filename=dialog_xrc.py
+genGettext=0
+makeXRS=0
