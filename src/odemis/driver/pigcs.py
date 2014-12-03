@@ -1673,14 +1673,6 @@ class SMOController(Controller):
               "%(n)d MAC END\n" % {"n": self.address}
         self._sendOrderCommand(mac)
 
-#        # For short moves
-#        mac = "MAC BEG OS0\n" \
-#              "%(n)d SMO 1 $1\n" \
-#              "%(n)d SAI? ALL\n" \
-#              "%(n)d SMO 1 0\n"  \
-#              "%(n)d MAC END\n" % {"n": self.address}
-#        self._sendOrderCommand(mac)
-
         # Don't authorize different speeds or accels
         self._speed_base = speed_base
         self.min_speed = speed_base # m/s
@@ -1712,34 +1704,11 @@ class SMOController(Controller):
         # From experiment: a delay of 0 means actually 2**16, and >= 10000 it's 0
         self._sendOrderCommand("MAC START OS %d %d\n" % (voltage, t))
 
-#    def OLMovePID0(self, axis, voltage):
-#        """
-#        Moves an axis a very little bit. Can be done only with servo off.
-#        Warning: it's completely hacky, there is no idea if it even moves
-#        axis (1<int<16): axis number
-#        voltage (-32766<=int<=32766): voltage for the PID control. <0 to go towards
-#          the negative direction. 32766 is 10V
-#        """
-#        # Uses MAC OS0, based on SMO
-#        assert(axis == 1)
-#        assert(-32768 <= voltage <= 32767)
-#
-#        self._sendOrderCommand("MAC START OS0 %d\n" % (voltage,))
-
-
     def _isAxisMovingOLViaPID(self, axis):
         """
         axis (1<int<16): axis number
         returns (boolean): True moving axes for the axes controlled via PID
         """
-#        # FIXME: SMO doesn't seem to work any more with the fine grain firmware
-#        now = time.time()
-#        end_move = self._end_move.get(axis, 0)
-#        if now > end_move:
-#            return False
-#        else:
-#            return True
-
         # "SMO?" (Get Control Value)
         # Reports the speed set. If it's 0, it's not moving, otherwise, it is.
         answer = self._sendQueryCommand("SMO? %d\n" % axis)
@@ -1799,46 +1768,6 @@ class SMOController(Controller):
 
         return voltage_u, mv_time_cy, act_dist
 
-#    def _OLDconvertDistanceSpeedToPIDControl(self, distance, speed):
-#        """
-#        converts meters and speed to the units for this device (~V, ms) in
-#        open-loop via PID control.
-#        distance (float): meters (can be negative)
-#        speed (0<float): meters/s (can be negative)
-#        return (tuple: int, 0<number, float): PID control (in device unit),
-#          duration (in device cycles), distance (in m)
-#        """
-#        voltage_u = round(int(speed * self._vpms)) # uV
-#        # clamp it to the possible values
-#        voltage_u = min(max(self._min_motor_out, voltage_u), self._max_motor_out)
-#        act_speed = voltage_u / self._vpms # m/s
-#
-#        mv_time = abs(distance) / act_speed # s
-#        mv_time_cy = int(round(mv_time * self.cycles_per_s)) # cycles
-#        if mv_time < 1e-3 and act_speed > self.min_speed:
-#            # small distance => try with the minimum speed to have a better precision
-#            return self._convertDistanceSpeedToPIDControl(distance, self.min_speed)
-#        # FIXME: unused with new firmware
-#        elif 0.1e-3 < mv_time and mv_time_cy < 1:
-#            logging.error("Should not be called")
-#            # try our special super small step trick if at least 0.1 ms
-#            mv_time_cy = 0.5e-3 * self.cycles_per_s # 0.5 ms
-#            voltage_u = self._min_motor_out # TODO: change according to requested distance?
-#        # TODO: on new experimental firmware, below 6 cyles might not be possible
-#        # according to PI
-#        elif mv_time_cy < 1:
-#            # really no hope
-#            return 0, 0, 0
-#        elif mv_time_cy >= 10000:
-#            logging.debug("Too big distance of %f m, shortening it", distance)
-#            mv_time_cy = 9999
-#
-#        if distance < 0:
-#            voltage_u = -voltage_u
-#
-#        act_dist = (mv_time_cy / self.cycles_per_s) * voltage_u / self._vpms # m (very approximate)
-#        return voltage_u, mv_time_cy, act_dist
-
     def moveRel(self, axis, distance):
         """
         See Controller.moveRel
@@ -1850,10 +1779,6 @@ class SMOController(Controller):
         if t == 0: # if distance is too small, report it
             logging.debug("Move of %g µm too small, not moving", distance * 1e-6)
             return 0
-#        elif t < 1: # special small move command
-#            logging.error("Should never be called")
-#            self.OLMovePID0(axis, v)
-#            duration = 0.5e-3 # = 1/2 ms
         else:
             self.OLMovePID(axis, v, t)
             duration = t / self.cycles_per_s
