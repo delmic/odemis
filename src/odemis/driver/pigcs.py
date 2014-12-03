@@ -354,26 +354,13 @@ class Controller(object):
                                               *args, **kwargs)
     
     
-    def __init__(self, busacc, address=None, axes=None,
-                 dist_to_steps=None, min_dist=None):
+    def __init__(self, busacc, address=None, axes=None):
         """
-        busacc: a SerialBusAccesser (with at least a serial port opened)
+        busacc: a BusAccesser
         address 1<int<16: address as configured on the controller
         If not address is given, it just allows to do some raw commands
         axes (dict int -> boolean): determine which axis will be used and whether
           it will be used closed-loop (True) or open-loop (False).
-        Next 2 parameters are calibration values for E-861
-        dist_to_steps (0 < float): allows to calibrate how many steps correspond
-          to a given distance (in step/m). Default is 1e5, a value that could 
-          make sense.
-        min_dist (0 <= float < 1): minimum distance required for the axis to 
-          even move (in m). Below this distance, a command will be sent, but it
-          is expected that the actuator doesn't move at all. Default is 0.01 
-          step (= 0.01 / dist_to_steps).
-        Next parameter is calibration value for C-867
-        vpms (0 < float): calibration value voltage -> speed, in V/(m/s), 
-          default is a not too bad value of 87 V/(m/s). Note: it's not linear
-          at all actually, but we tend to try to always go at lowest speed (near 3V)
         """
         # TODO: calibration values should be per axis (but for now we only have controllers with 1 axis)
         self.busacc = busacc
@@ -402,7 +389,8 @@ class Controller(object):
 
         self._model = self.getModel()
         if self._model == MODEL_UNKNOWN:
-            logging.warning("Controller %d is an unsupported version (%s)", self.address, self.GetIdentification())
+            logging.warning("Controller %d is an unsupported version (%s)",
+                            address, self.GetIdentification())
 
         self._channels = self.GetAxes() # available channels (=axes)
         # dict axis -> boolean
@@ -1310,8 +1298,7 @@ class CLController(Controller):
                 raise ValueError("Initialising CLController with request for open-loop")
             if not self._hasRefSwitch[a]:
                 logging.warning("Closed-loop control requested but controller "
-                                 "%d reports no sensor for axis %d", address, a)
-
+                                 "%d reports no reference sensor for axis %d", address, a)
 
             # Check the unit is mm
             unit = self.GetParameter(a, 0x7000601)
@@ -1328,11 +1315,12 @@ class CLController(Controller):
 
             # Start with servo, non-referenced mode, assume the position is
             # correct, and set units to meters
-            self.SetServo(a, True)
-            self.SetReferenceMode(a, False)
+            self._startEncoder(a) # TODO: Needed? For position?
+#             self.SetServo(a, True)
+#             self.SetReferenceMode(a, False)
 
             # Movement range before referencing is max range in both directions
-            pos = self.getPosition(a)
+            pos = self.GetPosition(a) * 1e-3
             width = self.GetMaxPosition(a) * 1e-3 - self.GetMinPosition(a) * 1e-3
             self.pos_rng[a] = (pos - width, pos + width)
 
@@ -1342,11 +1330,13 @@ class CLController(Controller):
 
             # TODO: also use per-axis info
             try:
-                self.max_speed = float(self.GetParameter(1, 0xA)) * 1e-3 # m/s
-                self.max_accel = float(self.GetParameter(1, 0x4A)) * 1e-3 # m/s²
+                self.max_speed = float(self.GetParameter(a, 0xA)) * 1e-3 # m/s
+                self.max_accel = float(self.GetParameter(a, 0x4A)) * 1e-3 # m/s²
             except (IOError, ValueError):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
+
+            self._stopEncoder(a)
 
         self.min_speed = 10e-6 # m/s (default low value)
         self._prev_speed_accel = ({}, {})
@@ -1363,7 +1353,7 @@ class CLController(Controller):
         # Use FRF? to know about the referencing status
         # TMN? TMX?  give range (careful, it's typically 0 -> BIG Number)
         # Note: the actuator actively control the motor to stay at the last 
-        # position requested as long as the servo is on. So need to disable
+        # position requesteaxisd as long as the servo is on. So need to disable
         # servo when stopping the program to allow the user to move the stage
         # manually (or maybe even after any move?)
 
@@ -1372,6 +1362,28 @@ class CLController(Controller):
         # Disable servo, to allow the user to move the axis manually
         for a in self._channels:
             self.SetServo(a, False)
+
+    def _stopEncoder(self, axis):
+        """
+        Turn off the supply power of the encoder. That means during this time
+        it's not possible to move the axes. Referencing is lost.
+        Should only be called when no move is taking place.
+        axis (1<=int<=16): the axis
+        """
+        # This can only be done if the servo is turned off
+        self.SetServo(axis, False)
+        if 0x56 in self._avail_params:
+            self.SetParameter(axis, 0x56, 0) # 0 = off
+
+    def _startEncoder(self, axis):
+        """
+        Turn on the suplly power of the encoder.
+        axis (1<=int<=16): the axis
+        """
+        if 0x56 in self._avail_params:
+            self.SetParameter(axis, 0x56, 1) # 1 = on
+        self.SetServo(axis, True)
+        self.SetReferenceMode(axis, False)
 
     def _updateSpeedAccel(self, axis):
         """
@@ -1400,6 +1412,7 @@ class CLController(Controller):
         See Controller.moveRel
         """
         assert(axis in self._channels)
+        self._startEncoder(axis)
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
@@ -1412,10 +1425,11 @@ class CLController(Controller):
         See Controller.moveAbs
         """
         assert(axis in self._channels)
+        self._startEncoder(axis)
         self._updateSpeedAccel(axis)
         # We trust the caller that it knows it's in range
         # (worst case the hardware will not go further)
-        old_pos = self.getPosition(axis)
+        old_pos = self.GetPosition(axis) * 1e-3
         distance = position - old_pos
 
         # Absolute move is only legal if already referenced.
@@ -1431,6 +1445,8 @@ class CLController(Controller):
         Find current position as reported by the sensor
         return (float): the current position of the given axis
         """
+        # TODO: find out if we need sensor to be turned on to read the position
+        self._startEncoder(axis)
         return self.GetPosition(axis) * 1e-3
 
     # Warning: if the settling window is too small or settling time too big,
@@ -1449,10 +1465,30 @@ class CLController(Controller):
         # With servo on, it might constantly be _slightly_ moving (around the
         # target), so it's much better to use IsOnTarget info. The controller
         # needs to be correctly configured with the right window size.
-        for c in axes:
-            if not self.IsOnTarget(c):
+        for a in axes:
+            if not self.IsOnTarget(a):
                 return True
+
+        # Encoder not needed anymore (until next move)
+        for a in axes:
+            self._stopEncoder(a)
         return False
+
+        # TODO: if return false => turn off encoder (in a few seconds)
+        # Then, need to "ensure the encoder is ON" before any other meaningful command
+
+        # FIXME: it seems that if the axis is stopped while moving, isontarget()
+        # will sometimes keep saying it's not reached forever. However, the documentation
+        # says that the target position is set to the current position after a
+        # stop (to avoid this problem). Need to investigate
+        # MOV 1 1.1
+        # MOV? 1  # read target pos
+        # time.sleep(0.01)
+        # ONT? 1  # should be false
+        # STP # also try HLT
+        # MOV? 1  # should be new pos
+        # POS? 1  # Should be very close
+        # ONT? 1 # Should be true at least after the settle time window
 
     def startReferencing(self, axis):
         """
@@ -1460,6 +1496,7 @@ class CLController(Controller):
         the move is over. Position will change, as well as absolute positions.
         axis (1<=int<=16)
         """
+        self._startEncoder(axis)
         if self._hasRefSwitch[axis]:
             self.ReferenceToSwitch(axis)
         elif self._hasLimitSwitches[axis]:
@@ -1491,14 +1528,21 @@ class OLController(Controller):
     """
     def __init__(self, busacc, address=None, axes=None,
                  dist_to_steps=None, min_dist=None):
+        """
+        dist_to_steps (0 < float): allows to calibrate how many steps correspond
+          to a given distance (in step/m). Default is 1e5, a value that could 
+          make sense.
+        min_dist (0 <= float < 1): minimum distance required for the axis to 
+          even move (in m). Below this distance, a command will be sent, but it
+          is expected that the actuator doesn't move at all. Default is 0.01 
+          step (= 0.01 / dist_to_steps).
+        """
         if dist_to_steps and not (0 < dist_to_steps):
             raise ValueError("dist_to_steps (%s) must be > 0" % dist_to_steps)
         if min_dist and not (0 <= min_dist < 1):
             raise ValueError("min_dist (%s) must be between 0 and 1 m" % min_dist)
 
-        super(OLController, self).__init__(busacc, address, axes,
-                                           dist_to_steps=dist_to_steps,
-                                           min_dist=min_dist)
+        super(OLController, self).__init__(busacc, address, axes)
         for a, cl in axes.items():
             if not a in self._channels:
                 raise LookupError("Axis %d is not supported by controller %d" % (a, address))
