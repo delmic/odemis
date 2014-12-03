@@ -2106,9 +2106,12 @@ class Bus(model.Actuator):
                 controller.stopMotion()
                 controllers.add(controller)
 
-        # wait all controllers are done moving
-        for controller in controllers:
-            controller.waitEndMotion()
+        # Normally all the axes are stopped immediately, and if not it doesn't
+        # help much to wait. In addition, on the CL controller, it can take a
+        # long time because it never reaches the original target
+#         # wait all controllers are done moving
+#         for controller in controllers:
+#             controller.waitEndMotion()
 
     def terminate(self):
         if not hasattr(self, "_action_mgr"):
