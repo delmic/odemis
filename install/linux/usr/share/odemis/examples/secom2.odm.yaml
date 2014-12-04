@@ -12,13 +12,14 @@ Spectra: {
     init: {
         port: "/dev/ttyFTDI*",
         # source name -> 99% low, 25% low, centre, 25% high, 99% high wavelength in m
-        # Values are quite approximate (only centre is pretty sure)
-        sources: {"UV": [372.e-9, 382.e-9, 390.e-9, 398.e-9, 408.e-9],
-                  "cyan": [465.e-9, 475.e-9, 485.e-9, 495.e-9, 505.e-9],
-                  "green": [535.e-9, 545.e-9, 560.e-9, 575.e-9, 585.e-9],
-                  "red": [637.e-9, 645.e-9, 650.e-9, 655.e-9, 663.e-9],
+        # Values are from vendor: http://lumencor.com/products/filters-for-spectra-x-light-engines/
+        sources: {"UV": [379.e-9, 384.e-9, 390.e-9, 396.e-9, 401.e-9], # 390/22
+                  "cyan": [472.e-9, 479.e-9, 485.e-9, 491.e-9, 497.e-9], # 485/25
+                  "green": [544.e-9, 552.e-9, 560.e-9, 568.e-9, 576.e-9], # 560/32
+                  "red": [638.e-9, 643.e-9, 648.e-9, 653.e-9, 658.e-9], # 648/20
                  }
         },
+        # The light is reflected via a Semrock FF410/504/582/669-DI01-25X36
     affects: [Zyla],
 }
 
@@ -127,14 +128,14 @@ Zyla: {
     },
 }
 
-# Network should be set up and the C-863 should be configured for DHCP.
+# Network should be set up and the C-885 should be configured for DHCP.
 # Each E-861 should be configured for the right stage.
 # PI E-861 addresses and stage configuration:
-# stage X = 1 (??1 closed loop)
-# stage Y = 2 (??1 closed loop)
-# optical X = 3 (??2 open loop)
-# optical Y = 4 (??2 open loop)
-# optical Z = 5 (??1 closed loop)
+# optical X = 1 (open loop)
+# optical Y = 2 (open loop)
+# optical Z = 3 (closed loop)
+# stage X = 4 (closed loop)
+# stage Y = 5 (closed loop)
 
 PIGCS: {
     class: pigcs.Bus,
@@ -142,16 +143,10 @@ PIGCS: {
     init: {
         port: "autoip", # put "autoip" or the IP address (if fixed)
         # axis -> controller, channel, closed-loop?
-        # FIXME: for now the controllers are not properly configured and not connected
-        # to the encoder, so only open loop
-#        axes: {"sx": [1, 1, True], "sy": [2, 1, True],
-#               "ox": [3, 1, False], "oy": [4, 1, False],
-#               "oz": [5, 1, True]},
-        axes: {"sx": [1, 1, False], "sy": [2, 1, False],
-               "ox": [3, 1, False], "oy": [4, 1, False],
-               "oz": [5, 1, False]},
+        axes: {"ox": [1, 1, False], "oy": [2, 1, False],
+               "oz": [3, 1, True],
+               "sx": [4, 1, True], "sy": [5, 1, True]},
         inverted: ["ox", "oy", "oz"], # TODO: check stage X/Y
         #dist_to_steps: {"sx": 100000, "sy": 100000}, # step/m
     },
 }
-
