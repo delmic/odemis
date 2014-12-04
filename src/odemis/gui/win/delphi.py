@@ -15,7 +15,14 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import wx
-
+from odemis.gui.win.dialog_xrc import xrcprogress_dialog
+from odemis.gui.util.widgets import ProgessiveFutureConnector
+from odemis.gui.cont.acquisition import DelphiCalibration
+import logging
+from odemis.util import units
+from odemis.gui.util import call_after
+from concurrent.futures._base import CancelledError
+from odemis import model
 
 # code based on the wxPython demo TestDialog class
 class FirstCalibrationDialog(wx.Dialog):
@@ -81,3 +88,94 @@ class FirstCalibrationDialog(wx.Dialog):
             return self.text.Value
         else:
             return None
+
+class CalibrationProgressDialog(xrcprogress_dialog):
+    """ Wrapper class responsible for the connection between delphi calibration
+    future and the xrcprogress_dialog.
+    """
+    def __init__(self, parent, main_data, overview_pressure, vacuum_pressure, vented_pressure,
+                 calibconf, shid):
+        xrcprogress_dialog.__init__(self, parent)
+
+        # ProgressiveFuture for the ongoing calibration
+        self._calibconf = calibconf
+        self._shid = shid
+        self.calib_future = None
+        self._calib_future_connector = None
+
+        self.info_txt.SetLabel("Calibration of the sample holder in progress")
+        self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
+        self.Bind(wx.EVT_CLOSE, self.on_close)
+        self.gauge.Show()
+        self.Layout()  # to put the gauge at the right place
+
+        self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
+                                              vented_pressure)
+        self._calib_future_connector = ProgessiveFutureConnector(self.calib_future,
+                                                                 self.gauge,
+                                                                 self.time_txt)
+        self.calib_future.add_done_callback(self.on_calib_done)
+        self.calib_future.add_update_callback(self.on_calib_update)
+
+    def update_calibration_time(self, time):
+        txt = "Time remaining: {}"
+        txt = txt.format(units.readable_time(time))
+
+        self.time_txt.SetLabel(txt)
+
+    def on_close(self, evt):
+        """ Close event handler that executes various cleanup actions
+        """
+        if self.calib_future:
+            msg = "Cancelling calibration due to closing the calibration window"
+            logging.info(msg)
+            self.calib_future.cancel()
+
+        self.Destroy()
+
+    def on_cancel(self, evt):
+        """ Handle calibration cancel button click """
+        if not self.calib_future:
+            logging.warning("Tried to cancel calibration while it was not started")
+            return
+
+        logging.debug("Cancel button clicked, stopping calibration")
+        self.calib_future.cancel()
+        # all the rest will be handled by on_acquisition_done()
+
+    @call_after
+    def on_calib_done(self, future):
+        """ Callback called when the calibration is finished (either successfully or cancelled) """
+        # bind button back to direct closure
+        self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_close)
+        try:
+            htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift = future.result(1)  # timeout is just for safety
+        except CancelledError:
+            # hide progress bar (+ put pack estimated time)
+            self.update_calibration_time(0)
+            self.time_txt.SetLabel("Calibration cancelled.")
+            self.cancel_btn.SetLabel("Close")
+            self.gauge.Hide()
+            self.Layout()
+            return
+        except Exception:
+            # We cannot do much: just warn the user and pretend it was cancelled
+            self.calib_future.cancel()
+            self.update_calibration_time(0)
+            self.time_txt.SetLabel("Calibration failed.")
+            self.cancel_btn.SetLabel("Close")
+            # leave the gauge, to give a hint on what went wrong.
+            return
+
+        # Update the calibration file
+        self._calibconf.set_sh_calib(self._shid, htop, hbot, strans, sscale, srot, iscale, irot,
+                                     resa, resb, hfwa, spotshift)
+
+        self.update_calibration_time(0)
+        self.time_txt.SetLabel("Calibration completed.")
+        # As the action is complete, rename "Cancel" to "Close"
+        self.cancel_btn.SetLabel("Close")
+
+    def on_calib_update(self, future, past, left):
+        """ Callback called when the calibration time is updated (either successfully or cancelled) """
+        self.update_calibration_time(left)

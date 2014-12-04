@@ -191,7 +191,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                                                     ebeam_focus, known_focus)
             first_hole, second_hole, hole_focus = future._hole_detectionf.result()
             logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
-        except IOError:
+        except Exception:
             raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
         if first_insertion == True:
@@ -230,7 +230,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 future._align_offsetf = AlignAndOffset(ccd, detector, escan, sem_stage,
                                                        opt_stage, focus)
                 offset = future._align_offsetf.result()
-            except IOError:
+            except Exception:
                 raise IOError("Conversion update failed to align and calculate offset.")
 
             if future._conversion_update_state == CANCELLED:
@@ -243,7 +243,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
                                                                opt_stage, focus, offset)
                 rotation, scaling = future._rotation_scalingf.result()
-            except IOError:
+            except Exception:
                 raise IOError("Conversion update failed to calculate rotation and scaling.")
 
             # Update progress of the future
@@ -262,7 +262,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 # Compute HFW-related values
                 future._hfw_shiftf = HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
                 hfwa = future._hfw_shiftf.result()
-            except IOError:
+            except Exception:
                 raise IOError("Conversion update failed to calculate shift parameters.")
 
             # Now we can return. There is no need to update the convert stage
