@@ -736,7 +736,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             # Set the FoV to almost 2mm
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
             # Just to force autocontrast
-            escan.accelVoltage.value += 100
+            escan.accelVoltage.value += 50
             # Apply the given sem focus value for a good initial focus level
             if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
@@ -745,6 +745,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if (pos == EXPECTED_HOLES[0]):
                 escan.horizontalFoV.value = 300e-06  # m
                 escan.scale.value = (2, 2)
+                escan.accelVoltage.value += 50
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]

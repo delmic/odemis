@@ -1139,7 +1139,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
                 raise IOError("Lens alignment failed.")
 
             # Update progress of the future
-            future.set_end_time(time.time() + 6 * 60)
+            future.set_end_time(time.time() + 14 * 60)
 
             # Just to check if move makes sense
             f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
@@ -1156,7 +1156,7 @@ def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
 
             # Update progress of the future
             logging.debug("Try to update the remaining time...")
-            future.set_end_time(time.time() + 5 * 60)
+            future.set_end_time(time.time() + 12.5 * 60)
 
             # Compute stage calibration values
             try:
@@ -1217,4 +1217,4 @@ def estimateDelphiCalibration():
     returns (float):  process estimated time #s
     """
     # Rough approximation
-    return 7 * 60  # s
+    return 15 * 60  # s
