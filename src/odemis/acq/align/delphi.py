@@ -191,7 +191,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                                                     ebeam_focus, known_focus)
             first_hole, second_hole, hole_focus = future._hole_detectionf.result()
             logging.debug("First hole: %s (m,m) Second hole: %s (m,m)", first_hole, second_hole)
-        except IOError:
+        except Exception:
             raise IOError("Conversion update failed to find sample holder holes.")
         # Check if the sample holder is inserted for the first time
         if first_insertion == True:
@@ -230,7 +230,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 future._align_offsetf = AlignAndOffset(ccd, detector, escan, sem_stage,
                                                        opt_stage, focus)
                 offset = future._align_offsetf.result()
-            except IOError:
+            except Exception:
                 raise IOError("Conversion update failed to align and calculate offset.")
 
             if future._conversion_update_state == CANCELLED:
@@ -243,7 +243,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 future._rotation_scalingf = RotationAndScaling(ccd, detector, escan, sem_stage,
                                                                opt_stage, focus, offset)
                 rotation, scaling = future._rotation_scalingf.result()
-            except IOError:
+            except Exception:
                 raise IOError("Conversion update failed to calculate rotation and scaling.")
 
             # Update progress of the future
@@ -262,7 +262,7 @@ def _DoUpdateConversion(future, ccd, detector, escan, sem_stage, opt_stage, ebea
                 # Compute HFW-related values
                 future._hfw_shiftf = HFWShiftFactor(detector, escan, sem_stage, ebeam_focus, hole_focus)
                 hfwa = future._hfw_shiftf.result()
-            except IOError:
+            except Exception:
                 raise IOError("Conversion update failed to calculate shift parameters.")
 
             # Now we can return. There is no need to update the convert stage
@@ -736,7 +736,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             # Set the FoV to almost 2mm
             escan.horizontalFoV.value = escan.horizontalFoV.range[1]
             # Just to force autocontrast
-            escan.accelVoltage.value += 100
+            escan.accelVoltage.value += 50
             # Apply the given sem focus value for a good initial focus level
             if hole_focus is not None:
                 f = ebeam_focus.moveAbs({"z":hole_focus})
@@ -745,6 +745,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
             if (pos == EXPECTED_HOLES[0]):
                 escan.horizontalFoV.value = 300e-06  # m
                 escan.scale.value = (2, 2)
+                escan.accelVoltage.value += 50
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
                 escan.horizontalFoV.value = escan.horizontalFoV.range[1]
@@ -757,8 +758,10 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
+                escan.horizontalFoV.value = 350e-06  # m
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
+                escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 try:
                     hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
                 except IOError:

@@ -727,8 +727,8 @@ class Detector(model.Detector):
             metadata[model.MD_BPP] = bpp
 
             self._scan_params_view = self._acq_device.GetSEMViewingMode().parameters
-            self._scan_params_view.resolution.width = 256
-            self._scan_params_view.resolution.height = 256
+            self._scan_params_view.resolution.width = 456
+            self._scan_params_view.resolution.height = 456
             self._scan_params_view.nrOfFrames = 1
             logging.debug("Acquiring SEM image of %s with %d bpp and %d frames",
                           res, bpp, self._scanParams.nrOfFrames)

@@ -32,12 +32,10 @@ from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import getVAs
 from odemis.model._vattributes import VigilantAttributeBase
 import wx
-
-import odemis.acq.align.delphi as aligndelphi
 import odemis.gui.img.data as imgdata
 import odemis.gui.win.delphi as windelphi
 import odemis.util.units as units
-
+from odemis.gui.win.delphi import CalibrationProgressDialog
 
 # Sample holder types in the Delphi, as defined by Phenom World
 PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
@@ -45,8 +43,6 @@ PHENOM_SH_TYPE_STANDARD = 1 # standard sample holder
 PHENOM_SH_TYPE_OPTICAL = 1023  # sample holder for the Delphi, containing a lens
 
 DELPHI_OVERVIEW_POS = {"x": 0, "y": 0} # good position of the stage for overview
-DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
-
 
 class MicroscopeStateController(object):
     """
@@ -590,6 +586,9 @@ class DelphiStateController(SecomStateController):
             # calibration should have already been done.
             self._load_holder_calib()
 
+        # Progress dialog for calibration
+        self._dlg = None
+
     def _start_chamber_pumping(self):
         # Warning: if the sample holder is not yet registered, the Phenom will
         # not accept to even load it to the overview. That's why checking for
@@ -779,116 +778,15 @@ class DelphiStateController(SecomStateController):
         self._main_data.chamberState.value = CHAMBER_VENTING
 
     def _run_full_calibration(self, shid):
-        tot_time = 3 * 60 # ~ 3 min (rough estimation)
-        dlg = wx.ProgressDialog("Calibrating...",
-                   "Calibration of the sample holder in progress",
-                   parent=self._main_frame,
-                   maximum=100,
-                   style=wx.PD_APP_MODAL | wx.PD_CAN_ABORT
-                         # | wx.PD_ESTIMATED_TIME
-                         | wx.PD_REMAINING_TIME # automatically computed
-                  )
-
-
-        (cont, skip) = dlg.Pulse()
-        try:
-            # TODO: Actually link to the ProgessiveFutures
-    #         cont = True # Will be False if the user presses "Cancel"
-    #         while cont and not f.done():
-    #             wx.MilliSleep(250)
-    #             wx.Yield()
-    #             (cont, skip) = dlg.Update(count)
-
-            # Move to the overview position first
-            f = self._main_data.chamber.moveAbs({"pressure": self._overview_pressure})
-            f.result()
-
-            # Clear all the previous calibration
-            self._main_data.stage.updateMetadata({
-                      model.MD_POS_COR: (0, 0),
-                      model.MD_PIXEL_SIZE_COR: (1, 1),
-                      model.MD_ROTATION_COR: 0
-                      })
-
-            # We need access to the separate sem and optical stages, which form
-            # the "stage". They are not found in the model, but we can find them
-            # as children of stage (on the DELPHI), and distinguish them by
-            # their role.
-            sem_stage = None
-            opt_stage = None
-            for c in self._main_data.stage.children.value:
-                if c.role == "sem-stage":
-                    sem_stage = c
-                elif c.role == "align":
-                    opt_stage = c
-
-            if not sem_stage or not opt_stage:
-                raise KeyError("Failed to find SEM and optical stages")
-
-            # Reference the (optical) stage
-            f = opt_stage.reference({"x", "y"})
-            f.result()
-
-            f = self._main_data.focus.reference({"z"})
-            f.result()
-
-            # SEM stage to (0,0)
-            f = sem_stage.moveAbs({"x":0, "y":0})
-            f.result()
-
-            # Calculate offset approximation
-            try:
-                f = aligndelphi.LensAlignment(self._main_data.overview_ccd, sem_stage)
-                position = f.result()
-                logging.debug("SEM position after lens alignment: %s", position)
-            except IOError:
-                raise IOError("Lens alignment failed.")
-
-            # Just to check if move makes sense
-            f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
-            f.result()
-
-            # Move to SEM
-            f = self._main_data.chamber.moveAbs({"pressure": self._vacuum_pressure})
-            f.result()
-
-            # Lens to a good optical focus position
-            f = self._main_data.focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
-            f.result()
-
-            # Compute stage calibration values
-            f = aligndelphi.UpdateConversion(self._main_data.ccd,
-                                             self._main_data.bsd,
-                                             self._main_data.ebeam,
-                                             sem_stage, opt_stage,
-                                             self._main_data.ebeam_focus,
-                                             self._main_data.focus,
-                                             self._main_data.stage,
-                                             first_insertion=True,
-                                             sem_position=position)
-            htop, hbot, hole_focus, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
-
-            # Run the optical fine alignment
-            # TODO: reuse the exposure time
-            f = align.FindOverlay((4, 4),
-                                  0.5, # s, dwell time
-                                  10e-06, # m, maximum difference allowed
-                                  self._main_data.ebeam,
-                                  self._main_data.ccd,
-                                  self._main_data.bsd)
-            trans_val, cor_md = f.result()
-            iscale = cor_md[model.MD_PIXEL_SIZE_COR]
-            irot = cor_md[model.MD_ROTATION_COR]
-        except Exception:
-            logging.exception("Calibration failed")
-
         # TODO: once the hole focus is not fixed, save it in the config too
-        # Update the calibration file
-        self._calibconf.set_sh_calib(shid, htop, hbot, strans, sscale, srot, iscale, irot,
-                                     resa, resb, hfwa, spotshift)
-
-        dlg.Destroy()
-
+        # Perform calibration and update the progress dialog
+        calib_dialog = CalibrationProgressDialog(self._main_frame, self._main_data,
+                                               self._overview_pressure, self._vacuum_pressure,
+                                               self._vented_pressure, self._calibconf, shid)
+        parent_size = [v * 0.25 for v in self._main_frame.GetSize()]
+        calib_dialog.SetSize(parent_size)
+        calib_dialog.Center()
+        calib_dialog.ShowModal()
 
 
 # TODO SparcStateController?

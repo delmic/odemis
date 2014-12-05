@@ -30,7 +30,6 @@ of microscope images.
 from __future__ import division
 
 from concurrent import futures
-from concurrent.futures._base import CancelledError
 import logging
 import math
 from odemis import model, dataio, acq
@@ -55,7 +54,7 @@ from wx.lib.pubsub import pub
 
 from odemis.gui.comp.popup import Message
 import odemis.gui.model as guimod
-
+from concurrent.futures._base import CancelledError
 
 class SnapshotController(object):
     """ Controller to handle snapshot acquisition in a 'global' context.
@@ -1028,4 +1027,3 @@ class AutoCenterController(object):
         self._main_frame.lbl_auto_center.Show()
         self._main_frame.gauge_auto_center.Hide()
         self._sizer.Layout()
-
