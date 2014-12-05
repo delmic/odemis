@@ -19,7 +19,7 @@ from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 from odemis.gui.util.widgets import ProgessiveFutureConnector
 import logging
 from odemis.util import units
-from odemis.gui.util import call_after
+from odemis.gui.util import call_after, ignore_dead
 from odemis import model
 from odemis.acq._futures import executeTask
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
@@ -112,7 +112,9 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self._started = False
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.Bind(wx.EVT_CLOSE, self.on_close)
-
+        self.info_txt.SetLabel("Calibration of the sample holder in progress")
+        self.gauge.Show()
+        self.Layout()  # to put the gauge at the right place
         self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
                                               vented_pressure)
         self._calib_future_connector = ProgessiveFutureConnector(self.calib_future,
@@ -181,13 +183,9 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self.cancel_btn.SetLabel("Close")
 
     @call_after
+    @ignore_dead
     def on_calib_update(self, future, past, left):
         """ Callback called when the calibration time is updated (either successfully or cancelled) """
-        if self._started == False:
-            self.info_txt.SetLabel("Calibration of the sample holder in progress")
-            self.gauge.Show()
-            self.Layout()  # to put the gauge at the right place
-            self._started = True
         self.update_calibration_time(left)
 
 def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure):
