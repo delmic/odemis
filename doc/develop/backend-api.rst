@@ -54,12 +54,25 @@ an component:
     
     .. Rationale: there can be many types of versions for just a given component and it depends a lot on how it's actually build. We cannot grasp every kind of detail. So either we make a metadata-like dict which will eventually appear as a string most probably or directly just a string.
 
+    .. py:attribute:: state
     
+    	*(RO VA, int or Exception)*: the state of the component, which is either
+    	ST_UNLOADED, ST_STARTING, ST_RUNNING, ST_STOPPED, or an exception
+    	(most usually a HwError) indicating the error that the hardware is
+    	experiencing. 
+    
+    .. TODO: how to turn on/off the hardware components? Via a method or a property? How about an .state enumerated property which has 'on', 'standby',  'off' possible value. At init it should automatically turned on, and automatically turned standby (or off if it's ok). For now, some emitters have a .power VA which allow to stop the hardware from emitting when set to 0, but it's pretty ad-hoc.
+
     .. TODO: isPropertyAvailabe(name) tells whether a property is present or not, and .getProperties() returns a list of all properties available.
 
     .. TODO: A set of named methods: if the component can support the method, then it is present, otherwise the component does not have the method. Eg: .degauss() for a SEM e-beam. A generic function isMethodAvailable(name) tells whether it's present or not. getMethods() returns all the methods present.
 
-    .. TODO: how to turn on/off the hardware components? Via a method or a property? How about an .state enumerated property which has 'on', 'standby',  'off' possible value. At init it should automatically turned on, and automatically turned standby (or off if it's ok). For now, some emitters have a .power VA which allow to stop the hardware from emitting when set to 0, but it's pretty ad-hoc.
+    .. py:attribute:: affects
+    
+        *(VA, list of str)* names of the components which can detect changes 
+        when the component is used. Typically, this is a set of Detectors, which
+        are affected by the emission of energy (in the case of an Emitter),
+        or a movement (in the case of an Actuator). 
 
     .. py:method:: updateMetadata(metadata)
 
@@ -68,7 +81,7 @@ an component:
         Update the metadata dict corresponding to the current physical state of the components affecting the component (detector). The goal is to attach this information to DataArrays. The key is the name of the metadata, which must be one of the constants model.MD_* whenever this is possible, but usage of additional strings is permitted. The detector can overwrite or append the metadata dict with its own metadata. The internal metadata is accumulative, so previous metadata keys which are not updated keep their previous value (i.e., they are not deleted).
         
         :param metadata:
-        :type metada: dict of str → value
+        :type metadata: dict of str → value
 
     .. py:method:: getMetadata()
 
@@ -86,11 +99,11 @@ an component:
 
     .. py:staticmethod:: scan()
    
-        *(optional)* Return a list of hw components that are available for being controlled by the driver. Each element in the list is a tuple with a user-friendly name (str) and a dict containing the arguments to be passed to __init__() for actually using this specific component (in addition to name, role and children).
-
-    .. TODO have an RO enumerated VA status, which indicate the state of the component in some standard way, with values from a constant type: RUNNING, IDLE, ERROR, OFF. Maybe it could even be a way to turn off the component or set it to powersave mode.
-
-    .. TODO: we actually need a way to be able to initialise a component later than at initialisation. Either __init__ raises an Error, and there is a special function to know the status of a component, or __init__ always succeeds, but if the component is OFF, then it will actually automatically be initialised later and be switched RUNNING then.
+        *(optional)* Return a list of arguments that correspond to each
+        available hardware (that could be controlled by this driver).
+        Each element in the list is a tuple with a user-friendly name (str)
+        and a dict containing the arguments to be passed to __init__() for 
+        actually using this specific component (in addition to name, and role).
 
 Microscope
 ==========
@@ -101,21 +114,21 @@ Getting access to this component is getting access to the whole microscope "mode
 
 .. py:class:: Microscope()
 
-    .. py:attribute:: emitters
-    
-        *(RO, set of Components)* Set of Emitters
-
-    .. py:attribute:: detectors
-    
-        *(RO, set of Components)* Set of Detectors
-
-    .. py:attribute:: actuators
-    
-        *(RO, set of Components)* Set of Actuators 
-
     .. py:attribute:: role
         
         *(RO, str)* Typical values are secom, sparc, sem, optical.
+
+    .. py:attribute:: alive
+        
+        *(VA, set of Component)* All the components which are loaded.
+        Should be considered read-only. It must only be modified by the back-end.
+
+    .. py:attribute:: ghosts
+        
+        *(VA, dict str → state)* Name of the components which are not loaded, 
+        and their state (or the error that caused them to fail loading, see
+        :py:attr:`HwComponent.state`).
+    	Should be considered read-only. It must only be modified by the back-end.
 
 Emitter
 =======
@@ -123,10 +136,6 @@ Emitter
 Emitters represent a hardware component whose main purpose is to generate energy which will interact (or not) with the sample. For example, an electron beam, a light...
 
 .. py:class:: Emitter()
-
-    .. py:attribute:: affects
-    
-        *(RO, set of Components)* set of Detectors which can detect changes when the component is emitting.
 
     .. py:attribute:: shape
     
@@ -231,7 +240,12 @@ For example, a secondary electron detector, the CCD of a camera.
 
     .. py:attribute:: shape
     
-        *(RO, list of ints)* maximum value of each dimension of the detector. A CCD camera 2560x1920 with 12 bits intensity has a 3D shape *(2560, 1920, 2048)*. The actual dimension of the data sent in the data-flow can be smaller, and found in the data-flow.
+        *(RO, list of ints)* maximum value of each dimension of the detector.
+        A greyscale CCD camera 2560x1920 with 12 bits intensity has a 3D shape *(2560, 1920, 2048)*.
+        A RGB camera has a shape of 4 values (eg, *(2560, 1920, 3, 2048)*)
+        The actual size of the data sent in the data-flow can be smaller
+        (though it should always have the same number of dimensions)
+        and found in the data-flow.
         
     .. py:attribute:: data
     
@@ -249,7 +263,7 @@ DigitialCamera is a subtype of Detector which detects light with an array.
 
 .. py:class:: DigitalCamera()
 
-    :param transpose: Allows to rotate/mirror the CCD. For each axis (indexed from 1) of the output data is the corresponding axis of the detector indicated. Each detector axis must be indicated precisely once. If an axis is mentioned as a negative number, it is mirrored. For example, the default (None) is equivalent to *[1, 2]* for a 2D detector. Mirroring on the Y axis is done with *[1, -2]*, and if a 90° clockwise rotation is needed, this is done with *[-2, 1]*. 
+    :param transpose: Allows to rotate/mirror the CCD image. For each axis (indexed from 1) of the output data is the corresponding axis of the detector indicated. Each detector axis must be indicated precisely once. If an axis is mentioned as a negative number, it is mirrored. For example, the default (None) is equivalent to *[1, 2]* for a 2D detector. Mirroring on the Y axis is done with *[1, -2]*, and if a 90° clockwise rotation is needed, this is done with *[-2, 1]*. 
     :type transpose: list of ints
 
     .. py:attribute:: binning
@@ -280,10 +294,6 @@ Note that .moveRel() and .moveAbs() are asynchronous. If several moves are reque
     
         *(RO, str)* if it is the main way to move the sample in x, y (,z) axes, then it should be *"stage"*.
     
-    .. py:attribute:: affects
-    
-        *(RO, set of Components)* set of Detectors which might detect changes when the actuator moves.
-
     .. py:attribute:: axes
     
         *(RO, dict str → Axis)* name of each axis available, and the :py:class:`Axis` information.

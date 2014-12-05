@@ -55,16 +55,20 @@ but it is expected that children are instantiated *before* their parent.
 
     Initialise the component. 
     Depending on the implementation, it might require children or not.
-    It can even create its own children and provide them via the 
-    :py:attr:`children` attribute.
+    It can even create its own children (what is called "creation by delegation")
+    and provide them via the :py:attr:`children` attribute.
     
     :param str name: name of the component
     :param parent: Parent of the component
     :type parent: Component or None
     :param children: Children of the component. The string corresponds to the 
         role that the children plays for the component and exact meaning is
-        implementation dependent.
-    :type children: dict str → Component
+        implementation dependent. If the value is a Component, it means the 
+        child has already been created, and it is just a child in the logical
+        tree of components. If the value is a dict (\*\*kwargs), then it means
+        it is expected that the component create the child, with the given
+        arguments.
+    :type children: dict str → (Component or \*\*kwargs) 
 
     .. py:method:: terminate()
         
@@ -80,44 +84,38 @@ but it is expected that children are instantiated *before* their parent.
 
     .. py:attribute:: children
 
-        *(ro, set of Components)* Set of children provided/contained by the Component.
+        *(VA, set of Components)* Set of children provided/contained by the Component.
         Filled in at initialisation by the device driver.
 
     .. py:attribute:: parent
 
-        *(ro, Component or None)* Component which provides/contains this Component.
-        If None, it means the component is the root of the tree structure.
+        *(ro, Component or None)* Component which provides this Component.
+        If None, it means the component was instantiated by itself (and not by
+        delegation).
         It has to be set at initialisation.
         
-    .. TODO:
-
-        How to explicitly support multiple parents? The problem is that then
-        it can create all sort of problems with cyclic dependency. For now the 
-        implementation supports it a bit (because we need it), but this attribute
-        points to only one of the parents.
-
 The following helper functions allow to list selectively the special attributes
 of a component.
 
 .. py:function:: model.getVAs(component)
 
     :returns: all the VAs in the component with their name
-    :rtype: dict of name -> VigilantAttributeBase
+    :rtype: dict of name → VigilantAttributeBase
 
 .. py:function:: model.getROAttributes(component)
 
     :returns: all the names of the roattributes and their values
-    :rtype: dict of name -> value
+    :rtype: dict of name → value
 
 .. py:function:: model.getDataFlows(component)
 
     :returns: all the DataFlows in the component with their name
-    :rtype: dict of name -> DataFlow
+    :rtype: dict of name → DataFlow
 
 .. py:function:: model.getEvents(component)
 
     :returns: all the Events in the component with their name
-    :rtype: dict of name -> Events
+    :rtype: dict of name → Events
 
 DataArray
 =========
@@ -388,7 +386,7 @@ function specifically.
             the estimated time before the task starts. If the task is finished (or
             cancelled) the time left is 0 and the time past is the duration of the
             task. 
-        :type fn: callable: (Future, float past, float left) -> None
+        :type fn: callable: (Future, float past, float left) → None
 
 
     The following two methods are only to be used by the executor, to provide 
@@ -559,7 +557,7 @@ containers.
         
         :param class klass: Component class
         :param kwargs: arguments for the __init__() of the component
-        :type kwargs: dict (str -> value)
+        :type kwargs: dict (str → value)
         :returns: The new component instantiated
         :rtype: Component
     
@@ -586,7 +584,7 @@ The following additional functions allow to manage containers.
     :param str container_name: Name of the container
     :param class klass: component class
     :param kwargs: arguments for the __init__() of the component
-    :type kwargs: dict (str -> value)
+    :type kwargs: dict (str → value)
     :returns: the (proxy to the) new component
     
 .. py:function:: model.getContainer(name[, validate=True])
