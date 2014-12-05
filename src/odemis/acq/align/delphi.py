@@ -758,8 +758,10 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, known_focu
                 hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
             except IOError:
                 # If hole was not found, apply autofocus and retry detection
+                escan.horizontalFoV.value = 350e-06  # m
                 f = autofocus.AutoFocus(detector, escan, ebeam_focus, autofocus.ROUGH_SPOTMODE_ACCURACY)
                 hole_focus, fm_level = f.result()
+                escan.horizontalFoV.value = escan.horizontalFoV.range[1]
                 try:
                     hole_coordinates = FindCircleCenter(image, HOLE_RADIUS, 6)
                 except IOError:
