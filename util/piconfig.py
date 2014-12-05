@@ -440,7 +440,7 @@ def GetParameter(acc, addr, axis, param):
     try:
         value = answer.split("=")[1]
     except IndexError:
-        acc.GetErrorNum(addr)
+        GetErrorNum(acc, addr)
         # no "=" => means the parameter is unknown
         raise ValueError("Parameter %d %d unknown" % (axis, param))
     return value
@@ -470,7 +470,7 @@ def read_param(acc, addr, f):
         try:
             # Note: it seems it's possible to use just "SPA?" to get all the parameters
             # v = GetParameters(ser, addr, 1, p)
-            f.write("0x%x\t%s" % (p, v))
+            f.write("0x%x\t%s\n" % (p, v))
         except Exception:
             logging.exception("Failed to read param 0x%x", p)
     
@@ -530,7 +530,7 @@ def reboot(acc, addr):
 
     # make sure it's fully rebooted and recovered
     time.sleep(2)
-    acc.GetErrorNum(addr)
+    GetErrorNum(acc, addr)
 
 def main(args):
     """
@@ -560,13 +560,15 @@ def main(args):
 
     try:
         acc = openPort(options.port)
+        addr = options.cont
+        GetErrorNum(acc, addr)
 
         if options.read:
-            read_param(acc, options.cont, options.read)
+            read_param(acc, addr, options.read)
         elif options.write:
-            write_param(acc, options.cont, options.write)
+            write_param(acc, addr, options.write)
         elif options.reboot:
-            reboot(acc, options.cont)
+            reboot(acc, addr)
         else:
             raise ValueError("Need to specify either read, write, or reboot")
 
