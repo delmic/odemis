@@ -17,12 +17,19 @@ You should have received a copy of the GNU General Public License along with Ode
 import wx
 from odemis.gui.win.dialog_xrc import xrcprogress_dialog
 from odemis.gui.util.widgets import ProgessiveFutureConnector
-from odemis.gui.cont.acquisition import DelphiCalibration
 import logging
 from odemis.util import units
 from odemis.gui.util import call_after
-from concurrent.futures._base import CancelledError
 from odemis import model
+from odemis.acq._futures import executeTask
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
+import odemis.acq.align.delphi as aligndelphi
+import threading
+import time
+from odemis.acq import align
+
+DELPHI_OPT_GOOD_FOCUS = 0.03826  # somehow possibly not too bad focus position
 
 # code based on the wxPython demo TestDialog class
 class FirstCalibrationDialog(wx.Dialog):
@@ -102,12 +109,9 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         self._shid = shid
         self.calib_future = None
         self._calib_future_connector = None
-
-        self.info_txt.SetLabel("Calibration of the sample holder in progress")
+        self._started = False
         self.cancel_btn.Bind(wx.EVT_BUTTON, self.on_cancel)
         self.Bind(wx.EVT_CLOSE, self.on_close)
-        self.gauge.Show()
-        self.Layout()  # to put the gauge at the right place
 
         self.calib_future = DelphiCalibration(main_data, overview_pressure, vacuum_pressure,
                                               vented_pressure)
@@ -176,6 +180,204 @@ class CalibrationProgressDialog(xrcprogress_dialog):
         # As the action is complete, rename "Cancel" to "Close"
         self.cancel_btn.SetLabel("Close")
 
+    @call_after
     def on_calib_update(self, future, past, left):
         """ Callback called when the calibration time is updated (either successfully or cancelled) """
+        if self._started == False:
+            self.info_txt.SetLabel("Calibration of the sample holder in progress")
+            self.gauge.Show()
+            self.Layout()  # to put the gauge at the right place
+            self._started = True
         self.update_calibration_time(left)
+
+def DelphiCalibration(main_data, overview_pressure, vacuum_pressure, vented_pressure):
+    """
+    Wrapper for DoDelphiCalibration. It provides the ability to check the 
+    progress of the procedure.
+    main_data (odemis.gui.model.MainGUIData) 
+    overview_pressure (float): NavCam pressure value
+    vacuum_pressure (float): Pressure under vacuum
+    vented_pressure (float): Pressure when vented
+    returns (ProgressiveFuture): Progress DoDelphiCalibration
+    """
+    # Create ProgressiveFuture and update its state to RUNNING
+    est_start = time.time() + 0.1
+    f = model.ProgressiveFuture(start=est_start,
+                                end=est_start + estimateDelphiCalibration())
+    f._delphi_calib_state = RUNNING
+
+    # Task to run
+    f.task_canceller = _CancelDelphiCalibration
+    f._delphi_calib_lock = threading.Lock()
+
+    # Run in separate thread
+    delphi_calib_thread = threading.Thread(target=executeTask,
+                  name="Delphi Calibration",
+                  args=(f, _DoDelphiCalibration, f, main_data, overview_pressure,
+                        vacuum_pressure, vented_pressure))
+
+    delphi_calib_thread.start()
+    return f
+
+def _DoDelphiCalibration(future, main_data, overview_pressure, vacuum_pressure,
+                         vented_pressure):
+    """
+    It performs all the calibration steps for Delphi including the lens alignment,
+    the conversion metadata update and the fine alignment.
+    future (model.ProgressiveFuture): Progressive future provided by the wrapper
+    main_data (odemis.gui.model.MainGUIData) 
+    overview_pressure (float): NavCam pressure value
+    vacuum_pressure (float): Pressure under vacuum
+    vented_pressure (float): Pressure when vented
+    returns (tuple of floats): Hole top
+            (tuple of floats): Hole bottom
+            (tuple of floats): Stage translation
+            (tuple of floats): Stage scale
+            (tuple of floats): Stage rotation
+            (tuple of floats): Image scale
+            (tuple of floats): Image rotation
+            (tuple of floats): Resolution-related shift slope
+            (tuple of floats): Resolution-related shift intercept
+            (tuple of floats): HFW-related shift slope
+            (tuple of floats): Spot shift percentage
+    raises:    
+        CancelledError() if cancelled
+    """
+    logging.debug("Delphi calibration...")
+
+    try:
+        if future._delphi_calib_state == CANCELLED:
+            raise CancelledError()
+
+        try:
+            # Move to the overview position first
+            f = main_data.chamber.moveAbs({"pressure": overview_pressure})
+            f.result()
+
+            # Clear all the previous calibration
+            logging.debug("Clear all the previous calibration...")
+            main_data.stage.updateMetadata({
+                      model.MD_POS_COR: (0, 0),
+                      model.MD_PIXEL_SIZE_COR: (1, 1),
+                      model.MD_ROTATION_COR: 0
+                      })
+
+            # We need access to the separate sem and optical stages, which form
+            # the "stage". They are not found in the model, but we can find them
+            # as children of stage (on the DELPHI), and distinguish them by
+            # their role.
+            sem_stage = None
+            opt_stage = None
+            logging.debug("Find SEM and optical stages...")
+            for c in main_data.stage.children.value:
+                if c.role == "sem-stage":
+                    sem_stage = c
+                elif c.role == "align":
+                    opt_stage = c
+
+            if not sem_stage or not opt_stage:
+                raise KeyError("Failed to find SEM and optical stages")
+
+            # Reference the (optical) stage
+            logging.debug("Reference the (optical) stage...")
+            f = opt_stage.reference({"x", "y"})
+            f.result()
+
+            logging.debug("Reference the focus...")
+            f = main_data.focus.reference({"z"})
+            f.result()
+
+            # SEM stage to (0,0)
+            logging.debug("Move to the center of SEM stage...")
+            f = sem_stage.moveAbs({"x":0, "y":0})
+            f.result()
+
+            # Calculate offset approximation
+            try:
+                logging.debug("Starting lens alignment...")
+                f = aligndelphi.LensAlignment(main_data.overview_ccd, sem_stage)
+                position = f.result()
+                logging.debug("SEM position after lens alignment: %s", position)
+            except Exception:
+                raise IOError("Lens alignment failed.")
+
+            # Update progress of the future
+            future.set_end_time(time.time() + 14 * 60)
+
+            # Just to check if move makes sense
+            f = sem_stage.moveAbs({"x": position[0], "y": position[1]})
+            f.result()
+
+            # Move to SEM
+            f = main_data.chamber.moveAbs({"pressure": vacuum_pressure})
+            f.result()
+
+            # Lens to a good optical focus position
+            logging.debug("Move focus to a good initial level...")
+            f = main_data.focus.moveAbs({"z": DELPHI_OPT_GOOD_FOCUS})
+            f.result()
+
+            # Update progress of the future
+            logging.debug("Try to update the remaining time...")
+            future.set_end_time(time.time() + 12.5 * 60)
+
+            # Compute stage calibration values
+            try:
+                logging.debug("Starting conversion update...")
+                f = aligndelphi.UpdateConversion(main_data.ccd,
+                                                 main_data.bsd,
+                                                 main_data.ebeam,
+                                                 sem_stage, opt_stage,
+                                                 main_data.ebeam_focus,
+                                                 main_data.focus,
+                                                 main_data.stage,
+                                                 first_insertion=True,
+                                                 sem_position=position)
+                htop, hbot, hole_focus, strans, srot, sscale, resa, resb, hfwa, spotshift = f.result()
+            except Exception:
+                raise IOError("Conversion update failed.")
+            # Update progress of the future
+            logging.debug("Try to update the remaining time...")
+            future.set_end_time(time.time() + 60)
+
+            # Run the optical fine alignment
+            # TODO: reuse the exposure time
+            f = align.FindOverlay((4, 4),
+                                  0.5,  # s, dwell time
+                                  10e-06,  # m, maximum difference allowed
+                                  main_data.ebeam,
+                                  main_data.ccd,
+                                  main_data.bsd)
+            trans_val, cor_md = f.result()
+            iscale = cor_md[model.MD_PIXEL_SIZE_COR]
+            irot = cor_md[model.MD_ROTATION_COR]
+            return htop, hbot, strans, sscale, srot, iscale, irot, resa, resb, hfwa, spotshift
+        except Exception:
+            raise IOError("Delphi calibration failed.")
+    finally:
+        with future._delphi_calib_lock:
+            if future._delphi_calib_state == CANCELLED:
+                raise CancelledError()
+            future._delphi_calib_state = FINISHED
+
+def _CancelDelphiCalibration(future):
+    """
+    Canceller of _DoDelphiCalibration task.
+    """
+    logging.debug("Cancelling Delphi calibration...")
+
+    with future._delphi_calib_lock:
+        if future._delphi_calib_state == FINISHED:
+            return False
+        future._delphi_calib_state = CANCELLED
+        logging.debug("Delphi calibration cancelled.")
+
+    return True
+
+def estimateDelphiCalibration():
+    """
+    Estimates Delphi calibration procedure duration
+    returns (float):  process estimated time #s
+    """
+    # Rough approximation
+    return 15 * 60  # s
