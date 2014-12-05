@@ -1336,26 +1336,10 @@ class CLController(Controller):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
 
-            self._stopEncoder(a)
+            # self._stopEncoder(a)
 
         self.min_speed = 10e-6 # m/s (default low value)
         self._prev_speed_accel = ({}, {})
-
-        # Note: setting position only works if ron is disabled. It's possible
-        # also indirectly set it after referencing, but then it will conflict
-        # with TMN/TMX and some correct moves will fail.
-        # So referencing could look like:
-        # ron 1 1
-        # frf -> go home and now know the position officially
-        # orig_pos = pos?
-        #
-
-        # Use FRF? to know about the referencing status
-        # TMN? TMX?  give range (careful, it's typically 0 -> BIG Number)
-        # Note: the actuator actively control the motor to stay at the last 
-        # position requesteaxisd as long as the servo is on. So need to disable
-        # servo when stopping the program to allow the user to move the stage
-        # manually (or maybe even after any move?)
 
     def terminate(self):
         super(CLController, self).terminate()
@@ -1373,6 +1357,7 @@ class CLController(Controller):
         # This can only be done if the servo is turned off
         self.SetServo(axis, False)
         if 0x56 in self._avail_params:
+            # TODO: don't check the error in SetParameter
             self.SetParameter(axis, 0x56, 0) # 0 = off
 
     def _startEncoder(self, axis):
@@ -1449,6 +1434,11 @@ class CLController(Controller):
         self._startEncoder(axis)
         return self.GetPosition(axis) * 1e-3
 
+        # This is called by the Bus in various situation while not moving,
+        # so we need a way to turn off the encoder afterwards => double-hack
+        self.isMoving(axes={axis})
+
+
     # Warning: if the settling window is too small or settling time too big,
     # it might take several seconds to reach target (or even never reach it)
     def isMoving(self, axes=None):
@@ -1477,10 +1467,11 @@ class CLController(Controller):
         # TODO: if return false => turn off encoder (in a few seconds)
         # Then, need to "ensure the encoder is ON" before any other meaningful command
 
-        # FIXME: it seems that if the axis is stopped while moving, isontarget()
+        # FIXME: it seems that on the C867 if the axis is stopped while moving, isontarget()
         # will sometimes keep saying it's not reached forever. However, the documentation
         # says that the target position is set to the current position after a
-        # stop (to avoid this problem). Need to investigate
+        # stop (to avoid this very problem). On E861 it does update the target position fine.
+        # Need to investigate
         # MOV 1 1.1
         # MOV? 1  # read target pos
         # time.sleep(0.01)
@@ -1488,7 +1479,7 @@ class CLController(Controller):
         # STP # also try HLT
         # MOV? 1  # should be new pos
         # POS? 1  # Should be very close
-        # ONT? 1 # Should be true at least after the settle time window
+        # ONT? 1 # Should be true at worst a little after the settle time window
 
     def startReferencing(self, axis):
         """
@@ -1497,6 +1488,15 @@ class CLController(Controller):
         axis (1<=int<=16)
         """
         self._startEncoder(axis)
+
+        # Note: setting position only works if ron is disabled. It's possible
+        # also indirectly set it after referencing, but then it will conflict
+        # with TMN/TMX and some correct moves will fail.
+        # So referencing could look like:
+        # ron 1 1
+        # frf -> go home and now know the position officially
+        # orig_pos = pos?
+
         if self._hasRefSwitch[axis]:
             self.ReferenceToSwitch(axis)
         elif self._hasLimitSwitches[axis]:
@@ -2077,7 +2077,7 @@ class Bus(model.Actuator):
 
         # Normally all the axes are stopped immediately, and if not it doesn't
         # help much to wait. In addition, on the CL controller, it can take a
-        # long time because it never reaches the original target
+        # long time because sometimes (with the C867?) it never reaches the target
 #         # wait all controllers are done moving
 #         for controller in controllers:
 #             controller.waitEndMotion()
