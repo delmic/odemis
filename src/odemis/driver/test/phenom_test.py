@@ -61,9 +61,9 @@ class TestSEMStatic(unittest.TestCase):
         Doesn't even try to acquire an image, just create and delete components
         """
         sem = phenom.SEM(**CONFIG_SEM)
-        self.assertEqual(len(sem.children), 7)
+        self.assertEqual(len(sem.children.value), 7)
 
-        for child in sem.children:
+        for child in sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 sed = child
             elif child.name == CONFIG_SCANNER["name"]:
@@ -87,7 +87,7 @@ class TestSEMStatic(unittest.TestCase):
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children), 7)
+        self.assertEqual(len(sem_unpickled.children.value), 7)
         sem.terminate()
 
     def test_hw_error(self):
@@ -108,7 +108,7 @@ class TestSEM(unittest.TestCase):
     def setUpClass(cls):
         cls.sem = phenom.SEM(**CONFIG_SEM)
 
-        for child in cls.sem.children:
+        for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
             elif child.name == CONFIG_SCANNER["name"]:

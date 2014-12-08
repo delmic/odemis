@@ -44,7 +44,7 @@ class TescanSEM(model.HwComponent):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner", "detector", "stage", "focus", "camera"
-            and "pressure". They will be provided back in the .children roattribute
+            and "pressure". They will be provided back in the .children VA
         host (string): ip address of the SEM server 
         Raise an exception if the device cannot be opened
         '''
@@ -79,7 +79,7 @@ class TescanSEM(model.HwComponent):
             raise KeyError("TescanSEM was not given a 'scanner' child")
 
         self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._scanner)
+        self.children.value.add(self._scanner)
 
         # create the detector child
         try:
@@ -87,7 +87,7 @@ class TescanSEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("TescanSEM was not given a 'detector' child")
         self._detector = Detector(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._detector)
+        self.children.value.add(self._detector)
 
         # create the stage child
         try:
@@ -96,7 +96,7 @@ class TescanSEM(model.HwComponent):
             raise KeyError("TescanSEM was not given a 'stage' child")
 
         self._stage = Stage(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._stage)
+        self.children.value.add(self._stage)
 
         # create the focus child
         try:
@@ -104,7 +104,7 @@ class TescanSEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("TescanSEM was not given a 'focus' child")
         self._focus = EbeamFocus(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._focus)
+        self.children.value.add(self._focus)
 
         # create the camera child
         try:
@@ -113,7 +113,7 @@ class TescanSEM(model.HwComponent):
             logging.info("Not initialising the chamber camera")
         else:
             self._camera = ChamberView(parent=self, daemon=daemon, **kwargs)
-            self.children.add(self._camera)
+            self.children.value.add(self._camera)
 
         # create the pressure child
         try:
@@ -121,7 +121,7 @@ class TescanSEM(model.HwComponent):
         except (KeyError, TypeError):
             raise KeyError("TescanSEM was not given a 'pressure' child")
         self._pressure = ChamberPressure(parent=self, daemon=daemon, **kwargs)
-        self.children.add(self._pressure)
+        self.children.value.add(self._pressure)
 
     def terminate(self):
         """

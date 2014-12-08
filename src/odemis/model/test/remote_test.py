@@ -476,7 +476,7 @@ class RemoteTest(unittest.TestCase):
         
         p = self.rdaemon.getObject("parent")
         self.assertEqual(len(p.children.value), 1, "parent doesn't have one child")
-        c = list(p.children)[0]
+        c = list(p.children.value)[0]
 #        self.assertEqual(c.parent, p, "Component and parent of child is different")
         self.assertEqual(p.value, 42)
         self.assertEqual(c.value, 43)
@@ -720,8 +720,10 @@ class RemoteTest(unittest.TestCase):
         l.subscribe(self.receive_listva_update)
         l.value += [3]
         self.assertEqual(len(l.value), 3)
+        time.sleep(0.01)
         l.value[-1] = 4
         self.assertEqual(l.value[-1], 4)
+        time.sleep(0.01)
         l.value.reverse()
         self.assertEqual(l.value[0], 4)
         time.sleep(0.1)

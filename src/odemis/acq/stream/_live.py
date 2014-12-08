@@ -373,7 +373,7 @@ class AlignedSEMStream(SEMStream):
                 shift = FindEbeamCenter(self._ccd, self._detector, self._emitter)
                 self._beamshift = shift
                 if self._shiftebeam == "Stage move":
-                    for child in self._stage.children:
+                    for child in self._stage.children.value:
                         if child.role == "sem-stage":
                             f = child.moveRel({"x": shift[0], "y": shift[1]})
                             f.result()

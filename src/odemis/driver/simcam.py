@@ -42,7 +42,7 @@ class Camera(model.DigitalCamera):
         '''
         children (dict string->kwargs): parameters setting for the children.
             The only possible child is "focus".
-            They will be provided back in the .children roattribute
+            They will be provided back in the .children VA
         image (str or None): path to a file to use as fake image (relative to
          the directory of this class)
         '''
