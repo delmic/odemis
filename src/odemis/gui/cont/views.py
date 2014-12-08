@@ -332,28 +332,23 @@ class ViewPortController(object):
         logging.debug("Changing focus to view %s", view.name.value)
 
         grid_panel = self._viewports[0].Parent
-        grid_panel.Freeze()
 
         try:
-            try:
-                viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
-            except IndexError:
-                logging.exception("No associated ViewPort found for view %s", view)
-                raise
+            viewport = [vp for vp in self._viewports if vp.microscope_view == view][0]
+        except IndexError:
+            logging.exception("No associated ViewPort found for view %s", view)
+            raise
 
-            if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
-                grid_panel.set_shown_viewports(viewport)
-                # Enable/disable ZOOM_FIT tool according to view ability
-                if self._toolbar:
-                    can_fit = hasattr(viewport.canvas, "fit_view_to_content")
-                    self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
+        if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
+            grid_panel.set_shown_viewports(viewport)
+            # Enable/disable ZOOM_FIT tool according to view ability
+            if self._toolbar:
+                can_fit = hasattr(viewport.canvas, "fit_view_to_content")
+                self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
 
-            for vp in self._viewports:
-                vp.SetFocus(False)
-            viewport.SetFocus(True)
-
-        finally:
-            grid_panel.Thaw()
+        for vp in self._viewports:
+            vp.SetFocus(False)
+        viewport.SetFocus(True)
 
     def _on_view_layout(self, layout):
         """ Called when the view layout of the GUI must be changed
@@ -364,30 +359,25 @@ class ViewPortController(object):
         """
 
         grid_panel = self._viewports[0].Parent
-        grid_panel.Freeze()
 
-        try:
-            if layout == model.VIEW_LAYOUT_ONE:
-                logging.debug("Displaying single viewport")
-                for viewport in self._viewports:
-                    if viewport.microscope_view == self._data_model.focussedView.value:
-                        grid_panel.set_shown_viewports(viewport)
-                        break
-                else:
-                    raise ValueError("No foccused view found!")
-
-            elif layout == model.VIEW_LAYOUT_22:
-                logging.debug("Displaying 2x2 viewport grid")
-                if isinstance(grid_panel, ViewportGrid):
-                    grid_panel.show_grid_viewports()
-
-            elif layout == model.VIEW_LAYOUT_FULLSCREEN:
-                raise NotImplementedError()
+        if layout == model.VIEW_LAYOUT_ONE:
+            logging.debug("Displaying single viewport")
+            for viewport in self._viewports:
+                if viewport.microscope_view == self._data_model.focussedView.value:
+                    grid_panel.set_shown_viewports(viewport)
+                    break
             else:
-                raise NotImplementedError()
+                raise ValueError("No foccused view found!")
 
-        finally:
-            grid_panel.Thaw()
+        elif layout == model.VIEW_LAYOUT_22:
+            logging.debug("Displaying 2x2 viewport grid")
+            if isinstance(grid_panel, ViewportGrid):
+                grid_panel.show_grid_viewports()
+
+        elif layout == model.VIEW_LAYOUT_FULLSCREEN:
+            raise NotImplementedError()
+        else:
+            raise NotImplementedError()
 
     def fitViewToContent(self, unused=None):
         """

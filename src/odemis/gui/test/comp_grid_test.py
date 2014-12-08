@@ -154,15 +154,17 @@ class GridPanelTestCase(test.GuiTestCase):
         self.assertRaises(ValueError, gp.swap_viewports, self.frame.red, self.frame.yellow)
         gp.swap_viewports(self.frame.red, self.frame.yellow)
 
-        self.frame.red.Hide()
-        self.frame.yellow.Show()
+        gp.hide_viewport(self.frame.red)
         gp.swap_viewports(self.frame.red, self.frame.yellow)
+        gp.show_viewport(self.frame.yellow)
+
         gui_loop()
         self.assertEqual(self.frame.yellow.Position, (0, 0))
 
-        self.frame.red.Show()
-        self.frame.yellow.Hide()
+        gp.hide_viewport(self.frame.yellow)
         gp.swap_viewports(self.frame.red, self.frame.yellow)
+        gp.show_viewport(self.frame.red)
+
         gui_loop()
         self.assertEqual(self.frame.red.Position, (0, 0))
 
