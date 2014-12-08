@@ -30,6 +30,7 @@ import threading
 import time
 import unittest
 from unittest.case import skip
+from odemis.model import HwError
 
 
 # logging.getLogger().setLevel(logging.DEBUG)
@@ -49,6 +50,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "host": "http://Phenom-MVE0206151080
                            "navcam": CONFIG_NAVCAM, "navcam-focus": CONFIG_NC_FOCUS,
                            "pressure": CONFIG_PRESSURE}
               }
+
 @skip("skip")
 class TestSEMStatic(unittest.TestCase):
     """
@@ -73,16 +75,6 @@ class TestSEMStatic(unittest.TestCase):
         self.assertTrue(sem.selfTest(), "SEM self test failed.")
         sem.terminate()
 
-    def test_error(self):
-        wrong_config = copy.deepcopy(CONFIG_SEM)
-        wrong_config["device"] = "/dev/comdeeeee"
-        self.assertRaises(Exception, phenom.SEM, **wrong_config)
-
-
-        wrong_config = copy.deepcopy(CONFIG_SEM)
-        wrong_config["children"]["scanner"]["channels"] = [1, 1]
-        self.assertRaises(Exception, phenom.SEM, **wrong_config)
-
     def test_pickle(self):
         try:
             os.remove("test")
@@ -97,6 +89,15 @@ class TestSEMStatic(unittest.TestCase):
         sem_unpickled = pickle.loads(dump)
         self.assertEqual(len(sem_unpickled.children.value), 7)
         sem.terminate()
+
+    def test_hw_error(self):
+        """
+        Check it raises HwError in case of wrong IP address
+        """
+        wrong_config = copy.deepcopy(CONFIG_SEM)
+        wrong_config["host"] = "http://Phenom-MVE0123456789.local:8888"
+        self.assertRaises(HwError, phenom.SEM, **wrong_config)
+
 
 @skip("skip")
 class TestSEM(unittest.TestCase):
@@ -331,10 +332,12 @@ class TestSEM(unittest.TestCase):
         self.left = number
         self.sed.data.subscribe(self.receive_image)
 
-        # change the attribute
+        # change few attributes
         time.sleep(expected_duration)
         dwell = self.scanner.dwellTime.range[0]
         self.scanner.dwellTime.value = dwell
+        self.scanner.spotSize.value = 2.5
+        self.scanner.accelVoltage.value = 6000
         expected_duration = self.compute_expected_duration()
 
         self.acq_done.wait(number * (2 + expected_duration * 1.1))  # 2s per image should be more than enough in any case
@@ -470,7 +473,43 @@ class TestSEM(unittest.TestCase):
         f.result()
         new_pos = self.pressure.position.value["pressure"]
         self.assertEqual(1e04, new_pos)
+        f = self.pressure.moveAbs({"pressure":1e-02})  # move to SEM
+        f.result()
+        new_pos = self.pressure.position.value["pressure"]
+        self.assertEqual(1e-02, new_pos)
+        f = self.pressure.moveAbs({"pressure":1e05})  # Unload
+        f.result()
+        new_pos = self.pressure.position.value["pressure"]
+        self.assertEqual(1e05, new_pos)
 
+    @skip("skip")
+    def test_grid_scanning(self):
+        self.scanner.dwellTime.value = 10e-6  # s
+        last_res = self.scanner.resolution.value
+        last_size = self.size
+        self.scanner.resolution.value = (4, 4)
+        self.size = self.scanner.resolution.value
+        expected_duration = self.compute_expected_duration()
+
+        start = time.time()
+        im = self.sed.data.get()
+        duration = time.time() - start
+        self.assertEqual(im.shape, self.size[::-1])
+        self.assertGreaterEqual(duration, expected_duration, "Error execution took %f s, less than exposure time %d." % (duration, expected_duration))
+        self.assertIn(model.MD_DWELL_TIME, im.metadata)
+        self.scanner.resolution.value = last_res
+        self.size = last_size
+
+    @skip("skip")
+    def test_sample_holder(self):
+        """
+        Check it's possible to read the current sample holder ID
+        and it raises a ValueError when wrong code is provided
+        """
+        sh = self.pressure.sampleHolder.value
+        self.assertNotEqual((None, None), sh)
+        # Try to register holder with wrong code
+        self.assertRaises(ValueError, self.pressure.registerSampleHolder, "wrongCode")
 
 if __name__ == "__main__":
     unittest.main()

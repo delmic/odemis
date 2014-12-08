@@ -856,7 +856,8 @@ class Detector(model.Detector):
         logging.info("Terminating SEM stream...")
         try:
             # "Unblank" the beam
-            self.beam_blank(False)
+            if self._tilt_unblank is not None:
+                self.beam_blank(False)
         except suds.WebFault:
             logging.warning("Beam might still be blanked!")
 
