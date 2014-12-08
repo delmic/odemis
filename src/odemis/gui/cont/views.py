@@ -347,10 +347,10 @@ class ViewPortController(object):
                 if self._toolbar:
                     can_fit = hasattr(viewport.canvas, "fit_view_to_content")
                     self._toolbar.enable_button(tools.TOOL_ZOOM_FIT, can_fit)
-            else:
-                for vp in self._viewports:
-                    vp.SetFocus(False)
-                viewport.SetFocus(True)
+
+            for vp in self._viewports:
+                vp.SetFocus(False)
+            viewport.SetFocus(True)
 
         finally:
             grid_panel.Thaw()
