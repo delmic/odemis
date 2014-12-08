@@ -40,7 +40,7 @@ class TestSimCam(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.camera = CLASS(**KWARGS)
-        for child in cls.camera.children:
+        for child in cls.camera.children.value:
             if child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
 

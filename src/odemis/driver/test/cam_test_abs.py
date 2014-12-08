@@ -465,7 +465,7 @@ class VirtualTestSynchronized(object):
         cls.sem = semcomedi.SEMComedi(**CONFIG_SEM)
 
 
-        for child in cls.sem.children:
+        for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
             elif child.name == CONFIG_SCANNER["name"]:

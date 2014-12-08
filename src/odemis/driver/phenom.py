@@ -122,7 +122,7 @@ class SEM(model.HwComponent):
         '''
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner" and "detector"
-            They will be provided back in the .children roattribute
+            They will be provided back in the .children VA
         Raise an exception if the device cannot be opened
         '''
 

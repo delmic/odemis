@@ -56,9 +56,9 @@ class TestSEMStatic(unittest.TestCase):
         Doesn't even try to acquire an image, just create and delete components
         """
         sem = simsem.SimSEM(**CONFIG_SEM)
-        self.assertEqual(len(sem.children), 3)
+        self.assertEqual(len(sem.children.value), 3)
         
-        for child in sem.children:
+        for child in sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 sed = child
             elif child.name == CONFIG_SCANNER["name"]:
@@ -92,7 +92,7 @@ class TestSEMStatic(unittest.TestCase):
         dump = pickle.dumps(sem, pickle.HIGHEST_PROTOCOL)
 #        print "dump size is", len(dump)
         sem_unpickled = pickle.loads(dump)
-        self.assertEqual(len(sem_unpickled.children), 2)
+        self.assertEqual(len(sem_unpickled.children.value), 2)
         sem.terminate()
     
 
@@ -104,7 +104,7 @@ class TestSEM(unittest.TestCase):
     def setUpClass(cls):
         cls.sem = simsem.SimSEM(**CONFIG_SEM)
         
-        for child in cls.sem.children:
+        for child in cls.sem.children.value:
             if child.name == CONFIG_SED["name"]:
                 cls.sed = child
             elif child.name == CONFIG_SCANNER["name"]:
@@ -388,9 +388,6 @@ class TestSEM(unittest.TestCase):
 
         # if it has acquired a least 5 pictures we are already happy
         self.assertLessEqual(self.left, 10000)
-
-    def onEvent(self):
-        self.events += 1
 
     def receive_image(self, dataflow, image):
         """
