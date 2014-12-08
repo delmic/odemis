@@ -169,16 +169,16 @@ class ProxyOfProxyTest(unittest.TestCase):
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
-        comp2._set_affects(set([comp]))
-        self.assertEqual(len(comp2.affects), 1)
-        for c in comp2.affects:
+        comp2.affects.value.append(comp)
+        self.assertEqual(len(comp2.affects.value), 1)
+        for c in comp2.affects.value:
             self.assertTrue(isinstance(c, model.ComponentBase))
             self.assertEqual(c.name, "MyHwComp")
             self.assertEqual(c.role, "affected")
             
         comp2_new = model.getObject("testscont2", "MyHwComp2")
         self.assertEqual(comp2_new.name, "MyHwComp2")
-        self.assertEqual(len(comp2_new.affects), 1)
+        self.assertEqual(len(comp2_new.affects.value), 1)
             
         comp.terminate()
         comp2.terminate()
@@ -195,9 +195,9 @@ class ProxyOfProxyTest(unittest.TestCase):
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
-        comp2._set_affects(set([comp]))
-        self.assertEqual(len(comp2.affects), 1)
-        comp_indir = list(comp2.affects)[0]
+        comp2.affects.value.append(comp)
+        self.assertEqual(len(comp2.affects.value), 1)
+        comp_indir = comp2.affects.value[0]
         self.assertIsInstance(comp_indir.prop, VigilantAttributeBase)
         self.assertIsInstance(comp_indir.cont, VigilantAttributeBase)
         self.assertIsInstance(comp_indir.enum, VigilantAttributeBase)
@@ -233,9 +233,9 @@ class ProxyOfProxyTest(unittest.TestCase):
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
-        comp2._set_affects(set([comp]))
-        self.assertEqual(len(comp2.affects), 1)
-        for c in comp2.affects:
+        comp2.affects.value.append(comp)
+        self.assertEqual(len(comp2.affects.value), 1)
+        for c in comp2.affects.value:
             self.assertTrue(isinstance(c, model.ComponentBase))
             self.assertEqual(c.name, "MyComp")
             val = comp.my_value
@@ -256,9 +256,9 @@ class ProxyOfProxyTest(unittest.TestCase):
                                            {"name":"MyHwComp2", "role":"affecter"})
         self.assertEqual(comp2.name, "MyHwComp2")
         
-        comp2._set_affects(set([comp]))
-        self.assertEqual(len(comp2.affects), 1)
-        comp_indir = list(comp2.affects)[0]
+        comp2.affects.value.append(comp)
+        self.assertEqual(len(comp2.affects.value), 1)
+        comp_indir = list(comp2.affects.value)[0]
 
         self.count = 0
         self.data_arrays_sent = 0
