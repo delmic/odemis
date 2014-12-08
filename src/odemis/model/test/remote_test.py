@@ -42,6 +42,9 @@ import unittest
 logging.getLogger().setLevel(logging.DEBUG)
 #gc.set_debug(gc.DEBUG_LEAK | gc.DEBUG_STATS)
 
+# pyrolog = logging.getLogger("Pyro4")
+# pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
+
 # Use processes or threads? Threads are easier to debug, but less real
 USE_THREADS = True
 
@@ -149,7 +152,7 @@ class SerializerTest(unittest.TestCase):
         sem.terminate()
 
     
-#@unittest.skip("simple")
+# @unittest.skip("simple")
 class ProxyOfProxyTest(unittest.TestCase):
 # Test sharing a shared component from the client
 

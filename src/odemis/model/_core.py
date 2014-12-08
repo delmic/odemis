@@ -219,7 +219,10 @@ class Container(Pyro4.core.Daemon):
         # all the sockets are in the same directory so it's independent from the PWD
         self.ipc_name = BASE_DIRECTORY + "/" + urllib.quote(name) + ".ipc"
 
-        if os.path.exists(self.ipc_name):
+        if not os.path.isdir(BASE_DIRECTORY + "/."): # + "/." to check it's readable
+            logging.error("Directory " + BASE_DIRECTORY + " is not accessible, "
+                          "which is needed for creating the container %s", name)
+        elif os.path.exists(self.ipc_name):
             try:
                 os.remove(self.ipc_name)
                 logging.warning("The file '%s' was deleted to create container '%s'.", self.ipc_name, name)
