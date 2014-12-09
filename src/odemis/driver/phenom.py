@@ -812,7 +812,7 @@ class Detector(model.Detector):
                     self._acq_device.SetSEMViewingMode(self._scan_params_view, 'SEM-SCAN-MODE-IMAGING')
                 img_str = self._acq_device.SEMAcquireImageCopy(self._scanParams)
                 # Use the metadata from the string to update some metadata
-                # metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
+                metadata[model.MD_POS] = (img_str.aAcqState.position.x, img_str.aAcqState.position.y)
                 metadata[model.MD_EBEAM_VOLTAGE] = img_str.aAcqState.highVoltage
                 metadata[model.MD_EBEAM_CURRENT] = img_str.aAcqState.emissionCurrent
                 metadata[model.MD_ROTATION] = -img_str.aAcqState.rotation
@@ -1444,6 +1444,10 @@ class ChamberPressure(model.Actuator):
         # in progress
         self._move_event = threading.Event()
         self._move_event.set()
+        # Event to prevent future from returning before position is updated
+        self._position_event = threading.Event()
+        self._position_event.set()
+
         self._chamber_must_stop = threading.Event()
         target = self._chamber_move_thread
         self._chamber_thread = threading.Thread(target=target,
@@ -1590,6 +1594,8 @@ class ChamberPressure(model.Actuator):
             except suds.WebFault:
                 logging.warning("Acquisition in progress, cannot move to another state.", exc_info=True)
         self._chamber_event.set()
+        # Wait for position to be updated
+        self._position_event.wait()
 
         TimeUpdater.cancel()
 
@@ -1727,8 +1733,10 @@ class ChamberPressure(model.Actuator):
                                 # Wait until any move performed by the user is completed
                                 self._chamber_event.wait()
                                 self._updatePosition()
+                                self._position_event.set()
                             else:
                                 self._move_event.clear()
+                                self._position_event.clear()
                         except Exception:
                             logging.warning("Received event does not have the expected attribute or format")
                     elif (newEvent == eventID2):
