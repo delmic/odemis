@@ -526,7 +526,7 @@
               <flag>wxEXPAND</flag>
             </object>
             <object class="sizeritem">
-              <object class="ViewportGrid" name="">
+              <object class="ViewportGrid">
                 <object class="SecomViewport" name="vp_secom_tl">
                   <fg>#BFBFBF</fg>
                   <bg>#000000</bg>

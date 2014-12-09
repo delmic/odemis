@@ -1,4 +1,5 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
 """
 :author:    Rinze de Laat
 :copyright: © 2014 Rinze de Laat, Delmic
@@ -32,6 +33,8 @@ class ViewportGrid(wx.Panel):
 
     def __init__(self, *args, **kwargs):
         super(ViewportGrid, self).__init__(*args, **kwargs)
+
+        self.SetBackgroundColour(wx.BLACK)
 
         # We need a separate attribute that contains all the child viewports, because the default
         # Children property in wx.Python does not allow for reordering.
@@ -203,12 +206,12 @@ class ViewportGrid(wx.Panel):
                 raise ValueError("If multiple viewports are visible, they should all reside in the "
                                  "2x2 grid! (%d shown, %d in grid)" % (num_vis_total, num_vis_grid))
             else:
-                tl, tr, bl, br = [vp for vp in gvps]
+                tl, tr, bl, br = gvps
                 tlv, trv, blv, brv = [vp in vvps for vp in gvps]
 
                 gl = self.grid_layout
 
-                if tl.Shown:
+                if tl in vvps:
                     pos = gl.tl.pos
                     size = (gl.tl.size.x + (gl.tr.size.x if not trv else 0),
                             gl.tl.size.y + (gl.bl.size.y if not blv and not brv and trv else 0))
@@ -219,7 +222,7 @@ class ViewportGrid(wx.Panel):
                 elif tl.Size != self.hidden_size:
                     tl.SetSize(self.hidden_size)
 
-                if tr.Shown:
+                if tr in vvps:
                     pos = (gl.tr.pos[0] - (gl.tr.size.x if not tlv else 0), 0)
                     size = (gl.tr.size.x + (gl.tl.size.x if not tlv else 0),
                             gl.tr.size.y + (gl.br.size.y if not brv and not blv and tlv else 0))
@@ -230,18 +233,18 @@ class ViewportGrid(wx.Panel):
                 elif tr.Size != self.hidden_size:
                     tr.SetSize(self.hidden_size)
 
-                if bl.Shown:
+                if bl in vvps:
                     pos = (0, gl.bl.pos[1] - (gl.tl.size.y if not tlv and not trv else 0))
                     size = (gl.bl.size.x + (gl.br.size.x if not brv else 0),
                             gl.bl.size.y + (gl.tl.size.y if not tlv and not trv and brv else 0))
 
                     bl.SetPosition(pos)
                     bl.SetSize(size)
-                    logging.debug("Layout bottom left: %s, %s", pos, size)
+                    logging.debug("Layout bottom left (%s): %s, %s", bl, pos, size)
                 elif bl.Size != self.hidden_size:
                     bl.SetSize(self.hidden_size)
 
-                if br.Shown:
+                if br in vvps:
                     pos = (gl.br.pos[0] - (gl.bl.size.x if not blv else 0),
                            gl.br.pos[1] - (gl.tr.size.y if not trv and not tlv and blv else 0))
                     size = (gl.br.size.x + (gl.bl.size.x if not blv else 0),
@@ -271,16 +274,16 @@ class ViewportGrid(wx.Panel):
 
         """
 
-        self.hide_all_viewports()
+        self.visible_viewports = vis_viewports
 
         for vis_viewport, viewport in zip(vis_viewports, self.viewports):
             if vis_viewport not in self.viewports:
                 raise ValueError("Unknown Viewport!")
             # Swap won't happen if the viewports are the same
             self._swap_viewports(vis_viewport, viewport)
-            vis_viewport.Show()
 
         self._layout_viewports()
+        self._show_hide_viewports()
 
     def get_win_grid_pos(self, win):
         return self.viewports.index(win)
