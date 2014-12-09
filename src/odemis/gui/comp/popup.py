@@ -38,15 +38,21 @@ class Message(wx.PopupTransientWindow):
         self.panel.SetBackgroundColour(BG_COLOUR_NOTIFY)
 
         self.title_txt = wx.StaticText(self.panel, -1,)
-        font = wx.Font(16, wx.FONTFAMILY_DEFAULT,
-                           wx.FONTSTYLE_NORMAL,
-                           wx.FONTWEIGHT_BOLD)
+        font = wx.Font(
+            16,
+            wx.FONTFAMILY_DEFAULT,
+            wx.FONTSTYLE_NORMAL,
+            wx.FONTWEIGHT_BOLD
+        )
         self.title_txt.SetFont(font)
 
         self.message_txt = wx.StaticText(self.panel, -1,)
-        font = wx.Font(8, wx.FONTFAMILY_DEFAULT,
-                           wx.FONTSTYLE_NORMAL,
-                           wx.FONTWEIGHT_NORMAL)
+        font = wx.Font(
+            8,
+            wx.FONTFAMILY_DEFAULT,
+            wx.FONTSTYLE_NORMAL,
+            wx.FONTWEIGHT_NORMAL
+        )
         self.message_txt.SetFont(font)
 
         self.sizer = wx.BoxSizer(wx.VERTICAL)
@@ -55,13 +61,22 @@ class Message(wx.PopupTransientWindow):
         self.panel.SetSizer(self.sizer)
 
     @classmethod
-    def show_message(cls, parent, title,
-                     message=None, timeout=1.5, bgcolour=BG_COLOUR_NOTIFY):
+    def show_message(cls, parent, title, message=None, timeout=1.5, bgcolour=BG_COLOUR_NOTIFY):
+        """ Show a small message popup
+
+        :param parent: (wxWindow)
+        :param title: (str) The title of the message
+        :param message: (str) Extra text that will be displayed below the title
+        :param timeout: (float) Timeout in seconds after which the message will automatically vanish
+        :param bgcolour: (str) The background colour of the window
+
+        """
+
         mo = Message(parent)
-        mo._show_message(title, message, timeout, bgcolour)
+        mo.construct_message(title, message, timeout, bgcolour)
 
     @call_after
-    def _show_message(self, title, message, timeout, bgcolour):
+    def construct_message(self, title, message, timeout, bgcolour):
 
         self.panel.SetBackgroundColour(bgcolour)
 
@@ -85,3 +100,8 @@ class Message(wx.PopupTransientWindow):
 
         self.Popup()
         wx.FutureCall(timeout * 1000, self.Dismiss)
+
+        self.Parent.Refresh()
+        # The Yield call forces wxPython to take control and process any event (i.e. the preceding
+        # Refresh call), making sure the Message is shown before the data loading begins.
+        wx.Yield()

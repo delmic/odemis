@@ -1191,13 +1191,11 @@ class AnalysisTab(Tab):
             else:
                 # pick a random format hoping it's the right one
                 fmt = formats[1]
-                logging.warning("Couldn't guess format from filename '%s',"
-                                " will use %s.", fn, fmt)
+                logging.warning("Couldn't guess format from filename '%s', will use %s.", fn, fmt)
 
         Message.show_message(self.main_frame, "Opening file")
-        self.main_frame.Refresh()
-        self.main_frame.Update()
-
+        # Since the loading of data can take relatively long, we use CallAfter so we are sure the
+        # message is displayed *before* the GUI blocks.
         wx.CallAfter(self.load_data, fmt, fn)
         return True
 
