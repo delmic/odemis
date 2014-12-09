@@ -766,7 +766,7 @@ class TestStaticStreams(unittest.TestCase):
     Test static streams, which don't need any backend running
     """
 
-#    @skip("simple")
+#     @skip("simple")
     def test_ar(self):
         """Test StaticARStream"""
         # AR background data
@@ -880,6 +880,33 @@ class TestStaticStreams(unittest.TestCase):
         wl0d = specs.get_spectrum_range()
         self.assertEqual(sp0d.shape, (data.shape[0],))
         self.assertEqual(wl0d.shape, (data.shape[0],))
+        self.assertEqual(sp0d.dtype, data.dtype)
+        self.assertTrue(numpy.all(sp0d <= data.max()))
+
+        # Check 1d spectrum on corner-case: parallel to the X axis
+        specs.selected_line.value = [(3, 7), (3, 65)]
+        sp1d = specs.get_line_spectrum()
+        wl1d = specs.get_spectrum_range()
+        self.assertEqual(sp1d.ndim, 3)
+        self.assertEqual(sp1d.shape, (65 - 7 + 1, data.shape[0], 3))
+        self.assertEqual(sp1d.dtype, numpy.uint8)
+        self.assertEqual(wl1d.shape, (data.shape[0],))
+        self.assertEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
+                         md[model.MD_PIXEL_SIZE][0])
+
+        # Check 1d spectrum
+        specs.selected_line.value = [(30, 65), (1, 1)]
+        sp1d = specs.get_line_spectrum()
+        wl1d = specs.get_spectrum_range()
+        self.assertEqual(sp1d.ndim, 3)
+        # There is not too much expectations on the size of the spatial axis
+        self.assertTrue(29 <= sp1d.shape[0] <= (64 * 1.41))
+        self.assertEqual(sp1d.shape[1], data.shape[0])
+        self.assertEqual(sp1d.shape[2], 3)
+        self.assertEqual(sp1d.dtype, numpy.uint8)
+        self.assertEqual(wl1d.shape, (data.shape[0],))
+        self.assertGreaterEqual(sp1d.metadata[model.MD_PIXEL_SIZE][1],
+                                md[model.MD_PIXEL_SIZE][0])
 
         # Check efficiency compensation
         prev_im2d = specs.image.value
