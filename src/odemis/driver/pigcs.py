@@ -2781,6 +2781,9 @@ class ActionFuture(object):
                 if now > self._timeout:
                     logging.warning("Giving up waiting for move %g s late",
                                     now - self._expected_end)
+                    # TODO: Stop the axes still moving. (Because on closed-loop
+                    # it's most likely due to strong oscillations, which are much
+                    # worse than having the stage at a sligthly wrong position)
                     break # move took too much time
                 if now > end_wait:
                     return False # could wait more but the caller is not interested
