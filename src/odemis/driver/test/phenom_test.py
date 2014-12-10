@@ -468,5 +468,13 @@ class TestSEM(unittest.TestCase):
         # Try to register holder with wrong code
         self.assertRaises(ValueError, self.pressure.registerSampleHolder, "wrongCode")
 
+    @skip("skip")
+    def test_auto_contrast(self):
+        """
+        Check it's possible to apply AutoContrast
+        """
+        f = self.scanner.applyAutoContrast()
+        f.result()
+
 if __name__ == "__main__":
     unittest.main()
