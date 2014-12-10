@@ -1780,7 +1780,7 @@ class ChamberPressure(model.Actuator):
         except Exception as e:
             logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
             # Update the state of SEM component so the backend is aware of the error occured
-            self.parent.state = e
+            self.parent.state.value = e
             # Keep on trying to reconnect
             self._reconnect_thread.start()
         finally:
