@@ -25,6 +25,7 @@ import collections
 from concurrent import futures
 import glob
 import logging
+import math
 from odemis import model
 from odemis.model import isasync
 from odemis.util import driver
@@ -1129,6 +1130,9 @@ class Controller(object):
         assert (0 < accel <= self.max_accel)
         assert (axis in self._channels)
         self._accel[axis] = accel
+
+    def getAccel(self, axis):
+        return self._accel[axis]
 
     def moveRel(self, axis, distance):
         """
@@ -2878,11 +2882,13 @@ class ActionFuture(object):
             controller to list of channel/distance to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
-        max_duration = 0 #s
+        max_duration = 0  # s
         for controller, channels in axes.items():
             for channel, distance in channels:
                 actual_dist = controller.moveRel(channel, distance)
-                duration = abs(actual_dist) / controller.getSpeed(channel)
+                duration = self._estimateDuration(abs(actual_dist),
+                                                  controller.getSpeed(channel),
+                                                  controller.getAccel(channel))
                 max_duration = max(max_duration, duration)
 
         return max_duration
@@ -2893,15 +2899,43 @@ class ActionFuture(object):
             controller to list of channel/position to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """
-        max_duration = 0 #s
+        max_duration = 0  # s
         for controller, channels in axes.items():
             for channel, pos in channels:
                 actual_dist = controller.moveAbs(channel, pos)
-                duration = abs(actual_dist) / controller.getSpeed(channel)
+                duration = self._estimateDuration(abs(actual_dist),
+                                                  controller.getSpeed(channel),
+                                                  controller.getAccel(channel))
                 max_duration = max(max_duration, duration)
 
         return max_duration
-
+    
+    @staticmethod
+    def _estimateDuration(distance, speed, accel):
+        """
+        Compute the theoritical duration of a move given the maximum speed and
+        accelleration. It considers that the speed curve of the move will follow
+        a trapezoidal shape: first acceleration, then maximum speed, and then
+        deceleration.
+        distance (0 <= float): distance that will be travelled (in m)
+        speed (0 < float): maximum speed allowed (in m/s)
+        accel (0 < float): acceleration and deceleration (in m²/s)
+        return (0 <= float): time in s
+        """
+        # Given the distance to be traveled, determine whether we have a triangular or
+        # a trapezoidal motion profile.
+        A = (2 * accel) / (accel ** 2)
+        s = 0.5 * A * speed ** 2
+        if distance > s:
+            t1 = speed / accel
+            t2 = (distance - s) / speed
+            t3 = speed / accel
+            return t1 + t2 + t3
+        else:
+            vp = math.sqrt(2.0 * distance / A)
+            t1 = vp / accel
+            t2 = vp / accel
+            return t1 + t2
 
 # All the classes below are for the simulation of the hardware
 
