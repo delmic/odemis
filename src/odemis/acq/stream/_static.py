@@ -422,6 +422,14 @@ class StaticSpectrumStream(StaticStream):
         # first point, second point in pixels. It must be 2 elements long.
         self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
 
+        # The thickness of a point of a line (shared).
+        # A point of width W leads to the average value between all the pixels
+        # which are within W/2 from the center of the point.
+        # A line of width W leads to a 1D spectrum taking into account all the
+        # pixels which fit on an orthogonal line to the selected line at a
+        # distance <= W/2.
+        self.width = model.FloatContinuous(1, [1, 32], unit="px")
+
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
         self.efficiencyCompensation.subscribe(self._onCalib)
@@ -446,6 +454,23 @@ class StaticSpectrumStream(StaticStream):
         if data is None:
             data = self._calibrated
         super(StaticSpectrumStream, self)._updateHistogram(data)
+
+    def _setLine(self, line):
+        """
+        Checks that the value set could be correct
+        """
+        if len(line) != 2:
+            raise ValueError("selected_line must be of length 2")
+
+        shape = self.raw[0].shape[-1:-3:-1]
+        for p in line:
+            if len(p) != 2:
+                raise ValueError("selected_line must contain only tuples of 2 ints")
+            if not 0 <= p[0] < shape[0] or not 0 <= p[1] < shape[1]:
+                raise ValueError("selected_line must only contain coordinates "
+                                 "within %s", shape)
+
+        return line
 
     def _get_bandwidth_in_pixel(self):
         """
@@ -549,9 +574,14 @@ class StaticSpectrumStream(StaticStream):
             return range(min_bw, max_bw + 1)
 
     def get_pixel_spectrum(self):
-        """ Return the spectrum belonging to the selected pixel or None if no
-        spectrum is selected.
         """
+        Return the (0D) spectrum belonging to the selected pixel.
+        See get_spectrum_range() to know the wavelength values for each index of
+         the spectrum dimension
+        return (None or DataArray with 1 dimension): the spectrum of the given
+         pixel or None if no spectrum is selected.
+        """
+
         if self.selected_pixel.value == (None, None):
             return None
         x, y = self.selected_pixel.value
