@@ -478,7 +478,7 @@ class Controller(object):
 
         # We timed out again, try harder: reboot
         self.Reboot()
-        self.busacc.sendOrderCommand("ERR?\n")
+        self.busacc.sendOrderCommand(self.address, "ERR?\n")
         try:
             resp = self.busacc.sendQueryCommand(self.address, "ERR?\n")
             if re.match(self.err_ans_re, resp): # looks like an answer to err?
@@ -1304,7 +1304,7 @@ class CLController(Controller):
             unit = self.GetParameter(a, 0x7000601)
             if unit != "MM":
                 raise IOError("Controller %d configured with unit %s, but only "
-                              "millimeters (MM) is supported.", address, unit)
+                              "millimeters (MM) is supported." % (address, unit))
 
             # TODO:
             # * if not referenced => disable reference mode to be able to
@@ -1322,6 +1322,12 @@ class CLController(Controller):
             # Movement range before referencing is max range in both directions
             pos = self.GetPosition(a) * 1e-3
             width = self.GetMaxPosition(a) * 1e-3 - self.GetMinPosition(a) * 1e-3
+            # TODO: check that if the stage starts at a limit, it's still possible
+            # to reach the other side (with relative moves) even if the travel
+            # range limits it.
+            # If not => need to read the range from non-volative memory, and
+            # then double the range (not just in Python but also) in volatile
+            # memory.
             self.pos_rng[a] = (pos - width, pos + width)
 
             # Read speed/accel ranges
@@ -1336,7 +1342,7 @@ class CLController(Controller):
                 self.max_speed = self._speed[a]
                 self.max_accel = self._accel[a]
 
-            # self._stopEncoder(a)
+            self._stopEncoder(a)
 
         self.min_speed = 10e-6 # m/s (default low value)
         self._prev_speed_accel = ({}, {})
@@ -1365,6 +1371,8 @@ class CLController(Controller):
         Turn on the suplly power of the encoder.
         axis (1<=int<=16): the axis
         """
+        # TODO: this works fine as long as the axis has not been referenced
+        # If it already was referenced, we need to re-write POS
         if 0x56 in self._avail_params:
             self.SetParameter(axis, 0x56, 1) # 1 = on
         self.SetServo(axis, True)
@@ -1423,6 +1431,7 @@ class CLController(Controller):
         else:
             self.MoveAbs(axis, position * 1e3)
 
+        # TODO: compute the time using accel/speed/decel => less optimistic == less timeouts
         return distance
 
     def getPosition(self, axis):
@@ -1431,12 +1440,13 @@ class CLController(Controller):
         return (float): the current position of the given axis
         """
         # TODO: find out if we need sensor to be turned on to read the position
-        self._startEncoder(axis)
+        # (according to the doc, it seems not, and the E861 doesn't need the servo to be turned on)
+#        self._startEncoder(axis)
         return self.GetPosition(axis) * 1e-3
 
-        # This is called by the Bus in various situation while not moving,
-        # so we need a way to turn off the encoder afterwards => double-hack
-        self.isMoving(axes={axis})
+#         # This is called by the Bus in various situation while not moving,
+#         # so we need a way to turn off the encoder afterwards => double-hack
+#         self.isMoving(axes={axis})
 
 
     # Warning: if the settling window is too small or settling time too big,
@@ -1459,13 +1469,20 @@ class CLController(Controller):
             if not self.IsOnTarget(a):
                 return True
 
+        # TODO: if return false => turn off encoder (in a few seconds)
+        # Then, need to "ensure the encoder is ON" before any other meaningful command
         # Encoder not needed anymore (until next move)
         for a in axes:
             self._stopEncoder(a)
         return False
 
-        # TODO: if return false => turn off encoder (in a few seconds)
-        # Then, need to "ensure the encoder is ON" before any other meaningful command
+
+        # TODO: handle the fact that if the stage reaches the physical limit without knowing,
+        # the move will fail with:
+        # PIGCSError: PIGCS error -1024: Motion error: position error too large, servo is switched off automatically
+        # => put back the servo if necessary
+        # => keep checking for errors at the same time as ONT?
+
 
         # FIXME: it seems that on the C867 if the axis is stopped while moving, isontarget()
         # will sometimes keep saying it's not reached forever. However, the documentation
@@ -2293,7 +2310,7 @@ class Bus(model.Actuator):
             raise model.HwError("Failed to connect to '%s:%d', check the master "
                                 "controller is connected to the network, turned "
                                 " on, and correctly configured." % (host, port))
-        sock.settimeout(0.5) # s
+        sock.settimeout(1.0) # s
         return sock
 
 class SerialBusAccesser(object):
@@ -2569,14 +2586,19 @@ class ActionManager(threading.Thread):
                 return
 
             try:
-                self.current_action._start_action()
-            except futures.CancelledError:
-                # cancelled in the mean time: skip the action
-                continue
+                try:
+                    self.current_action._start_action()
+                except futures.CancelledError:
+                    # cancelled in the mean time: skip the action
+                    continue
 
-            while not self.current_action._wait_action(0.2):
-                # regularly update position (5 Hz)
-                self._bus._updatePosition()
+                while not self.current_action._wait_action(0.2):
+                    # regularly update position (5 Hz)
+                    self._bus._updatePosition()
+            except Exception as exp:
+                logging.exception("Failed to run action %s", self.current_action)
+                # TODO: need to be able to set an excption to the ActionFuture
+                # => just use CancellableFutures?
 
             # Update position one last time
             # FIXME: should update position just _before_ calling the callbacks
