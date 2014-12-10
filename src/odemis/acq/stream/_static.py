@@ -24,11 +24,12 @@ import collections
 import logging
 import math
 import numpy
+from scipy import ndimage
+
 from odemis import model
 from odemis.acq import calibration
-from odemis.model import MD_POS, VigilantAttribute
+from odemis.model import MD_POS, MD_PIXEL_SIZE, VigilantAttribute
 from odemis.util import img, conversion, polar, limit_invocation, spectrum
-
 from ._base import Stream
 
 
@@ -416,11 +417,10 @@ class StaticSpectrumStream(StaticStream):
 
         # This attribute is used to keep track of any selected pixel within the
         # data for the display of a spectrum
-        self.selected_pixel = model.TupleVA((None, None)) # int, int
+        self.selected_pixel = model.TupleVA((None, None))  # int, int
 
         # first point, second point in pixels. It must be 2 elements long.
-        self.selected_line = model.ListVA([(None, None), (None, None)],
-                                          setter=self._setLine)
+        self.selected_line = model.ListVA([(None, None), (None, None)], setter=self._setLine)
 
         self.fitToRGB.subscribe(self.onFitToRGB)
         self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
@@ -552,7 +552,7 @@ class StaticSpectrumStream(StaticStream):
         """ Return the spectrum belonging to the selected pixel or None if no
         spectrum is selected.
         """
-        if self.selected_pixel.value is None:
+        if self.selected_pixel.value == (None, None):
             return None
         x, y = self.selected_pixel.value
         return self._calibrated[:, 0, 0, y, x]
