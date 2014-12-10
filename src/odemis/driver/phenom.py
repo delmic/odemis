@@ -260,6 +260,9 @@ class Scanner(model.Emitter):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
+        # will take care of executing autocontrast asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         self._shape = (2048, 2048)
 
         # TODO: document where this funky number comes from
@@ -543,6 +546,28 @@ class Scanner(model.Emitter):
         tran_pxs = (clipped_tran[0] / pixelSize[0],
                     clipped_tran[1] / pixelSize[1])
         return tran_pxs
+
+    @isasync
+    def applyAutoContrast(self):
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + 2)  # rough time estimation
+        f._move_lock = threading.Lock()
+
+        return self._executor.submitf(f, self._applyAutoContrast, f)
+
+    def _applyAutoContrast(self, future):
+        """
+        Trigger Phenom's AutoContrast
+        """
+        with self.parent._acq_progress_lock:
+            self.parent._device.SEMACB()
+
+    def terminate(self):
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
 
 class Detector(model.Detector):
     """
