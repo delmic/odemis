@@ -2997,8 +2997,8 @@ class E861Simulator(object):
         self._parameters = {0x14: 1 if self._has_encoder else 0, # 0 = no ref switch, 1 = ref switch
                             0x32: 0 if self._has_encoder else 1, # 0 = limit switches, 1 = no limit switches
                             0x3c: "DEFAULT-FAKE", # stage name
-                            0x15: 0.025, # TMX (in m)
-                            0x30: 0.0, # TMN (in m)
+                            0x15: 25.0, # TMX (in mm)
+                            0x30: 0.0, # TMN (in mm)
                             0x16: 0.012, # value at ref pos
                             0x49: 10.0, # VEL
                             0x0B: 3.2, # ACC
@@ -3014,6 +3014,7 @@ class E861Simulator(object):
                             0x7000204: 15.3, # max step/s
                             0x7000205: 1.2, # max step/s²
                             0x7000206: 0.9, # ODC
+                            0x7000601: "MM", # unit
                             }
         self._servo = 0 # servo state
         self._ready = True # is ready?
@@ -3060,8 +3061,6 @@ class E861Simulator(object):
         """
         Computes the current position, in closed loop mode
         """
-        if self._servo != 1:
-            raise SimulatedError(2)
         now = time.time()
         if now > self._end_move:
             self._position = self._target
@@ -3294,6 +3293,7 @@ class E861Simulator(object):
                        "0x32=\t0\t1\tINT\tmotorcontroller\thas limit\t(0=limitswitchs 1=no limitswitchs) \n" +
                        "0x3C=\t0\t1\tCHAR\tmotorcontroller\tStagename \n" +
                        "0x7000000=\t0\t1\tFLOAT\tmotorcontroller\ttravel range minimum \n" +
+                       "0x7000601=\t0\t1\tCHAR\tunit\tuser unit \n" +
                        "end of help"
                        )
             else:
