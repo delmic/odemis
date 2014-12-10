@@ -1052,7 +1052,7 @@
                           <cellpos>2,0</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_p_mirror_y">
+                          <object class="ImageTextButton" name="lens_align_btn_p_aligner_y">
                             <label>↑</label>
                             <delta>1</delta>
                             <bitmap>img/button/btn_64x48.png</bitmap>
@@ -1076,7 +1076,7 @@
                           <cellpos>1,2</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_m_mirror_y">
+                          <object class="ImageTextButton" name="lens_align_btn_m_aligner_y">
                             <label>↓</label>
                             <delta>1</delta>
                             <bitmap>img/button/btn_64x48.png</bitmap>
@@ -1100,7 +1100,7 @@
                           <cellpos>3,2</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_p_mirror_x">
+                          <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
                             <label>←</label>
                             <delta>1</delta>
                             <bitmap>img/button/btn_64x48.png</bitmap>
@@ -1122,7 +1122,7 @@
                           <cellpos>2,1</cellpos>
                         </object>
                         <object class="sizeritem">
-                          <object class="ImageTextButton" name="lens_align_btn_m_mirror_x">
+                          <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
                             <label>→</label>
                             <delta>1</delta>
                             <bitmap>img/button/btn_64x48.png</bitmap>
