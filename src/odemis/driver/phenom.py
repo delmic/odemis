@@ -1800,7 +1800,7 @@ class ChamberPressure(model.Actuator):
                     mode = self.parent._device.GetInstrumentMode()
                     if mode != 'INSTRUMENT-MODE-ERROR':
                         # We can now open the event channel again
-                        self.parent.state = model.ST_RUNNING
+                        self.parent.state.value = model.ST_RUNNING
                         self._chamber_thread.start()
                         break
                 except Exception:
