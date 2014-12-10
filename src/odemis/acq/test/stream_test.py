@@ -6,15 +6,15 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -51,7 +51,7 @@ RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview
 
 class FakeEBeam(model.Emitter):
     """
-    Imitates an e-beam, sufficiently for the Streams 
+    Imitates an e-beam, sufficiently for the Streams
     """
     def __init__(self, name):
         model.Emitter.__init__(self, name, "fakeebeam", parent=None)
@@ -97,11 +97,11 @@ class StreamTestCase(unittest.TestCase):
 
     def test_roi_rep_pxs_links(self):
         """
-        Test the connections between .roi, .pixelSize and .repetition of a 
+        Test the connections between .roi, .pixelSize and .repetition of a
         SpectrumStream.
         """
         ebeam = FakeEBeam("ebeam")
-        ss = stream.SpectrumStream("test spec", None, None, ebeam)
+        ss = stream.SpectrumSettingsStream("test spec", None, None, ebeam)
 
         # if roi is UNDEFINED, everything is left unchanged
         ss.roi.value = stream.UNDEFINED_ROI
@@ -125,7 +125,7 @@ class StreamTestCase(unittest.TestCase):
             ss.roi.value = roi
             new_roi = ss.roi.value
             rep = ss.repetition.value
-            pxs = ss.pixelSize.value 
+            pxs = ss.pixelSize.value
             exp_roi_size = [rep[0] * pxs / phy_size[0],
                             rep[1] * pxs / phy_size[1]]
             roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
@@ -205,10 +205,10 @@ class StreamTestCase(unittest.TestCase):
     def test_rgb_camera_stream(self):
         cam = RGBCAM_CLASS(**RGBCAM_KWARGS)
         rgbs = stream.RGBCameraStream("rgb", cam, cam.data, None) # no emitter
-        
+
         dur = 0.1
         cam.exposureTime.value = dur
-        
+
         # at start, no data
         img = rgbs.image.value
         self.assertIsNone(img)
@@ -226,7 +226,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(img.dtype, numpy.uint8)
         self.assertEqual(img.ndim, 3)
         self.assertEqual(img.shape, tuple(cam.resolution.value) + (3,))
-        
+
         rgbs.is_active.value = False
         rgbs.should_update.value = False
 
@@ -427,7 +427,7 @@ class SECOMTestCase(unittest.TestCase):
 
         time.sleep(2)
         s1.is_active.value = False
-        
+
         self.assertFalse(self._image is None, "No image received after 2s")
 
     def _on_image(self, im):

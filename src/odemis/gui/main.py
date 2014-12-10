@@ -61,6 +61,8 @@ class OdemisGUIApp(wx.App):
         self.main_frame = None
         self._tab_controller = None
         self._is_standalone = standalone
+        self._snapshot_controller = None
+        self._menu_controller = None
 
         l = logging.getLogger()
         self.log_level = l.getEffectiveLevel()
@@ -81,8 +83,10 @@ class OdemisGUIApp(wx.App):
         wx.App.__init__(self, redirect=True)
 
     def OnInit(self):
-        """ Application initialization, automatically run from the :wx:`App`
-        constructor.
+        """ Initialize the GUI
+
+        This method is automatically called from the :wx:`App` constructor
+
         """
 
         if self._is_standalone:
@@ -177,14 +181,9 @@ class OdemisGUIApp(wx.App):
 
             # Create the main tab controller and store a global reference
             # in the odemis.gui.cont package
-            tc = tabs.TabBarController(
-                            tab_defs,
-                            self.main_frame,
-                            self.main_data)
-            self._tab_controller = tc
+            self._tab_controller = tabs.TabBarController(tab_defs, self.main_frame, self.main_data)
 
-            self._menu_controller = MenuController(self.main_data,
-                                                   self.main_frame)
+            self._menu_controller = MenuController(self.main_data, self.main_frame)
             # Menu events
             wx.EVT_MENU(self.main_frame,
                         self.main_frame.menu_item_quit.GetId(),
@@ -193,9 +192,8 @@ class OdemisGUIApp(wx.App):
             self.main_frame.Bind(wx.EVT_CLOSE, self.on_close_window)
 
             # To handle "Save snapshot" menu
-            self._snapshot_controller = acquisition.SnapshotController(
-                                                        self.main_data,
-                                                        self.main_frame)
+            self._snapshot_controller = acquisition.SnapshotController(self.main_data,
+                                                                       self.main_frame)
 
             if self.main_data.role == "delphi":
                 from odemis.gui.img.data import getlogo_delphiBitmap

@@ -69,28 +69,29 @@ def get_available_formats(mode=os.O_RDWR, allowlossy=False):
 
     return formats
 
-# TODO: change name to imply reading is possible too:
-#  * get_converter
-#  * get_manager
-#  * get_serializer
-# ?
-def get_exporter(fmt):
+
+def get_converter(fmt):
+    """ Return the converter corresponding to a format name
+
+    :param fmt: (string) the format name
+    :returns: (module) the converter
+
+    :raises ValueError: in case no exporter can be found
+
     """
-    Return the exporter corresponding to a format name
-    fmt (string): the format name
-    returns (module): the exporter
-    raise ValueError: in case no exporter can be found
-    """
+
     # Look dynamically which format is available
     for module_name in __all__:
         try:
-            exporter = importlib.import_module("." + module_name, "odemis.dataio")
-        except:  #pylint: disable=W0702
-            continue # module cannot be loaded
-        if fmt == exporter.FORMAT:
-            return exporter
+            converter = importlib.import_module("." + module_name, "odemis.dataio")
+        except (ValueError, TypeError, ImportError):
+            logging.exception("Import of converter failed for fmt %s", fmt)
+            continue  # module cannot be loaded
 
-    raise ValueError("No exporter for format %s found" % fmt)
+        if fmt == converter.FORMAT:
+            return converter
+
+    raise ValueError("No converter for format %s found" % fmt)
 
 
 def find_fittest_exporter(filename, default=tiff):

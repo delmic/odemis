@@ -138,7 +138,7 @@ class SnapshotController(object):
                 logging.warning(msg, filepath)
                 tab, filepath = None, None
 
-        exporter = dataio.get_exporter(config.last_format)
+        exporter = dataio.get_converter(config.last_format)
 
         return tab, filepath, exporter
 
@@ -623,7 +623,7 @@ class SparcAcquiController(object):
                           len(data), exp)
 
         filename = self.filename.value
-        exporter = dataio.get_exporter(self.conf.last_format)
+        exporter = dataio.get_converter(self.conf.last_format)
         exporter.export(filename, data, thumb)
         logging.info(u"Acquisition saved as file '%s'.", filename)
         return data, exp, filename
@@ -864,10 +864,11 @@ class FineAlignController(object):
                 rot = math.degrees(cor_md[model.MD_ROTATION_COR])
                 # the worse is the rotation, the longer it's displayed
                 timeout = max(2, min(abs(rot), 10))
-                Message.show_message(self._main_frame,
-                                     u"Rotation applied: %s" % (
-                                      units.readable_str(rot, unit="°", sig=3)),
-                                     timeout=timeout)
+                Message.show_message(
+                    self._main_frame,
+                    u"Rotation applied: %s" % (units.readable_str(rot, unit="°", sig=3)),
+                    timeout=timeout
+                )
                 logging.warning("Fine alignment computed rotation needed of %f°",
                                 rot)
 

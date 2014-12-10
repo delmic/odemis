@@ -474,7 +474,7 @@ def __init_resources():
         </XRCED>
       </object>
       <size>500,500</size>
-      <bg>#4D4D4D</bg>
+      <bg>#FFC9C9</bg>
       <XRCED>
         <assign_var>1</assign_var>
       </XRCED>
@@ -482,7 +482,7 @@ def __init_resources():
     <size>500,500</size>
     <title>Cairo Test</title>
     <centered>1</centered>
-    <bg>#4D4D4D</bg>
+    <bg>#1E90FF</bg>
   </object>
   <object class="wxMenuBar" name="menu_bar">
     <object class="wxMenu">

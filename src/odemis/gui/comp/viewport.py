@@ -576,7 +576,7 @@ class PlotViewport(ViewPort):
         self.Refresh()
 
     def OnSize(self, evt):
-        evt.Skip() # processed also by the parent
+        evt.Skip()  # processed also by the parent
 
     @property
     def microscope_view(self):
@@ -592,7 +592,11 @@ class PlotViewport(ViewPort):
         # There should be exactly one Spectrum stream. In the future there
         # might be scenarios where there are more than one.
         if not ss:
-            raise ValueError("No spectrum streams found")
+            if self.spectrum_stream is not None:
+                self.spectrum_stream.selected_pixel.unsubscribe(self._on_pixel_select)
+            self.spectrum_stream = None
+            logging.warn("No spectrum streams found")
+            return
         elif len(ss) > 1:
             logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
 
@@ -605,6 +609,10 @@ class PlotViewport(ViewPort):
             # TODO: handle more graciously when pixel is unselected?
             logging.warning("Don't know what to do when no pixel is selected")
             return
+        elif self.spectrum_stream is None:
+            logging.warning("No Spectrum Stream present!")
+            return
+
         data = self.spectrum_stream.get_pixel_spectrum()
         domain = self.spectrum_stream.get_spectrum_range()
         unit_x = self.spectrum_stream.spectrumBandwidth.unit
@@ -673,6 +681,8 @@ class SpatialSpectrumViewport(ViewPort):
     """ A panel that shows a microscope view and its legend below it.
 
     This is a generic class, that should be inherited by more specific classes.
+
+    FIXME: This class shares a lot with PlotViewport, see what can be merged
     """
 
     canvas_class = miccanvas.OneDimensionalSpatialSpectrumCanvas
@@ -685,3 +695,82 @@ class SpatialSpectrumViewport(ViewPort):
         """
         # Call parent constructor at the end, because it needs the legend panel
         super(SpatialSpectrumViewport, self).__init__(*args, **kwargs)
+
+        self.spectrum_stream = None
+
+    def setView(self, microscope_view, tab_data):
+        """
+        Set the microscope view that this viewport is displaying/representing
+        *Important*: Should be called only once, at initialisation.
+
+        :param microscope_view:(model.View)
+        :param tab_data: (model.MicroscopyGUIData)
+
+        TODO: rename `microscope_view`, since this parameter is a regular view
+        """
+
+        # This is a kind of a kludge, as it'd be best to have the viewport
+        # created after the microscope view, but they are created independently
+        # via XRC.
+        assert(self._microscope_view is None)
+
+        # import traceback
+        # traceback.print_stack()
+
+        self._microscope_view = microscope_view
+        self._tab_data_model = tab_data
+
+        # canvas handles also directly some of the view properties
+        self.canvas.setView(microscope_view, tab_data)
+
+        # Keep an eye on the stream tree, so we can (re)connect when it changes
+        # microscope_view.stream_tree.should_update.subscribe(self.connect_stream)
+        # FIXME: it shouldn't listen to should_update, but to modifications of
+        # the stream tree itself... it just there is nothing to do that.
+        microscope_view.lastUpdate.subscribe(self.connect_stream)
+
+    def connect_stream(self, _=None):
+        """ This method will connect this ViewPort to the Spectrum Stream so it
+        it can react to spectrum pixel selection.
+        """
+
+        ss = self.microscope_view.stream_tree.spectrum_streams
+
+        # There should be exactly one Spectrum stream. In the future there
+        # might be scenarios where there are more than one.
+        if not ss:
+            # if self.spectrum_stream is not None:
+                # self.spectrum_stream.selected_pixel.unsubscribe(self._on_pixel_select)
+            self.spectrum_stream = None
+            logging.warn("No spectrum streams found")
+            return
+        elif len(ss) > 1:
+            logging.warning("Found %d spectrum streams, will pick one randomly", len(ss))
+
+        self.spectrum_stream = ss[0]
+        self.spectrum_stream.selected_line.subscribe(self._on_line_select)
+
+    def _on_line_select(self, line):
+        """ Line selection event handler """
+
+        if line == (None, None):
+            # TODO: handle more graciously when line is unselected?
+            logging.warning("Don't know what to do when no line is selected")
+            self.canvas.Refresh(eraseBackground=True)
+            return
+        elif self.spectrum_stream is None:
+            logging.warning("No Spectrum Stream present!")
+            self.canvas.Refresh(eraseBackground=True)
+            return
+
+        # length = self.canvas._line
+        data = self.spectrum_stream.get_line_spectrum()
+        if data:
+            domain = self.spectrum_stream.get_spectrum_range()
+            unit_x = self.spectrum_stream.spectrumBandwidth.unit
+            self.bottom_legend.unit = unit_x
+            self.canvas.set_2d_data(domain, data, unit_x)
+        else:
+            logging.warn("No data to display for the selected line!")
+
+        self.Refresh()

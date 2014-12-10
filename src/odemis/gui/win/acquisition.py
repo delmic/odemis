@@ -498,7 +498,7 @@ class AcquisitionDialog(xrcfr_acq):
                             self._tab_data_model.focussedView.value.stream_tree,
                             future)
             filename = self.filename.value
-            exporter = dataio.get_exporter(self.conf.last_format)
+            exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
             logging.info("Acquisition saved as file '%s'.", filename)
         except Exception:

@@ -1,4 +1,5 @@
-#-*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
+
 """
 :author:    Rinze de Laat
 :copyright: © 2014 Rinze de Laat, Delmic
@@ -33,9 +34,15 @@ class ViewportGrid(wx.Panel):
     def __init__(self, *args, **kwargs):
         super(ViewportGrid, self).__init__(*args, **kwargs)
 
+        self.SetBackgroundColour(wx.BLACK)
+
         # We need a separate attribute that contains all the child viewports, because the default
         # Children property in wx.Python does not allow for reordering.
         self.viewports = None
+
+        self._visible_viewports = []
+        self._invisible_viewports = []
+
         self.grid_layout = None
         # The size of the viewports when they are hidden
         self.hidden_size = (400, 400)
@@ -44,32 +51,47 @@ class ViewportGrid(wx.Panel):
     @property
     def visible_viewports(self):
         """ Return all the viewports that are visible """
-        return [c for c in self.viewports if c.Shown]
+        return self._visible_viewports
+
+    @visible_viewports.setter
+    def visible_viewports(self, visible_viewports):
+        self._visible_viewports = visible_viewports
+        self._invisible_viewports = [vp for vp in self.viewports if vp not in visible_viewports]
 
     @property
     def invisible_viewports(self):
         """ Return all the viewports that are invisible """
-        return [c for c in self.viewports if not c.Shown]
+        return self._invisible_viewports
 
-    ##### Viewport showing and hiding #####
+    @invisible_viewports.setter
+    def invisible_viewports(self, invisible_viewports):
+        self._invisible_viewports = invisible_viewports
+        self._visible_viewports = [vp for vp in self.viewports if vp not in invisible_viewports]
+
+    def _show_hide_viewports(self):
+        """ Call the Show and Hide method an the appropriate Viewports """
+
+        for vp in self._visible_viewports:
+            vp.Show()
+
+        for vp in self._invisible_viewports:
+            vp.Hide()
+
+    # #### Viewport showing and hiding #### #
 
     def set_shown_viewports(self, *show_viewports):
         """ Show the given viewports and hide the rest """
-        for viewport in self.viewports:
-            if viewport in show_viewports:
-                viewport.Show()
-            else:
-                viewport.Hide()
+
+        self.visible_viewports = show_viewports
         self._layout_viewports()
+        self._show_hide_viewports()
 
     def set_hidden_viewports(self, *hide_viewports):
         """ Hide the given viewports and show the rest """
-        for viewport in self.viewports:
-            if viewport in hide_viewports:
-                viewport.Hide()
-            else:
-                viewport.Show()
+
+        self.invisible_viewports = hide_viewports
         self._layout_viewports()
+        self._show_hide_viewports()
 
     def hide_all_viewports(self):
         """ Hide all viewports """
@@ -77,30 +99,38 @@ class ViewportGrid(wx.Panel):
 
     def show_grid_viewports(self):
         """ Show all grid viewports """
-        for viewport in self.viewports[:4]:
-            viewport.Show()
-        for viewport in self.viewports[4:]:
-            viewport.Hide()
+        self.visible_viewports = self.viewports[:4]
         self._layout_viewports()
+        self._show_hide_viewports()
 
     def show_viewport(self, viewport):
         """ Show the given viewport """
-        viewport.Show()
-        self._layout_viewports()
+        if viewport not in self.visible_viewports:
+            self._visible_viewports.append(viewport)
+            self._invisible_viewports.remove(viewport)
+
+            self._layout_viewports()
+            self._show_hide_viewports()
 
     def hide_viewport(self, viewport):
         """ Hide the given viewport """
-        viewport.Hide()
-        self._layout_viewports()
+        if viewport not in self.invisible_viewports:
+            self._invisible_viewports.append(viewport)
+            self._visible_viewports.remove(viewport)
 
-    ##### END Viewport showing and hiding #####
+            self._layout_viewports()
+            self._show_hide_viewports()
 
-    def on_size(self, evt):
+    # #### END Viewport showing and hiding #### #
+
+    def on_size(self, _):
         """ Grab the child windows and perform layout when the size changes """
         if self.viewports is None:
             self.viewports = list(self.Children)
             if len(self.viewports) < 4:
-                logging.warn("There should be at least viewports present!")
+                raise ValueError("There should be at least 4 viewports present!")
+            else:
+                self.visible_viewports = self.viewports[:4]
 
         self.grid_layout = AttrDict({
             'tl': AttrDict({
@@ -154,8 +184,8 @@ class ViewportGrid(wx.Panel):
 
         """
 
-        visible_vps = self.visible_viewports
-        num_vis_total = len(visible_vps)
+        vvps = self.visible_viewports
+        num_vis_total = len(vvps)
 
         # Everything hidden, no layout
         if num_vis_total == 0:
@@ -165,23 +195,26 @@ class ViewportGrid(wx.Panel):
                 viewport.SetSize(self.hidden_size)
         # One shown, make the viewport match the size of the parent
         elif num_vis_total == 1:
-            visible_vps[0].SetSize(self.ClientSize)
-            visible_vps[0].SetPosition((0, 0))
+            vvps[0].SetSize(self.ClientSize)
+            vvps[0].SetPosition((0, 0))
+            # TODO: Make invisible ones small!
         else:
-            num_vis_grid = len([vp for vp in self.viewports[:4] if vp.Shown])
+            gvps = self.viewports[:4]
+            num_vis_grid = len([vp for vp in gvps if vp in vvps])
 
             if num_vis_grid != num_vis_total:
                 raise ValueError("If multiple viewports are visible, they should all reside in the "
                                  "2x2 grid! (%d shown, %d in grid)" % (num_vis_total, num_vis_grid))
             else:
-                tl, tr, bl, br = [vp for vp in self.viewports[:4]]
+                tl, tr, bl, br = gvps
+                tlv, trv, blv, brv = [vp in vvps for vp in gvps]
+
                 gl = self.grid_layout
 
-                if tl.Shown:
+                if tl in vvps:
                     pos = gl.tl.pos
-                    size = (gl.tl.size.x + (gl.tr.size.x if not tr.Shown else 0),
-                            gl.tl.size.y + (gl.bl.size.y if not bl.Shown and not br.Shown
-                                            and tr.Shown else 0))
+                    size = (gl.tl.size.x + (gl.tr.size.x if not trv else 0),
+                            gl.tl.size.y + (gl.bl.size.y if not blv and not brv and trv else 0))
 
                     tl.SetPosition(pos)
                     tl.SetSize(size)
@@ -189,11 +222,10 @@ class ViewportGrid(wx.Panel):
                 elif tl.Size != self.hidden_size:
                     tl.SetSize(self.hidden_size)
 
-                if tr.Shown:
-                    pos = (gl.tr.pos[0] - (gl.tr.size.x if not tl.Shown else 0), 0)
-                    size = (gl.tr.size.x + (gl.tl.size.x if not tl.Shown else 0),
-                            gl.tr.size.y + (gl.br.size.y if not br.Shown and not bl.Shown
-                                            and tl.Shown else 0))
+                if tr in vvps:
+                    pos = (gl.tr.pos[0] - (gl.tr.size.x if not tlv else 0), 0)
+                    size = (gl.tr.size.x + (gl.tl.size.x if not tlv else 0),
+                            gl.tr.size.y + (gl.br.size.y if not brv and not blv and tlv else 0))
 
                     tr.SetPosition(pos)
                     tr.SetSize(size)
@@ -201,25 +233,22 @@ class ViewportGrid(wx.Panel):
                 elif tr.Size != self.hidden_size:
                     tr.SetSize(self.hidden_size)
 
-                if bl.Shown:
-                    pos = (0, gl.bl.pos[1] - (gl.tl.size.y if not tl.Shown and not tr.Shown else 0))
-                    size = (gl.bl.size.x + (gl.br.size.x if not br.Shown else 0),
-                            gl.bl.size.y + (gl.tl.size.y if not tl.Shown and not tr.Shown
-                                            and br.Shown else 0))
+                if bl in vvps:
+                    pos = (0, gl.bl.pos[1] - (gl.tl.size.y if not tlv and not trv else 0))
+                    size = (gl.bl.size.x + (gl.br.size.x if not brv else 0),
+                            gl.bl.size.y + (gl.tl.size.y if not tlv and not trv and brv else 0))
 
                     bl.SetPosition(pos)
                     bl.SetSize(size)
-                    logging.debug("Layout bottom left: %s, %s", pos, size)
+                    logging.debug("Layout bottom left (%s): %s, %s", bl, pos, size)
                 elif bl.Size != self.hidden_size:
                     bl.SetSize(self.hidden_size)
 
-                if br.Shown:
-                    pos = (gl.br.pos[0] - (gl.bl.size.x if not bl.Shown else 0),
-                           gl.br.pos[1] - (gl.tr.size.y if not tr.Shown and not tl.Shown and
-                                           bl.Shown else 0))
-                    size = (gl.br.size.x + (gl.bl.size.x if not bl.Shown else 0),
-                            gl.br.size.y + (gl.tr.size.y if not tr.Shown and not tl.Shown
-                                            and bl.Shown else 0))
+                if br in vvps:
+                    pos = (gl.br.pos[0] - (gl.bl.size.x if not blv else 0),
+                           gl.br.pos[1] - (gl.tr.size.y if not trv and not tlv and blv else 0))
+                    size = (gl.br.size.x + (gl.bl.size.x if not blv else 0),
+                            gl.br.size.y + (gl.tr.size.y if not trv and not tlv and blv else 0))
 
                     br.SetPosition(pos)
                     br.SetSize(size)
@@ -237,7 +266,7 @@ class ViewportGrid(wx.Panel):
         self._swap_viewports(vpa, vpb)
         self._layout_viewports()
 
-    def set_visible_viewports(self, viewports):
+    def set_visible_viewports(self, vis_viewports):
         """ Set the viewports to be shown
 
         This method will movie the viewports to be shown to the front of the viewport list (in
@@ -245,13 +274,16 @@ class ViewportGrid(wx.Panel):
 
         """
 
-        self.hide_all_viewports()
-        for grid_viewport, viewport in zip(viewports, self.viewports):
-            if grid_viewport not in self.viewports:
+        self.visible_viewports = vis_viewports
+
+        for vis_viewport, viewport in zip(vis_viewports, self.viewports):
+            if vis_viewport not in self.viewports:
                 raise ValueError("Unknown Viewport!")
-            self._swap_viewports(grid_viewport, viewport)
-            grid_viewport.Show()
+            # Swap won't happen if the viewports are the same
+            self._swap_viewports(vis_viewport, viewport)
+
         self._layout_viewports()
+        self._show_hide_viewports()
 
     def get_win_grid_pos(self, win):
         return self.viewports.index(win)

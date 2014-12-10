@@ -503,22 +503,37 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def __init__(self, cnvs):
         super(LineSelectOverlay, self).__init__(cnvs)
+        self._selected_line = None
+
+    @property
+    def length(self):
+        if None in (self.w_start_pos, self.w_end_pos):
+            return 0
+        else:
+            x1, y1 = self.w_start_pos
+            x2, y2 = self.w_end_pos
+            return math.hypot(x2-x1, y2-y1)
 
     def _calc_world_pos(self):
         """ Update the world position to reflect the view position """
-        if self.v_start_pos and self.v_end_pos:
+        if None not in (self.v_start_pos, self.v_end_pos):
             offset = self.cnvs.get_half_buffer_size()
             self.w_start_pos = self.cnvs.view_to_world(self.v_start_pos, offset)
             self.w_end_pos = self.cnvs.view_to_world(self.v_end_pos, offset)
 
+            # FIXME: Translate to integer values
+            self._selected_line.value = (self.w_start_pos, self.w_end_pos)
+        else:
+            self._selected_line.value = None
+
     @staticmethod
     def _normalize(rect):
-        """ Lines don't need to be """
+        """ Lines don't need to be normalized """
         return rect
 
     def Draw(self, ctx, shift=(0, 0), scale=1.0):
 
-        if self.w_start_pos and self.w_end_pos:
+        if None not in (self.w_start_pos, self.w_end_pos) and self.w_start_pos != self.w_end_pos:
 
             ctx.save()
 
@@ -609,7 +624,7 @@ class LineSelectOverlay(WorldSelectOverlay):
 
     def _calc_edges(self):
         """ Calculate the hit boxes for the start and end point """
-        if self.v_start_pos and self.v_end_pos:
+        if None not in (self.v_start_pos, self.v_end_pos):
             rect = self.v_start_pos + self.v_end_pos
             s_l, s_t, e_l, e_t = [v - self.hover_margin for v in rect]
             s_r, s_b, e_r, e_b = [v + self.hover_margin for v in rect]
@@ -648,8 +663,11 @@ class LineSelectOverlay(WorldSelectOverlay):
         v_pos = evt.GetPositionTuple()
         hover = self.is_hovering(v_pos)
 
-        if not evt.Dragging() and hover in (gui.HOVER_START, gui.HOVER_END):
-            self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+        if not evt.Dragging():
+            if hover in (gui.HOVER_START, gui.HOVER_END):
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
+            else:
+                self.cnvs.set_dynamic_cursor(wx.CURSOR_PENCIL)
         else:
             super(LineSelectOverlay, self)._on_motion(evt)
 
@@ -669,6 +687,17 @@ class LineSelectOverlay(WorldSelectOverlay):
     def stop_edit(self):
         super(LineSelectOverlay, self).stop_edit()
         self.cnvs.reset_dynamic_cursor()
+
+    def set_line_va(self, selected_line_va):
+        """ Set the line VA """
+        self._selected_line = selected_line_va
+        self._selected_line.subscribe(self._selection_made, init=True)
+
+    def _selection_made(self, selected_line):
+        """ Event handler that requests a redraw when the selected pixel changes """
+        if selected_line is not None:
+            self.w_start_pos, self.w_end_pos = selected_line
+            self.cnvs.update_drawing()
 
 
 class PixelSelectOverlay(WorldOverlay, DragMixin):
@@ -719,9 +748,8 @@ class PixelSelectOverlay(WorldOverlay, DragMixin):
                     self.cnvs.update_drawing()
             else:
                 self.cnvs.reset_dynamic_cursor()
-        else:
-            self.cnvs.reset_dynamic_cursor()
-            super(PixelSelectOverlay, self).on_motion(evt)
+
+        super(PixelSelectOverlay, self).on_motion(evt)
 
     def on_left_down(self, evt):
 

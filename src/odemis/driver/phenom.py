@@ -260,6 +260,9 @@ class Scanner(model.Emitter):
         self._hwVersion = parent._hwVersion
         self._swVersion = parent._swVersion
 
+        # will take care of executing autocontrast asynchronously
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
+
         self._shape = (2048, 2048)
 
         # TODO: document where this funky number comes from
@@ -543,6 +546,28 @@ class Scanner(model.Emitter):
         tran_pxs = (clipped_tran[0] / pixelSize[0],
                     clipped_tran[1] / pixelSize[1])
         return tran_pxs
+
+    @isasync
+    def applyAutoContrast(self):
+        # Create ProgressiveFuture and update its state to RUNNING
+        est_start = time.time() + 0.1
+        f = model.ProgressiveFuture(start=est_start,
+                                    end=est_start + 2)  # rough time estimation
+        f._move_lock = threading.Lock()
+
+        return self._executor.submitf(f, self._applyAutoContrast, f)
+
+    def _applyAutoContrast(self, future):
+        """
+        Trigger Phenom's AutoContrast
+        """
+        with self.parent._acq_progress_lock:
+            self.parent._device.SEMACB()
+
+    def terminate(self):
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
 
 class Detector(model.Detector):
     """
@@ -1454,6 +1479,11 @@ class ChamberPressure(model.Actuator):
                 name="Phenom chamber pressure state change")
         self._chamber_thread.start()
 
+        self._reconnection_must_stop = threading.Event()
+        target = self._reconnection_thread
+        self._reconnect_thread = threading.Thread(target=target,
+                name="Phenom reconnection attempt")
+
     def _updatePosition(self):
         """
         update the position VA and .pressure VA
@@ -1535,6 +1565,7 @@ class ChamberPressure(model.Actuator):
     def terminate(self):
         if self._executor:
             self._chamber_must_stop.set()
+            self._reconnection_must_stop.set()
             self.stop()
             self._executor.shutdown()
             self._executor = None
@@ -1746,9 +1777,34 @@ class ChamberPressure(model.Actuator):
                             self._updateSampleHolder()  # in case new sample holder was loaded
                     else:
                         logging.warning("Unexpected event received")
-        except Exception:
-            logging.exception("Unexpected failure during chamber pressure event listening")
+        except Exception as e:
+            logging.exception("Unexpected failure during chamber pressure event listening. Lost connection to Phenom.")
+            # Update the state of SEM component so the backend is aware of the error occured
+            self.parent.state = e
+            # Keep on trying to reconnect
+            self._reconnect_thread.start()
         finally:
             self._chamber_device.CloseEventChannel(ch_id)
             logging.debug("Chamber pressure thread closed")
             self._chamber_must_stop.clear()
+
+    def _reconnection_thread(self):
+        """
+        Keeps on trying to reconnect after connection failure.
+        """
+        try:
+            while not self._reconnection_must_stop.is_set():
+                # Wait before retrying
+                time.sleep(5)
+                try:
+                    mode = self.parent._device.GetInstrumentMode()
+                    if mode != 'INSTRUMENT-MODE-ERROR':
+                        # We can now open the event channel again
+                        self.parent.state = model.ST_RUNNING
+                        self._chamber_thread.start()
+                        break
+                except Exception:
+                    logging.warning("Retrying to connect to Phenom...")
+        finally:
+            logging.debug("Phenom reconnection attempt thread closed")
+            self._reconnection_must_stop.clear()              
